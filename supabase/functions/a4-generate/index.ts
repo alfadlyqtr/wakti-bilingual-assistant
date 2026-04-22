@@ -45,6 +45,17 @@ interface GenerateRequest {
   logo_color_extract?: boolean;
   requested_pages?: "auto" | 1 | 2 | 3;
   language_mode?: "en" | "ar" | "bilingual";
+  design_settings?: {
+    orientation?: "portrait" | "landscape";
+    background_color?: string | null;
+    text_color?: string | null;
+    accent_color?: string | null;
+    font_family?: "modern_sans" | "classic_serif" | "elegant_script" | "bold_display" | "playful_hand";
+    border_style?: "none" | "thin" | "thick" | "rounded" | "decorative";
+    include_decorative_images?: boolean;
+    density?: "compact" | "balanced" | "airy";
+    tone?: "professional" | "friendly" | "playful" | "formal";
+  } | null;
 }
 
 interface GeminiPreprocessOutput {
@@ -299,12 +310,29 @@ serve(async (req) => {
     }
   }
 
-  const formState = body.form_state ?? {};
-  const rawContent = String((formState as any).raw_content ?? "");
+  const rawFormState = body.form_state ?? {};
+  const designSettings = body.design_settings ?? null;
+  // Stash design settings inside form_state so page 2+ callback can reuse them without a schema change
+  const formState = designSettings
+    ? { ...rawFormState, __design_settings__: designSettings }
+    : rawFormState;
+  const rawContent = String((rawFormState as any).raw_content ?? "");
   const languageMode: "en" | "ar" | "bilingual" =
     body.language_mode === "ar" ? "ar" : body.language_mode === "bilingual" ? "bilingual" : "en";
   const requestedPages = body.requested_pages ?? "auto";
   const maxPages = maxPagesForTheme(theme);
+
+  // Resolved aspect ratio honoring user orientation override
+  const resolvedAspect = (() => {
+    const o = designSettings?.orientation;
+    if (!o || o === "portrait") return theme.aspect_ratio;
+    if (o === "landscape") {
+      if (theme.aspect_ratio === "2:3") return "3:2";
+      if (theme.aspect_ratio === "3:4") return "4:3";
+      return "3:2";
+    }
+    return theme.aspect_ratio;
+  })();
 
   // Batch ID for this document
   const batchId = crypto.randomUUID();
@@ -364,7 +392,7 @@ serve(async (req) => {
       form_state: formState,
       gemini_output: i === 1 ? gemini : null, // store full output only on page 1 for debug
       status: i === 1 ? "generating" : "queued",
-      aspect_ratio: theme.aspect_ratio,
+      aspect_ratio: resolvedAspect,
       resolution: "1K",
       title: titleForMeta,
       reference_image_url: null,
@@ -396,6 +424,7 @@ serve(async (req) => {
     brandColors: brandColors ?? null,
     hasLogoReference: !!logoSignedUrl,
     hasPrevPageReference: false,
+    designSettings: designSettings,
   });
 
   // Dispatch Kie createTask for page 1
@@ -403,7 +432,7 @@ serve(async (req) => {
   const kieResult = await dispatchKieTask({
     prompt: compiledPrompt,
     imageInputs: logoSignedUrl ? [logoSignedUrl] : [],
-    aspectRatio: theme.aspect_ratio,
+    aspectRatio: resolvedAspect,
     callbackUrl,
     apiKey: KIE_API_KEY,
   });

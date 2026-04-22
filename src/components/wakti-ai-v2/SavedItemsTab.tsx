@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/providers/ThemeProvider';
-import { Loader2, Presentation, FileCode2, ExternalLink, Download, Trash2, LayoutDashboard, Eye, FileText, Copy, Check } from 'lucide-react';
+import { Loader2, Presentation, Download, Trash2, LayoutDashboard, Eye, FileText, Copy, Check, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import ShareButton from '@/components/ui/ShareButton';
+import { downloadA4RowsAsJpgs, downloadA4RowsAsPdf, fetchA4History, type A4HistoryBatch } from './a4/a4Service';
 
 interface SavedPresentation {
   id: string;
@@ -34,10 +35,11 @@ export default function SavedItemsTab() {
   const { user } = useAuth();
   const { language } = useTheme();
   
-  const [activeTab, setActiveTab] = useState<'text' | 'presentations' | 'diagrams'>('text');
+  const [activeTab, setActiveTab] = useState<'text' | 'presentations' | 'diagrams' | 'a4'>('text');
   
   const [presentations, setPresentations] = useState<SavedPresentation[]>([]);
   const [diagrams, setDiagrams] = useState<SavedDiagram[]>([]);
+  const [a4Documents, setA4Documents] = useState<A4HistoryBatch[]>([]);
   const [savedTexts, setSavedTexts] = useState<SavedText[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   
@@ -51,6 +53,8 @@ export default function SavedItemsTab() {
         loadPresentations();
       } else if (activeTab === 'diagrams') {
         loadDiagrams();
+      } else if (activeTab === 'a4') {
+        loadA4Documents();
       }
     }
   }, [user?.id, activeTab]);
@@ -102,6 +106,58 @@ export default function SavedItemsTab() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const loadA4Documents = async () => {
+    if (!user?.id) return;
+    setIsLoading(true);
+    try {
+      const data = await fetchA4History();
+      setA4Documents(data);
+    } catch (err) {
+      console.error('Error loading A4 documents:', err);
+      toast.error(language === 'ar' ? 'فشل تحميل مستندات A4' : 'Failed to load A4 documents');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDownloadA4Pdf = async (item: A4HistoryBatch) => {
+    try {
+      toast.info(language === 'ar' ? 'جاري إنشاء الملف…' : 'Building PDF…');
+      await downloadA4RowsAsPdf(item.rows, item.title ?? 'wakti-a4');
+    } catch (err) {
+      toast.error(language === 'ar' ? 'فشل تنزيل PDF' : 'Failed to download PDF');
+    }
+  };
+
+  const handleDownloadA4Photos = async (item: A4HistoryBatch) => {
+    try {
+      toast.info(language === 'ar' ? 'جاري تجهيز الصور…' : 'Preparing photo download…');
+      await downloadA4RowsAsJpgs(item.rows, item.title ?? 'wakti-a4');
+    } catch (err) {
+      toast.error(language === 'ar' ? 'فشل تنزيل الصور' : 'Failed to download photos');
+    }
+  };
+
+  const getA4StatusLabel = (status: A4HistoryBatch['status']) => {
+    if (language === 'ar') {
+      if (status === 'completed') return 'مكتمل';
+      if (status === 'partial') return 'مكتمل جزئياً';
+      if (status === 'failed') return 'فشل';
+      return 'قيد المعالجة';
+    }
+    if (status === 'completed') return 'Completed';
+    if (status === 'partial') return 'Partial';
+    if (status === 'failed') return 'Failed';
+    return 'Generating';
+  };
+
+  const getA4StatusClass = (status: A4HistoryBatch['status']) => {
+    if (status === 'completed') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+    if (status === 'partial') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+    if (status === 'failed') return 'bg-red-500/10 text-red-700 dark:text-red-300';
+    return 'bg-blue-500/10 text-blue-700 dark:text-blue-300';
   };
 
   const loadDiagrams = async () => {
@@ -192,34 +248,45 @@ export default function SavedItemsTab() {
 
   return (
     <div className="w-full space-y-4">
-      <div className="flex bg-muted/50 p-1 rounded-lg w-fit">
-        <button
-          onClick={() => setActiveTab('text')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-            activeTab === 'text' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <FileText className="w-4 h-4" />
-          {language === 'ar' ? 'النصوص' : 'Text'}
-        </button>
-        <button
-          onClick={() => setActiveTab('presentations')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-            activeTab === 'presentations' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Presentation className="w-4 h-4" />
-          {language === 'ar' ? 'العروض التقديمية' : 'Presentations'}
-        </button>
-        <button
-          onClick={() => setActiveTab('diagrams')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-            activeTab === 'diagrams' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <LayoutDashboard className="w-4 h-4" />
-          {language === 'ar' ? 'المخططات' : 'Diagrams'}
-        </button>
+      <div className="overflow-x-auto pb-1 -mx-1 px-1">
+        <div className="flex bg-muted/50 p-1 rounded-lg w-max min-w-full">
+          <button
+            onClick={() => setActiveTab('text')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+              activeTab === 'text' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            {language === 'ar' ? 'النصوص' : 'Text'}
+          </button>
+          <button
+            onClick={() => setActiveTab('presentations')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+              activeTab === 'presentations' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Presentation className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            {language === 'ar' ? 'العروض' : 'Presentations'}
+          </button>
+          <button
+            onClick={() => setActiveTab('diagrams')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+              activeTab === 'diagrams' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            {language === 'ar' ? 'المخططات' : 'Diagrams'}
+          </button>
+          <button
+            onClick={() => setActiveTab('a4')}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+              activeTab === 'a4' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            {language === 'ar' ? 'مستندات A4' : 'A4 Documents'}
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -325,7 +392,7 @@ export default function SavedItemsTab() {
             ))
           )}
         </div>
-      ) : (
+      ) : activeTab === 'diagrams' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {diagrams.length === 0 ? (
             <div className="col-span-full text-center py-12 text-muted-foreground">
@@ -377,6 +444,79 @@ export default function SavedItemsTab() {
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {a4Documents.length === 0 ? (
+            <div className="col-span-full text-center py-12 text-muted-foreground">
+              {language === 'ar' ? 'لا توجد مستندات A4 محفوظة' : 'No saved A4 documents'}
+            </div>
+          ) : (
+            a4Documents.map((item) => (
+              <div key={item.batch_id} className="border rounded-xl p-3 flex flex-col gap-3 bg-card hover:shadow-md transition-all">
+                <div className="w-full aspect-[3/4] bg-muted/30 rounded-lg overflow-hidden border flex items-center justify-center">
+                  {item.preview_image_url ? (
+                    <img src={item.preview_image_url} alt={item.title ?? 'A4 Document'} className="w-full h-full object-contain bg-white" />
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <ImageIcon className="w-8 h-8" />
+                      <span className="text-xs">{language === 'ar' ? 'لا توجد معاينة' : 'No preview'}</span>
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <h4 className="font-semibold text-sm truncate" title={item.title ?? undefined}>
+                        {item.title || (language === 'ar' ? 'مستند A4' : 'A4 Document')}
+                      </h4>
+                      <div className="text-[10px] text-muted-foreground mt-1">
+                        {new Date(item.updated_at).toLocaleDateString(language === 'ar' ? 'ar-QA' : 'en-US')}
+                      </div>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-medium ${getA4StatusClass(item.status)}`}>
+                      {getA4StatusLabel(item.status)}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {language === 'ar'
+                      ? `${item.completed_pages} من ${item.total_pages} صفحة مكتملة`
+                      : `${item.completed_pages} of ${item.total_pages} pages completed`}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => handleDownloadA4Pdf(item)}
+                      className="text-xs flex items-center gap-1 bg-primary text-primary-foreground px-2.5 py-1.5 rounded-md hover:opacity-90"
+                      title={language === 'ar' ? 'تنزيل PDF' : 'Download PDF'}
+                    >
+                      <Download className="w-3 h-3" />
+                      {language === 'ar' ? 'PDF' : 'PDF'}
+                    </button>
+                    <button
+                      onClick={() => handleDownloadA4Photos(item)}
+                      className="text-xs flex items-center gap-1 border border-primary/30 bg-primary/10 text-primary px-2.5 py-1.5 rounded-md hover:bg-primary/15"
+                      title={language === 'ar' ? 'تنزيل الصور' : 'Download photos'}
+                    >
+                      <ImageIcon className="w-3 h-3" />
+                      {language === 'ar' ? 'صورة' : 'Photo'}
+                    </button>
+                    {item.preview_image_url && (
+                      <a
+                        href={item.preview_image_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs flex items-center gap-1 text-blue-600 hover:text-blue-800 bg-blue-50 dark:bg-blue-900/20 px-2.5 py-1.5 rounded-md"
+                        title={language === 'ar' ? 'عرض المعاينة' : 'View preview'}
+                      >
+                        <Eye className="w-3 h-3" />
+                        {language === 'ar' ? 'عرض' : 'View'}
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>

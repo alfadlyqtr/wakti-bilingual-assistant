@@ -28,15 +28,15 @@ export default function TextGenerator() {
         </div>
 
         <div className="mb-3">
-          <div className="flex md:grid md:grid-cols-7 gap-1.5 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm overflow-x-auto scrollbar-none" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
+          <div className="grid grid-cols-4 md:grid-cols-7 gap-1.5 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
             {[
               { key: 'compose',      labelEn: 'Compose',         labelAr: 'تأليف',         activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
               { key: 'reply',        labelEn: 'Reply',           labelAr: 'رد',            activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
-              { key: 'generated',    labelEn: 'Generated',       labelAr: 'النص المُولد',  activeClass: 'bg-muted/90 text-foreground shadow-lg border-muted-foreground/20 ring-1 ring-muted-foreground/20' },
+              { key: 'a4',           labelEn: 'A4 Document',     labelAr: 'مستند A4',     activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
               { key: 'diagrams',     labelEn: 'Diagrams',        labelAr: 'المخططات',      activeClass: 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20' },
               { key: 'presentation', labelEn: 'Presentations',   labelAr: 'العروض',        activeClass: 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg' },
               { key: 'translate',    labelEn: 'Text Translator',  labelAr: 'مترجم النص',   activeClass: 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20' },
-              { key: 'a4',           labelEn: 'A4 Document',     labelAr: 'مستند A4',     activeClass: 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg' },
+              { key: 'generated',    labelEn: 'Generated',       labelAr: 'النص المُولد',  activeClass: 'bg-muted/90 text-foreground shadow-lg border-muted-foreground/20 ring-1 ring-muted-foreground/20' },
             ].map(({ key, labelEn, labelAr, activeClass }) => (
               <button
                 key={key}
@@ -44,7 +44,7 @@ export default function TextGenerator() {
                 role="tab"
                 aria-selected={activeTab === key}
                 onClick={() => setActiveTab(key as any)}
-                className={`flex-shrink-0 h-10 md:h-12 px-3 md:px-4 rounded-xl border text-xs md:text-sm font-medium transition-all whitespace-nowrap
+                className={`min-h-[42px] md:h-12 px-2.5 md:px-4 py-2 md:py-0 rounded-xl border text-[11px] md:text-sm font-medium transition-all whitespace-normal leading-tight text-center flex items-center justify-center
                   ${activeTab === key
                     ? activeClass
                     : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-white/10'}

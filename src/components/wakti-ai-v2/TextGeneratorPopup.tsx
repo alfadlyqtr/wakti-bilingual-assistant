@@ -2290,7 +2290,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'reply' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             >{language === 'ar' ? 'رد' : 'Reply'}</button>
             <button
-              disabled={!generatedText && cachedTexts.length === 0}
               onClick={() => {
                 // Switch to Generated; if empty, preload latest cached
                 if (!generatedText && cachedTexts.length > 0) {
@@ -2301,9 +2300,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               className={`px-3 py-2 rounded-md border text-sm ${
                 activeTab === 'generated'
                   ? 'bg-primary text-primary-foreground'
-                  : (generatedText || cachedTexts.length > 0)
-                    ? 'hover:bg-muted'
-                    : 'opacity-60 cursor-not-allowed'
+                  : 'hover:bg-muted'
               }`}
             >{language === 'ar' ? 'النص المُولد' : 'Generated Text'}</button>
             <button
@@ -2320,7 +2317,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             >{language === 'ar' ? 'مترجم النص' : 'Text Translator'}</button>
             <button
               onClick={() => setActiveTab('a4')}
-              className={`px-3 py-2 rounded-md border text-sm bg-gradient-to-r ${activeTab === 'a4' ? 'from-indigo-600 to-purple-600 text-white border-purple-600' : 'from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/40 dark:hover:to-purple-900/40 text-indigo-700 dark:text-indigo-300'}`}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'a4' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
             >{language === 'ar' ? 'مستند A4' : 'A4 Document'}</button>
           </div>
         </div>

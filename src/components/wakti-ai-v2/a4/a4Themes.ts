@@ -78,7 +78,7 @@ const FIELD_RAW = (
 });
 
 // -----------------------------------------------------------------------------
-// 8 launch themes (display metadata + form schemas only)
+// 12 themes (display metadata + form schemas only)
 // -----------------------------------------------------------------------------
 
 export const A4_THEMES: A4Theme[] = [
@@ -348,6 +348,123 @@ export const A4_THEMES: A4Theme[] = [
       ],
     },
     search_aliases: ["simple", "minimal", "clean", "بسيط"],
+  },
+
+  {
+    id: "invoice_receipt",
+    name_en: "Invoice / Receipt",
+    name_ar: "فاتورة / إيصال",
+    aspect_ratio: "2:3",
+    max_pages: 2,
+    purpose_chips: [
+      { id: "invoice", label_en: "Invoice", label_ar: "فاتورة" },
+      { id: "receipt", label_en: "Receipt", label_ar: "إيصال" },
+    ],
+    form_schema_by_purpose: {
+      invoice: [
+        { key: "company_name", label_en: "Business Name", label_ar: "اسم النشاط", type: "text", required: true },
+        { key: "client_name", label_en: "Bill To", label_ar: "الفاتورة إلى", type: "text", required: true },
+        { key: "invoice_number", label_en: "Invoice Number", label_ar: "رقم الفاتورة", type: "text", required: true },
+        { key: "issue_date", label_en: "Issue Date", label_ar: "تاريخ الإصدار", type: "date", required: true },
+        { key: "due_date", label_en: "Due Date", label_ar: "تاريخ الاستحقاق", type: "date" },
+        { key: "currency", label_en: "Currency", label_ar: "العملة", type: "text" },
+        { key: "payment_terms", label_en: "Payment Terms", label_ar: "شروط الدفع", type: "text" },
+        FIELD_LOGO,
+        FIELD_BILINGUAL,
+        { key: "include_table", label_en: "Include Items Table", label_ar: "تضمين جدول العناصر", type: "toggle", default: true },
+        FIELD_RAW("Paste line items, subtotal, tax, and notes", "الصق العناصر والمجموع والضريبة والملاحظات"),
+      ],
+      receipt: [
+        { key: "company_name", label_en: "Business Name", label_ar: "اسم النشاط", type: "text", required: true },
+        { key: "client_name", label_en: "Customer Name", label_ar: "اسم العميل", type: "text" },
+        { key: "receipt_number", label_en: "Receipt Number", label_ar: "رقم الإيصال", type: "text", required: true },
+        { key: "issue_date", label_en: "Date", label_ar: "التاريخ", type: "date", required: true },
+        { key: "paid_method", label_en: "Payment Method", label_ar: "طريقة الدفع", type: "text" },
+        { key: "currency", label_en: "Currency", label_ar: "العملة", type: "text" },
+        FIELD_LOGO,
+        FIELD_BILINGUAL,
+        { key: "include_table", label_en: "Include Items Table", label_ar: "تضمين جدول العناصر", type: "toggle", default: true },
+        FIELD_RAW("Paste purchased items, totals, and notes", "الصق العناصر المشتراة والإجمالي والملاحظات"),
+      ],
+    },
+    search_aliases: ["invoice", "receipt", "bill", "فاتورة", "إيصال"],
+  },
+
+  {
+    id: "menu_price_list",
+    name_en: "Menu / Price List",
+    name_ar: "قائمة أسعار / منيو",
+    aspect_ratio: "3:4",
+    max_pages: 1,
+    form_schema: [
+      { key: "business_name", label_en: "Business Name", label_ar: "اسم النشاط", type: "text", required: true },
+      { key: "subtitle", label_en: "Subtitle / Tagline", label_ar: "العنوان الفرعي", type: "text" },
+      { key: "currency", label_en: "Currency", label_ar: "العملة", type: "text" },
+      { key: "contact_info", label_en: "Contact Info", label_ar: "معلومات التواصل", type: "text" },
+      { key: "working_hours", label_en: "Working Hours", label_ar: "ساعات العمل", type: "text" },
+      FIELD_LOGO,
+      FIELD_BILINGUAL,
+      { key: "include_table", label_en: "Use Price Table Layout", label_ar: "استخدام تخطيط جدول الأسعار", type: "toggle", default: true },
+      FIELD_RAW("Paste sections, item names, descriptions, and prices", "الصق الأقسام والأصناف والوصف والأسعار"),
+    ],
+    search_aliases: ["menu", "price", "restaurant", "cafe", "منيو", "أسعار"],
+  },
+
+  {
+    id: "thank_you_invitation_card",
+    name_en: "Thank-you / Invitation Card",
+    name_ar: "بطاقة شكر / دعوة",
+    aspect_ratio: "3:4",
+    max_pages: 1,
+    purpose_chips: [
+      { id: "thank_you", label_en: "Thank-you", label_ar: "شكر" },
+      { id: "invitation", label_en: "Invitation", label_ar: "دعوة" },
+    ],
+    form_schema_by_purpose: {
+      thank_you: [
+        { key: "sender_name", label_en: "From", label_ar: "من", type: "text", required: true },
+        { key: "recipient_name", label_en: "To", label_ar: "إلى", type: "text" },
+        { key: "card_title", label_en: "Card Title", label_ar: "عنوان البطاقة", type: "text" },
+        { key: "date", label_en: "Date", label_ar: "التاريخ", type: "text" },
+        FIELD_LOGO,
+        FIELD_BILINGUAL,
+        FIELD_RAW("Write your thank-you message", "اكتب رسالة الشكر"),
+      ],
+      invitation: [
+        { key: "host_name", label_en: "Host / Organizer", label_ar: "المضيف / الجهة المنظمة", type: "text", required: true },
+        { key: "event_name", label_en: "Event Name", label_ar: "اسم المناسبة", type: "text", required: true },
+        { key: "event_date", label_en: "Event Date", label_ar: "تاريخ المناسبة", type: "text", required: true },
+        { key: "time", label_en: "Time", label_ar: "الوقت", type: "text" },
+        { key: "venue", label_en: "Venue", label_ar: "المكان", type: "text" },
+        { key: "dress_code", label_en: "Dress Code", label_ar: "الزي", type: "text" },
+        { key: "rsvp", label_en: "RSVP / Contact", label_ar: "تأكيد الحضور / التواصل", type: "text" },
+        FIELD_LOGO,
+        FIELD_BILINGUAL,
+        FIELD_RAW("Write your invitation wording", "اكتب نص الدعوة", false),
+      ],
+    },
+    search_aliases: ["thank you", "invitation", "card", "شكر", "دعوة"],
+  },
+
+  {
+    id: "resume_cv",
+    name_en: "Resume / CV",
+    name_ar: "سيرة ذاتية",
+    aspect_ratio: "2:3",
+    max_pages: 2,
+    form_schema: [
+      { key: "full_name", label_en: "Full Name", label_ar: "الاسم الكامل", type: "text", required: true },
+      { key: "desired_role", label_en: "Job Title / Role", label_ar: "المسمى الوظيفي", type: "text", required: true },
+      { key: "email", label_en: "Email", label_ar: "البريد الإلكتروني", type: "text" },
+      { key: "phone", label_en: "Phone", label_ar: "الهاتف", type: "text" },
+      { key: "location", label_en: "Location", label_ar: "الموقع", type: "text" },
+      { key: "website", label_en: "Website / Portfolio", label_ar: "الموقع / معرض الأعمال", type: "text" },
+      { key: "linkedin", label_en: "LinkedIn", label_ar: "لينكدإن", type: "text" },
+      FIELD_LOGO,
+      FIELD_BILINGUAL,
+      FIELD_RAW("Paste your summary, experience, education, skills, and certifications", "الصق الملخص والخبرة والتعليم والمهارات والشهادات"),
+    ],
+    search_aliases: ["resume", "cv", "career", "job", "سيرة", "وظيفة"],
   },
 ];
 

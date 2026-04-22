@@ -83,9 +83,10 @@ export interface A4PreprocessInput {
 }
 
 export function buildGeminiPreprocessUserPayload(input: A4PreprocessInput): string {
-  // Strip very large binary/image-ish values from form_state so we don't blow the context
+  // Strip very large binary/image-ish values and internal keys from form_state so we don't blow the context
   const cleanForm: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(input.form_state || {})) {
+    if (k.startsWith("__")) continue; // internal stash keys (e.g. __design_settings__)
     if (typeof v === "string" && v.length > 2000) continue;
     if (typeof v === "string" && v.startsWith("data:")) continue;
     cleanForm[k] = v;
@@ -112,6 +113,24 @@ Return ONLY the JSON per the schema. No prose. No markdown.`;
 // MASTER PROMPT COMPILER (Nano Banana 2)
 // =============================================================================
 
+export type A4Orientation = "portrait" | "landscape";
+export type A4FontFamily = "modern_sans" | "classic_serif" | "elegant_script" | "bold_display" | "playful_hand";
+export type A4BorderStyle = "none" | "thin" | "thick" | "rounded" | "decorative";
+export type A4Density = "compact" | "balanced" | "airy";
+export type A4Tone = "professional" | "friendly" | "playful" | "formal";
+
+export interface A4DesignSettings {
+  orientation?: A4Orientation;
+  background_color?: string | null;   // hex like #FFFFFF
+  text_color?: string | null;         // hex
+  accent_color?: string | null;       // hex
+  font_family?: A4FontFamily;
+  border_style?: A4BorderStyle;
+  include_decorative_images?: boolean;
+  density?: A4Density;
+  tone?: A4Tone;
+}
+
 export interface A4CompileInput {
   theme: A4Theme;
   purposeId: string | null;
@@ -123,6 +142,7 @@ export interface A4CompileInput {
   brandColors: { primary?: string | null; secondary?: string | null } | null;
   hasLogoReference: boolean;
   hasPrevPageReference: boolean; // true for page >=2 when chaining style anchor
+  designSettings?: A4DesignSettings | null;
 }
 
 export interface GeminiBlock {
@@ -222,7 +242,7 @@ function getHeaderBlock(
 ): string {
   // For multi-page, page 2+ uses a slim running header
   if (pageNumber > 1) {
-    const title = String(formState.project_title ?? formState.report_title ?? formState.subject ?? formState.title ?? formState.event_name ?? "").trim();
+    const title = String(formState.project_title ?? formState.report_title ?? formState.business_name ?? formState.company_name ?? formState.full_name ?? formState.card_title ?? formState.subject ?? formState.title ?? formState.event_name ?? "").trim();
     return `Slim running header only: document title "${title || "Document"}" aligned per language direction. No logo repetition needed unless it fits elegantly.`;
   }
 
@@ -257,7 +277,7 @@ function getHeaderBlock(
       const period = String(formState.period ?? "").trim();
       const author = String(formState.author ?? "").trim();
       const ref = String(formState.doc_ref ?? "").trim();
-      return `Header: Narrow accent bar across the very top. ${logoClause} Next to logo: company name "${company}"${dept ? " | " + dept : ""}. Top-right: reference code "${ref}" in small monospaced style. Below header, full-width H1 title: "${title}". Meta row: ${period ? '"Period: ' + period + '"' : ""}${author ? ' | "Prepared by: ' + author + '"' : ""}.`;
+      return `Header: ${logoClause} Narrow accent bar across the very top. Next to logo: company name "${company}"${dept ? " | " + dept : ""}. Top-right: reference code "${ref}" in small monospaced style. Below header, full-width H1 title: "${title}". Meta row: ${period ? '"Period: ' + period + '"' : ""}${author ? ' | "Prepared by: ' + author + '"' : ""}.`;
     }
     case "certificate": {
       const issuer = String(formState.issuer_name ?? "").trim();
@@ -287,6 +307,51 @@ function getHeaderBlock(
       const title = String(formState.title ?? "").trim();
       return `Header: bold comic-lettering title banner across the top: "${title}".`;
     }
+    case "invoice_receipt": {
+      const business = String(formState.business_name ?? formState.company_name ?? "").trim();
+      const client = String(formState.client_name ?? "").trim();
+      const invoiceNo = String(formState.invoice_number ?? "").trim();
+      const receiptNo = String(formState.receipt_number ?? "").trim();
+      const issueDate = String(formState.issue_date ?? "").trim();
+      const dueDate = String(formState.due_date ?? "").trim();
+      const currency = String(formState.currency ?? "").trim();
+      const paymentTerms = String(formState.payment_terms ?? formState.paid_method ?? "").trim();
+      const docLabel = invoiceNo ? "Invoice" : "Receipt";
+      const docNumber = invoiceNo || receiptNo;
+      return `Header: ${logoClause} Top-left: business name "${business}". Top-right: ${docLabel.toUpperCase()}${docNumber ? ' number "' + docNumber + '"' : ""}. Below header: customer line "${client || "Customer"}" and date "${issueDate}".${dueDate ? ` Also show due date "${dueDate}".` : ""}${currency ? ` Show currency "${currency}" in the totals block.` : ""}${paymentTerms ? ` Add small payment info line: "${paymentTerms}".` : ""}`;
+    }
+    case "menu_price_list": {
+      const business = String(formState.business_name ?? "").trim();
+      const subtitle = String(formState.subtitle ?? "").trim();
+      const contact = String(formState.contact_info ?? "").trim();
+      const hours = String(formState.working_hours ?? "").trim();
+      return `Header: elegant menu masthead. ${logoClause} Large centered business name "${business}".${subtitle ? ` Subtitle below: "${subtitle}".` : ""}${hours ? ` Small hours line: "${hours}".` : ""}${contact ? ` Small contact line near footer or lower header: "${contact}".` : ""}`;
+    }
+    case "thank_you_invitation_card": {
+      const sender = String(formState.sender_name ?? "").trim();
+      const recipient = String(formState.recipient_name ?? "").trim();
+      const cardTitle = String(formState.card_title ?? "").trim();
+      const host = String(formState.host_name ?? "").trim();
+      const event = String(formState.event_name ?? "").trim();
+      const eventDate = String(formState.event_date ?? formState.date ?? "").trim();
+      const venue = String(formState.venue ?? "").trim();
+      const rsvp = String(formState.rsvp ?? "").trim();
+      if (host || event) {
+        return `Layout: elegant invitation card. ${logoClause} Main centered title: "${event || "Invitation"}". Supporting host line: "${host}".${eventDate ? ` Event date line: "${eventDate}".` : ""}${venue ? ` Venue line: "${venue}".` : ""}${rsvp ? ` RSVP line near bottom: "${rsvp}".` : ""}`;
+      }
+      return `Layout: elegant thank-you card. ${logoClause} Main centered heading: "${cardTitle || "Thank You"}".${recipient ? ` Addressed to "${recipient}".` : ""}${sender ? ` Signature or from-line near the bottom: "${sender}".` : ""}${eventDate ? ` Small date line: "${eventDate}".` : ""}`;
+    }
+    case "resume_cv": {
+      const fullName = String(formState.full_name ?? "").trim();
+      const role = String(formState.desired_role ?? "").trim();
+      const email = String(formState.email ?? "").trim();
+      const phone = String(formState.phone ?? "").trim();
+      const location = String(formState.location ?? "").trim();
+      const website = String(formState.website ?? "").trim();
+      const linkedin = String(formState.linkedin ?? "").trim();
+      const contactBits = [email, phone, location, website, linkedin].filter(Boolean).join(" | ");
+      return `Header: professional resume masthead. ${logoClause} Large candidate name "${fullName}" at top.${role ? ` Role subtitle directly beneath: "${role}".` : ""}${contactBits ? ` Compact contact row below: "${contactBits}".` : ""}`;
+    }
     case "clean_minimal": {
       const title = String(formState.title ?? formState.event_name ?? formState.subject ?? "").trim();
       const subtitle = String(formState.subtitle ?? formState.sender_name ?? formState.issuer ?? "").trim();
@@ -296,6 +361,126 @@ function getHeaderBlock(
     default:
       return logoClause;
   }
+}
+
+function resolveAspectRatio(theme: A4Theme, orientation?: A4Orientation): string {
+  if (!orientation || orientation === "portrait") return theme.aspect_ratio;
+  if (orientation === "landscape") {
+    // Flip common portrait ratios
+    if (theme.aspect_ratio === "2:3") return "3:2";
+    if (theme.aspect_ratio === "3:4") return "4:3";
+    return "3:2";
+  }
+  return theme.aspect_ratio;
+}
+
+function fontFamilyLabel(font?: A4FontFamily): string {
+  switch (font) {
+    case "classic_serif":
+      return "Classic Serif (Georgia, Garamond, or similar elegant serif)";
+    case "elegant_script":
+      return "Elegant Script (refined italic/script font for headings; pair with a clean sans-serif for body)";
+    case "bold_display":
+      return "Bold Display (heavy geometric display type for titles; strong confident feel)";
+    case "playful_hand":
+      return "Playful Handwritten (friendly handwritten-style font; casual, warm)";
+    case "modern_sans":
+    default:
+      return "Modern Sans-Serif (Inter, Helvetica, or similar — clean and contemporary)";
+  }
+}
+
+function borderStyleLabel(border?: A4BorderStyle): string {
+  switch (border) {
+    case "none":
+      return "No decorative borders. Use only whitespace and subtle rules for structure.";
+    case "thick":
+      return "Thick bold borders around key sections and around the overall page margin.";
+    case "rounded":
+      return "Rounded, softly curved borders on cards, boxes, and accent panels.";
+    case "decorative":
+      return "Tasteful decorative borders (ornamental corners, elegant flourishes) that match the document tone — used sparingly so they never compete with content.";
+    case "thin":
+    default:
+      return "Thin clean borders around tables, callouts, and section cards.";
+  }
+}
+
+function densityLabel(density?: A4Density): string {
+  switch (density) {
+    case "compact":
+      return "Compact density: tighter line-height, smaller gaps between sections, more content per page, still fully readable.";
+    case "airy":
+      return "Airy density: generous whitespace, relaxed line-height, breathing room between every section.";
+    case "balanced":
+    default:
+      return "Balanced density: comfortable reading rhythm, moderate spacing between sections.";
+  }
+}
+
+function toneLabel(tone?: A4Tone): string {
+  switch (tone) {
+    case "friendly":
+      return "Friendly tone: warm, approachable design; soft shapes; inviting visuals.";
+    case "playful":
+      return "Playful tone: fun accents, vibrant pops of color (within chosen palette), lighter illustrations.";
+    case "formal":
+      return "Formal tone: traditional layout, conservative spacing, classical feel.";
+    case "professional":
+    default:
+      return "Professional tone: polished corporate feel, refined typography, restrained decoration.";
+  }
+}
+
+function getDesignPreferencesBlock(
+  design: A4DesignSettings | null | undefined,
+): string {
+  if (!design) return "";
+  const parts: string[] = [];
+
+  if (design.background_color) {
+    parts.push(
+      `- DOCUMENT BACKGROUND COLOR: ${design.background_color}. Fill the entire page background with this color. Do NOT default to pure white if this is set.`,
+    );
+  }
+  if (design.text_color) {
+    parts.push(
+      `- BODY TEXT COLOR: ${design.text_color}. Apply to all body text and default headings. Ensure strong readable contrast against the background.`,
+    );
+  }
+  if (design.accent_color) {
+    parts.push(
+      `- ACCENT / BORDER COLOR: ${design.accent_color}. Apply to borders, section dividers, accent bars, table header rows, bullet markers, and small emphasis elements. Use it consistently, never randomly.`,
+    );
+  }
+  if (design.font_family) {
+    parts.push(`- FONT FAMILY: ${fontFamilyLabel(design.font_family)}. Use this consistently for headings and body text.`);
+  }
+  if (design.border_style) {
+    parts.push(`- BORDER STYLE: ${borderStyleLabel(design.border_style)}`);
+  }
+  if (typeof design.include_decorative_images === "boolean") {
+    if (design.include_decorative_images) {
+      parts.push(
+        "- DECORATIVE IMAGES: YES. Integrate contextually relevant illustrations, icons, or small spot images that match the subject matter. Keep them clean, on-brand, and non-photographic unless the theme explicitly calls for photos. They must never compete with text or reduce readability.",
+      );
+    } else {
+      parts.push(
+        "- DECORATIVE IMAGES: NO. Render a text-first layout. Only allow minimal iconography if it clarifies meaning (like bullet icons or section markers).",
+      );
+    }
+  }
+  if (design.density) {
+    parts.push(`- PAGE DENSITY: ${densityLabel(design.density)}`);
+  }
+  if (design.tone) {
+    parts.push(`- DESIGN TONE: ${toneLabel(design.tone)}`);
+  }
+
+  if (parts.length === 0) return "";
+
+  return `USER DESIGN PREFERENCES (HIGH PRIORITY — these OVERRIDE the theme's default palette and typography where they conflict, while preserving the theme's layout DNA):
+${parts.join("\n")}`;
 }
 
 function getVisualAssetsBlock(formState: Record<string, unknown>, theme: A4Theme): string {
@@ -352,13 +537,19 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   const brandColorDirective = getBrandColorDirective(brandColors);
   const headerBlock = getHeaderBlock(theme, formState, hasLogoReference, pageNumber);
   const visualAssets = getVisualAssetsBlock(formState, theme);
+  const design = input.designSettings ?? null;
+  const resolvedAspect = resolveAspectRatio(theme, design?.orientation);
+  const designPrefs = getDesignPreferencesBlock(design);
+  const backgroundDirective = design?.background_color
+    ? `Page background filled with ${design.background_color} edge-to-edge (unless the theme explicitly requires a different treatment for a specific block).`
+    : "Pure solid white page (unless the theme style block explicitly dictates otherwise).";
 
   return `ROLE:
 You are "A4", a precision digital document architect. Your only output is a pristine, flat 2D digital A4 document, indistinguishable from a professionally designed PDF export. You never produce photos of paper on desks, shadows, wood, hands, fingers, curled corners, staples, or any physical object. You are a vector layout engine, not a photographer.
 
 NON-NEGOTIABLE VISUAL LAWS:
-1. PERSPECTIVE: Absolute top-down, flat, 2D vector layout. Zero perspective, zero 3D, zero depth. Aspect ratio ${theme.aspect_ratio}.
-2. BACKGROUND: Pure solid white page (unless the theme style block explicitly dictates otherwise). No paper texture, no shadows behind the page, no vignettes, no borders around the page edge unless the theme calls for it.
+1. PERSPECTIVE: Absolute top-down, flat, 2D vector layout. Zero perspective, zero 3D, zero depth. Aspect ratio ${resolvedAspect}${design?.orientation ? ` (user chose ${design.orientation} orientation)` : ""}.
+2. BACKGROUND: ${backgroundDirective} No paper texture, no shadows behind the page, no vignettes, no borders around the page edge unless the theme or user border style calls for it.
 3. TEXT CLARITY: Every single character must be razor-sharp, properly kerned, anti-aliased cleanly, and readable at 400% zoom. No blurred, warped, wavy, or smudged text anywhere.
 4. TEXT FIDELITY (CRITICAL): Every word, number, punctuation mark, subscript, superscript, chemical formula, fraction, and symbol inside the CONTENT section below must be rendered EXACTLY as written. Do NOT paraphrase. Do NOT shorten. Do NOT translate. Do NOT substitute synonyms. Do NOT "improve" or "correct" the content. Preserve every character verbatim, including punctuation and spacing.
 5. NO HALLUCINATED TEXT: Do not invent text anywhere on the page. If a region has no assigned content, leave it clean or fill with requested visuals only. Zero lorem ipsum, zero placeholder copy, zero sample watermarks, zero gibberish.
@@ -383,7 +574,7 @@ ${languageRules}
 VISUAL THEME (DESIGN DNA):
 ${theme.style_block}
 
-${brandColorDirective ? "BRAND COLORS:\n" + brandColorDirective + "\n" : ""}
+${designPrefs ? designPrefs + "\n" : ""}${brandColorDirective ? "BRAND COLORS:\n" + brandColorDirective + "\n" : ""}
 PAGE CONTEXT:
 ${pageContext}
 

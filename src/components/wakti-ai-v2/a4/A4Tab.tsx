@@ -16,7 +16,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { toast } from "sonner";
-import { PDFDocument } from "pdf-lib";
 import {
   Search,
   ArrowLeft,
@@ -29,6 +28,21 @@ import {
   X,
   Check,
   AlertTriangle,
+  GraduationCap,
+  BookOpen,
+  Briefcase,
+  Award,
+  Megaphone,
+  Palette,
+  BookMarked,
+  FileText,
+  Sliders,
+  Link as LinkIcon,
+  ChevronDown,
+  ChevronUp,
+  Type,
+  Square as SquareIcon,
+  type LucideIcon,
 } from "lucide-react";
 import {
   A4_THEMES,
@@ -43,12 +57,34 @@ import {
   generateA4Document,
   subscribeToBatch,
   fetchBatch,
+  downloadA4RowsAsJpgs,
+  downloadA4RowsAsPdf,
   fileToDataUrl,
+  fetchUrlContent,
   type A4DocumentRow,
+  type A4DesignSettings,
 } from "./a4Service";
+import { supabase } from "@/integrations/supabase/client";
 
 type Stage = "pick" | "form" | "generating" | "done" | "failed";
 type PageChoice = "auto" | 1 | 2 | 3;
+
+type AssetPickerMode = "photos" | "qrs";
+
+interface SavedPhotoAsset {
+  id: string;
+  image_url: string;
+  prompt: string | null;
+  created_at: string;
+}
+
+interface SavedQrAsset {
+  id: string;
+  label: string;
+  qr_type: string;
+  data_url: string;
+  created_at: string;
+}
 
 // Helper: bilingual label
 const useTL = () => {
@@ -59,9 +95,145 @@ const useTL = () => {
   };
 };
 
+async function imageUrlToDataUrl(url: string): Promise<string> {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Image fetch failed (${resp.status})`);
+  const blob = await resp.blob();
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Failed to read image"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 // =============================================================================
-// THEME PICKER
+// THEME PICKER — per-theme accent visuals (WAKTI-approved accents only)
 // =============================================================================
+interface ThemeVisual {
+  icon: LucideIcon;
+  // Tailwind utility strings — all brand-approved accents (no purple/indigo).
+  bg: string;      // gradient background tint
+  text: string;    // icon + badge text color
+  border: string;  // hover border color
+  ring: string;    // subtle inner glow on hover
+}
+
+interface ThemeBadgeLabel {
+  en: string;
+  ar: string;
+}
+
+const THEME_VISUALS: Record<string, ThemeVisual> = {
+  official_exam: {
+    icon: GraduationCap,
+    bg: "from-amber-500/10 via-orange-500/5 to-transparent",
+    text: "text-amber-600 dark:text-amber-400",
+    border: "hover:border-amber-500/50",
+    ring: "group-hover:shadow-amber-500/20",
+  },
+  school_project: {
+    icon: BookOpen,
+    bg: "from-emerald-500/10 via-green-500/5 to-transparent",
+    text: "text-emerald-600 dark:text-emerald-400",
+    border: "hover:border-emerald-500/50",
+    ring: "group-hover:shadow-emerald-500/20",
+  },
+  corporate_brief: {
+    icon: Briefcase,
+    bg: "from-blue-500/10 via-sky-500/5 to-transparent",
+    text: "text-blue-600 dark:text-blue-400",
+    border: "hover:border-blue-500/50",
+    ring: "group-hover:shadow-blue-500/20",
+  },
+  certificate: {
+    icon: Award,
+    bg: "from-amber-500/15 via-yellow-500/5 to-transparent",
+    text: "text-amber-600 dark:text-amber-400",
+    border: "hover:border-amber-500/60",
+    ring: "group-hover:shadow-amber-500/25",
+  },
+  event_flyer: {
+    icon: Megaphone,
+    bg: "from-orange-500/10 via-pink-500/5 to-transparent",
+    text: "text-orange-600 dark:text-orange-400",
+    border: "hover:border-orange-500/50",
+    ring: "group-hover:shadow-orange-500/20",
+  },
+  craft_infographic: {
+    icon: Palette,
+    bg: "from-pink-500/10 via-rose-500/5 to-transparent",
+    text: "text-pink-600 dark:text-pink-400",
+    border: "hover:border-pink-500/50",
+    ring: "group-hover:shadow-pink-500/20",
+  },
+  comic_explainer: {
+    icon: BookMarked,
+    bg: "from-cyan-500/10 via-teal-500/5 to-transparent",
+    text: "text-cyan-600 dark:text-cyan-400",
+    border: "hover:border-cyan-500/50",
+    ring: "group-hover:shadow-cyan-500/20",
+  },
+  clean_minimal: {
+    icon: FileText,
+    bg: "from-slate-500/10 via-zinc-500/5 to-transparent",
+    text: "text-slate-600 dark:text-slate-300",
+    border: "hover:border-slate-500/50",
+    ring: "group-hover:shadow-slate-500/20",
+  },
+  invoice_receipt: {
+    icon: FileText,
+    bg: "from-emerald-500/10 via-teal-500/5 to-transparent",
+    text: "text-emerald-600 dark:text-emerald-400",
+    border: "hover:border-emerald-500/50",
+    ring: "group-hover:shadow-emerald-500/20",
+  },
+  menu_price_list: {
+    icon: BookOpen,
+    bg: "from-orange-500/10 via-amber-500/5 to-transparent",
+    text: "text-orange-600 dark:text-orange-400",
+    border: "hover:border-orange-500/50",
+    ring: "group-hover:shadow-orange-500/20",
+  },
+  thank_you_invitation_card: {
+    icon: Award,
+    bg: "from-pink-500/10 via-rose-500/5 to-transparent",
+    text: "text-pink-600 dark:text-pink-400",
+    border: "hover:border-pink-500/50",
+    ring: "group-hover:shadow-pink-500/20",
+  },
+  resume_cv: {
+    icon: Briefcase,
+    bg: "from-blue-500/10 via-sky-500/5 to-transparent",
+    text: "text-blue-600 dark:text-blue-400",
+    border: "hover:border-blue-500/50",
+    ring: "group-hover:shadow-blue-500/20",
+  },
+};
+
+const DEFAULT_VISUAL: ThemeVisual = {
+  icon: FileText,
+  bg: "from-muted via-muted/50 to-transparent",
+  text: "text-muted-foreground",
+  border: "hover:border-primary/40",
+  ring: "group-hover:shadow-primary/10",
+};
+
+const THEME_BADGES: Record<string, ThemeBadgeLabel> = {
+  official_exam: { en: "School Exam", ar: "اختبار مدرسي" },
+  school_project: { en: "School Project", ar: "مشروع مدرسي" },
+  corporate_brief: { en: "Corporate Report", ar: "تقرير مؤسسي" },
+  certificate: { en: "Certificate", ar: "شهادة" },
+  event_flyer: { en: "Event Flyer", ar: "ملصق فعالية" },
+  craft_infographic: { en: "Infographic", ar: "إنفوجرافيك" },
+  comic_explainer: { en: "Comic Explainer", ar: "شرح كوميكس" },
+  clean_minimal: { en: "Minimal", ar: "بسيط" },
+  invoice_receipt: { en: "Invoice", ar: "فاتورة" },
+  menu_price_list: { en: "Price Menu", ar: "قائمة أسعار" },
+  thank_you_invitation_card: { en: "Invitation Card", ar: "بطاقة دعوة" },
+  resume_cv: { en: "Resume CV", ar: "سيرة ذاتية" },
+};
+
 const ThemePicker: React.FC<{ onPick: (themeId: string) => void }> = ({ onPick }) => {
   const { lang, t } = useTL();
   const [query, setQuery] = useState("");
@@ -75,7 +247,7 @@ const ThemePicker: React.FC<{ onPick: (themeId: string) => void }> = ({ onPick }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("Search themes…", "ابحث عن قالب…")}
-          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-purple-500/30 bg-background focus:outline-none focus:ring-2 focus:ring-purple-500/30 focus:border-purple-500 text-sm"
+          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm"
         />
       </div>
 
@@ -84,24 +256,136 @@ const ThemePicker: React.FC<{ onPick: (themeId: string) => void }> = ({ onPick }
           {t("No themes match. Try another search.", "لا توجد نتائج. جرّب بحثًا آخر.")}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {themes.map((theme) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+          {themes.map((theme) => {
+            const v = THEME_VISUALS[theme.id] ?? DEFAULT_VISUAL;
+            const Icon = v.icon;
+            const badge = THEME_BADGES[theme.id];
+            return (
+              <button
+                key={theme.id}
+                onClick={() => onPick(theme.id)}
+                className={`group relative aspect-[5/4] rounded-lg border border-border bg-card ${v.border} hover:shadow-lg ${v.ring} transition-all duration-200 overflow-hidden p-2.5 text-left active:scale-95`}
+              >
+                {/* Accent gradient wash */}
+                <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${v.bg} opacity-90 group-hover:opacity-100 transition-opacity`} />
+                {/* Big soft icon watermark */}
+                <Icon className={`pointer-events-none absolute -right-2 -bottom-2 h-16 w-16 ${v.text} opacity-10 group-hover:opacity-20 transition-opacity`} />
+                <div className="relative h-full flex flex-col justify-between gap-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Icon className={`h-3.5 w-3.5 ${v.text}`} />
+                    <div className={`text-[10px] uppercase tracking-wider font-semibold ${v.text}`}>
+                      {badge ? (lang === "ar" ? badge.ar : badge.en) : (lang === "ar" ? theme.name_ar : theme.name_en)}
+                    </div>
+                  </div>
+                  <div className="text-xs font-semibold leading-snug line-clamp-2 text-foreground">
+                    {lang === "ar" ? theme.name_ar : theme.name_en}
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// =============================================================================
+// URL → CONTENT HELPER (cheap Gemini)
+// =============================================================================
+const UrlFetchHelper: React.FC<{
+  onContent: (content: string) => void;
+  currentValue: string;
+}> = ({ onContent, currentValue }) => {
+  const { t } = useTL();
+  const [open, setOpen] = useState(false);
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFetch = async () => {
+    setError(null);
+    const trimmed = url.trim();
+    if (!trimmed) {
+      setError(t("Please paste a URL first", "يرجى لصق رابط أولاً"));
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await fetchUrlContent(trimmed);
+      if (!res.success || !res.content) {
+        setError(res.error || t("Failed to fetch URL", "فشل جلب الرابط"));
+        return;
+      }
+      const merged = currentValue.trim()
+        ? `${currentValue.trim()}\n\n${res.content}`
+        : res.content;
+      onContent(merged);
+      toast.success(
+        t(
+          "Content fetched and added",
+          "تم جلب المحتوى وإضافته",
+        ),
+      );
+      setOpen(false);
+      setUrl("");
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-background text-[11px] font-medium hover:border-primary/40 hover:text-primary transition"
+      >
+        <LinkIcon className="h-3 w-3" />
+        {t("Fetch from URL", "جلب من رابط")}
+      </button>
+
+      {open && (
+        <div className="absolute right-0 top-full mt-2 w-80 z-20 rounded-xl border border-border bg-card shadow-lg p-3">
+          <div className="text-xs font-medium mb-1.5">
+            {t("Paste a page URL", "الصق رابط صفحة")}
+          </div>
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://example.com/article"
+            className="w-full px-2.5 py-1.5 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+            disabled={loading}
+          />
+          <div className="text-[10px] text-muted-foreground mt-1">
+            {t(
+              "We'll extract and clean the page text using a cheap model, then add it to the content field.",
+              "سنستخرج نص الصفحة وننظفه باستخدام نموذج اقتصادي، ثم نضيفه إلى حقل المحتوى.",
+            )}
+          </div>
+          {error && <div className="text-[11px] text-red-500 mt-2">{error}</div>}
+          <div className="flex items-center gap-2 mt-3">
             <button
-              key={theme.id}
-              onClick={() => onPick(theme.id)}
-              className="group relative aspect-[4/3] rounded-xl border-2 border-purple-500/20 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 hover:border-purple-500/60 hover:shadow-lg hover:shadow-purple-500/20 transition-all duration-200 overflow-hidden p-3 text-left active:scale-95"
+              type="button"
+              onClick={handleFetch}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-60 hover:opacity-90 transition"
             >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 bg-gradient-to-br from-purple-500/10 to-indigo-500/10 transition-opacity" />
-              <div className="relative h-full flex flex-col justify-between">
-                <div className="text-xs uppercase tracking-wider text-purple-600 dark:text-purple-400 font-semibold">
-                  {theme.aspect_ratio === "3:4" ? t("Portrait", "طولي") : t("Document", "مستند")}
-                </div>
-                <div className="text-sm font-semibold leading-snug">
-                  {lang === "ar" ? theme.name_ar : theme.name_en}
-                </div>
-              </div>
+              {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <LinkIcon className="h-3 w-3" />}
+              {loading ? t("Fetching…", "جاري الجلب…") : t("Fetch", "جلب")}
             </button>
-          ))}
+            <button
+              type="button"
+              onClick={() => { setOpen(false); setError(null); }}
+              className="px-3 py-1.5 rounded-md border border-border text-xs hover:bg-muted transition"
+            >
+              {t("Cancel", "إلغاء")}
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -119,10 +403,71 @@ const FormFieldRenderer: React.FC<{
   const { lang, t } = useTL();
   const label = lang === "ar" ? field.label_ar : field.label_en;
   const accent =
-    "border-purple-500/30 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500";
+    "border-border focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary";
 
   const commonWrapperCls = "mb-3";
   const labelCls = "block text-xs font-medium mb-1.5 text-foreground/80";
+  const [assetPicker, setAssetPicker] = useState<AssetPickerMode | null>(null);
+  const [savedPhotos, setSavedPhotos] = useState<SavedPhotoAsset[]>([]);
+  const [savedQrs, setSavedQrs] = useState<SavedQrAsset[]>([]);
+  const [assetLoading, setAssetLoading] = useState(false);
+  const [applyingAssetId, setApplyingAssetId] = useState<string | null>(null);
+
+  const loadSavedPhotos = useCallback(async () => {
+    try {
+      setAssetLoading(true);
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user?.id) {
+        setSavedPhotos([]);
+        return;
+      }
+      const { data, error } = await (supabase as any)
+        .from("user_generated_images")
+        .select("id, image_url, prompt, created_at")
+        .eq("user_id", auth.user.id)
+        .order("created_at", { ascending: false })
+        .limit(12);
+      if (error) throw error;
+      setSavedPhotos(data ?? []);
+    } catch (e) {
+      toast.error(`${t("Failed to load saved photos", "فشل تحميل الصور المحفوظة")}: ${(e as Error).message}`);
+    } finally {
+      setAssetLoading(false);
+    }
+  }, [t]);
+
+  const loadSavedQrs = useCallback(async () => {
+    try {
+      setAssetLoading(true);
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user?.id) {
+        setSavedQrs([]);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("saved_qr_codes")
+        .select("id, label, qr_type, data_url, created_at")
+        .eq("user_id", auth.user.id)
+        .order("created_at", { ascending: false })
+        .limit(12);
+      if (error) throw error;
+      setSavedQrs(data ?? []);
+    } catch (e) {
+      toast.error(`${t("Failed to load saved QR codes", "فشل تحميل رموز QR المحفوظة")}: ${(e as Error).message}`);
+    } finally {
+      setAssetLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (field.type !== "image" || !assetPicker) return;
+    if (assetPicker === "photos" && savedPhotos.length === 0) {
+      void loadSavedPhotos();
+    }
+    if (assetPicker === "qrs" && savedQrs.length === 0) {
+      void loadSavedQrs();
+    }
+  }, [field.type, assetPicker, savedPhotos.length, savedQrs.length, loadSavedPhotos, loadSavedQrs]);
 
   switch (field.type) {
     case "text":
@@ -170,14 +515,25 @@ const FormFieldRenderer: React.FC<{
     case "textarea":
       return (
         <div className={commonWrapperCls}>
-          <label className={labelCls}>
-            {label} {field.required && <span className="text-red-500">*</span>}
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={labelCls + " mb-0"}>
+              {label} {field.required && <span className="text-red-500">*</span>}
+            </label>
+            {field.key === "raw_content" && (
+              <UrlFetchHelper onContent={(content) => onChange(content)} currentValue={String(value ?? "")} />
+            )}
+          </div>
           <textarea
             value={String(value ?? "")}
             onChange={(e) => onChange(e.target.value)}
-            rows={6}
+            rows={8}
             className={`w-full px-3 py-2 rounded-lg border bg-background text-sm resize-y ${accent}`}
+            placeholder={field.key === "raw_content"
+              ? t(
+                  "Type or paste your content here. Or use 'Fetch from URL' to auto-fill from a web page.",
+                  "اكتب أو الصق المحتوى هنا. أو استخدم \"جلب من رابط\" لملء المحتوى من صفحة ويب.",
+                )
+              : undefined}
           />
         </div>
       );
@@ -189,7 +545,7 @@ const FormFieldRenderer: React.FC<{
             type="button"
             onClick={() => onChange(!value)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-              value ? "bg-purple-600" : "bg-muted"
+              value ? "bg-primary" : "bg-muted"
             }`}
           >
             <span
@@ -228,24 +584,26 @@ const FormFieldRenderer: React.FC<{
       return (
         <div className={commonWrapperCls}>
           <label className={labelCls}>{label}</label>
-          <div className="flex items-center gap-3">
-            {v ? (
-              <div className="relative">
-                <img
-                  src={v}
-                  alt={label}
-                  className="h-16 w-16 rounded-lg border object-contain bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={() => onChange(null)}
-                  className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow"
-                  aria-label="Remove"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              </div>
-            ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              {v && (
+                <div className="relative">
+                  <img
+                    src={v}
+                    alt={label}
+                    className="h-16 w-16 rounded-lg border object-contain bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => onChange(null)}
+                    className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-red-500 text-white flex items-center justify-center shadow"
+                    aria-label="Remove"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+
               <label
                 className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border text-xs ${accent}`}
               >
@@ -267,6 +625,107 @@ const FormFieldRenderer: React.FC<{
                   }}
                 />
               </label>
+
+              <button
+                type="button"
+                onClick={() => setAssetPicker((prev) => prev === "photos" ? null : "photos")}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition ${assetPicker === "photos" ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"}`}
+              >
+                <ImageIcon className="h-4 w-4" />
+                {t("Saved Photos", "الصور المحفوظة")}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setAssetPicker((prev) => prev === "qrs" ? null : "qrs")}
+                className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-xs transition ${assetPicker === "qrs" ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted"}`}
+              >
+                <FileText className="h-4 w-4" />
+                {t("Saved QR Codes", "رموز QR المحفوظة")}
+              </button>
+            </div>
+
+            {assetPicker && (
+              <div className="rounded-xl border border-border bg-background/70 p-3">
+                <div className="mb-2 text-xs font-medium text-muted-foreground">
+                  {assetPicker === "photos"
+                    ? t("Choose from your saved photos", "اختر من صورك المحفوظة")
+                    : t("Choose from your saved QR codes", "اختر من رموز QR المحفوظة")}
+                </div>
+
+                {assetLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-3">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {t("Loading…", "جاري التحميل…")}
+                  </div>
+                ) : assetPicker === "photos" ? (
+                  savedPhotos.length > 0 ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {savedPhotos.map((photo) => (
+                        <button
+                          key={photo.id}
+                          type="button"
+                          onClick={async () => {
+                            try {
+                              setApplyingAssetId(photo.id);
+                              const dataUrl = await imageUrlToDataUrl(photo.image_url);
+                              onChange(dataUrl);
+                              setAssetPicker(null);
+                            } catch (e) {
+                              toast.error(`${t("Failed to use saved photo", "فشل استخدام الصورة المحفوظة")}: ${(e as Error).message}`);
+                            } finally {
+                              setApplyingAssetId(null);
+                            }
+                          }}
+                          className="rounded-lg overflow-hidden border border-border bg-card hover:border-primary/40 transition text-left"
+                          disabled={applyingAssetId === photo.id}
+                        >
+                          <div className="aspect-square bg-muted/40">
+                            <img src={photo.image_url} alt={photo.prompt || "Saved photo"} className="w-full h-full object-cover" />
+                          </div>
+                          <div className="p-2 text-[10px] text-muted-foreground line-clamp-2">
+                            {applyingAssetId === photo.id
+                              ? t("Using photo…", "جاري استخدام الصورة…")
+                              : (photo.prompt || t("Saved photo", "صورة محفوظة"))}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-muted-foreground py-2">
+                      {t("No saved photos found.", "لا توجد صور محفوظة.")}
+                    </div>
+                  )
+                ) : savedQrs.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {savedQrs.map((qr) => (
+                      <button
+                        key={qr.id}
+                        type="button"
+                        onClick={() => {
+                          onChange(qr.data_url);
+                          setAssetPicker(null);
+                        }}
+                        className="rounded-lg border border-border bg-card hover:border-primary/40 transition p-2 text-left"
+                      >
+                        <div className="aspect-square rounded-md bg-white overflow-hidden mb-2">
+                          <img src={qr.data_url} alt={qr.label || "QR code"} className="w-full h-full object-contain" />
+                        </div>
+                        <div className="text-xs font-medium line-clamp-1 text-foreground">
+                          {qr.label || t("QR Code", "رمز QR")}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-wide text-muted-foreground mt-0.5">
+                          {qr.qr_type}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground py-2">
+                    {t("No saved QR codes found.", "لا توجد رموز QR محفوظة.")}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -282,7 +741,7 @@ const FormFieldRenderer: React.FC<{
 // =============================================================================
 const PageCarousel: React.FC<{
   rows: A4DocumentRow[];
-  aspectRatio: "2:3" | "3:4";
+  aspectRatio: "2:3" | "3:4" | "3:2" | "4:3";
 }> = ({ rows, aspectRatio }) => {
   const { t } = useTL();
   const [idx, setIdx] = useState(0);
@@ -292,12 +751,19 @@ const PageCarousel: React.FC<{
   }, [total, idx]);
   if (total === 0) return null;
   const row = rows[idx];
-  const aspectCls = aspectRatio === "3:4" ? "aspect-[3/4]" : "aspect-[2/3]";
+  const aspectCls =
+    aspectRatio === "4:3"
+      ? "aspect-[4/3]"
+      : aspectRatio === "3:2"
+      ? "aspect-[3/2]"
+      : aspectRatio === "3:4"
+      ? "aspect-[3/4]"
+      : "aspect-[2/3]";
 
   return (
     <div>
       <div
-        className={`relative w-full max-w-md mx-auto ${aspectCls} rounded-2xl border-2 border-purple-500/20 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40 overflow-hidden shadow-lg`}
+        className={`relative w-full max-w-md mx-auto ${aspectCls} rounded-2xl border border-border bg-card overflow-hidden shadow-md`}
       >
         {row.status === "completed" && row.image_url ? (
           <img src={row.image_url} alt={`Page ${row.page_number}`} className="w-full h-full object-contain" />
@@ -311,7 +777,7 @@ const PageCarousel: React.FC<{
           </div>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="h-10 w-10 text-purple-500 animate-spin" />
+            <Loader2 className="h-10 w-10 text-primary animate-spin" />
             <div className="text-sm font-medium">
               {row.status === "queued" ? t("Queued…", "في الانتظار…") : t("Generating page…", "يتم التوليد…")}
             </div>
@@ -337,7 +803,7 @@ const PageCarousel: React.FC<{
                 key={r.id}
                 onClick={() => setIdx(i)}
                 className={`h-2 rounded-full transition-all ${
-                  i === idx ? "w-6 bg-purple-600" : "w-2 bg-muted"
+                  i === idx ? "w-6 bg-primary" : "w-2 bg-muted"
                 }`}
                 aria-label={`Page ${r.page_number}`}
               />
@@ -359,6 +825,294 @@ const PageCarousel: React.FC<{
 // =============================================================================
 // MAIN COMPONENT
 // =============================================================================
+// =============================================================================
+// DESIGN SETTINGS PANEL — global look & feel controls applied to every theme
+// =============================================================================
+const COLOR_PALETTES: Array<{
+  id: string;
+  name_en: string;
+  name_ar: string;
+  bg: string;
+  text: string;
+  accent: string;
+}> = [
+  { id: "clean_white", name_en: "Clean White", name_ar: "أبيض نظيف", bg: "#FFFFFF", text: "#0B0D12", accent: "#2563EB" },
+  { id: "soft_cream", name_en: "Soft Cream", name_ar: "كريمي ناعم", bg: "#FAF7F0", text: "#1F2937", accent: "#C08457" },
+  { id: "midnight", name_en: "Midnight", name_ar: "منتصف الليل", bg: "#0C0F14", text: "#F2F2F2", accent: "#60A5FA" },
+  { id: "emerald_light", name_en: "Emerald Light", name_ar: "زمرد فاتح", bg: "#F0FDF4", text: "#064E3B", accent: "#059669" },
+  { id: "royal_blue", name_en: "Royal", name_ar: "ملكي", bg: "#F8FAFC", text: "#060541", accent: "#1E3A8A" },
+  { id: "warm_sunset", name_en: "Warm Sunset", name_ar: "غروب دافئ", bg: "#FFF7ED", text: "#7C2D12", accent: "#EA580C" },
+  { id: "rose_blush", name_en: "Rose Blush", name_ar: "وردي خجول", bg: "#FFF1F2", text: "#881337", accent: "#E11D48" },
+  { id: "graphite", name_en: "Graphite", name_ar: "جرافيت", bg: "#F3F4F6", text: "#111827", accent: "#4B5563" },
+];
+
+const FONT_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["font_family"]>; en: string; ar: string }> = [
+  { id: "modern_sans", en: "Modern Sans", ar: "عصري" },
+  { id: "classic_serif", en: "Classic Serif", ar: "كلاسيكي" },
+  { id: "elegant_script", en: "Elegant Script", ar: "أنيق" },
+  { id: "bold_display", en: "Bold Display", ar: "عريض" },
+  { id: "playful_hand", en: "Playful Hand", ar: "مرح" },
+];
+
+const BORDER_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["border_style"]>; en: string; ar: string }> = [
+  { id: "none", en: "None", ar: "بدون" },
+  { id: "thin", en: "Thin", ar: "رفيع" },
+  { id: "thick", en: "Thick", ar: "سميك" },
+  { id: "rounded", en: "Rounded", ar: "مدوّر" },
+  { id: "decorative", en: "Decorative", ar: "زخرفي" },
+];
+
+const ORIENTATION_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["orientation"]>; en: string; ar: string }> = [
+  { id: "portrait", en: "Portrait", ar: "طولي" },
+  { id: "landscape", en: "Landscape", ar: "عرضي" },
+];
+
+const DENSITY_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["density"]>; en: string; ar: string }> = [
+  { id: "compact", en: "Compact", ar: "مكثف" },
+  { id: "balanced", en: "Balanced", ar: "متوازن" },
+  { id: "airy", en: "Airy", ar: "فسيح" },
+];
+
+const TONE_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["tone"]>; en: string; ar: string }> = [
+  { id: "professional", en: "Professional", ar: "احترافي" },
+  { id: "friendly", en: "Friendly", ar: "ودود" },
+  { id: "playful", en: "Playful", ar: "مرح" },
+  { id: "formal", en: "Formal", ar: "رسمي" },
+];
+
+const DesignSettingsPanel: React.FC<{
+  settings: A4DesignSettings;
+  onChange: (next: A4DesignSettings) => void;
+}> = ({ settings, onChange }) => {
+  const { lang, t } = useTL();
+  const [open, setOpen] = useState(true);
+
+  const set = (patch: Partial<A4DesignSettings>) => onChange({ ...settings, ...patch });
+
+  const segBtn = (active: boolean) =>
+    `px-3 py-1.5 rounded-lg text-xs font-medium transition border ${
+      active
+        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+        : "bg-background border-border hover:border-primary/40 text-foreground/80"
+    }`;
+
+  const swatchBtn = (active: boolean) =>
+    `relative w-10 h-10 rounded-lg border-2 transition overflow-hidden shadow-sm hover:scale-105 ${
+      active ? "border-primary ring-2 ring-primary/30" : "border-border"
+    }`;
+
+  return (
+    <div className="mb-4 rounded-xl border border-border bg-gradient-to-br from-card to-background/50 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition"
+        aria-expanded={open}
+      >
+        <div className="flex items-center gap-2">
+          <Sliders className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold">{t("Design Settings", "إعدادات التصميم")}</span>
+          <span className="text-[10px] text-muted-foreground hidden sm:inline">
+            {t("orientation · colors · fonts · style", "الاتجاه · الألوان · الخطوط · النمط")}
+          </span>
+        </div>
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-4">
+          {/* Orientation */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              {t("Orientation", "الاتجاه")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ORIENTATION_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => set({ orientation: o.id })}
+                  className={segBtn(settings.orientation === o.id)}
+                >
+                  {lang === "ar" ? o.ar : o.en}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Color palettes */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              {t("Color Palette", "لوحة الألوان")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {COLOR_PALETTES.map((p) => {
+                const active =
+                  settings.background_color === p.bg &&
+                  settings.text_color === p.text &&
+                  settings.accent_color === p.accent;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    title={lang === "ar" ? p.name_ar : p.name_en}
+                    onClick={() =>
+                      set({
+                        background_color: p.bg,
+                        text_color: p.text,
+                        accent_color: p.accent,
+                      })
+                    }
+                    className={swatchBtn(active)}
+                  >
+                    <div style={{ background: p.bg }} className="absolute inset-0" />
+                    <div style={{ background: p.accent }} className="absolute bottom-0 left-0 right-0 h-3" />
+                    <div style={{ background: p.text }} className="absolute top-1 left-1 w-2 h-2 rounded-full" />
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              <label className="flex flex-col gap-1 text-[10px] text-muted-foreground">
+                <span>{t("Background", "الخلفية")}</span>
+                <input
+                  type="color"
+                  value={settings.background_color || "#FFFFFF"}
+                  onChange={(e) => set({ background_color: e.target.value.toUpperCase() })}
+                  className="h-8 w-full rounded border border-border bg-transparent cursor-pointer"
+                  aria-label={t("Background color", "لون الخلفية")}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-[10px] text-muted-foreground">
+                <span>{t("Text", "النص")}</span>
+                <input
+                  type="color"
+                  value={settings.text_color || "#0B0D12"}
+                  onChange={(e) => set({ text_color: e.target.value.toUpperCase() })}
+                  className="h-8 w-full rounded border border-border bg-transparent cursor-pointer"
+                  aria-label={t("Text color", "لون النص")}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-[10px] text-muted-foreground">
+                <span>{t("Accent", "التمييز")}</span>
+                <input
+                  type="color"
+                  value={settings.accent_color || "#2563EB"}
+                  onChange={(e) => set({ accent_color: e.target.value.toUpperCase() })}
+                  className="h-8 w-full rounded border border-border bg-transparent cursor-pointer"
+                  aria-label={t("Accent color", "لون التمييز")}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Font family */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1">
+              <Type className="h-3 w-3" /> {t("Font Style", "نمط الخط")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {FONT_OPTIONS.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => set({ font_family: f.id })}
+                  className={segBtn(settings.font_family === f.id)}
+                >
+                  {lang === "ar" ? f.ar : f.en}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Border style */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1">
+              <SquareIcon className="h-3 w-3" /> {t("Border Style", "نمط الحدود")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {BORDER_OPTIONS.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => set({ border_style: b.id })}
+                  className={segBtn(settings.border_style === b.id)}
+                >
+                  {lang === "ar" ? b.ar : b.en}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Density + Tone row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+                {t("Page Density", "كثافة الصفحة")}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {DENSITY_OPTIONS.map((d) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() => set({ density: d.id })}
+                    className={segBtn(settings.density === d.id)}
+                  >
+                    {lang === "ar" ? d.ar : d.en}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+                {t("Tone", "اللهجة")}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {TONE_OPTIONS.map((t2) => (
+                  <button
+                    key={t2.id}
+                    type="button"
+                    onClick={() => set({ tone: t2.id })}
+                    className={segBtn(settings.tone === t2.id)}
+                  >
+                    {lang === "ar" ? t2.ar : t2.en}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Decorative images toggle */}
+          <div className="flex items-center justify-between border-t border-border/50 pt-3">
+            <div>
+              <div className="text-sm font-medium">{t("Include Decorative Images", "إدراج صور زخرفية")}</div>
+              <div className="text-[11px] text-muted-foreground">
+                {t("Icons and illustrations that match the subject", "أيقونات ورسومات تناسب الموضوع")}
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!!settings.include_decorative_images}
+              onClick={() => set({ include_decorative_images: !settings.include_decorative_images })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                settings.include_decorative_images ? "bg-primary" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  settings.include_decorative_images ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const A4Tab: React.FC = () => {
   const { lang, t } = useTL();
 
@@ -368,6 +1122,17 @@ const A4Tab: React.FC = () => {
   const [formState, setFormState] = useState<Record<string, unknown>>({});
   const [pageChoice, setPageChoice] = useState<PageChoice>("auto");
   const [extractColors, setExtractColors] = useState<boolean>(false);
+  const [designSettings, setDesignSettings] = useState<A4DesignSettings>({
+    orientation: "portrait",
+    background_color: "#FFFFFF",
+    text_color: "#0B0D12",
+    accent_color: "#2563EB",
+    font_family: "modern_sans",
+    border_style: "thin",
+    include_decorative_images: true,
+    density: "balanced",
+    tone: "professional",
+  });
   const [batchId, setBatchId] = useState<string | null>(null);
   const [rows, setRows] = useState<A4DocumentRow[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -404,6 +1169,10 @@ const A4Tab: React.FC = () => {
       if (f.default !== undefined) initial[f.key] = f.default;
     }
     setFormState(initial);
+    setDesignSettings((prev) => ({
+      ...prev,
+      orientation: prev.orientation === "landscape" ? "landscape" : "portrait",
+    }));
   }, [themeId, purposeId]);
 
   // Cleanup subscription on unmount
@@ -447,6 +1216,7 @@ const A4Tab: React.FC = () => {
         logo_color_extract: extractColors && !!logoDataUrl,
         requested_pages: pageChoice,
         language_mode: languageMode,
+        design_settings: designSettings,
       });
 
       if (!res.success || !res.batch_id) {
@@ -477,7 +1247,7 @@ const A4Tab: React.FC = () => {
       setFatalError((e as Error).message);
       setStage("failed");
     }
-  }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, t]);
+  }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, t]);
 
   // Watch rows: when all rows are completed/failed, flip stage
   useEffect(() => {
@@ -492,72 +1262,75 @@ const A4Tab: React.FC = () => {
 
   // --- PDF download -----------------------------------------------------------
   const handleDownloadPdf = useCallback(async () => {
-    const completed = rows.filter((r) => r.status === "completed" && r.image_url);
-    if (completed.length === 0) return;
     try {
       toast.info(t("Building PDF…", "جاري إنشاء الملف…"));
-      const pdfDoc = await PDFDocument.create();
-      for (const row of completed) {
-        const resp = await fetch(row.image_url!);
-        const bytes = new Uint8Array(await resp.arrayBuffer());
-        // Nano Banana 2 returns JPG by request
-        let embedded;
-        try {
-          embedded = await pdfDoc.embedJpg(bytes);
-        } catch {
-          embedded = await pdfDoc.embedPng(bytes);
-        }
-        const page = pdfDoc.addPage([embedded.width, embedded.height]);
-        page.drawImage(embedded, { x: 0, y: 0, width: embedded.width, height: embedded.height });
-      }
-      const bytes = await pdfDoc.save();
-      const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${rows[0]?.title ?? "wakti-a4"}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      await downloadA4RowsAsPdf(rows);
     } catch (e) {
       toast.error(`${t("PDF build failed", "فشل بناء الملف")}: ${(e as Error).message}`);
+    }
+  }, [rows, t]);
+
+  const handleDownloadPhoto = useCallback(async () => {
+    try {
+      toast.info(t("Preparing photo download…", "جاري تجهيز الصور…"));
+      await downloadA4RowsAsJpgs(rows);
+    } catch (e) {
+      toast.error(`${t("Photo download failed", "فشل تنزيل الصور")}: ${(e as Error).message}`);
     }
   }, [rows, t]);
 
   // ===========================================================================
   // RENDER
   // ===========================================================================
-  const aspectRatio = (theme?.aspect_ratio ?? "2:3") as "2:3" | "3:4";
+  const aspectRatio = useMemo(() => {
+    const base = (theme?.aspect_ratio ?? "2:3") as "2:3" | "3:4";
+    if (designSettings.orientation === "landscape") {
+      return base === "3:4" ? "4:3" : "3:2";
+    }
+    return base;
+  }, [theme?.aspect_ratio, designSettings.orientation]);
+  const currentThemeVisual = theme ? (THEME_VISUALS[theme.id] ?? DEFAULT_VISUAL) : DEFAULT_VISUAL;
+  const CurrentThemeIcon = currentThemeVisual.icon;
+  const currentThemeBadge = theme ? THEME_BADGES[theme.id] : null;
 
   return (
     <div className="w-full max-w-4xl mx-auto px-1 pb-8" dir={lang === "ar" ? "rtl" : "ltr"}>
       {/* ---------- Header strip: current theme + change button --------------- */}
       {theme && stage !== "pick" && (
-        <div className="mb-4 flex items-center justify-between gap-3 p-3 rounded-xl border border-purple-500/30 bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-950/40 dark:to-purple-950/40">
-          <div className="min-w-0">
-            <div className="text-xs uppercase tracking-wider text-purple-600 dark:text-purple-400 font-semibold">
-              {t("Theme", "القالب")}
+        <div className="relative mb-4 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+          <div className={`pointer-events-none absolute inset-0 bg-gradient-to-r ${currentThemeVisual.bg} opacity-90`} />
+          <CurrentThemeIcon className={`pointer-events-none absolute -right-3 -bottom-3 h-20 w-20 ${currentThemeVisual.text} opacity-10`} />
+          <div className="relative flex items-center justify-between gap-3 p-3">
+            <div className="min-w-0 flex items-center gap-3">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-border bg-background/85 shadow-sm ${currentThemeVisual.text}`}>
+                <CurrentThemeIcon className="h-5 w-5" />
+              </div>
+              <div className="min-w-0">
+                <div className={`text-[10px] uppercase tracking-[0.18em] font-semibold ${currentThemeVisual.text}`}>
+                  {currentThemeBadge ? (lang === "ar" ? currentThemeBadge.ar : currentThemeBadge.en) : t("Theme", "القالب")}
+                </div>
+                <div className="text-sm font-semibold truncate text-foreground">
+                  {lang === "ar" ? theme.name_ar : theme.name_en}
+                </div>
+                {purposeId && theme.purpose_chips && (
+                  <div className="mt-0.5 text-xs text-muted-foreground truncate">
+                    {lang === "ar"
+                      ? theme.purpose_chips.find((p) => p.id === purposeId)?.label_ar
+                      : theme.purpose_chips.find((p) => p.id === purposeId)?.label_en}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="text-sm font-semibold truncate">
-              {lang === "ar" ? theme.name_ar : theme.name_en}
-              {purposeId && theme.purpose_chips && (
-                <span className="ml-2 text-xs text-muted-foreground">
-                  ·{" "}
-                  {lang === "ar"
-                    ? theme.purpose_chips.find((p) => p.id === purposeId)?.label_ar
-                    : theme.purpose_chips.find((p) => p.id === purposeId)?.label_en}
-                </span>
-              )}
-            </div>
+            <button
+              onClick={resetAll}
+              className="shrink-0 inline-flex items-center gap-2 rounded-full border border-border bg-background/90 px-3.5 py-2 text-xs font-medium text-foreground shadow-sm hover:border-primary/30 hover:bg-background hover:shadow transition-all active:scale-95"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted">
+                <ArrowLeft className="h-3.5 w-3.5" />
+              </span>
+              {t("Back", "رجوع")}
+            </button>
           </div>
-          <button
-            onClick={resetAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border hover:bg-muted transition"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            {t("Change", "تغيير")}
-          </button>
         </div>
       )}
 
@@ -594,7 +1367,7 @@ const A4Tab: React.FC = () => {
                     onClick={() => setPurposeId(p.id)}
                     className={`px-3 py-1.5 rounded-full text-sm border transition ${
                       purposeId === p.id
-                        ? "bg-purple-600 text-white border-purple-600"
+                        ? "bg-primary text-primary-foreground border-primary"
                         : "hover:bg-muted"
                     }`}
                   >
@@ -607,7 +1380,14 @@ const A4Tab: React.FC = () => {
 
           {/* Dynamic form */}
           {canShowForm ? (
-            <div className="rounded-2xl border border-purple-500/20 bg-background/50 p-4">
+            <div className="relative overflow-hidden rounded-2xl border border-border bg-card/95 p-4 shadow-sm">
+              <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${currentThemeVisual.bg} opacity-70`} />
+              <CurrentThemeIcon className={`pointer-events-none absolute -right-4 bottom-3 h-24 w-24 ${currentThemeVisual.text} opacity-[0.06]`} />
+              <div className="relative">
+              <DesignSettingsPanel
+                settings={designSettings}
+                onChange={setDesignSettings}
+              />
               {schema.map((field) => (
                 <FormFieldRenderer
                   key={field.key}
@@ -625,9 +1405,10 @@ const A4Tab: React.FC = () => {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setExtractColors((v) => !v)}
+                    onClick={() => setExtractColors((v) => !v)
+                    }
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      extractColors ? "bg-purple-600" : "bg-muted"
+                      extractColors ? "bg-primary" : "bg-muted"
                     }`}
                   >
                     <span
@@ -654,7 +1435,7 @@ const A4Tab: React.FC = () => {
                           onClick={() => setPageChoice(p)}
                           className={`flex-1 px-3 py-2 rounded-lg text-sm border transition ${
                             pageChoice === p
-                              ? "bg-purple-600 text-white border-purple-600"
+                              ? "bg-primary text-primary-foreground border-primary"
                               : "hover:bg-muted"
                           }`}
                         >
@@ -664,6 +1445,7 @@ const A4Tab: React.FC = () => {
                   </div>
                 </div>
               )}
+              </div>
             </div>
           ) : (
             <div className="text-sm text-muted-foreground text-center py-8">
@@ -677,7 +1459,7 @@ const A4Tab: React.FC = () => {
               <button
                 onClick={handleGenerate}
                 disabled={isSubmitting || missingRequired.length > 0}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all active:scale-95 ${
+                className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-md bg-primary text-primary-foreground hover:opacity-90 transition-all active:scale-95 ${
                   isSubmitting || missingRequired.length > 0 ? "opacity-60 cursor-not-allowed" : ""
                 }`}
               >
@@ -715,10 +1497,17 @@ const A4Tab: React.FC = () => {
           <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
             <button
               onClick={handleDownloadPdf}
-              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all active:scale-95"
+              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium shadow-md bg-primary text-primary-foreground hover:opacity-90 transition-all active:scale-95"
             >
               <Download className="h-4 w-4" />
               {t("Download PDF", "تنزيل PDF")}
+            </button>
+            <button
+              onClick={handleDownloadPhoto}
+              className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium border border-primary/30 bg-primary/10 text-primary hover:bg-primary/15 transition-all active:scale-95"
+            >
+              <ImageIcon className="h-4 w-4" />
+              {t("Download Photo", "تنزيل الصورة")}
             </button>
             <button
               onClick={resetAll}
@@ -750,7 +1539,7 @@ const A4Tab: React.FC = () => {
           </div>
           <button
             onClick={resetAll}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-lg active:scale-95"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-medium bg-primary text-primary-foreground shadow-md active:scale-95"
           >
             <RefreshCcw className="h-4 w-4" />
             {t("Start Over", "البدء من جديد")}

@@ -5,6 +5,25 @@
 // -----------------------------------------------------------------------------
 
 import { supabase } from "@/integrations/supabase/client";
+import { PDFDocument } from "pdf-lib";
+
+export type A4Orientation = "portrait" | "landscape";
+export type A4FontFamily = "modern_sans" | "classic_serif" | "elegant_script" | "bold_display" | "playful_hand";
+export type A4BorderStyle = "none" | "thin" | "thick" | "rounded" | "decorative";
+export type A4Density = "compact" | "balanced" | "airy";
+export type A4Tone = "professional" | "friendly" | "playful" | "formal";
+
+export interface A4DesignSettings {
+  orientation?: A4Orientation;
+  background_color?: string | null;
+  text_color?: string | null;
+  accent_color?: string | null;
+  font_family?: A4FontFamily;
+  border_style?: A4BorderStyle;
+  include_decorative_images?: boolean;
+  density?: A4Density;
+  tone?: A4Tone;
+}
 
 export interface A4GenerateRequest {
   theme_id: string;
@@ -14,6 +33,28 @@ export interface A4GenerateRequest {
   logo_color_extract?: boolean;
   requested_pages?: "auto" | 1 | 2 | 3;
   language_mode?: "en" | "ar" | "bilingual";
+  design_settings?: A4DesignSettings | null;
+}
+
+export interface A4FetchUrlResponse {
+  success: boolean;
+  error?: string;
+  title?: string | null;
+  detected_language?: "en" | "ar" | "mixed";
+  content?: string;
+}
+
+export async function fetchUrlContent(url: string): Promise<A4FetchUrlResponse> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) return { success: false, error: "Not signed in" };
+
+  const resp = await supabase.functions.invoke<A4FetchUrlResponse>("a4-fetch-url", {
+    body: { url },
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (resp.error) return { success: false, error: resp.error.message };
+  return resp.data ?? { success: false, error: "Empty response" };
 }
 
 export interface A4GenerateResponse {
@@ -42,6 +83,19 @@ export interface A4DocumentRow {
   title: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface A4HistoryBatch {
+  batch_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  total_pages: number;
+  completed_pages: number;
+  failed_pages: number;
+  status: "completed" | "partial" | "failed" | "generating";
+  preview_image_url: string | null;
+  rows: A4DocumentRow[];
 }
 
 export async function generateA4Document(
@@ -109,6 +163,138 @@ export async function fetchBatch(batchId: string): Promise<A4DocumentRow[]> {
     return [];
   }
   return (data ?? []) as A4DocumentRow[];
+}
+
+export async function fetchA4History(limit = 60): Promise<A4HistoryBatch[]> {
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) return [];
+
+  const { data, error } = await supabase
+    .from("user_a4_documents")
+    .select("*")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(Math.max(limit * 3, 120));
+
+  if (error) {
+    console.error("[a4Service] fetchA4History error:", error);
+    return [];
+  }
+
+  const grouped = new Map<string, A4DocumentRow[]>();
+  for (const row of (data ?? []) as A4DocumentRow[]) {
+    const rows = grouped.get(row.batch_id);
+    if (rows) rows.push(row);
+    else grouped.set(row.batch_id, [row]);
+  }
+
+  return Array.from(grouped.values())
+    .map((rows) => {
+      const sortedRows = rows.slice().sort((a, b) => a.page_number - b.page_number);
+      const completedRows = sortedRows.filter((row) => row.status === "completed" && row.image_url);
+      const failedRows = sortedRows.filter((row) => row.status === "failed");
+      const previewRow =
+        completedRows.find((row) => row.page_number === 1) ??
+        completedRows[0] ??
+        sortedRows.find((row) => !!row.image_url) ??
+        sortedRows[0];
+
+      const updatedAt = sortedRows.reduce(
+        (latest, row) => (new Date(row.updated_at).getTime() > new Date(latest).getTime() ? row.updated_at : latest),
+        sortedRows[0]?.updated_at ?? new Date(0).toISOString(),
+      );
+
+      let status: A4HistoryBatch["status"] = "generating";
+      if (completedRows.length === sortedRows.length && sortedRows.length > 0) status = "completed";
+      else if (completedRows.length > 0) status = "partial";
+      else if (failedRows.length === sortedRows.length && sortedRows.length > 0) status = "failed";
+
+      return {
+        batch_id: sortedRows[0]?.batch_id ?? "",
+        title: previewRow?.title ?? sortedRows[0]?.title ?? null,
+        created_at: sortedRows[0]?.created_at ?? updatedAt,
+        updated_at: updatedAt,
+        total_pages: sortedRows[0]?.total_pages ?? sortedRows.length,
+        completed_pages: completedRows.length,
+        failed_pages: failedRows.length,
+        status,
+        preview_image_url: previewRow?.image_url ?? null,
+        rows: sortedRows,
+      };
+    })
+    .filter((batch) => batch.completed_pages > 0)
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    .slice(0, limit);
+}
+
+function sanitizeFilename(name: string): string {
+  const cleaned = name
+    .replace(/[<>:"/\\|?*\u0000-\u001F]/g, "-")
+    .replace(/\s+/g, "_")
+    .trim();
+  return cleaned || "wakti-a4";
+}
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function getCompletedRows(rows: A4DocumentRow[]) {
+  return rows
+    .filter((row) => row.status === "completed" && row.image_url)
+    .slice()
+    .sort((a, b) => a.page_number - b.page_number);
+}
+
+export function getA4DownloadBaseName(rows: A4DocumentRow[], fallback = "wakti-a4") {
+  return sanitizeFilename(rows[0]?.title ?? fallback);
+}
+
+export async function downloadA4RowsAsPdf(rows: A4DocumentRow[], fallbackName = "wakti-a4") {
+  const completed = getCompletedRows(rows);
+  if (completed.length === 0) throw new Error("No completed A4 pages available");
+
+  const pdfDoc = await PDFDocument.create();
+  for (const row of completed) {
+    const resp = await fetch(String(row.image_url));
+    if (!resp.ok) throw new Error(`Image fetch failed (${resp.status})`);
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    let embedded;
+    try {
+      embedded = await pdfDoc.embedJpg(bytes);
+    } catch {
+      embedded = await pdfDoc.embedPng(bytes);
+    }
+    const page = pdfDoc.addPage([embedded.width, embedded.height]);
+    page.drawImage(embedded, { x: 0, y: 0, width: embedded.width, height: embedded.height });
+  }
+
+  const bytes = await pdfDoc.save();
+  const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
+  triggerDownload(blob, `${getA4DownloadBaseName(completed, fallbackName)}.pdf`);
+}
+
+export async function downloadA4RowsAsJpgs(rows: A4DocumentRow[], fallbackName = "wakti-a4") {
+  const completed = getCompletedRows(rows);
+  if (completed.length === 0) throw new Error("No completed A4 pages available");
+
+  const baseName = getA4DownloadBaseName(completed, fallbackName);
+  for (const row of completed) {
+    const resp = await fetch(String(row.image_url));
+    if (!resp.ok) throw new Error(`Image fetch failed (${resp.status})`);
+    const blob = await resp.blob();
+    const filename = completed.length === 1 ? `${baseName}.jpg` : `${baseName}-page-${row.page_number}.jpg`;
+    triggerDownload(blob, filename);
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+  }
 }
 
 // -----------------------------------------------------------------------------

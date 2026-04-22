@@ -23,6 +23,7 @@ const corsHeaders = {
 
 const KIE_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_MODEL = "nano-banana-2";
+const KIE_RECORD_INFO_ENDPOINT = "https://api.kie.ai/api/v1/jobs/recordInfo";
 
 function ok(body: unknown = { ok: true }) {
   return new Response(JSON.stringify(body), {
@@ -34,6 +35,9 @@ function ok(body: unknown = { ok: true }) {
 // Kie wraps image-gen callbacks similar to music. Typical shape:
 //   { code: 200, data: { taskId, info: { resultUrls: ["https://..."] } } }
 // or directly: { taskId, status, resultUrls: [...] } — handle both.
+// Nano Banana 2 (image-gen) real shape (per webhook-visual-ads reference):
+//   { taskId, state: "success" | "fail",
+//     resultJson: "{\"resultUrls\":[\"https://...\"]}", failMsg?: string }
 function extractTaskResult(parsed: any): {
   taskId?: string;
   status?: string;
@@ -44,12 +48,30 @@ function extractTaskResult(parsed: any): {
   const data = parsed?.data ?? parsed;
 
   out.taskId = data?.taskId || data?.task_id || parsed?.taskId || parsed?.task_id;
-  out.status = String(
-    data?.status || parsed?.status || parsed?.state || data?.state || "",
-  ).toUpperCase();
+  // Accept both "status" (uppercase convention) and "state" (lowercase per Kie image webhook).
+  const rawStatus =
+    data?.status || parsed?.status || parsed?.state || data?.state || "";
+  out.status = String(rawStatus).toUpperCase();
+
+  // Nano Banana 2 image callback returns resultJson as a STRING that itself contains { resultUrls: [...] }.
+  // Parse it first so the resultUrls extraction below can find the URL.
+  let parsedResultJson: any = null;
+  const rawResultJson = data?.resultJson ?? data?.result_json ?? parsed?.resultJson ?? parsed?.result_json;
+  if (typeof rawResultJson === "string" && rawResultJson.trim().length > 0) {
+    try {
+      parsedResultJson = JSON.parse(rawResultJson);
+    } catch (e) {
+      console.warn("[a4-callback] resultJson not valid JSON:", (e as Error).message);
+    }
+  } else if (rawResultJson && typeof rawResultJson === "object") {
+    parsedResultJson = rawResultJson;
+  }
 
   // Candidate result URL fields (may be strings or objects with .url)
   const resultUrls: any[] =
+    parsedResultJson?.resultUrls ||
+    parsedResultJson?.result_urls ||
+    parsedResultJson?.urls ||
     data?.resultUrls ||
     data?.result_urls ||
     data?.info?.resultUrls ||
@@ -71,6 +93,10 @@ function extractTaskResult(parsed: any): {
   }
 
   out.errorMessage =
+    parsed?.failMsg ||
+    parsed?.fail_msg ||
+    data?.failMsg ||
+    data?.fail_msg ||
     data?.errorMessage ||
     data?.error_message ||
     parsed?.errorMessage ||
@@ -78,6 +104,34 @@ function extractTaskResult(parsed: any): {
     "";
 
   return out;
+}
+
+async function fetchKieTaskDetail(
+  taskId: string,
+  apiKey: string,
+): Promise<{ taskId?: string; status?: string; imageUrl?: string; errorMessage?: string } | null> {
+  try {
+    const url = `${KIE_RECORD_INFO_ENDPOINT}?taskId=${encodeURIComponent(taskId)}`;
+    const resp = await fetch(url, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+    });
+    const raw = await resp.text();
+    console.log(`[a4-callback] recordInfo task=${taskId} HTTP:${resp.status} body:${raw.slice(0, 400)}`);
+    if (!resp.ok) return null;
+
+    let parsed: any = {};
+    try {
+      parsed = raw ? JSON.parse(raw) : {};
+    } catch {
+      return null;
+    }
+
+    return extractTaskResult(parsed);
+  } catch (e) {
+    console.error("[a4-callback] fetchKieTaskDetail error:", (e as Error).message);
+    return null;
+  }
 }
 
 async function downloadAndStore(
@@ -145,10 +199,13 @@ async function dispatchNextPage(
     const languageMode: "en" | "ar" | "bilingual" =
       ((page1.form_state as any)?.bilingual === true ? "bilingual" : "en") as any;
 
+    const formStateForPrompt = (page1.form_state as any) || {};
+    const designSettings = formStateForPrompt?.__design_settings__ ?? null;
+
     const prompt = compileMasterPrompt({
       theme,
       purposeId: row.purpose_id ?? null,
-      formState: (page1.form_state as any) || {},
+      formState: formStateForPrompt,
       geminiPages,
       pageNumber: row.page_number,
       totalPages: row.total_pages,
@@ -156,6 +213,7 @@ async function dispatchNextPage(
       brandColors: null,
       hasLogoReference: !!logoUrl,
       hasPrevPageReference: true,
+      designSettings,
     });
 
     const imageInputs: string[] = [];
@@ -244,15 +302,6 @@ serve(async (req) => {
     }
 
     const result = extractTaskResult(parsed);
-    const isSuccess =
-      result.status === "SUCCESS" ||
-      result.status === "COMPLETE" ||
-      result.status === "DONE" ||
-      !!result.imageUrl;
-    const isFailed =
-      result.status === "FAILED" ||
-      result.status === "ERROR" ||
-      result.status === "FAIL";
 
     // Find target row: prefer query params (batch_id + page) for reliability, fall back to task_id
     let rowQuery = svc.from("user_a4_documents").select("*").limit(1);
@@ -271,12 +320,37 @@ serve(async (req) => {
     }
     const row = rows[0];
 
+    const taskIdForLookup = result.taskId || row.kie_task_id || undefined;
+    let finalResult: any = result;
+    if (!finalResult.imageUrl && taskIdForLookup && KIE_API_KEY) {
+      const fetched = await fetchKieTaskDetail(String(taskIdForLookup), KIE_API_KEY);
+      if (fetched) {
+        finalResult = {
+          taskId: fetched.taskId || finalResult.taskId,
+          status: fetched.status || finalResult.status,
+          imageUrl: fetched.imageUrl || finalResult.imageUrl,
+          errorMessage: fetched.errorMessage || finalResult.errorMessage,
+        };
+      } else {
+        console.error(`[a4-callback] failed to fetch task detail for task=${taskIdForLookup}`);
+      }
+    }
+
+    const isSuccess =
+      finalResult.status === "SUCCESS" ||
+      finalResult.status === "COMPLETE" ||
+      finalResult.status === "DONE" ||
+      !!finalResult.imageUrl;
+    const isFailed =
+      finalResult.status === "FAILED" ||
+      finalResult.status === "ERROR" ||
+      finalResult.status === "FAIL";
+
     if (isFailed) {
       await svc
         .from("user_a4_documents")
-        .update({ status: "failed", error_message: result.errorMessage || "Kie reported failure" })
+        .update({ status: "failed", error_message: finalResult.errorMessage || "Kie reported failure" })
         .eq("id", row.id);
-      // Also fail any queued siblings
       await svc
         .from("user_a4_documents")
         .update({ status: "failed", error_message: "Upstream page failed" })
@@ -285,15 +359,29 @@ serve(async (req) => {
       return ok();
     }
 
-    if (!isSuccess || !result.imageUrl) {
+    const isTerminalWithoutImage =
+      (finalResult.status === "SUCCESS" ||
+        finalResult.status === "COMPLETE" ||
+        finalResult.status === "DONE") &&
+      !finalResult.imageUrl;
+
+    if (isTerminalWithoutImage) {
+      await svc
+        .from("user_a4_documents")
+        .update({ status: "failed", error_message: "Kie completed the task but returned no image URL" })
+        .eq("id", row.id);
+      return ok();
+    }
+
+    if (!isSuccess || !finalResult.imageUrl) {
       // Intermediate/unknown stage — just ack
-      console.log(`[a4-callback] intermediate stage status=${result.status} — ack`);
+      console.log(`[a4-callback] intermediate stage status=${finalResult.status} task=${taskIdForLookup} — ack`);
       return ok();
     }
 
     // Success: download + store
     const storagePath = `${row.user_id}/${row.batch_id}/page_${row.page_number}.jpg`;
-    const signedUrl = await downloadAndStore(svc, result.imageUrl, storagePath, "image/jpeg");
+    const signedUrl = await downloadAndStore(svc, finalResult.imageUrl, storagePath, "image/jpeg");
 
     if (!signedUrl) {
       await svc
@@ -308,7 +396,7 @@ serve(async (req) => {
       .update({
         status: "completed",
         image_url: signedUrl,
-        kie_raw_url: result.imageUrl,
+        kie_raw_url: finalResult.imageUrl,
       })
       .eq("id", row.id);
 
