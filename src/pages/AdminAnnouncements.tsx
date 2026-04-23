@@ -1,12 +1,14 @@
 // @ts-nocheck
 import { useEffect, useMemo, useState } from "react";
-import { Megaphone, RefreshCw, Search, Filter, Download } from "lucide-react";
+import { Megaphone, RefreshCw, Search, Filter, Download, Plus, Edit3, Archive, Copy, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
+import { AnnouncementEditorModal } from "@/components/admin/AnnouncementEditorModal";
+import { AnnouncementAdminService, type AnnouncementAdminRow } from "@/services/AnnouncementAdminService";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AnnouncementEventRow {
@@ -62,12 +64,78 @@ function userLabel(userId: string, profile?: ProfileLite | null): string {
 }
 
 export default function AdminAnnouncements() {
+  const [tab, setTab] = useState<'announcements' | 'events'>('announcements');
+  const [announcements, setAnnouncements] = useState<AnnouncementAdminRow[]>([]);
+  const [annLoading, setAnnLoading] = useState(true);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [editing, setEditing] = useState<AnnouncementAdminRow | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
   const [events, setEvents] = useState<AnnouncementEventRow[]>([]);
   const [profiles, setProfiles] = useState<Record<string, ProfileLite>>({});
   const [loading, setLoading] = useState(true);
   const [keyFilter, setKeyFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+
+  const fetchAnnouncements = async () => {
+    setAnnLoading(true);
+    try {
+      const rows = await AnnouncementAdminService.list();
+      setAnnouncements(rows);
+    } catch (err: any) {
+      console.error('[AdminAnnouncements] list error:', err);
+      toast.error('Failed to load announcements: ' + (err?.message || 'unknown'));
+    } finally {
+      setAnnLoading(false);
+    }
+  };
+
+  const handleCreate = () => { setEditing(null); setEditorOpen(true); };
+  const handleEdit = (row: AnnouncementAdminRow) => { setEditing(row); setEditorOpen(true); };
+  const handleArchive = async (row: AnnouncementAdminRow) => {
+    setBusyId(row.id);
+    try {
+      await AnnouncementAdminService.archive(row.id);
+      toast.success('Archived');
+      fetchAnnouncements();
+    } catch (err: any) {
+      toast.error('Archive failed: ' + (err?.message || 'unknown'));
+    } finally { setBusyId(null); }
+  };
+  const handleDelete = async (row: AnnouncementAdminRow) => {
+    if (row.is_system) { toast.error('System announcements cannot be deleted'); return; }
+    if (!confirm(`Delete announcement "${row.announcement_key}"? This cannot be undone.`)) return;
+    setBusyId(row.id);
+    try {
+      await AnnouncementAdminService.remove(row.id);
+      toast.success('Deleted');
+      fetchAnnouncements();
+    } catch (err: any) {
+      toast.error('Delete failed: ' + (err?.message || 'unknown'));
+    } finally { setBusyId(null); }
+  };
+  const handleDuplicate = async (row: AnnouncementAdminRow) => {
+    setBusyId(row.id);
+    try {
+      await AnnouncementAdminService.duplicate(row.id);
+      toast.success('Duplicated as draft');
+      fetchAnnouncements();
+    } catch (err: any) {
+      toast.error('Duplicate failed: ' + (err?.message || 'unknown'));
+    } finally { setBusyId(null); }
+  };
+  const handlePublishToggle = async (row: AnnouncementAdminRow) => {
+    setBusyId(row.id);
+    try {
+      const nextStatus = row.status === 'live' ? 'draft' : 'live';
+      await AnnouncementAdminService.upsert({ status: nextStatus } as any, row.id);
+      toast.success(nextStatus === 'live' ? 'Published live' : 'Moved to draft');
+      fetchAnnouncements();
+    } catch (err: any) {
+      toast.error('Status change failed: ' + (err?.message || 'unknown'));
+    } finally { setBusyId(null); }
+  };
 
   const fetchData = async () => {
     setLoading(true);
@@ -107,6 +175,7 @@ export default function AdminAnnouncements() {
 
   useEffect(() => {
     fetchData();
+    fetchAnnouncements();
   }, []);
 
   const keyOptions = useMemo(() => {
@@ -205,7 +274,7 @@ export default function AdminAnnouncements() {
       >
         <div className="flex items-center gap-2">
           <Button
-            onClick={fetchData}
+            onClick={() => { fetchData(); fetchAnnouncements(); }}
             variant="outline"
             size="sm"
             className="h-8 px-3 text-xs bg-white/5 border-white/15 text-white/70 hover:bg-white/10 hover:text-white"
@@ -213,19 +282,65 @@ export default function AdminAnnouncements() {
             <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
             <span className="hidden sm:inline">Refresh</span>
           </Button>
-          <Button
-            onClick={exportCsv}
-            variant="outline"
-            size="sm"
-            className="h-8 px-3 text-xs bg-white/5 border-white/15 text-white/70 hover:bg-white/10 hover:text-white"
-          >
-            <Download className="h-3.5 w-3.5 mr-1.5" />
-            <span className="hidden sm:inline">Export CSV</span>
-          </Button>
+          {tab === 'events' && (
+            <Button
+              onClick={exportCsv}
+              variant="outline"
+              size="sm"
+              className="h-8 px-3 text-xs bg-white/5 border-white/15 text-white/70 hover:bg-white/10 hover:text-white"
+            >
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </Button>
+          )}
+          {tab === 'announcements' && (
+            <Button
+              onClick={handleCreate}
+              size="sm"
+              className="h-8 px-3 text-xs bg-gradient-to-r from-sky-500 to-violet-500 text-white hover:brightness-110"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1.5" />
+              <span className="hidden sm:inline">New Announcement</span>
+            </Button>
+          )}
         </div>
       </AdminHeader>
 
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-28 space-y-6">
+        {/* Tab switcher */}
+        <div className="inline-flex rounded-xl border border-white/10 bg-[#0e1119] p-1">
+          {[
+            { id: 'announcements', label: 'Announcements' },
+            { id: 'events', label: 'Events' },
+          ].map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setTab(id as any)}
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
+                tab === id ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'announcements' && (
+          <AnnouncementsList
+            rows={announcements}
+            loading={annLoading}
+            busyId={busyId}
+            onEdit={handleEdit}
+            onArchive={handleArchive}
+            onDelete={handleDelete}
+            onDuplicate={handleDuplicate}
+            onPublishToggle={handlePublishToggle}
+            onCreate={handleCreate}
+          />
+        )}
+
+        {tab === 'events' && (
+        <>
         {/* Per-key summary */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -384,9 +499,162 @@ export default function AdminAnnouncements() {
             </table>
           </div>
         </div>
+        </>
+        )}
       </div>
 
+      <AnnouncementEditorModal
+        open={editorOpen}
+        onClose={() => setEditorOpen(false)}
+        initial={editing}
+        onSaved={fetchAnnouncements}
+      />
+
       <AdminMobileNav />
+    </div>
+  );
+}
+
+function AnnouncementsList({
+  rows,
+  loading,
+  busyId,
+  onEdit,
+  onArchive,
+  onDelete,
+  onDuplicate,
+  onPublishToggle,
+  onCreate,
+}: {
+  rows: AnnouncementAdminRow[];
+  loading: boolean;
+  busyId: string | null;
+  onEdit: (row: AnnouncementAdminRow) => void;
+  onArchive: (row: AnnouncementAdminRow) => void;
+  onDelete: (row: AnnouncementAdminRow) => void;
+  onDuplicate: (row: AnnouncementAdminRow) => void;
+  onPublishToggle: (row: AnnouncementAdminRow) => void;
+  onCreate: () => void;
+}) {
+  if (loading && rows.length === 0) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-40 rounded-2xl border border-white/10 bg-[#0e1119] animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div className="rounded-2xl border border-white/10 bg-[#0e1119] p-10 text-center">
+        <Megaphone className="h-10 w-10 mx-auto text-white/30 mb-3" />
+        <h3 className="text-base font-semibold text-white/80">No announcements yet</h3>
+        <p className="text-sm text-white/50 mt-1">Create your first announcement to ship it to users.</p>
+        <Button onClick={onCreate} className="mt-4 bg-gradient-to-r from-sky-500 to-violet-500 text-white hover:brightness-110">
+          <Plus className="h-4 w-4 mr-1.5" />
+          New Announcement
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      {rows.map((row) => {
+        const isBusy = busyId === row.id;
+        const conv = row.total_events > 0 ? Math.round((row.acted_count / row.total_events) * 100) : 0;
+        return (
+          <Card key={row.id} className="enhanced-card border-white/10 bg-[#0e1119]">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CardTitle className="text-sm font-semibold text-white/90 break-all">
+                      {row.title_en || row.announcement_key}
+                    </CardTitle>
+                    {row.is_system && (
+                      <span className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-amber-200">
+                        System
+                      </span>
+                    )}
+                  </div>
+                  <CardDescription className="text-[11px] text-white/40 break-all mt-0.5">
+                    {row.announcement_key}
+                  </CardDescription>
+                </div>
+                <span
+                  className={`shrink-0 inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                    row.status === 'live'
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                      : row.status === 'draft'
+                      ? 'bg-sky-500/10 text-sky-300 border-sky-500/20'
+                      : 'bg-white/5 text-white/60 border-white/10'
+                  }`}
+                >
+                  {row.status}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-3">
+              {row.body_en && (
+                <p className="text-[12px] text-white/60 line-clamp-2 whitespace-pre-line">{row.body_en}</p>
+              )}
+              <div className="flex flex-wrap gap-1.5 text-[10px]">
+                <span className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-white/70">{row.display_type}</span>
+                <span className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-white/70">{row.trigger_type}</span>
+                <span className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-white/70">{row.audience_type}</span>
+                <span className="rounded-full bg-white/5 border border-white/10 px-2 py-0.5 text-white/70">{row.frequency}</span>
+                {row.priority === 'high' && (
+                  <span className="rounded-full bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 text-rose-200">high priority</span>
+                )}
+              </div>
+              <div className="grid grid-cols-5 gap-2 text-center">
+                <Stat label="Sent" value={row.unique_users} color="text-white/80" />
+                <Stat label="Seen" value={row.seen_count} color="text-sky-300" />
+                <Stat label="Acted" value={row.acted_count} color="text-emerald-300" />
+                <Stat label="Dism." value={row.dismissed_count} color="text-rose-300" />
+                <Stat label="Conv." value={`${conv}%`} color="text-amber-300" />
+              </div>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button size="sm" variant="outline" onClick={() => onEdit(row)} disabled={isBusy} className="h-8 px-2 text-[11px] border-white/15 bg-white/5 text-white/80 hover:bg-white/10">
+                  <Edit3 className="h-3 w-3 mr-1" />Edit
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => onPublishToggle(row)}
+                  disabled={isBusy || row.status === 'archived'}
+                  className={`h-8 px-2 text-[11px] text-white ${row.status === 'live' ? 'bg-white/10 hover:bg-white/15' : 'bg-gradient-to-r from-sky-500 to-violet-500 hover:brightness-110'}`}
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  {row.status === 'live' ? 'Unpublish' : 'Publish'}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onDuplicate(row)} disabled={isBusy} className="h-8 px-2 text-[11px] border-white/15 bg-white/5 text-white/70 hover:bg-white/10">
+                  <Copy className="h-3 w-3 mr-1" />Duplicate
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => onArchive(row)} disabled={isBusy || row.status === 'archived'} className="h-8 px-2 text-[11px] border-white/15 bg-white/5 text-white/60 hover:bg-white/10">
+                  <Archive className="h-3 w-3 mr-1" />Archive
+                </Button>
+                {!row.is_system && (
+                  <Button size="sm" variant="outline" onClick={() => onDelete(row)} disabled={isBusy} className="h-8 px-2 text-[11px] border-rose-500/20 bg-rose-500/5 text-rose-200 hover:bg-rose-500/10">
+                    <Trash2 className="h-3 w-3 mr-1" />Delete
+                  </Button>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+function Stat({ label, value, color }: { label: string; value: number | string; color: string }) {
+  return (
+    <div>
+      <div className={`text-sm font-bold ${color}`}>{value}</div>
+      <div className="text-[9px] text-white/40 uppercase tracking-wider">{label}</div>
     </div>
   );
 }

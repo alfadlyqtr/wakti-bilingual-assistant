@@ -1,4 +1,14 @@
 
+/* Jump-to-reply highlight pulse (WhatsApp-style) */
+.wakti-reply-highlight {
+  box-shadow: 0 0 0 3px hsla(210, 100%, 65%, 0.55), 0 0 24px hsla(210, 100%, 65%, 0.35);
+  animation: wakti-reply-flash 1.6s ease-out;
+}
+@keyframes wakti-reply-flash {
+  0%   { box-shadow: 0 0 0 3px hsla(210, 100%, 65%, 0.75), 0 0 32px hsla(210, 100%, 65%, 0.55); }
+  100% { box-shadow: 0 0 0 0 hsla(210, 100%, 65%, 0),    0 0 0 hsla(210, 100%, 65%, 0); }
+}
+
 #root {
   margin: 0 auto;
   text-align: center;

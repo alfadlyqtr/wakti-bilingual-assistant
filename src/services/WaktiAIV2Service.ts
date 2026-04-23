@@ -47,6 +47,7 @@ export interface AIMessage {
   metadata?: any;
   chatSubmode?: 'chat' | 'study';
   replyTo?: string; // ID of the message being replied to
+  replyQuote?: string; // One-line preview of the replied-to content (for rendering)
 }
 
 export interface AIConversation {

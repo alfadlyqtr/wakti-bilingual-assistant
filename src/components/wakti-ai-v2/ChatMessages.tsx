@@ -1453,8 +1453,18 @@ export function ChatMessages({
     return '💬 Chat';
   };
 
+  // Strip the injected "[Replying to: ...]\n\n" / "[ردًا على: ...]\n\n" prefix for display
+  const stripReplyPrefix = (text: string): string => {
+    if (!text) return text;
+    return text.replace(/^\s*\[(?:Replying to|ردًا على):[\s\S]*?\]\s*\n\n?/, '');
+  };
+
   // ENHANCED: Function to render message content with proper video display
   const renderMessageContent = (message: AIMessage) => {
+    // Hide the raw "[Replying to: ...]" marker on user bubbles (quote header renders it visually instead)
+    if (message.role === 'user' && (message as any)?.replyTo) {
+      message = { ...message, content: stripReplyPrefix(message.content || '') } as AIMessage;
+    }
     const content = message.content;
     const yt = (message as any)?.metadata?.youtube;
     const ytResults = (message as any)?.metadata?.youtubeResults;
@@ -2079,8 +2089,19 @@ export function ChatMessages({
             const filesModified = metadata.filesModified || [];
             const tasks = metadata.tasks || [];
             
+            const replyToId = (message as any)?.replyTo as string | undefined;
+            const replyQuotePreview = (message as any)?.replyQuote as string | undefined;
+            const handleJumpToReplied = () => {
+              if (!replyToId) return;
+              const el = document.getElementById(`msg-${replyToId}`);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                el.classList.add('wakti-reply-highlight');
+                window.setTimeout(() => el.classList.remove('wakti-reply-highlight'), 1600);
+              }
+            };
             return (
-              <div key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} group`}>
+              <div id={`msg-${message.id}`} key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} group scroll-mt-24 transition-shadow rounded-lg`}>
                 <div className="flex w-full min-w-0">
                   
                   <div className={`rounded-lg px-4 py-3 relative w-full min-h-24 ${
@@ -2096,6 +2117,23 @@ export function ChatMessages({
                         {getMessageBadge(message, activeTrigger)}
                       </Badge>
                     </div>
+
+                    {/* WhatsApp-style quoted reply header (user messages only) */}
+                    {message.role === 'user' && replyToId && replyQuotePreview && (
+                      <button
+                        type="button"
+                        onClick={handleJumpToReplied}
+                        className="mb-2 w-full text-left rounded-md bg-white/15 hover:bg-white/25 border-l-4 border-white/70 px-2.5 py-1.5 transition-colors"
+                        title={language === 'ar' ? 'الانتقال إلى الرسالة الأصلية' : 'Jump to original message'}
+                      >
+                        <div className="text-[11px] font-semibold opacity-90 mb-0.5">
+                          {language === 'ar' ? 'وكتي قال' : 'wakti said'}
+                        </div>
+                        <div className="text-xs opacity-90 truncate">
+                          {replyQuotePreview}
+                        </div>
+                      </button>
+                    )}
                     
                     <div className={`text-sm leading-relaxed break-words ${message.role === 'user' ? (language === 'ar' ? 'text-right' : 'text-left') : 'text-left'}`}>
                       {(() => {

@@ -519,15 +519,20 @@ const WaktiAIV2 = () => {
     const wantsArabic = /translate.+to\s+arabic/i.test(messageContent || '') || /إلى العربية/.test(messageContent || '');
     const requestLanguage = wantsArabic ? 'ar' : language;
 
-    // If replying to a message, prepend context for the AI
+    // If replying to a message, prepend context for the AI (localized) and keep a structured quote for rendering
     let finalMessageContent = messageContent;
+    let replyQuoteStored: string | undefined;
     if (replyContextParam) {
       // Get the first line of the reply and truncate if necessary
       const firstLine = replyContextParam.content.split('\n')[0].trim();
-      const replyQuote = firstLine.length > 150 
+      const replyQuote = firstLine.length > 150
         ? firstLine.substring(0, 150) + '...'
         : firstLine;
-      finalMessageContent = `[Replying to: (wakti said) "${replyQuote}"]\n\n${messageContent}`;
+      replyQuoteStored = replyQuote;
+      const marker = language === 'ar'
+        ? `[ردًا على: (وكتي قال) "${replyQuote}"]`
+        : `[Replying to: (wakti said) "${replyQuote}"]`;
+      finalMessageContent = `${marker}\n\n${messageContent}`;
     }
 
     const userMessage: AIMessage = {
@@ -540,6 +545,7 @@ const WaktiAIV2 = () => {
       attachedFiles: attachedFiles,
       chatSubmode: effectiveChatSubmode, // Store study/chat mode for bubble styling
       replyTo: replyContextParam?.messageId, // Store reference to replied message
+      replyQuote: replyQuoteStored, // One-line preview for WhatsApp-style rendering
     };
     const newMessages = [...sessionMessages, userMessage];
     setSessionMessages(newMessages);

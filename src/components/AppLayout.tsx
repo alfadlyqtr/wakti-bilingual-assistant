@@ -18,6 +18,7 @@ import { onEvent } from "@/utils/eventBus";
 import { toast } from "sonner";
 
 const CustomPaywallModal = lazy(() => import("@/components/paywall/CustomPaywallModal"));
+const AnnouncementRunner = lazy(() => import("@/components/announcements/AnnouncementRunner").then((m) => ({ default: m.AnnouncementRunner })));
 
 interface AppLayoutProps {
   children?: React.ReactNode;
@@ -135,6 +136,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
               {content}
             </main>
             <PresenceBeacon />
+            <Suspense fallback={null}>
+              <AnnouncementRunner />
+            </Suspense>
           </div>
         </ProtectedRoute>
       </>
@@ -150,6 +154,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
         <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
           <PresenceBeacon />
           <TabletLayout>{content}</TabletLayout>
+          <Suspense fallback={null}>
+            <AnnouncementRunner />
+          </Suspense>
         </ProtectedRoute>
       </>
     );
@@ -166,6 +173,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       <ProtectedRoute CustomPaywallModal={CustomPaywallModal}>
         <PresenceBeacon />
         <DesktopLayout>{content}</DesktopLayout>
+        <Suspense fallback={null}>
+          <AnnouncementRunner />
+        </Suspense>
       </ProtectedRoute>
     </>
   );

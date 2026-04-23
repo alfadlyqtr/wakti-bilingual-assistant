@@ -3338,7 +3338,21 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
           chatSubmode,
           { useSearch: chatUsesSearch, hasReminders: !!activeRemindersContext, isReminderTrigger: messageHasReminderKeyword, formattedOffset }
         );
-        const systemPrompt = `${helpfulMemoryContext ? helpfulMemoryContext + '\n\n' : ''}${continuityContext ? continuityContext + '\n\n' : ''}${systemPromptBase}${activeRemindersContext || ''}`;
+        // Detect WhatsApp-style reply marker injected by the frontend and convert it into an explicit system instruction.
+        // Supports EN: [Replying to: (wakti said) "..."]  and  AR: [ردًا على: (وكتي قال) "..."]
+        let replyInstruction = '';
+        try {
+          const msgStr = typeof message === 'string' ? message : '';
+          const replyMatch = msgStr.match(/^\s*\[(?:Replying to|ردًا على):\s*\((?:wakti said|وكتي قال)\)\s*"([\s\S]*?)"\s*\]/);
+          if (replyMatch && replyMatch[1]) {
+            const quoted = replyMatch[1].trim().slice(0, 400);
+            replyInstruction = language === 'ar'
+              ? `REPLY FOCUS (ضروري): المستخدم يرد تحديدًا على رسالتك السابقة المقتبسة أدناه. خاطب هذه النقطة بالذات، لا تعامل الرسالة كموضوع جديد. إذا طلب المستخدم رأيك/إعادة صياغة/تصحيحًا/تفصيلًا فأجبه عن المحتوى المقتبس حصرًا.\nRESPONSE LANGUAGE: اكتب الرد بالعربية.\nالمقتبس: "${quoted}"`
+              : `REPLY FOCUS (CRITICAL): The user is replying SPECIFICALLY to your previous message quoted below. Address that exact point — do NOT treat their message as a new topic. If they ask for your opinion / rephrase / correction / elaboration, answer about the quoted content only.\nQUOTED MESSAGE: "${quoted}"`;
+          }
+        } catch { /* best-effort */ }
+
+        const systemPrompt = `${helpfulMemoryContext ? helpfulMemoryContext + '\n\n' : ''}${continuityContext ? continuityContext + '\n\n' : ''}${systemPromptBase}${activeRemindersContext || ''}${replyInstruction ? '\n\n' + replyInstruction : ''}`;
 
         const messages = [
           { role: 'system', content: systemPrompt }
