@@ -4,6 +4,16 @@ import { Megaphone, RefreshCw, Search, Filter, Download, Plus, Edit3, Archive, C
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
@@ -70,6 +80,7 @@ export default function AdminAnnouncements() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState<AnnouncementAdminRow | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<AnnouncementAdminRow | null>(null);
 
   const [events, setEvents] = useState<AnnouncementEventRow[]>([]);
   const [profiles, setProfiles] = useState<Record<string, ProfileLite>>({});
@@ -103,9 +114,14 @@ export default function AdminAnnouncements() {
       toast.error('Archive failed: ' + (err?.message || 'unknown'));
     } finally { setBusyId(null); }
   };
-  const handleDelete = async (row: AnnouncementAdminRow) => {
+  const handleDelete = (row: AnnouncementAdminRow) => {
     if (row.is_system) { toast.error('System announcements cannot be deleted'); return; }
-    if (!confirm(`Delete announcement "${row.announcement_key}"? This cannot be undone.`)) return;
+    setToDelete(row);
+  };
+  const confirmDelete = async () => {
+    const row = toDelete;
+    if (!row) return;
+    setToDelete(null);
     setBusyId(row.id);
     try {
       await AnnouncementAdminService.remove(row.id);
@@ -509,6 +525,30 @@ export default function AdminAnnouncements() {
         initial={editing}
         onSaved={fetchAnnouncements}
       />
+
+      <AlertDialog open={!!toDelete} onOpenChange={(v) => { if (!v) setToDelete(null); }}>
+        <AlertDialogContent className="bg-[#0c0f14] border-white/10 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-white">Delete announcement?</AlertDialogTitle>
+            <AlertDialogDescription className="text-white/60">
+              This will permanently delete
+              <span className="mx-1 text-white font-semibold break-all">"{toDelete?.title_en || toDelete?.announcement_key}"</span>
+              and cannot be undone. Existing event history remains in the Events tab.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white/15 bg-white/5 text-white/80 hover:bg-white/10 hover:text-white">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-gradient-to-r from-rose-500 to-rose-600 text-white hover:brightness-110"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AdminMobileNav />
     </div>
