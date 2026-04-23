@@ -13,6 +13,7 @@ const AdminAnalytics = lazy(() => import("@/pages/AdminAnalytics"));
 const AdminSettings = lazy(() => import("@/pages/AdminSettings"));
 const AdminAuditLog = lazy(() => import("@/pages/AdminAuditLog"));
 const AdminAIUsage = lazy(() => import("@/pages/AdminAIUsage"));
+const AdminAnnouncements = lazy(() => import("@/pages/AdminAnnouncements"));
 
 function AdminFallback() {
   return (
@@ -36,6 +37,7 @@ export default function AdminRouter() {
         <Route path="/admin/analytics" element={<AdminRoute><AdminAnalytics /></AdminRoute>} />
         <Route path="/admin/audit-log" element={<AdminRoute><AdminAuditLog /></AdminRoute>} />
         <Route path="/admin/ai-usage" element={<AdminRoute><AdminAIUsage /></AdminRoute>} />
+        <Route path="/admin/announcements" element={<AdminRoute><AdminAnnouncements /></AdminRoute>} />
         <Route path="/admin-settings" element={<AdminRoute><AdminSettings /></AdminRoute>} />
       </Routes>
     </Suspense>

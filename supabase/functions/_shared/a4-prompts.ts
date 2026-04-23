@@ -529,9 +529,25 @@ function getBackgroundTreatmentBlock(bg: A4BackgroundTreatment | null | undefine
   }
 }
 
+// Themes where topic elaboration is welcome (educational / explanatory).
+// For these themes we soften the "never invent" rule so the model can fill
+// sparse content with accurate facts about the stated topic instead of
+// falling back to Lorem Ipsum.
+const ELABORATION_FRIENDLY_THEMES = new Set<string>([
+  "craft_infographic",
+  "comic_explainer",
+  "school_project",
+  "school_exam",
+  "clean_minimal",
+]);
+
+// Themes where grading_circle makes sense. Everywhere else it gets stripped.
+const GRADING_CIRCLE_THEMES = new Set<string>(["official_exam"]);
+
 function getContentComponentsBlock(
   components: A4ContentComponent[] | null | undefined,
   rawContent: string,
+  themeId: string,
 ): string {
   if (!components || components.length === 0) return "";
   const map: Record<A4ContentComponent, string> = {
@@ -560,10 +576,14 @@ function getContentComponentsBlock(
     "chart_radar",
   ]);
   let filtered = components.slice();
+
+  // Theme compatibility gate: grading_circle only belongs in actual exam themes.
+  if (!GRADING_CIRCLE_THEMES.has(themeId)) {
+    filtered = filtered.filter((c) => c !== "grading_circle");
+  }
+
   if (!hasNumbers) {
     filtered = filtered.filter((c) => !numericOnly.has(c));
-    // If a chart was requested but we removed it, add info_cards as a safe
-    // qualitative fallback (unless already present).
     const hadChart = components.some((c) => numericOnly.has(c));
     if (hadChart && !filtered.includes("info_cards")) {
       filtered.push("info_cards");
@@ -573,13 +593,24 @@ function getContentComponentsBlock(
   const pieces = filtered.map((c) => map[c]).filter(Boolean);
   if (pieces.length === 0) return "";
 
-  return [
-    `Content components to include: ${pieces.join("; ")}.`,
-    "Integrate each component into the layout where it logically fits.",
-    "CRITICAL: Populate every component ONLY with data that already exists in the content above.",
-    "Do NOT invent numbers, labels, company names, product names, technology names, brand names, integrations, or examples.",
-    "If a component has no matching data source in the content, OMIT that component entirely and replace it with a short qualitative summary card built from words that ARE in the content.",
-  ].join(" ");
+  const isElaborationFriendly = ELABORATION_FRIENDLY_THEMES.has(themeId);
+
+  const rules = isElaborationFriendly
+    ? [
+        `Content components to include: ${pieces.join("; ")}.`,
+        "Integrate each component into the layout where it logically fits.",
+        "RULE: If the provided content is brief, elaborate each card using short, accurate, age-appropriate facts about the stated topic, written in the SAME LANGUAGE as the content.",
+        "Stay factually correct. Do NOT fabricate brand names, product names, company names, numeric statistics, dates, or specific integrations that are not common knowledge about the topic.",
+      ]
+    : [
+        `Content components to include: ${pieces.join("; ")}.`,
+        "Integrate each component into the layout where it logically fits.",
+        "CRITICAL: Populate every component ONLY with data that already exists in the content above.",
+        "Do NOT invent numbers, labels, company names, product names, technology names, brand names, integrations, or examples.",
+        "If a component has no matching data source in the content, OMIT that component entirely and replace it with a short qualitative summary card built from words that ARE in the content.",
+      ];
+
+  return rules.join(" ");
 }
 
 function getLayoutPatternBlock(pattern: A4LayoutPattern | null | undefined): string {
@@ -648,8 +679,29 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   const illustrationStyle = getIllustrationStyleBlock(creative?.illustration_style);
   const accentElements = getAccentElementsBlock(creative?.accent_elements);
   const backgroundTreatment = getBackgroundTreatmentBlock(creative?.background_treatment);
-  const contentComponents = getContentComponentsBlock(creative?.content_components, rawContent);
+  const contentComponents = getContentComponentsBlock(
+    creative?.content_components,
+    rawContent,
+    theme.id,
+  );
   const layoutPattern = getLayoutPatternBlock(creative?.layout_pattern);
+
+  // Orientation override: when user picks landscape, prepend an aggressive
+  // directive so the theme's portrait-flavoured blueprint does not override it.
+  const orientation = design?.orientation ?? "portrait";
+  const orientationOverride = orientation === "landscape"
+    ? "ORIENTATION\nThis is a LANDSCAPE page (wider than tall). Fill the full frame edge-to-edge. Arrange body sections HORIZONTALLY — cards or panels should flow left-to-right in a row (or multi-row grid), not stack vertically. The header sits across the top, body fills the wide middle, footer across the bottom. If any downstream instruction describes a vertical reading flow, adapt it to a horizontal flow while preserving the visual style."
+    : "";
+
+  // Subject-aware imagery rule: forbid generic fallback motifs that don't
+  // relate to the actual document topic.
+  const subjectAwareImagery =
+    "SUBJECT-AWARE IMAGERY\nAll decorative elements, icons, spot illustrations, craft shapes, and small accents MUST be semantically tied to the document's subject matter (derived from the header, topic, title, or content). Do NOT use generic weather motifs (clouds, rain, water drops, cotton) unless the subject is literally about weather or water. Do NOT reuse the same stock motifs across different topics. If a motif has no connection to the subject, omit it.";
+
+  // No-Lorem guard: prevents the classic placeholder-text fallback when the
+  // provided content is sparse.
+  const noLoremGuard =
+    "NO PLACEHOLDER TEXT\nNEVER render Lorem Ipsum, placeholder Latin, 'sample text', or meaningless filler inside any card, label, or body block. Every rendered character must be meaningful text. If the provided content is brief and a card would otherwise be empty, write a short, accurate, on-topic sentence in the SAME LANGUAGE as the content.";
 
   const backgroundDirective = backgroundTreatment
     || (design?.background_color
@@ -692,9 +744,12 @@ export function compileMasterPrompt(input: A4CompileInput): string {
 
   sections.push(`LANGUAGE\n${languageRules}`);
   sections.push(`PAGE CONTEXT\n${pageContext}`);
+  if (orientationOverride) sections.push(orientationOverride);
   sections.push(`LAYOUT BLUEPRINT\n${layoutBlueprint}`);
   if (layoutPattern) sections.push(`LAYOUT PATTERN\n${layoutPattern}`);
   sections.push(`HEADER\n${headerBlock}`);
+  sections.push(subjectAwareImagery);
+  sections.push(noLoremGuard);
 
   if (designPrefs) sections.push(designPrefs);
   if (brandColorDirective) sections.push(`BRAND ACCENT COLORS\n${brandColorDirective}`);

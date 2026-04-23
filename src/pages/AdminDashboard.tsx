@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Shield, RefreshCw, TrendingUp, Users, CreditCard, Brain, Apple, Smartphone, Zap, Activity, FileText, MessageSquare, Gift, ArrowUpRight } from "lucide-react";
+import { Shield, RefreshCw, TrendingUp, Users, CreditCard, Brain, Apple, Smartphone, Zap, Activity, FileText, MessageSquare, Gift, ArrowUpRight, Megaphone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
@@ -350,6 +350,7 @@ export default function AdminDashboard() {
               { label: "Messages", icon: MessageSquare, href: "/admin/messages", color: "text-sky-400" },
               { label: "Subscriptions", icon: CreditCard, href: "/admin/subscriptions", color: "text-violet-400" },
               { label: "Users", icon: Users, href: "/admin/users", color: "text-blue-400" },
+              { label: "Announcements", icon: Megaphone, href: "/admin/announcements", color: "text-fuchsia-400" },
             ].map(({ label, icon: Icon, href, color }) => (
               <button
                 key={href}
