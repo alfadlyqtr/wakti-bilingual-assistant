@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { GraduationCap, Briefcase, Crown, Rocket, Baby, Palmtree, Sparkles, Save, X } from 'lucide-react';
+import { GraduationCap, Briefcase, Crown, Rocket, Baby, Palmtree, Sparkles, Save, X, Clapperboard } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,7 +15,7 @@ interface HelpfulMemoryProfileFormProps {
   onClose: () => void;
 }
 
-type Role = 'student' | 'employee' | 'manager' | 'self_employed' | 'parent' | 'retired' | 'other';
+type Role = 'student' | 'employee' | 'manager' | 'self_employed' | 'parent' | 'retired' | 'creator' | 'other';
 
 interface FieldSpec {
   key: string;
@@ -33,6 +33,7 @@ const ROLE_OPTIONS: { value: Role; icon: React.ComponentType<{ className?: strin
   { value: 'self_employed', icon: Rocket,        en: 'Self-employed',  ar: 'عمل حر' },
   { value: 'parent',        icon: Baby,          en: 'Parent',         ar: 'والد/والدة' },
   { value: 'retired',       icon: Palmtree,      en: 'Retired',        ar: 'متقاعد' },
+  { value: 'creator',       icon: Clapperboard,  en: 'Content creator', ar: 'صانع محتوى' },
   { value: 'other',         icon: Sparkles,      en: 'Other',          ar: 'غير ذلك' },
 ];
 
@@ -229,41 +230,98 @@ const ROLE_FIELDS: Record<Role, FieldSpec[]> = {
       format: (v) => `Health note: ${v}.`,
     },
   ],
+  creator: [
+    {
+      key: 'content_type',
+      label: { en: 'What you create', ar: 'ماذا تصنع' },
+      placeholder: { en: 'e.g. short videos, podcasts, design, writing', ar: 'مثال: فيديوهات قصيرة، بودكاست، تصميم' },
+      layer: 'always_use',
+      format: (v) => `Creates ${v}.`,
+    },
+    {
+      key: 'platforms',
+      label: { en: 'Main platforms', ar: 'المنصات الأساسية' },
+      placeholder: { en: 'e.g. Instagram, TikTok, YouTube', ar: 'مثال: إنستغرام، تيك توك، يوتيوب' },
+      layer: 'always_use',
+      format: (v) => `Main platforms: ${v}.`,
+    },
+    {
+      key: 'niche',
+      label: { en: 'Topic / niche', ar: 'المجال / التخصص' },
+      placeholder: { en: 'e.g. productivity, food, fitness, tech', ar: 'مثال: إنتاجية، طعام، لياقة، تقنية' },
+      layer: 'project',
+      format: (v) => `Content niche: ${v}.`,
+    },
+    {
+      key: 'brand_voice',
+      label: { en: 'Brand voice', ar: 'أسلوب العلامة' },
+      placeholder: { en: 'e.g. playful, premium, educational', ar: 'مثال: مرح، راقٍ، تعليمي' },
+      layer: 'always_use',
+      format: (v) => `Preferred brand voice: ${v}.`,
+    },
+    {
+      key: 'posting_routine',
+      label: { en: 'Posting routine (optional)', ar: 'روتين النشر (اختياري)' },
+      placeholder: { en: 'e.g. I post 3 reels every week', ar: 'مثال: أنشر 3 ريلز كل أسبوع' },
+      layer: 'routine',
+      format: (v) => `Posting routine: ${v}.`,
+    },
+    {
+      key: 'current_content_goal',
+      label: { en: 'Current content goal', ar: 'هدف المحتوى الحالي' },
+      placeholder: { en: 'e.g. grow my Arabic audience, launch a new series', ar: 'مثال: زيادة الجمهور العربي، إطلاق سلسلة جديدة' },
+      layer: 'project',
+      format: (v) => `Current content goal: ${v}.`,
+    },
+  ],
   other: [],
 };
 
 export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProfileFormProps) {
-  const { language } = useTheme();
+  const { language, theme } = useTheme();
   const { showError, showSuccess } = useToastHelper();
   const [role, setRole] = useState<Role | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [freeText, setFreeText] = useState('');
   const [freeLayer, setFreeLayer] = useState<HelpfulMemoryLayer>('always_use');
   const [isSaving, setIsSaving] = useState(false);
+  const isDark = theme === 'dark';
 
   const labels = useMemo(() => ({
     title: language === 'ar' ? 'إعداد الملف الشخصي السريع' : 'Quick Profile Setup',
     subtitle: language === 'ar'
-      ? 'املأ ما يناسبك فقط. كل حقل يُحفظ كذاكرة ويمكنك تعديلها أو حذفها في أي وقت.'
-      : 'Fill only what fits you. Each field is saved as a memory you can edit or delete anytime.',
+      ? 'املأ ما يناسبك فقط. نحفظ أهم الأشياء كذاكرة مفيدة حتى يفهمك وقتي بشكل أفضل بدون إغراق النظام.'
+      : 'Fill only what fits you. We save the most helpful details as memory so Wakti understands you better without overflowing the system.',
     pickRole: language === 'ar' ? 'اختر ما يناسبك:' : 'Pick what fits you best:',
     change: language === 'ar' ? 'تغيير' : 'Change',
     common: language === 'ar' ? 'عام' : 'About you',
     roleFields: language === 'ar' ? 'تفاصيل إضافية' : 'More details',
     anythingElse: language === 'ar' ? 'شيء آخر تريد وقتي أن يتذكره؟' : 'Anything else you want Wakti to remember?',
-    anythingElseHint: language === 'ar' ? 'اكتب بلغتك الخاصة. اختر أين يعيش.' : 'Type it in your own words. Pick where it lives.',
+    anythingElseHint: language === 'ar' ? 'اكتب بلغتك الخاصة. اختر أين يجب أن تعيش هذه المعلومة.' : 'Type it in your own words. Choose where this should live.',
     save: language === 'ar' ? 'حفظ الكل' : 'Save all',
     saving: language === 'ar' ? 'جاري الحفظ...' : 'Saving...',
     cancel: language === 'ar' ? 'إلغاء' : 'Cancel',
     saved: (n: number) => language === 'ar' ? `تم حفظ ${n} عنصر` : `Saved ${n} item${n === 1 ? '' : 's'}`,
     noneFilled: language === 'ar' ? 'لم يتم تعبئة أي حقل' : 'No fields filled',
     saveFailed: language === 'ar' ? 'تعذر حفظ بعض العناصر' : 'Some items failed to save',
+    helper: language === 'ar' ? 'اختر فقط ما يساعد وقتي فعلاً.' : 'Only add what truly helps Wakti help you.',
     layer: {
       always_use: language === 'ar' ? 'عني' : 'About me',
       routine: language === 'ar' ? 'روتين' : 'Routine',
       project: language === 'ar' ? 'مشروع' : 'Project',
     } as Record<Exclude<HelpfulMemoryLayer, 'candidate'>, string>,
   }), [language]);
+
+  const shellClass = isDark
+    ? 'border-white/10 bg-[linear-gradient(135deg,rgba(12,15,20,0.96)_0%,rgba(30,41,59,0.96)_100%)] shadow-[0_8px_32px_rgba(0,0,0,0.35)]'
+    : 'border-[rgba(233,206,176,0.95)] bg-[linear-gradient(135deg,rgba(252,254,253,0.99)_0%,rgba(245,241,233,0.99)_100%)] shadow-[0_16px_36px_rgba(6,5,65,0.08)]';
+  const headingText = isDark ? 'text-slate-100' : 'text-[hsl(243_84%_14%)]';
+  const mutedText = isDark ? 'text-slate-300' : 'text-[hsl(243_20%_34%)]';
+  const subtleText = isDark ? 'text-slate-400' : 'text-[hsl(243_15%_42%)]';
+  const fieldClass = isDark
+    ? 'border-white/10 bg-black/30 text-slate-100'
+    : 'border-[rgba(6,5,65,0.12)] bg-white/90 text-[hsl(243_84%_14%)]';
+  const chipShell = isDark ? 'border-white/10 bg-black/20' : 'border-[rgba(6,5,65,0.10)] bg-[rgba(6,5,65,0.04)]';
 
   const update = (key: string, value: string) => setValues((prev) => ({ ...prev, [key]: value }));
 
@@ -321,7 +379,7 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
     const value = values[spec.key] || '';
     return (
       <div key={spec.key} className="space-y-1">
-        <label className="block text-[11px] text-slate-400">
+        <label className={`block text-[11px] ${subtleText}`}>
           {language === 'ar' ? spec.label.ar : spec.label.en}
         </label>
         {spec.multiline ? (
@@ -329,14 +387,14 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
             value={value}
             onChange={(e) => update(spec.key, e.target.value)}
             placeholder={language === 'ar' ? spec.placeholder.ar : spec.placeholder.en}
-            className="min-h-[64px] rounded-xl border border-white/10 bg-black/30 text-sm text-slate-100"
+            className={`min-h-[64px] rounded-xl border text-sm ${fieldClass}`}
           />
         ) : (
           <Input
             value={value}
             onChange={(e) => update(spec.key, e.target.value)}
             placeholder={language === 'ar' ? spec.placeholder.ar : spec.placeholder.en}
-            className="h-9 rounded-xl border border-white/10 bg-black/30 text-sm text-slate-100"
+            className={`h-9 rounded-xl border text-sm ${fieldClass}`}
           />
         )}
       </div>
@@ -347,16 +405,17 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
   const currentRoleMeta = role ? ROLE_OPTIONS.find((r) => r.value === role) : null;
 
   return (
-    <div className="mt-3 rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(12,15,20,0.96)_0%,rgba(30,41,59,0.96)_100%)] p-3 shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+    <div className={`mt-3 rounded-2xl border p-3 ${shellClass}`}>
       <div className="flex items-start justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold text-slate-100">{labels.title}</div>
-          <p className="mt-1 text-[11px] leading-relaxed text-slate-300">{labels.subtitle}</p>
+          <div className={`text-sm font-semibold ${headingText}`}>{labels.title}</div>
+          <p className={`mt-1 text-[11px] leading-relaxed ${mutedText}`}>{labels.subtitle}</p>
+          <p className={`mt-1 text-[11px] ${subtleText}`}>{labels.helper}</p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="rounded-lg p-1 text-slate-400 hover:bg-white/5 hover:text-slate-200"
+          className={`rounded-lg p-1 ${isDark ? 'text-slate-400 hover:bg-white/5 hover:text-slate-200' : 'text-[hsl(243_20%_34%)] hover:bg-[rgba(6,5,65,0.06)] hover:text-[hsl(243_84%_14%)]'}`}
           aria-label="Close"
         >
           <X className="h-4 w-4" />
@@ -365,7 +424,7 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
 
       {!role ? (
         <div className="mt-3">
-          <div className="mb-2 text-[11px] text-slate-400">{labels.pickRole}</div>
+          <div className={`mb-2 text-[11px] ${subtleText}`}>{labels.pickRole}</div>
           <div className="grid grid-cols-2 gap-1.5">
             {ROLE_OPTIONS.map((opt) => {
               const Icon = opt.icon;
@@ -374,9 +433,9 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
                   key={opt.value}
                   type="button"
                   onClick={() => setRole(opt.value)}
-                  className="flex items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-left text-xs text-slate-200 transition-colors hover:border-blue-400/30 hover:bg-blue-500/10"
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs transition-colors ${isDark ? 'border-white/10 bg-black/20 text-slate-200 hover:border-blue-400/30 hover:bg-blue-500/10' : 'border-[rgba(6,5,65,0.10)] bg-white/80 text-[hsl(243_84%_14%)] hover:border-[rgba(6,5,65,0.18)] hover:bg-[rgba(6,5,65,0.04)]'}`}
                 >
-                  <Icon className="h-3.5 w-3.5 text-blue-300" />
+                  <Icon className={`h-3.5 w-3.5 ${isDark ? 'text-blue-300' : 'text-[hsl(243_84%_14%)]'}`} />
                   <span>{language === 'ar' ? opt.ar : opt.en}</span>
                 </button>
               );
@@ -385,15 +444,15 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
         </div>
       ) : (
         <>
-          <div className="mt-3 flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
-            <div className="flex items-center gap-2 text-xs text-slate-200">
-              {currentRoleMeta && <currentRoleMeta.icon className="h-3.5 w-3.5 text-blue-300" />}
+          <div className={`mt-3 flex items-center justify-between gap-2 rounded-xl border px-3 py-2 ${chipShell}`}>
+            <div className={`flex items-center gap-2 text-xs ${isDark ? 'text-slate-200' : 'text-[hsl(243_84%_14%)]'}`}>
+              {currentRoleMeta && <currentRoleMeta.icon className={`h-3.5 w-3.5 ${isDark ? 'text-blue-300' : 'text-[hsl(243_84%_14%)]'}`} />}
               <span>{currentRoleMeta ? (language === 'ar' ? currentRoleMeta.ar : currentRoleMeta.en) : ''}</span>
             </div>
             <button
               type="button"
               onClick={() => { setRole(null); setValues({}); }}
-              className="text-[11px] text-blue-300 hover:underline"
+              className={`text-[11px] ${isDark ? 'text-blue-300 hover:underline' : 'text-[hsl(243_84%_14%)] hover:underline'}`}
             >
               {labels.change}
             </button>
@@ -401,7 +460,7 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
 
           {roleFields.length > 0 && (
             <div className="mt-3">
-              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              <div className={`mb-2 text-[11px] font-semibold uppercase tracking-wide ${subtleText}`}>
                 {labels.roleFields}
               </div>
               <div className="grid grid-cols-1 gap-2">
@@ -411,7 +470,7 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
           )}
 
           <div className="mt-3">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <div className={`mb-2 text-[11px] font-semibold uppercase tracking-wide ${subtleText}`}>
               {labels.common}
             </div>
             <div className="grid grid-cols-1 gap-2">
@@ -420,24 +479,24 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
           </div>
 
           <div className="mt-3">
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            <div className={`mb-1 text-[11px] font-semibold uppercase tracking-wide ${subtleText}`}>
               {labels.anythingElse}
             </div>
-            <div className="mb-2 text-[11px] text-slate-500">{labels.anythingElseHint}</div>
+            <div className={`mb-2 text-[11px] ${subtleText}`}>{labels.anythingElseHint}</div>
             <Textarea
               value={freeText}
               onChange={(e) => setFreeText(e.target.value)}
               placeholder={language === 'ar' ? 'اكتب هنا...' : 'Type here...'}
-              className="min-h-[72px] rounded-xl border border-white/10 bg-black/30 text-sm text-slate-100"
+              className={`min-h-[72px] rounded-xl border text-sm ${fieldClass}`}
             />
-            <div className="mt-2 flex flex-wrap gap-1 rounded-xl border border-white/10 bg-black/30 p-1">
+            <div className={`mt-2 flex flex-wrap gap-1 rounded-xl border p-1 ${chipShell}`}>
               {(['always_use', 'routine', 'project'] as Exclude<HelpfulMemoryLayer, 'candidate'>[]).map((layer) => (
                 <button
                   key={layer}
                   type="button"
                   onClick={() => setFreeLayer(layer)}
                   className={`flex-1 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                    freeLayer === layer ? 'bg-blue-500 text-white' : 'text-slate-200 hover:bg-white/5'
+                    freeLayer === layer ? 'bg-blue-500 text-white' : isDark ? 'text-slate-200 hover:bg-white/5' : 'text-[hsl(243_84%_14%)] hover:bg-[rgba(6,5,65,0.06)]'
                   }`}
                 >
                   {labels.layer[layer]}
@@ -460,7 +519,7 @@ export function HelpfulMemoryProfileForm({ onSaved, onClose }: HelpfulMemoryProf
               type="button"
               variant="outline"
               onClick={onClose}
-              className="h-9 rounded-xl border-white/10 bg-transparent px-3 text-xs text-slate-200 hover:bg-white/10"
+              className={`h-9 rounded-xl px-3 text-xs ${isDark ? 'border-white/10 bg-transparent text-slate-200 hover:bg-white/10' : 'border-[rgba(6,5,65,0.12)] bg-white/70 text-[hsl(243_84%_14%)] hover:bg-white'}`}
             >
               {labels.cancel}
             </Button>

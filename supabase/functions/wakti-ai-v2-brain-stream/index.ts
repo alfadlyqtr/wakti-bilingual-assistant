@@ -1235,6 +1235,39 @@ function buildTextContent(role: GeminiRole, text: string): GeminiContent {
   return { role, parts: [{ text }] };
 }
 
+function extractGeminiDelta(parts: unknown[], accumulatedText: string): { delta: string; nextText: string } {
+  const combined = Array.isArray(parts)
+    ? parts
+        .map((part) => (typeof (part as { text?: unknown })?.text === 'string' ? ((part as { text?: string }).text || '') : ''))
+        .join('')
+    : '';
+
+  if (!combined) return { delta: '', nextText: accumulatedText };
+  if (!accumulatedText) return { delta: combined, nextText: combined };
+  if (combined === accumulatedText) return { delta: '', nextText: accumulatedText };
+  if (combined.startsWith(accumulatedText)) {
+    return {
+      delta: combined.slice(accumulatedText.length),
+      nextText: combined,
+    };
+  }
+
+  const overlapWindow = Math.min(accumulatedText.length, combined.length);
+  for (let overlap = overlapWindow; overlap > 0; overlap -= 1) {
+    if (accumulatedText.slice(-overlap) === combined.slice(0, overlap)) {
+      return {
+        delta: combined.slice(overlap),
+        nextText: accumulatedText + combined.slice(overlap),
+      };
+    }
+  }
+
+  return {
+    delta: combined,
+    nextText: accumulatedText + combined,
+  };
+}
+
 async function streamGemini(
   model: string,
   contents: GeminiContent[],
@@ -1283,10 +1316,9 @@ async function streamGemini(
         const cands = parsed?.candidates;
         if (Array.isArray(cands) && cands.length > 0) {
           const parts = cands[0]?.content?.parts || [];
-          for (const p of parts) {
-            const text = typeof p?.text === "string" ? p.text : "";
-            if (text) { fullText += text; onToken(text); }
-          }
+          const { delta, nextText } = extractGeminiDelta(parts, fullText);
+          fullText = nextText;
+          if (delta) onToken(delta);
         }
       } catch { /* ignore */ }
     }
@@ -1557,10 +1589,9 @@ async function streamGemini3FlashChat(
         const cands = parsed?.candidates;
         if (Array.isArray(cands) && cands.length > 0) {
           const parts = cands[0]?.content?.parts || [];
-          for (const p of parts) {
-            const text = typeof p?.text === 'string' ? p.text : '';
-            if (text) { fullText += text; onToken(text); }
-          }
+          const { delta, nextText } = extractGeminiDelta(parts, fullText);
+          fullText = nextText;
+          if (delta) onToken(delta);
         }
       } catch { /* ignore parse errors */ }
     }
@@ -1676,10 +1707,9 @@ async function streamGemini3WithSearch(
         const cands = parsed?.candidates;
         if (Array.isArray(cands) && cands.length > 0) {
           const parts = cands[0]?.content?.parts || [];
-          for (const p of parts) {
-            const text = typeof p?.text === 'string' ? p.text : '';
-            if (text) { fullText += text; onToken(text); }
-          }
+          const { delta, nextText } = extractGeminiDelta(parts, fullText);
+          fullText = nextText;
+          if (delta) onToken(delta);
           // Capture grounding metadata from final chunk
           if (cands[0]?.groundingMetadata) {
             groundingMeta = cands[0].groundingMetadata;

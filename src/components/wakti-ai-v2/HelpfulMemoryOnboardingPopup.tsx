@@ -37,7 +37,7 @@ export function HelpfulMemoryOnboardingPopup({ open, onQuickSetup, onDismiss }: 
     cta: isAr ? 'إعداد سريع' : 'Quick Setup',
     skip: isAr ? 'لاحقاً' : 'Maybe Later',
     footer: isAr
-      ? 'يمكنك فتح Helpful Memory في أي وقت من لوحة المحادثات.'
+      ? 'يمكنك فتح الذاكرة المفيدة في أي وقت من لوحة المحادثات.'
       : 'You can open Helpful Memory anytime from the chat panel.',
   };
 
