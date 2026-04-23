@@ -32,8 +32,10 @@ const getCorsHeaders = (origin: string | null) => {
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || 'H2PK3P9R7E';
-const WOLFRAM_LLM_APP_ID = 'U2W74EHLQX';
+const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || '';
+// Query Recognizer / Summary Box / LLM API all use the SAME commercial AppID.
+// Controlled entirely by the Supabase secret — no hardcoded fallbacks.
+const WOLFRAM_LLM_APP_ID = Deno.env.get('WOLFRAM_LLM_APP_ID') || WOLFRAM_APP_ID;
 const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -631,7 +633,53 @@ function selectRelevantHelpfulMemory(
     .map((entry) => entry.item);
 }
 
-function buildPromptMemoryContext(lines: string[]): string {
+// Build adaptive memory posture block based on Personal Touch Tone + Style.
+// This modulates HOW aggressively the AI surfaces Helpful Memory so users who
+// prefer short/neutral answers don't feel memory is being forced into every turn,
+// while users who prefer detailed/engaging answers get richer contextual weaving.
+function buildMemoryPostureBlock(personalTouch: unknown): string {
+  const pt = (personalTouch || {}) as Record<string, unknown>;
+  const toneRaw = typeof pt.tone === 'string' ? pt.tone.toLowerCase().trim() : '';
+  const styleRaw = typeof pt.style === 'string' ? pt.style.toLowerCase().trim() : '';
+
+  // Style → surfacing frequency
+  let styleLine = '';
+  if (styleRaw.includes('short')) {
+    styleLine = 'Style=Short answers → surface memory ONLY when directly asked or absolutely essential. Never preempt.';
+  } else if (styleRaw.includes('detail')) {
+    styleLine = 'Style=Detailed → you MAY connect relevant memory facts that genuinely enrich the answer, kept natural.';
+  } else if (styleRaw.includes('analy')) {
+    styleLine = 'Style=Analytical → use memory as reasoning context where it applies to the user\'s question.';
+  } else if (styleRaw.includes('convers')) {
+    styleLine = 'Style=Conversational → reference memory only when it genuinely improves flow. Light touch.';
+  } else {
+    styleLine = 'Style=Default → reference memory sparingly and only when it clearly improves the answer.';
+  }
+
+  // Tone → phrasing style
+  let toneLine = '';
+  if (toneRaw.includes('funny') || toneRaw.includes('playful') || toneRaw.includes('humor')) {
+    toneLine = 'Tone=Funny → you may reference memory playfully and briefly, never labored.';
+  } else if (toneRaw.includes('serious')) {
+    toneLine = 'Tone=Serious → professional reference only when topically relevant. No asides.';
+  } else if (toneRaw.includes('casual')) {
+    toneLine = 'Tone=Casual → natural woven mention when appropriate (e.g., "since you\'re in Alkhor...").';
+  } else if (toneRaw.includes('encourag') || toneRaw.includes('supportive')) {
+    toneLine = 'Tone=Encouraging → reference goals/routines supportively only when motivating the user.';
+  } else if (toneRaw.includes('engag')) {
+    toneLine = 'Tone=Engaging → weave memory naturally when it makes the reply more alive.';
+  } else {
+    toneLine = 'Tone=Neutral → use plain, unembellished phrasing when you do reference memory.';
+  }
+
+  return [
+    'YOUR MEMORY POSTURE (based on user preferences):',
+    `- ${styleLine}`,
+    `- ${toneLine}`
+  ].join('\n');
+}
+
+function buildPromptMemoryContext(lines: string[], personalTouch?: unknown): string {
   const normalizedLines = Array.from(new Set(
     lines
       .map((line) => normalizeHelpfulMemoryText(line, 180))
@@ -640,27 +688,36 @@ function buildPromptMemoryContext(lines: string[]): string {
 
   if (normalizedLines.length === 0) return '';
 
+  const postureBlock = buildMemoryPostureBlock(personalTouch);
+
   return [
-    'HELPFUL MEMORY (use only when relevant; never overrides the current request):',
+    'HELPFUL MEMORY (reference only when genuinely relevant; never overrides the current request):',
     ...normalizedLines.map((line) => `- ${line}`),
     '',
-    'MEMORY RULES:',
+    postureBlock,
+    '',
+    'HARD RULES (NON-NEGOTIABLE — apply regardless of posture):',
+    '- NEVER inject memory into greetings ("hey", "hi", "good morning", "السلام عليكم", "صباح الخير") — just greet back.',
+    '- NEVER inject memory into pure creative requests (poems, stories, duas, love notes, images, translations) unless the user explicitly connects the memory to the request.',
+    '- NEVER open a response with a memory-derived factoid unless the user asked about that fact.',
+    '- A memory is RELEVANT only if removing it would leave the answer incomplete. If the answer works fine without it, LEAVE IT OUT.',
     '- If asked "what do you remember about me?" / "ماذا تتذكر عني؟", list the items above plainly and mention the Helpful Memory panel for edits.',
     '- If the user says they no longer do X / forget X / لم أعد / انسى: just acknowledge briefly ("Done, I\'ve forgotten that." / "تمّ، نسيتها."). Do NOT ask for confirmation and do NOT tell them to open a panel — the system removes the matching memory automatically.',
     '- Never invent a memory that is not listed above.',
-    '- Routines tied to a specific day/season ("Every Thursday...", "During Ramadan...") — act on them only when today actually matches; otherwise just acknowledge, do not pre-prepare.'
+    '- Routines tied to a specific day/season ("Every Thursday...", "During Ramadan...") — act on them only when today actually matches AND the user\'s current message is about that routine; otherwise leave them unmentioned.'
   ].join('\n').trim();
 }
 
 function buildCombinedHelpfulMemoryContext(
   helpfulMemoryItems: HelpfulMemoryItem[],
-  durableMemoryItems: DurableMemoryItem[]
+  durableMemoryItems: DurableMemoryItem[],
+  personalTouch?: unknown
 ): string {
   const lines = [
     ...helpfulMemoryItems.map((item) => item.memory_text),
     ...durableMemoryItems.map((item) => item.text)
   ];
-  return buildPromptMemoryContext(lines);
+  return buildPromptMemoryContext(lines, personalTouch);
 }
 
 async function getHelpfulMemorySettings(
@@ -2253,24 +2310,6 @@ async function translateSubjectToEnglish(subject: string): Promise<string> {
   }
 }
 
-// Gatekeeper: superseded by inlined recognizer logic in study block — kept for non-study fallback use
-async function _wolframGatekeeperCheck(subject: string, timeoutMs: number = 1500): Promise<boolean> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-    const url = `http://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_LLM_APP_ID}&mode=Default&i=${encodeURIComponent(subject)}`;
-    const resp = await fetch(url, { signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (!resp.ok) return true; // if check fails, proceed anyway
-    const xml = await resp.text();
-    const acceptedMatch = xml.match(/accepted="([^"]+)"/);
-    const accepted = acceptedMatch?.[1] !== 'false';
-    return accepted;
-  } catch {
-    return true; // timeout or error → proceed
-  }
-}
-
 // LLM API: modern endpoint that returns a clean fact sheet for any academic subject
 async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promise<{ success: boolean; factSheet?: string; error?: string }> {
   try {
@@ -2411,7 +2450,10 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     // Step 1: Get the summary box path from Query Recognizer
-    const recognizerUrl = `https://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_APP_ID}&mode=Default&i=${encodeURIComponent(input)}`;
+    // NOTE: Query Recognizer permissions are provisioned on WOLFRAM_LLM_APP_ID
+    // (U2W74EHLQX), not the legacy WOLFRAM_APP_ID. Using the wrong key here
+    // was silently failing for all non-study chat entity lookups.
+    const recognizerUrl = `https://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_LLM_APP_ID}&mode=Default&i=${encodeURIComponent(input)}`;
 
     const recognizerResp = await fetch(recognizerUrl, {
       method: 'GET',
@@ -3274,7 +3316,7 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
           ? selectRelevantHelpfulMemory(helpfulMemoryItems, message || '', effectiveTrigger, chatSubmode)
           : [];
         const helpfulMemoryContext = helpfulMemorySettings.helpful_memory_enabled
-          ? buildCombinedHelpfulMemoryContext(selectedHelpfulMemory, selectedDurableMemory)
+          ? buildCombinedHelpfulMemoryContext(selectedHelpfulMemory, selectedDurableMemory, personalTouch)
           : '';
         if (selectedHelpfulMemory.length > 0) {
           touchHelpfulMemoryItems(supabaseAdmin, selectedHelpfulMemory.map((item) => item.id)).catch((error) => {
@@ -3884,8 +3926,12 @@ If you are running out of space, keep this order and drop the rest:
 
           let wolframContext = '';
           let wolframMetaBase: Record<string, unknown> | null = null;
-          const useWolfram = chatSubmode === 'study' || isWolframQuery(rawWolframQuery);
           const useSummaryBox = isSummaryBoxQuery(rawWolframQuery);
+          // Widened gate: chat mode now also triggers Wolfram for entity queries
+          // ("who is X", "tell me about X", proper-noun lookups). Previously entity
+          // questions skipped Wolfram entirely because isWolframQuery's regex only
+          // matched math/science subject words — exactly Blake's Dec 2025 feedback.
+          const useWolfram = chatSubmode === 'study' || isWolframQuery(rawWolframQuery) || useSummaryBox;
 
           if (useWolfram) {
             try {
@@ -3909,7 +3955,7 @@ If you are running out of space, keep this order and drop the rest:
               try {
                 const recCtrl = new AbortController();
                 const recTid = setTimeout(() => recCtrl.abort(), 1500);
-                const recUrl = `http://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_LLM_APP_ID}&mode=Default&i=${encodeURIComponent(cleanSubject)}`;
+                const recUrl = `https://www.wolframalpha.com/queryrecognizer/query.jsp?appid=${WOLFRAM_LLM_APP_ID}&mode=Default&i=${encodeURIComponent(cleanSubject)}`;
                 const recResp = await fetch(recUrl, { signal: recCtrl.signal });
                 clearTimeout(recTid);
                 if (recResp.ok) {
@@ -3992,10 +4038,16 @@ If you are running out of space, keep this order and drop the rest:
               }
 
             } else {
-              // === NON-STUDY MODE: legacy v2/query for math/science calculations ===
+              // === NON-STUDY MODE: Full Results (math/science) + Summary Box (entities), in parallel ===
+              // Only hit legacy v2/query when the query genuinely looks computational.
+              // Pure entity queries skip it — Wolfram's v2/query would return empty and
+              // still be counted as a billable failed Full Results call.
               const summaryBoxInput = normalizeSummaryBoxQuery(rawWolframQuery);
+              const runFullResults = isWolframQuery(rawWolframQuery);
               const [fullResultsResult, summaryBoxResult] = await Promise.all([
-                queryWolfram(rawWolframQuery, 4000),
+                runFullResults
+                  ? queryWolfram(rawWolframQuery, 4000)
+                  : Promise.resolve<{ success: boolean; answer?: string; steps?: string[]; interpretation?: string; error?: string }>({ success: false }),
                 useSummaryBox ? queryWolframSummaryBox(summaryBoxInput, 5000) : Promise.resolve<SummaryBoxResult>({ success: false })
               ]);
 

@@ -37,6 +37,7 @@ import {
   BookMarked,
   FileText,
   Sliders,
+  Sparkles,
   Link as LinkIcon,
   ChevronDown,
   ChevronUp,
@@ -63,6 +64,13 @@ import {
   fetchUrlContent,
   type A4DocumentRow,
   type A4DesignSettings,
+  type A4CreativeSettings,
+  type A4VisualRecipe,
+  type A4IllustrationStyle,
+  type A4AccentElement,
+  type A4BackgroundTreatment,
+  type A4ContentComponent,
+  type A4LayoutPattern,
 } from "./a4Service";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -241,13 +249,14 @@ const ThemePicker: React.FC<{ onPick: (themeId: string) => void }> = ({ onPick }
 
   return (
     <div>
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+      <div className="relative mb-3">
+        <Search className={`absolute top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none ${lang === "ar" ? "right-3" : "left-3"}`} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("Search themes…", "ابحث عن قالب…")}
-          className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm"
+          dir={lang === "ar" ? "rtl" : "ltr"}
+          className={`w-full py-2.5 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-sm ${lang === "ar" ? "pr-9 pl-3 text-right" : "pl-9 pr-3"}`}
         />
       </div>
 
@@ -256,7 +265,7 @@ const ThemePicker: React.FC<{ onPick: (themeId: string) => void }> = ({ onPick }
           {t("No themes match. Try another search.", "لا توجد نتائج. جرّب بحثًا آخر.")}
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
           {themes.map((theme) => {
             const v = THEME_VISUALS[theme.id] ?? DEFAULT_VISUAL;
             const Icon = v.icon;
@@ -265,22 +274,22 @@ const ThemePicker: React.FC<{ onPick: (themeId: string) => void }> = ({ onPick }
               <button
                 key={theme.id}
                 onClick={() => onPick(theme.id)}
-                className={`group relative aspect-[5/4] rounded-lg border border-border bg-card ${v.border} hover:shadow-lg ${v.ring} transition-all duration-200 overflow-hidden p-2.5 text-left active:scale-95`}
+                className={`group relative rounded-xl border border-border bg-card ${v.border} hover:shadow-lg ${v.ring} transition-all duration-200 overflow-hidden p-3 active:scale-95 flex flex-col gap-2.5 min-h-[115px]`}
               >
-                {/* Accent gradient wash */}
-                <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${v.bg} opacity-90 group-hover:opacity-100 transition-opacity`} />
-                {/* Big soft icon watermark */}
-                <Icon className={`pointer-events-none absolute -right-2 -bottom-2 h-16 w-16 ${v.text} opacity-10 group-hover:opacity-20 transition-opacity`} />
-                <div className="relative h-full flex flex-col justify-between gap-1.5">
-                  <div className="flex items-center gap-1.5">
-                    <Icon className={`h-3.5 w-3.5 ${v.text}`} />
-                    <div className={`text-[10px] uppercase tracking-wider font-semibold ${v.text}`}>
-                      {badge ? (lang === "ar" ? badge.ar : badge.en) : (lang === "ar" ? theme.name_ar : theme.name_en)}
-                    </div>
-                  </div>
+                <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${v.bg} opacity-80 group-hover:opacity-100 transition-opacity`} />
+                <Icon className={`pointer-events-none absolute -right-1 -bottom-1 h-14 w-14 ${v.text} opacity-10 group-hover:opacity-20 transition-opacity`} />
+                <span className={`relative flex items-center justify-center w-9 h-9 rounded-lg bg-background/60 border border-border/60 shrink-0`}>
+                  <Icon className={`h-4.5 w-4.5 ${v.text}`} style={{width:"18px",height:"18px"}} />
+                </span>
+                <div className={`relative flex-1 flex flex-col justify-end ${lang === "ar" ? "text-right" : "text-left"}`}>
                   <div className="text-xs font-semibold leading-snug line-clamp-2 text-foreground">
                     {lang === "ar" ? theme.name_ar : theme.name_en}
                   </div>
+                  {badge && (
+                    <div className={`text-[10px] font-medium mt-0.5 leading-tight ${v.text} line-clamp-1`}>
+                      {lang === "ar" ? badge.ar : badge.en}
+                    </div>
+                  )}
                 </div>
               </button>
             );
@@ -885,7 +894,7 @@ const DesignSettingsPanel: React.FC<{
   onChange: (next: A4DesignSettings) => void;
 }> = ({ settings, onChange }) => {
   const { lang, t } = useTL();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
   const set = (patch: Partial<A4DesignSettings>) => onChange({ ...settings, ...patch });
 
@@ -1113,6 +1122,302 @@ const DesignSettingsPanel: React.FC<{
   );
 };
 
+// =============================================================================
+// CREATIVE SETTINGS PANEL — rich per-document direction for Nano Banana 2.
+// Every control here maps to a specific prompt fragment on the backend. No AI
+// in the middle. What the user clicks is exactly what the image model sees.
+// =============================================================================
+
+const VISUAL_RECIPE_OPTIONS: Array<{ id: A4VisualRecipe; en: string; ar: string; hint_en: string; hint_ar: string }> = [
+  { id: "paper_craft_flatlay", en: "Paper-Craft Flat-Lay", ar: "قصاصات ورقية", hint_en: "Top-down paper cut-outs on textured paper", hint_ar: "قصاصات ورقية على خلفية ورقية" },
+  { id: "executive_tech_spec", en: "Executive Tech Spec", ar: "مواصفات تقنية", hint_en: "Consultancy-grade panels, wheel & data table", hint_ar: "لوحات فخمة وجدول بيانات" },
+  { id: "comic_triptych", en: "Comic Triptych", ar: "ثلاثية الكوميكس", hint_en: "3 vibrant panels with bold comic lettering", hint_ar: "٣ لوحات كوميكس بألوان قوية" },
+  { id: "ministry_exam", en: "Ministry Exam Paper", ar: "ورقة اختبار رسمية", hint_en: "Official ink-on-white exam layout", hint_ar: "ورقة اختبار رسمية بيضاء" },
+  { id: "menu_board", en: "Menu Board", ar: "قائمة طعام", hint_en: "Elegant menu with dotted leaders", hint_ar: "قائمة أنيقة بخطوط منقطة" },
+  { id: "craft_diy_explainer", en: "Craft DIY Explainer", ar: "شرح حرفي", hint_en: "Hand-cut shapes linked by ink arrows", hint_ar: "أشكال مقصوصة وأسهم رسم يدوي" },
+  { id: "minimal_stationery", en: "Minimal Stationery", ar: "بسيط أنيق", hint_en: "Ultra-clean premium whitespace", hint_ar: "تصميم بسيط فاخر" },
+  { id: "bold_poster", en: "Bold Poster", ar: "ملصق جريء", hint_en: "Hero headline, full-bleed background", hint_ar: "عنوان ضخم وخلفية كاملة" },
+];
+
+const ILLUSTRATION_STYLE_OPTIONS: Array<{ id: A4IllustrationStyle; en: string; ar: string }> = [
+  { id: "none", en: "None", ar: "بدون" },
+  { id: "icons", en: "Icons Only", ar: "أيقونات فقط" },
+  { id: "flat_vector", en: "Flat Vector", ar: "فيكتور مسطح" },
+  { id: "paper_craft", en: "Paper Craft", ar: "ورقي" },
+  { id: "watercolor", en: "Watercolor", ar: "ألوان مائية" },
+  { id: "comic_bold", en: "Comic Bold", ar: "كوميكس" },
+  { id: "photo_realistic", en: "Photo-Realistic", ar: "واقعي" },
+];
+
+const ACCENT_ELEMENT_OPTIONS: Array<{ id: A4AccentElement; en: string; ar: string }> = [
+  { id: "hand_drawn_arrows", en: "Hand-drawn Arrows", ar: "أسهم يدوية" },
+  { id: "ribbons", en: "Ribbons", ar: "شرائط" },
+  { id: "stars", en: "Stars", ar: "نجوم" },
+  { id: "corner_ornaments", en: "Corner Ornaments", ar: "زخارف الزوايا" },
+  { id: "callout_badges", en: "Callout Badges", ar: "شارات" },
+  { id: "dotted_dividers", en: "Dotted Dividers", ar: "فواصل منقطة" },
+  { id: "paper_tape", en: "Paper Tape", ar: "شريط ورقي" },
+  { id: "thread_connectors", en: "Thread Connectors", ar: "خيوط رابطة" },
+];
+
+const BACKGROUND_TREATMENT_OPTIONS: Array<{ id: A4BackgroundTreatment; en: string; ar: string }> = [
+  { id: "plain_white", en: "Plain White", ar: "أبيض نقي" },
+  { id: "soft_paper_texture", en: "Soft Paper", ar: "ورقي ناعم" },
+  { id: "light_gradient", en: "Light Gradient", ar: "تدرّج خفيف" },
+  { id: "subtle_grid", en: "Subtle Grid", ar: "شبكة خفيفة" },
+  { id: "botanical_motif", en: "Botanical", ar: "نباتي" },
+  { id: "confetti", en: "Confetti", ar: "قصاصات ملوّنة" },
+  { id: "photographic_backdrop", en: "Photo Backdrop", ar: "خلفية صورة" },
+];
+
+const CONTENT_COMPONENT_OPTIONS: Array<{ id: A4ContentComponent; en: string; ar: string }> = [
+  { id: "chart_bar", en: "Bar Chart", ar: "رسم أعمدة" },
+  { id: "chart_line", en: "Line Chart", ar: "رسم خطي" },
+  { id: "chart_donut", en: "Donut Chart", ar: "رسم دائري" },
+  { id: "chart_radar", en: "Radar Chart", ar: "رسم شبكي" },
+  { id: "data_table", en: "Data Table", ar: "جدول بيانات" },
+  { id: "timeline", en: "Timeline", ar: "خط زمني" },
+  { id: "step_flow", en: "Step Flow", ar: "خطوات متسلسلة" },
+  { id: "side_by_side", en: "Side-by-Side", ar: "جنباً إلى جنب" },
+  { id: "vitality_wheel", en: "Vitality Wheel", ar: "عجلة القدرات" },
+  { id: "info_cards", en: "Info Cards", ar: "بطاقات معلومات" },
+  { id: "grading_circle", en: "Grading Circle", ar: "دائرة الدرجة" },
+  { id: "pull_quote", en: "Pull Quote", ar: "اقتباس بارز" },
+  { id: "callout_boxes", en: "Callout Boxes", ar: "صناديق تنبيه" },
+];
+
+const LAYOUT_PATTERN_OPTIONS: Array<{ id: A4LayoutPattern; en: string; ar: string }> = [
+  { id: "single_column", en: "Single Column", ar: "عمود واحد" },
+  { id: "two_column_split", en: "Two-Column Split", ar: "عمودان" },
+  { id: "sidebar_main", en: "Sidebar + Main", ar: "شريط جانبي + محتوى" },
+  { id: "three_panel_grid", en: "Three-Panel Grid", ar: "ثلاث لوحات" },
+  { id: "hero_body", en: "Hero + Body", ar: "رأس ضخم + نص" },
+  { id: "centered_composition", en: "Centered", ar: "توسيط كامل" },
+];
+
+const CreativeSettingsPanel: React.FC<{
+  settings: A4CreativeSettings;
+  onChange: (next: A4CreativeSettings) => void;
+}> = ({ settings, onChange }) => {
+  const { lang, t } = useTL();
+  const [open, setOpen] = useState(false);
+
+  const set = (patch: Partial<A4CreativeSettings>) => onChange({ ...settings, ...patch });
+
+  const toggleInArray = <T extends string>(current: T[] | null | undefined, value: T): T[] => {
+    const list = Array.isArray(current) ? current : [];
+    return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+  };
+
+  const singleBtn = (active: boolean) =>
+    `px-3 py-1.5 rounded-lg text-xs font-medium transition border ${
+      active
+        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+        : "bg-background border-border hover:border-primary/40 text-foreground/80"
+    }`;
+
+  const multiBtn = (active: boolean) =>
+    `px-3 py-1.5 rounded-lg text-xs font-medium transition border ${
+      active
+        ? "bg-accent text-accent-foreground border-primary/60 shadow-sm ring-1 ring-primary/30"
+        : "bg-background border-border hover:border-primary/40 text-foreground/80"
+    }`;
+
+  const recipeCard = (active: boolean) =>
+    `text-left rounded-xl border p-3 transition ${
+      active
+        ? "border-primary bg-primary/10 shadow-sm ring-1 ring-primary/30"
+        : "border-border bg-background hover:border-primary/40"
+    }`;
+
+  return (
+    <div className="mb-4 rounded-xl border border-border bg-gradient-to-br from-card to-background/50 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition"
+        aria-expanded={open}
+      >
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold">{t("Creative Controls", "اللمسات الإبداعية")}</span>
+          <span className="text-[10px] text-muted-foreground hidden sm:inline">
+            {t("recipe · illustration · accents · components", "وصفة · رسومات · لمسات · مكوّنات")}
+          </span>
+        </div>
+        {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-4">
+          {/* 1. Visual Recipe — single-select starter vibe */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              {t("Visual Recipe", "الوصفة البصرية")}
+              <span className="ml-2 normal-case text-[10px] text-muted-foreground/70">
+                {t("pick a starter vibe (optional)", "اختر بداية جاهزة (اختياري)")}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <button
+                type="button"
+                onClick={() => set({ visual_recipe: null })}
+                className={recipeCard(!settings.visual_recipe)}
+              >
+                <div className="text-xs font-semibold">{t("None", "بدون")}</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">
+                  {t("use the theme's own style", "استخدم نمط القالب")}
+                </div>
+              </button>
+              {VISUAL_RECIPE_OPTIONS.map((r) => {
+                const active = settings.visual_recipe === r.id;
+                return (
+                  <button
+                    key={r.id}
+                    type="button"
+                    onClick={() => set({ visual_recipe: active ? null : r.id })}
+                    className={recipeCard(active)}
+                  >
+                    <div className="text-xs font-semibold">{lang === "ar" ? r.ar : r.en}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
+                      {lang === "ar" ? r.hint_ar : r.hint_en}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2. Illustration Style — single-select */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              {t("Illustration Style", "نمط الرسومات")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ILLUSTRATION_STYLE_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => set({ illustration_style: o.id })}
+                  className={singleBtn((settings.illustration_style ?? "none") === o.id)}
+                >
+                  {lang === "ar" ? o.ar : o.en}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 3. Accent Elements — multi-select */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              {t("Accent Elements", "لمسات زخرفية")}
+              <span className="ml-2 normal-case text-[10px] text-muted-foreground/70">
+                {t("pick any you like", "اختر ما يعجبك")}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {ACCENT_ELEMENT_OPTIONS.map((o) => {
+                const active = (settings.accent_elements ?? []).includes(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() =>
+                      set({ accent_elements: toggleInArray(settings.accent_elements, o.id) })
+                    }
+                    className={multiBtn(active)}
+                  >
+                    {lang === "ar" ? o.ar : o.en}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 4. Background Treatment — single-select */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              {t("Background Treatment", "معالجة الخلفية")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => set({ background_treatment: null })}
+                className={singleBtn(!settings.background_treatment)}
+              >
+                {t("Auto", "تلقائي")}
+              </button>
+              {BACKGROUND_TREATMENT_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => set({ background_treatment: o.id })}
+                  className={singleBtn(settings.background_treatment === o.id)}
+                >
+                  {lang === "ar" ? o.ar : o.en}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* 5. Content Components — multi-select */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              {t("Content Components", "مكوّنات المحتوى")}
+              <span className="ml-2 normal-case text-[10px] text-muted-foreground/70">
+                {t("pick any you want on the page", "اختر ما تريد ظهوره في الصفحة")}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {CONTENT_COMPONENT_OPTIONS.map((o) => {
+                const active = (settings.content_components ?? []).includes(o.id);
+                return (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() =>
+                      set({ content_components: toggleInArray(settings.content_components, o.id) })
+                    }
+                    className={multiBtn(active)}
+                  >
+                    {lang === "ar" ? o.ar : o.en}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 6. Layout Pattern — single-select */}
+          <div>
+            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
+              {t("Layout Pattern", "نمط التخطيط")}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => set({ layout_pattern: null })}
+                className={singleBtn(!settings.layout_pattern)}
+              >
+                {t("Auto", "تلقائي")}
+              </button>
+              {LAYOUT_PATTERN_OPTIONS.map((o) => (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => set({ layout_pattern: o.id })}
+                  className={singleBtn(settings.layout_pattern === o.id)}
+                >
+                  {lang === "ar" ? o.ar : o.en}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const A4Tab: React.FC = () => {
   const { lang, t } = useTL();
 
@@ -1122,6 +1427,14 @@ const A4Tab: React.FC = () => {
   const [formState, setFormState] = useState<Record<string, unknown>>({});
   const [pageChoice, setPageChoice] = useState<PageChoice>("auto");
   const [extractColors, setExtractColors] = useState<boolean>(false);
+  const [creativeSettings, setCreativeSettings] = useState<A4CreativeSettings>({
+    visual_recipe: null,
+    illustration_style: "none",
+    accent_elements: [],
+    background_treatment: null,
+    content_components: [],
+    layout_pattern: null,
+  });
   const [designSettings, setDesignSettings] = useState<A4DesignSettings>({
     orientation: "portrait",
     background_color: "#FFFFFF",
@@ -1217,6 +1530,7 @@ const A4Tab: React.FC = () => {
         requested_pages: pageChoice,
         language_mode: languageMode,
         design_settings: designSettings,
+        creative_settings: creativeSettings,
       });
 
       if (!res.success || !res.batch_id) {
@@ -1247,7 +1561,7 @@ const A4Tab: React.FC = () => {
       setFatalError((e as Error).message);
       setStage("failed");
     }
-  }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, t]);
+  }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, t]);
 
   // Watch rows: when all rows are completed/failed, flip stage
   useEffect(() => {
@@ -1384,41 +1698,50 @@ const A4Tab: React.FC = () => {
               <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${currentThemeVisual.bg} opacity-70`} />
               <CurrentThemeIcon className={`pointer-events-none absolute -right-4 bottom-3 h-24 w-24 ${currentThemeVisual.text} opacity-[0.06]`} />
               <div className="relative">
-              <DesignSettingsPanel
-                settings={designSettings}
-                onChange={setDesignSettings}
-              />
-              {schema.map((field) => (
-                <FormFieldRenderer
-                  key={field.key}
-                  field={field}
-                  value={formState[field.key]}
-                  onChange={(v) => setFormState((prev) => ({ ...prev, [field.key]: v }))}
-                />
-              ))}
-
-              {/* Logo color extract toggle, only when a logo is present */}
-              {typeof formState.logo === "string" && (formState.logo as string).length > 0 && (
-                <div className="mb-3 flex items-center justify-between pt-2 border-t">
-                  <label className="text-sm">
-                    {t("Extract brand colors from logo", "استخراج ألوان العلامة التجارية من الشعار")}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setExtractColors((v) => !v)
-                    }
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      extractColors ? "bg-primary" : "bg-muted"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                        extractColors ? "translate-x-6" : "translate-x-1"
-                      }`}
-                    />
-                  </button>
+                <div className="mb-3 text-[10px] leading-4 text-muted-foreground/85">
+                  {t(
+                    "This form helps guide the design — fill only the parts that matter to you.",
+                    "هذا النموذج يساعد في توجيه التصميم — املأ فقط الأجزاء التي تهمك."
+                  )}
                 </div>
-              )}
+                <DesignSettingsPanel
+                  settings={designSettings}
+                  onChange={setDesignSettings}
+                />
+                <CreativeSettingsPanel
+                  settings={creativeSettings}
+                  onChange={setCreativeSettings}
+                />
+                {schema.map((field) => (
+                  <FormFieldRenderer
+                    key={field.key}
+                    field={field}
+                    value={formState[field.key]}
+                    onChange={(v) => setFormState((prev) => ({ ...prev, [field.key]: v }))}
+                  />
+                ))}
+
+                {/* Logo color extract toggle, only when a logo is present */}
+                {typeof formState.logo === "string" && (formState.logo as string).length > 0 && (
+                  <div className="mb-3 flex items-center justify-between pt-2 border-t">
+                    <label className="text-sm">
+                      {t("Extract brand colors from logo", "استخراج ألوان العلامة التجارية من الشعار")}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setExtractColors((v) => !v)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        extractColors ? "bg-primary" : "bg-muted"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                          extractColors ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                )}
 
               {/* Page count chip row */}
               {maxPages > 1 && (

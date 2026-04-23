@@ -1,113 +1,10 @@
-// A4 Document Builder — Prompt Compiler
+// A4 Document Builder — Prompt Compiler (Direct Form-to-Prompt)
 // -----------------------------------------------------------------------------
-// Exports:
-//   - buildGeminiPreprocessSystemPrompt(): strict-JSON system prompt for Gemini
-//   - buildGeminiPreprocessUserPayload(): the user payload text
-//   - compileMasterPrompt(): assembles the final 20k-budget Nano Banana 2 prompt
+// No Gemini middleman. The form IS the prompt builder. What the user clicks is
+// what gets sent to Nano Banana 2.
 // -----------------------------------------------------------------------------
 
 import type { A4Theme } from "./a4-themes.ts";
-
-// =============================================================================
-// GEMINI PREPROCESSOR PROMPT
-// =============================================================================
-
-export function buildGeminiPreprocessSystemPrompt(): string {
-  return `You are the A4 document preprocessor. You transform messy user input into a clean, page-aware, structured layout plan. You do NOT render images. You output JSON only — no prose, no markdown fences, no explanation.
-
-YOUR THREE JOBS:
-
-1. CLEAN the raw_content:
-   - Remove redundant whitespace, broken bullets, stray characters, and duplicate lines.
-   - Preserve every meaningful word, number, formula, and symbol. NEVER paraphrase or translate.
-   - Detect natural structure: title, section headings, paragraphs, bullet lists, numbered questions, tables, chemical equations, fractions.
-   - Tag each structural element using the block types in the schema below.
-
-2. DECIDE page count + SPLIT content:
-   - If requested_pages is a number (1, 2, or 3): honor it. If content exceeds the budget at that page count, gently trim the least-critical sections to fit. Never drop user-authored numbered items (like exam questions).
-   - If requested_pages is "auto":
-     - Calculate needed pages using per_page_char_budget. Clamp between 1 and 3.
-     - Split at clean boundaries: never mid-question, never mid-paragraph, never mid-section.
-   - For multi-page output, repeat ONLY the header metadata blocks (title, subtitle) on every page if they make sense as a running header; otherwise page 1 has the full header and subsequent pages just have a slim "continued" header.
-
-3. EMIT a layout JSON matching the OUTPUT SCHEMA exactly.
-
-OUTPUT SCHEMA (strict JSON, no prose, no markdown fences):
-
-{
-  "status": "ok" | "too_long" | "content_unclear",
-  "detected_language": "en" | "ar" | "bilingual",
-  "suggested_pages": 1 | 2 | 3,
-  "honored_pages": 1 | 2 | 3,
-  "pages": [
-    {
-      "page_number": 1,
-      "blocks": [
-        { "type": "title", "text": "...", "lang": "en" | "ar" },
-        { "type": "subtitle", "text": "...", "lang": "en" | "ar" },
-        { "type": "section_heading", "text": "...", "lang": "en" | "ar" },
-        { "type": "paragraph", "text": "...", "lang": "en" | "ar" },
-        { "type": "bullet_list", "items": ["...", "..."], "lang": "en" | "ar" },
-        { "type": "numbered_list", "items": ["...", "..."], "lang": "en" | "ar" },
-        { "type": "question", "number": 1, "text": "...", "options": ["A) ...", "B) ...", "C) ..."], "marks": 2, "lang": "en" | "ar" },
-        { "type": "equation", "latex_or_text": "6CO2 + 6H2O -> C6H12O6 + 6O2" },
-        { "type": "table", "headers": ["...","..."], "rows": [["...","..."]] },
-        { "type": "bilingual_row", "en": "...", "ar": "..." },
-        { "type": "spacer", "size": "small" | "medium" | "large" }
-      ]
-    }
-  ],
-  "notes_for_renderer": "Short special-handling hints or empty string."
-}
-
-VALIDATION RULES:
-- Always return valid JSON. No markdown fences. No prose. Just JSON.
-- Fields "options" and "marks" on question blocks are optional — omit them if not applicable.
-- If raw_content is empty, return one page of just the form-derived title/subtitle blocks.
-- If status="too_long", still return your best-effort split at honored_pages=3 but flag it in notes_for_renderer.
-- If status="content_unclear", explain briefly in notes_for_renderer.
-- Use block type "bilingual_row" only when language_mode is "bilingual" AND the two languages are clear parallels.
-- Never emit HTML tags, LaTeX fences, or markdown inside block text.
-`;
-}
-
-export interface A4PreprocessInput {
-  theme_id: string;
-  purpose_id: string | null;
-  form_state: Record<string, unknown>;
-  raw_content: string;
-  language_mode: "en" | "ar" | "bilingual";
-  requested_pages: "auto" | 1 | 2 | 3;
-  per_page_char_budget: number;
-  max_pages: 1 | 2 | 3;
-}
-
-export function buildGeminiPreprocessUserPayload(input: A4PreprocessInput): string {
-  // Strip very large binary/image-ish values and internal keys from form_state so we don't blow the context
-  const cleanForm: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(input.form_state || {})) {
-    if (k.startsWith("__")) continue; // internal stash keys (e.g. __design_settings__)
-    if (typeof v === "string" && v.length > 2000) continue;
-    if (typeof v === "string" && v.startsWith("data:")) continue;
-    cleanForm[k] = v;
-  }
-
-  return `INPUT:
-- theme_id: ${input.theme_id}
-- purpose_id: ${input.purpose_id ?? "null"}
-- language_mode: ${input.language_mode}
-- requested_pages: ${input.requested_pages}
-- per_page_char_budget: ${input.per_page_char_budget}
-- max_pages: ${input.max_pages}
-- form_state (JSON): ${JSON.stringify(cleanForm)}
-
-raw_content (between markers, preserve every character verbatim):
-[RAW BEGIN]
-${input.raw_content ?? ""}
-[RAW END]
-
-Return ONLY the JSON per the schema. No prose. No markdown.`;
-}
 
 // =============================================================================
 // MASTER PROMPT COMPILER (Nano Banana 2)
@@ -131,78 +28,92 @@ export interface A4DesignSettings {
   tone?: A4Tone;
 }
 
+// -----------------------------------------------------------------------------
+// CREATIVE CONTROL TYPES — each form control maps to a specific prompt fragment.
+// -----------------------------------------------------------------------------
+export type A4VisualRecipe =
+  | "paper_craft_flatlay"
+  | "executive_tech_spec"
+  | "comic_triptych"
+  | "ministry_exam"
+  | "menu_board"
+  | "craft_diy_explainer"
+  | "minimal_stationery"
+  | "bold_poster";
+
+export type A4IllustrationStyle =
+  | "none"
+  | "icons"
+  | "flat_vector"
+  | "paper_craft"
+  | "watercolor"
+  | "comic_bold"
+  | "photo_realistic";
+
+export type A4AccentElement =
+  | "hand_drawn_arrows"
+  | "ribbons"
+  | "stars"
+  | "corner_ornaments"
+  | "callout_badges"
+  | "dotted_dividers"
+  | "paper_tape"
+  | "thread_connectors";
+
+export type A4BackgroundTreatment =
+  | "plain_white"
+  | "soft_paper_texture"
+  | "light_gradient"
+  | "subtle_grid"
+  | "botanical_motif"
+  | "confetti"
+  | "photographic_backdrop";
+
+export type A4ContentComponent =
+  | "chart_bar"
+  | "chart_line"
+  | "chart_donut"
+  | "chart_radar"
+  | "data_table"
+  | "timeline"
+  | "step_flow"
+  | "side_by_side"
+  | "vitality_wheel"
+  | "info_cards"
+  | "grading_circle"
+  | "pull_quote"
+  | "callout_boxes";
+
+export type A4LayoutPattern =
+  | "single_column"
+  | "two_column_split"
+  | "sidebar_main"
+  | "three_panel_grid"
+  | "hero_body"
+  | "centered_composition";
+
+export interface A4CreativeSettings {
+  visual_recipe?: A4VisualRecipe | null;
+  illustration_style?: A4IllustrationStyle | null;
+  accent_elements?: A4AccentElement[] | null;
+  background_treatment?: A4BackgroundTreatment | null;
+  content_components?: A4ContentComponent[] | null;
+  layout_pattern?: A4LayoutPattern | null;
+}
+
 export interface A4CompileInput {
   theme: A4Theme;
   purposeId: string | null;
   formState: Record<string, unknown>;
-  geminiPages: GeminiPage[]; // full page array from Gemini output
+  rawContent: string; // user's textarea body — passed through verbatim
   pageNumber: number;
   totalPages: number;
   languageMode: "en" | "ar" | "bilingual";
   brandColors: { primary?: string | null; secondary?: string | null } | null;
   hasLogoReference: boolean;
-  hasPrevPageReference: boolean; // true for page >=2 when chaining style anchor
+  hasPrevPageReference: boolean;
   designSettings?: A4DesignSettings | null;
-}
-
-export interface GeminiBlock {
-  type: string;
-  [k: string]: unknown;
-}
-
-export interface GeminiPage {
-  page_number: number;
-  blocks: GeminiBlock[];
-}
-
-// Render a single block as plain structured text the image model can parse.
-function renderBlock(b: GeminiBlock): string {
-  const t = b.type as string;
-  switch (t) {
-    case "title":
-      return `[TITLE][${b.lang ?? "en"}] ${String(b.text ?? "")}`;
-    case "subtitle":
-      return `[SUBTITLE][${b.lang ?? "en"}] ${String(b.text ?? "")}`;
-    case "section_heading":
-      return `[SECTION][${b.lang ?? "en"}] ${String(b.text ?? "")}`;
-    case "paragraph":
-      return `[PARAGRAPH][${b.lang ?? "en"}] ${String(b.text ?? "")}`;
-    case "bullet_list": {
-      const items = Array.isArray(b.items) ? (b.items as string[]) : [];
-      return `[BULLETS][${b.lang ?? "en"}]\n${items.map((i) => `- ${i}`).join("\n")}`;
-    }
-    case "numbered_list": {
-      const items = Array.isArray(b.items) ? (b.items as string[]) : [];
-      return `[NUMBERED][${b.lang ?? "en"}]\n${items.map((i, idx) => `${idx + 1}. ${i}`).join("\n")}`;
-    }
-    case "question": {
-      const num = b.number ?? "?";
-      const txt = String(b.text ?? "");
-      const options = Array.isArray(b.options) ? (b.options as string[]) : [];
-      const marks = typeof b.marks === "number" ? ` (${b.marks} marks)` : "";
-      const optsRendered = options.length ? `\n  Options: ${options.join(" | ")}` : "";
-      return `[Q${num}${marks}][${b.lang ?? "en"}] ${txt}${optsRendered}`;
-    }
-    case "equation":
-      return `[EQUATION] ${String(b.latex_or_text ?? "")}`;
-    case "table": {
-      const headers = Array.isArray(b.headers) ? (b.headers as string[]) : [];
-      const rows = Array.isArray(b.rows) ? (b.rows as string[][]) : [];
-      const headerLine = headers.join(" | ");
-      const rowsRendered = rows.map((r) => r.join(" | ")).join("\n");
-      return `[TABLE]\n  Headers: ${headerLine}\n  Rows:\n${rowsRendered}`;
-    }
-    case "bilingual_row":
-      return `[BILINGUAL_ROW] EN: ${String(b.en ?? "")} || AR: ${String(b.ar ?? "")}`;
-    case "spacer":
-      return `[SPACER:${String(b.size ?? "medium")}]`;
-    default:
-      return `[${t.toUpperCase()}] ${JSON.stringify(b)}`;
-  }
-}
-
-function renderPage(page: GeminiPage): string {
-  return page.blocks.map(renderBlock).join("\n");
+  creativeSettings?: A4CreativeSettings | null;
 }
 
 function getLanguageRules(mode: "en" | "ar" | "bilingual"): string {
@@ -273,11 +184,21 @@ function getHeaderBlock(
     case "corporate_brief": {
       const company = String(formState.company_name ?? "").trim();
       const dept = String(formState.department ?? formState.client_name ?? "").trim();
-      const title = String(formState.report_title ?? "").trim();
+      const title = String(formState.report_title ?? formState.__fallback_title__ ?? "").trim();
       const period = String(formState.period ?? "").trim();
       const author = String(formState.author ?? "").trim();
       const ref = String(formState.doc_ref ?? "").trim();
-      return `Header: ${logoClause} Narrow accent bar across the very top. Next to logo: company name "${company}"${dept ? " | " + dept : ""}. Top-right: reference code "${ref}" in small monospaced style. Below header, full-width H1 title: "${title}". Meta row: ${period ? '"Period: ' + period + '"' : ""}${author ? ' | "Prepared by: ' + author + '"' : ""}.`;
+      const lines: string[] = [];
+      if (logoClause) lines.push(logoClause);
+      lines.push("Narrow accent bar across the very top.");
+      if (company) lines.push(`Next to logo: company name "${company}"${dept ? ' | "' + dept + '"' : ""}.`);
+      if (ref) lines.push(`Top-right: reference code "${ref}" in small monospaced style.`);
+      if (title) lines.push(`Below header, full-width H1 title: "${title}".`);
+      const meta: string[] = [];
+      if (period) meta.push(`"Period: ${period}"`);
+      if (author) meta.push(`"Prepared by: ${author}"`);
+      if (meta.length) lines.push(`Meta row: ${meta.join(" | ")}.`);
+      return `Header: ${lines.join(" ")}`;
     }
     case "certificate": {
       const issuer = String(formState.issuer_name ?? "").trim();
@@ -483,45 +404,209 @@ function getDesignPreferencesBlock(
 ${parts.join("\n")}`;
 }
 
-function getVisualAssetsBlock(formState: Record<string, unknown>, theme: A4Theme): string {
+function getVisualAssetsBlock(
+  formState: Record<string, unknown>,
+  theme: A4Theme,
+): string {
   const diagram = !!formState.include_diagram;
   const chart = !!formState.include_chart;
   const table = !!formState.include_table;
   const grading = !!formState.include_grading_circle;
 
   const parts: string[] = [];
+
   if (diagram) {
     parts.push(
-      `DIAGRAM: YES. Render a contextually relevant, accurate diagram for the subject matter, placed in a logical position within the layout (centered between sections or in a dedicated visual block). Style: ${theme.diagram_default_style ?? "clean vector schematic, labeled with leader lines"}. Label parts clearly. If language_mode includes Arabic, label in both languages.`,
+      `Include a contextually relevant diagram illustrating the subject matter. Place it in a logical spot within the layout. Style: ${theme.diagram_default_style ?? "clean vector schematic, labeled with leader lines"}. Label parts clearly.`,
     );
-  } else {
-    parts.push("DIAGRAM: NO.");
   }
   if (chart) {
     parts.push(
-      `CHART: YES. If numerical data is present anywhere in the content, render a clean ${theme.chart_default_style ?? "2D bar or line chart"} illustrating it. Include axis labels. Do not invent data that is not in the content.`,
+      `If the content contains numerical data, render a ${theme.chart_default_style ?? "clean 2D bar or line chart"} visualising it. Include axis labels drawn from the content. Use only numbers that are present \u2014 never invent values.`,
     );
-  } else {
-    parts.push("CHART: NO.");
   }
   if (table) {
     parts.push(
-      "TABLE: YES. If tabular data or side-by-side comparisons appear in the content, render them as a clean bordered table with a shaded header row.",
+      "If the content contains tabular data, render it as a clean bordered table with a shaded header row, hairline row dividers, and alternating subtle row shading.",
     );
   }
   if (grading) {
+    const totalMarks = Number(formState.total_marks ?? 0);
+    const denominator = totalMarks === 100 ? "100" : "10";
     parts.push(
-      "GRADING CIRCLE: YES. Bottom-right corner, draw a bold circle. Inside the circle, render a blank space followed by '/ 10' (or '/ 100' if total_marks is 100) for the teacher to fill in. Small label above: 'Final Grade'.",
+      `Bottom-right corner: render a bold circle. Inside the circle place a short blank line followed by "/ ${denominator}" for the teacher to fill in. Small label above the circle: "Final Grade".`,
     );
   }
+
+  if (parts.length === 0) return "";
   return parts.join("\n");
+}
+
+// -----------------------------------------------------------------------------
+// CREATIVE FRAGMENT BUILDERS — each translates a user-clicked control into a
+// specific natural-language instruction for Nano Banana 2. No AI in between.
+// -----------------------------------------------------------------------------
+function getVisualRecipeBlock(recipe: A4VisualRecipe | null | undefined): string {
+  if (!recipe) return "";
+  switch (recipe) {
+    case "paper_craft_flatlay":
+      return "High-quality flat-lay photography aesthetic. Paper-craft cut-outs arranged on a clean light-gray textured paper background. Small tactile 3D accents (folded paper, cotton-ball clouds, twine, blue water drops) where relevant. Shot from a top-down bird's-eye view with soft even lighting that minimises shadows. Educational, modern, easy to understand.";
+    case "executive_tech_spec":
+      return "Premium executive-report tech-specification aesthetic. Organised information panels with strong section dividers, subtle gradient fills, a prominent centered circular chart or capability wheel, and a system-capabilities data table. Consultancy-grade feel.";
+    case "comic_triptych":
+      return "Bold comic-book poster aesthetic organised as 3 vertical panels. Thick black outlines, dramatic vibrant saturated backgrounds, uppercase comic-lettering titles in banner shapes, clean caption strips at the bottom of each panel.";
+    case "ministry_exam":
+      return "Official ministry-style exam paper aesthetic. Sharp black ink on pure white stock, conservative ruled lines, generous answering space beneath every numbered question, bordered checkbox rows for multiple-choice options.";
+    case "menu_board":
+      return "Refined menu-board aesthetic. Elegant masthead at the top, categorised sections, items listed with name on the left and price right-aligned connected by dotted leader lines, subtle decorative accents between categories.";
+    case "craft_diy_explainer":
+      return "Hands-on DIY craft infographic aesthetic. Hand-cut paper shapes arranged in a flow, hand-drawn ink arrows connecting steps, short text captions on each card, warm educational handmade feel.";
+    case "minimal_stationery":
+      return "Ultra-clean minimalist stationery aesthetic. Pure white background, generous whitespace, single tasteful accent color, clean sans-serif typography, hairline section dividers. Premium modern feel.";
+    case "bold_poster":
+      return "Bold social-share poster aesthetic. Full-bleed color or gradient background, hero-size headline typography, high-contrast information card floating on the background, Instagram-ready eye-grabbing composition.";
+    default:
+      return "";
+  }
+}
+
+function getIllustrationStyleBlock(style: A4IllustrationStyle | null | undefined): string {
+  if (!style || style === "none") return "";
+  switch (style) {
+    case "icons":
+      return "Illustration approach: minimal line or filled icons only. No larger illustrations. Icons support bullets, section headings, and small callouts.";
+    case "flat_vector":
+      return "Illustration approach: clean flat vector illustrations with soft fills and crisp outlines. Modern and friendly.";
+    case "paper_craft":
+      return "Illustration approach: paper-craft cut-outs with subtle drop shadows. Tactile, handmade feel. Folded paper, twine, cotton-ball clouds where relevant.";
+    case "watercolor":
+      return "Illustration approach: soft watercolor illustrations with gentle bleeds and warm earthy tones.";
+    case "comic_bold":
+      return "Illustration approach: bold comic-book illustrations with thick black outlines and vibrant saturated fills.";
+    case "photo_realistic":
+      return "Illustration approach: photo-realistic imagery integrated naturally into the layout where the subject calls for a photograph.";
+    default:
+      return "";
+  }
+}
+
+function getAccentElementsBlock(elements: A4AccentElement[] | null | undefined): string {
+  if (!elements || elements.length === 0) return "";
+  const map: Record<A4AccentElement, string> = {
+    hand_drawn_arrows: "hand-drawn ink arrows connecting sequential or related elements",
+    ribbons: "small ribbon banners behind key labels or achievements",
+    stars: "small decorative stars for emphasis around awards or highlights",
+    corner_ornaments: "elegant ornamental flourishes at the page corners",
+    callout_badges: "circular or pill-shape callout badges drawing attention to key numbers or labels",
+    dotted_dividers: "dotted or dashed hairline dividers between sections",
+    paper_tape: "washi-tape or paper-tape strips fastening key elements to the page",
+    thread_connectors: "decorative thread or twine lines linking related items",
+  };
+  const pieces = elements.map((e) => map[e]).filter(Boolean);
+  if (pieces.length === 0) return "";
+  return `Accent elements to include: ${pieces.join(", ")}. Use them tastefully so they enhance rather than compete with the content.`;
+}
+
+function getBackgroundTreatmentBlock(bg: A4BackgroundTreatment | null | undefined): string {
+  if (!bg) return "";
+  switch (bg) {
+    case "plain_white":
+      return "Background: pure flat white, edge-to-edge.";
+    case "soft_paper_texture":
+      return "Background: soft off-white or light-gray paper texture with subtle grain, edge-to-edge.";
+    case "light_gradient":
+      return "Background: gentle light gradient softly shifting between two close hues, edge-to-edge.";
+    case "subtle_grid":
+      return "Background: very subtle grid or graph-paper pattern in a near-invisible tint, edge-to-edge.";
+    case "botanical_motif":
+      return "Background: delicate botanical motif (soft leaves or floral line art) faded to near-watermark opacity, edge-to-edge.";
+    case "confetti":
+      return "Background: tasteful confetti pattern in muted accent-color dots, edge-to-edge, never overpowering the content.";
+    case "photographic_backdrop":
+      return "Background: photographic backdrop relevant to the subject (wood desk, linen, marble, etc.) with a soft vignette keeping text readable.";
+    default:
+      return "";
+  }
+}
+
+function getContentComponentsBlock(
+  components: A4ContentComponent[] | null | undefined,
+  rawContent: string,
+): string {
+  if (!components || components.length === 0) return "";
+  const map: Record<A4ContentComponent, string> = {
+    chart_bar: "a clean 2D bar chart visualising numerical data found in the content (axis labels drawn from the content; never invent numbers)",
+    chart_line: "a clean 2D line chart visualising numerical data found in the content (axis labels drawn from the content; never invent numbers)",
+    chart_donut: "a donut chart visualising proportional data found in the content, with a clean legend",
+    chart_radar: "a radar / spider chart visualising multi-axis data found in the content",
+    data_table: "a bordered data table with a shaded header row, hairline row dividers, and alternating subtle row shading",
+    timeline: "a horizontal or vertical timeline with clear markers for each step or milestone",
+    step_flow: "a step-by-step flow diagram with hand-drawn or clean vector arrows connecting each step",
+    side_by_side: "a side-by-side comparison panel with clear column headers and aligned rows",
+    vitality_wheel: "a prominent centered circular vitality / capability wheel with labeled spokes",
+    info_cards: "a grid of information cards, each card holding a short label and one or two lines of content",
+    grading_circle: "a bold circle in the bottom-right corner containing a blank line followed by a denominator (for example '___ / 10'), labeled 'Final Grade' above it",
+    pull_quote: "one or two large pull-quote blocks emphasising key phrases from the content",
+    callout_boxes: "small callout boxes highlighting key facts or warnings beside their relevant sections",
+  };
+
+  // Anti-hallucination guard: if the content carries no numeric data, strip
+  // components that require numbers so the model cannot invent them.
+  const hasNumbers = /\d/.test(rawContent ?? "");
+  const numericOnly = new Set<A4ContentComponent>([
+    "chart_bar",
+    "chart_line",
+    "chart_donut",
+    "chart_radar",
+  ]);
+  let filtered = components.slice();
+  if (!hasNumbers) {
+    filtered = filtered.filter((c) => !numericOnly.has(c));
+    // If a chart was requested but we removed it, add info_cards as a safe
+    // qualitative fallback (unless already present).
+    const hadChart = components.some((c) => numericOnly.has(c));
+    if (hadChart && !filtered.includes("info_cards")) {
+      filtered.push("info_cards");
+    }
+  }
+
+  const pieces = filtered.map((c) => map[c]).filter(Boolean);
+  if (pieces.length === 0) return "";
+
+  return [
+    `Content components to include: ${pieces.join("; ")}.`,
+    "Integrate each component into the layout where it logically fits.",
+    "CRITICAL: Populate every component ONLY with data that already exists in the content above.",
+    "Do NOT invent numbers, labels, company names, product names, technology names, brand names, integrations, or examples.",
+    "If a component has no matching data source in the content, OMIT that component entirely and replace it with a short qualitative summary card built from words that ARE in the content.",
+  ].join(" ");
+}
+
+function getLayoutPatternBlock(pattern: A4LayoutPattern | null | undefined): string {
+  if (!pattern) return "";
+  switch (pattern) {
+    case "single_column":
+      return "Layout pattern: single full-width column, top-to-bottom reading flow.";
+    case "two_column_split":
+      return "Layout pattern: two equal columns side by side inside the body zone.";
+    case "sidebar_main":
+      return "Layout pattern: narrow sidebar on one side carrying meta or highlights, wider main column carrying the primary content.";
+    case "three_panel_grid":
+      return "Layout pattern: three equal panels (vertical strip or horizontal row) inside the body zone.";
+    case "hero_body":
+      return "Layout pattern: tall hero zone at the top (oversized headline or feature visual), body content flows beneath it.";
+    case "centered_composition":
+      return "Layout pattern: entirely centered composition, every element balanced around the page axis.";
+    default:
+      return "";
+  }
 }
 
 export function compileMasterPrompt(input: A4CompileInput): string {
   const {
     theme,
     formState,
-    geminiPages,
+    rawContent,
     pageNumber,
     totalPages,
     languageMode,
@@ -530,81 +615,106 @@ export function compileMasterPrompt(input: A4CompileInput): string {
     hasPrevPageReference,
   } = input;
 
-  const thisPage = geminiPages.find((p) => p.page_number === pageNumber) ?? geminiPages[0];
-  const contentRendered = thisPage ? renderPage(thisPage) : "";
+  // Title fallback: if the user left document title empty, synthesise one from
+  // the most likely entity field + theme label so the model never invents a title.
+  const entityName = String(
+    formState.company_name
+      ?? formState.business_name
+      ?? formState.school_name
+      ?? formState.issuer_name
+      ?? formState.sender_name
+      ?? formState.full_name
+      ?? "",
+  ).trim();
+  const themeLabel = (theme as unknown as { name_en?: string }).name_en ?? "Document";
+  const fallbackTitle = entityName ? `${entityName} — ${themeLabel}` : themeLabel;
+  const formStateForHeader: Record<string, unknown> = {
+    ...formState,
+    __fallback_title__: fallbackTitle,
+  };
+
   const languageRules = getLanguageRules(languageMode);
   const pageContext = getPageContextClause(pageNumber, totalPages, hasPrevPageReference);
   const brandColorDirective = getBrandColorDirective(brandColors);
-  const headerBlock = getHeaderBlock(theme, formState, hasLogoReference, pageNumber);
+  const headerBlock = getHeaderBlock(theme, formStateForHeader, hasLogoReference, pageNumber);
   const visualAssets = getVisualAssetsBlock(formState, theme);
   const design = input.designSettings ?? null;
+  const creative = input.creativeSettings ?? null;
   const resolvedAspect = resolveAspectRatio(theme, design?.orientation);
   const designPrefs = getDesignPreferencesBlock(design);
-  const backgroundDirective = design?.background_color
-    ? `Page background filled with ${design.background_color} edge-to-edge (unless the theme explicitly requires a different treatment for a specific block).`
-    : "Pure solid white page (unless the theme style block explicitly dictates otherwise).";
+  const orientationLabel = design?.orientation ?? "portrait";
 
-  return `ROLE:
-You are "A4", a precision digital document architect. Your only output is a pristine, flat 2D digital A4 document, indistinguishable from a professionally designed PDF export. You never produce photos of paper on desks, shadows, wood, hands, fingers, curled corners, staples, or any physical object. You are a vector layout engine, not a photographer.
+  const visualRecipe = getVisualRecipeBlock(creative?.visual_recipe);
+  const illustrationStyle = getIllustrationStyleBlock(creative?.illustration_style);
+  const accentElements = getAccentElementsBlock(creative?.accent_elements);
+  const backgroundTreatment = getBackgroundTreatmentBlock(creative?.background_treatment);
+  const contentComponents = getContentComponentsBlock(creative?.content_components, rawContent);
+  const layoutPattern = getLayoutPatternBlock(creative?.layout_pattern);
 
-NON-NEGOTIABLE VISUAL LAWS:
-1. PERSPECTIVE: Absolute top-down, flat, 2D vector layout. Zero perspective, zero 3D, zero depth. Aspect ratio ${resolvedAspect}${design?.orientation ? ` (user chose ${design.orientation} orientation)` : ""}.
-2. BACKGROUND: ${backgroundDirective} No paper texture, no shadows behind the page, no vignettes, no borders around the page edge unless the theme or user border style calls for it.
-3. TEXT CLARITY: Every single character must be razor-sharp, properly kerned, anti-aliased cleanly, and readable at 400% zoom. No blurred, warped, wavy, or smudged text anywhere.
-4. TEXT FIDELITY (CRITICAL): Every word, number, punctuation mark, subscript, superscript, chemical formula, fraction, and symbol inside the CONTENT section below must be rendered EXACTLY as written. Do NOT paraphrase. Do NOT shorten. Do NOT translate. Do NOT substitute synonyms. Do NOT "improve" or "correct" the content. Preserve every character verbatim, including punctuation and spacing.
-5. NO HALLUCINATED TEXT: Do not invent text anywhere on the page. If a region has no assigned content, leave it clean or fill with requested visuals only. Zero lorem ipsum, zero placeholder copy, zero sample watermarks, zero gibberish.
+  const backgroundDirective = backgroundTreatment
+    || (design?.background_color
+      ? `Background: solid ${design.background_color}, edge-to-edge.`
+      : `Background: ${theme.id === "certificate" ? "cream or pearl-white" : "pure white"} (unless the theme aesthetic above specifies otherwise).`);
 
-TYPOGRAPHY STACK:
-- English / Latin text: clean sans-serif (Inter, Helvetica, or Arial). Consistent throughout the document.
-- Arabic text: Noto Sans Arabic or an equivalent modern Arabic sans-serif. Proper letter joining. No broken or isolated glyphs.
-- Numbers: use Western digits (0123456789) with English content; use them with Arabic content too unless the source content explicitly uses Arabic-Indic digits (٠١٢٣...).
-- Never mix two different font families within the same text block.
-- Chemical formulas use proper subscripts (CO2 should render as CO with subscript 2). Fractions use proper typographic fractions or clean horizontal-bar fractions.
+  const layoutBlueprint = theme.layout_blueprint
+    ?? "Use a clean top-to-bottom layout: header zone, body zone, footer zone. Keep margins consistent and spacing generous.";
 
-VISUAL HIERARCHY:
-- H1 (document title): largest, bold, placed per header instructions.
-- H2 (section headings): clearly smaller than H1, bold or semi-bold, consistent spacing between sections.
-- Body text: comfortable reading size, generous line-height, left-aligned (or right-aligned for Arabic).
-- Tables: bordered, with a distinct header row. Alternating subtle row shading allowed.
-- Bullet and numbered lists: clean, properly indented, consistent markers.
+  // Prompt is composed per Google's Nano Banana prompting guide:
+  //   - Strong verb opening ("Generate...")
+  //   - Positive framing throughout (describe what you want, never what to avoid)
+  //   - Content to render passes through verbatim so the model renders it exactly
+  //   - Spatial blueprint + creative direction like a creative director would
 
-LANGUAGE & ALIGNMENT RULES:
-${languageRules}
+  const sections: string[] = [];
 
-VISUAL THEME (DESIGN DNA):
-${theme.style_block}
+  sections.push(
+    `Generate a flat 2D digital A4 ${orientationLabel} document \u2014 the final image should look indistinguishable from a crisp PDF export viewed on screen. Aspect ratio ${resolvedAspect}.`,
+  );
 
-${designPrefs ? designPrefs + "\n" : ""}${brandColorDirective ? "BRAND COLORS:\n" + brandColorDirective + "\n" : ""}
-PAGE CONTEXT:
-${pageContext}
+  sections.push(
+    `VISUAL STYLE\n${theme.style_block}\n${backgroundDirective}\nAll text renders razor-sharp and anti-aliased, with consistent kerning, legible at 400% zoom.`,
+  );
 
-HEADER SECTION:
-${headerBlock}
+  if (visualRecipe) sections.push(`VISUAL RECIPE\n${visualRecipe}`);
+  if (illustrationStyle) sections.push(`ILLUSTRATION APPROACH\n${illustrationStyle}`);
+  if (accentElements) sections.push(`ACCENT ELEMENTS\n${accentElements}`);
 
-MAIN CONTENT:
-Render the following structured content with perfect spacing, grouping, and emphasis. Respect every label, section break, list, and question. Preserve every word.
+  // Slim TYPOGRAPHY: only send Arabic rules when the document actually uses Arabic.
+  if (languageMode === "ar" || languageMode === "bilingual") {
+    sections.push(
+      `TYPOGRAPHY\nEnglish and Latin text uses clean modern sans-serif (Inter, Helvetica, or Arial). Arabic text uses Noto Sans Arabic or an equivalent modern Arabic sans-serif with proper letter joining. Numbers use Western digits (0123456789) unless the source content itself uses Arabic-Indic digits. Within any single text block, typography stays consistent.`,
+    );
+  } else {
+    sections.push(
+      `TYPOGRAPHY\nClean modern sans-serif (Inter, Helvetica, or Arial). Consistent kerning. Western digits. Proper typographic punctuation and fractions. No mixed fonts within the same block.`,
+    );
+  }
 
-[CONTENT START]
-${contentRendered}
-[CONTENT END]
+  sections.push(`LANGUAGE\n${languageRules}`);
+  sections.push(`PAGE CONTEXT\n${pageContext}`);
+  sections.push(`LAYOUT BLUEPRINT\n${layoutBlueprint}`);
+  if (layoutPattern) sections.push(`LAYOUT PATTERN\n${layoutPattern}`);
+  sections.push(`HEADER\n${headerBlock}`);
 
-VISUAL ASSETS:
-${visualAssets}
+  if (designPrefs) sections.push(designPrefs);
+  if (brandColorDirective) sections.push(`BRAND ACCENT COLORS\n${brandColorDirective}`);
 
-FOOTER (MANDATORY ON EVERY PAGE):
-Render at the very bottom center of the page, in 7pt light gray text, non-distracting, never overlapping any content:
-"wakti.qa"
-${totalPages > 1 ? `Also render small page numbering at the bottom right: "Page ${pageNumber} of ${totalPages}".` : ""}
+  const trimmedContent = (rawContent ?? "").trim();
+  if (trimmedContent) {
+    sections.push(
+      `CONTENT TO RENDER\nRender the following content inside the body zone of the layout. Preserve every word, number, punctuation mark, and symbol exactly as written. Respect every paragraph, list, question, and heading. Keep it razor-sharp and perfectly legible.\n\n${trimmedContent}`,
+    );
+  }
 
-SELF-CORRECTION (EXECUTE BEFORE RENDERING):
-Before finalizing the image, mentally verify:
-- Is every word from CONTENT START to CONTENT END present and spelled identically to the source?
-- Are all chemical formulas, fractions, and equations technically correct and properly typeset?
-- Are Arabic characters correctly joined and right-aligned per the language rules?
-- Are there zero hallucinated or invented words anywhere on the page?
-- Is every line perfectly straight, every margin consistent, every color crisp?
-- Does the page feel like a flat PDF export, NOT a photograph of paper?
-- Does the bottom-center "wakti.qa" footer appear exactly once, light gray, non-intrusive?
+  if (contentComponents) sections.push(`CONTENT COMPONENTS\n${contentComponents}`);
+  if (visualAssets) sections.push(`VISUAL ASSETS\n${visualAssets}`);
 
-Render now.`;
+  const footerLine = totalPages > 1
+    ? `FOOTER\nBottom center of the page, in small 7pt light gray text: "wakti.qa"\nBottom right, small matching type: "Page ${pageNumber} of ${totalPages}"`
+    : `FOOTER\nBottom center of the page, in small 7pt light gray text: "wakti.qa"`;
+  sections.push(footerLine);
+
+  sections.push("Render the final image now.");
+
+  return sections.join("\n\n");
 }

@@ -13,7 +13,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { findTheme } from "../_shared/a4-themes.ts";
-import { compileMasterPrompt, type GeminiPage } from "../_shared/a4-prompts.ts";
+import { compileMasterPrompt, type A4CreativeSettings } from "../_shared/a4-prompts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -184,29 +184,43 @@ async function dispatchNextPage(
       console.error(`[a4-callback] theme not found: ${row.theme_id}`);
       return;
     }
-    // Fetch page 1 row to get the full gemini_output (pages array)
+    // Fetch page 1 row to reconstruct form state + creative settings + split content
     const { data: page1, error: p1err } = await svc
       .from("user_a4_documents")
-      .select("gemini_output, form_state, total_pages")
+      .select("form_state, total_pages")
       .eq("batch_id", row.batch_id)
       .eq("page_number", 1)
       .maybeSingle();
-    if (p1err || !page1?.gemini_output) {
-      console.error(`[a4-callback] page1 gemini_output missing for batch=${row.batch_id}`);
+    if (p1err || !page1?.form_state) {
+      console.error(`[a4-callback] page1 form_state missing for batch=${row.batch_id}`);
       return;
     }
-    const geminiPages: GeminiPage[] = (page1.gemini_output as any).pages || [];
-    const languageMode: "en" | "ar" | "bilingual" =
-      ((page1.form_state as any)?.bilingual === true ? "bilingual" : "en") as any;
 
-    const formStateForPrompt = (page1.form_state as any) || {};
-    const designSettings = formStateForPrompt?.__design_settings__ ?? null;
+    const formStateForPrompt = (page1.form_state as Record<string, unknown>) || {};
+    const designSettings = (formStateForPrompt.__design_settings__ as any) ?? null;
+    const creativeSettings = (formStateForPrompt.__creative_settings__ as A4CreativeSettings | null) ?? null;
+    const splitPages = Array.isArray(formStateForPrompt.__split_pages__)
+      ? (formStateForPrompt.__split_pages__ as string[])
+      : [];
+    const stashedLang = formStateForPrompt.__language_mode__;
+    const languageMode: "en" | "ar" | "bilingual" =
+      stashedLang === "ar" || stashedLang === "bilingual" || stashedLang === "en"
+        ? stashedLang
+        : (formStateForPrompt.bilingual === true ? "bilingual" : "en");
+
+    // Page index into split content (0-based). Fall back to full raw_content
+    // when the split array is shorter than the requested page number.
+    const pageIdx = row.page_number - 1;
+    const rawContentForPage =
+      splitPages[pageIdx] ??
+      splitPages[splitPages.length - 1] ??
+      String(formStateForPrompt.raw_content ?? "");
 
     const prompt = compileMasterPrompt({
       theme,
       purposeId: row.purpose_id ?? null,
       formState: formStateForPrompt,
-      geminiPages,
+      rawContent: rawContentForPage,
       pageNumber: row.page_number,
       totalPages: row.total_pages,
       languageMode,
@@ -214,6 +228,7 @@ async function dispatchNextPage(
       hasLogoReference: !!logoUrl,
       hasPrevPageReference: true,
       designSettings,
+      creativeSettings,
     });
 
     const imageInputs: string[] = [];

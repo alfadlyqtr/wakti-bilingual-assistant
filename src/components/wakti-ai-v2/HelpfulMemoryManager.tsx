@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Brain, Check, Download, Pause, Pencil, Plus, RotateCcw, Save, Trash2, UserCog, X } from 'lucide-react';
+import { Brain, Check, Download, Pause, Pencil, Plus, RotateCcw, Save, Sparkles, Trash2, UserCog, X } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
@@ -167,6 +167,16 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
       loadData({ silent: true }).catch(() => {});
     });
   }, [loadData]);
+
+  // Open Quick Setup when triggered externally (e.g. from Helpful Memory onboarding popup).
+  useEffect(() => {
+    return onEvent('wakti-open-memory-panel', (detail) => {
+      if (detail && (detail as any).openQuickSetup) {
+        setActiveTab('always_use');
+        setProfileFormOpen(true);
+      }
+    });
+  }, []);
 
   const resetEditor = useCallback(() => {
     setEditorOpen(false);
@@ -566,9 +576,44 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
           </div>
         ) : activeItems.length > 0 ? (
           activeItems.map(renderCard)
-        ) : (
+        ) : activeTab === 'candidate' ? (
           <div className="rounded-xl border border-dashed border-white/15 bg-black/15 px-3 py-5 text-center text-sm text-slate-400">
-            {activeTab === 'candidate' ? labels.emptyCandidates : labels.empty}
+            {labels.emptyCandidates}
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-white/10 bg-[linear-gradient(135deg,rgba(12,15,20,0.85)_0%,rgba(30,41,59,0.85)_100%)] px-4 py-5 text-center shadow-[0_6px_24px_rgba(0,0,0,0.28)]">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,hsl(210,100%,65%)_0%,hsl(280,70%,65%)_100%)] shadow-[0_0_25px_hsla(210,100%,65%,0.55)]">
+              <Brain className="h-6 w-6 text-white" />
+            </div>
+            <div className="text-sm font-semibold text-slate-100">
+              {language === 'ar' ? 'لا ذاكرة هنا بعد' : 'Nothing saved here yet'}
+            </div>
+            <p className="mx-auto mt-1 max-w-[280px] text-[12px] leading-relaxed text-slate-400">
+              {language === 'ar'
+                ? 'أضف بعض الأساسيات بنفسك أو جرّب الإعداد السريع — يستغرق 10 ثوانٍ ويجعل وقتي أكثر فائدة من أول رسالة.'
+                : 'Add a few basics yourself or try Quick Setup — takes 10 seconds and makes Wakti more helpful from the very first message.'}
+            </p>
+            <div className="mt-3 flex flex-wrap justify-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setProfileFormOpen(true)}
+                className="h-8 rounded-xl px-3 text-xs text-white bg-[linear-gradient(135deg,hsl(210,100%,65%)_0%,hsl(260,80%,65%)_50%,hsl(280,70%,65%)_100%)] shadow-[0_4px_16px_hsla(260,80%,65%,0.45)] hover:brightness-110"
+              >
+                <Sparkles className="mr-1 h-3.5 w-3.5" />
+                {language === 'ar' ? 'إعداد سريع' : 'Quick Setup'}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={handleStartAdd}
+                className="h-8 rounded-xl border-white/15 bg-transparent px-3 text-xs text-slate-200 hover:bg-white/10"
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                {labels.addButton}
+              </Button>
+            </div>
           </div>
         )}
       </div>

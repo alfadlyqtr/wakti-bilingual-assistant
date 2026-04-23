@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { onEvent } from '@/utils/eventBus';
 import { PersonalTouchManager } from './PersonalTouchManager';
 import { ConversationsList } from './ConversationsList';
 import { AIConversation } from '@/services/WaktiAIV2Service';
@@ -33,6 +34,14 @@ export function ExtraPanel({
   isLoading
 }: ExtraPanelProps) {
   const { language } = useTheme();
+  const [activeTab, setActiveTab] = useState<string>('personal');
+
+  // Listen for external requests to open the Memory tab (e.g. from the onboarding popup).
+  useEffect(() => {
+    return onEvent('wakti-open-memory-panel', () => {
+      setActiveTab('memory');
+    });
+  }, []);
 
   // Convert AIConversation to the format expected by ConversationsList
   const mappedConversations = conversations.map(conv => ({
@@ -45,7 +54,7 @@ export function ExtraPanel({
   return (
     <div className="md:h-full overflow-hidden">
       <div className="px-2 pb-0 md:pb-2 pt-0 md:h-full flex flex-col">
-        <Tabs defaultValue="personal" className="flex flex-col md:h-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col md:h-full">
           {/* Sticky compact tabs header (inside the same Tabs) */}
           <div className="sticky top-0 z-10 px-1 pt-1 pb-1">
             <TabsList className="flex gap-2 h-8 p-0 bg-transparent !rounded-none justify-start">

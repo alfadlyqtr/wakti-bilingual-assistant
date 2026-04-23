@@ -191,15 +191,75 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       }
       if (kept.length === 0) { helpfulMemoryBlockRef.current = ''; return; }
 
-      const bullets = kept.map((line) => `- ${line}`).join('\n');
-      // Bilingual-friendly single block. OpenAI Realtime reads both fine; we
-      // keep rules honest about Talk being read-only for forget.
-      helpfulMemoryBlockRef.current =
-        `HELPFUL MEMORY (use only when relevant; never overrides the current request):\n${bullets}\n\nMEMORY RULES:\n- If asked "what do you remember about me?" / "ماذا تتذكر عني؟", list the items above plainly and mention the Helpful Memory panel in Chat for edits.\n- If the user says they no longer do X / forget X / لم أعد / انسى: acknowledge warmly ("Got it — I'll keep that in mind next time." / "تمام، راح أنتبه لها في المرة الجاية."). In Talk mode the memory is read-only, so tell them to say the same thing in Chat to remove it permanently. Do NOT claim it has been deleted.\n- Never invent a memory that is not listed above.`;
+      // Store ONLY the raw bullets in the ref. The full block (with adaptive
+      // posture + hard rules) is built at use-time in buildHelpfulMemoryBlock()
+      // so Personal Touch changes are always reflected without needing a reload.
+      helpfulMemoryBlockRef.current = kept.map((line) => `- ${line}`).join('\n');
     } catch (e) {
       console.warn('[Talk] loadHelpfulMemoryForTalk failed:', e);
       helpfulMemoryBlockRef.current = '';
     }
+  }, []);
+
+  // Compose the final Helpful Memory block at use-time, adapting the posture
+  // (how aggressively memory is surfaced) to the user's Personal Touch
+  // Tone + Style. Returns empty string if there are no memories to inject.
+  const buildHelpfulMemoryBlock = useCallback((): string => {
+    const bullets = helpfulMemoryBlockRef.current;
+    if (!bullets) return '';
+
+    const pt = (personalTouchRef.current || {}) as Record<string, unknown>;
+    const toneRaw = typeof pt.tone === 'string' ? pt.tone.toLowerCase().trim() : '';
+    const styleRaw = typeof pt.style === 'string' ? pt.style.toLowerCase().trim() : '';
+
+    // Style → surfacing frequency
+    let styleLine = '';
+    if (styleRaw.includes('short')) {
+      styleLine = 'Style=Short answers → surface memory ONLY when directly asked or absolutely essential. Never preempt.';
+    } else if (styleRaw.includes('detail')) {
+      styleLine = 'Style=Detailed → you MAY connect relevant memory facts that genuinely enrich the answer, kept natural.';
+    } else if (styleRaw.includes('analy')) {
+      styleLine = "Style=Analytical → use memory as reasoning context where it applies to the user's question.";
+    } else if (styleRaw.includes('convers')) {
+      styleLine = 'Style=Conversational → reference memory only when it genuinely improves flow. Light touch.';
+    } else {
+      styleLine = 'Style=Default → reference memory sparingly and only when it clearly improves the answer.';
+    }
+
+    // Tone → phrasing style
+    let toneLine = '';
+    if (toneRaw.includes('funny') || toneRaw.includes('playful') || toneRaw.includes('humor')) {
+      toneLine = 'Tone=Funny → you may reference memory playfully and briefly, never labored.';
+    } else if (toneRaw.includes('serious')) {
+      toneLine = 'Tone=Serious → professional reference only when topically relevant. No asides.';
+    } else if (toneRaw.includes('casual')) {
+      toneLine = 'Tone=Casual → natural woven mention when appropriate (e.g., "since you\'re in Alkhor...").';
+    } else if (toneRaw.includes('encourag') || toneRaw.includes('supportive')) {
+      toneLine = 'Tone=Encouraging → reference goals/routines supportively only when motivating the user.';
+    } else if (toneRaw.includes('engag')) {
+      toneLine = 'Tone=Engaging → weave memory naturally when it makes the reply more alive.';
+    } else {
+      toneLine = 'Tone=Neutral → use plain, unembellished phrasing when you do reference memory.';
+    }
+
+    return [
+      'HELPFUL MEMORY (things you know about the user — reference only when it genuinely helps the current reply):',
+      bullets,
+      '',
+      'YOUR MEMORY POSTURE (based on user preferences):',
+      `- ${styleLine}`,
+      `- ${toneLine}`,
+      '',
+      'NATURAL MEMORY USAGE:',
+      '- Lean on memory only when it directly helps the current reply. If the reply works fine without it, leave it out.',
+      '- For greetings ("hey", "hi", "good morning", "السلام عليكم", "صباح الخير") — just greet back warmly, no memory facts.',
+      '- For creative requests (poems, stories, duas, love notes, translations) — focus on the craft, not on memory.',
+      '- Don\'t open replies with a memory-derived factoid unless the user actually asked about that fact.',
+      '- If asked "what do you remember about me?" / "ماذا تتذكر عني؟", list the items above plainly and mention they can edit memory in the Helpful Memory panel in Chat.',
+      '- If the user says they no longer do X / forget X / لم أعد / انسى: acknowledge warmly. In Talk the memory is read-only, so tell them to say the same thing in Chat to remove it permanently. Don\'t claim it has been deleted.',
+      '- Don\'t invent a memory that isn\'t listed above.',
+      '- Routines tied to a specific day/season ("Every Thursday...", "During Ramadan...") — act on them only when today actually matches AND the user\'s current message is about that routine.'
+    ].join('\n');
   }, []);
 
   // Build Personal Touch enforcement block
@@ -213,17 +273,16 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     const style = (pt.style || 'short answers').toString().trim();
     const extra = (pt.instruction || '').toString().trim();
 
-    let section = '\n🎯 CRITICAL PERSONAL TOUCH ENFORCEMENT (MUST FOLLOW)\n';
+    let section = '\nPERSONAL TOUCH (how to sound like yourself with this user):\n';
     if (userNick) {
-      section += `- YOU MUST call the user "${userNick}" - use this nickname in EVERY response!\n`;
-      section += `- Start responses with "Hey ${userNick}" or "${userNick}," or similar.\n`;
+      section += `- The user\'s nickname is "${userNick}". Use it NATURALLY, like a friend would — at the start of a fresh topic, when reconnecting, or warmly once in a while. DO NOT open every single reply with it. Repeating a name every turn sounds robotic.\n`;
     }
     if (aiNick) {
-      section += `- When referring to yourself, use "${aiNick}" instead of "I" or "Wakti".\n`;
+      section += `- When referring to yourself, prefer "${aiNick}" over "I" or "Wakti" when it feels natural.\n`;
     }
-    section += `- 🎭 TONE: Be ${tone}. Every response must reflect this tone.\n`;
-    section += `- 📝 STYLE: Use ${style} format for all responses.\n`;
-    if (extra) section += `- 📌 CUSTOM INSTRUCTION: ${extra}\n`;
+    section += `- Tone: ${tone} — reflect this in your rhythm and word choice. Don\'t announce the tone, just be it.\n`;
+    section += `- Style: ${style} — match this level of depth/brevity.\n`;
+    if (extra) section += `- Custom instruction: ${extra}\n`;
     return section;
   }, []);
 
@@ -505,10 +564,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         const currentVoiceGender = voiceGenderRef.current;
         const currentLocation = userLocationRef.current;
         
-        // Build personal instructions with user's name - MUST use name in greeting
+        // Natural conversational opener — use name on greeting, then sparingly
         const personalTouch = currentUserName ? (language === 'ar' 
-          ? `أنت تتحدث مع ${currentUserName}. يجب أن تستخدم اسمه "${currentUserName}" في ردك الأول وأحياناً في الردود الأخرى.`
-          : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`
+          ? `أنت في محادثة صوتية مستمرة مع ${currentUserName}. استخدم اسمه بشكل طبيعي — في التحية الأولى، أو عند بداية موضوع جديد، أو من وقت لآخر بشكل ودي. لا تذكر اسمه في كل رد فهذا يبدو آلياً.`
+          : `You're in an ongoing voice conversation with ${currentUserName}. Use their name naturally — for the first greeting, when a new topic opens, or warmly once in a while. Don't say their name in every single reply, that sounds robotic.`
         ) : '';
 
         // Build location context for weather/local queries
@@ -519,48 +578,82 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           : '';
         
         const waktiQuickRules = t(
-          `WAKTI quick rules (app questions):
-1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
-2) When asked "who made Wakti": say it was made by WAKTI AI LLC in Doha, Qatar.
-3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.
-4) IMPORTANT - Web Search: You CANNOT browse the internet in Talk mode. If user asks you to search something, tell them: "I can't browse the web in Talk mode. Tap the Search toggle above, then ask me again and I'll search for real." Never pretend you searched.
-5) IMPORTANT - Weather: When asked about weather, you MUST use the user's location provided above. Do NOT make up or guess a location. If no location is set, ask them to set their location in Account settings.`,
-          `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
-1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
-2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة شركة وقتي للذكاء الاصطناعي (WAKTI AI LLC) في الدوحة، قطر.
-3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.
-4) مهم - البحث: لا يمكنك تصفح الإنترنت في وضع المحادثة. إذا طلب المستخدم البحث، قل له: "لا أستطيع البحث في وضع المحادثة. اضغط على زر البحث في الأعلى، ثم اسألني مرة أخرى وسأبحث فعلاً." لا تتظاهر أبداً بأنك بحثت.
-5) مهم - الطقس: عند السؤال عن الطقس، يجب استخدام موقع المستخدم المذكور أعلاه. لا تخترع أو تخمن موقعاً. إذا لم يكن هناك موقع محدد، اطلب منه تحديد موقعه في إعدادات الحساب.`
+          `WAKTI quick notes (if asked about the app):
+1) "What is Wakti": answer warmly and mention Help & Guides has three tabs — Guides, the Wakti Help Assistant, and Support.
+2) "Who made Wakti": made by WAKTI AI LLC in Doha, Qatar.
+3) "What can Wakti do": briefly mention tasks, events, voice tools, AI chat with search, and content creation — then point them to Help & Guides.
+
+HONESTY WITH LIVE DATA — read this carefully, it is the most important rule:
+
+What you CAN do (this is normal conversation):
+- Discuss sports, teams, players, news topics in a general conversational way — opinions, storylines, how a player is doing, team dynamics, historical facts, general knowledge. If the user says "the Oilers lost Game 2 at home", you can react to that naturally ("tough one, McDavid's absence really shifts things"). That's a friend talking.
+- Answer questions about how things work (planes, physics, history, math, geography, rules of a sport, what a team is about, what happened in past seasons) confidently from what you know.
+
+What you MUST NOT do (this is lying):
+- NEVER produce specific time-sensitive facts you don't actually have: exact dates, exact times, current scores, upcoming schedules, matchups, today's prices, flight times, live stats, exchange rates. These change constantly and you will be wrong. Being wrong here makes the app look broken.
+- NEVER say things like "let me check", "let me grab that", "one sec, pulling it up", "as of right now", "the next game is Thursday April 24th at 8 PM" — UNLESS actual web search results are sitting in your context right now. You are NOT connected to the internet by default. You cannot check anything.
+- NEVER fabricate a date, time, score, opponent, or venue. Even with a hedge. Even softly. If you don't know, say you don't know.
+
+What to do instead:
+- If the user asks WHEN, WHAT TIME, WHAT SCORE, WHO'S PLAYING, HOW MUCH, WHAT'S THE PRICE, or anything that needs today's data — and the search toggle is OFF — say it plainly and naturally: "Honestly, I don't have the live schedule in front of me — tap the green search button above and ask me again, and I'll pull the exact date and time for you." Or in Arabic: "والله ما عندي الجدول الحي الحين — اضغط زر البحث الأخضر فوق واسألني مرة ثانية، وأجيب لك التاريخ والوقت بالضبط."
+- If the user EXPLICITLY says "search", "look it up", "check for me" — and the search toggle is OFF — tell them clearly: "The search toggle is off right now — tap the green button above and ask again, and I'll run a real search." NEVER pretend you searched.
+- If the search toggle is ON and search results are already in your context — answer directly from those results, no hedges, no "let me check" theater, no "tap the toggle" line (it's already on).
+- Weather "right now / today" = live data → same rule. General climate → answer from knowledge using the user's location above.`,
+          `ملاحظات سريعة عن وقتي (إذا سُئلت عن التطبيق):
+1) "ما هو وقتي": أجب بحرارة واذكر أن "المساعدة والأدلة" فيها ثلاث تبويبات — الأدلة، ومساعد وقتي، والدعم.
+2) "من صنع وقتي": تم تطويره بواسطة شركة WAKTI AI LLC في الدوحة، قطر.
+3) "ماذا يفعل وقتي": اذكر باختصار المهام، الفعاليات، أدوات الصوت، دردشة الذكاء الاصطناعي مع البحث، وإنشاء المحتوى — ثم وجّه إلى المساعدة والأدلة.
+
+الصدق مع البيانات الحية — اقرأ هذا بعناية، هذه أهم قاعدة:
+
+ما يمكنك فعله (هذا حديث طبيعي):
+- نقاش الرياضة والفرق واللاعبين والأخبار بشكل عام ومحادث — آراء، قصص، أداء لاعب، ديناميكية فريق، حقائق تاريخية، معلومات عامة. إذا قال المستخدم "الأويلرز خسروا المباراة الثانية في بيتهم"، تفاعل بشكل طبيعي ("صعبة، غياب ماكدافيد يغيّر الأمور"). هذا كلام صديق.
+- أجب عن كيفية عمل الأشياء (الطائرات، الفيزياء، التاريخ، الرياضيات، الجغرافيا، قوانين رياضة، معلومات عامة عن فريق، ما حدث في مواسم سابقة) بثقة من معرفتك.
+
+ما لا يجوز لك فعله (هذا كذب):
+- لا تختلق أبداً حقائق محددة لا تعرفها: تواريخ محددة، أوقات محددة، نتائج حالية، جداول قادمة، مواجهات، أسعار اليوم، أوقات رحلات، إحصائيات لحظية، أسعار صرف. هذه تتغير باستمرار وستخطئ فيها. والخطأ هنا يجعل التطبيق يبدو معطوباً.
+- لا تقل أبداً أشياء مثل "خلني أتأكد"، "خلني أشوف"، "لحظة، أجيبها"، "حتى هذه اللحظة"، "المباراة القادمة الخميس 24 أبريل الساعة 8 مساءً" — إلا إذا كانت نتائج بحث فعلية أمامك الآن. أنت غير متصل بالإنترنت افتراضياً. لا تستطيع التأكد من أي شيء.
+- لا تختلق أبداً تاريخاً أو وقتاً أو نتيجة أو خصماً أو ملعباً. حتى بتحفّظ. حتى بلطف. إذا ما تعرف، قُل إنك ما تعرف.
+
+ما يجب فعله بدلاً من ذلك:
+- إذا سأل المستخدم متى، كم الساعة، ما النتيجة، مين يلعب، كم السعر، أو أي شيء يحتاج بيانات اليوم — وزر البحث مُطفأ — قُلها بوضوح وبشكل طبيعي: "والله ما عندي الجدول الحي الحين — اضغط زر البحث الأخضر فوق واسألني مرة ثانية، وأجيب لك التاريخ والوقت بالضبط."
+- إذا قال المستخدم صراحة "ابحث"، "دوّر"، "شيّك" — وزر البحث مُطفأ — قُلها بوضوح: "زر البحث مطفأ حالياً — اضغطه ثم اسألني مرة ثانية، وراح أسوي بحث حقيقي." لا تتظاهر أبداً بأنك بحثت.
+- إذا كان زر البحث مُفعّلاً ونتائج البحث عندك في السياق — أجب مباشرة منها، بدون تحفّظات، بدون مسرحية "خلني أتأكد"، وبدون جملة "اضغط الزر" (فهو مُفعّل أصلاً).
+- الطقس "الآن / اليوم" = بيانات حية → نفس القاعدة. المناخ العام → أجب من معرفتك مستخدماً موقع المستخدم أعلاه.`
         );
 
         const memoryContext = buildMemoryContext(language === 'ar' ? 'ar' : 'en');
         const personalTouchSection = buildPersonalTouchSection();
-        const helpfulMemoryBlock = helpfulMemoryBlockRef.current;
+        const helpfulMemoryBlock = buildHelpfulMemoryBlock();
 
         const instructions = t(
-          `You are WAKTI, a smart voice assistant. ${personalTouch}
+          `You are WAKTI — a warm, natural voice assistant. You're having a real conversation, not reading from a manual. ${personalTouch}
 ${locationContext}
 
-Style rules (important):
-- Always start with the direct answer (1-2 lines).
-- Then: max 2-6 lines.
-- Use bullet points for features/steps.
-- Don't ramble or repeat.
+VOICE STYLE (this is SPEECH, not text — every rule matters):
+- Talk like a smart friend. Natural pauses, contractions ("I'd", "you're", "it's"), and conversational connectors ("okay so...", "yeah, actually...", "right, so...").
+- Match the user's energy. Casual when they're casual, focused when they're focused, playful when they're playful.
+- Reply length fits the moment — a single line for quick things, a few sentences for explanations. Never a wall of text.
+- ABSOLUTELY NO markdown, NO bullet points, NO numbered lists, NO URLs, NO code blocks. This is spoken audio. Express lists naturally: "first... then... and also..."
+- Follow up on what the user just said. Reference earlier parts of the conversation naturally. If they pivot topics, follow along without calling it out.
+- Don't lecture. Don't pad. Don't repeat the user's question back to them before answering.
 
 ${waktiQuickRules}
 ${personalTouchSection}
 ${helpfulMemoryBlock ? '\n' + helpfulMemoryBlock + '\n' : ''}
 ${memoryContext ? memoryContext : ''}`,
-          `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
+          `أنت WAKTI — مساعد صوتي دافئ وطبيعي. أنت في محادثة حقيقية، لا تقرأ من دليل. ${personalTouch}
 ${locationContext}
 
-🚨 قاعدة اللغة (إلزامية): يجب أن تكون جميع ردودك بالعربية فقط. لا تستخدم أي كلمات إنجليزية إلا إذا كانت أسماء علم أو مصطلحات تقنية لا بديل عربي لها.
+🚨 قاعدة اللغة (إلزامية): جميع ردودك بالعربية فقط. لا تستخدم الإنجليزية إلا لأسماء العلم والمصطلحات التقنية التي لا بديل عربي لها.
 
-قواعد أسلوب (مهم):
-- ابدأ دائماً بإجابة مباشرة (سطر أو سطرين).
-- بعد ذلك: 2 إلى 6 أسطر كحد أقصى.
-- استخدم نقاط عند ذكر ميزات أو خطوات.
-- لا تطوّل ولا تكرر.
+أسلوب الصوت (هذا كلام منطوق، لا نص — كل قاعدة مهمة):
+- تكلّم كصديق ذكي. توقّفات طبيعية، وكلمات ربط المحادثة ("طيب،"، "أيوه، في الواقع..."، "تمام، إذن...").
+- جاري طاقة المستخدم. كن عفوياً لما يكون عفوياً، ومركّزاً لما يكون مركّزاً.
+- طول الرد حسب الموقف — سطر واحد للأشياء السريعة، وعدة جمل للشرح. لا تصنع جدارًا من الكلام أبداً.
+- ممنوع قطعاً استخدام تنسيق ماركداون، أو نقاط، أو قوائم مرقمة، أو روابط، أو أكواد. هذا صوت منطوق. عبّر عن القوائم بشكل طبيعي: "أولاً... ثم... وأيضاً..."
+- تابع كلام المستخدم. اربط بما قاله سابقاً بشكل طبيعي. إذا غيّر الموضوع، جاري معه بدون أن تعلّق على التغيير.
+- لا تحاضر. لا تحشُ الكلام. ولا تكرر سؤال المستخدم قبل الإجابة.
 
 ${waktiQuickRules}
 ${personalTouchSection}
@@ -823,8 +916,16 @@ ${memoryContext ? memoryContext : ''}`
     }
   }, [tLang]);
 
-  // Send response.create with optional search context
-  const sendResponseCreate = useCallback((searchContext?: string, userUtterance?: string, detectedLang?: 'ar' | 'en') => {
+  // Send response.create — optionally inject transient search context.
+  //
+  // Design: the Realtime API natively tracks every user transcription and
+  // assistant response in conversation.items, so we do NOT re-inject the base
+  // system prompt or conversation history on every turn (that was wasteful and
+  // fought the model's own context). We only send `session.update` when there
+  // is genuinely new transient info to inject — i.e. fresh web search results.
+  // For long sessions we also piggy-back the rolling session summary so older
+  // context survives even if native items get truncated.
+  const sendResponseCreate = useCallback((searchContext?: string, _userUtterance?: string, detectedLang?: 'ar' | 'en') => {
     if (!dcRef.current || dcRef.current.readyState !== 'open') {
       console.warn('[Talk] Data channel not open, cannot send response.create');
       setError((detectedLang || language) === 'ar' ? 'فشل الاتصال' : 'Connection failed');
@@ -833,110 +934,46 @@ ${memoryContext ? memoryContext : ''}`
     }
 
     try {
-      const activeLang = detectedLang || detectedLanguageRef.current || (language === 'ar' ? 'ar' : 'en');
-      const currentUserName = userNameRef.current;
-      const personalTouch = currentUserName
-        ? (activeLang === 'ar'
-          ? `أنت تتحدث مع ${currentUserName}. يجب أن تستخدم اسمه "${currentUserName}" في ردك الأول وأحياناً في الردود الأخرى.`
-          : `You are talking to ${currentUserName}. You MUST use their name "${currentUserName}" in your first response and occasionally in other responses.`)
-        : '';
+      // Only inject a session.update when we have transient info (search results).
+      // Plain turns rely entirely on the base instructions sent on session open
+      // plus the Realtime API's native conversation.items tracking.
+      if (searchContext) {
+        const activeLang = detectedLang || detectedLanguageRef.current || (language === 'ar' ? 'ar' : 'en');
 
-      const personalTouchSection = buildPersonalTouchSection();
-
-      const searchInstructions = searchContext ? tLang(
-        activeLang,
-        `\n\nWEB SEARCH RESULTS (use these to answer the user's question):\n${searchContext}\n\nIMPORTANT: Base your answer on the search results above. Cite sources when relevant.\nAfter you finish the answer, add a short friendly note: "For advanced search, try Search mode in Wakti AI."`,
-        `\n\nنتائج البحث على الويب (استخدمها للإجابة على سؤال المستخدم):\n${searchContext}\n\nمهم: بني إجابتك على نتائج البحث أعلاه. اذكر المصادر عند الحاجة.\nبعد أن تنهي الإجابة، أضف ملاحظة ودية قصيرة: "للبحث المتقدم، جرّب وضع البحث في Wakti AI."`
-      ) : '';
-
-      const waktiQuickRules = searchContext ? '' : tLang(
-        activeLang,
-        `WAKTI quick rules (app questions):
-1) When asked "what is Wakti": answer friendly and mention Help & Guides has 3 tabs: Guides, my little brother Wakti Help Assistant, and Support.
-2) When asked "who made Wakti": say it was made by WAKTI AI LLC in Doha, Qatar.
-3) When asked "what can Wakti do": give a short list of key capabilities (tasks/events/voice tools/AI chat+search+content) then point to Help & Guides.
-4) IMPORTANT - Web Search: You CANNOT browse the internet in Talk mode. If user asks you to search something, tell them: "I can't browse the web in Talk mode. Tap the Search toggle above, then ask me again and I'll search for real." Never pretend you searched.`,
-        `قواعد WAKTI السريعة (عند السؤال عن التطبيق):
-1) عندما يسأل المستخدم "ما هو وقتي" أو سؤال مشابه: أجب بطريقة ودية واذكر أن "المساعدة والأدلة" فيها 3 تبويبات: الأدلة، مساعد وقتي الصغير، والدعم.
-2) عندما يسأل "من صنع وقتي" أو "من عمل وقتي": قل أنه تم تطويره بواسطة شركة وقتي للذكاء الاصطناعي (WAKTI AI LLC) في الدوحة، قطر.
-3) عندما يسأل "ماذا يمكن لوقتي أن يفعل" أو "وش يسوي وقتي": أعطِ قائمة قصيرة بأهم القدرات (مهام/فعاليات/أدوات صوت/دردشة وبحث وذكاء) ثم وجّه للمساعدة والأدلة.
-4) مهم - البحث: لا يمكنك تصفح الإنترنت في وضع المحادثة. إذا طلب المستخدم البحث، قل له: "لا أستطيع البحث في وضع المحادثة. اضغط على زر البحث في الأعلى، ثم اسألني مرة أخرى وسأبحث فعلاً." لا تتظاهر أبداً بأنك بحثت.`
-      );
-
-      const memoryContext = buildMemoryContext(activeLang);
-      const helpfulMemoryBlock = helpfulMemoryBlockRef.current;
-
-      // Build location context for weather/local queries
-      const loc = userLocationRef.current;
-      const locationContext = (loc?.city || loc?.country) ? tLang(
-        activeLang,
-        `\n📍 USER LOCATION: The user is currently in ${loc.city ? loc.city : ''}${loc.city && loc.country ? ', ' : ''}${loc.country || ''}. Use this for weather, local time, nearby places, or any location-related questions. Do NOT ask where they are - you already know.`,
-        `\n📍 موقع المستخدم: المستخدم حالياً في ${loc.city ? loc.city : ''}${loc.city && loc.country ? '، ' : ''}${loc.country || ''}. استخدم هذا للطقس أو الوقت المحلي أو الأماكن القريبة أو أي سؤال متعلق بالموقع. لا تسأل أين هو - أنت تعرف بالفعل.`
-      ) : '';
-
-      let followUpContext = '';
-      const history = conversationHistoryRef.current;
-      if (history.length > 0) {
-        const lastMsg = history[history.length - 1];
-        const lastMsgText = lastMsg.text.length > 300 ? `${lastMsg.text.slice(0, 300)}...` : lastMsg.text;
-
-        let summaryOfPrevious = '';
-        if (history.length > 1) {
-          const previousMsgs = history.slice(Math.max(0, history.length - 6), history.length - 1);
-          const summaryParts = previousMsgs.map(m => {
-            const snippet = m.text.length > 80 ? `${m.text.slice(0, 80)}...` : m.text;
-            return `${m.role === 'user' ? 'User' : 'Wakti'}: ${snippet}`;
-          });
-          summaryOfPrevious = summaryParts.join(' | ');
-        }
-
-        followUpContext = tLang(
+        // Rolling session summary — useful in long sessions where older
+        // conversation items may fall out of the model's native window.
+        const rollingSummary = (talkSummaryRef.current || '').trim();
+        const summaryBlock = rollingSummary ? tLang(
           activeLang,
-          `\n\nCONVERSATION MEMORY (use for context):\nLast message (${lastMsg.role}): "${lastMsgText}"${summaryOfPrevious ? `\nPrevious exchanges summary: ${summaryOfPrevious}` : ''}`,
-          `\n\nذاكرة المحادثة (للسياق):\nآخر رسالة (${lastMsg.role === 'user' ? 'المستخدم' : 'واكتي'}): "${lastMsgText}"${summaryOfPrevious ? `\nملخص المحادثات السابقة: ${summaryOfPrevious}` : ''}`
+          `\n\nSESSION CONTEXT (rolling summary of this conversation so far, for continuity — do not read it out loud, just use it):\n${rollingSummary}`,
+          `\n\nسياق الجلسة (ملخص متدرج للمحادثة حتى الآن للمتابعة — لا تقرأه بصوتٍ عالٍ، فقط استخدمه):\n${rollingSummary}`
+        ) : '';
+
+        const searchBlock = tLang(
+          activeLang,
+          `\n\nFRESH WEB SEARCH RESULTS (answer from these, not from memory):\n${searchContext}\n\nHow to use these results:\n- Answer the user's question directly and naturally using the facts above.\n- Mention the source briefly when it helps trust (e.g., "according to ESPN..."), but don't read URLs out loud.\n- Spoken style — no lists, no markdown, no link dumps.\n- At the very end, once, add a short natural line inviting deeper research: "If you want a deeper dive with sources and references, jump over to Search mode in Wakti AI — it's built for that." Phrase it casually, not as an ad. Skip this line entirely if the user just wanted a quick factual check (like a score, a price, or a single fact).`,
+          `\n\nنتائج بحث حديثة من الويب (أجب منها، لا من الذاكرة):\n${searchContext}\n\nكيف تستخدمها:\n- أجب على سؤال المستخدم مباشرة وبأسلوب طبيعي من هذه الحقائق.\n- اذكر المصدر باختصار عند الحاجة (مثلاً "حسب ESPN..."), لكن لا تقرأ الروابط بصوت عالٍ.\n- أسلوب منطوق — بلا قوائم ولا ماركداون ولا سرد روابط.\n- في النهاية، مرة واحدة، أضف سطراً طبيعياً قصيراً يدعو لبحث أعمق: "لو تبي بحثاً أعمق مع مصادر ومراجع، خش على وضع البحث في Wakti AI — مصمم لهذا بالضبط." قُلها بشكل عفوي لا إعلاني. اتركها تماماً إذا كان المستخدم يبغى فقط معلومة سريعة واحدة (نتيجة مباراة، سعر، أو حقيقة واحدة).`
         );
+
+        // Minimal instructions update — just the transient blocks.
+        // Base voice/style/personal touch rules remain from session open.
+        const refreshedInstructions = tLang(
+          activeLang,
+          `(Continuing the same voice conversation — all your original voice-style rules, personal touch, and memory guidance still apply; do not reintroduce yourself.)${summaryBlock}${searchBlock}`,
+          `(استمرار لنفس المحادثة الصوتية — جميع قواعد الأسلوب الصوتي الأصلية، ولمستك الشخصية، وإرشادات الذاكرة ما زالت سارية؛ لا تعيد تقديم نفسك.)${summaryBlock}${searchBlock}`
+        );
+
+        dcRef.current.send(JSON.stringify({
+          type: 'session.update',
+          session: { instructions: refreshedInstructions }
+        }));
       }
-
-      const refreshedInstructions = tLang(
-        activeLang,
-        `You are WAKTI, a smart voice assistant. ${personalTouch}
-
-Style rules (important):
-- Always start with the direct answer (1-2 lines).
-- Then: max 2-6 lines.
-- Use bullet points for features/steps.
-- Don't ramble or repeat.
-
-${waktiQuickRules}${searchInstructions}${locationContext}${followUpContext}
-
-${personalTouchSection}
-${helpfulMemoryBlock ? '\n' + helpfulMemoryBlock + '\n' : ''}
-${memoryContext ? memoryContext : ''}`,
-        `أنت مساعد WAKTI الصوتي الذكي. ${personalTouch}
-
-قواعد أسلوب (مهم):
-- ابدأ دائماً بإجابة مباشرة (سطر أو سطرين).
-- بعد ذلك: 2 إلى 6 أسطر كحد أقصى.
-- استخدم نقاط عند ذكر ميزات أو خطوات.
-- لا تطوّل ولا تكرر.
-
-${waktiQuickRules}${searchInstructions}${locationContext}${followUpContext}
-
-${personalTouchSection}
-${helpfulMemoryBlock ? '\n' + helpfulMemoryBlock + '\n' : ''}
-${memoryContext ? memoryContext : ''}`
-      );
-
-      dcRef.current.send(JSON.stringify({
-        type: 'session.update',
-        session: { instructions: refreshedInstructions }
-      }));
     } catch (e) {
-      console.warn('[Talk] Failed to inject instructions before response:', e);
+      console.warn('[Talk] Failed to inject transient context before response:', e);
     }
 
     dcRef.current.send(JSON.stringify({ type: 'response.create' }));
-  }, [buildMemoryContext, buildPersonalTouchSection, language, tLang]);
+  }, [language, tLang]);
 
   // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {

@@ -21,14 +21,12 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { generateGemini, buildTextContent, buildVisionContent } from "../_shared/gemini.ts";
+import { generateGemini, buildVisionContent } from "../_shared/gemini.ts";
 import { findTheme, maxPagesForTheme } from "../_shared/a4-themes.ts";
 import {
-  buildGeminiPreprocessSystemPrompt,
-  buildGeminiPreprocessUserPayload,
   compileMasterPrompt,
-  type A4PreprocessInput,
-  type GeminiPage,
+  type A4CreativeSettings,
+  type A4DesignSettings,
 } from "../_shared/a4-prompts.ts";
 
 const corsHeaders = {
@@ -45,26 +43,8 @@ interface GenerateRequest {
   logo_color_extract?: boolean;
   requested_pages?: "auto" | 1 | 2 | 3;
   language_mode?: "en" | "ar" | "bilingual";
-  design_settings?: {
-    orientation?: "portrait" | "landscape";
-    background_color?: string | null;
-    text_color?: string | null;
-    accent_color?: string | null;
-    font_family?: "modern_sans" | "classic_serif" | "elegant_script" | "bold_display" | "playful_hand";
-    border_style?: "none" | "thin" | "thick" | "rounded" | "decorative";
-    include_decorative_images?: boolean;
-    density?: "compact" | "balanced" | "airy";
-    tone?: "professional" | "friendly" | "playful" | "formal";
-  } | null;
-}
-
-interface GeminiPreprocessOutput {
-  status: "ok" | "too_long" | "content_unclear";
-  detected_language: "en" | "ar" | "bilingual";
-  suggested_pages: 1 | 2 | 3;
-  honored_pages: 1 | 2 | 3;
-  pages: GeminiPage[];
-  notes_for_renderer?: string;
+  design_settings?: A4DesignSettings | null;
+  creative_settings?: A4CreativeSettings | null;
 }
 
 const KIE_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
@@ -157,42 +137,50 @@ async function extractBrandColors(
 }
 
 // -----------------------------------------------------------------------------
-// Gemini preprocess
+// Language detection — simple unicode scan, no AI.
 // -----------------------------------------------------------------------------
-async function runGeminiPreprocess(input: A4PreprocessInput): Promise<GeminiPreprocessOutput> {
-  const systemInstruction = buildGeminiPreprocessSystemPrompt();
-  const userText = buildGeminiPreprocessUserPayload(input);
-  const contents = [buildTextContent("user", userText)];
-  const result = await generateGemini(
-    "gemini-2.5-flash-lite",
-    contents,
-    systemInstruction,
-    {
-      temperature: 0.2,
-      maxOutputTokens: 8000,
-      response_mime_type: "application/json",
-    },
-  );
-  const text: string = result?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-  if (!text) throw new Error("Gemini preprocess returned empty text");
-  let parsed: GeminiPreprocessOutput;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    console.error("[a4-generate] Gemini JSON parse error. Raw:", text.slice(0, 500));
-    throw new Error("Gemini preprocess returned invalid JSON");
+function detectLanguage(text: string): "en" | "ar" | "bilingual" {
+  if (!text) return "en";
+  // Arabic unicode ranges: Arabic (0600-06FF), Arabic Supplement (0750-077F), Arabic Extended-A (08A0-08FF), Arabic Presentation Forms (FB50-FDFF, FE70-FEFF)
+  const arabicRe = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g;
+  const latinRe = /[A-Za-z]/g;
+  const arabicCount = (text.match(arabicRe) ?? []).length;
+  const latinCount = (text.match(latinRe) ?? []).length;
+  if (arabicCount === 0) return "en";
+  if (latinCount === 0) return "ar";
+  // Both present: if one dominates heavily, pick it; otherwise bilingual.
+  const ratio = arabicCount / (arabicCount + latinCount);
+  if (ratio > 0.8) return "ar";
+  if (ratio < 0.2) return "en";
+  return "bilingual";
+}
+
+// -----------------------------------------------------------------------------
+// Content splitter — deterministic, paragraph-boundary split for multi-page.
+// -----------------------------------------------------------------------------
+function splitContentIntoPages(rawContent: string, pageCount: 1 | 2 | 3, perPageBudget: number): string[] {
+  const trimmed = (rawContent ?? "").trim();
+  if (pageCount <= 1 || !trimmed) return [trimmed];
+
+  // Prefer splitting at blank-line paragraph boundaries; fall back to single-newline; finally hard-split on char count.
+  const paragraphs = trimmed.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (paragraphs.length === 0) return [trimmed];
+
+  // Accumulate paragraphs into buckets of ~perPageBudget chars until we fill pageCount buckets.
+  const buckets: string[] = Array.from({ length: pageCount }, () => "");
+  let idx = 0;
+  for (const para of paragraphs) {
+    const candidate = buckets[idx] ? `${buckets[idx]}\n\n${para}` : para;
+    if (candidate.length > perPageBudget && idx < pageCount - 1 && buckets[idx].length > 0) {
+      idx++;
+      buckets[idx] = para;
+    } else {
+      buckets[idx] = candidate;
+    }
   }
-  // Basic validation + clamping
-  if (!Array.isArray(parsed.pages) || parsed.pages.length === 0) {
-    throw new Error("Gemini preprocess returned no pages");
-  }
-  // Clamp pages to max 3
-  if (parsed.pages.length > 3) parsed.pages = parsed.pages.slice(0, 3);
-  if (parsed.honored_pages > 3) parsed.honored_pages = 3;
-  if (parsed.honored_pages < 1) parsed.honored_pages = 1;
-  // Ensure page_number fields are 1..N
-  parsed.pages = parsed.pages.map((p, idx) => ({ ...p, page_number: idx + 1 }));
-  return parsed;
+  // Remove empty trailing buckets
+  while (buckets.length > 0 && !buckets[buckets.length - 1].trim()) buckets.pop();
+  return buckets.length === 0 ? [trimmed] : buckets;
 }
 
 // -----------------------------------------------------------------------------
@@ -354,28 +342,41 @@ serve(async (req) => {
     }
   }
 
-  // --- Gemini preprocess -----------------------------------------------------
-  let gemini: GeminiPreprocessOutput;
-  try {
-    gemini = await runGeminiPreprocess({
-      theme_id: theme.id,
-      purpose_id: body.purpose_id ?? null,
-      form_state: formState,
-      raw_content: rawContent,
-      language_mode: languageMode,
-      requested_pages: requestedPages,
-      per_page_char_budget: theme.per_page_char_budget,
-      max_pages: maxPages,
-    });
-  } catch (e) {
-    console.error("[a4-generate] preprocess error:", (e as Error).message);
-    return json(500, { success: false, error: "Gemini preprocess failed" });
+  // --- Direct pipeline: detect language + split content (no AI middleman) ----
+  // Honor explicit language_mode from the client; else detect from raw content.
+  const detectedLanguage: "en" | "ar" | "bilingual" = body.language_mode
+    ? languageMode
+    : detectLanguage(rawContent);
+
+  // Decide page count: explicit requested_pages wins, otherwise auto-estimate
+  // from content length against the theme's per-page budget.
+  let totalPages: 1 | 2 | 3;
+  if (requestedPages === "auto") {
+    const estimate = Math.max(1, Math.ceil((rawContent.length || 1) / Math.max(400, theme.per_page_char_budget)));
+    totalPages = Math.min(maxPages, Math.min(3, estimate)) as 1 | 2 | 3;
+  } else {
+    totalPages = Math.min(maxPages, requestedPages as 1 | 2 | 3) as 1 | 2 | 3;
   }
 
-  const totalPages = Math.min(gemini.honored_pages, maxPages) as 1 | 2 | 3;
+  // Split content deterministically at paragraph boundaries.
+  const splitPages = splitContentIntoPages(rawContent, totalPages, theme.per_page_char_budget);
+  // If splitter produced fewer buckets than totalPages (short content), clamp.
+  if (splitPages.length > 0 && splitPages.length < totalPages) {
+    totalPages = splitPages.length as 1 | 2 | 3;
+  }
+
+  // Stash creative_settings + split pages inside form_state internal keys so
+  // a4-callback can recompile pages 2+ without a schema change.
+  const creativeSettings = body.creative_settings ?? null;
+  const formStateWithInternals: Record<string, unknown> = {
+    ...formState,
+    __creative_settings__: creativeSettings,
+    __split_pages__: splitPages,
+    __language_mode__: detectedLanguage,
+  };
 
   // --- Insert N placeholder rows ---------------------------------------------
-  const fs = formState as any;
+  const fs = formState as Record<string, unknown>;
   const titleForMeta = String(
     fs.project_title ?? fs.report_title ?? fs.event_name ?? fs.title ?? fs.subject ?? "A4 Document",
   ).slice(0, 200);
@@ -389,8 +390,8 @@ serve(async (req) => {
       total_pages: totalPages,
       theme_id: theme.id,
       purpose_id: body.purpose_id ?? null,
-      form_state: formState,
-      gemini_output: i === 1 ? gemini : null, // store full output only on page 1 for debug
+      form_state: formStateWithInternals,
+      gemini_output: null,
       status: i === 1 ? "generating" : "queued",
       aspect_ratio: resolvedAspect,
       resolution: "1K",
@@ -412,19 +413,20 @@ serve(async (req) => {
   const page1Row = insertedRows.find((r) => r.page_number === 1);
   if (!page1Row) return json(500, { success: false, error: "Page 1 row missing" });
 
-  // --- Compile master prompt for page 1 --------------------------------------
+  // --- Compile master prompt for page 1 (direct, no middleman) ---------------
   const compiledPrompt = compileMasterPrompt({
     theme,
     purposeId: body.purpose_id ?? null,
     formState,
-    geminiPages: gemini.pages,
+    rawContent: splitPages[0] ?? rawContent,
     pageNumber: 1,
     totalPages,
-    languageMode,
+    languageMode: detectedLanguage,
     brandColors: brandColors ?? null,
     hasLogoReference: !!logoSignedUrl,
     hasPrevPageReference: false,
     designSettings: designSettings,
+    creativeSettings,
   });
 
   // Dispatch Kie createTask for page 1
@@ -459,9 +461,9 @@ serve(async (req) => {
     success: true,
     batch_id: batchId,
     total_pages: totalPages,
-    suggested_pages: gemini.suggested_pages,
-    detected_language: gemini.detected_language,
+    suggested_pages: totalPages,
+    detected_language: detectedLanguage,
     brand_colors: brandColors,
-    notes: gemini.notes_for_renderer ?? "",
+    notes: "",
   });
 });

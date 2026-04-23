@@ -13,6 +13,9 @@ import { StreamingBubbleHandle } from '@/components/wakti-ai-v2/StreamingBubble'
 import { ChatInput, ChatSubmode, ReplyContext } from '@/components/wakti-ai-v2/ChatInput';
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
+import { HelpfulMemoryOnboardingPopup } from '@/components/wakti-ai-v2/HelpfulMemoryOnboardingPopup';
+import { AnnouncementService } from '@/services/AnnouncementService';
+import { HelpfulMemoryService } from '@/services/HelpfulMemoryService';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { useIsDesktop } from '@/hooks/use-mobile';
@@ -86,6 +89,8 @@ const WaktiAIV2 = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputReservePx, setInputReservePx] = useState<number>(120);
   const [chatSubmode, setChatSubmode] = useState<ChatSubmode>('chat');
+  const [showMemoryOnboarding, setShowMemoryOnboarding] = useState(false);
+  const reminderShownRef = useRef<boolean>(false);
   const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
   const [chatTrialLimitReached, setChatTrialLimitReached] = useState(false);
   // Streaming isolation: active stream ID tracked in state (one set per message, not per token).
@@ -239,6 +244,79 @@ const WaktiAIV2 = () => {
     const userId = authUser?.id || userProfile?.id;
     if (!userId) return;
     WaktiAIV2Service.prewarmUserLocation(userId).catch(() => {});
+  }, [authUser?.id, userProfile?.id]);
+
+  // One-time Helpful Memory onboarding popup — shows exactly once per user.
+  useEffect(() => {
+    const userId = authUser?.id || userProfile?.id;
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const seen = await AnnouncementService.hasSeen(userId, 'helpful_memory_onboarding_v1');
+        if (cancelled || seen) return;
+        // Small delay so the chat UI mounts first and it doesn't feel aggressive.
+        setTimeout(() => { if (!cancelled) setShowMemoryOnboarding(true); }, 1200);
+      } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, [authUser?.id, userProfile?.id]);
+
+  // Subtle reminder nudge: if user has sent >= 15 messages and memory is still empty,
+  // show a one-time toast pointing to Helpful Memory. Triggers once per user lifetime.
+  useEffect(() => {
+    const userId = authUser?.id || userProfile?.id;
+    if (!userId) return;
+    if (reminderShownRef.current) return;
+    if (showMemoryOnboarding) return;
+    const userMsgCount = sessionMessages.filter((m: any) => m?.role === 'user').length;
+    if (userMsgCount < 15) return;
+    reminderShownRef.current = true;
+    (async () => {
+      try {
+        const seen = await AnnouncementService.hasSeen(userId, 'helpful_memory_empty_reminder_v1');
+        if (seen) return;
+        // Only nudge if memory is actually empty.
+        const items = await HelpfulMemoryService.listMemories().catch(() => [] as any[]);
+        if (Array.isArray(items) && items.length > 0) {
+          await AnnouncementService.mark(userId, 'helpful_memory_empty_reminder_v1', 'dismissed');
+          return;
+        }
+        const { toast } = await import('sonner');
+        toast.message(
+          language === 'ar' ? 'اجعل وقتي أذكى لك' : 'Make Wakti smarter for you',
+          {
+            description: language === 'ar'
+              ? 'جرّب الإعداد السريع لذاكرة وقتي — يستغرق 10 ثوانٍ فقط.'
+              : 'Try Quick Setup for Helpful Memory — takes 10 seconds.',
+            duration: 7000,
+            action: {
+              label: language === 'ar' ? 'فتح' : 'Open',
+              onClick: () => {
+                setShowConversations(true);
+                setTimeout(() => emitEvent('wakti-open-memory-panel', { openQuickSetup: true }), 60);
+              },
+            },
+          }
+        );
+        await AnnouncementService.mark(userId, 'helpful_memory_empty_reminder_v1', 'seen');
+      } catch {}
+    })();
+  }, [sessionMessages, authUser?.id, userProfile?.id, showMemoryOnboarding, language]);
+
+  const handleMemoryOnboardingQuickSetup = useCallback(async () => {
+    const userId = authUser?.id || userProfile?.id;
+    setShowMemoryOnboarding(false);
+    if (userId) AnnouncementService.mark(userId, 'helpful_memory_onboarding_v1', 'acted').catch(() => {});
+    setShowConversations(true);
+    // Ask ExtraPanel/Manager to switch to memory tab and open Quick Setup form.
+    setTimeout(() => emitEvent('wakti-open-memory-panel', { openQuickSetup: true }), 60);
+  }, [authUser?.id, userProfile?.id]);
+
+  const handleMemoryOnboardingDismiss = useCallback(() => {
+    const userId = authUser?.id || userProfile?.id;
+    setShowMemoryOnboarding(false);
+    if (userId) AnnouncementService.mark(userId, 'helpful_memory_onboarding_v1', 'dismissed').catch(() => {});
   }, [authUser?.id, userProfile?.id]);
 
   // Always portal to document.body to avoid iOS fixed-inside-scroller bugs
@@ -739,7 +817,7 @@ const WaktiAIV2 = () => {
             } : m));
           },
           controller.signal,
-          chatSubmodeParam || 'chat' // Pass chatSubmode for Study mode support
+          effectiveChatSubmode // Pass chatSubmode for Study mode support (use resolved value, not raw param)
         );
 
         // If search confirmation was triggered, don't update with final message
@@ -1019,6 +1097,11 @@ const WaktiAIV2 = () => {
           </div>
         </div>
       )}
+      <HelpfulMemoryOnboardingPopup
+        open={showMemoryOnboarding}
+        onQuickSetup={handleMemoryOnboardingQuickSetup}
+        onDismiss={handleMemoryOnboardingDismiss}
+      />
       <ChatDrawers
         showConversations={showConversations}
         setShowConversations={setShowConversations}

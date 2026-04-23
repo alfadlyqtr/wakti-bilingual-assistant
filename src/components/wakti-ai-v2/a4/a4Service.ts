@@ -25,6 +25,81 @@ export interface A4DesignSettings {
   tone?: A4Tone;
 }
 
+// -----------------------------------------------------------------------------
+// Creative controls — rich per-document direction that replaces the thin
+// include_* toggles. Each value maps to a specific prompt fragment on the
+// backend. No AI middleman — what the user clicks is what the image model sees.
+// -----------------------------------------------------------------------------
+export type A4VisualRecipe =
+  | "paper_craft_flatlay"
+  | "executive_tech_spec"
+  | "comic_triptych"
+  | "ministry_exam"
+  | "menu_board"
+  | "craft_diy_explainer"
+  | "minimal_stationery"
+  | "bold_poster";
+
+export type A4IllustrationStyle =
+  | "none"
+  | "icons"
+  | "flat_vector"
+  | "paper_craft"
+  | "watercolor"
+  | "comic_bold"
+  | "photo_realistic";
+
+export type A4AccentElement =
+  | "hand_drawn_arrows"
+  | "ribbons"
+  | "stars"
+  | "corner_ornaments"
+  | "callout_badges"
+  | "dotted_dividers"
+  | "paper_tape"
+  | "thread_connectors";
+
+export type A4BackgroundTreatment =
+  | "plain_white"
+  | "soft_paper_texture"
+  | "light_gradient"
+  | "subtle_grid"
+  | "botanical_motif"
+  | "confetti"
+  | "photographic_backdrop";
+
+export type A4ContentComponent =
+  | "chart_bar"
+  | "chart_line"
+  | "chart_donut"
+  | "chart_radar"
+  | "data_table"
+  | "timeline"
+  | "step_flow"
+  | "side_by_side"
+  | "vitality_wheel"
+  | "info_cards"
+  | "grading_circle"
+  | "pull_quote"
+  | "callout_boxes";
+
+export type A4LayoutPattern =
+  | "single_column"
+  | "two_column_split"
+  | "sidebar_main"
+  | "three_panel_grid"
+  | "hero_body"
+  | "centered_composition";
+
+export interface A4CreativeSettings {
+  visual_recipe?: A4VisualRecipe | null;
+  illustration_style?: A4IllustrationStyle | null;
+  accent_elements?: A4AccentElement[] | null;
+  background_treatment?: A4BackgroundTreatment | null;
+  content_components?: A4ContentComponent[] | null;
+  layout_pattern?: A4LayoutPattern | null;
+}
+
 export interface A4GenerateRequest {
   theme_id: string;
   purpose_id?: string | null;
@@ -34,6 +109,7 @@ export interface A4GenerateRequest {
   requested_pages?: "auto" | 1 | 2 | 3;
   language_mode?: "en" | "ar" | "bilingual";
   design_settings?: A4DesignSettings | null;
+  creative_settings?: A4CreativeSettings | null;
 }
 
 export interface A4FetchUrlResponse {

@@ -41,6 +41,7 @@ type EventMap = {
   'wakti-calendar-manual-update': { userId: string };
   'wakti-calendar-data-update': { userId: string };
   'wakti-calendar-extras-update': { userId: string };
+  'wakti-open-memory-panel': { openQuickSetup?: boolean } | void;
 };
 
 type EventName = keyof EventMap;
