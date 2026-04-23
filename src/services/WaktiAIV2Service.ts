@@ -55,6 +55,12 @@ export interface AIConversation {
   title: string;
   lastMessageAt: Date;
   createdAt: Date;
+  is_active?: boolean;
+  conversation_id?: string | null;
+  is_saved?: boolean;
+  tags?: string[];
+  is_custom_title?: boolean;
+  message_count?: number;
 }
 
 type UserLocationContext = {

@@ -362,13 +362,13 @@ export default function AdminSubscriptions() {
         </div>
       </AdminHeader>
 
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 py-6 pb-28 space-y-5">
+      <div className="max-w-[1280px] mx-auto px-3 sm:px-6 py-4 sm:py-6 pb-32 sm:pb-28 space-y-4 sm:space-y-5">
 
         {/* ── BENTO GROWTH LAB ── */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
           {/* CARD 1: WHALE WATCH */}
-          <div className="relative rounded-2xl border border-white/10 bg-[#0e1119] p-5 flex flex-col gap-3 overflow-hidden
+          <div className="relative rounded-2xl border border-white/10 bg-[#0e1119] p-4 sm:p-5 flex flex-col gap-3 overflow-hidden
                           hover:border-emerald-500/30 transition-colors duration-300
                           shadow-[0_0_40px_rgba(52,211,153,0.04)]">
             <div className="pointer-events-none absolute -top-8 -left-8 w-36 h-36 rounded-full bg-emerald-500/10 blur-3xl" />
@@ -377,7 +377,7 @@ export default function AdminSubscriptions() {
                 <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
                   <Flame className="h-4 w-4 text-emerald-400" />
                 </div>
-                <span className="text-xs font-medium text-white/50 uppercase tracking-widest">Whale Watch</span>
+                <span className="text-[11px] sm:text-xs font-medium text-white/50 uppercase tracking-widest">Whale Watch</span>
               </div>
               <span className="text-[10px] text-white/30 border border-white/10 rounded-full px-2 py-0.5">Top MRR</span>
             </div>
@@ -402,7 +402,7 @@ export default function AdminSubscriptions() {
                   <button
                     onClick={() => openActivationForUser(user)}
                     aria-label="Manage subscription"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity text-white/30 hover:text-white/60"
+                    className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-white/30 hover:text-white/60"
                   >
                     <ArrowUpRight className="h-3 w-3" />
                   </button>
@@ -412,7 +412,7 @@ export default function AdminSubscriptions() {
           </div>
 
           {/* CARD 2: CHURN RISK */}
-          <div className="relative rounded-2xl border border-white/10 bg-[#0e1119] p-5 flex flex-col gap-3 overflow-hidden
+          <div className="relative rounded-2xl border border-white/10 bg-[#0e1119] p-4 sm:p-5 flex flex-col gap-3 overflow-hidden
                           hover:border-amber-500/30 transition-colors duration-300
                           shadow-[0_0_40px_rgba(245,158,11,0.04)]">
             <div className="pointer-events-none absolute -top-8 -right-8 w-36 h-36 rounded-full bg-amber-500/8 blur-3xl" />
@@ -421,7 +421,7 @@ export default function AdminSubscriptions() {
                 <div className="w-7 h-7 rounded-lg bg-amber-500/15 flex items-center justify-center">
                   <AlertTriangle className="h-4 w-4 text-amber-400" />
                 </div>
-                <span className="text-xs font-medium text-white/50 uppercase tracking-widest">Churn Risk</span>
+                <span className="text-[11px] sm:text-xs font-medium text-white/50 uppercase tracking-widest">Churn Risk</span>
               </div>
               <span className="text-[10px] text-white/30 border border-white/10 rounded-full px-2 py-0.5">Inactive 7d+</span>
             </div>
@@ -443,7 +443,7 @@ export default function AdminSubscriptions() {
                     </div>
                     <button
                       onClick={() => handleDeactivateSubscription(user)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity text-[10px] border border-red-500/30 text-red-400 rounded-lg px-2 py-1 hover:bg-red-500/10"
+                      className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-[10px] border border-red-500/30 text-red-400 rounded-lg px-2 py-1 hover:bg-red-500/10"
                     >
                       Deactivate
                     </button>
@@ -454,7 +454,7 @@ export default function AdminSubscriptions() {
           </div>
 
           {/* CARD 3: CONVERSION FUNNEL */}
-          <div className="relative rounded-2xl border border-white/10 bg-[#0e1119] p-5 flex flex-col gap-4 overflow-hidden
+          <div className="relative rounded-2xl border border-white/10 bg-[#0e1119] p-4 sm:p-5 flex flex-col gap-3 sm:gap-4 overflow-hidden
                           hover:border-sky-500/30 transition-colors duration-300
                           shadow-[0_0_40px_rgba(14,165,233,0.04)]">
             <div className="pointer-events-none absolute -bottom-8 -left-8 w-36 h-36 rounded-full bg-sky-500/8 blur-3xl" />
@@ -462,12 +462,12 @@ export default function AdminSubscriptions() {
               <div className="w-7 h-7 rounded-lg bg-sky-500/15 flex items-center justify-center">
                 <TrendingUp className="h-4 w-4 text-sky-400" />
               </div>
-              <span className="text-xs font-medium text-white/50 uppercase tracking-widest">Conversion Funnel</span>
+              <span className="text-[11px] sm:text-xs font-medium text-white/50 uppercase tracking-widest">Conversion Funnel</span>
             </div>
             {/* Total KPI */}
             <div>
               <p className="text-[11px] text-white/40 mb-0.5">Total Users</p>
-              <p className="text-4xl font-bold tracking-tight text-white">{conversionFunnel.total.toLocaleString()}</p>
+              <p className="text-3xl sm:text-4xl font-bold tracking-tight text-white">{conversionFunnel.total.toLocaleString()}</p>
             </div>
             {/* Funnel bars */}
             <div className="space-y-3">
@@ -540,14 +540,27 @@ export default function AdminSubscriptions() {
                 const trial = getTrialStatus(user);
                 return (
                   <div key={user.id}
-                    className="flex items-center gap-3 rounded-2xl border border-white/8 bg-[#0e1119] px-4 py-3 hover:border-emerald-500/20 transition-all duration-200 group"
+                    className="flex flex-col gap-3 rounded-2xl border border-white/8 bg-[#0e1119] px-4 py-3 hover:border-emerald-500/20 transition-all duration-200 group sm:flex-row sm:items-center"
                   >
-                    <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-white/50">
-                      {(user.display_name || user.email || '?').charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-white/80 truncate">{user.display_name || 'No name'}</p>
-                      <p className="text-xs text-white/35 truncate">{user.email}</p>
+                    <div className="flex items-start gap-3 w-full sm:w-auto sm:flex-1 sm:min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center flex-shrink-0 text-xs font-semibold text-white/50">
+                        {(user.display_name || user.email || '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white/80 truncate">{user.display_name || 'No name'}</p>
+                        <p className="text-xs text-white/35 truncate">{user.email}</p>
+                        <div className="mt-2 flex sm:hidden items-center gap-2 flex-wrap">
+                          {user.is_subscribed ? (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-500/30 text-emerald-400 bg-emerald-500/10">
+                              {isGift ? `Gift · ${getRemainingGiftTime(user)}` : (user.plan_name || 'Active')}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full border border-white/10 text-white/50 bg-white/5">
+                              {trial.label}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     <div className="hidden sm:flex items-center gap-2 flex-shrink-0">
                       {user.is_subscribed ? (
@@ -560,24 +573,24 @@ export default function AdminSubscriptions() {
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="w-full sm:w-auto flex flex-wrap items-center gap-2 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                       {user.is_subscribed ? (
                         <button
                           onClick={() => handleDeactivateSubscription(user)}
-                          className="text-[10px] border border-red-500/30 text-red-400 rounded-lg px-2 py-1 hover:bg-red-500/10 transition-colors"
+                          className="h-8 text-[10px] border border-red-500/30 text-red-400 rounded-lg px-3 py-1 hover:bg-red-500/10 transition-colors"
                         >
                           Deactivate
                         </button>
                       ) : (
                         <button
                           onClick={() => openActivationForUser(user)}
-                          className="text-[10px] border border-emerald-500/30 text-emerald-400 rounded-lg px-2 py-1 hover:bg-emerald-500/10 transition-colors"
+                          className="h-8 text-[10px] border border-emerald-500/30 text-emerald-400 rounded-lg px-3 py-1 hover:bg-emerald-500/10 transition-colors"
                         >
                           Activate
                         </button>
                       )}
                       {!user.is_subscribed && (
-                        <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                           <input
                             type="number"
                             min={1}
@@ -585,17 +598,17 @@ export default function AdminSubscriptions() {
                             placeholder="min"
                             aria-label="Extend trial minutes"
                             onChange={(e) => setTrialMinutesInput(prev => ({ ...prev, [user.id]: e.target.value }))}
-                            className="h-7 w-16 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white"
+                            className="h-8 w-20 rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white"
                           />
                           <button
                             onClick={() => handleAdjustTrial(user, 'reset')}
-                            className="text-[10px] border border-white/10 text-white/50 rounded-lg px-2 py-1 hover:bg-white/5 transition-colors"
+                            className="h-8 text-[10px] border border-white/10 text-white/50 rounded-lg px-3 py-1 hover:bg-white/5 transition-colors"
                           >
                             Reset
                           </button>
                           <button
                             onClick={() => handleAdjustTrial(user, 'extend')}
-                            className="text-[10px] border border-white/10 text-white/50 rounded-lg px-2 py-1 hover:bg-white/5 transition-colors"
+                            className="h-8 text-[10px] border border-white/10 text-white/50 rounded-lg px-3 py-1 hover:bg-white/5 transition-colors"
                           >
                             Extend
                           </button>

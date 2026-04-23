@@ -4,6 +4,11 @@ export interface ConversationMetadata {
   lastMessageAt: Date;
   messageCount: number;
   createdAt: Date;
+  is_active?: boolean;
+  conversation_id?: string | null;
+  is_saved?: boolean;
+  tags?: string[];
+  is_custom_title?: boolean;
 }
 
 export interface StoredConversation {

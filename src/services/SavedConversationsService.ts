@@ -1,6 +1,8 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export const MAX_CONVERSATIONS = 10;
+export const MAX_CONVERSATIONS = 15;
+
+const CONVERSATION_LIMIT_ERROR_CODE = 'CONVERSATION_LIMIT_REACHED';
 
 export interface SavedConversationRow {
   id: string;
@@ -13,6 +15,9 @@ export interface SavedConversationRow {
   updated_at: string;
   is_active?: boolean;
   conversation_id?: string;
+  is_saved?: boolean;
+  tags?: string[];
+  is_custom_title?: boolean;
 }
 
 export interface ConversationListItem {
@@ -22,6 +27,47 @@ export interface ConversationListItem {
   last_message_at: string;
   is_active: boolean;
   conversation_id: string | null;
+  is_saved: boolean;
+  tags: string[];
+  is_custom_title: boolean;
+}
+
+export interface ConversationRetentionStatus {
+  limit: number;
+  total: number;
+  saved: number;
+  deletable: number;
+  available: number;
+  canCreate: boolean;
+}
+
+export interface ConversationMetaUpdate {
+  title?: string;
+  tags?: string[];
+  is_saved?: boolean;
+}
+
+export function normalizeConversationTitle(value: unknown, fallback = 'Conversation'): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  const words = text.split(/\s+/).filter(Boolean).slice(0, 2);
+  if (words.length === 0) return fallback;
+  return words.join(' ');
+}
+
+function normalizeTags(tags: unknown): string[] {
+  if (!Array.isArray(tags)) return [];
+  return Array.from(new Set(
+    tags
+      .map((tag) => (typeof tag === 'string' ? tag.trim() : ''))
+      .filter(Boolean)
+      .slice(0, 6)
+  ));
+}
+
+function buildLimitError() {
+  const error = new Error(CONVERSATION_LIMIT_ERROR_CODE) as Error & { code?: string };
+  error.code = CONVERSATION_LIMIT_ERROR_CODE;
+  return error;
 }
 
 function normalizeMessages(messages: any[]): any[] {
@@ -63,12 +109,45 @@ function generateTitle(messages: any[]): string {
   const userMsg = msgs.find((m: any) => m?.role === 'user');
   const first = userMsg || msgs.find(Boolean) || {};
   const text = typeof first?.content === 'string' ? first.content.trim() : '';
-  const base = text.length > 0 ? text : 'Conversation';
-  return base.length > 50 ? base.slice(0, 47) + '...' : base;
+  return normalizeConversationTitle(text, 'Conversation');
 }
 
 export const SavedConversationsService = {
-  // Upsert the active conversation — atomic INSERT ON CONFLICT DO UPDATE (no race condition)
+  isConversationLimitError(error: unknown): boolean {
+    return (error as { code?: string; message?: string } | null)?.code === CONVERSATION_LIMIT_ERROR_CODE
+      || (error as { message?: string } | null)?.message === CONVERSATION_LIMIT_ERROR_CODE;
+  },
+
+  async getRetentionStatus(): Promise<ConversationRetentionStatus> {
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (error || !user) throw new Error('Not authenticated');
+    return SavedConversationsService.getRetentionStatusForUser(user.id);
+  },
+
+  async getRetentionStatusForUser(userId: string): Promise<ConversationRetentionStatus> {
+    const { data, error } = await supabase
+      .from('ai_saved_conversations')
+      .select('id, is_saved')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+
+    const total = Array.isArray(data) ? data.length : 0;
+    const saved = (data || []).filter((row: any) => row.is_saved === true).length;
+    const deletable = Math.max(0, total - saved);
+    const available = Math.max(0, MAX_CONVERSATIONS - total);
+
+    return {
+      limit: MAX_CONVERSATIONS,
+      total,
+      saved,
+      deletable,
+      available,
+      canCreate: total < MAX_CONVERSATIONS || deletable > 0,
+    };
+  },
+
   async upsertActiveConversation(messages: any[], conversationId: string): Promise<string> {
     const { data: { session }, error: userErr } = await supabase.auth.getSession();
     const user = session?.user;
@@ -82,21 +161,35 @@ export const SavedConversationsService = {
     const now = new Date().toISOString();
 
     const db = supabase as any;
+    const { data: existing } = await db
+      .from('ai_saved_conversations')
+      .select('id, title, is_saved, tags, is_custom_title')
+      .eq('user_id', user.id)
+      .eq('conversation_id', conversationId)
+      .maybeSingle();
 
-    // Atomic upsert — relies on UNIQUE INDEX (user_id, conversation_id WHERE conversation_id IS NOT NULL)
-    // This eliminates the SELECT→INSERT race condition that caused duplicates
+    if (!existing) {
+      const status = await SavedConversationsService.getRetentionStatusForUser(user.id);
+      if (status.total >= MAX_CONVERSATIONS && status.deletable <= 0) {
+        throw buildLimitError();
+      }
+    }
+
     const { data, error } = await db
       .from('ai_saved_conversations')
       .upsert(
         {
           user_id: user.id,
           conversation_id: conversationId,
-          title,
+          title: existing?.is_custom_title ? normalizeConversationTitle(existing.title, 'Conversation') : title,
           messages: normalized,
           message_count: normalized.length,
           last_message_at: lastMessageAt,
           updated_at: now,
           is_active: true,
+          is_saved: existing?.is_saved === true,
+          tags: normalizeTags(existing?.tags),
+          is_custom_title: existing?.is_custom_title === true,
         },
         {
           onConflict: 'user_id,conversation_id',
@@ -108,8 +201,9 @@ export const SavedConversationsService = {
 
     if (error) throw error;
 
-    // Prune oldest beyond MAX_CONVERSATIONS
-    await SavedConversationsService.pruneOldest(user.id);
+    if (!existing) {
+      await SavedConversationsService.pruneOldest(user.id);
+    }
 
     return data.id;
   },
@@ -128,42 +222,58 @@ export const SavedConversationsService = {
 
   // Prune oldest conversations beyond MAX_CONVERSATIONS
   async pruneOldest(userId: string): Promise<void> {
-    try {
-      const { data } = await supabase
-        .from('ai_saved_conversations')
-        .select('id')
-        .eq('user_id', userId)
-        .order('last_message_at', { ascending: true });
-      if (!data || data.length <= MAX_CONVERSATIONS) return;
-      const toDelete = data.slice(0, data.length - MAX_CONVERSATIONS).map((r: any) => r.id);
-      await supabase.from('ai_saved_conversations').delete().in('id', toDelete);
-    } catch {}
+    const status = await SavedConversationsService.getRetentionStatusForUser(userId);
+    if (status.total <= MAX_CONVERSATIONS) return;
+
+    const overage = status.total - MAX_CONVERSATIONS;
+    const { data, error } = await supabase
+      .from('ai_saved_conversations')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('is_saved', false)
+      .order('is_active', { ascending: true })
+      .order('last_message_at', { ascending: true });
+
+    if (error) throw error;
+    if (!data || data.length < overage) throw buildLimitError();
+
+    const toDelete = data.slice(0, overage).map((row: any) => row.id);
+    if (toDelete.length === 0) throw buildLimitError();
+
+    const { error: deleteError } = await supabase
+      .from('ai_saved_conversations')
+      .delete()
+      .in('id', toDelete);
+
+    if (deleteError) throw deleteError;
   },
 
-  // List all conversations for current user (active first, then recent)
   async listConversations(): Promise<ConversationListItem[]> {
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;
     if (!user) throw new Error('Not authenticated');
     const { data, error } = await (supabase as any)
       .from('ai_saved_conversations')
-      .select('id, title, message_count, last_message_at, is_active, conversation_id')
+      .select('id, title, message_count, last_message_at, is_active, conversation_id, is_saved, tags, is_custom_title')
       .eq('user_id', user.id)
       .order('is_active', { ascending: false })
+      .order('is_saved', { ascending: false })
       .order('last_message_at', { ascending: false })
       .limit(MAX_CONVERSATIONS);
     if (error) throw error;
     return (data || []).map((r: any) => ({
       id: r.id,
-      title: r.title,
+      title: normalizeConversationTitle(r.title, 'Conversation'),
       message_count: r.message_count,
       last_message_at: r.last_message_at,
       is_active: r.is_active === true,
       conversation_id: r.conversation_id || null,
+      is_saved: r.is_saved === true,
+      tags: normalizeTags(r.tags),
+      is_custom_title: r.is_custom_title === true,
     }));
   },
 
-  // Load full messages for a conversation
   async loadConversation(id: string): Promise<SavedConversationRow | null> {
     const { data, error } = await supabase
       .from('ai_saved_conversations')
@@ -171,14 +281,51 @@ export const SavedConversationsService = {
       .eq('id', id)
       .maybeSingle();
     if (error) throw error;
-    return (data as SavedConversationRow) || null;
+    return data ? {
+      ...(data as SavedConversationRow),
+      title: normalizeConversationTitle((data as any).title, 'Conversation'),
+      is_saved: (data as any).is_saved === true,
+      tags: normalizeTags((data as any).tags),
+      is_custom_title: (data as any).is_custom_title === true,
+    } : null;
   },
 
   async updateTitle(id: string, title: string): Promise<boolean> {
+    const nextTitle = normalizeConversationTitle(title, 'Conversation');
+    if (!nextTitle) throw new Error('Title is required');
     const { error } = await supabase
       .from('ai_saved_conversations')
-      .update({ title })
+      .update({ title: nextTitle, is_custom_title: true, updated_at: new Date().toISOString() })
       .eq('id', id);
+    if (error) throw error;
+    return true;
+  },
+
+  async updateConversationMeta(id: string, updates: ConversationMetaUpdate): Promise<boolean> {
+    const payload: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (typeof updates.title === 'string') {
+      const nextTitle = normalizeConversationTitle(updates.title, 'Conversation');
+      if (!nextTitle) throw new Error('Title is required');
+      payload.title = nextTitle;
+      payload.is_custom_title = true;
+    }
+
+    if (Array.isArray(updates.tags)) {
+      payload.tags = normalizeTags(updates.tags);
+    }
+
+    if (typeof updates.is_saved === 'boolean') {
+      payload.is_saved = updates.is_saved;
+    }
+
+    const { error } = await supabase
+      .from('ai_saved_conversations')
+      .update(payload)
+      .eq('id', id);
+
     if (error) throw error;
     return true;
   },

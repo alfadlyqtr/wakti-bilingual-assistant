@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage } from '@/services/WaktiAIV2Service';
-import { SavedConversationsService } from '@/services/SavedConversationsService';
+import { ConversationMetaUpdate, normalizeConversationTitle, SavedConversationsService } from '@/services/SavedConversationsService';
 import { EnhancedFrontendMemory, ConversationMetadata } from '@/services/EnhancedFrontendMemory';
 import { useToastHelper } from "@/hooks/use-toast-helper";
 import { useAuth } from '@/contexts/AuthContext';
@@ -107,8 +107,23 @@ const WaktiAIV2 = () => {
   const saveInFlightRef = useRef<boolean>(false);
   const saveDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const { language } = useTheme();
-  const { showError } = useToastHelper();
+  const { showError, showSuccess } = useToastHelper();
   const { isDesktop } = useIsDesktop();
+  const activeConversationTitle = useMemo(() => {
+    if (isNewConversation || !currentConversationId) {
+      return language === 'ar' ? 'محادثة جديدة' : 'New Chat';
+    }
+
+    const activeConversation = archivedConversations.find((conversation) => (
+      conversation.id === currentConversationId || conversation.conversation_id === currentConversationId
+    ));
+
+    if (!activeConversation?.title) {
+      return language === 'ar' ? 'محادثة جديدة' : 'New Chat';
+    }
+
+    return normalizeConversationTitle(activeConversation.title, language === 'ar' ? 'محادثة جديدة' : 'New Chat');
+  }, [archivedConversations, currentConversationId, isNewConversation, language]);
 
   const canSendMessage = useMemo(() => !isLoading && !chatTrialLimitReached && !!(authUser?.id || userProfile?.id), [isLoading, chatTrialLimitReached, authUser?.id, userProfile?.id]);
 
@@ -168,21 +183,26 @@ const WaktiAIV2 = () => {
     };
   }, [isLoading]);
 
+  const mapConversationList = useCallback((list: any[]) => (
+    (Array.isArray(list) ? list : []).map((c: any) => ({
+      id: c.id,
+      title: c.title,
+      lastMessageAt: new Date(c.last_message_at),
+      messageCount: c.message_count,
+      createdAt: new Date(c.last_message_at),
+      is_active: c.is_active,
+      conversation_id: c.conversation_id,
+      is_saved: c.is_saved === true,
+      tags: Array.isArray(c.tags) ? c.tags : [],
+      is_custom_title: c.is_custom_title === true,
+    }))
+  ), []);
+
   const handleRefreshConversations = useCallback(() => {
     SavedConversationsService.listConversations()
-      .then(list => setArchivedConversations(
-        (Array.isArray(list) ? list : []).map((c: any) => ({
-          id: c.id,
-          title: c.title,
-          lastMessageAt: new Date(c.last_message_at),
-          messageCount: c.message_count,
-          createdAt: new Date(c.last_message_at),
-          is_active: c.is_active,
-          conversation_id: c.conversation_id,
-        }))
-      ))
+      .then(list => setArchivedConversations(mapConversationList(list)))
       .catch(() => {});
-  }, []);
+  }, [mapConversationList]);
 
   // When the active mode changes, clear loading state but DON'T abort
   // Aborting here causes "signal is aborted without reason" errors
@@ -201,17 +221,7 @@ const WaktiAIV2 = () => {
     // Load active conversation from DB first, fallback to localStorage
     SavedConversationsService.listConversations()
       .then(async (list: any[]) => {
-        setArchivedConversations(
-          list.map((c: any) => ({
-            id: c.id,
-            title: c.title,
-            lastMessageAt: new Date(c.last_message_at),
-            messageCount: c.message_count,
-            createdAt: new Date(c.last_message_at),
-            is_active: c.is_active,
-            conversation_id: c.conversation_id,
-          }))
-        );
+        setArchivedConversations(mapConversationList(list));
         const active = list.find((c: any) => c.is_active);
         if (active) {
           const full = await SavedConversationsService.loadConversation(active.id);
@@ -238,7 +248,7 @@ const WaktiAIV2 = () => {
         setIsNewConversation(!conversationId || messages.length === 0);
         handleRefreshConversations();
       });
-  }, [handleRefreshConversations]);
+  }, [handleRefreshConversations, mapConversationList]);
 
   useEffect(() => {
     const userId = authUser?.id || userProfile?.id;
@@ -390,12 +400,19 @@ const WaktiAIV2 = () => {
       saveInFlightRef.current = true;
       try {
         await SavedConversationsService.upsertActiveConversation(messages, convId);
-      } catch {}
+      } catch (error) {
+        if (SavedConversationsService.isConversationLimitError(error)) {
+          showError(language === 'ar'
+            ? 'كل المحادثات المحفوظة محمية الآن. احذف محادثة واحدة أو ألغِ حفظ واحدة لبدء محادثة جديدة.'
+            : 'All kept chats are protected right now. Delete one or un-save one before starting a new chat.');
+          handleRefreshConversations();
+        }
+      }
       finally {
         saveInFlightRef.current = false;
       }
     }, 500);
-  }, []);
+  }, [handleRefreshConversations, language, showError]);
 
   const handleSelectConversation = useCallback(async (id: string) => {
     // Load from DB
@@ -419,6 +436,17 @@ const WaktiAIV2 = () => {
   }, [currentConversationId, handleRefreshConversations]);
 
   const handleClearChat = useCallback(async () => {
+    try {
+      const status = await SavedConversationsService.getRetentionStatus();
+      if (!status.canCreate && status.total >= status.limit) {
+        showError(language === 'ar'
+          ? 'وصلت إلى الحد الكامل وكل المحادثات محفوظة. احذف واحدة أو ألغِ حفظ واحدة أولاً.'
+          : 'You reached the full limit and all chats are saved. Delete one or un-save one first.');
+        handleRefreshConversations();
+        return false;
+      }
+    } catch {}
+
     // Deactivate current in DB
     if (currentConversationId) {
       SavedConversationsService.deactivateConversation(currentConversationId).catch(() => {});
@@ -429,7 +457,24 @@ const WaktiAIV2 = () => {
     setIsNewConversation(true);
     EnhancedFrontendMemory.clearActiveConversation();
     handleRefreshConversations();
-  }, [currentConversationId, handleRefreshConversations]);
+    return true;
+  }, [currentConversationId, handleRefreshConversations, language, showError]);
+
+  const handleUpdateConversationMeta = useCallback(async (id: string, updates: ConversationMetaUpdate) => {
+    await SavedConversationsService.updateConversationMeta(id, updates);
+    handleRefreshConversations();
+    if (typeof updates.title === 'string') {
+      showSuccess(language === 'ar' ? 'تم تحديث اسم المحادثة' : 'Conversation updated');
+      return;
+    }
+    if (typeof updates.is_saved === 'boolean') {
+      showSuccess(updates.is_saved
+        ? (language === 'ar' ? 'تم حفظ المحادثة وحمايتها' : 'Chat saved and protected')
+        : (language === 'ar' ? 'أصبحت المحادثة قابلة للاستبدال التلقائي' : 'Chat can be auto-replaced again'));
+      return;
+    }
+    showSuccess(language === 'ar' ? 'تم تحديث المحادثة' : 'Conversation updated');
+  }, [handleRefreshConversations, language, showSuccess]);
 
   const handleDeleteConversation = useCallback(async (id: string) => {
     await SavedConversationsService.deleteConversation(id).catch(() => {});
@@ -1121,6 +1166,7 @@ const WaktiAIV2 = () => {
         onTriggerChange={setActiveTrigger}
         onTextGenerated={(text) => setMessage(text)}
         onNewConversation={handleClearChat}
+        onUpdateConversationMeta={handleUpdateConversationMeta}
         onClearChat={handleClearChat}
         sessionMessages={sessionMessages}
         isLoading={isLoading}
@@ -1134,6 +1180,7 @@ const WaktiAIV2 = () => {
           onSelectConversation={handleSelectConversation}
           onDeleteConversation={handleDeleteConversation}
           onNewConversation={handleClearChat}
+          onUpdateConversationMeta={handleUpdateConversationMeta}
           currentConversationId={currentConversationId}
           onRefreshConversations={handleRefreshConversations}
         />
@@ -1177,6 +1224,7 @@ const WaktiAIV2 = () => {
               setMessage={setMessage}
               isLoading={canSendMessage ? isLoading : true}
               sessionMessages={sessionMessages}
+              activeConversationTitle={activeConversationTitle}
               onSendMessage={handleSendMessage}
               onClearChat={handleClearChat}
               onOpenPlusDrawer={() => setIsSidebarOpen(true)}
@@ -1199,6 +1247,7 @@ const WaktiAIV2 = () => {
               setMessage={setMessage}
               isLoading={canSendMessage ? isLoading : true}
               sessionMessages={sessionMessages}
+              activeConversationTitle={activeConversationTitle}
               onSendMessage={handleSendMessage}
               onClearChat={handleClearChat}
               onOpenPlusDrawer={() => setIsSidebarOpen(true)}

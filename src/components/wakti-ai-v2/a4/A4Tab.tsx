@@ -62,6 +62,9 @@ import {
   downloadA4RowsAsPdf,
   fileToDataUrl,
   fetchUrlContent,
+  expandIdea,
+  A4_UNIVERSAL_DECOR_CHIPS,
+  A4_MAX_CHIPS_PER_SIDE,
   type A4DocumentRow,
   type A4DesignSettings,
   type A4CreativeSettings,
@@ -71,6 +74,7 @@ import {
   type A4BackgroundTreatment,
   type A4ContentComponent,
   type A4LayoutPattern,
+  type A4InputMode,
 } from "./a4Service";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1452,6 +1456,16 @@ const A4Tab: React.FC = () => {
   const [fatalError, setFatalError] = useState<string | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
 
+  // --- Prompt Engineer UI state ---------------------------------------------
+  const [inputMode, setInputMode] = useState<A4InputMode>("content_ready");
+  const [ideaText, setIdeaText] = useState("");
+  const [expandedContent, setExpandedContent] = useState("");
+  const [isExpanding, setIsExpanding] = useState(false);
+  const [decorWanted, setDecorWanted] = useState<string[]>([]);
+  const [decorUnwanted, setDecorUnwanted] = useState<string[]>([]);
+  const [customWanted, setCustomWanted] = useState("");
+  const [customUnwanted, setCustomUnwanted] = useState("");
+
   const theme = themeId ? findTheme(themeId) : null;
   const schema = theme ? getFormSchema(theme, purposeId) : [];
   const needsPurpose = theme ? themeRequiresPurpose(theme) : false;
@@ -1472,6 +1486,14 @@ const A4Tab: React.FC = () => {
     setRows([]);
     setIsSubmitting(false);
     setFatalError(null);
+    setInputMode("content_ready");
+    setIdeaText("");
+    setExpandedContent("");
+    setIsExpanding(false);
+    setDecorWanted([]);
+    setDecorUnwanted([]);
+    setCustomWanted("");
+    setCustomUnwanted("");
   }, []);
 
   // When theme changes, re-init formState with default values from schema
@@ -1496,10 +1518,14 @@ const A4Tab: React.FC = () => {
     if (!theme) return [];
     return schema.filter((f) => {
       if (!f.required) return false;
+      // In idea mode, raw_content is supplied by the expanded preview, not the form.
+      if (inputMode === "idea" && f.key === "raw_content" && expandedContent.trim()) {
+        return false;
+      }
       const v = formState[f.key];
       return v === undefined || v === null || (typeof v === "string" && !v.trim());
     });
-  }, [theme, schema, formState]);
+  }, [theme, schema, formState, inputMode, expandedContent]);
 
   // --- Submit -----------------------------------------------------------------
   const handleGenerate = useCallback(async () => {
@@ -1520,17 +1546,37 @@ const A4Tab: React.FC = () => {
 
     const languageMode = formState.bilingual === true ? "bilingual" : "en";
 
+    // If user is in idea mode and has approved an expanded preview, use that
+    // as the raw_content override. If they're in idea mode but haven't expanded
+    // yet, block and prompt them.
+    let finalForm: Record<string, unknown> = cleanForm;
+    if (inputMode === "idea") {
+      const approved = expandedContent.trim();
+      if (!approved) {
+        setIsSubmitting(false);
+        toast.error(t(
+          "Please expand your idea and review the preview first.",
+          "يرجى توسيع الفكرة ومراجعة المعاينة أولاً.",
+        ));
+        return;
+      }
+      finalForm = { ...cleanForm, raw_content: approved };
+    }
+
     try {
       const res = await generateA4Document({
         theme_id: theme.id,
         purpose_id: purposeId,
-        form_state: cleanForm,
+        form_state: finalForm,
         logo_data_url: logoDataUrl,
         logo_color_extract: extractColors && !!logoDataUrl,
         requested_pages: pageChoice,
         language_mode: languageMode,
         design_settings: designSettings,
         creative_settings: creativeSettings,
+        input_mode: inputMode,
+        decorations_wanted: decorWanted,
+        decorations_unwanted: decorUnwanted,
       });
 
       if (!res.success || !res.batch_id) {
@@ -1561,7 +1607,67 @@ const A4Tab: React.FC = () => {
       setFatalError((e as Error).message);
       setStage("failed");
     }
-  }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, t]);
+  }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, inputMode, expandedContent, decorWanted, decorUnwanted, t]);
+
+  // --- Expand idea -----------------------------------------------------------
+  const handleExpandIdea = useCallback(async () => {
+    if (!theme) return;
+    const idea = ideaText.trim();
+    if (!idea) {
+      toast.error(t("Type your idea first.", "اكتب فكرتك أولاً."));
+      return;
+    }
+    setIsExpanding(true);
+    try {
+      const languageMode = formState.bilingual === true ? "bilingual" : "en";
+      const res = await expandIdea({
+        theme_id: theme.id,
+        purpose_id: purposeId,
+        idea_text: idea,
+        language_mode: languageMode,
+      });
+      if (!res.success || !res.content) {
+        toast.error(res.error || t("Expansion failed", "فشل التوسيع"));
+        return;
+      }
+      setExpandedContent(res.content);
+      toast.success(t("Draft ready — review and edit below.", "المسودة جاهزة — راجعها وحررها بالأسفل."));
+    } catch (e) {
+      toast.error(`${t("Expansion failed", "فشل التوسيع")}: ${(e as Error).message}`);
+    } finally {
+      setIsExpanding(false);
+    }
+  }, [theme, ideaText, purposeId, formState.bilingual, t]);
+
+  // --- Chip helpers ----------------------------------------------------------
+  const toggleChip = useCallback((side: "want" | "unwant", value: string) => {
+    const v = value.trim();
+    if (!v) return;
+    const setter = side === "want" ? setDecorWanted : setDecorUnwanted;
+    const other = side === "want" ? decorUnwanted : decorWanted;
+    const current = side === "want" ? decorWanted : decorUnwanted;
+    const already = current.some((c) => c.toLowerCase() === v.toLowerCase());
+    if (already) {
+      setter(current.filter((c) => c.toLowerCase() !== v.toLowerCase()));
+      return;
+    }
+    if (current.length >= A4_MAX_CHIPS_PER_SIDE) {
+      toast.error(t(
+        `You can pick up to ${A4_MAX_CHIPS_PER_SIDE} chips per side.`,
+        `يمكنك اختيار حتى ${A4_MAX_CHIPS_PER_SIDE} عناصر لكل جانب.`,
+      ));
+      return;
+    }
+    // Prevent same chip on both sides
+    if (other.some((c) => c.toLowerCase() === v.toLowerCase())) {
+      toast.error(t(
+        "That chip is already on the opposite side.",
+        "هذا العنصر موجود في الجانب المقابل.",
+      ));
+      return;
+    }
+    setter([...current, v]);
+  }, [decorWanted, decorUnwanted, t]);
 
   // Watch rows: when all rows are completed/failed, flip stage
   useEffect(() => {
@@ -1712,14 +1818,225 @@ const A4Tab: React.FC = () => {
                   settings={creativeSettings}
                   onChange={setCreativeSettings}
                 />
-                {schema.map((field) => (
-                  <FormFieldRenderer
-                    key={field.key}
-                    field={field}
-                    value={formState[field.key]}
-                    onChange={(v) => setFormState((prev) => ({ ...prev, [field.key]: v }))}
-                  />
-                ))}
+                {schema.map((field) => {
+                  // In idea mode we replace the raw_content textarea with the
+                  // idea + expand + editable preview UI below.
+                  if (inputMode === "idea" && field.key === "raw_content") return null;
+                  return (
+                    <FormFieldRenderer
+                      key={field.key}
+                      field={field}
+                      value={formState[field.key]}
+                      onChange={(v) => setFormState((prev) => ({ ...prev, [field.key]: v }))}
+                    />
+                  );
+                })}
+
+                {/* --- Input Mode toggle (bottom of content area) ---------- */}
+                <div className="mb-3 pt-3 border-t border-border/60">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
+                    {t("Input mode", "طريقة الإدخال")}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInputMode("content_ready")}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium border transition text-left ${
+                        inputMode === "content_ready"
+                          ? "border-primary bg-primary/10 text-primary ring-1 ring-primary/30"
+                          : "border-border bg-background hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="font-semibold">{t("I have content ready", "لدي المحتوى جاهز")}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
+                        {t("Use your content exactly as written.", "سيُستخدم نصك كما هو دون تعديل.")}
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInputMode("idea")}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium border transition text-left ${
+                        inputMode === "idea"
+                          ? "border-primary bg-primary/10 text-primary ring-1 ring-primary/30"
+                          : "border-border bg-background hover:border-primary/40"
+                      }`}
+                    >
+                      <div className="font-semibold">{t("I have just an idea", "لدي مجرد فكرة")}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
+                        {t("AI expands it — you review and edit before generation.", "يوسّعها الذكاء الاصطناعي — راجعها وحررها قبل التوليد.")}
+                      </div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* --- Idea mode panel ------------------------------------ */}
+                {inputMode === "idea" && (
+                  <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-3">
+                    <div>
+                      <label className="block text-xs font-medium mb-1.5 text-foreground/80">
+                        {t("Your idea", "فكرتك")}
+                      </label>
+                      <textarea
+                        value={ideaText}
+                        onChange={(e) => setIdeaText(e.target.value)}
+                        rows={3}
+                        placeholder={t(
+                          "e.g. A poster for our annual teacher appreciation day with a quote.",
+                          "مثال: ملصق ليوم تكريم المعلم السنوي مع اقتباس.",
+                        )}
+                        className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <div className="text-[10px] text-muted-foreground">
+                          {t(
+                            "We'll expand this into a full draft you can edit before generation.",
+                            "سنوسّعها إلى مسودة كاملة يمكنك تحريرها قبل التوليد.",
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleExpandIdea}
+                          disabled={isExpanding || !ideaText.trim()}
+                          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium shadow-sm transition ${
+                            isExpanding || !ideaText.trim()
+                              ? "bg-muted text-muted-foreground cursor-not-allowed"
+                              : "bg-primary text-primary-foreground hover:opacity-90"
+                          }`}
+                        >
+                          {isExpanding ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+                          {isExpanding ? t("Expanding…", "جاري التوسيع…") : t("Expand with AI", "وسّع بالذكاء")}
+                        </button>
+                      </div>
+                    </div>
+
+                    {expandedContent && (
+                      <div>
+                        <label className="block text-xs font-medium mb-1.5 text-foreground/80">
+                          {t("Draft preview (editable)", "معاينة المسودة (قابلة للتحرير)")}
+                        </label>
+                        <textarea
+                          value={expandedContent}
+                          onChange={(e) => setExpandedContent(e.target.value)}
+                          rows={10}
+                          className="w-full px-3 py-2 rounded-lg border border-primary/40 bg-background text-sm resize-y focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        />
+                        <div className="mt-1 text-[10px] text-muted-foreground">
+                          {t(
+                            "Edit freely. This exact text will be used when you click Generate.",
+                            "حرر النص بحرية. سيتم استخدام هذا النص عند الضغط على إنشاء.",
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* --- Decorations I want / I don't want ------------------ */}
+                <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-4">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {t("Decorations", "الزخارف")}
+                    <span className="ml-2 normal-case text-[10px] text-muted-foreground/70">
+                      {t(`up to ${A4_MAX_CHIPS_PER_SIDE} per side`, `حتى ${A4_MAX_CHIPS_PER_SIDE} لكل جانب`)}
+                    </span>
+                  </div>
+
+                  {(["want", "unwant"] as const).map((side) => {
+                    const title = side === "want"
+                      ? t("Decorations I want", "زخارف أريدها")
+                      : t("Decorations I DON'T want", "زخارف لا أريدها");
+                    const selected = side === "want" ? decorWanted : decorUnwanted;
+                    const opposite = side === "want" ? decorUnwanted : decorWanted;
+                    const custom = side === "want" ? customWanted : customUnwanted;
+                    const setCustom = side === "want" ? setCustomWanted : setCustomUnwanted;
+                    const activeCls = side === "want"
+                      ? "bg-primary/15 text-primary border-primary/60 ring-1 ring-primary/30"
+                      : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/60 ring-1 ring-red-500/30";
+                    const oppositeCls = "opacity-40 cursor-not-allowed";
+
+                    return (
+                      <div key={side}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="text-xs font-semibold text-foreground/85">{title}</div>
+                          <div className="text-[10px] text-muted-foreground">
+                            {selected.length}/{A4_MAX_CHIPS_PER_SIDE}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {A4_UNIVERSAL_DECOR_CHIPS.map((chip) => {
+                            const label = lang === "ar" ? chip.label_ar : chip.label_en;
+                            const key = chip.label_en;
+                            const isSelected = selected.some((c) => c.toLowerCase() === key.toLowerCase());
+                            const isOnOther = opposite.some((c) => c.toLowerCase() === key.toLowerCase());
+                            return (
+                              <button
+                                key={chip.id}
+                                type="button"
+                                disabled={isOnOther}
+                                onClick={() => toggleChip(side, key)}
+                                className={`px-2.5 py-1 rounded-full border text-[11px] transition ${
+                                  isSelected
+                                    ? activeCls
+                                    : isOnOther
+                                      ? `border-border ${oppositeCls}`
+                                      : "border-border bg-background hover:border-primary/40"
+                                }`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {selected.filter((v) => !A4_UNIVERSAL_DECOR_CHIPS.some((c) => c.label_en.toLowerCase() === v.toLowerCase())).length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {selected
+                              .filter((v) => !A4_UNIVERSAL_DECOR_CHIPS.some((c) => c.label_en.toLowerCase() === v.toLowerCase()))
+                              .map((v) => (
+                                <button
+                                  key={`custom-${side}-${v}`}
+                                  type="button"
+                                  onClick={() => toggleChip(side, v)}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] ${activeCls}`}
+                                >
+                                  {v}
+                                  <X className="h-3 w-3" />
+                                </button>
+                              ))}
+                          </div>
+                        )}
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={custom}
+                            onChange={(e) => setCustom(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                if (custom.trim()) {
+                                  toggleChip(side, custom.trim());
+                                  setCustom("");
+                                }
+                              }
+                            }}
+                            placeholder={t("Add your own…", "أضف عنصرك الخاص…")}
+                            className="flex-1 px-2.5 py-1.5 rounded-md border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (custom.trim()) {
+                                toggleChip(side, custom.trim());
+                                setCustom("");
+                              }
+                            }}
+                            className="px-2.5 py-1.5 rounded-md border border-border text-xs hover:bg-muted transition"
+                          >
+                            {t("Add", "أضف")}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
 
                 {/* Logo color extract toggle, only when a logo is present */}
                 {typeof formState.logo === "string" && (formState.logo as string).length > 0 && (

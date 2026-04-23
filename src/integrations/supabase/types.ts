@@ -522,9 +522,12 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean | null
+          is_custom_title: boolean
+          is_saved: boolean
           last_message_at: string
           message_count: number
           messages: Json
+          tags: string[]
           title: string
           updated_at: string
           user_id: string
@@ -534,9 +537,12 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          is_custom_title?: boolean
+          is_saved?: boolean
           last_message_at?: string
           message_count?: number
           messages: Json
+          tags?: string[]
           title: string
           updated_at?: string
           user_id: string
@@ -546,9 +552,12 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean | null
+          is_custom_title?: boolean
+          is_saved?: boolean
           last_message_at?: string
           message_count?: number
           messages?: Json
+          tags?: string[]
           title?: string
           updated_at?: string
           user_id?: string

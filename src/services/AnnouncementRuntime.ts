@@ -23,9 +23,11 @@ export interface PendingAnnouncement {
   frequency: 'show_once' | 'show_until_acted' | 'show_n_times';
   max_shows: number;
   priority: 'normal' | 'high';
+  test_override?: boolean;
 }
 
 const db = supabase as any;
+const ANNOUNCEMENT_REFRESH_EVENT = 'wakti-announcements-refresh';
 
 export const AnnouncementRuntime = {
   async getPending(): Promise<PendingAnnouncement[]> {
@@ -43,6 +45,28 @@ export const AnnouncementRuntime = {
     } catch (err) {
       console.warn('[AnnouncementRuntime] recordShown failed', err);
     }
+  },
+
+  subscribe(userId: string, onRefresh: () => void): () => void {
+    const channel = supabase
+      .channel(`announcement-runtime-${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => onRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcement_audience_groups' }, () => onRefresh())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'announcement_test_recipients', filter: `user_id=eq.${userId}` }, () => onRefresh())
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  },
+
+  triggerRefresh(): void {
+    window.dispatchEvent(new Event(ANNOUNCEMENT_REFRESH_EVENT));
+  },
+
+  onRefresh(handler: () => void): () => void {
+    window.addEventListener(ANNOUNCEMENT_REFRESH_EVENT, handler);
+    return () => window.removeEventListener(ANNOUNCEMENT_REFRESH_EVENT, handler);
   },
 };
 

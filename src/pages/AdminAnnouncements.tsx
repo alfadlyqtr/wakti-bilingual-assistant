@@ -19,6 +19,7 @@ import { AdminHeader } from "@/components/admin/AdminHeader";
 import { AdminMobileNav } from "@/components/admin/AdminMobileNav";
 import { AnnouncementEditorModal } from "@/components/admin/AnnouncementEditorModal";
 import { AnnouncementAdminService, type AnnouncementAdminRow } from "@/services/AnnouncementAdminService";
+import { AnnouncementRuntime } from "@/services/AnnouncementRuntime";
 import { supabase } from "@/integrations/supabase/client";
 
 interface AnnouncementEventRow {
@@ -108,6 +109,7 @@ export default function AdminAnnouncements() {
     setBusyId(row.id);
     try {
       await AnnouncementAdminService.archive(row.id);
+      AnnouncementRuntime.triggerRefresh();
       toast.success('Archived');
       fetchAnnouncements();
     } catch (err: any) {
@@ -125,6 +127,7 @@ export default function AdminAnnouncements() {
     setBusyId(row.id);
     try {
       await AnnouncementAdminService.remove(row.id);
+      AnnouncementRuntime.triggerRefresh();
       toast.success('Deleted');
       fetchAnnouncements();
     } catch (err: any) {
@@ -146,6 +149,7 @@ export default function AdminAnnouncements() {
     try {
       const nextStatus = row.status === 'live' ? 'draft' : 'live';
       await AnnouncementAdminService.upsert({ status: nextStatus } as any, row.id);
+      AnnouncementRuntime.triggerRefresh();
       toast.success(nextStatus === 'live' ? 'Published live' : 'Moved to draft');
       fetchAnnouncements();
     } catch (err: any) {

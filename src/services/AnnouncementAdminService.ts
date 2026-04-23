@@ -12,6 +12,7 @@ export type AnnouncementAudience =
   | 'specific_users'
   | 'by_country'
   | 'by_language'
+  | 'saved_group'
   | 'custom';
 export type AnnouncementFrequency = 'show_once' | 'show_until_acted' | 'show_n_times';
 export type AnnouncementCtaAction = 'url' | 'navigate' | 'event' | null;
@@ -42,6 +43,7 @@ export interface AnnouncementAdminRow {
   target_user_ids: string[];
   target_countries: string[];
   target_languages: string[];
+  target_group_id?: string | null;
   audience_filter: Record<string, unknown>;
   frequency: AnnouncementFrequency;
   max_shows: number;
@@ -61,6 +63,42 @@ export interface AnnouncementAdminRow {
 export type AnnouncementPayload = Partial<
   Omit<AnnouncementAdminRow, 'id' | 'is_system' | 'created_at' | 'updated_at' | 'total_events' | 'seen_count' | 'acted_count' | 'dismissed_count' | 'unique_users'>
 >;
+
+export interface AnnouncementAudienceGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  audience_type: Exclude<AnnouncementAudience, 'saved_group'>;
+  target_user_ids: string[];
+  target_countries: string[];
+  target_languages: string[];
+  audience_filter: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  usage_count: number;
+}
+
+export interface AnnouncementAudiencePreview {
+  total_count: number;
+  sample_users: Array<{ id: string; email: string | null; display_name: string | null }>;
+  audience_source: 'direct' | 'group';
+  group_name: string | null;
+}
+
+export interface AnnouncementEligibilityExplanation {
+  eligible: boolean;
+  status_ok: boolean | null;
+  schedule_ok: boolean | null;
+  route_ok: boolean | null;
+  audience_ok: boolean | null;
+  frequency_ok: boolean | null;
+  test_override: boolean;
+  effective_audience_type: string | null;
+  group: { id: string; name: string } | null;
+  event_status: string | null;
+  shown_count: number;
+  reasons: string[];
+}
 
 const db = supabase as any;
 
@@ -91,6 +129,50 @@ export const AnnouncementAdminService = {
     const { data, error } = await db.rpc('admin_duplicate_announcement', { p_id: id });
     if (error) throw error;
     return data as AnnouncementAdminRow;
+  },
+
+  async listAudienceGroups(): Promise<AnnouncementAudienceGroup[]> {
+    const { data, error } = await db.rpc('admin_list_audience_groups');
+    if (error) throw error;
+    return (data || []) as AnnouncementAudienceGroup[];
+  },
+
+  async upsertAudienceGroup(payload: Record<string, unknown>, id?: string | null): Promise<AnnouncementAudienceGroup> {
+    const { data, error } = await db.rpc('admin_upsert_audience_group', { p_payload: payload, p_id: id ?? null });
+    if (error) throw error;
+    return data as AnnouncementAudienceGroup;
+  },
+
+  async deleteAudienceGroup(id: string): Promise<void> {
+    const { error } = await db.rpc('admin_delete_audience_group', { p_id: id });
+    if (error) throw error;
+  },
+
+  async previewAudience(payload: AnnouncementPayload): Promise<AnnouncementAudiencePreview | null> {
+    const { data, error } = await db.rpc('admin_preview_announcement_audience', { p_payload: payload });
+    if (error) throw error;
+    return Array.isArray(data) ? (data[0] as AnnouncementAudiencePreview) : (data as AnnouncementAudiencePreview | null);
+  },
+
+  async explainUser(payload: AnnouncementPayload, userId: string, announcementId?: string | null, path?: string | null): Promise<AnnouncementEligibilityExplanation> {
+    const { data, error } = await db.rpc('admin_explain_announcement_user', {
+      p_payload: payload,
+      p_user_id: userId,
+      p_announcement_id: announcementId ?? null,
+      p_path: path ?? null,
+    });
+    if (error) throw error;
+    return data as AnnouncementEligibilityExplanation;
+  },
+
+  async resetForUser(announcementId: string, userId: string): Promise<void> {
+    const { error } = await db.rpc('admin_reset_announcement_for_user', { p_announcement_id: announcementId, p_user_id: userId });
+    if (error) throw error;
+  },
+
+  async testSend(announcementId: string, userId?: string | null): Promise<void> {
+    const { error } = await db.rpc('admin_test_send_announcement', { p_announcement_id: announcementId, p_user_id: userId ?? null });
+    if (error) throw error;
   },
 
   async searchUsers(term: string, limit = 20): Promise<{ id: string; email: string | null; display_name: string | null }[]> {

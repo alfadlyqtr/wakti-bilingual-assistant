@@ -1,10 +1,13 @@
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Trash2, MessageSquare, Plus, RefreshCw, Trash, Eraser, Zap } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Bookmark, BookmarkCheck, MessageSquare, Pencil, Plus, RefreshCw, Trash, Eraser, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ConversationMetaUpdate, MAX_CONVERSATIONS } from '@/services/SavedConversationsService';
+import { ConversationManagerDialog } from './ConversationManagerDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,12 +23,16 @@ import {
 interface Conversation {
   id: string;
   title: string;
+  message_count?: number;
   last_message_at?: string;
   lastMessageAt?: Date;
   created_at?: string;
   createdAt?: Date;
   is_active?: boolean;
   conversation_id?: string | null;
+  is_saved?: boolean;
+  tags?: string[];
+  is_custom_title?: boolean;
 }
 
 interface ConversationsListProps {
@@ -35,7 +42,8 @@ interface ConversationsListProps {
   onDeleteConversation: (id: string) => void;
   onRefresh: () => void;
   onClose?: () => void;
-  onNewConversation?: () => void;
+  onNewConversation?: () => Promise<boolean> | boolean;
+  onUpdateConversationMeta: (id: string, updates: ConversationMetaUpdate) => Promise<void>;
   onClearChat: () => void;
   sessionMessages: any[];
   isLoading?: boolean;
@@ -49,15 +57,21 @@ export function ConversationsList({
   onRefresh,
   onClose,
   onNewConversation,
+  onUpdateConversationMeta,
   onClearChat,
   sessionMessages,
   isLoading
 }: ConversationsListProps) {
   const { language, toggleLanguage } = useTheme();
   const [isClearing, setIsClearing] = useState(false);
+  const [managingConversation, setManagingConversation] = useState<Conversation | null>(null);
+  const [isTogglingSaveId, setIsTogglingSaveId] = useState<string | null>(null);
 
   // Limit to 10 — active first, then by recency
-  const limitedConversations = conversations.slice(0, 10);
+  const limitedConversations = conversations.slice(0, MAX_CONVERSATIONS);
+  const savedCount = useMemo(() => limitedConversations.filter((conversation) => conversation.is_saved === true).length, [limitedConversations]);
+  const isAtCapacity = limitedConversations.length >= MAX_CONVERSATIONS;
+  const allProtected = isAtCapacity && savedCount >= MAX_CONVERSATIONS;
 
   const handleSelectConversation = (id: string) => {
     onSelectConversation(id);
@@ -71,14 +85,31 @@ export function ConversationsList({
     } catch {}
   };
 
-  const handleNewConversation = () => {
-    onNewConversation?.();
-    onClose?.();
+  const handleNewConversation = async () => {
+    const result = await onNewConversation?.();
+    if (result !== false) {
+      onClose?.();
+    }
   };
 
-  const handleClearChat = () => {
-    onClearChat();
-    onClose?.();
+  const handleClearChat = async () => {
+    const result = await onNewConversation?.();
+    if (result !== false) {
+      onClose?.();
+    }
+  };
+
+  const handleToggleSaved = async (conversation: Conversation) => {
+    setIsTogglingSaveId(conversation.id);
+    try {
+      await onUpdateConversationMeta(conversation.id, { is_saved: conversation.is_saved !== true });
+    } finally {
+      setIsTogglingSaveId(null);
+    }
+  };
+
+  const handleSaveConversationMeta = async (id: string, updates: { title: string; tags: string[]; is_saved: boolean }) => {
+    await onUpdateConversationMeta(id, updates);
   };
 
   const handleClearAll = async () => {
@@ -118,7 +149,10 @@ export function ConversationsList({
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground bg-primary/10 px-2 py-1 rounded-full font-medium">
-              {limitedConversations.length}/10
+              {limitedConversations.length}/{MAX_CONVERSATIONS}
+            </span>
+            <span className="text-xs text-[hsl(243_84%_14%)] bg-[rgba(6,5,65,0.06)] px-2 py-1 rounded-full font-medium">
+              {language === 'ar' ? `${savedCount} محفوظة` : `${savedCount} saved`}
             </span>
             <Button
               variant="outline"
@@ -210,13 +244,13 @@ export function ConversationsList({
           <div className="flex items-center gap-1 mb-1">
             <Zap className="h-3 w-3 text-blue-500" />
             <span className="font-medium text-blue-600 dark:text-blue-400">
-              {language === 'ar' ? 'حفظ تلقائي سحابي' : 'Auto Cloud Save'}
+              {language === 'ar' ? 'مكتبة المحادثات الذكية' : 'Smart conversation library'}
             </span>
           </div>
           <p className="leading-relaxed">
             {language === 'ar'
-              ? '• كل محادثاتك تُحفظ تلقائياً في السحابة — تظهر هنا فوراً وتُستعاد على أي جهاز. استخدم "محادثة جديدة" لبدء موضوع جديد.'
-              : '• All conversations auto-save to cloud — visible here instantly and restored on any device. Use "New Chat" to start a fresh topic.'
+              ? '• كل محادثاتك تُحفظ تلقائياً. المحادثات المحفوظة يدوياً لا تُستبدل تلقائياً، ويمكنك إعادة تسميتها وإضافة وسوم لها.'
+              : '• Every chat auto-saves. Chats you save manually are protected from auto-replacement, and you can rename them and add tags.'
             }
           </p>
         </div>
@@ -228,48 +262,84 @@ export function ConversationsList({
           {limitedConversations.map((conversation) => {
             const isActive = (conversation as any).is_active === true;
             const dateVal = conversation.lastMessageAt || conversation.last_message_at;
+            const matchesCurrent = currentConversationId === conversation.id || currentConversationId === conversation.conversation_id;
             return (
               <div
                 key={conversation.id}
                 className={cn(
-                  "group relative p-3 rounded-lg border cursor-pointer transition-all duration-200",
-                  "hover:bg-accent/50 hover:border-primary/30 hover:shadow-sm",
+                  "group relative rounded-2xl border cursor-pointer transition-all duration-200 p-3",
+                  "border-[rgba(233,206,176,0.82)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99)_0%,rgba(252,254,253,0.99)_55%,rgba(247,241,232,0.96)_100%)] shadow-[0_10px_24px_rgba(6,5,65,0.07)] hover:border-[rgba(79,141,246,0.34)] hover:shadow-[0_12px_26px_rgba(6,5,65,0.1)]",
                   isActive
-                    ? "bg-primary/5 border-primary/40 shadow-sm ring-1 ring-primary/20"
-                    : currentConversationId === conversation.id
-                      ? "bg-primary/5 border-primary/50 shadow-sm ring-1 ring-primary/20"
+                    ? "ring-1 ring-primary/20 border-[rgba(79,141,246,0.5)]"
+                    : matchesCurrent
+                      ? "ring-1 ring-primary/20 border-[rgba(79,141,246,0.55)]"
                       : ""
                 )}
                 onClick={() => handleSelectConversation(conversation.id)}
               >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0 pr-2">
-                    <div className="flex items-center gap-2 mb-1">
-                      <p className="text-sm font-medium truncate">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 pr-1">
+                    <div className="mb-1 flex items-center gap-2">
+                      <p className="truncate text-sm font-semibold text-[hsl(243_84%_14%)]">
                         {conversation.title}
                       </p>
+                      {conversation.is_saved && (
+                        <Badge className="border border-[rgba(16,185,129,0.18)] bg-[rgba(16,185,129,0.10)] text-[10px] text-[hsl(160_80%_28%)]">
+                          {language === 'ar' ? 'محفوظة' : 'Saved'}
+                        </Badge>
+                      )}
                       {isActive && (
-                        <div className="text-xs bg-blue-500/15 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 shrink-0">
+                        <div className="shrink-0 rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-1">
                           <Zap className="h-2.5 w-2.5" />
                           {language === 'ar' ? 'الآن' : 'Current'}
                         </div>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <div className="flex items-center gap-2 text-xs text-[hsl(243_20%_34%)]">
                       <span>{formatRelativeTime(dateVal)}</span>
+                      <span>•</span>
+                      <span>{conversation.message_count ?? 0} {language === 'ar' ? 'رسالة' : 'msgs'}</span>
                     </div>
+                    {Array.isArray(conversation.tags) && conversation.tags.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {conversation.tags.slice(0, 4).map((tag) => (
+                          <Badge
+                            key={`${conversation.id}-${tag}`}
+                            className="border-[rgba(6,5,65,0.08)] bg-[rgba(6,5,65,0.05)] text-[10px] text-[hsl(243_84%_14%)]"
+                          >
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 text-muted-foreground hover:text-destructive"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteConversation(conversation.id);
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-full border border-[rgba(6,5,65,0.08)] bg-white text-[hsl(243_84%_14%)] shadow-[0_4px_10px_rgba(6,5,65,0.05)] hover:bg-[rgba(6,5,65,0.03)]"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleToggleSaved(conversation);
+                      }}
+                      disabled={isTogglingSaveId === conversation.id}
+                      title={conversation.is_saved ? (language === 'ar' ? 'إلغاء حفظ المحادثة' : 'Unsave chat') : (language === 'ar' ? 'حفظ المحادثة' : 'Save chat')}
+                    >
+                      {conversation.is_saved ? <BookmarkCheck className="h-4 w-4 text-emerald-600" /> : <Bookmark className="h-4 w-4" />}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-full border border-[rgba(6,5,65,0.08)] bg-white text-[hsl(243_84%_14%)] shadow-[0_4px_10px_rgba(6,5,65,0.05)] hover:bg-[rgba(6,5,65,0.03)]"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setManagingConversation(conversation);
+                      }}
+                      title={language === 'ar' ? 'إدارة المحادثة' : 'Manage chat'}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             );
@@ -287,24 +357,32 @@ export function ConversationsList({
             </div>
           )}
 
-          {conversations.length >= 10 && (
-            <div className="text-center py-3 px-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-              <p className="text-xs text-amber-700 dark:text-amber-300 font-medium">
-                {language === 'ar'
-                  ? '⚠️ وصلت للحد الأقصى (10 محادثات)'
-                  : '⚠️ Maximum reached (10 conversations)'
-                }
+          {isAtCapacity && (
+            <div className={`rounded-xl border px-3 py-3 ${allProtected ? 'border-[rgba(239,68,68,0.18)] bg-[rgba(239,68,68,0.07)]' : 'border-[rgba(245,158,11,0.24)] bg-[rgba(255,244,214,0.65)]'}`}>
+              <p className={`text-xs font-semibold ${allProtected ? 'text-red-700' : 'text-[hsl(25_95%_28%)]'}`}>
+                {allProtected
+                  ? (language === 'ar' ? `الحد ممتلئ (${MAX_CONVERSATIONS}/${MAX_CONVERSATIONS}) وكل المحادثات محفوظة` : `Library full (${MAX_CONVERSATIONS}/${MAX_CONVERSATIONS}) and all chats are saved`)
+                  : (language === 'ar' ? `وصلت إلى الحد الأقصى (${MAX_CONVERSATIONS} محادثة)` : `Maximum reached (${MAX_CONVERSATIONS} chats)`)}
               </p>
-              <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                {language === 'ar'
-                  ? 'المحادثات الجديدة ستحل محل الأقدم تلقائياً'
-                  : 'Oldest conversations are auto-removed for new ones'
-                }
+              <p className={`mt-1 text-xs ${allProtected ? 'text-red-600' : 'text-[hsl(25_95%_28%)]'}`}>
+                {allProtected
+                  ? (language === 'ar' ? 'لحفظ محادثة جديدة، احذف محادثة واحدة أو ألغِ حفظ واحدة أولاً.' : 'To keep a new chat, delete one saved chat or un-save one first.')
+                  : (language === 'ar' ? 'المحادثات غير المحفوظة فقط هي التي يمكن أن تُستبدل تلقائياً.' : 'Only non-saved chats can be auto-replaced now.')}
               </p>
             </div>
           )}
         </div>
       </ScrollArea>
+
+      <ConversationManagerDialog
+        open={!!managingConversation}
+        onOpenChange={(open) => {
+          if (!open) setManagingConversation(null);
+        }}
+        conversation={managingConversation}
+        onSave={handleSaveConversationMeta}
+        onDelete={handleDeleteConversation}
+      />
     </div>
   );
 }

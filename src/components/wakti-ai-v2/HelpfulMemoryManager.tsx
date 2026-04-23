@@ -107,6 +107,8 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
     collapsed: language === 'ar' ? 'عرض' : 'Show',
     expanded: language === 'ar' ? 'إخفاء' : 'Hide',
     tapToExpand: language === 'ar' ? 'اضغط لعرض التفاصيل' : 'Tap to view details',
+    viewDetails: language === 'ar' ? 'عرض التفاصيل' : 'View details',
+    lessDetails: language === 'ar' ? 'عرض أقل' : 'Show less',
   }), [language]);
 
   const layerLabel = useCallback((layer: HelpfulMemoryLayer) => labels.layer[layer], [labels]);
@@ -188,6 +190,10 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
       }
     });
   }, []);
+
+  useEffect(() => {
+    setExpandedItems({});
+  }, [activeTab]);
 
   const resetEditor = useCallback(() => {
     setEditorOpen(false);
@@ -350,53 +356,68 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
     const isExpanded = !!expandedItems[item.id] || isCandidate;
     const cardShell = isDark
       ? 'border-white/10 bg-[linear-gradient(135deg,rgba(12,15,20,0.92)_0%,rgba(30,41,59,0.92)_100%)] shadow-[0_6px_24px_rgba(0,0,0,0.28)]'
-      : 'border-[hsl(36_67%_81%/.65)] bg-[linear-gradient(135deg,rgba(252,254,253,0.98)_0%,rgba(245,241,235,0.98)_55%,rgba(252,254,253,0.98)_100%)] shadow-[0_10px_26px_rgba(6,5,65,0.08)]';
+      : 'border-[rgba(233,206,176,0.8)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99)_0%,rgba(252,254,253,0.99)_55%,rgba(247,241,232,0.96)_100%)] shadow-[0_12px_28px_rgba(6,5,65,0.08)]';
     const badgeClass = isDark
       ? 'border-transparent bg-white/10 text-[10px] text-slate-200 hover:bg-white/10'
-      : 'border-transparent bg-[rgba(6,5,65,0.08)] text-[10px] text-[hsl(243_84%_14%)] hover:bg-[rgba(6,5,65,0.08)]';
-    const summaryText = item.memoryText.length > 100 ? `${item.memoryText.slice(0, 100).trim()}…` : item.memoryText;
+      : 'border border-[rgba(6,5,65,0.08)] bg-[rgba(6,5,65,0.04)] text-[10px] text-[hsl(243_84%_14%)] hover:bg-[rgba(6,5,65,0.04)]';
+    const toggleClass = isDark
+      ? 'border-white/10 bg-white/5 text-slate-200 hover:bg-white/10'
+      : 'border-[rgba(6,5,65,0.1)] bg-white text-[hsl(243_84%_14%)] shadow-[0_4px_10px_rgba(6,5,65,0.06)] hover:bg-[rgba(6,5,65,0.03)]';
+    const ghostActionClass = isDark
+      ? 'border-white/10 bg-transparent text-slate-200 hover:bg-white/10'
+      : 'border-[rgba(6,5,65,0.1)] bg-white text-[hsl(243_84%_14%)] hover:bg-[rgba(6,5,65,0.03)]';
+    const deleteActionClass = isDark
+      ? 'border-red-400/20 bg-transparent text-red-200 hover:bg-red-500/10'
+      : 'border-red-200 bg-white text-red-700 hover:bg-red-50';
+    const previewClamp = !isExpanded ? 'overflow-hidden whitespace-nowrap text-ellipsis' : '';
+    const cardPadding = isExpanded ? 'p-3' : 'px-3 py-2.5';
+    const collapsedTextWidth = !isCandidate ? 'max-w-[calc(100%-104px)]' : '';
     return (
-      <div key={item.id} className={`rounded-2xl border p-3 transition-colors ${cardShell}`}>
-        <button
-          type="button"
-          onClick={() => toggleExpanded(item.id)}
-          className="flex w-full items-start justify-between gap-3 text-left"
-        >
-          <div className="min-w-0 flex-1">
-            <div className={`text-sm leading-relaxed ${isDark ? 'text-slate-100' : 'text-[hsl(243_84%_14%)]'}`}>
-              {isExpanded ? item.memoryText : summaryText}
+      <div key={item.id} className={`rounded-2xl border transition-colors ${cardPadding} ${cardShell}`}>
+        <div className={`flex justify-between gap-3 ${isExpanded ? 'items-start' : 'items-center'}`}>
+          <div className={`min-w-0 flex-1 ${collapsedTextWidth}`}>
+            <div className={`${isExpanded ? 'text-sm leading-7' : 'text-[15px] leading-6'} ${previewClamp} ${isDark ? 'text-slate-100' : 'text-[hsl(243_84%_14%)]'}`}>
+              {item.memoryText}
             </div>
-            {!isExpanded && (
-              <div className={`mt-1 text-[11px] ${isDark ? 'text-slate-400' : 'text-[hsl(243_20%_34%)]'}`}>
-                {labels.tapToExpand}
-              </div>
+          </div>
+          {!isCandidate && (
+            <button
+              type="button"
+              onClick={() => toggleExpanded(item.id)}
+              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${toggleClass}`}
+            >
+              <span>{isExpanded ? labels.lessDetails : labels.viewDetails}</span>
+              {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            </button>
+          )}
+        </div>
+        <div className={`flex flex-wrap items-center justify-between gap-2 ${isExpanded ? 'mt-3' : 'mt-2'}`}>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <Badge className={badgeClass}>
+              {layerLabel(item.layer)}
+            </Badge>
+            <Badge className={badgeClass}>
+              {item.source === 'auto_saved' ? labels.sourceAuto : item.source === 'user_confirmed' ? labels.sourceConfirmed : labels.sourceUser}
+            </Badge>
+            {item.sensitivity === 'careful' && (
+              <Badge className={isDark ? 'border-transparent bg-amber-400/15 text-[10px] text-amber-100 hover:bg-amber-400/15' : 'border border-[rgba(245,158,11,0.18)] bg-[rgba(245,158,11,0.12)] text-[10px] text-[hsl(25_95%_30%)] hover:bg-[rgba(245,158,11,0.12)]'}>
+                {labels.sensitive}
+              </Badge>
             )}
           </div>
-          <div className={`mt-0.5 flex items-center gap-1 text-[11px] ${isDark ? 'text-slate-300' : 'text-[hsl(243_60%_24%)]'}`}>
-            <span>{isExpanded ? labels.expanded : labels.collapsed}</span>
-            {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </div>
-        </button>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Badge className={badgeClass}>
-            {layerLabel(item.layer)}
-          </Badge>
-          <Badge className={badgeClass}>
-            {item.source === 'auto_saved' ? labels.sourceAuto : item.source === 'user_confirmed' ? labels.sourceConfirmed : labels.sourceUser}
-          </Badge>
-          {item.sensitivity === 'careful' && (
-            <Badge className={isDark ? 'border-transparent bg-amber-400/15 text-[10px] text-amber-100 hover:bg-amber-400/15' : 'border-transparent bg-[rgba(245,158,11,0.16)] text-[10px] text-[hsl(25_95%_35%)] hover:bg-[rgba(245,158,11,0.16)]'}>
-              {labels.sensitive}
+          {isCandidate && (
+            <Badge className={isDark ? 'border-transparent bg-emerald-500/15 text-[10px] text-emerald-100 hover:bg-emerald-500/15' : 'border border-[rgba(16,185,129,0.18)] bg-[rgba(16,185,129,0.10)] text-[10px] text-[hsl(160_80%_28%)] hover:bg-[rgba(16,185,129,0.10)]'}>
+              {labels.viewDetails}
             </Badge>
           )}
         </div>
         {isExpanded && isCandidate ? (
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button
               type="button"
               size="sm"
               onClick={() => handleApproveCandidate(item)}
-              className="h-8 rounded-xl bg-emerald-500 px-3 text-xs text-white hover:bg-emerald-600"
+              className="h-8 flex-1 rounded-xl bg-emerald-500 px-3 text-xs text-white hover:bg-emerald-600"
             >
               <Check className="mr-1 h-3.5 w-3.5" />
               {labels.remember}
@@ -406,20 +427,20 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
               size="sm"
               variant="outline"
               onClick={() => handleDismissCandidate(item)}
-              className="h-8 rounded-xl border-white/10 bg-transparent px-3 text-xs text-slate-200 hover:bg-white/10"
+              className={`h-8 flex-1 rounded-xl px-3 text-xs ${ghostActionClass}`}
             >
               <X className="mr-1 h-3.5 w-3.5" />
               {labels.dismiss}
             </Button>
           </div>
         ) : isExpanded ? (
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button
               type="button"
               size="sm"
               variant="outline"
               onClick={() => handleStartEdit(item)}
-              className="h-8 rounded-xl border-white/10 bg-transparent px-3 text-xs text-slate-200 hover:bg-white/10"
+              className={`h-8 flex-1 rounded-xl px-3 text-xs ${ghostActionClass}`}
             >
               <Pencil className="mr-1 h-3.5 w-3.5" />
               {labels.edit}
@@ -429,7 +450,7 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
               size="sm"
               variant="outline"
               onClick={() => handleDelete(item.id)}
-              className="h-8 rounded-xl border-red-400/20 bg-transparent px-3 text-xs text-red-200 hover:bg-red-500/10"
+              className={`h-8 flex-1 rounded-xl px-3 text-xs ${deleteActionClass}`}
             >
               <Trash2 className="mr-1 h-3.5 w-3.5" />
               {labels.delete}
@@ -444,11 +465,15 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
   const activeItems = grouped[activeTab];
   const panelShell = isDark
     ? 'border-white/10 bg-white/5'
-    : 'border-[rgba(233,206,176,0.95)] bg-[linear-gradient(135deg,rgba(252,254,253,0.98)_0%,rgba(247,244,238,0.98)_50%,rgba(252,254,253,0.98)_100%)] shadow-[0_16px_40px_rgba(6,5,65,0.08)]';
+    : 'border-[rgba(233,206,176,0.95)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99)_0%,rgba(252,254,253,0.99)_46%,rgba(248,244,236,0.98)_100%)] shadow-[0_16px_40px_rgba(6,5,65,0.08)]';
   const mutedText = isDark ? 'text-slate-300' : 'text-[hsl(243_20%_34%)]';
   const headingText = isDark ? 'text-slate-100' : 'text-[hsl(243_84%_14%)]';
-  const subtleShell = isDark ? 'border-white/10 bg-black/20' : 'border-[rgba(6,5,65,0.08)] bg-[rgba(6,5,65,0.04)]';
-  const tabShell = isDark ? 'border-white/10 bg-black/15' : 'border-[rgba(6,5,65,0.08)] bg-[rgba(6,5,65,0.05)]';
+  const subtleShell = isDark ? 'border-white/10 bg-black/20' : 'border-[rgba(6,5,65,0.08)] bg-white/92 shadow-[0_6px_18px_rgba(6,5,65,0.05)]';
+  const tabShell = isDark ? 'border-white/10 bg-black/15' : 'border-[rgba(6,5,65,0.08)] bg-white/94 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]';
+  const noticeShell = isDark ? 'border-amber-400/20 bg-amber-400/10 text-amber-100' : 'border-[rgba(245,158,11,0.24)] bg-[linear-gradient(180deg,rgba(255,250,240,0.98)_0%,rgba(255,244,214,0.95)_100%)] text-[hsl(25_95%_24%)]';
+  const quickSetupShell = isDark ? 'border-blue-400/20 bg-[linear-gradient(135deg,rgba(37,99,235,0.16)_0%,rgba(147,51,234,0.14)_100%)]' : 'border-[rgba(233,206,176,0.95)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99)_0%,rgba(250,246,239,0.98)_100%)] shadow-[0_14px_30px_rgba(6,5,65,0.07)]';
+  const primaryActionClass = isDark ? 'bg-blue-500 hover:bg-blue-600' : 'bg-[linear-gradient(135deg,#060541_0%,hsl(260_70%_25%)_55%,#060541_100%)] shadow-[0_10px_24px_rgba(6,5,65,0.18)] hover:brightness-110';
+  const secondaryActionClass = isDark ? 'border-white/10 bg-transparent text-slate-200 hover:bg-white/10' : 'border-[rgba(6,5,65,0.10)] bg-white text-[hsl(243_84%_14%)] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[rgba(6,5,65,0.03)]';
 
   return (
     <div className={`mt-2 rounded-2xl border p-3 text-foreground ${panelShell}`}>
@@ -467,7 +492,7 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
       </div>
 
       {!helpfulMemoryEnabled && (
-        <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+        <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${noticeShell}`}>
           {labels.memoryPaused}
         </div>
       )}
@@ -492,7 +517,7 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
       )}
 
       {capturePaused && helpfulMemoryEnabled && (
-        <div className="mt-2 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-100">
+        <div className={`mt-2 rounded-xl border px-3 py-2 text-[11px] ${noticeShell}`}>
           {language === 'ar'
             ? 'التقاط الذاكرة متوقف. يمكنك دائماً إضافة الذاكرة يدوياً من هنا.'
             : 'Capture is paused. You can still add memory manually here.'}
@@ -500,7 +525,7 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
       )}
 
       {helpfulMemoryEnabled && activeTab !== 'candidate' && (
-        <div className={`mt-3 rounded-2xl border p-3 ${isDark ? 'border-blue-400/20 bg-[linear-gradient(135deg,rgba(37,99,235,0.16)_0%,rgba(147,51,234,0.14)_100%)]' : 'border-[rgba(6,5,65,0.10)] bg-[linear-gradient(135deg,rgba(6,5,65,0.06)_0%,rgba(233,206,176,0.45)_100%)]'}`}>
+        <div className={`mt-3 rounded-2xl border p-3 ${quickSetupShell}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className={`text-sm font-semibold ${headingText}`}>{labels.quickSetupTitle}</div>
@@ -508,12 +533,12 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
             </div>
             <Sparkles className={`mt-0.5 h-4 w-4 shrink-0 ${isDark ? 'text-blue-300' : 'text-[hsl(243_84%_14%)]'}`} />
           </div>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 grid w-full grid-cols-2 gap-2">
             <Button
               type="button"
               size="sm"
               onClick={() => setProfileFormOpen((v) => !v)}
-              className={`h-8 rounded-xl px-3 text-xs text-white ${isDark ? 'bg-[linear-gradient(135deg,hsl(210,100%,65%)_0%,hsl(260,80%,65%)_50%,hsl(280,70%,65%)_100%)] shadow-[0_4px_16px_hsla(260,80%,65%,0.45)] hover:brightness-110' : 'bg-[linear-gradient(135deg,#060541_0%,hsl(260_70%_25%)_50%,#060541_100%)] shadow-[0_10px_24px_rgba(6,5,65,0.18)] hover:brightness-110'}`}
+              className={`h-8 w-full min-w-0 justify-center rounded-xl px-3 text-xs text-white ${isDark ? 'bg-[linear-gradient(135deg,hsl(210,100%,65%)_0%,hsl(260,80%,65%)_50%,hsl(280,70%,65%)_100%)] shadow-[0_4px_16px_hsla(260,80%,65%,0.45)] hover:brightness-110' : primaryActionClass}`}
             >
               <UserCog className="mr-1 h-3.5 w-3.5" />
               {labels.quickSetupAction}
@@ -523,10 +548,10 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
               size="sm"
               variant="outline"
               onClick={handleStartAdd}
-              className={`h-8 rounded-xl px-3 text-xs ${isDark ? 'border-white/10 bg-transparent text-slate-200 hover:bg-white/10' : 'border-[rgba(6,5,65,0.12)] bg-white/70 text-[hsl(243_84%_14%)] hover:bg-white'}`}
+              className={`h-8 w-full min-w-0 justify-center rounded-xl px-3 text-xs ${secondaryActionClass}`}
             >
               <Plus className="mr-1 h-3.5 w-3.5" />
-              {labels.addManually}
+              {labels.addButton}
             </Button>
           </div>
         </div>
@@ -543,7 +568,9 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
               onClick={() => setActiveTab(tab)}
               className={`flex-1 min-w-[22%] rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors ${
                 isActive
-                  ? 'bg-blue-500 text-white'
+                  ? isDark
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-[linear-gradient(135deg,#4f8df6_0%,#3b82f6_100%)] text-white shadow-[0_6px_16px_rgba(59,130,246,0.24)]'
                   : isDark
                     ? 'text-slate-200 hover:bg-white/5'
                     : 'text-[hsl(243_84%_14%)] hover:bg-[rgba(6,5,65,0.06)]'
@@ -552,7 +579,15 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
               {layerLabel(tab as HelpfulMemoryLayer)}
               {count > 0 && (
                 <span className={`ml-1 inline-block rounded-full px-1.5 py-0.5 text-[9px] ${
-                  isActive ? 'bg-white/25' : tab === 'candidate' ? 'bg-amber-400/30 text-amber-100' : 'bg-white/10'
+                  isActive
+                    ? 'bg-white/25'
+                    : tab === 'candidate'
+                      ? isDark
+                        ? 'bg-amber-400/30 text-amber-100'
+                        : 'bg-[rgba(245,158,11,0.16)] text-[hsl(25_95%_28%)]'
+                      : isDark
+                        ? 'bg-white/10'
+                        : 'bg-[rgba(6,5,65,0.08)] text-[hsl(243_84%_14%)]'
                 }`}>
                   {count}
                 </span>
@@ -562,23 +597,6 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
         })}
       </div>
 
-      {activeTab !== 'candidate' && (
-        <div className="mt-3 flex items-center justify-between gap-2">
-          <div className="text-[11px] text-blue-300">{isRefreshing ? labels.syncing : '\u00A0'}</div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleStartAdd}
-              className={`h-8 rounded-xl px-3 text-xs text-white ${isDark ? 'bg-blue-500 hover:bg-blue-600' : 'bg-[linear-gradient(135deg,#060541_0%,hsl(260_70%_25%)_50%,#060541_100%)] hover:brightness-110'}`}
-            >
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              {labels.addButton}
-            </Button>
-          </div>
-        </div>
-      )}
-
       {profileFormOpen && (
         <HelpfulMemoryProfileForm
           onSaved={handleProfileSaved}
@@ -587,7 +605,7 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
       )}
 
       {activeTab === 'candidate' && grouped.candidate.length > 0 && (
-        <div className="mt-3 rounded-xl border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-[11px] text-amber-100">
+        <div className={`mt-3 rounded-xl border px-3 py-2 text-[11px] ${noticeShell}`}>
           {labels.candidateHint}
         </div>
       )}

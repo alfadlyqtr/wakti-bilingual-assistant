@@ -5,6 +5,7 @@ import { onEvent } from '@/utils/eventBus';
 import { PersonalTouchManager } from './PersonalTouchManager';
 import { ConversationsList } from './ConversationsList';
 import { AIConversation } from '@/services/WaktiAIV2Service';
+import { ConversationMetaUpdate } from '@/services/SavedConversationsService';
 import { TalkBackSettings } from './TalkBackSettings';
 import { HelpfulMemoryManager } from './HelpfulMemoryManager';
 
@@ -15,7 +16,8 @@ interface ExtraPanelProps {
   onDeleteConversation: (id: string) => void;
   onRefresh: () => void;
   onClose: () => void;
-  onNewConversation: () => void;
+  onNewConversation: () => Promise<boolean> | boolean;
+  onUpdateConversationMeta: (id: string, updates: ConversationMetaUpdate) => Promise<void>;
   onClearChat: () => void;
   sessionMessages: any[];
   isLoading: boolean;
@@ -29,6 +31,7 @@ export function ExtraPanel({
   onRefresh,
   onClose,
   onNewConversation,
+  onUpdateConversationMeta,
   onClearChat,
   sessionMessages,
   isLoading
@@ -48,7 +51,13 @@ export function ExtraPanel({
     id: conv.id,
     title: conv.title,
     last_message_at: conv.lastMessageAt.toISOString(),
-    created_at: conv.createdAt.toISOString()
+    created_at: conv.createdAt.toISOString(),
+    message_count: (conv as any).message_count ?? (conv as any).messageCount ?? 0,
+    is_active: conv.is_active,
+    conversation_id: conv.conversation_id,
+    is_saved: conv.is_saved,
+    tags: conv.tags,
+    is_custom_title: conv.is_custom_title,
   }));
 
   return (
@@ -95,6 +104,7 @@ export function ExtraPanel({
               onRefresh={onRefresh}
               onClose={onClose}
               onNewConversation={onNewConversation}
+              onUpdateConversationMeta={onUpdateConversationMeta}
               onClearChat={onClearChat}
               sessionMessages={sessionMessages}
               isLoading={isLoading}

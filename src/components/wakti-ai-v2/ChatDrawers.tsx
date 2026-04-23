@@ -3,6 +3,7 @@ import { SideSheet } from "@/components/ui/side-sheet";
 import { ExtraPanel } from './ExtraPanel';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIConversation } from '@/services/WaktiAIV2Service';
+import { ConversationMetaUpdate } from '@/services/SavedConversationsService';
 
 interface ChatDrawersProps {
   showConversations: boolean;
@@ -16,7 +17,8 @@ interface ChatDrawersProps {
   activeTrigger: string;
   onTriggerChange: (trigger: string) => void;
   onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
-  onNewConversation: () => void;
+  onNewConversation: () => Promise<boolean> | boolean;
+  onUpdateConversationMeta: (id: string, updates: ConversationMetaUpdate) => Promise<void>;
   onClearChat: () => void;
   sessionMessages: any[];
   isLoading: boolean;
@@ -35,6 +37,7 @@ export function ChatDrawers({
   onTriggerChange,
   onTextGenerated,
   onNewConversation,
+  onUpdateConversationMeta,
   onClearChat,
   sessionMessages,
   isLoading
@@ -59,6 +62,7 @@ export function ChatDrawers({
           onRefresh={fetchConversations}
           onClose={() => setShowConversations(false)}
           onNewConversation={onNewConversation}
+          onUpdateConversationMeta={onUpdateConversationMeta}
           onClearChat={onClearChat}
           sessionMessages={sessionMessages}
           isLoading={isLoading}

@@ -100,6 +100,50 @@ export interface A4CreativeSettings {
   layout_pattern?: A4LayoutPattern | null;
 }
 
+export type A4InputMode = "content_ready" | "idea";
+
+export const A4_MAX_CHIPS_PER_SIDE = 6;
+
+export interface A4DecorChip {
+  id: string;
+  label_en: string;
+  label_ar: string;
+}
+
+// Universal decoration chip library (mirrors the backend list).
+export const A4_UNIVERSAL_DECOR_CHIPS: A4DecorChip[] = [
+  { id: "geometric_shapes", label_en: "geometric shapes", label_ar: "أشكال هندسية" },
+  { id: "botanical_leaves", label_en: "botanical leaves", label_ar: "أوراق نباتية" },
+  { id: "floral_accents", label_en: "floral accents", label_ar: "لمسات زهور" },
+  { id: "arabic_motifs", label_en: "arabic / islamic motifs", label_ar: "زخارف عربية" },
+  { id: "gold_foil", label_en: "gold foil accents", label_ar: "لمسات ذهبية" },
+  { id: "paper_texture", label_en: "soft paper texture", label_ar: "ملمس ورقي ناعم" },
+  { id: "watercolor_wash", label_en: "watercolor wash", label_ar: "رذاذ ألوان مائية" },
+  { id: "hand_drawn_lines", label_en: "hand-drawn lines", label_ar: "خطوط يدوية" },
+  { id: "ribbons_banners", label_en: "ribbons and banners", label_ar: "شرائط ولافتات" },
+  { id: "stars_sparkles", label_en: "stars and sparkles", label_ar: "نجوم وبريق" },
+  { id: "corner_ornaments", label_en: "corner ornaments", label_ar: "زخارف الزوايا" },
+  { id: "line_icons", label_en: "minimalist line icons", label_ar: "أيقونات خطية بسيطة" },
+  { id: "flat_illustrations", label_en: "flat illustrations", label_ar: "رسومات مسطحة" },
+  { id: "abstract_waves", label_en: "abstract waves", label_ar: "موجات تجريدية" },
+  { id: "dotted_dividers", label_en: "dotted dividers", label_ar: "فواصل منقطة" },
+  { id: "grid_background", label_en: "subtle grid background", label_ar: "خلفية شبكية خفيفة" },
+  { id: "confetti", label_en: "confetti accents", label_ar: "قصاصات احتفالية" },
+  { id: "paper_tape", label_en: "paper tape strips", label_ar: "شرائط ورقية" },
+  { id: "thread_connectors", label_en: "thread connectors", label_ar: "خيوط رابطة" },
+  { id: "callout_badges", label_en: "callout badges", label_ar: "شارات ملاحظات" },
+  { id: "soft_gradient", label_en: "soft color gradient", label_ar: "تدرج لوني ناعم" },
+  { id: "marble_accent", label_en: "marble accent", label_ar: "لمسة رخامية" },
+  { id: "vintage_stamps", label_en: "vintage stamps", label_ar: "طوابع قديمة" },
+  { id: "photographic_imagery", label_en: "photographic imagery", label_ar: "صور فوتوغرافية" },
+  { id: "3d_renders", label_en: "3d rendered elements", label_ar: "عناصر ثلاثية الأبعاد" },
+  { id: "cartoon_characters", label_en: "cartoon characters", label_ar: "شخصيات كرتونية" },
+  { id: "emoji_stickers", label_en: "emoji stickers", label_ar: "ملصقات إيموجي" },
+  { id: "neon_glow", label_en: "neon glow effects", label_ar: "إضاءة نيون" },
+  { id: "heavy_shadows", label_en: "heavy drop shadows", label_ar: "ظلال ثقيلة" },
+  { id: "grunge_texture", label_en: "grunge texture", label_ar: "ملمس خشن" },
+];
+
 export interface A4GenerateRequest {
   theme_id: string;
   purpose_id?: string | null;
@@ -110,6 +154,46 @@ export interface A4GenerateRequest {
   language_mode?: "en" | "ar" | "bilingual";
   design_settings?: A4DesignSettings | null;
   creative_settings?: A4CreativeSettings | null;
+  // --- Prompt Engineer controls --------------------------------------------
+  input_mode?: A4InputMode;
+  decorations_wanted?: string[];
+  decorations_unwanted?: string[];
+}
+
+export interface A4ExpandIdeaRequest {
+  theme_id: string;
+  purpose_id?: string | null;
+  idea_text: string;
+  language_mode?: "en" | "ar" | "bilingual";
+}
+
+export interface A4ExpandIdeaResponse {
+  success: boolean;
+  error?: string;
+  title?: string;
+  content?: string;
+}
+
+export async function expandIdea(
+  req: A4ExpandIdeaRequest,
+): Promise<A4ExpandIdeaResponse> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) return { success: false, error: "Not signed in" };
+
+  const resp = await supabase.functions.invoke<A4ExpandIdeaResponse>("a4-generate", {
+    body: {
+      mode: "expand",
+      theme_id: req.theme_id,
+      purpose_id: req.purpose_id ?? null,
+      idea_text: req.idea_text,
+      language_mode: req.language_mode ?? "en",
+      form_state: {}, // required by the interface even in expand mode
+    },
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (resp.error) return { success: false, error: resp.error.message };
+  return resp.data ?? { success: false, error: "Empty response" };
 }
 
 export interface A4FetchUrlResponse {

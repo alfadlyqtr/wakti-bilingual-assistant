@@ -46,6 +46,7 @@ interface ChatInputProps {
   setMessage: (message: string) => void;
   isLoading: boolean;
   sessionMessages: any[];
+  activeConversationTitle: string;
   onSendMessage: (message: string, trigger: string, files?: any[], imageMode?: undefined, imageQuality?: undefined, chatSubmode?: ChatSubmode, replyContext?: ReplyContext) => void;
   onClearChat: () => void;
   onOpenPlusDrawer: () => void;
@@ -69,6 +70,7 @@ export function ChatInput({
   setMessage,
   isLoading,
   sessionMessages,
+  activeConversationTitle,
   onSendMessage,
   onClearChat,
   onOpenPlusDrawer,
@@ -961,8 +963,8 @@ export function ChatInput({
             
             {/* Top row with all buttons - always visible (even during mobile keyboard) */}
             <div className="flex items-center justify-between px-3 pt-2 pb-0 isolate relative z-[200] pointer-events-auto">
-                {/* Left side: Extra + Modes + Quick Modes + Mode Badge (moved here) */}
-                <div className="flex items-center gap-2" >
+                {/* Left side: Extra + Modes + Active Chat */}
+                <div className="flex items-center gap-2 min-w-0" >
                   <button
                     onPointerUp={(e) => {
                       e.preventDefault();
@@ -1130,6 +1132,12 @@ export function ChatInput({
                         document.body
                       )}
                     </AnimatePresence>
+                  </div>
+
+                  <div className="min-w-0 max-w-[120px] sm:max-w-[170px] px-0.5">
+                    <span className="block truncate text-xs font-semibold tracking-[-0.01em] text-[hsl(243_40%_24%)] dark:text-white/75">
+                      {activeConversationTitle}
+                    </span>
                   </div>
                 </div>
 

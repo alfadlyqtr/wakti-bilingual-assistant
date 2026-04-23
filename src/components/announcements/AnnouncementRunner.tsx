@@ -25,10 +25,10 @@ export function AnnouncementRunner() {
 
   const isAdminRoute = useMemo(() => EXCLUDED_PREFIXES.some((p) => location.pathname.startsWith(p)), [location.pathname]);
 
-  const refreshPending = async () => {
+  const refreshPending = async (force = false) => {
     if (!user?.id) return;
     const now = Date.now();
-    if (now - lastFetchRef.current < 15_000) return;
+    if (!force && now - lastFetchRef.current < 15_000) return;
     lastFetchRef.current = now;
     try {
       const rows = await AnnouncementRuntime.getPending();
@@ -40,19 +40,30 @@ export function AnnouncementRunner() {
     if (loading || !user?.id) {
       setPending([]);
       setActive(null);
+      lastFetchRef.current = 0;
       return;
     }
-    refreshPending();
+    void refreshPending(true);
   }, [loading, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
-    const handler = () => refreshPending();
+    const handler = () => { void refreshPending(true); };
     window.addEventListener('focus', handler);
     document.addEventListener('visibilitychange', handler);
     return () => {
       window.removeEventListener('focus', handler);
       document.removeEventListener('visibilitychange', handler);
+    };
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const localUnsub = AnnouncementRuntime.onRefresh(() => { void refreshPending(true); });
+    const realtimeUnsub = AnnouncementRuntime.subscribe(user.id, () => { void refreshPending(true); });
+    return () => {
+      localUnsub();
+      realtimeUnsub();
     };
   }, [user?.id]);
 

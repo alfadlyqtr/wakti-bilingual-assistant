@@ -28,6 +28,12 @@ import {
   type A4CreativeSettings,
   type A4DesignSettings,
 } from "../_shared/a4-prompts.ts";
+import {
+  runPromptEngineer,
+  runIdeaExpand,
+  A4_MAX_CHIPS_PER_SIDE,
+  type A4InputMode,
+} from "../_shared/a4-prompt-engineer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,6 +51,14 @@ interface GenerateRequest {
   language_mode?: "en" | "ar" | "bilingual";
   design_settings?: A4DesignSettings | null;
   creative_settings?: A4CreativeSettings | null;
+  // --- Prompt Engineer controls (new) --------------------------------------
+  input_mode?: A4InputMode; // "content_ready" | "idea"
+  decorations_wanted?: string[];
+  decorations_unwanted?: string[];
+  // Special short-circuit: when mode="expand" we only run Gemini idea-expansion
+  // and return { title, content } without touching the DB or Kie.
+  mode?: "generate" | "expand";
+  idea_text?: string; // only used with mode="expand"
 }
 
 const KIE_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
@@ -282,6 +296,34 @@ serve(async (req) => {
     return json(400, { success: false, error: `Unknown theme_id: ${body.theme_id}` });
   }
 
+  // ---------------------------------------------------------------------------
+  // EXPAND MODE — just call Gemini idea-expansion and return { title, content }.
+  // No DB writes, no Kie dispatch. Used by the "I have just an idea" UI flow
+  // to produce an editable preview before generation.
+  // ---------------------------------------------------------------------------
+  if (body.mode === "expand") {
+    const idea = String(body.idea_text ?? "").trim();
+    if (!idea) {
+      return json(400, { success: false, error: "idea_text is required for expand mode" });
+    }
+    const languageMode: "en" | "ar" | "bilingual" =
+      body.language_mode === "ar" ? "ar" : body.language_mode === "bilingual" ? "bilingual" : "en";
+    const expanded = await runIdeaExpand({
+      idea,
+      language_mode: languageMode,
+      theme_name: theme.name_en,
+      purpose_id: body.purpose_id ?? null,
+    });
+    if (!expanded) {
+      return json(502, { success: false, error: "Idea expansion failed" });
+    }
+    return json(200, {
+      success: true,
+      title: expanded.title,
+      content: expanded.content,
+    });
+  }
+
   // Validate purpose chip if theme requires one
   const requiresPurpose =
     !!theme.purpose_chips && !theme.form_schema_common && !theme.form_schema;
@@ -365,6 +407,26 @@ serve(async (req) => {
     totalPages = splitPages.length as 1 | 2 | 3;
   }
 
+  // Sanitize decoration chips (cap at max per side, trim, filter empty/dupes)
+  const sanitizeChips = (arr: unknown): string[] => {
+    if (!Array.isArray(arr)) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const raw of arr) {
+      const v = String(raw ?? "").trim();
+      if (!v) continue;
+      const k = v.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(v);
+      if (out.length >= A4_MAX_CHIPS_PER_SIDE) break;
+    }
+    return out;
+  };
+  const decorWanted = sanitizeChips(body.decorations_wanted);
+  const decorUnwanted = sanitizeChips(body.decorations_unwanted);
+  const inputMode: A4InputMode = body.input_mode === "idea" ? "idea" : "content_ready";
+
   // Stash creative_settings + split pages inside form_state internal keys so
   // a4-callback can recompile pages 2+ without a schema change.
   const creativeSettings = body.creative_settings ?? null;
@@ -373,6 +435,9 @@ serve(async (req) => {
     __creative_settings__: creativeSettings,
     __split_pages__: splitPages,
     __language_mode__: detectedLanguage,
+    __decor_wanted__: decorWanted,
+    __decor_unwanted__: decorUnwanted,
+    __input_mode__: inputMode,
   };
 
   // --- Insert N placeholder rows ---------------------------------------------
@@ -413,8 +478,8 @@ serve(async (req) => {
   const page1Row = insertedRows.find((r) => r.page_number === 1);
   if (!page1Row) return json(500, { success: false, error: "Page 1 row missing" });
 
-  // --- Compile master prompt for page 1 (direct, no middleman) ---------------
-  const compiledPrompt = compileMasterPrompt({
+  // --- Compile master prompt for page 1 (deterministic baseline / fallback) --
+  const fallbackPrompt = compileMasterPrompt({
     theme,
     purposeId: body.purpose_id ?? null,
     formState,
@@ -428,6 +493,81 @@ serve(async (req) => {
     designSettings: designSettings,
     creativeSettings,
   });
+
+  // --- Prompt Engineer (Gemini) -- try to produce a tighter cinematic prompt.
+  // If it fails validation, we silently keep the deterministic fallback.
+  let compiledPrompt = fallbackPrompt;
+  let promptSource: "engineer" | "fallback" = "fallback";
+  try {
+    const page1Content = splitPages[0] ?? rawContent;
+    const titleHint = String(
+      (formState as any).project_title ??
+        (formState as any).report_title ??
+        (formState as any).event_name ??
+        (formState as any).title ??
+        (formState as any).subject ??
+        "",
+    ).trim();
+    const subjectHint = String(
+      (formState as any).subject ??
+        (formState as any).topic ??
+        (formState as any).event_name ??
+        (formState as any).report_title ??
+        (formState as any).title ??
+        "",
+    ).trim() || null;
+    const brandName = String(
+      (formState as any).company_name ??
+        (formState as any).business_name ??
+        (formState as any).issuer_name ??
+        "",
+    ).trim() || null;
+    const creativeSummary = creativeSettings
+      ? [
+          creativeSettings.visual_recipe,
+          creativeSettings.illustration_style,
+          creativeSettings.layout_pattern,
+          creativeSettings.background_treatment,
+          ...(creativeSettings.accent_elements ?? []),
+          ...(creativeSettings.content_components ?? []),
+        ]
+          .filter(Boolean)
+          .join(", ") || null
+      : null;
+
+    const engineered = await runPromptEngineer({
+      theme_id: theme.id,
+      theme_name: theme.name_en,
+      theme_style_summary: theme.style_block,
+      purpose_id: body.purpose_id ?? null,
+      document_type_hint: theme.name_en,
+      language_mode: detectedLanguage,
+      orientation: designSettings?.orientation ?? "portrait",
+      page_number: 1,
+      total_pages: totalPages,
+      input_mode: inputMode,
+      subject_hint: subjectHint,
+      title_hint: titleHint || null,
+      brand_name: brandName,
+      brand_colors: brandColors
+        ? { primary: brandColors.primary ?? null, secondary: brandColors.secondary ?? null }
+        : null,
+      content: page1Content,
+      decorations_wanted: decorWanted,
+      decorations_unwanted: decorUnwanted,
+      creative_summary: creativeSummary,
+      has_logo_reference: !!logoSignedUrl,
+    });
+    if (engineered?.final_prompt) {
+      compiledPrompt = engineered.final_prompt;
+      promptSource = "engineer";
+      console.log("[a4-generate] using Prompt Engineer output");
+    } else {
+      console.log("[a4-generate] Prompt Engineer invalid, using deterministic fallback");
+    }
+  } catch (e) {
+    console.warn("[a4-generate] Prompt Engineer threw, using fallback:", (e as Error).message);
+  }
 
   // Dispatch Kie createTask for page 1
   const callbackUrl = `${SUPABASE_URL}/functions/v1/a4-callback?batch_id=${batchId}&page=1`;
@@ -464,6 +604,7 @@ serve(async (req) => {
     suggested_pages: totalPages,
     detected_language: detectedLanguage,
     brand_colors: brandColors,
+    prompt_source: promptSource,
     notes: "",
   });
 });
