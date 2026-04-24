@@ -22,7 +22,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { generateGemini, buildVisionContent } from "../_shared/gemini.ts";
-import { findTheme, maxPagesForTheme } from "../_shared/a4-themes.ts";
+import { findTheme, maxPagesForTheme, themeRequiresPurpose } from "../_shared/a4-themes.ts";
 import {
   compileMasterPrompt,
   type A4CreativeSettings,
@@ -341,8 +341,7 @@ serve(async (req) => {
   }
 
   // Validate purpose chip if theme requires one
-  const requiresPurpose =
-    !!theme.purpose_chips && !theme.form_schema_common && !theme.form_schema;
+  const requiresPurpose = themeRequiresPurpose(theme);
   if (requiresPurpose) {
     if (!body.purpose_id) {
       return json(400, { success: false, error: "purpose_id is required for this theme" });

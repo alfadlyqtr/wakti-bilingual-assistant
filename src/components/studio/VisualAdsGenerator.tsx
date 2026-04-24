@@ -120,7 +120,7 @@ function StepContent({ step, activeStep, children }: { step: number; activeStep:
 }
 
 // What the ad is about — pick one chip
-const adTopicChips = [
+export const adTopicChips = [
   { id: 'new-launch',    label: '🚀 New Launch',          prompt: 'exciting new product launch' },
   { id: 'limited-offer', label: '⏰ Limited Offer',        prompt: 'limited-time offer, urgency' },
   { id: 'app-download',  label: '📱 App Download',         prompt: 'app download promotion' },
@@ -131,7 +131,7 @@ const adTopicChips = [
   { id: 'sale',          label: '🛍️ Sale / Discount',      prompt: 'sale or discount offer' },
 ];
 
-const mainMessageVariantMap: Record<string, Array<{ id: string; labelEn: string; labelAr: string; prompt: string }>> = {
+export const mainMessageVariantMap: Record<string, Array<{ id: string; labelEn: string; labelAr: string; prompt: string }>> = {
   'new-launch': [
     { id: 'hero-reveal', labelEn: 'Hero Reveal', labelAr: 'كشف البطل', prompt: 'Treat the campaign like a dramatic hero reveal with one big centerpiece moment.' },
     { id: 'future-wave', labelEn: 'Future Wave', labelAr: 'موجة مستقبلية', prompt: 'Make it feel futuristic, visionary, and ahead of its category.' },
@@ -175,7 +175,7 @@ const mainMessageVariantMap: Record<string, Array<{ id: string; labelEn: string;
 };
 
 // CTA chips
-const ctaChips = [
+export const ctaChips = [
   { id: 'download-now',   label: 'Download now' },
   { id: 'get-started',    label: 'Get started' },
   { id: 'shop-now',       label: 'Shop now' },
@@ -188,7 +188,7 @@ const ctaChips = [
 ];
 
 // Ad look & feel
-const adStyleChips = [
+export const adStyleChips = [
   { id: 'premium-dark',      label: '🌙 Sleek & Dark',       prompt: 'premium dark theme, elegant, high-contrast' },
   { id: 'bright-clean',      label: '☀️ Bright & Clean',     prompt: 'bright clean design, light background, fresh' },
   { id: 'bold-modern',       label: '⚡ Bold & Punchy',       prompt: 'bold modern design, high energy, strong typography' },
@@ -197,7 +197,7 @@ const adStyleChips = [
   { id: 'ugc',               label: '🎥 Natural / UGC',       prompt: 'organic UGC style, native social feed look' },
 ];
 
-const styleVariantMap: Record<string, Array<{ id: string; labelEn: string; labelAr: string; prompt: string }>> = {
+export const styleVariantMap: Record<string, Array<{ id: string; labelEn: string; labelAr: string; prompt: string }>> = {
   'premium-dark': [
     { id: 'luxury-noir', labelEn: 'Luxury Noir', labelAr: 'فخامة ليلية', prompt: 'Use noir-like premium drama, refined shadows, and luxury contrast.' },
     { id: 'cinematic-glow', labelEn: 'Cinematic Glow', labelAr: 'توهج سينمائي', prompt: 'Blend darkness with polished glow accents and cinematic mood lighting.' },

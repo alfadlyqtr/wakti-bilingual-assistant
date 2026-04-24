@@ -25,7 +25,14 @@ import {
 } from 'lucide-react';
 import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
 import type { UploadedFile } from '@/types/fileUpload';
-import VisualAdsGenerator, { type VisualAdsState } from '@/components/studio/VisualAdsGenerator';
+import VisualAdsGenerator, {
+  adStyleChips,
+  adTopicChips,
+  ctaChips,
+  mainMessageVariantMap,
+  styleVariantMap,
+  type VisualAdsState,
+} from '@/components/studio/VisualAdsGenerator';
 
 type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw' | 'visual-ads';
 
@@ -1244,6 +1251,21 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             const customTopic = normalizeShortValue(visualState.creativeSoul.customMainMessage);
             const customCta = normalizeShortValue(visualState.creativeSoul.customCta);
             const customStyle = normalizeShortValue(visualState.creativeSoul.customStyle);
+            const selectedTopicChip = visualState.creativeSoul.mainMessage && visualState.creativeSoul.mainMessage !== 'custom'
+              ? adTopicChips.find((chip) => chip.id === visualState.creativeSoul.mainMessage) || null
+              : null;
+            const selectedTopicVariant = visualState.creativeSoul.mainMessage && visualState.creativeSoul.mainMessage !== 'custom' && visualState.creativeSoul.mainMessageVariant
+              ? (mainMessageVariantMap[visualState.creativeSoul.mainMessage] || []).find((variant) => variant.id === visualState.creativeSoul.mainMessageVariant) || null
+              : null;
+            const selectedCtaChip = visualState.creativeSoul.cta && visualState.creativeSoul.cta !== 'custom'
+              ? ctaChips.find((chip) => chip.id === visualState.creativeSoul.cta) || null
+              : null;
+            const selectedStyleChip = visualState.creativeSoul.style && visualState.creativeSoul.style !== 'custom'
+              ? adStyleChips.find((chip) => chip.id === visualState.creativeSoul.style) || null
+              : null;
+            const selectedStyleVariant = visualState.creativeSoul.style && visualState.creativeSoul.style !== 'custom' && visualState.creativeSoul.styleVariant
+              ? (styleVariantMap[visualState.creativeSoul.style] || []).find((variant) => variant.id === visualState.creativeSoul.styleVariant) || null
+              : null;
 
             const MAX_VISUAL_AD_IMAGES = 14;
             const assetEntries = (visualState.assets || [])
@@ -1735,6 +1757,81 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 assetDirectives,
                 scenePlan,
               ].join('\n\n');
+              const visualAdsSpec = {
+                language: language === 'ar' ? 'ar' : 'en',
+                aspect_ratio: visualState.campaignDNA.platform || '1:1',
+                objective: normalizeShortValue(visualState.campaignDNA.objective) || null,
+                assets: taggedAssets.map((item, index) => ({
+                  source_id: getSourceId(index),
+                  image_ref: `Image ${index + 1}`,
+                  role: getAssetLabel(item.asset),
+                  custom_role: item.asset.customType || null,
+                  person_mode: item.asset.type === 'person' ? (item.asset.personMode || 'exact') : null,
+                  pose_mode: item.asset.type === 'person' && (item.asset.personMode || 'exact') === 'exact' ? (item.asset.exactPersonStyle || 'same-pose') : null,
+                  reference_style: item.asset.type === 'person' && item.asset.personMode === 'reference' ? (item.asset.referenceStyle || 'realistic') : null,
+                  logo_mode: item.asset.type === 'logo' ? (item.asset.logoMode || 'transparent') : null,
+                  screenshot_device: item.asset.type === 'screenshot' ? getScreenshotDevice(item.asset) : null,
+                })),
+                campaign: {
+                  main_message_id: visualState.creativeSoul.mainMessage || null,
+                  main_message_prompt: visualState.creativeSoul.mainMessage === 'custom'
+                    ? customTopic || null
+                    : selectedTopicChip?.prompt || null,
+                  main_message_custom_text: visualState.creativeSoul.mainMessage === 'custom' ? customTopic || null : null,
+                  main_message_detail_id: visualState.creativeSoul.mainMessageVariant || null,
+                  main_message_detail_prompt: selectedTopicVariant?.prompt || null,
+                  cta_id: visualState.creativeSoul.cta || null,
+                  cta_text: allowedText[0] || null,
+                  cta_prompt: selectedCtaChip?.label || null,
+                },
+                style: {
+                  primary_style_id: visualState.creativeSoul.style || null,
+                  primary_style_prompt: visualState.creativeSoul.style === 'custom'
+                    ? customStyle || null
+                    : selectedStyleChip?.prompt || null,
+                  primary_style_custom_text: visualState.creativeSoul.style === 'custom' ? customStyle || null : null,
+                  style_detail_id: visualState.creativeSoul.styleVariant || null,
+                  style_detail_prompt: selectedStyleVariant?.prompt || null,
+                },
+                composition: {
+                  layout_type: layoutType,
+                  primary_subjects: primarySubjects,
+                  secondary_subjects: secondarySubjects,
+                  background_source: backgroundAsset ? getSourceId(taggedAssets.indexOf(backgroundAsset)) : null,
+                  logo_source: logoAsset ? getSourceId(taggedAssets.indexOf(logoAsset)) : null,
+                  face_must_remain_visible: Boolean(personAsset),
+                  device_must_not_block_face: Boolean(personAsset && screenshotAsset),
+                  must_feel_unified: true,
+                },
+                text_policy: {
+                  allowed_text: allowedText,
+                  allow_generated_headline: false,
+                  allow_generated_tagline: false,
+                  allow_generated_social_proof_copy: false,
+                  allow_generated_testimonials: false,
+                },
+                hard_constraints: {
+                  must_follow_tagged_roles: true,
+                  must_preserve_exact_person_identity: hasExactPerson,
+                  must_preserve_logo_fidelity: hasLogo,
+                  must_preserve_screenshot_fidelity: hasScreenshot,
+                  must_preserve_background_identity: hasBackground,
+                  allow_invented_text: false,
+                  allow_invented_names: false,
+                  allow_invented_testimonials: false,
+                  hard_constraints_override_style: true,
+                  priority_order: [
+                    'exact_person_identity',
+                    'logo_fidelity',
+                    'screenshot_fidelity',
+                    'background_identity',
+                    'composition_clarity',
+                    'campaign_message',
+                    'style_polish',
+                  ],
+                },
+                legacy_prompt: finalPromptForKie,
+              };
               const validImages = sentAssets.map((item) => item.preparedImage);
 
               const { data: { session } } = await supabase.auth.getSession();
@@ -1751,6 +1848,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   generation_type: 'visual_ads',
                   images: validImages,
                   prompt: finalPromptForKie,
+                  visual_ads_spec: visualAdsSpec,
                   aspect_ratio: visualState.campaignDNA.platform,
                 }),
               });
@@ -1790,6 +1888,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                           stopProgress();
                           setResultImageUrl(finalUrl);
                           setResultUrls(row.result_urls || [finalUrl]);
+                          setIsSaved(true);
+                          setSavedBucketUrl(finalUrl);
+                          setSavedSourceUrl(finalUrl);
                           resolve();
                         });
                       } else {

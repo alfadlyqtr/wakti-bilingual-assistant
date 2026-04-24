@@ -159,7 +159,7 @@ function getHeaderBlock(
   };
   // For multi-page, page 2+ uses a slim running header
   if (pageNumber > 1) {
-    const title = String(formState.project_title ?? formState.report_title ?? formState.business_name ?? formState.company_name ?? formState.full_name ?? formState.card_title ?? formState.subject ?? formState.title ?? formState.event_name ?? "").trim();
+    const title = String(formState.project_title ?? formState.report_title ?? formState.poster_title ?? formState.business_name ?? formState.company_name ?? formState.full_name ?? formState.card_title ?? formState.subject ?? formState.course_name ?? formState.title ?? formState.event_name ?? "").trim();
     return `Slim running header only: document title "${title || "Document"}" aligned per language direction. No logo repetition needed unless it fits elegantly.`;
   }
 
@@ -170,30 +170,108 @@ function getHeaderBlock(
   // Theme-specific header assembly
   switch (theme.id) {
     case "official_exam": {
-      const school = String(formState.school_name ?? "").trim();
+      const school = String(formState.institution_name ?? formState.school_name ?? "").trim();
       const subject = String(formState.subject ?? "").trim();
       const grade = String(formState.grade ?? "").trim();
+      const level = String(formState.education_level ?? "").trim();
       const term = String(formState.term ?? "").trim();
       const duration = String(formState.duration ?? "").trim();
       const marks = String(formState.total_marks ?? "").trim();
+      const teacher = String(formState.teacher_name ?? "").trim();
+      const courseCode = String(formState.course_code ?? "").trim();
       const lblName = L("Name", "الاسم");
       const lblDate = L("Date", "التاريخ");
       const lblSubject = L("Subject", "المادة");
       const lblGrade = L("Grade", "الصف");
+      const lblLevel = L("Level", "المستوى");
       const lblTerm = L("Term", "الفصل");
       const lblDuration = L("Duration", "المدة");
       const lblMin = L("min", "دقيقة");
       const lblMarks = L("Total Marks", "الدرجة الكلية");
-      return `Header: ${logoClause} Top-center: school name "${school}". Meta row labels MUST be written exactly as follows (do NOT translate them to English): "${lblSubject}: ${subject}"${grade ? ` | "${lblGrade}: ${grade}"` : ""}${term ? ` | "${lblTerm}: ${term}"` : ""}. Top-right: two fill-in lines labeled "${lblName}" and "${lblDate}" with underlines for handwriting.${duration ? ` Also show "${lblDuration}: ${duration} ${lblMin}".` : ""}${marks ? ` Show "${lblMarks}: ${marks}".` : ""} CRITICAL: Every label in the header (name, date, subject, grade, term, duration, total marks) must render in the EXACT script shown above — never substitute with English words when the document language is Arabic.`;
+      const meta: string[] = [];
+      if (subject) meta.push(`"${lblSubject}: ${subject}"`);
+      if (grade) meta.push(`"${lblGrade}: ${grade}"`);
+      if (level && level !== grade) meta.push(`"${lblLevel}: ${level}"`);
+      if (term) meta.push(`"${lblTerm}: ${term}"`);
+      if (teacher) meta.push(`"${L("Teacher", "المعلم")}: ${teacher}"`);
+      if (courseCode) meta.push(`"${L("Course Code", "رمز المقرر")}: ${courseCode}"`);
+      return `Header: ${logoClause} Top-center: institution name "${school}". Meta row labels MUST be written exactly as follows in the active document language: ${meta.join(" | ") || `"${lblSubject}: ${subject || "..."}"`}. Top-right: fill-in lines labeled "${lblName}" and "${lblDate}" with underlines for handwriting when the layout is exam-like.${duration ? ` Also show "${lblDuration}: ${duration} ${lblMin}".` : ""}${marks ? ` Show "${lblMarks}: ${marks}".` : ""} CRITICAL: Every label in the header must render in the EXACT script selected above — never substitute English labels inside Arabic output.`;
     }
     case "school_project": {
-      const school = String(formState.school_name ?? "").trim();
+      const school = String(formState.institution_name ?? formState.school_name ?? "").trim();
       const student = String(formState.student_name ?? "").trim();
+      const studentId = String(formState.student_id ?? "").trim();
       const subject = String(formState.subject ?? "").trim();
       const grade = String(formState.grade ?? "").trim();
-      const title = String(formState.project_title ?? "").trim();
+      const level = String(formState.education_level ?? "").trim();
+      const faculty = String(formState.department_or_faculty ?? "").trim();
+      const supervisor = String(formState.teacher_or_supervisor ?? "").trim();
+      const title = String(formState.project_title ?? formState.__fallback_title__ ?? "").trim();
       const date = String(formState.submission_date ?? "").trim();
-      return `Header: ${logoClause} Large H1 title centered: "${title}". Meta row below title: "Student: ${student}${grade ? " | Grade: " + grade : ""}${subject ? " | Subject: " + subject : ""}${school ? " | " + school : ""}${date ? " | Date: " + date : ""}".`;
+      const meta = [
+        student ? `${L("Student", "الطالب")}: ${student}` : "",
+        studentId ? `${L("Student ID", "الرقم الجامعي")}: ${studentId}` : "",
+        grade ? `${L("Grade", "الصف")}: ${grade}` : "",
+        level && level !== grade ? `${L("Level", "المستوى")}: ${level}` : "",
+        subject ? `${L("Subject", "المادة")}: ${subject}` : "",
+        faculty ? `${L("Department", "القسم")}: ${faculty}` : "",
+        supervisor ? `${L("Supervisor", "المشرف")}: ${supervisor}` : "",
+        school,
+        date ? `${L("Date", "التاريخ")}: ${date}` : "",
+      ].filter(Boolean).join(" | ");
+      return `Header: ${logoClause} Large H1 title centered: "${title}". Meta row below title: "${meta}".`;
+    }
+    case "academic_report": {
+      const title = String(formState.title ?? formState.__fallback_title__ ?? "").trim();
+      const institution = String(formState.institution_name ?? "").trim();
+      const department = String(formState.department_or_faculty ?? "").trim();
+      const course = String(formState.course_name ?? "").trim();
+      const instructor = String(formState.instructor_name ?? "").trim();
+      const supervisor = String(formState.supervisor_name ?? "").trim();
+      const student = String(formState.student_name ?? "").trim();
+      const studentId = String(formState.student_id ?? "").trim();
+      const level = String(formState.education_level ?? "").trim();
+      const semester = String(formState.year_or_semester ?? "").trim();
+      const date = String(formState.submission_date ?? "").trim();
+      const meta = [
+        institution,
+        department,
+        course,
+        instructor ? `${L("Instructor", "المحاضر")}: ${instructor}` : "",
+        supervisor ? `${L("Supervisor", "المشرف")}: ${supervisor}` : "",
+        student ? `${L("Student", "الطالب")}: ${student}` : "",
+        studentId ? `${L("Student ID", "الرقم الجامعي")}: ${studentId}` : "",
+        level ? `${L("Level", "المستوى")}: ${level}` : "",
+        semester ? `${L("Semester", "الفصل الدراسي")}: ${semester}` : "",
+        date ? `${L("Date", "التاريخ")}: ${date}` : "",
+      ].filter(Boolean).join(" | ");
+      return `Header: ${logoClause} Academic title block with the main title "${title}". Secondary meta line: "${meta}".`;
+    }
+    case "study_handout": {
+      const topic = String(formState.topic ?? formState.__fallback_title__ ?? "").trim();
+      const course = String(formState.course_name ?? "").trim();
+      const teacher = String(formState.teacher_name ?? "").trim();
+      const grade = String(formState.grade ?? "").trim();
+      const level = String(formState.education_level ?? "").trim();
+      const focus = String(formState.focus_area ?? formState.session_title ?? formState.exam_scope ?? formState.formula_focus ?? "").trim();
+      const meta = [
+        course ? `${L("Course", "المقرر")}: ${course}` : "",
+        teacher ? `${L("Teacher", "المعلم")}: ${teacher}` : "",
+        grade ? `${L("Grade", "الصف")}: ${grade}` : "",
+        level && level !== grade ? `${L("Level", "المستوى")}: ${level}` : "",
+        focus ? `${L("Focus", "التركيز")}: ${focus}` : "",
+      ].filter(Boolean).join(" | ");
+      return `Header: ${logoClause} Clear study-handout title at the top: "${topic}".${meta ? ` Compact supporting meta row: "${meta}".` : ""}`;
+    }
+    case "research_poster": {
+      const title = String(formState.poster_title ?? formState.__fallback_title__ ?? "").trim();
+      const institution = String(formState.institution_name ?? "").trim();
+      const department = String(formState.department_or_faculty ?? "").trim();
+      const authors = String(formState.authors ?? "").trim();
+      const supervisor = String(formState.supervisor_name ?? "").trim();
+      const event = String(formState.event_name ?? formState.conference_name ?? "").trim();
+      const meta = [institution, department, authors, supervisor ? `${L("Supervisor", "المشرف")}: ${supervisor}` : "", event].filter(Boolean).join(" | ");
+      return `Header: ${logoClause} Large scientific poster title across the top: "${title}".${meta ? ` Author and affiliation line below: "${meta}".` : ""}`;
     }
     case "corporate_brief": {
       const company = String(formState.company_name ?? "").trim();
@@ -217,11 +295,12 @@ function getHeaderBlock(
     case "certificate": {
       const issuer = String(formState.issuer_name ?? "").trim();
       const recipient = String(formState.recipient_name ?? "").trim();
-      const achievement = String(formState.achievement ?? "").trim();
+      const achievement = String(formState.achievement ?? formState.program_name ?? formState.category_or_reason ?? "").trim();
+      const certTitle = String(formState.certificate_title ?? "").trim();
       const date = String(formState.issue_date ?? "").trim();
       const sigName = String(formState.signatory_name ?? "").trim();
       const sigTitle = String(formState.signatory_title ?? "").trim();
-      return `Layout: fully centered. Top: "${issuer}". Middle: an elegant "This is to certify that" line, then recipient name "${recipient}" rendered large and beautifully. Below: "${achievement}". Bottom-left: date "${date}". Bottom-right: signature line with "${sigName}${sigTitle ? ", " + sigTitle : ""}" beneath. ${logoClause ? "Logo or seal centered at the very bottom." : ""}`;
+      return `Layout: fully centered. Top: "${issuer}".${certTitle ? ` Prominent certificate title beneath the issuer: "${certTitle}".` : ""} Middle: an elegant "This is to certify that" line, then recipient name "${recipient}" rendered large and beautifully. Below: "${achievement}". Bottom-left: date "${date}". Bottom-right: signature line with "${sigName}${sigTitle ? ", " + sigTitle : ""}" beneath. ${logoClause ? "Logo or seal centered at the very bottom." : ""}`;
     }
     case "event_flyer": {
       const event = String(formState.event_name ?? "").trim();
@@ -236,7 +315,9 @@ function getHeaderBlock(
       const topic = String(formState.topic ?? "").trim();
       const student = String(formState.student_name ?? "").trim();
       const subject = String(formState.subject ?? "").trim();
-      return `Header: crisp paper-cut title card at top with the topic "${topic}". ${student || subject ? 'Small meta strip: "' + [student, subject].filter(Boolean).join(" | ") + '". ' : ""}${logoClause}`;
+      const institution = String(formState.institution_name ?? "").trim();
+      const level = String(formState.education_level ?? "").trim();
+      return `Header: crisp paper-cut title card at top with the topic "${topic}". ${student || subject || institution || level ? 'Small meta strip: "' + [student, subject, institution, level].filter(Boolean).join(" | ") + '". ' : ""}${logoClause}`;
     }
     case "comic_explainer": {
       const title = String(formState.title ?? "").trim();
@@ -285,7 +366,8 @@ function getHeaderBlock(
       const website = String(formState.website ?? "").trim();
       const linkedin = String(formState.linkedin ?? "").trim();
       const contactBits = [email, phone, location, website, linkedin].filter(Boolean).join(" | ");
-      return `Header: professional resume masthead. ${logoClause} Large candidate name "${fullName}" at top.${role ? ` Role subtitle directly beneath: "${role}".` : ""}${contactBits ? ` Compact contact row below: "${contactBits}".` : ""}`;
+      const summary = String(formState.summary ?? "").trim();
+      return `Header: professional resume masthead. ${logoClause} Large candidate name "${fullName}" at top.${role ? ` Role subtitle directly beneath: "${role}".` : ""}${contactBits ? ` Compact contact row below: "${contactBits}".` : ""}${summary ? ` Short professional summary preview immediately below the contact row.` : ""}`;
     }
     case "clean_minimal": {
       const title = String(formState.title ?? formState.event_name ?? formState.subject ?? "").trim();
@@ -561,7 +643,10 @@ const ELABORATION_FRIENDLY_THEMES = new Set<string>([
   "craft_infographic",
   "comic_explainer",
   "school_project",
-  "school_exam",
+  "official_exam",
+  "academic_report",
+  "study_handout",
+  "research_poster",
   "clean_minimal",
 ]);
 
@@ -675,10 +760,12 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   const entityName = String(
     formState.company_name
       ?? formState.business_name
+      ?? formState.institution_name
       ?? formState.school_name
       ?? formState.issuer_name
       ?? formState.sender_name
       ?? formState.full_name
+      ?? formState.poster_title
       ?? "",
   ).trim();
   const themeLabel = (theme as unknown as { name_en?: string }).name_en ?? "Document";

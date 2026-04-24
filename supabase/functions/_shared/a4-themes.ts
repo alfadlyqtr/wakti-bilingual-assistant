@@ -68,6 +68,13 @@ const FIELD_LOGO: A4FormField = {
   required: false,
 };
 
+const EDUCATION_LEVEL_OPTIONS = [
+  "School / مدرسة",
+  "High School / ثانوي",
+  "College / كلية",
+  "University / جامعة",
+];
+
 const FIELD_RAW_CONTENT = (label_en: string, label_ar: string, required = true): A4FormField => ({
   key: "raw_content",
   label_en,
@@ -80,66 +87,371 @@ const FIELD_RAW_CONTENT = (label_en: string, label_ar: string, required = true):
 // THEMES (12 themes)
 // -----------------------------------------------------------------------------
 
-export const A4_THEMES: A4Theme[] = [
+  export const A4_THEMES: A4Theme[] = [
   // 1. OFFICIAL SCHOOL EXAM -----------------------------------------------------
   {
     id: "official_exam",
-    name_en: "Official School Exam",
-    name_ar: "اختبار مدرسي رسمي",
+    name_en: "Academic Exam / Test",
+    name_ar: "اختبار / تقييم أكاديمي",
     aspect_ratio: "2:3",
     per_page_char_budget: 1800,
-    form_schema: [
-      { key: "school_name", label_en: "School Name", label_ar: "اسم المدرسة", type: "text", required: false },
-      { key: "subject", label_en: "Subject", label_ar: "المادة", type: "text", required: false },
-      { key: "grade", label_en: "Grade / Class", label_ar: "الصف", type: "text", required: false },
-      { key: "term", label_en: "Term / Semester", label_ar: "الفصل الدراسي", type: "text", required: false },
-      { key: "duration", label_en: "Duration (minutes)", label_ar: "المدة (دقائق)", type: "number", required: false },
-      { key: "total_marks", label_en: "Total Marks", label_ar: "الدرجة الكلية", type: "number", required: false },
+    purpose_chips: [
+      { id: "school", label_en: "School", label_ar: "مدرسة" },
+      { id: "high_school", label_en: "High School", label_ar: "ثانوي" },
+      { id: "college_university", label_en: "College / University", label_ar: "كلية / جامعة" },
+      { id: "worksheet", label_en: "Worksheet", label_ar: "ورقة عمل" },
+    ],
+    form_schema_common: [
+      { key: "institution_name", label_en: "Institution / School Name", label_ar: "اسم المؤسسة / المدرسة", type: "text", required: false },
+      { key: "education_level", label_en: "Education Level", label_ar: "المرحلة التعليمية", type: "select", options: EDUCATION_LEVEL_OPTIONS, required: false },
+      { key: "subject", label_en: "Subject / Course", label_ar: "المادة / المقرر", type: "text", required: false },
+      { key: "teacher_name", label_en: "Teacher / Instructor", label_ar: "المعلم / المدرس", type: "text", required: false },
       FIELD_LOGO,
       FIELD_BILINGUAL,
-      { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: false },
-      { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
-      { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
-      { key: "include_grading_circle", label_en: "Grading Circle", label_ar: "دائرة الدرجة", type: "toggle", default: true },
-      FIELD_RAW_CONTENT("Paste your questions here", "الصق الأسئلة هنا"),
     ],
+    form_schema_by_purpose: {
+      school: [
+        { key: "grade", label_en: "Grade / Class", label_ar: "الصف / الفصل", type: "text", required: false },
+        { key: "term", label_en: "Term / Semester", label_ar: "الفصل الدراسي", type: "text", required: false },
+        { key: "duration", label_en: "Duration (minutes)", label_ar: "المدة (دقائق)", type: "number", required: false },
+        { key: "total_marks", label_en: "Total Marks", label_ar: "الدرجة الكلية", type: "number", required: false },
+        { key: "instructions", label_en: "Exam Instructions", label_ar: "تعليمات الاختبار", type: "textarea", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: false },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_grading_circle", label_en: "Grading Circle", label_ar: "دائرة الدرجة", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste your questions here", "الصق الأسئلة هنا"),
+      ],
+      high_school: [
+        { key: "grade", label_en: "Grade / Level", label_ar: "الصف / المستوى", type: "text", required: false },
+        { key: "term", label_en: "Term / Semester", label_ar: "الفصل / الفصل الدراسي", type: "text", required: false },
+        { key: "duration", label_en: "Duration (minutes)", label_ar: "المدة (دقائق)", type: "number", required: false },
+        { key: "total_marks", label_en: "Total Marks", label_ar: "الدرجة الكلية", type: "number", required: false },
+        { key: "instructions", label_en: "Exam Instructions", label_ar: "تعليمات الاختبار", type: "textarea", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: false },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_grading_circle", label_en: "Grading Circle", label_ar: "دائرة الدرجة", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste your questions here", "الصق الأسئلة هنا"),
+      ],
+      college_university: [
+        { key: "grade", label_en: "Year / Level", label_ar: "السنة / المستوى", type: "text", required: false },
+        { key: "course_code", label_en: "Course Code", label_ar: "رمز المقرر", type: "text", required: false },
+        { key: "term", label_en: "Semester", label_ar: "الفصل الدراسي", type: "text", required: false },
+        { key: "duration", label_en: "Duration (minutes)", label_ar: "المدة (دقائق)", type: "number", required: false },
+        { key: "total_marks", label_en: "Total Marks", label_ar: "الدرجة الكلية", type: "number", required: false },
+        { key: "instructions", label_en: "Assessment Instructions", label_ar: "تعليمات التقييم", type: "textarea", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: false },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_grading_circle", label_en: "Grading Circle", label_ar: "دائرة الدرجة", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste your questions here", "الصق الأسئلة هنا"),
+      ],
+      worksheet: [
+        { key: "grade", label_en: "Grade / Level", label_ar: "الصف / المستوى", type: "text", required: false },
+        { key: "instructions", label_en: "Worksheet Instructions", label_ar: "تعليمات ورقة العمل", type: "textarea", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_grading_circle", label_en: "Grading Circle", label_ar: "دائرة الدرجة", type: "toggle", default: false },
+        FIELD_RAW_CONTENT("Paste your worksheet questions or practice content", "الصق أسئلة أو محتوى ورقة العمل"),
+      ],
+    },
     style_block:
-      "Official ministry-style exam paper aesthetic. Sharp black ink on pure white stock. Crisp vector ruled lines. Conservative, serious, print-ready — looks like a scanned or photocopied official test paper.",
+      "Formal academic assessment aesthetic. Sharp black ink on clean white stock, crisp vector ruled lines, disciplined spacing, and a serious print-ready feel suitable for school, high school, and university assessments.",
     layout_blueprint:
-      "Top zone: horizontal ruled header strip. Top-left: uploaded logo if provided. Top-center: school or ministry name. Top-right: two short ruled lines labeled 'Name' and 'Date' with generous space for handwriting. Directly below the header strip: a compact meta row showing subject, grade, term, duration, and total marks when provided. Body zone: numbered questions flow top-to-bottom with clear blank space beneath each for handwritten answers. Multiple-choice options render as a row of bordered checkboxes. Question spacing is generous so the page feels usable. Optional grading circle: when requested, bottom-right corner shows a bold circle containing '___ / 10' (or '___ / 100') with a small 'Final Grade' label above it.",
-    diagram_default_style: "clean vector schematic, black-and-white line art, labeled with leader lines",
+      "Top zone: structured assessment header strip. Top-left: uploaded logo if provided. Top-center: institution name. Top-right: fill-in name and date lines when the subtype is exam-like. Directly below: a compact meta row showing subject, grade or level, term or semester, duration, and total marks when provided. Body zone: numbered questions or worksheet tasks flow top-to-bottom with clear working space beneath each. Multiple-choice items use clean bordered boxes. Optional grading circle appears bottom-right only when requested.",
+    diagram_default_style: "clean vector schematic or instructional diagram, labeled with leader lines",
     chart_default_style: "clean 2D bar or line chart, minimal colors, clearly labeled axes",
-    search_aliases: ["exam", "test", "quiz", "school", "ministry", "امتحان", "اختبار"],
+    search_aliases: ["exam", "test", "quiz", "worksheet", "assessment", "school", "university", "امتحان", "اختبار"],
   },
 
   // 2. SCHOOL PROJECT / ESSAY --------------------------------------------------
   {
     id: "school_project",
-    name_en: "School Project / Essay",
-    name_ar: "مشروع مدرسي / مقال",
+    name_en: "Academic Project / Essay / Report",
+    name_ar: "مشروع / مقال / تقرير أكاديمي",
     aspect_ratio: "2:3",
     per_page_char_budget: 2000,
-    form_schema: [
-      { key: "school_name", label_en: "School Name", label_ar: "اسم المدرسة", type: "text", required: false },
+    purpose_chips: [
+      { id: "project", label_en: "Project", label_ar: "مشروع" },
+      { id: "essay", label_en: "Essay", label_ar: "مقال" },
+      { id: "report", label_en: "Report", label_ar: "تقرير" },
+      { id: "lab_report", label_en: "Lab Report", label_ar: "تقرير مختبر" },
+      { id: "diy_infographic", label_en: "DIY Infographic", label_ar: "إنفوجرافيك يدوي" },
+    ],
+    form_schema_common: [
+      { key: "institution_name", label_en: "Institution / School Name", label_ar: "اسم المؤسسة / المدرسة", type: "text", required: false },
+      { key: "education_level", label_en: "Education Level", label_ar: "المرحلة التعليمية", type: "select", options: EDUCATION_LEVEL_OPTIONS, required: false },
       { key: "student_name", label_en: "Student Name", label_ar: "اسم الطالب", type: "text", required: false },
-      { key: "grade", label_en: "Grade / Class", label_ar: "الصف", type: "text", required: false },
-      { key: "subject", label_en: "Subject", label_ar: "المادة", type: "text", required: false },
-      { key: "project_title", label_en: "Project Title", label_ar: "عنوان المشروع", type: "text", required: false },
+      { key: "student_id", label_en: "Student ID", label_ar: "الرقم الجامعي / التعريفي", type: "text", required: false },
+      { key: "grade", label_en: "Grade / Class / Year", label_ar: "الصف / الفصل / السنة", type: "text", required: false },
+      { key: "department_or_faculty", label_en: "Department / Faculty", label_ar: "القسم / الكلية", type: "text", required: false },
+      { key: "subject", label_en: "Subject / Course", label_ar: "المادة / المقرر", type: "text", required: false },
+      { key: "teacher_or_supervisor", label_en: "Teacher / Supervisor", label_ar: "المعلم / المشرف", type: "text", required: false },
       { key: "submission_date", label_en: "Submission Date", label_ar: "تاريخ التسليم", type: "date", required: false },
       FIELD_LOGO,
       FIELD_BILINGUAL,
-      { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
-      { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
-      { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
-      FIELD_RAW_CONTENT("Paste your project / essay content", "الصق محتوى المشروع"),
     ],
+    form_schema_by_purpose: {
+      project: [
+        { key: "project_title", label_en: "Project Title", label_ar: "عنوان المشروع", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: false },
+        FIELD_RAW_CONTENT("Paste your project content", "الصق محتوى المشروع"),
+      ],
+      essay: [
+        { key: "project_title", label_en: "Essay Title", label_ar: "عنوان المقال", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: false },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: false },
+        FIELD_RAW_CONTENT("Paste your essay content", "الصق محتوى المقال"),
+      ],
+      report: [
+        { key: "project_title", label_en: "Report Title", label_ar: "عنوان التقرير", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste your report content", "الصق محتوى التقرير"),
+      ],
+      lab_report: [
+        { key: "project_title", label_en: "Lab Report Title", label_ar: "عنوان تقرير المختبر", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste your lab report content", "الصق محتوى تقرير المختبر"),
+      ],
+      diy_infographic: [
+        { key: "project_title", label_en: "Infographic Title", label_ar: "عنوان الإنفوجرافيك", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: false },
+        FIELD_RAW_CONTENT("Paste your infographic content", "الصق محتوى الإنفوجرافيك"),
+      ],
+    },
     style_block:
-      "Student-friendly educational document aesthetic. Clean white background, warm approachable feel, accent color drawn from the logo or soft blue by default. Modern sans-serif typography. Feels like a polished school project ready for submission, ages 10 through 18.",
+      "Polished academic submission aesthetic. Clean white background, calm accent color, modern sans-serif typography, and structured sections suited to school through university coursework.",
     layout_blueprint:
-      "Top zone: large H1 project title centered. Compact meta row directly below in lighter weight showing student name, grade, subject, school, and submission date — separated by thin vertical dividers, only fields that were provided appear. Body zone: section headings rendered with a thin colored underline rule, followed by body paragraphs at comfortable reading size and generous line-height. Optional diagram centered between two sections with clean leader-line labels, friendly illustrated style. Lower zone: concluding paragraph flows naturally into the footer.",
+      "Top zone: large H1 title centered. Compact meta row directly below in lighter weight showing student name, student ID, grade or year, subject or course, institution, supervisor, and submission date — only fields that exist appear. Body zone: section headings use thin accent underlines, body paragraphs have generous line-height, and optional diagrams, charts, or tables sit between logical sections. Lower zone: conclusion or final takeaway flows naturally toward the footer.",
     diagram_default_style: "friendly illustrated style, clean outlines, light fills, clearly labeled",
     chart_default_style: "friendly bar or line chart with soft accent colors",
-    search_aliases: ["project", "essay", "homework", "assignment", "مقال", "مشروع"],
+    search_aliases: ["project", "essay", "report", "assignment", "lab", "homework", "مقال", "مشروع", "تقرير"],
+  },
+
+  {
+    id: "academic_report",
+    name_en: "Academic Report / University Work",
+    name_ar: "تقرير أكاديمي / عمل جامعي",
+    aspect_ratio: "2:3",
+    per_page_char_budget: 1900,
+    purpose_chips: [
+      { id: "essay", label_en: "Essay", label_ar: "مقال" },
+      { id: "report", label_en: "Report", label_ar: "تقرير" },
+      { id: "lab_report", label_en: "Lab Report", label_ar: "تقرير مختبر" },
+      { id: "research_summary", label_en: "Research Summary", label_ar: "ملخص بحث" },
+      { id: "case_study", label_en: "Case Study", label_ar: "دراسة حالة" },
+    ],
+    form_schema_common: [
+      { key: "institution_name", label_en: "Institution", label_ar: "اسم المؤسسة", type: "text", required: false },
+      { key: "department_or_faculty", label_en: "Department / Faculty", label_ar: "القسم / الكلية", type: "text", required: false },
+      { key: "course_name", label_en: "Course Name", label_ar: "اسم المقرر", type: "text", required: false },
+      { key: "instructor_name", label_en: "Instructor / Professor", label_ar: "المحاضر / الأستاذ", type: "text", required: false },
+      { key: "supervisor_name", label_en: "Supervisor", label_ar: "المشرف", type: "text", required: false },
+      { key: "student_name", label_en: "Student Name", label_ar: "اسم الطالب", type: "text", required: false },
+      { key: "student_id", label_en: "Student ID", label_ar: "الرقم الجامعي", type: "text", required: false },
+      { key: "education_level", label_en: "Education Level", label_ar: "المرحلة التعليمية", type: "select", options: EDUCATION_LEVEL_OPTIONS, required: false },
+      { key: "year_or_semester", label_en: "Year / Semester", label_ar: "السنة / الفصل", type: "text", required: false },
+      { key: "submission_date", label_en: "Submission Date", label_ar: "تاريخ التسليم", type: "date", required: false },
+      FIELD_LOGO,
+      FIELD_BILINGUAL,
+    ],
+    form_schema_by_purpose: {
+      essay: [
+        { key: "title", label_en: "Essay Title", label_ar: "عنوان المقال", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: false },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: false },
+        FIELD_RAW_CONTENT("Paste your essay content", "الصق محتوى المقال"),
+      ],
+      report: [
+        { key: "title", label_en: "Report Title", label_ar: "عنوان التقرير", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste your report content", "الصق محتوى التقرير"),
+      ],
+      lab_report: [
+        { key: "title", label_en: "Lab Report Title", label_ar: "عنوان تقرير المختبر", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste your lab report content", "الصق محتوى تقرير المختبر"),
+      ],
+      research_summary: [
+        { key: "title", label_en: "Research Summary Title", label_ar: "عنوان ملخص البحث", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste your research summary content", "الصق محتوى ملخص البحث"),
+      ],
+      case_study: [
+        { key: "title", label_en: "Case Study Title", label_ar: "عنوان دراسة الحالة", type: "text", required: false },
+        { key: "case_subject", label_en: "Case Subject / Organization", label_ar: "موضوع / جهة الحالة", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste your case study content", "الصق محتوى دراسة الحالة"),
+      ],
+    },
+    style_block:
+      "University-grade report aesthetic. Crisp academic typography, restrained accent color, strong section hierarchy, and professional whitespace that feels like a polished coursework or research submission.",
+    layout_blueprint:
+      "Top zone: centered or left-aligned academic title block with institution, department, course, instructor, student, and submission meta when provided. Body zone: section-led composition with clear headings and optional diagrams, tables, or charts placed beside or beneath relevant sections. Footer remains minimal and unobtrusive.",
+    diagram_default_style: "clean academic explanatory diagram with precise labels",
+    chart_default_style: "clean academic chart with subtle gridlines and clear labels",
+    search_aliases: ["academic", "university", "college", "report", "research", "case study", "جامعة", "كلية", "بحث", "تقرير"],
+  },
+
+  {
+    id: "study_handout",
+    name_en: "Study Sheet / Handout",
+    name_ar: "ورقة دراسة / مذكرة",
+    aspect_ratio: "2:3",
+    per_page_char_budget: 1200,
+    purpose_chips: [
+      { id: "study_sheet", label_en: "Study Sheet", label_ar: "ورقة دراسة" },
+      { id: "lecture_handout", label_en: "Lecture Handout", label_ar: "مذكرة محاضرة" },
+      { id: "revision_guide", label_en: "Revision Guide", label_ar: "دليل مراجعة" },
+      { id: "cheat_sheet", label_en: "Cheat Sheet", label_ar: "ورقة تلخيص" },
+    ],
+    form_schema_common: [
+      { key: "topic", label_en: "Topic", label_ar: "الموضوع", type: "text", required: false },
+      { key: "course_name", label_en: "Subject / Course", label_ar: "المادة / المقرر", type: "text", required: false },
+      { key: "teacher_name", label_en: "Teacher / Lecturer", label_ar: "المعلم / المحاضر", type: "text", required: false },
+      { key: "education_level", label_en: "Education Level", label_ar: "المرحلة التعليمية", type: "select", options: EDUCATION_LEVEL_OPTIONS, required: false },
+      { key: "grade", label_en: "Grade / Level", label_ar: "الصف / المستوى", type: "text", required: false },
+      FIELD_LOGO,
+      FIELD_BILINGUAL,
+    ],
+    form_schema_by_purpose: {
+      study_sheet: [
+        { key: "focus_area", label_en: "Focus Area", label_ar: "محور التركيز", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste the study sheet content", "الصق محتوى ورقة الدراسة"),
+      ],
+      lecture_handout: [
+        { key: "session_title", label_en: "Lecture / Session Title", label_ar: "عنوان المحاضرة / الجلسة", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste the handout content", "الصق محتوى المذكرة"),
+      ],
+      revision_guide: [
+        { key: "exam_scope", label_en: "Exam / Revision Scope", label_ar: "نطاق الاختبار / المراجعة", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste the revision guide content", "الصق محتوى دليل المراجعة"),
+      ],
+      cheat_sheet: [
+        { key: "formula_focus", label_en: "Key Formulas / Rules", label_ar: "القواعد / المعادلات الرئيسية", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste the cheat sheet content", "الصق محتوى ورقة التلخيص"),
+      ],
+    },
+    style_block:
+      "Clear study-aid aesthetic. Structured learning blocks, crisp headings, soft accent highlights, and highly scannable academic typography designed for quick revision and classroom use.",
+    layout_blueprint:
+      "Top zone: topic title with small course and level metadata. Body zone: compact instructional sections, summary cards, comparison tables, and optional diagrams arranged for fast scanning. Keep the layout tidy, legible, and classroom-friendly.",
+    diagram_default_style: "clean instructional diagram with simple labels and calm color accents",
+    chart_default_style: "simple study-friendly chart with clear labels and restrained colors",
+    search_aliases: ["study", "handout", "revision", "cheat sheet", "notes", "مذكرة", "مراجعة", "ملخص"],
+  },
+
+  {
+    id: "research_poster",
+    name_en: "Research Poster / Scientific Poster",
+    name_ar: "ملصق بحثي / علمي",
+    aspect_ratio: "3:4",
+    per_page_char_budget: 900,
+    max_pages_override: 1,
+    purpose_chips: [
+      { id: "science_fair", label_en: "School Science Fair", label_ar: "معرض علوم مدرسي" },
+      { id: "university_research", label_en: "University Research", label_ar: "بحث جامعي" },
+      { id: "project_showcase", label_en: "Project Showcase", label_ar: "عرض مشروع" },
+      { id: "conference_poster", label_en: "Conference Poster", label_ar: "ملصق مؤتمر" },
+    ],
+    form_schema_common: [
+      { key: "poster_title", label_en: "Poster Title", label_ar: "عنوان الملصق", type: "text", required: false },
+      { key: "institution_name", label_en: "Institution", label_ar: "اسم المؤسسة", type: "text", required: false },
+      { key: "department_or_faculty", label_en: "Department / Faculty", label_ar: "القسم / الكلية", type: "text", required: false },
+      { key: "authors", label_en: "Author(s)", label_ar: "الباحث / الباحثون", type: "text", required: false },
+      { key: "supervisor_name", label_en: "Supervisor", label_ar: "المشرف", type: "text", required: false },
+      { key: "education_level", label_en: "Education Level", label_ar: "المرحلة التعليمية", type: "select", options: EDUCATION_LEVEL_OPTIONS, required: false },
+      FIELD_LOGO,
+      FIELD_BILINGUAL,
+    ],
+    form_schema_by_purpose: {
+      science_fair: [
+        { key: "event_name", label_en: "Fair / Event Name", label_ar: "اسم المعرض / الفعالية", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste the poster abstract, methods, and findings", "الصق الملخص والمنهجية والنتائج"),
+      ],
+      university_research: [
+        { key: "research_area", label_en: "Research Area", label_ar: "مجال البحث", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste the research poster content", "الصق محتوى الملصق البحثي"),
+      ],
+      project_showcase: [
+        { key: "project_title", label_en: "Project Name", label_ar: "اسم المشروع", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste the project showcase content", "الصق محتوى عرض المشروع"),
+      ],
+      conference_poster: [
+        { key: "conference_name", label_en: "Conference Name", label_ar: "اسم المؤتمر", type: "text", required: false },
+        { key: "event_date", label_en: "Conference Date", label_ar: "تاريخ المؤتمر", type: "text", required: false },
+        { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+        { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+        { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: true },
+        { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: true },
+        FIELD_RAW_CONTENT("Paste the conference poster content", "الصق محتوى ملصق المؤتمر"),
+      ],
+    },
+    style_block:
+      "Scientific poster aesthetic. Crisp academic typography, strong section headers, balanced data visuals, and a polished conference-ready composition that remains legible at a glance.",
+    layout_blueprint:
+      "Top zone: large poster title with institution, authors, and supervisor. Body zone: poster blocks arranged in a clean grid for abstract, methods, findings, visuals, and conclusion. Charts, tables, and diagrams should feel integrated, not decorative. Footer remains light.",
+    diagram_default_style: "scientific explanatory figure with clear labels and professional color use",
+    chart_default_style: "conference-style chart with crisp axes, legend, and restrained palette",
+    search_aliases: ["poster", "research", "scientific", "conference", "science fair", "ملصق", "بحث", "علمي"],
   },
 
   // 3. CORPORATE BRIEF / REPORT ------------------------------------------------
@@ -204,9 +516,10 @@ export const A4_THEMES: A4Theme[] = [
     per_page_char_budget: 400,
     max_pages_override: 1,
     purpose_chips: [
-      { id: "school", label_en: "School", label_ar: "مدرسي" },
-      { id: "work", label_en: "Work", label_ar: "عمل" },
-      { id: "personal", label_en: "Personal", label_ar: "شخصي" },
+      { id: "academic", label_en: "Academic", label_ar: "أكاديمي" },
+      { id: "training", label_en: "Training", label_ar: "تدريب" },
+      { id: "achievement_award", label_en: "Achievement", label_ar: "إنجاز" },
+      { id: "completion", label_en: "Completion", label_ar: "إتمام" },
     ],
     form_schema_common: [
       { key: "issuer_name", label_en: "Issuing Organization", label_ar: "الجهة المانحة", type: "text", required: false },
@@ -218,11 +531,37 @@ export const A4_THEMES: A4Theme[] = [
       { key: "logo", label_en: "Logo / Seal", label_ar: "الشعار / الختم", type: "image", required: false },
       FIELD_BILINGUAL,
     ],
+    form_schema_by_purpose: {
+      academic: [
+        { key: "certificate_title", label_en: "Certificate Title", label_ar: "عنوان الشهادة", type: "text", required: false },
+        { key: "program_name", label_en: "Program / Course", label_ar: "البرنامج / الدورة", type: "text", required: false },
+        { key: "education_level", label_en: "Education Level", label_ar: "المرحلة التعليمية", type: "select", options: EDUCATION_LEVEL_OPTIONS, required: false },
+        { key: "grade_or_result", label_en: "Grade / Result", label_ar: "النتيجة / التقدير", type: "text", required: false },
+        { key: "certificate_id", label_en: "Certificate ID", label_ar: "رقم الشهادة", type: "text", required: false },
+      ],
+      training: [
+        { key: "certificate_title", label_en: "Certificate Title", label_ar: "عنوان الشهادة", type: "text", required: false },
+        { key: "program_name", label_en: "Training Name", label_ar: "اسم التدريب", type: "text", required: false },
+        { key: "hours_completed", label_en: "Hours Completed", label_ar: "عدد الساعات", type: "text", required: false },
+        { key: "certificate_id", label_en: "Certificate ID", label_ar: "رقم الشهادة", type: "text", required: false },
+      ],
+      achievement_award: [
+        { key: "certificate_title", label_en: "Award Title", label_ar: "عنوان الجائزة", type: "text", required: false },
+        { key: "category_or_reason", label_en: "Category / Reason", label_ar: "الفئة / السبب", type: "text", required: false },
+        { key: "certificate_id", label_en: "Award ID", label_ar: "رقم الجائزة", type: "text", required: false },
+      ],
+      completion: [
+        { key: "certificate_title", label_en: "Completion Title", label_ar: "عنوان الإتمام", type: "text", required: false },
+        { key: "program_name", label_en: "Program Name", label_ar: "اسم البرنامج", type: "text", required: false },
+        { key: "hours_completed", label_en: "Hours Completed", label_ar: "عدد الساعات", type: "text", required: false },
+        { key: "certificate_id", label_en: "Completion ID", label_ar: "رقم الإتمام", type: "text", required: false },
+      ],
+    },
     style_block:
       "Award-grade ceremonial certificate aesthetic. Cream or pearl-white stock, thin gold or navy ornamental hairline border, calligraphic display typography on the recipient name. Premium, frame-worthy, feels like a formal diploma.",
     layout_blueprint:
       "Entire page is a fully centered single-column composition. Thin ornamental border (gold or navy hairline) frames the page inside the margins. Top zone: issuing organization name or logo, centered. Upper middle: italic phrase 'This is to certify that' (or the Arabic equivalent when language is Arabic). Center zone: recipient name rendered hero-size, elegant and prominent. Directly below recipient: achievement description line in graceful body type. Lower zone: issue date on the left, signature line on the right with the signatory name and title beneath. Bottom center: seal or logo small and centered.",
-    search_aliases: ["certificate", "diploma", "award", "achievement", "شهادة", "تكريم"],
+    search_aliases: ["certificate", "diploma", "award", "achievement", "training", "completion", "شهادة", "تكريم"],
   },
 
   // 5. EVENT FLYER / POSTER ----------------------------------------------------
@@ -260,36 +599,62 @@ export const A4_THEMES: A4Theme[] = [
   // 6. CRAFT INFOGRAPHIC -------------------------------------------------------
   {
     id: "craft_infographic",
-    name_en: "Craft Infographic",
-    name_ar: "إنفوجرافيك يدوي",
+    name_en: "Craft / Visual Infographic",
+    name_ar: "إنفوجرافيك يدوي / مرئي",
     aspect_ratio: "2:3",
     per_page_char_budget: 800,
     purpose_chips: [
-      { id: "school", label_en: "School Project", label_ar: "مشروع مدرسي" },
+      { id: "school", label_en: "School", label_ar: "مدرسة" },
+      { id: "high_school", label_en: "High School", label_ar: "ثانوي" },
+      { id: "college_university", label_en: "College / University", label_ar: "كلية / جامعة" },
       { id: "work", label_en: "Work", label_ar: "عمل" },
       { id: "personal", label_en: "Personal", label_ar: "شخصي" },
     ],
+    form_schema_common: [
+      { key: "topic", label_en: "Topic", label_ar: "الموضوع", type: "text", required: false },
+      { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: true },
+      { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
+      { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
+      { key: "include_table", label_en: "Include Table", label_ar: "تضمين جدول", type: "toggle", default: false },
+      FIELD_LOGO,
+      FIELD_BILINGUAL,
+    ],
     form_schema_by_purpose: {
       school: [
-        { key: "school_name", label_en: "School Name", label_ar: "اسم المدرسة", type: "text", required: false },
+        { key: "institution_name", label_en: "School Name", label_ar: "اسم المدرسة", type: "text", required: false },
         { key: "student_name", label_en: "Student Name", label_ar: "اسم الطالب", type: "text", required: false },
+        { key: "grade", label_en: "Grade / Class", label_ar: "الصف / الفصل", type: "text", required: false },
         { key: "subject", label_en: "Subject", label_ar: "المادة", type: "text", required: false },
-        { key: "topic", label_en: "Topic", label_ar: "الموضوع", type: "text", required: false },
-        FIELD_BILINGUAL,
+        { key: "teacher_or_supervisor", label_en: "Teacher", label_ar: "المعلم", type: "text", required: false },
+        { key: "education_level", label_en: "Education Level", label_ar: "المرحلة التعليمية", type: "select", options: EDUCATION_LEVEL_OPTIONS, required: false },
+        FIELD_RAW_CONTENT("Explain the topic in your own words", "اشرح الموضوع بأسلوبك"),
+      ],
+      high_school: [
+        { key: "institution_name", label_en: "School Name", label_ar: "اسم المدرسة", type: "text", required: false },
+        { key: "student_name", label_en: "Student Name", label_ar: "اسم الطالب", type: "text", required: false },
+        { key: "grade", label_en: "Grade / Level", label_ar: "الصف / المستوى", type: "text", required: false },
+        { key: "subject", label_en: "Subject", label_ar: "المادة", type: "text", required: false },
+        { key: "teacher_or_supervisor", label_en: "Teacher", label_ar: "المعلم", type: "text", required: false },
+        { key: "education_level", label_en: "Education Level", label_ar: "المرحلة التعليمية", type: "select", options: EDUCATION_LEVEL_OPTIONS, required: false },
+        FIELD_RAW_CONTENT("Explain the topic in your own words", "اشرح الموضوع بأسلوبك"),
+      ],
+      college_university: [
+        { key: "institution_name", label_en: "Institution", label_ar: "اسم المؤسسة", type: "text", required: false },
+        { key: "student_name", label_en: "Student Name", label_ar: "اسم الطالب", type: "text", required: false },
+        { key: "student_id", label_en: "Student ID", label_ar: "الرقم الجامعي", type: "text", required: false },
+        { key: "department_or_faculty", label_en: "Department / Faculty", label_ar: "القسم / الكلية", type: "text", required: false },
+        { key: "subject", label_en: "Course", label_ar: "المقرر", type: "text", required: false },
+        { key: "teacher_or_supervisor", label_en: "Instructor / Supervisor", label_ar: "المحاضر / المشرف", type: "text", required: false },
+        { key: "education_level", label_en: "Education Level", label_ar: "المرحلة التعليمية", type: "select", options: EDUCATION_LEVEL_OPTIONS, required: false },
         FIELD_RAW_CONTENT("Explain the topic in your own words", "اشرح الموضوع بأسلوبك"),
       ],
       work: [
         { key: "company_name", label_en: "Company", label_ar: "الشركة", type: "text", required: false },
         { key: "department", label_en: "Department / Team", label_ar: "القسم / الفريق", type: "text", required: false },
         { key: "audience", label_en: "Audience", label_ar: "الجمهور", type: "text", required: false },
-        { key: "topic", label_en: "Topic / Message", label_ar: "الموضوع / الرسالة", type: "text", required: false },
-        FIELD_LOGO,
-        FIELD_BILINGUAL,
         FIELD_RAW_CONTENT("Key points to explain", "النقاط الرئيسية"),
       ],
       personal: [
-        { key: "topic", label_en: "Topic / Title", label_ar: "العنوان", type: "text", required: false },
-        FIELD_BILINGUAL,
         FIELD_RAW_CONTENT("Content", "المحتوى"),
       ],
     },
@@ -297,7 +662,7 @@ export const A4_THEMES: A4Theme[] = [
       "Paper-craft flat-lay infographic aesthetic. Soft paper-texture background, hand-cut paper shapes with subtle drop shadows, hand-drawn ink arrows and labels, small tactile craft accents. CRITICAL: every craft element, shape, and small accent MUST be semantically related to the document's actual subject matter — derived from words in the topic, title, or content. Examples (illustrative only, do not default to these): electricity topics use paper wires, batteries, bulbs, lightning bolts; biology topics use paper leaves, cells, animals; weather topics use clouds and raindrops; history topics use scrolls and artifacts. NEVER add clouds, raindrops, cotton, or water motifs unless the subject is literally about weather or water. Warm, educational, hands-on feel.",
     layout_blueprint:
       "Top zone: paper-cut title card holding the topic text inside. Small meta strip below showing student name and subject when provided. Middle body: information cards (3 to 4 when the page is portrait, 3 to 5 arranged horizontally when the page is landscape), each card holding a short label and one or two sentences of content. Hand-drawn ink arrows or twine lines connect cards in reading order. Final summary card or closing thought placed at the end of the reading flow. Small subject-appropriate 3D craft accents scattered tastefully between cards without competing with text — never generic clouds or water drops unless the subject requires them. All text on shapes stays razor-sharp and perfectly legible.",
-    search_aliases: ["infographic", "diy", "craft", "visual", "إنفوجرافيك", "شرح"],
+    search_aliases: ["infographic", "diy", "craft", "visual", "university", "إنفوجرافيك", "شرح"],
   },
 
   // 7. COMIC EXPLAINER ---------------------------------------------------------
@@ -519,7 +884,12 @@ export const A4_THEMES: A4Theme[] = [
     aspect_ratio: "2:3",
     per_page_char_budget: 1400,
     max_pages_override: 2,
-    form_schema: [
+    purpose_chips: [
+      { id: "student_cv", label_en: "Student CV", label_ar: "سيرة طالب" },
+      { id: "graduate_cv", label_en: "Graduate CV", label_ar: "سيرة خريج" },
+      { id: "professional_cv", label_en: "Professional CV", label_ar: "سيرة مهنية" },
+    ],
+    form_schema_common: [
       { key: "full_name", label_en: "Full Name", label_ar: "الاسم الكامل", type: "text", required: false },
       { key: "desired_role", label_en: "Job Title / Role", label_ar: "المسمى الوظيفي", type: "text", required: false },
       { key: "email", label_en: "Email", label_ar: "البريد الإلكتروني", type: "text", required: false },
@@ -527,15 +897,39 @@ export const A4_THEMES: A4Theme[] = [
       { key: "location", label_en: "Location", label_ar: "الموقع", type: "text", required: false },
       { key: "website", label_en: "Website / Portfolio", label_ar: "الموقع / معرض الأعمال", type: "text", required: false },
       { key: "linkedin", label_en: "LinkedIn", label_ar: "لينكدإن", type: "text", required: false },
+      { key: "summary", label_en: "Professional Summary", label_ar: "الملخص المهني", type: "textarea", required: false },
       FIELD_LOGO,
       FIELD_BILINGUAL,
-      FIELD_RAW_CONTENT("Paste your summary, experience, education, skills, and certifications", "الصق الملخص والخبرة والتعليم والمهارات والشهادات"),
     ],
+    form_schema_by_purpose: {
+      student_cv: [
+        { key: "education", label_en: "Education", label_ar: "التعليم", type: "textarea", required: false },
+        { key: "skills", label_en: "Skills", label_ar: "المهارات", type: "textarea", required: false },
+        { key: "languages", label_en: "Languages", label_ar: "اللغات", type: "textarea", required: false },
+        { key: "certifications", label_en: "Certifications", label_ar: "الشهادات", type: "textarea", required: false },
+        FIELD_RAW_CONTENT("Paste projects, activities, awards, and extra details", "الصق المشاريع والأنشطة والجوائز والتفاصيل الإضافية", false),
+      ],
+      graduate_cv: [
+        { key: "education", label_en: "Education", label_ar: "التعليم", type: "textarea", required: false },
+        { key: "experience", label_en: "Experience", label_ar: "الخبرة", type: "textarea", required: false },
+        { key: "skills", label_en: "Skills", label_ar: "المهارات", type: "textarea", required: false },
+        { key: "languages", label_en: "Languages", label_ar: "اللغات", type: "textarea", required: false },
+        { key: "certifications", label_en: "Certifications", label_ar: "الشهادات", type: "textarea", required: false },
+        FIELD_RAW_CONTENT("Paste internships, projects, and extra details", "الصق التدريب والمشاريع والتفاصيل الإضافية", false),
+      ],
+      professional_cv: [
+        { key: "experience", label_en: "Experience", label_ar: "الخبرة", type: "textarea", required: false },
+        { key: "skills", label_en: "Skills", label_ar: "المهارات", type: "textarea", required: false },
+        { key: "languages", label_en: "Languages", label_ar: "اللغات", type: "textarea", required: false },
+        { key: "certifications", label_en: "Certifications", label_ar: "الشهادات", type: "textarea", required: false },
+        FIELD_RAW_CONTENT("Paste achievements, responsibilities, and extra details", "الصق الإنجازات والمسؤوليات والتفاصيل الإضافية", false),
+      ],
+    },
     style_block:
       "Recruiter-grade modern resume aesthetic. Clean typography, restrained accent highlights, consistent section rules, elegant spacing. Feels serious, modern, employer-ready.",
     layout_blueprint:
       "Top zone: large candidate name rendered as a masthead. Role or desired-job-title subtitle directly beneath. Compact contact row in smaller type — email, phone, location, website, LinkedIn — separated by thin vertical dividers, only provided fields appear. Body: distinct section blocks in this order — Summary, Experience, Education, Skills, Certifications. Each section starts with a bold heading and a thin accent underline rule. Experience and education items follow a consistent pattern: role or title on the left, dates right-aligned, followed by company or institution and a short description beneath. Consistent gap between sections. Layout is recruiter-readable at a glance.",
-    search_aliases: ["resume", "cv", "career", "job", "employment", "سيرة", "وظيفة"],
+    search_aliases: ["resume", "cv", "career", "job", "employment", "student cv", "graduate", "سيرة", "وظيفة"],
   },
  ];
 
@@ -549,11 +943,16 @@ export function findTheme(themeId: string): A4Theme | null {
 
 export function getThemeFormSchema(theme: A4Theme, purposeId: string | null | undefined): A4FormField[] {
   if (theme.form_schema) return theme.form_schema;
-  if (theme.form_schema_common) return theme.form_schema_common;
+  const common = theme.form_schema_common ?? [];
   if (theme.form_schema_by_purpose && purposeId) {
-    return theme.form_schema_by_purpose[purposeId] ?? [];
+    return [...common, ...(theme.form_schema_by_purpose[purposeId] ?? [])];
   }
+  if (common.length) return common;
   return [];
+}
+
+export function themeRequiresPurpose(theme: A4Theme): boolean {
+  return !!theme.purpose_chips && !!theme.form_schema_by_purpose && !theme.form_schema;
 }
 
 export function maxPagesForTheme(theme: A4Theme): 1 | 2 | 3 {

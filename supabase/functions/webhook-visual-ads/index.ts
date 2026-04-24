@@ -148,13 +148,14 @@ serve(async (req) => {
       
       // Automatically save to the user's Saved gallery
       if (statusToSave === "COMPLETED" && resultUrls.length > 0 && jobData?.user_id) {
-        for (const url of resultUrls) {
+        for (const [resultIndex, url] of resultUrls.entries()) {
           try {
             // Check if already exists to prevent duplicates
             const { data: existing } = await supabase
               .from("user_generated_images")
               .select("id")
-              .eq("image_url", url)
+              .eq("user_id", jobData.user_id)
+              .contains("meta", { visual_ads_task_id: taskId, visual_ads_result_index: resultIndex })
               .maybeSingle();
               
             if (!existing) {
@@ -164,7 +165,11 @@ serve(async (req) => {
                 image_url: url,
                 submode: "visual-ads",
                 quality: VISUAL_ADS_MODEL,
-                meta: { storage_path: storagePath ? decodeURIComponent(storagePath) : null }
+                meta: {
+                  storage_path: storagePath ? decodeURIComponent(storagePath) : null,
+                  visual_ads_task_id: taskId,
+                  visual_ads_result_index: resultIndex,
+                }
               });
               console.log("[webhook-visual-ads] Inserted image into user_generated_images gallery");
             }
