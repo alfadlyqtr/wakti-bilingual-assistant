@@ -213,6 +213,19 @@ function mapKieAspectRatio(aspectRatio: string): string {
   return "auto";
 }
 
+function buildCallbackUrl(
+  supabaseUrl: string,
+  batchId: string,
+  pageNumber: number,
+  callbackToken: string,
+): string {
+  const url = new URL(`${supabaseUrl}/functions/v1/a4-callback`);
+  url.searchParams.set("batch_id", batchId);
+  url.searchParams.set("page", String(pageNumber));
+  url.searchParams.set("token", callbackToken);
+  return url.toString();
+}
+
 // -----------------------------------------------------------------------------
 // Kie createTask dispatch
 // -----------------------------------------------------------------------------
@@ -445,6 +458,7 @@ serve(async (req) => {
   // Stash creative_settings + split pages inside form_state internal keys so
   // a4-callback can recompile pages 2+ without a schema change.
   const creativeSettings = body.creative_settings ?? null;
+  const callbackToken = crypto.randomUUID();
   const formStateWithInternals: Record<string, unknown> = {
     ...formState,
     __creative_settings__: creativeSettings,
@@ -453,6 +467,7 @@ serve(async (req) => {
     __decor_wanted__: decorWanted,
     __decor_unwanted__: decorUnwanted,
     __input_mode__: inputMode,
+    __callback_token__: callbackToken,
   };
 
   // --- Insert N placeholder rows ---------------------------------------------
@@ -585,7 +600,7 @@ serve(async (req) => {
   }
 
   // Dispatch Kie createTask for page 1
-  const callbackUrl = `${SUPABASE_URL}/functions/v1/a4-callback?batch_id=${batchId}&page=1`;
+  const callbackUrl = buildCallbackUrl(SUPABASE_URL, batchId, 1, callbackToken);
   const kieResult = await dispatchKieTask({
     prompt: compiledPrompt,
     imageInputs: logoSignedUrl ? [logoSignedUrl] : [],

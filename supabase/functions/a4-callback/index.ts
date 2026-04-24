@@ -107,20 +107,33 @@ function extractTaskResult(parsed: any): {
   return out;
 }
 
- function mapKieAspectRatio(aspectRatio: string): string {
-   if (aspectRatio === "2:3") return "3:4";
-   if (aspectRatio === "3:2") return "4:3";
-   if (
-     aspectRatio === "1:1"
-     || aspectRatio === "3:4"
-     || aspectRatio === "4:3"
-     || aspectRatio === "9:16"
-     || aspectRatio === "16:9"
-   ) {
-     return aspectRatio;
-   }
-   return "auto";
- }
+function mapKieAspectRatio(aspectRatio: string): string {
+  if (aspectRatio === "2:3") return "3:4";
+  if (aspectRatio === "3:2") return "4:3";
+  if (
+    aspectRatio === "1:1"
+    || aspectRatio === "3:4"
+    || aspectRatio === "4:3"
+    || aspectRatio === "9:16"
+    || aspectRatio === "16:9"
+  ) {
+    return aspectRatio;
+  }
+  return "auto";
+}
+
+function buildCallbackUrl(
+  supabaseUrl: string,
+  batchId: string,
+  pageNumber: number,
+  callbackToken: string,
+): string {
+  const url = new URL(`${supabaseUrl}/functions/v1/a4-callback`);
+  url.searchParams.set("batch_id", batchId);
+  url.searchParams.set("page", String(pageNumber));
+  url.searchParams.set("token", callbackToken);
+  return url.toString();
+}
 
 async function fetchKieTaskDetail(
   taskId: string,
@@ -215,6 +228,7 @@ async function dispatchNextPage(
     const formStateForPrompt = (page1.form_state as Record<string, unknown>) || {};
     const designSettings = (formStateForPrompt.__design_settings__ as any) ?? null;
     const creativeSettings = (formStateForPrompt.__creative_settings__ as A4CreativeSettings | null) ?? null;
+    const callbackToken = String(formStateForPrompt.__callback_token__ ?? "").trim();
     const splitPages = Array.isArray(formStateForPrompt.__split_pages__)
       ? (formStateForPrompt.__split_pages__ as string[])
       : [];
@@ -251,7 +265,12 @@ async function dispatchNextPage(
     if (logoUrl) imageInputs.push(logoUrl);
     imageInputs.push(page1ImageUrl);
 
-    const callbackUrl = `${supabaseUrl}/functions/v1/a4-callback?batch_id=${row.batch_id}&page=${row.page_number}`;
+    if (!callbackToken) {
+      console.error(`[a4-callback] missing callback token for batch=${row.batch_id}`);
+      return;
+    }
+
+    const callbackUrl = buildCallbackUrl(supabaseUrl, row.batch_id, row.page_number, callbackToken);
     const hasImageInputs = imageInputs.length > 0;
 
     const payload = {
@@ -320,6 +339,7 @@ serve(async (req) => {
   const url = new URL(req.url);
   const qBatchId = url.searchParams.get("batch_id");
   const qPage = Number(url.searchParams.get("page") || "0");
+  const qToken = url.searchParams.get("token") ?? "";
 
   try {
     const rawBody = await req.text();
@@ -350,6 +370,13 @@ serve(async (req) => {
       return ok();
     }
     const row = rows[0];
+    const formState = (row.form_state as Record<string, unknown> | null) ?? null;
+    const expectedToken = String(formState?.__callback_token__ ?? "").trim();
+
+    if (!expectedToken || qToken !== expectedToken) {
+      console.warn(`[a4-callback] invalid callback token for batch=${row.batch_id} page=${row.page_number}`);
+      return ok();
+    }
 
     const taskIdForLookup = result.taskId || row.kie_task_id || undefined;
     let finalResult: any = result;

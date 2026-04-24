@@ -1279,9 +1279,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     'a4':           { key: '',         limit: 0, en: '',               ar: '' }, // A4Tab has its own UI/gating
   };
   const activeTextTrial = textTabTrialMap[activeTab];
+  const isA4Tab = activeTab === 'a4';
 
   const body = (
-    <div className="px-6 md:pb-6 pb-[calc(var(--app-bottom-tabs-h)+16px)]">
+    <div className={`${isA4Tab ? 'px-2 sm:px-4 md:px-5' : 'px-6'} md:pb-6 pb-[calc(var(--app-bottom-tabs-h)+16px)]`}>
           <TrialGateOverlay featureKey={activeTextTrial.key} limit={activeTextTrial.limit} featureLabel={{ en: activeTextTrial.en, ar: activeTextTrial.ar }} />
           {activeTab === 'compose' && (
             <div className="space-y-4">
@@ -2271,7 +2272,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   return (
     <div className="w-full h-full flex items-start justify-center p-4">
-      <div className="w-full max-w-6xl rounded-xl border bg-background shadow-2xl">
+      <div className="w-full max-w-7xl rounded-xl border bg-background shadow-2xl">
         {/* Header */}
         <div className="px-6 py-5 mt-6 border-b flex items-center gap-3">
           <h1 className="text-lg font-semibold whitespace-nowrap">{title}</h1>

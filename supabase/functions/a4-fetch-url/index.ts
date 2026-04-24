@@ -80,6 +80,44 @@ function htmlToText(html: string): { title: string; text: string } {
   return { title, text: out };
 }
 
+function detectDominantLanguage(text: string): "en" | "ar" | "mixed" {
+  const sample = text.slice(0, 4000);
+  const arabicChars = (sample.match(/[\u0600-\u06FF]/g) ?? []).length;
+  const latinChars = (sample.match(/[A-Za-z]/g) ?? []).length;
+
+  if (arabicChars > 0 && latinChars > 0) return "mixed";
+  if (arabicChars > 0) return "ar";
+  return "en";
+}
+
+function fallbackStructuredContent(title: string, text: string): string {
+  const cleanTitle = title.trim() || "Fetched Web Content";
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const intro = paragraphs[0] ?? text.slice(0, 700).trim();
+  const bulletPool = paragraphs
+    .slice(1)
+    .join("\n")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 40)
+    .slice(0, 8);
+
+  const body = [
+    cleanTitle,
+    "",
+    intro,
+    ...(bulletPool.length > 0
+      ? ["", "Key points", ...bulletPool.map((line) => `- ${line}`)]
+      : []),
+  ].join("\n");
+
+  return body.slice(0, 3500).trim();
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -161,6 +199,8 @@ serve(async (req) => {
 
   const { title, text } = htmlToText(html);
   fetchedTitle = title;
+  const fallbackLanguage = detectDominantLanguage(text);
+  const fallbackContent = fallbackStructuredContent(fetchedTitle, text);
 
   if (!text || text.length < 50) {
     return json(422, { success: false, error: "Page had no extractable text content" });
@@ -210,30 +250,50 @@ RETURN JSON EXACTLY:
         response_mime_type: "application/json",
       },
     );
-  } catch (e) {
-    return json(500, { success: false, error: `Gemini error: ${(e as Error).message}` });
+  } catch {
+    return json(200, {
+      success: true,
+      title: fetchedTitle || null,
+      detected_language: fallbackLanguage,
+      content: fallbackContent,
+    });
   }
 
   const out: string = gemini?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   if (!out) {
-    return json(500, { success: false, error: "Gemini returned empty response" });
+    return json(200, {
+      success: true,
+      title: fetchedTitle || null,
+      detected_language: fallbackLanguage,
+      content: fallbackContent,
+    });
   }
 
   let parsedJson: any;
   try {
     parsedJson = JSON.parse(out);
   } catch {
-    return json(500, { success: false, error: "Gemini returned invalid JSON" });
+    return json(200, {
+      success: true,
+      title: fetchedTitle || null,
+      detected_language: fallbackLanguage,
+      content: fallbackContent,
+    });
   }
 
   const cleanTitle = String(parsedJson.title ?? fetchedTitle ?? "").slice(0, 300);
   const detected = ["en", "ar", "mixed"].includes(parsedJson.detected_language)
     ? parsedJson.detected_language
-    : "en";
+    : fallbackLanguage;
   const content = String(parsedJson.content ?? "").trim();
 
   if (!content) {
-    return json(500, { success: false, error: "Empty content after processing" });
+    return json(200, {
+      success: true,
+      title: cleanTitle || fetchedTitle || null,
+      detected_language: fallbackLanguage,
+      content: fallbackContent,
+    });
   }
 
   return json(200, {

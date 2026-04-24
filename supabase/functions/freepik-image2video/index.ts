@@ -125,6 +125,8 @@ type VisualAdsSpec = {
     main_message_custom_text?: string | null;
     main_message_detail_id?: string | null;
     main_message_detail_prompt?: string | null;
+    feature_chips?: string[] | null;
+    require_exact_feature_chips?: boolean | null;
     cta_id?: string | null;
     cta_text?: string | null;
     cta_prompt?: string | null;
@@ -148,6 +150,7 @@ type VisualAdsSpec = {
   } | null;
   text_policy?: {
     allowed_text?: string[] | null;
+    allowed_feature_labels?: string[] | null;
     allow_generated_headline?: boolean | null;
     allow_generated_tagline?: boolean | null;
     allow_generated_social_proof_copy?: boolean | null;
@@ -250,6 +253,8 @@ function normalizeVisualAdsSpec(raw: unknown, legacyPrompt: string): VisualAdsSp
       main_message_custom_text: asString(campaign.main_message_custom_text, 120) || null,
       main_message_detail_id: asString(campaign.main_message_detail_id, 80) || null,
       main_message_detail_prompt: asString(campaign.main_message_detail_prompt, 320) || null,
+      feature_chips: asStringArray(campaign.feature_chips, 80),
+      require_exact_feature_chips: asBoolean(campaign.require_exact_feature_chips),
       cta_id: asString(campaign.cta_id, 80) || null,
       cta_text: asString(campaign.cta_text, 80) || null,
       cta_prompt: asString(campaign.cta_prompt, 120) || null,
@@ -273,6 +278,7 @@ function normalizeVisualAdsSpec(raw: unknown, legacyPrompt: string): VisualAdsSp
     } : null,
     text_policy: textPolicy ? {
       allowed_text: asStringArray(textPolicy.allowed_text, 120),
+      allowed_feature_labels: asStringArray(textPolicy.allowed_feature_labels, 80),
       allow_generated_headline: asBoolean(textPolicy.allow_generated_headline),
       allow_generated_tagline: asBoolean(textPolicy.allow_generated_tagline),
       allow_generated_social_proof_copy: asBoolean(textPolicy.allow_generated_social_proof_copy),
@@ -330,6 +336,9 @@ function buildVisualAdsFallbackSections(spec: VisualAdsSpec, legacyPrompt: strin
     spec.campaign?.main_message_detail_prompt,
     spec.campaign?.main_message_custom_text,
   ].filter((item): item is string => typeof item === "string" && item.length > 0).join(" ");
+  const featureChips = spec.campaign?.feature_chips?.length
+    ? spec.campaign.feature_chips
+    : (spec.text_policy?.allowed_feature_labels || []);
   const stylePrompt = [
     spec.style?.primary_style_prompt,
     spec.style?.style_detail_prompt,
@@ -350,15 +359,17 @@ function buildVisualAdsFallbackSections(spec: VisualAdsSpec, legacyPrompt: strin
       "Treat the structured brief as the single source of truth.",
       "Honor every tagged asset role exactly and preserve real identity fidelity before style.",
       "Use only the approved CTA or text that appears in allowed_text.",
+      ...(featureChips.length ? ["Use the provided key points as required source-truth campaign points, not optional inspiration."] : []),
       "Respect the requested aspect ratio and build one unified premium poster composition.",
     ],
     production_prompt: [
       `Create one premium advertising poster in ${spec.aspect_ratio || "9:16"}.`,
       campaignPrompt ? `Campaign intent: ${campaignPrompt}.` : "Campaign intent: premium advertising poster based on the selected UI brief.",
+      featureChips.length ? `Required key points: ${featureChips.join(" | ")}. Present them clearly in the composition when text or callout treatment is used.` : "",
       stylePrompt ? `Style direction: ${stylePrompt}.` : "Style direction: keep it polished, premium, and faithful to the selected settings.",
       assetSummary ? `Tagged assets: ${assetSummary}.` : "Use the uploaded assets strictly according to their tagged roles.",
       allowedText ? `Allowed on-poster text: ${allowedText}.` : "Do not invent headline, tagline, testimonial, or unapproved marketing copy.",
-      spec.composition?.layout_type ? `Layout type: ${spec.composition.layout_type}.` : "Layout type: one unified ad composition.",
+      spec.composition?.layout_type ? `Layout type: ${spec.composition?.layout_type}.` : "Layout type: one unified ad composition.",
       spec.objective ? `Business objective: ${spec.objective}.` : "",
       legacyPrompt ? `Legacy brief reference: ${legacyPrompt}` : "",
     ].filter(Boolean).join(" "),
@@ -367,10 +378,12 @@ function buildVisualAdsFallbackSections(spec: VisualAdsSpec, legacyPrompt: strin
       spec.hard_constraints?.must_preserve_logo_fidelity ? "Preserve logo fidelity exactly with no redraw, distortion, or restyling." : "Keep brand marks clean and faithful when present.",
       spec.hard_constraints?.must_preserve_screenshot_fidelity ? "Preserve the screenshot UI faithfully and keep it readable inside the composition." : "If a screenshot is present, keep its interface readable.",
       spec.hard_constraints?.must_preserve_background_identity ? "Keep the selected background recognizable as the real scene foundation." : "Keep the environment coherent with the tagged background.",
+      ...(spec.campaign?.require_exact_feature_chips && featureChips.length ? [`Use these exact key points without swapping them for different claims: ${featureChips.join(" | ")}.`] : []),
       spec.composition?.face_must_remain_visible ? "The device or overlay must never block the person’s face." : "Avoid blocking the hero subject.",
     ],
     negative_guards: [
       spec.hard_constraints?.allow_invented_text === false ? "Do not invent any headline, tagline, body copy, testimonial, or names outside allowed_text." : "Do not add unapproved marketing copy.",
+      ...(spec.campaign?.require_exact_feature_chips && featureChips.length ? ["Do not replace the provided key points with different claims, synonyms, or generic benefits."] : []),
       spec.hard_constraints?.allow_invented_names === false ? "Do not invent brand names, usernames, or fake labels from the screenshot UI." : "Do not fabricate names from the UI.",
       spec.hard_constraints?.allow_invented_testimonials === false ? "Do not fabricate testimonials, ratings, or social proof." : "Do not fabricate social proof.",
       "Do not swap the real person for a prettier different model.",
@@ -379,6 +392,7 @@ function buildVisualAdsFallbackSections(spec: VisualAdsSpec, legacyPrompt: strin
     layout_instructions: [
       `Use a ${spec.aspect_ratio || "9:16"} poster layout with a clear ad hierarchy.`,
       spec.composition?.layout_type ? `Follow the ${spec.composition.layout_type} layout logic.` : "Follow a clean advertising poster layout.",
+      ...(featureChips.length ? ["If key points are provided, place them as clean callouts or a smart breakdown with strong readability."] : []),
       spec.composition?.primary_subjects?.length ? `Primary subjects: ${spec.composition.primary_subjects.join(", ")}.` : "Keep the main tagged hero assets dominant.",
       spec.composition?.secondary_subjects?.length ? `Secondary supporting subjects: ${spec.composition.secondary_subjects.join(", ")}.` : "Use secondary assets only as support.",
       spec.composition?.must_feel_unified ? "The poster must feel like one unified composition, not a messy collage." : "Keep the composition unified.",
@@ -397,10 +411,11 @@ Rules:
 4. Preserve fidelity before style. Exact person identity, logo fidelity, screenshot fidelity, and background identity outrank stylistic polish.
 5. Layout instructions are mandatory. The layout_instructions array must never be empty.
 6. If allowed_text is limited, do not invent any extra marketing copy beyond that allowance.
-7. If the brief forbids invented names or testimonials, explicitly reinforce that in negative_guards.
-8. Write for an image model. Be concrete, visual, direct, and production-ready.
-9. Respect the requested aspect ratio and build exactly one unified premium poster ad.
-10. Do not output placeholders such as TBD, maybe, optional, or generic fluff.
+7. If feature_chips are provided, treat them as source-truth key points. Do not rename, replace, generalize, or invent different claims.
+8. If the brief forbids invented names or testimonials, explicitly reinforce that in negative_guards.
+9. Write for an image model. Be concrete, visual, direct, and production-ready.
+10. Respect the requested aspect ratio and build exactly one unified premium poster ad.
+11. Do not output placeholders such as TBD, maybe, optional, or generic fluff.
 
 Return JSON with this exact shape:
 {
@@ -442,6 +457,7 @@ async function compileVisualAdsPrompt(rawSpec: unknown, legacyPrompt: string): P
       throw new Error("invalid Gemini prompt section shape");
     }
     const compiled = parsed as VisualAdsPromptSections;
+    console.log("[kie-visual-ads] Prompt engineer source: gemini");
     return {
       ...compiled,
       final_prompt: buildVisualAdsPromptText(compiled),
@@ -449,6 +465,7 @@ async function compileVisualAdsPrompt(rawSpec: unknown, legacyPrompt: string): P
     };
   } catch (error) {
     console.warn("[kie-visual-ads] Prompt engineer fallback:", error instanceof Error ? error.message : error);
+    console.log("[kie-visual-ads] Prompt engineer source: fallback");
     return {
       ...fallbackSections,
       final_prompt: buildVisualAdsPromptText(fallbackSections),
@@ -1047,6 +1064,7 @@ serve(async (req) => {
         ? sanitizeUserInput(body.prompt, { maxLength: 7000, label: "visual_ads_prompt" })
         : "";
       const compiledPrompt = await compileVisualAdsPrompt(body.visual_ads_spec, legacyPrompt);
+      console.log(`[kie-visual-ads] Using compiled prompt source: ${compiledPrompt.used_fallback ? "fallback" : "gemini"}`);
       const supabaseAdminForAds = createClient(
         Deno.env.get("SUPABASE_URL") || "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""

@@ -124,6 +124,9 @@ verify_jwt = false
 [functions.project-backend-api]
 verify_jwt = false
 
+[functions.a4-callback]
+verify_jwt = false
+
 [functions.deen-search]
 verify_jwt = true
 

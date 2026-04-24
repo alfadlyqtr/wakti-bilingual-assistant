@@ -4,6 +4,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { ImageSharePickerDialog } from '@/components/studio/ImageSharePickerDialog';
 import { Button } from '@/components/ui/button';
 import ShareButton from '@/components/ui/ShareButton';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
@@ -53,6 +54,7 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
   const lightboxSliderRef = useRef<HTMLInputElement | null>(null);
   const lightboxPctRef = useRef<HTMLSpanElement | null>(null);
   const lightboxContainerRef = useRef<HTMLDivElement | null>(null);
+  const [shareImageTarget, setShareImageTarget] = useState<{ id: string; title: string; imageUrl: string | null } | null>(null);
   const pinchDistanceRef = useRef<number | null>(null);
   const pinchStartZoomRef = useRef(1);
   const panXRef = useRef(0);
@@ -83,6 +85,17 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
 
   useEffect(() => {
     loadImages();
+  }, [loadImages]);
+
+  useEffect(() => {
+    const handleSharedImageReload = () => {
+      loadImages();
+    };
+
+    window.addEventListener('wakti-saved-images-reload', handleSharedImageReload);
+    return () => {
+      window.removeEventListener('wakti-saved-images-reload', handleSharedImageReload);
+    };
   }, [loadImages]);
 
   useEffect(() => {
@@ -268,6 +281,16 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
     return entry ? (language === 'ar' ? entry.ar : entry.en) : s;
   };
 
+  const WaktiShareIcon = () => (
+    <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="" className="w-full h-full object-cover rounded-full" />
+  );
+
+  const buildShareTarget = (img: SavedImage) => ({
+    id: img.id,
+    title: img.prompt || (language === 'ar' ? 'صورة من وقتي' : 'Image from Wakti'),
+    imageUrl: img.image_url.replace(/%20/g, ' ').trim(),
+  });
+
   const closeLightbox = useCallback(() => {
     setLightboxImage(null);
   }, []);
@@ -419,6 +442,15 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
               shareTitle={language === 'ar' ? 'صورة من Wakti AI' : 'Image from Wakti AI'}
               shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
               size="sm"
+              extraActions={[
+                {
+                  name: 'wakti',
+                  icon: WaktiShareIcon,
+                  bgColor: 'bg-transparent !p-0 overflow-hidden',
+                  angle: 309,
+                  action: () => setShareImageTarget(buildShareTarget(lightboxImage)),
+                },
+              ]}
             />
             <div className="w-px h-4 bg-white/20" />
             <button
@@ -513,6 +545,15 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
                       shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
                       size="sm"
                       className="w-full justify-center"
+                      extraActions={[
+                        {
+                          name: 'wakti',
+                          icon: WaktiShareIcon,
+                          bgColor: 'bg-transparent !p-0 overflow-hidden',
+                          angle: 309,
+                          action: () => setShareImageTarget(buildShareTarget(img)),
+                        },
+                      ]}
                     />
                   </div>
                   <button
@@ -539,6 +580,12 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
           ))}
         </div>
       </div>
+      <ImageSharePickerDialog
+        isOpen={!!shareImageTarget}
+        image={shareImageTarget}
+        onClose={() => setShareImageTarget(null)}
+        onSent={() => setShareImageTarget(null)}
+      />
     </>
   );
 }

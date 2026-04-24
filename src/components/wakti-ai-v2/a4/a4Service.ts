@@ -8,10 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { PDFDocument } from "pdf-lib";
 
 export type A4Orientation = "portrait" | "landscape";
-export type A4FontFamily = "modern_sans" | "classic_serif" | "elegant_script" | "bold_display" | "playful_hand";
-export type A4BorderStyle = "none" | "thin" | "thick" | "rounded" | "decorative";
-export type A4Density = "compact" | "balanced" | "airy";
-export type A4Tone = "professional" | "friendly" | "playful" | "formal";
+export type A4FontFamily = "modern_sans" | "classic_serif" | "elegant_script" | "bold_display" | "playful_hand" | "rounded_sans" | "editorial_serif" | "luxury_script" | "notebook_hand" | "marker_hand" | "monoline_hand";
+export type A4BorderStyle = "none" | "thin" | "thick" | "rounded" | "decorative" | "double_line" | "dashed" | "corner_frame";
+export type A4Density = "ultra_compact" | "compact" | "balanced" | "airy" | "spacious";
+export type A4Tone = "professional" | "friendly" | "playful" | "formal" | "elegant" | "bold" | "romantic";
 
 export interface A4DesignSettings {
   orientation?: A4Orientation;
@@ -38,7 +38,11 @@ export type A4VisualRecipe =
   | "menu_board"
   | "craft_diy_explainer"
   | "minimal_stationery"
-  | "bold_poster";
+  | "bold_poster"
+  | "luxury_editorial"
+  | "study_notes"
+  | "scrapbook_story"
+  | "museum_catalog";
 
 export type A4IllustrationStyle =
   | "none"
@@ -47,7 +51,11 @@ export type A4IllustrationStyle =
   | "paper_craft"
   | "watercolor"
   | "comic_bold"
-  | "photo_realistic";
+  | "photo_realistic"
+  | "line_art"
+  | "sketch_handdrawn"
+  | "collage_cutout"
+  | "pastel_gouache";
 
 export type A4AccentElement =
   | "hand_drawn_arrows"
@@ -57,7 +65,12 @@ export type A4AccentElement =
   | "callout_badges"
   | "dotted_dividers"
   | "paper_tape"
-  | "thread_connectors";
+  | "thread_connectors"
+  | "underlines"
+  | "sticky_notes"
+  | "spark_lines"
+  | "ink_stamps"
+  | "washi_corners";
 
 export type A4BackgroundTreatment =
   | "plain_white"
@@ -66,7 +79,11 @@ export type A4BackgroundTreatment =
   | "subtle_grid"
   | "botanical_motif"
   | "confetti"
-  | "photographic_backdrop";
+  | "photographic_backdrop"
+  | "dark_solid"
+  | "linen_texture"
+  | "marble_surface"
+  | "chalkboard";
 
 export type A4ContentComponent =
   | "chart_bar"
@@ -81,7 +98,11 @@ export type A4ContentComponent =
   | "info_cards"
   | "grading_circle"
   | "pull_quote"
-  | "callout_boxes";
+  | "callout_boxes"
+  | "metric_tiles"
+  | "faq_block"
+  | "numbered_steps"
+  | "process_chevrons";
 
 export type A4LayoutPattern =
   | "single_column"
@@ -89,7 +110,11 @@ export type A4LayoutPattern =
   | "sidebar_main"
   | "three_panel_grid"
   | "hero_body"
-  | "centered_composition";
+  | "centered_composition"
+  | "top_bottom_split"
+  | "magazine_editorial"
+  | "zigzag_story"
+  | "card_mosaic";
 
 export interface A4CreativeSettings {
   visual_recipe?: A4VisualRecipe | null;
@@ -204,6 +229,26 @@ export interface A4FetchUrlResponse {
   content?: string;
 }
 
+async function getEdgeFunctionErrorMessage(error: unknown): Promise<string> {
+  const fallback = error instanceof Error ? error.message : "Request failed";
+  if (!error || typeof error !== "object" || !("context" in error)) return fallback;
+
+  try {
+    const ctx = (error as { context?: Response }).context;
+    if (!ctx) return fallback;
+    const text = await ctx.text();
+    if (!text) return fallback;
+    try {
+      const parsed = JSON.parse(text) as { error?: string; message?: string };
+      return parsed.error || parsed.message || text;
+    } catch {
+      return text;
+    }
+  } catch {
+    return fallback;
+  }
+}
+
 export async function fetchUrlContent(url: string): Promise<A4FetchUrlResponse> {
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData?.session?.access_token;
@@ -213,7 +258,9 @@ export async function fetchUrlContent(url: string): Promise<A4FetchUrlResponse> 
     body: { url },
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (resp.error) return { success: false, error: resp.error.message };
+  if (resp.error) {
+    return { success: false, error: await getEdgeFunctionErrorMessage(resp.error) };
+  }
   return resp.data ?? { success: false, error: "Empty response" };
 }
 

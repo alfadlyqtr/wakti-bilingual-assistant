@@ -11,10 +11,10 @@ import type { A4Theme } from "./a4-themes.ts";
 // =============================================================================
 
 export type A4Orientation = "portrait" | "landscape";
-export type A4FontFamily = "modern_sans" | "classic_serif" | "elegant_script" | "bold_display" | "playful_hand";
-export type A4BorderStyle = "none" | "thin" | "thick" | "rounded" | "decorative";
-export type A4Density = "compact" | "balanced" | "airy";
-export type A4Tone = "professional" | "friendly" | "playful" | "formal";
+export type A4FontFamily = "modern_sans" | "classic_serif" | "elegant_script" | "bold_display" | "playful_hand" | "rounded_sans" | "editorial_serif" | "luxury_script" | "notebook_hand" | "marker_hand" | "monoline_hand";
+export type A4BorderStyle = "none" | "thin" | "thick" | "rounded" | "decorative" | "double_line" | "dashed" | "corner_frame";
+export type A4Density = "ultra_compact" | "compact" | "balanced" | "airy" | "spacious";
+export type A4Tone = "professional" | "friendly" | "playful" | "formal" | "elegant" | "bold" | "romantic";
 
 export interface A4DesignSettings {
   orientation?: A4Orientation;
@@ -39,7 +39,11 @@ export type A4VisualRecipe =
   | "menu_board"
   | "craft_diy_explainer"
   | "minimal_stationery"
-  | "bold_poster";
+  | "bold_poster"
+  | "luxury_editorial"
+  | "study_notes"
+  | "scrapbook_story"
+  | "museum_catalog";
 
 export type A4IllustrationStyle =
   | "none"
@@ -48,7 +52,11 @@ export type A4IllustrationStyle =
   | "paper_craft"
   | "watercolor"
   | "comic_bold"
-  | "photo_realistic";
+  | "photo_realistic"
+  | "line_art"
+  | "sketch_handdrawn"
+  | "collage_cutout"
+  | "pastel_gouache";
 
 export type A4AccentElement =
   | "hand_drawn_arrows"
@@ -58,7 +66,12 @@ export type A4AccentElement =
   | "callout_badges"
   | "dotted_dividers"
   | "paper_tape"
-  | "thread_connectors";
+  | "thread_connectors"
+  | "underlines"
+  | "sticky_notes"
+  | "spark_lines"
+  | "ink_stamps"
+  | "washi_corners";
 
 export type A4BackgroundTreatment =
   | "plain_white"
@@ -67,7 +80,11 @@ export type A4BackgroundTreatment =
   | "subtle_grid"
   | "botanical_motif"
   | "confetti"
-  | "photographic_backdrop";
+  | "photographic_backdrop"
+  | "dark_solid"
+  | "linen_texture"
+  | "marble_surface"
+  | "chalkboard";
 
 export type A4ContentComponent =
   | "chart_bar"
@@ -82,7 +99,11 @@ export type A4ContentComponent =
   | "info_cards"
   | "grading_circle"
   | "pull_quote"
-  | "callout_boxes";
+  | "callout_boxes"
+  | "metric_tiles"
+  | "faq_block"
+  | "numbered_steps"
+  | "process_chevrons";
 
 export type A4LayoutPattern =
   | "single_column"
@@ -90,7 +111,11 @@ export type A4LayoutPattern =
   | "sidebar_main"
   | "three_panel_grid"
   | "hero_body"
-  | "centered_composition";
+  | "centered_composition"
+  | "top_bottom_split"
+  | "magazine_editorial"
+  | "zigzag_story"
+  | "card_mosaic";
 
 export interface A4CreativeSettings {
   visual_recipe?: A4VisualRecipe | null;
@@ -393,6 +418,18 @@ function resolveAspectRatio(theme: A4Theme, orientation?: A4Orientation): string
 
 function fontFamilyLabel(font?: A4FontFamily): string {
   switch (font) {
+    case "rounded_sans":
+      return "Rounded Sans (soft rounded sans-serif with friendly modern shapes)";
+    case "editorial_serif":
+      return "Editorial Serif (high-contrast magazine-style serif for premium headings)";
+    case "luxury_script":
+      return "Luxury Script (refined premium calligraphy for elegant headings; pair with a restrained body font)";
+    case "notebook_hand":
+      return "Notebook Handwriting (neat handwritten notebook feel, warm and personal)";
+    case "marker_hand":
+      return "Marker Handwriting (bold marker-style hand lettering for energetic headings and labels)";
+    case "monoline_hand":
+      return "Monoline Handwriting (clean monoline handwritten style, stylish and readable)";
     case "classic_serif":
       return "Classic Serif (Georgia, Garamond, or similar elegant serif)";
     case "elegant_script":
@@ -409,6 +446,12 @@ function fontFamilyLabel(font?: A4FontFamily): string {
 
 function borderStyleLabel(border?: A4BorderStyle): string {
   switch (border) {
+    case "double_line":
+      return "Double-line borders around key sections and/or the page frame for a formal premium feel.";
+    case "dashed":
+      return "Dashed or stitched borders used selectively around cards, notes, or process areas for a crafted feel.";
+    case "corner_frame":
+      return "Minimal frame defined mainly by elegant corner brackets or corner ornaments instead of a full border.";
     case "none":
       return "No decorative borders. Use only whitespace and subtle rules for structure.";
     case "thick":
@@ -425,10 +468,14 @@ function borderStyleLabel(border?: A4BorderStyle): string {
 
 function densityLabel(density?: A4Density): string {
   switch (density) {
+    case "ultra_compact":
+      return "Ultra-compact density: highly efficient layout, tighter blocks, minimal whitespace, maximum information while preserving legibility.";
     case "compact":
       return "Compact density: tighter line-height, smaller gaps between sections, more content per page, still fully readable.";
     case "airy":
       return "Airy density: generous whitespace, relaxed line-height, breathing room between every section.";
+    case "spacious":
+      return "Spacious density: editorial breathing room, larger margins, larger gaps between sections, intentionally premium and calm.";
     case "balanced":
     default:
       return "Balanced density: comfortable reading rhythm, moderate spacing between sections.";
@@ -437,6 +484,12 @@ function densityLabel(density?: A4Density): string {
 
 function toneLabel(tone?: A4Tone): string {
   switch (tone) {
+    case "elegant":
+      return "Elegant tone: refined hierarchy, premium spacing, graceful accents, polished upscale feel.";
+    case "bold":
+      return "Bold tone: assertive hierarchy, high contrast, strong shapes, confident visual energy.";
+    case "romantic":
+      return "Romantic tone: soft graceful accents, warm emotional atmosphere, delicate decorative touches.";
     case "friendly":
       return "Friendly tone: warm, approachable design; soft shapes; inviting visuals.";
     case "playful":
@@ -555,6 +608,14 @@ function getVisualAssetsBlock(
 function getVisualRecipeBlock(recipe: A4VisualRecipe | null | undefined): string {
   if (!recipe) return "";
   switch (recipe) {
+    case "luxury_editorial":
+      return "Luxury editorial magazine aesthetic. Sophisticated oversized headings, restrained premium palette, elegant serif pairing, balanced negative space, and polished art-direction.";
+    case "study_notes":
+      return "High-performing study-notes aesthetic. Clear highlighted sections, exam-prep structure, neat marker emphasis, tidy labels, and a smart student-friendly layout.";
+    case "scrapbook_story":
+      return "Creative scrapbook storytelling aesthetic. Layered paper pieces, taped notes, handwritten labels, and charming collage composition with good readability.";
+    case "museum_catalog":
+      return "Museum-catalog aesthetic. Curated object labels, elegant captions, refined grid, premium whitespace, and archival sophistication.";
     case "paper_craft_flatlay":
       return "High-quality flat-lay photography aesthetic. Paper-craft cut-outs arranged on a clean light-gray textured paper background. Small tactile 3D accents (folded paper, cotton-ball clouds, twine, blue water drops) where relevant. Shot from a top-down bird's-eye view with soft even lighting that minimises shadows. Educational, modern, easy to understand.";
     case "executive_tech_spec":
@@ -579,6 +640,14 @@ function getVisualRecipeBlock(recipe: A4VisualRecipe | null | undefined): string
 function getIllustrationStyleBlock(style: A4IllustrationStyle | null | undefined): string {
   if (!style || style === "none") return "";
   switch (style) {
+    case "line_art":
+      return "Illustration approach: clean line-art drawings with minimal fills, precise outlines, and editorial clarity.";
+    case "sketch_handdrawn":
+      return "Illustration approach: hand-drawn sketch style, lightly imperfect lines, notebook-like human warmth.";
+    case "collage_cutout":
+      return "Illustration approach: collage cut-out composition mixing paper snippets, clipped shapes, and layered image fragments.";
+    case "pastel_gouache":
+      return "Illustration approach: soft gouache / pastel painted look with velvety color blocks and gentle handcrafted character.";
     case "icons":
       return "Illustration approach: minimal line or filled icons only. No larger illustrations. Icons support bullets, section headings, and small callouts.";
     case "flat_vector":
@@ -607,6 +676,11 @@ function getAccentElementsBlock(elements: A4AccentElement[] | null | undefined):
     dotted_dividers: "dotted or dashed hairline dividers between sections",
     paper_tape: "washi-tape or paper-tape strips fastening key elements to the page",
     thread_connectors: "decorative thread or twine lines linking related items",
+    underlines: "hand-drawn or brush underlines emphasizing key headings or phrases",
+    sticky_notes: "small sticky-note style callouts pinned beside important points",
+    spark_lines: "small burst or spark accent lines around highlighted elements",
+    ink_stamps: "tasteful ink-stamp style seals or labels for emphasis",
+    washi_corners: "decorative washi-tape corners anchoring select cards or images",
   };
   const pieces = elements.map((e) => map[e]).filter(Boolean);
   if (pieces.length === 0) return "";
@@ -616,6 +690,14 @@ function getAccentElementsBlock(elements: A4AccentElement[] | null | undefined):
 function getBackgroundTreatmentBlock(bg: A4BackgroundTreatment | null | undefined): string {
   if (!bg) return "";
   switch (bg) {
+    case "dark_solid":
+      return "Background: deep dark solid tone, premium and cinematic, with strong readable contrast for text and cards.";
+    case "linen_texture":
+      return "Background: subtle linen or fabric texture, premium and tactile, lightly visible behind the layout.";
+    case "marble_surface":
+      return "Background: soft light marble or stone surface texture with restrained luxury feel.";
+    case "chalkboard":
+      return "Background: chalkboard-style dark surface with subtle chalk texture, while keeping all text crisp and readable.";
     case "plain_white":
       return "Background: pure flat white, edge-to-edge.";
     case "soft_paper_texture":
@@ -673,6 +755,10 @@ function getContentComponentsBlock(
     grading_circle: "a bold circle in the bottom-right corner containing a blank line followed by a denominator (for example '___ / 10'), labeled 'Final Grade' above it",
     pull_quote: "one or two large pull-quote blocks emphasising key phrases from the content",
     callout_boxes: "small callout boxes highlighting key facts or warnings beside their relevant sections",
+    metric_tiles: "a row or grid of metric tiles featuring short labels with bold headline values only when those values are present in the content",
+    faq_block: "a concise FAQ block with short question-and-answer pairs derived directly from the content",
+    numbered_steps: "a numbered step list with strong visual numbering and compact supporting text",
+    process_chevrons: "a chevron-based process strip or directional process row showing ordered phases or steps",
   };
 
   // Anti-hallucination guard: if the content carries no numeric data, strip
@@ -725,6 +811,14 @@ function getContentComponentsBlock(
 function getLayoutPatternBlock(pattern: A4LayoutPattern | null | undefined): string {
   if (!pattern) return "";
   switch (pattern) {
+    case "top_bottom_split":
+      return "Layout pattern: clear top section and bottom section split, with strong horizontal separation between the two zones.";
+    case "magazine_editorial":
+      return "Layout pattern: editorial magazine composition with varied block sizes, refined asymmetry, and strong hierarchy.";
+    case "zigzag_story":
+      return "Layout pattern: staggered zigzag storytelling path guiding the eye across alternating sections.";
+    case "card_mosaic":
+      return "Layout pattern: mosaic of cards with varied sizes but aligned edges and strong rhythm.";
     case "single_column":
       return "Layout pattern: single full-width column, top-to-bottom reading flow.";
     case "two_column_split":

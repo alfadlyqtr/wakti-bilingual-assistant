@@ -5,6 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
+import { ImageSharePickerDialog } from '@/components/studio/ImageSharePickerDialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import ShareButton from '@/components/ui/ShareButton';
@@ -99,6 +100,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [savedBucketUrl, setSavedBucketUrl] = useState<string | null>(null);
   const [savedImageId, setSavedImageId] = useState<string | null>(null);
   const [savedSourceUrl, setSavedSourceUrl] = useState<string | null>(null);
+  const [shareImageTarget, setShareImageTarget] = useState<{ id: string; title: string; imageUrl: string | null } | null>(null);
 
   // Pick from saved state
   const [showSavedPicker, setShowSavedPicker] = useState(false);
@@ -506,7 +508,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       triggerSaveSuccess?: boolean;
     }
   ) => {
-    if (!imageUrl || !user?.id) return false;
+    if (!imageUrl || !user?.id) {
+      return { success: false, imageId: null as string | null, imageUrl: null as string | null };
+    }
 
     const {
       showSuccessToast = true,
@@ -521,13 +525,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       if (triggerSaveSuccess) {
         onSaveSuccess?.();
       }
-      return true;
+      return { success: true, imageId: savedImageId, imageUrl: savedBucketUrl || imageUrl };
     }
 
     setIsSaving(true);
     try {
       let bucketUrl = savedBucketUrl;
       let storagePath = '';
+      let resolvedImageId = savedImageId;
 
       if (!bucketUrl) {
         try {
@@ -569,6 +574,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         if (existingErr) throw existingErr;
 
         if (existingRow?.id) {
+          resolvedImageId = existingRow.id;
           setSavedImageId(existingRow.id);
         } else {
           const { data: row, error: dbErr } = await (supabase as any)
@@ -585,6 +591,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             .single();
           if (dbErr) throw dbErr;
           if (!row?.id) throw new Error('Save succeeded but no record ID was returned');
+          resolvedImageId = row.id;
           setSavedImageId(row.id);
         }
       }
@@ -597,13 +604,13 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       if (triggerSaveSuccess) {
         onSaveSuccess?.();
       }
-      return true;
+      return { success: true, imageId: resolvedImageId, imageUrl: bucketUrl || imageUrl };
     } catch (err: any) {
       console.error('Save failed:', err);
       if (showSuccessToast) {
         toast.error(language === 'ar' ? 'فشل الحفظ' : 'Save failed');
       }
-      return false;
+      return { success: false, imageId: null as string | null, imageUrl: null as string | null };
     } finally {
       setIsSaving(false);
     }
@@ -895,48 +902,56 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         { label: language === 'ar' ? '⬛ أبيض وأسود' : '⬛ Black & White', prompt: 'Change to black and white' },
       ];
     }
-    return [];
+    return [
+      { label: language === 'ar' ? '🌅 سينمائي' : '🌅 Cinematic', prompt: 'cinematic lighting, ultra detailed' },
+      { label: language === 'ar' ? '📸 واقعي' : '📸 Realistic', prompt: 'photorealistic, highly detailed' },
+      { label: language === 'ar' ? '🎨 فني' : '🎨 Artistic', prompt: 'artistic illustration, vibrant colors' },
+      { label: language === 'ar' ? '✨ ناعم' : '✨ Soft Glow', prompt: 'soft glow, dreamy atmosphere' },
+    ];
   };
 
-  // ─── Shared submode tabs component ───
   const SubmodeTabs = () => (
-    <div className="p-1 rounded-2xl bg-gradient-to-r from-[#0c0f14]/5 via-[#606062]/10 to-[#0c0f14]/5 dark:from-[#0c0f14] dark:via-[#1a1d24] dark:to-[#0c0f14] border border-[#606062]/20 dark:border-[#606062]/30 backdrop-blur-sm shadow-inner">
-      <div className="grid grid-cols-2 gap-1.5">
-        {submodes.map((m) => {
-          const isActive = submode === m.key;
-          const isVisualAds = m.key === 'visual-ads';
-          return (
-            <button
-              key={m.key}
-              onClick={() => { setSubmode(m.key); resetForNewGeneration(); setUploadedFile(null); setPrompt(''); }}
-              title={language === 'ar' ? m.labelAr : m.labelEn}
-              className={`relative flex items-center justify-center gap-2 px-3 py-3 rounded-xl transition-all duration-200 min-h-[58px] touch-manipulation ${
-                isVisualAds ? 'col-span-2' : ''
-              } ${
-                isActive
-                  ? isVisualAds
-                    ? 'bg-gradient-to-r from-orange-400 via-amber-400 to-orange-400 text-[#060541] shadow-lg shadow-orange-500/40 scale-[1.02]'
-                    : 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
-                  : isVisualAds
-                    ? 'bg-white/50 dark:bg-white/5 border-2 border-orange-400/60 dark:border-amber-500/50 hover:bg-white/70 dark:hover:bg-white/10 active:scale-95'
-                    : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
-              }`}
-            >
-              <span className="text-lg leading-none">{m.emoji}</span>
-              <span className={`font-semibold leading-none ${
-                isVisualAds ? 'text-sm' : 'text-[10px]'
-              } ${
-                isActive ? 'text-white dark:text-[#060541]' : (isVisualAds ? 'text-foreground dark:text-[#f2f2f2]' : 'text-[#858384] dark:text-[#606062]')
-              }`}>{language === 'ar' ? m.shortAr : m.shortEn}</span>
-              {isActive && (
-                <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 dark:from-transparent dark:via-transparent dark:to-transparent pointer-events-none" />
-              )}
-            </button>
-          );
-        })}
-      </div>
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+      {submodes.map((m) => {
+        const isActive = submode === m.key;
+        const isVisualAds = m.key === 'visual-ads';
+
+        return (
+          <button
+            key={m.key}
+            type="button"
+            onClick={() => setSubmode(m.key)}
+            title={language === 'ar' ? m.labelAr : m.labelEn}
+            className={`relative flex items-center justify-center gap-2 px-3 py-3 rounded-xl transition-all duration-200 min-h-[58px] touch-manipulation ${
+              isVisualAds ? 'col-span-2 sm:col-span-1' : ''
+            } ${
+              isActive
+                ? isVisualAds
+                  ? 'bg-gradient-to-r from-orange-400 via-amber-400 to-orange-400 text-[#060541] shadow-lg shadow-orange-500/40 scale-[1.02]'
+                  : 'bg-gradient-to-br from-[#060541] via-[#1a1a4a] to-[#060541] dark:from-[#f2f2f2] dark:via-[#e0e0e0] dark:to-[#f2f2f2] shadow-lg shadow-[#060541]/25 dark:shadow-white/25 scale-[1.02]'
+                : isVisualAds
+                  ? 'bg-white/50 dark:bg-white/5 border-2 border-orange-400/60 dark:border-amber-500/50 hover:bg-white/70 dark:hover:bg-white/10 active:scale-95'
+                  : 'bg-white/30 dark:bg-white/5 border border-[#606062]/20 dark:border-[#858384]/30 hover:bg-white/50 dark:hover:bg-white/15 active:scale-95'
+            }`}
+          >
+            <span className="text-lg leading-none">{m.emoji}</span>
+            <span className={`font-semibold leading-none ${
+              isVisualAds ? 'text-sm' : 'text-[10px]'
+            } ${
+              isActive ? 'text-white dark:text-[#060541]' : (isVisualAds ? 'text-foreground dark:text-[#f2f2f2]' : 'text-[#858384] dark:text-[#606062]')
+            }`}>
+              {language === 'ar' ? m.shortAr : m.shortEn}
+            </span>
+            {isActive && (
+              <span className="absolute inset-0 rounded-xl bg-gradient-to-r from-orange-500/10 via-amber-500/10 to-orange-500/10 dark:from-transparent dark:via-transparent dark:to-transparent pointer-events-none" />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
+
+  const WaktiShareIcon = () => <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="" className="w-full h-full object-cover rounded-full" />;
 
   // ─── Result actions bar ───
   const ResultActions = () => (
@@ -988,6 +1003,31 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         shareTitle={language === 'ar' ? 'صورة من Wakti AI' : 'Image from Wakti AI'}
         shareDescription={language === 'ar' ? 'تم إنشاؤها بواسطة Wakti AI' : 'Created with Wakti AI'}
         size="sm"
+        extraActions={[
+          {
+            name: 'wakti',
+            icon: WaktiShareIcon,
+            bgColor: 'bg-transparent !p-0 overflow-hidden',
+            angle: 309,
+            action: async () => {
+              if (!resultImageUrl) return;
+              const ensured = await persistGeneratedImage(resultImageUrl, {
+                showSuccessToast: false,
+                showAlreadySavedToast: false,
+                triggerSaveSuccess: false,
+              });
+              if (!ensured.success || !ensured.imageId) {
+                toast.error(language === 'ar' ? 'فشل تجهيز الصورة للمشاركة' : 'Failed to prepare image for sharing');
+                return;
+              }
+              setShareImageTarget({
+                id: ensured.imageId,
+                title: prompt || (language === 'ar' ? 'صورة من وقتي' : 'Image from Wakti'),
+                imageUrl: ensured.imageUrl || resultImageUrl,
+              });
+            },
+          },
+        ]}
       />
       {resultImageUrl && (
         <InstagramPublishButton
@@ -1251,6 +1291,13 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             const customTopic = normalizeShortValue(visualState.creativeSoul.customMainMessage);
             const customCta = normalizeShortValue(visualState.creativeSoul.customCta);
             const customStyle = normalizeShortValue(visualState.creativeSoul.customStyle);
+            const featureChips = (visualState.creativeSoul.featureChips || [])
+              .map((chip) => normalizeShortValue(chip))
+              .filter(Boolean)
+              .slice(0, 5);
+            const canUseFeatureChips = visualState.creativeSoul.mainMessage === 'custom'
+              ? Boolean(customTopic)
+              : Boolean(visualState.creativeSoul.mainMessage && visualState.creativeSoul.mainMessageVariant);
             const selectedTopicChip = visualState.creativeSoul.mainMessage && visualState.creativeSoul.mainMessage !== 'custom'
               ? adTopicChips.find((chip) => chip.id === visualState.creativeSoul.mainMessage) || null
               : null;
@@ -1710,6 +1757,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 `    main_message: ${visualState.creativeSoul.mainMessage === 'custom' ? 'custom' : (topicLabels[visualState.creativeSoul.mainMessage] || 'none')}`,
                 ...(visualState.creativeSoul.mainMessage === 'custom' && customTopic ? [`    main_message_custom_text: ${toQuoted(customTopic)}`] : []),
                 ...(visualState.creativeSoul.mainMessage !== 'custom' && visualState.creativeSoul.mainMessageVariant ? [`    main_message_detail: ${topicVariantLabels[visualState.creativeSoul.mainMessage]?.[visualState.creativeSoul.mainMessageVariant] || visualState.creativeSoul.mainMessageVariant}`] : []),
+                ...(canUseFeatureChips && featureChips.length ? [`    feature_points: [${featureChips.map(toQuoted).join(', ')}]`] : []),
                 ...(allowedText.length ? [`    cta_text: ${toQuoted(allowedText[0])}`] : []),
               ];
 
@@ -1780,6 +1828,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   main_message_custom_text: visualState.creativeSoul.mainMessage === 'custom' ? customTopic || null : null,
                   main_message_detail_id: visualState.creativeSoul.mainMessageVariant || null,
                   main_message_detail_prompt: selectedTopicVariant?.prompt || null,
+                  feature_chips: canUseFeatureChips ? featureChips : [],
+                  require_exact_feature_chips: canUseFeatureChips && featureChips.length > 0,
                   cta_id: visualState.creativeSoul.cta || null,
                   cta_text: allowedText[0] || null,
                   cta_prompt: selectedCtaChip?.label || null,
@@ -1805,6 +1855,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 },
                 text_policy: {
                   allowed_text: allowedText,
+                  allowed_feature_labels: canUseFeatureChips ? featureChips : [],
                   allow_generated_headline: false,
                   allow_generated_tagline: false,
                   allow_generated_social_proof_copy: false,
@@ -2489,7 +2540,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           </div>
         </div>
       )}
-    </div>
+      </div>
+      <ImageSharePickerDialog
+        isOpen={!!shareImageTarget}
+        image={shareImageTarget}
+        onClose={() => setShareImageTarget(null)}
+        onSent={() => setShareImageTarget(null)}
+      />
+      <Lightbox />
     </>
   );
 }

@@ -36,6 +36,7 @@ export interface VisualAdsState {
     mainMessage: string;
     customMainMessage: string;
     mainMessageVariant: string;
+    featureChips: string[];
     cta: string;
     customCta: string;
     style: string;
@@ -361,6 +362,7 @@ export default function VisualAdsGenerator({
   ] as const;
   const MAX_ASSET_IMAGES = 6;
   const INITIAL_VISIBLE_SLOTS = 4;
+  const MAX_FEATURE_CHIPS = 5;
   
   // State
   const [activeStep, setActiveStep] = useState<number | null>(1);
@@ -369,11 +371,12 @@ export default function VisualAdsGenerator({
   const [selectedAssetIndex, setSelectedAssetIndex] = useState(0);
   const [openBriefSection, setOpenBriefSection] = useState<1 | 4 | null>(1);
   const [visibleSlotCount, setVisibleSlotCount] = useState(INITIAL_VISIBLE_SLOTS);
+  const [featureChipDraft, setFeatureChipDraft] = useState('');
 
   const [state, setState] = useState<VisualAdsState>({
     brandAsset: { image: null, type: null },
     campaignDNA: { platform: null, objective: '' },
-    creativeSoul: { mainMessage: '', customMainMessage: '', mainMessageVariant: '', cta: '', customCta: '', style: '', customStyle: '', styleVariant: '' },
+    creativeSoul: { mainMessage: '', customMainMessage: '', mainMessageVariant: '', featureChips: [], cta: '', customCta: '', style: '', customStyle: '', styleVariant: '' },
     assets: [],
   });
 
@@ -395,6 +398,10 @@ export default function VisualAdsGenerator({
   const hasMoreThanThreeWords = useCallback((value: string) => {
     const normalized = normalizeWordLimitedValue(value);
     return normalized.length > 0 && normalized.split(' ').length > 3;
+  }, [normalizeWordLimitedValue]);
+  const hasMoreThanFourWords = useCallback((value: string) => {
+    const normalized = normalizeWordLimitedValue(value);
+    return normalized.length > 0 && normalized.split(' ').length > 4;
   }, [normalizeWordLimitedValue]);
   const getCustomSelectionLabel = useCallback((value?: string) => {
     const normalized = normalizeWordLimitedValue(value || '');
@@ -459,6 +466,11 @@ export default function VisualAdsGenerator({
   const selectedTopicVariantMeta = getSelectedTopicVariantMeta();
   const selectedStyleMeta = getSelectedStyleMeta();
   const selectedStyleVariantMeta = getSelectedStyleVariantMeta();
+  const normalizedFeatureChipDraft = normalizeWordLimitedValue(featureChipDraft);
+  const hasMainMessageDetail = state.creativeSoul.mainMessage === 'custom'
+    ? Boolean(normalizeWordLimitedValue(state.creativeSoul.customMainMessage || ''))
+    : Boolean(state.creativeSoul.mainMessage && state.creativeSoul.mainMessageVariant);
+  const canUseFeatureChips = Boolean(state.creativeSoul.mainMessage) && hasMainMessageDetail;
   const getPersonModeLabel = useCallback((asset: NonNullable<VisualAdsState['assets']>[number]) => {
     if (asset.type !== 'person') return '';
     if (asset.personMode === 'reference') {
@@ -590,6 +602,27 @@ export default function VisualAdsGenerator({
     customFieldToastShownRef.current[field] = false;
     updateCreativeSoul({ [field]: value } as Partial<VisualAdsState['creativeSoul']>);
   }, [hasMoreThanThreeWords, language, updateCreativeSoul]);
+  const addFeatureChip = useCallback(() => {
+    const normalized = normalizeWordLimitedValue(featureChipDraft);
+    if (!normalized) return;
+    if (hasMoreThanFourWords(normalized)) {
+      toast.error(language === 'ar' ? 'اكتب من كلمة إلى ٤ كلمات كحد أقصى لكل ميزة' : 'Use 1 to 4 words maximum per feature');
+      return;
+    }
+    if (state.creativeSoul.featureChips.includes(normalized)) {
+      toast.error(language === 'ar' ? 'هذه الميزة مضافة بالفعل' : 'This feature is already added');
+      return;
+    }
+    if (state.creativeSoul.featureChips.length >= MAX_FEATURE_CHIPS) {
+      toast.error(language === 'ar' ? 'يمكنك إضافة حتى ٥ ميزات فقط' : 'You can add up to 5 features only');
+      return;
+    }
+    updateCreativeSoul({ featureChips: [...state.creativeSoul.featureChips, normalized] });
+    setFeatureChipDraft('');
+  }, [MAX_FEATURE_CHIPS, featureChipDraft, hasMoreThanFourWords, language, normalizeWordLimitedValue, state.creativeSoul.featureChips, updateCreativeSoul]);
+  const removeFeatureChip = useCallback((chipToRemove: string) => {
+    updateCreativeSoul({ featureChips: state.creativeSoul.featureChips.filter((chip) => chip !== chipToRemove) });
+  }, [state.creativeSoul.featureChips, updateCreativeSoul]);
 
   // Handle multiple file uploads (up to 6)
   const [uploadedImages, setUploadedImages] = useState<Array<{
@@ -632,16 +665,37 @@ export default function VisualAdsGenerator({
     });
   }, [uploadedImages.length, INITIAL_VISIBLE_SLOTS, MAX_ASSET_IMAGES]);
 
-  const handleSavedImageSelect = useCallback((url: string) => {
-    if (uploadedImages.length >= MAX_ASSET_IMAGES) {
-      toast.error(language === 'ar' ? 'الحد الأقصى 6 صور' : 'Max 6 images allowed');
+  useEffect(() => {
+    if (!canUseFeatureChips) {
+      if (featureChipDraft) setFeatureChipDraft('');
+      if (state.creativeSoul.featureChips.length) {
+        updateCreativeSoul({ featureChips: [] });
+      }
+    }
+  }, [canUseFeatureChips, featureChipDraft, state.creativeSoul.featureChips.length, updateCreativeSoul]);
+
+  const handleSavedImageSelect = useCallback((imageUrl: string) => {
+    if (!imageUrl) {
+      toast.error(language === 'ar' ? 'هذا العنصر لا يحتوي على صورة صالحة' : 'This item does not have a valid image');
       return;
     }
 
-    const newImages = [{ image: url, type: null as any, customType: null, customTypeDraft: null, personMode: null, exactPersonStyle: null, referenceStyle: null, logoMode: null, screenshotDevice: null }];
-    const allImages = [...uploadedImages, ...newImages].slice(0, MAX_ASSET_IMAGES);
+    const nextAsset = {
+      image: imageUrl,
+      type: null as 'logo' | 'product' | 'screenshot' | 'person' | 'background' | 'icon' | 'prop' | 'mascot' | 'texture' | 'illustration' | null,
+      customType: null,
+      customTypeDraft: null,
+      personMode: null,
+      exactPersonStyle: null,
+      referenceStyle: null,
+      logoMode: null,
+      screenshotDevice: null,
+    };
+    const allImages = [...uploadedImages, nextAsset].slice(0, MAX_ASSET_IMAGES);
+    const newIndex = Math.max(0, allImages.length - 1);
+
     setUploadedImages(allImages);
-    setSelectedAssetIndex(uploadedImages.length);
+    setSelectedAssetIndex(newIndex);
     setCompletedSteps(prev => {
       const next = new Set(prev);
       next.delete(1);
@@ -651,15 +705,15 @@ export default function VisualAdsGenerator({
     setState(prev => ({
       ...prev,
       brandAsset: {
-        image: allImages[uploadedImages.length]?.image || allImages[0]?.image || null,
-        type: allImages[uploadedImages.length]?.type || null,
-        customType: allImages[uploadedImages.length]?.customType || null,
-        customTypeDraft: allImages[uploadedImages.length]?.customTypeDraft || null,
-        personMode: allImages[uploadedImages.length]?.personMode || null,
-        exactPersonStyle: allImages[uploadedImages.length]?.exactPersonStyle || null,
-        referenceStyle: allImages[uploadedImages.length]?.referenceStyle || null,
-        logoMode: allImages[uploadedImages.length]?.logoMode || null,
-        screenshotDevice: allImages[uploadedImages.length]?.screenshotDevice || null,
+        image: allImages[newIndex]?.image || allImages[0]?.image || null,
+        type: allImages[newIndex]?.type || null,
+        customType: allImages[newIndex]?.customType || null,
+        customTypeDraft: allImages[newIndex]?.customTypeDraft || null,
+        personMode: allImages[newIndex]?.personMode || null,
+        exactPersonStyle: allImages[newIndex]?.exactPersonStyle || null,
+        referenceStyle: allImages[newIndex]?.referenceStyle || null,
+        logoMode: allImages[newIndex]?.logoMode || null,
+        screenshotDevice: allImages[newIndex]?.screenshotDevice || null,
       },
       creativeSoul: {
         ...prev.creativeSoul,
@@ -1411,8 +1465,11 @@ export default function VisualAdsGenerator({
                 ? getCustomSelectionLabel(state.creativeSoul.customStyle)
                 : adStyleChips.find(s => s.id === state.creativeSoul.style)?.label;
               const selectedStyleVariant = selectedStyleVariantMeta.label;
+              const selectedFeatureSummary = state.creativeSoul.featureChips.length > 0
+                ? (language === 'ar' ? `${state.creativeSoul.featureChips.length} نقاط` : `${state.creativeSoul.featureChips.length} points`)
+                : null;
               const isOpen = openBriefSection === 1;
-              const selectedQuickSettings = [selectedTopic, selectedTopicVariant, selectedCta, selectedStyle, selectedStyleVariant].filter(Boolean);
+              const selectedQuickSettings = [selectedTopic, selectedTopicVariant, selectedFeatureSummary, selectedCta, selectedStyle, selectedStyleVariant].filter(Boolean);
               return (
                 <div className="rounded-xl border border-[#606062]/20 dark:border-[#858384]/20 overflow-hidden">
                   <button
@@ -1464,7 +1521,11 @@ export default function VisualAdsGenerator({
                                 key={chip.id}
                                 onClick={() => {
                                   const newVal = state.creativeSoul.mainMessage === chip.id ? '' : chip.id;
-                                  updateCreativeSoul({ mainMessage: newVal, customMainMessage: newVal ? '' : state.creativeSoul.customMainMessage, mainMessageVariant: newVal ? '' : state.creativeSoul.mainMessageVariant });
+                                  updateCreativeSoul({
+                                    mainMessage: newVal,
+                                    customMainMessage: newVal ? '' : state.creativeSoul.customMainMessage,
+                                    mainMessageVariant: newVal ? '' : state.creativeSoul.mainMessageVariant,
+                                  });
                                 }}
                                 type="button"
                                 className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium transition-all text-left leading-tight ${
@@ -1478,7 +1539,9 @@ export default function VisualAdsGenerator({
                             ))}
                             <button
                               type="button"
-                              onClick={() => updateCreativeSoul({ mainMessage: state.creativeSoul.mainMessage === 'custom' ? '' : 'custom', mainMessageVariant: '' })}
+                              onClick={() => {
+                                updateCreativeSoul({ mainMessage: state.creativeSoul.mainMessage === 'custom' ? '' : 'custom', mainMessageVariant: '' });
+                              }}
                               className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium transition-all text-left leading-tight ${
                                 state.creativeSoul.mainMessage === 'custom'
                                   ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
@@ -1507,6 +1570,58 @@ export default function VisualAdsGenerator({
                                   </button>
                                 ))}
                               </div>
+                            </div>
+                          )}
+                          {canUseFeatureChips && (
+                            <div className="space-y-2 rounded-xl border border-[#606062]/15 bg-white/30 p-2 dark:border-[#858384]/20 dark:bg-white/[0.03]">
+                              <div>
+                                <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'النقاط الأساسية' : 'Key points'}</p>
+                                <p className="text-[10px] text-[#858384]">{language === 'ar' ? 'أضف حتى ٥ نقاط قصيرة ليستخدمها الإعلان كما هي.' : 'Add up to 5 short points for the ad to use exactly as written.'}</p>
+                              </div>
+                              <div className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={featureChipDraft}
+                                  onChange={(e) => setFeatureChipDraft(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      e.preventDefault();
+                                      addFeatureChip();
+                                    }
+                                  }}
+                                  placeholder={language === 'ar' ? 'مثال: Text to Video' : 'e.g. Text to Video'}
+                                  className="flex-1 rounded-xl bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-400/60"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={addFeatureChip}
+                                  disabled={!normalizedFeatureChipDraft || state.creativeSoul.featureChips.length >= MAX_FEATURE_CHIPS}
+                                  className="rounded-xl bg-gradient-to-r from-orange-400 to-amber-400 px-3 py-2 text-xs font-semibold text-[#060541] shadow-[0_4px_14px_rgba(251,146,60,0.28)] disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {language === 'ar' ? 'إضافة' : 'Add'}
+                                </button>
+                              </div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {state.creativeSoul.featureChips.map((chip) => (
+                                  <button
+                                    key={chip}
+                                    type="button"
+                                    onClick={() => removeFeatureChip(chip)}
+                                    className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-orange-400 to-amber-400 px-2.5 py-1 text-[10px] font-semibold text-[#060541] shadow-[0_3px_10px_rgba(251,146,60,0.2)]"
+                                  >
+                                    <span>{chip}</span>
+                                    <span className="text-[11px] leading-none">×</span>
+                                  </button>
+                                ))}
+                                {!state.creativeSoul.featureChips.length && (
+                                  <span className="text-[10px] text-[#858384]">
+                                    {language === 'ar' ? 'مثال: New Launch، App Download، Try it Today' : 'Example: New Launch, App Download, Try it Today'}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-[#858384]">
+                                {language === 'ar' ? `كل نقطة من كلمة إلى ٤ كلمات. ${state.creativeSoul.featureChips.length}/${MAX_FEATURE_CHIPS}` : `Each point is 1 to 4 words. ${state.creativeSoul.featureChips.length}/${MAX_FEATURE_CHIPS}`}
+                              </p>
                             </div>
                           )}
                           {state.creativeSoul.mainMessage === 'custom' && (

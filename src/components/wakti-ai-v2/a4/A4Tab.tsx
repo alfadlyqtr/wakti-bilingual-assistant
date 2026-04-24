@@ -351,18 +351,18 @@ const UrlFetchHelper: React.FC<{
   };
 
   return (
-    <div className="relative">
+    <div className="relative w-full sm:w-auto">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-background text-[11px] font-medium hover:border-primary/40 hover:text-primary transition"
+        className="inline-flex w-full items-center justify-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-background text-[11px] font-medium hover:border-primary/40 hover:text-primary transition sm:w-auto sm:justify-start"
       >
         <LinkIcon className="h-3 w-3" />
         {t("Fetch from URL", "جلب من رابط")}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 z-20 rounded-xl border border-border bg-card shadow-lg p-3">
+        <div className="absolute left-0 right-0 top-full mt-2 z-20 rounded-xl border border-border bg-card shadow-lg p-3 sm:left-auto sm:right-0 sm:w-[28rem]">
           <div className="text-xs font-medium mb-1.5">
             {t("Paste a page URL", "الصق رابط صفحة")}
           </div>
@@ -381,12 +381,12 @@ const UrlFetchHelper: React.FC<{
             )}
           </div>
           {error && <div className="text-[11px] text-red-500 mt-2">{error}</div>}
-          <div className="flex items-center gap-2 mt-3">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
             <button
               type="button"
               onClick={handleFetch}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-60 hover:opacity-90 transition"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-medium disabled:opacity-60 hover:opacity-90 transition"
             >
               {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <LinkIcon className="h-3 w-3" />}
               {loading ? t("Fetching…", "جاري الجلب…") : t("Fetch", "جلب")}
@@ -528,7 +528,7 @@ const FormFieldRenderer: React.FC<{
     case "textarea":
       return (
         <div className={commonWrapperCls}>
-          <div className="flex items-center justify-between mb-1.5">
+          <div className="mb-1.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <label className={labelCls + " mb-0"}>
               {label} {field.required && <span className="text-red-500">*</span>}
             </label>
@@ -864,20 +864,37 @@ const COLOR_PALETTES: Array<{
   { id: "graphite", name_en: "Graphite", name_ar: "جرافيت", bg: "#F3F4F6", text: "#111827", accent: "#4B5563" },
 ];
 
-const FONT_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["font_family"]>; en: string; ar: string }> = [
-  { id: "modern_sans", en: "Modern Sans", ar: "عصري" },
-  { id: "classic_serif", en: "Classic Serif", ar: "كلاسيكي" },
-  { id: "elegant_script", en: "Elegant Script", ar: "أنيق" },
-  { id: "bold_display", en: "Bold Display", ar: "عريض" },
-  { id: "playful_hand", en: "Playful Hand", ar: "مرح" },
+type LocalizedChipOption<T extends string = string> = {
+  id: T;
+  en: string;
+  ar: string;
+  hint_en?: string;
+  hint_ar?: string;
+};
+
+const FONT_OPTIONS: LocalizedChipOption<NonNullable<A4DesignSettings["font_family"]>>[] = [
+  { id: "modern_sans", en: "Modern Sans", ar: "عصري", hint_en: "Clean and contemporary", hint_ar: "نظيف وعصري" },
+  { id: "rounded_sans", en: "Rounded Sans", ar: "مستدير", hint_en: "Soft and friendly", hint_ar: "ناعم وودود" },
+  { id: "classic_serif", en: "Classic Serif", ar: "كلاسيكي", hint_en: "Traditional and academic", hint_ar: "تقليدي وأكاديمي" },
+  { id: "editorial_serif", en: "Editorial Serif", ar: "تحريري", hint_en: "Magazine-like premium serif", hint_ar: "سيرف فاخر يشبه المجلات" },
+  { id: "elegant_script", en: "Elegant Script", ar: "سكريبت أنيق", hint_en: "Polished script for headings", hint_ar: "خط أنيق للعناوين" },
+  { id: "luxury_script", en: "Luxury Script", ar: "سكريبت فاخر", hint_en: "Premium calligraphy feel", hint_ar: "إحساس فاخر يشبه الكاليغرافي" },
+  { id: "bold_display", en: "Bold Display", ar: "عريض جريء", hint_en: "Strong headline energy", hint_ar: "طاقة قوية للعناوين" },
+  { id: "playful_hand", en: "Playful Hand", ar: "مرح يدوي", hint_en: "Casual handwritten warmth", hint_ar: "دفء خط يدوي مرح" },
+  { id: "notebook_hand", en: "Notebook Hand", ar: "دفتر ملاحظات", hint_en: "Neat student notes feel", hint_ar: "إحساس ملاحظات طالب مرتبة" },
+  { id: "marker_hand", en: "Marker Hand", ar: "ماركر يدوي", hint_en: "Bold handwritten marker look", hint_ar: "شكل خط يدوي بالماركر" },
+  { id: "monoline_hand", en: "Monoline Hand", ar: "أحادي الخط", hint_en: "Stylish clean handwriting", hint_ar: "خط يدوي أنيق ونظيف" },
 ];
 
-const BORDER_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["border_style"]>; en: string; ar: string }> = [
+const BORDER_OPTIONS: LocalizedChipOption<NonNullable<A4DesignSettings["border_style"]>>[] = [
   { id: "none", en: "None", ar: "بدون" },
   { id: "thin", en: "Thin", ar: "رفيع" },
   { id: "thick", en: "Thick", ar: "سميك" },
   { id: "rounded", en: "Rounded", ar: "مدوّر" },
   { id: "decorative", en: "Decorative", ar: "زخرفي" },
+  { id: "double_line", en: "Double Line", ar: "خطّان" },
+  { id: "dashed", en: "Dashed", ar: "متقطّع" },
+  { id: "corner_frame", en: "Corner Frame", ar: "إطار الزوايا" },
 ];
 
 const ORIENTATION_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["orientation"]>; en: string; ar: string }> = [
@@ -885,18 +902,95 @@ const ORIENTATION_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["orientation
   { id: "landscape", en: "Landscape", ar: "عرضي" },
 ];
 
-const DENSITY_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["density"]>; en: string; ar: string }> = [
+const DENSITY_OPTIONS: LocalizedChipOption<NonNullable<A4DesignSettings["density"]>>[] = [
+  { id: "ultra_compact", en: "Ultra Compact", ar: "مكثف جدًا" },
   { id: "compact", en: "Compact", ar: "مكثف" },
   { id: "balanced", en: "Balanced", ar: "متوازن" },
   { id: "airy", en: "Airy", ar: "فسيح" },
+  { id: "spacious", en: "Spacious", ar: "واسع جدًا" },
 ];
 
-const TONE_OPTIONS: Array<{ id: NonNullable<A4DesignSettings["tone"]>; en: string; ar: string }> = [
+const TONE_OPTIONS: LocalizedChipOption<NonNullable<A4DesignSettings["tone"]>>[] = [
   { id: "professional", en: "Professional", ar: "احترافي" },
   { id: "friendly", en: "Friendly", ar: "ودود" },
   { id: "playful", en: "Playful", ar: "مرح" },
   { id: "formal", en: "Formal", ar: "رسمي" },
+  { id: "elegant", en: "Elegant", ar: "أنيق" },
+  { id: "bold", en: "Bold", ar: "جريء" },
+  { id: "romantic", en: "Romantic", ar: "رومانسي" },
 ];
+
+function getLocalizedOptionLabel<T extends string>(
+  options: LocalizedChipOption<T>[],
+  id: T | null | undefined,
+  lang: "en" | "ar",
+  fallback = "",
+): string {
+  const match = options.find((option) => option.id === id);
+  if (!match) return fallback;
+  return lang === "ar" ? match.ar : match.en;
+}
+
+function getLocalizedOptionHint<T extends string>(
+  options: LocalizedChipOption<T>[],
+  id: T | null | undefined,
+  lang: "en" | "ar",
+): string {
+  const match = options.find((option) => option.id === id);
+  if (!match) return "";
+  return lang === "ar" ? match.hint_ar ?? "" : match.hint_en ?? "";
+}
+
+function summarizeSelectedOptions<T extends string>(
+  options: LocalizedChipOption<T>[],
+  selected: T[] | null | undefined,
+  lang: "en" | "ar",
+  emptyLabel: string,
+): string {
+  if (!selected || selected.length === 0) return emptyLabel;
+  const labels = selected
+    .map((id) => getLocalizedOptionLabel(options, id, lang))
+    .filter(Boolean);
+  if (labels.length === 0) return emptyLabel;
+  if (labels.length <= 2) return labels.join(" · ");
+  return `${labels.slice(0, 2).join(" · ")} +${labels.length - 2}`;
+}
+
+const SettingsDropdownSection: React.FC<{
+  titleEn: string;
+  titleAr: string;
+  summary?: string;
+  helperEn?: string;
+  helperAr?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}> = ({ titleEn, titleAr, summary, helperEn, helperAr, defaultOpen = false, children }) => {
+  const { lang, t } = useTL();
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div className="self-start h-fit rounded-xl border border-border/60 bg-background/50 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full flex items-center justify-between gap-3 px-3 py-2.5 hover:bg-muted/30 transition"
+      >
+        <div className={`min-w-0 ${lang === "ar" ? "text-right" : "text-left"}`}>
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {t(titleEn, titleAr)}
+          </div>
+          {(summary || helperEn || helperAr) && (
+            <div className="mt-0.5 text-xs font-medium text-foreground/85 truncate">
+              {summary || t(helperEn ?? "", helperAr ?? "")}
+            </div>
+          )}
+        </div>
+        {open ? <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />}
+      </button>
+      {open && <div className="px-3 pb-3 pt-1">{children}</div>}
+    </div>
+  );
+};
 
 const DesignSettingsPanel: React.FC<{
   settings: A4DesignSettings;
@@ -906,6 +1000,7 @@ const DesignSettingsPanel: React.FC<{
   const [open, setOpen] = useState(false);
 
   const set = (patch: Partial<A4DesignSettings>) => onChange({ ...settings, ...patch });
+  const isRtl = lang === "ar";
 
   const segBtn = (active: boolean) =>
     `px-3 py-1.5 rounded-lg text-xs font-medium transition border ${
@@ -918,6 +1013,21 @@ const DesignSettingsPanel: React.FC<{
     `relative w-10 h-10 rounded-lg border-2 transition overflow-hidden shadow-sm hover:scale-105 ${
       active ? "border-primary ring-2 ring-primary/30" : "border-border"
     }`;
+
+  const richChipBtn = (active: boolean) =>
+    `rounded-xl border px-3 py-2 text-left transition ${
+      active
+        ? "border-primary bg-primary/10 text-primary shadow-sm ring-1 ring-primary/30"
+        : "border-border bg-background hover:border-primary/40 text-foreground/85"
+    }`;
+
+  const onPos = isRtl ? "-translate-x-6" : "translate-x-6";
+  const offPos = isRtl ? "-translate-x-1" : "translate-x-1";
+  const fontSummary = getLocalizedOptionLabel(FONT_OPTIONS, settings.font_family, lang, t("Modern Sans", "عصري"));
+  const fontHint = getLocalizedOptionHint(FONT_OPTIONS, settings.font_family, lang);
+  const borderSummary = getLocalizedOptionLabel(BORDER_OPTIONS, settings.border_style, lang, t("Thin", "رفيع"));
+  const densitySummary = getLocalizedOptionLabel(DENSITY_OPTIONS, settings.density, lang, t("Balanced", "متوازن"));
+  const toneSummary = getLocalizedOptionLabel(TONE_OPTIONS, settings.tone, lang, t("Professional", "احترافي"));
 
   return (
     <div className="mb-4 rounded-xl border border-border bg-gradient-to-br from-card to-background/50 overflow-hidden">
@@ -939,7 +1049,6 @@ const DesignSettingsPanel: React.FC<{
 
       {open && (
         <div className="px-4 pb-4 space-y-4">
-          {/* Orientation */}
           <div>
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
               {t("Orientation", "الاتجاه")}
@@ -958,7 +1067,6 @@ const DesignSettingsPanel: React.FC<{
             </div>
           </div>
 
-          {/* Color palettes */}
           <div>
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
               {t("Color Palette", "لوحة الألوان")}
@@ -1025,50 +1133,57 @@ const DesignSettingsPanel: React.FC<{
             </div>
           </div>
 
-          {/* Font family */}
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1">
-              <Type className="h-3 w-3" /> {t("Font Style", "نمط الخط")}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {FONT_OPTIONS.map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => set({ font_family: f.id })}
-                  className={segBtn(settings.font_family === f.id)}
-                >
-                  {lang === "ar" ? f.ar : f.en}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Border style */}
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5 flex items-center gap-1">
-              <SquareIcon className="h-3 w-3" /> {t("Border Style", "نمط الحدود")}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {BORDER_OPTIONS.map((b) => (
-                <button
-                  key={b.id}
-                  type="button"
-                  onClick={() => set({ border_style: b.id })}
-                  className={segBtn(settings.border_style === b.id)}
-                >
-                  {lang === "ar" ? b.ar : b.en}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Density + Tone row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
-                {t("Page Density", "كثافة الصفحة")}
+          <div className="grid grid-cols-2 gap-3 items-start">
+            <SettingsDropdownSection
+              titleEn="Font Style"
+              titleAr="نمط الخط"
+              summary={fontHint ? `${fontSummary} · ${fontHint}` : fontSummary}
+              defaultOpen={false}
+            >
+              <div className="grid grid-cols-1 gap-2">
+                {FONT_OPTIONS.map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => set({ font_family: f.id })}
+                    className={richChipBtn(settings.font_family === f.id)}
+                    title={lang === "ar" ? f.ar : f.en}
+                  >
+                    <div className="text-xs font-semibold">{lang === "ar" ? f.ar : f.en}</div>
+                    {(f.hint_en || f.hint_ar) && (
+                      <div className="mt-0.5 text-[10px] text-muted-foreground line-clamp-2">
+                        {lang === "ar" ? f.hint_ar : f.hint_en}
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
+            </SettingsDropdownSection>
+
+            <SettingsDropdownSection
+              titleEn="Border Style"
+              titleAr="نمط الحدود"
+              summary={borderSummary}
+            >
+              <div className="flex flex-wrap gap-2">
+                {BORDER_OPTIONS.map((b) => (
+                  <button
+                    key={b.id}
+                    type="button"
+                    onClick={() => set({ border_style: b.id })}
+                    className={segBtn(settings.border_style === b.id)}
+                  >
+                    {lang === "ar" ? b.ar : b.en}
+                  </button>
+                ))}
+              </div>
+            </SettingsDropdownSection>
+
+            <SettingsDropdownSection
+              titleEn="Page Density"
+              titleAr="كثافة الصفحة"
+              summary={densitySummary}
+            >
               <div className="flex flex-wrap gap-2">
                 {DENSITY_OPTIONS.map((d) => (
                   <button
@@ -1081,11 +1196,13 @@ const DesignSettingsPanel: React.FC<{
                   </button>
                 ))}
               </div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
-                {t("Tone", "اللهجة")}
-              </div>
+            </SettingsDropdownSection>
+
+            <SettingsDropdownSection
+              titleEn="Tone"
+              titleAr="النبرة"
+              summary={toneSummary}
+            >
               <div className="flex flex-wrap gap-2">
                 {TONE_OPTIONS.map((t2) => (
                   <button
@@ -1098,10 +1215,9 @@ const DesignSettingsPanel: React.FC<{
                   </button>
                 ))}
               </div>
-            </div>
+            </SettingsDropdownSection>
           </div>
 
-          {/* Decorative images toggle */}
           <div className="flex items-center justify-between border-t border-border/50 pt-3">
             <div>
               <div className="text-sm font-medium">{t("Include Decorative Images", "إدراج صور زخرفية")}</div>
@@ -1120,7 +1236,7 @@ const DesignSettingsPanel: React.FC<{
             >
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  settings.include_decorative_images ? "translate-x-6" : "translate-x-1"
+                  settings.include_decorative_images ? onPos : offPos
                 }`}
               />
             </button>
@@ -1137,7 +1253,7 @@ const DesignSettingsPanel: React.FC<{
 // in the middle. What the user clicks is exactly what the image model sees.
 // =============================================================================
 
-const VISUAL_RECIPE_OPTIONS: Array<{ id: A4VisualRecipe; en: string; ar: string; hint_en: string; hint_ar: string }> = [
+const VISUAL_RECIPE_OPTIONS: LocalizedChipOption<A4VisualRecipe>[] = [
   { id: "paper_craft_flatlay", en: "Paper-Craft Flat-Lay", ar: "قصاصات ورقية", hint_en: "Top-down paper cut-outs on textured paper", hint_ar: "قصاصات ورقية على خلفية ورقية" },
   { id: "executive_tech_spec", en: "Executive Tech Spec", ar: "مواصفات تقنية", hint_en: "Consultancy-grade panels, wheel & data table", hint_ar: "لوحات فخمة وجدول بيانات" },
   { id: "comic_triptych", en: "Comic Triptych", ar: "ثلاثية الكوميكس", hint_en: "3 vibrant panels with bold comic lettering", hint_ar: "٣ لوحات كوميكس بألوان قوية" },
@@ -1146,9 +1262,13 @@ const VISUAL_RECIPE_OPTIONS: Array<{ id: A4VisualRecipe; en: string; ar: string;
   { id: "craft_diy_explainer", en: "Craft DIY Explainer", ar: "شرح حرفي", hint_en: "Hand-cut shapes linked by ink arrows", hint_ar: "أشكال مقصوصة وأسهم رسم يدوي" },
   { id: "minimal_stationery", en: "Minimal Stationery", ar: "بسيط أنيق", hint_en: "Ultra-clean premium whitespace", hint_ar: "تصميم بسيط فاخر" },
   { id: "bold_poster", en: "Bold Poster", ar: "ملصق جريء", hint_en: "Hero headline, full-bleed background", hint_ar: "عنوان ضخم وخلفية كاملة" },
+  { id: "luxury_editorial", en: "Luxury Editorial", ar: "تحريري فاخر", hint_en: "Magazine elegance with premium spacing", hint_ar: "أناقة مجلة مع مساحات فاخرة" },
+  { id: "study_notes", en: "Study Notes", ar: "ملاحظات دراسية", hint_en: "Highlighter-style structured notes", hint_ar: "ملاحظات منظمة بأسلوب التحديد" },
+  { id: "scrapbook_story", en: "Scrapbook Story", ar: "سكراب بوك", hint_en: "Layered collage paper story feel", hint_ar: "إحساس قصة ورقية متعددة الطبقات" },
+  { id: "museum_catalog", en: "Museum Catalog", ar: "كتالوج متحف", hint_en: "Curated archival premium layout", hint_ar: "تخطيط أرشيفي فاخر ومنسق" },
 ];
 
-const ILLUSTRATION_STYLE_OPTIONS: Array<{ id: A4IllustrationStyle; en: string; ar: string }> = [
+const ILLUSTRATION_STYLE_OPTIONS: LocalizedChipOption<A4IllustrationStyle>[] = [
   { id: "none", en: "None", ar: "بدون" },
   { id: "icons", en: "Icons Only", ar: "أيقونات فقط" },
   { id: "flat_vector", en: "Flat Vector", ar: "فيكتور مسطح" },
@@ -1156,9 +1276,13 @@ const ILLUSTRATION_STYLE_OPTIONS: Array<{ id: A4IllustrationStyle; en: string; a
   { id: "watercolor", en: "Watercolor", ar: "ألوان مائية" },
   { id: "comic_bold", en: "Comic Bold", ar: "كوميكس" },
   { id: "photo_realistic", en: "Photo-Realistic", ar: "واقعي" },
+  { id: "line_art", en: "Line Art", ar: "خطّي" },
+  { id: "sketch_handdrawn", en: "Sketch Hand", ar: "سكتش يدوي" },
+  { id: "collage_cutout", en: "Collage Cutout", ar: "كولاج قصاصات" },
+  { id: "pastel_gouache", en: "Pastel Gouache", ar: "غواش باستيل" },
 ];
 
-const ACCENT_ELEMENT_OPTIONS: Array<{ id: A4AccentElement; en: string; ar: string }> = [
+const ACCENT_ELEMENT_OPTIONS: LocalizedChipOption<A4AccentElement>[] = [
   { id: "hand_drawn_arrows", en: "Hand-drawn Arrows", ar: "أسهم يدوية" },
   { id: "ribbons", en: "Ribbons", ar: "شرائط" },
   { id: "stars", en: "Stars", ar: "نجوم" },
@@ -1167,9 +1291,14 @@ const ACCENT_ELEMENT_OPTIONS: Array<{ id: A4AccentElement; en: string; ar: strin
   { id: "dotted_dividers", en: "Dotted Dividers", ar: "فواصل منقطة" },
   { id: "paper_tape", en: "Paper Tape", ar: "شريط ورقي" },
   { id: "thread_connectors", en: "Thread Connectors", ar: "خيوط رابطة" },
+  { id: "underlines", en: "Underlines", ar: "تسطير" },
+  { id: "sticky_notes", en: "Sticky Notes", ar: "ملاحظات لاصقة" },
+  { id: "spark_lines", en: "Spark Lines", ar: "خطوط إبراز" },
+  { id: "ink_stamps", en: "Ink Stamps", ar: "أختام حبر" },
+  { id: "washi_corners", en: "Washi Corners", ar: "زوايا واشي" },
 ];
 
-const BACKGROUND_TREATMENT_OPTIONS: Array<{ id: A4BackgroundTreatment; en: string; ar: string }> = [
+const BACKGROUND_TREATMENT_OPTIONS: LocalizedChipOption<A4BackgroundTreatment>[] = [
   { id: "plain_white", en: "Plain White", ar: "أبيض نقي" },
   { id: "soft_paper_texture", en: "Soft Paper", ar: "ورقي ناعم" },
   { id: "light_gradient", en: "Light Gradient", ar: "تدرّج خفيف" },
@@ -1177,9 +1306,13 @@ const BACKGROUND_TREATMENT_OPTIONS: Array<{ id: A4BackgroundTreatment; en: strin
   { id: "botanical_motif", en: "Botanical", ar: "نباتي" },
   { id: "confetti", en: "Confetti", ar: "قصاصات ملوّنة" },
   { id: "photographic_backdrop", en: "Photo Backdrop", ar: "خلفية صورة" },
+  { id: "dark_solid", en: "Dark Solid", ar: "داكن صلب" },
+  { id: "linen_texture", en: "Linen Texture", ar: "ملمس قماش" },
+  { id: "marble_surface", en: "Marble Surface", ar: "سطح رخامي" },
+  { id: "chalkboard", en: "Chalkboard", ar: "سبورة" },
 ];
 
-const CONTENT_COMPONENT_OPTIONS: Array<{ id: A4ContentComponent; en: string; ar: string }> = [
+const CONTENT_COMPONENT_OPTIONS: LocalizedChipOption<A4ContentComponent>[] = [
   { id: "chart_bar", en: "Bar Chart", ar: "رسم أعمدة" },
   { id: "chart_line", en: "Line Chart", ar: "رسم خطي" },
   { id: "chart_donut", en: "Donut Chart", ar: "رسم دائري" },
@@ -1193,15 +1326,23 @@ const CONTENT_COMPONENT_OPTIONS: Array<{ id: A4ContentComponent; en: string; ar:
   { id: "grading_circle", en: "Grading Circle", ar: "دائرة الدرجة" },
   { id: "pull_quote", en: "Pull Quote", ar: "اقتباس بارز" },
   { id: "callout_boxes", en: "Callout Boxes", ar: "صناديق تنبيه" },
+  { id: "metric_tiles", en: "Metric Tiles", ar: "بطاقات أرقام" },
+  { id: "faq_block", en: "FAQ Block", ar: "قسم أسئلة" },
+  { id: "numbered_steps", en: "Numbered Steps", ar: "خطوات مرقمة" },
+  { id: "process_chevrons", en: "Process Chevrons", ar: "شيفرونات عملية" },
 ];
 
-const LAYOUT_PATTERN_OPTIONS: Array<{ id: A4LayoutPattern; en: string; ar: string }> = [
+const LAYOUT_PATTERN_OPTIONS: LocalizedChipOption<A4LayoutPattern>[] = [
   { id: "single_column", en: "Single Column", ar: "عمود واحد" },
   { id: "two_column_split", en: "Two-Column Split", ar: "عمودان" },
   { id: "sidebar_main", en: "Sidebar + Main", ar: "شريط جانبي + محتوى" },
   { id: "three_panel_grid", en: "Three-Panel Grid", ar: "ثلاث لوحات" },
   { id: "hero_body", en: "Hero + Body", ar: "رأس ضخم + نص" },
   { id: "centered_composition", en: "Centered", ar: "توسيط كامل" },
+  { id: "top_bottom_split", en: "Top / Bottom Split", ar: "تقسيم علوي سفلي" },
+  { id: "magazine_editorial", en: "Magazine Editorial", ar: "تحريري مجلة" },
+  { id: "zigzag_story", en: "Zigzag Story", ar: "قصة متعرجة" },
+  { id: "card_mosaic", en: "Card Mosaic", ar: "فسيفساء بطاقات" },
 ];
 
 const CreativeSettingsPanel: React.FC<{
@@ -1239,6 +1380,19 @@ const CreativeSettingsPanel: React.FC<{
         : "border-border bg-background hover:border-primary/40"
     }`;
 
+  const visualRecipeSummary = settings.visual_recipe
+    ? getLocalizedOptionLabel(VISUAL_RECIPE_OPTIONS, settings.visual_recipe, lang)
+    : t("Auto", "تلقائي");
+  const illustrationSummary = getLocalizedOptionLabel(ILLUSTRATION_STYLE_OPTIONS, settings.illustration_style ?? "none", lang, t("None", "بدون"));
+  const accentSummary = summarizeSelectedOptions(ACCENT_ELEMENT_OPTIONS, settings.accent_elements, lang, t("None selected", "لا شيء محدد"));
+  const backgroundSummary = settings.background_treatment
+    ? getLocalizedOptionLabel(BACKGROUND_TREATMENT_OPTIONS, settings.background_treatment, lang)
+    : t("Auto", "تلقائي");
+  const contentSummary = summarizeSelectedOptions(CONTENT_COMPONENT_OPTIONS, settings.content_components, lang, t("Auto", "تلقائي"));
+  const layoutSummary = settings.layout_pattern
+    ? getLocalizedOptionLabel(LAYOUT_PATTERN_OPTIONS, settings.layout_pattern, lang)
+    : t("Auto", "تلقائي");
+
   return (
     <div className="mb-4 rounded-xl border border-border bg-gradient-to-br from-card to-background/50 overflow-hidden">
       <button
@@ -1258,168 +1412,163 @@ const CreativeSettingsPanel: React.FC<{
       </button>
 
       {open && (
-        <div className="px-4 pb-4 space-y-4">
-          {/* 1. Visual Recipe — single-select starter vibe */}
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
-              {t("Visual Recipe", "الوصفة البصرية")}
-              <span className="ml-2 normal-case text-[10px] text-muted-foreground/70">
-                {t("pick a starter vibe (optional)", "اختر بداية جاهزة (اختياري)")}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <button
-                type="button"
-                onClick={() => set({ visual_recipe: null })}
-                className={recipeCard(!settings.visual_recipe)}
-              >
-                <div className="text-xs font-semibold">{t("None", "بدون")}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">
-                  {t("use the theme's own style", "استخدم نمط القالب")}
-                </div>
-              </button>
-              {VISUAL_RECIPE_OPTIONS.map((r) => {
-                const active = settings.visual_recipe === r.id;
-                return (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => set({ visual_recipe: active ? null : r.id })}
-                    className={recipeCard(active)}
-                  >
-                    <div className="text-xs font-semibold">{lang === "ar" ? r.ar : r.en}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
-                      {lang === "ar" ? r.hint_ar : r.hint_en}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 2. Illustration Style — single-select */}
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
-              {t("Illustration Style", "نمط الرسومات")}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {ILLUSTRATION_STYLE_OPTIONS.map((o) => (
+        <div className="px-4 pb-4">
+          <div className="grid grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+            <SettingsDropdownSection
+              titleEn="Visual Recipe"
+              titleAr="الوصفة البصرية"
+              summary={visualRecipeSummary}
+              helperEn="Pick a starter vibe"
+              helperAr="اختر بداية جاهزة"
+            >
+              <div className="grid grid-cols-1 gap-2">
                 <button
-                  key={o.id}
                   type="button"
-                  onClick={() => set({ illustration_style: o.id })}
-                  className={singleBtn((settings.illustration_style ?? "none") === o.id)}
+                  onClick={() => set({ visual_recipe: null })}
+                  className={recipeCard(!settings.visual_recipe)}
                 >
-                  {lang === "ar" ? o.ar : o.en}
+                  <div className="text-xs font-semibold">{t("Auto", "تلقائي")}</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    {t("use the theme's own style", "استخدم نمط القالب")}
+                  </div>
                 </button>
-              ))}
-            </div>
-          </div>
+                {VISUAL_RECIPE_OPTIONS.map((r) => {
+                  const active = settings.visual_recipe === r.id;
+                  return (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => set({ visual_recipe: active ? null : r.id })}
+                      className={recipeCard(active)}
+                    >
+                      <div className="text-xs font-semibold">{lang === "ar" ? r.ar : r.en}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">
+                        {lang === "ar" ? r.hint_ar : r.hint_en}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </SettingsDropdownSection>
 
-          {/* 3. Accent Elements — multi-select */}
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
-              {t("Accent Elements", "لمسات زخرفية")}
-              <span className="ml-2 normal-case text-[10px] text-muted-foreground/70">
-                {t("pick any you like", "اختر ما يعجبك")}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {ACCENT_ELEMENT_OPTIONS.map((o) => {
-                const active = (settings.accent_elements ?? []).includes(o.id);
-                return (
+            <SettingsDropdownSection
+              titleEn="Illustration Style"
+              titleAr="نمط الرسومات"
+              summary={illustrationSummary}
+            >
+              <div className="flex flex-wrap gap-2">
+                {ILLUSTRATION_STYLE_OPTIONS.map((o) => (
                   <button
                     key={o.id}
                     type="button"
-                    onClick={() =>
-                      set({ accent_elements: toggleInArray(settings.accent_elements, o.id) })
-                    }
-                    className={multiBtn(active)}
+                    onClick={() => set({ illustration_style: o.id })}
+                    className={singleBtn((settings.illustration_style ?? "none") === o.id)}
                   >
                     {lang === "ar" ? o.ar : o.en}
                   </button>
-                );
-              })}
-            </div>
-          </div>
+                ))}
+              </div>
+            </SettingsDropdownSection>
 
-          {/* 4. Background Treatment — single-select */}
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
-              {t("Background Treatment", "معالجة الخلفية")}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => set({ background_treatment: null })}
-                className={singleBtn(!settings.background_treatment)}
-              >
-                {t("Auto", "تلقائي")}
-              </button>
-              {BACKGROUND_TREATMENT_OPTIONS.map((o) => (
+            <SettingsDropdownSection
+              titleEn="Accent Elements"
+              titleAr="لمسات زخرفية"
+              summary={accentSummary}
+              helperEn="Pick any you like"
+              helperAr="اختر ما يعجبك"
+            >
+              <div className="flex flex-wrap gap-2">
+                {ACCENT_ELEMENT_OPTIONS.map((o) => {
+                  const active = (settings.accent_elements ?? []).includes(o.id);
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => set({ accent_elements: toggleInArray(settings.accent_elements, o.id) })}
+                      className={multiBtn(active)}
+                    >
+                      {lang === "ar" ? o.ar : o.en}
+                    </button>
+                  );
+                })}
+              </div>
+            </SettingsDropdownSection>
+
+            <SettingsDropdownSection
+              titleEn="Background Treatment"
+              titleAr="معالجة الخلفية"
+              summary={backgroundSummary}
+            >
+              <div className="flex flex-wrap gap-2">
                 <button
-                  key={o.id}
                   type="button"
-                  onClick={() => set({ background_treatment: o.id })}
-                  className={singleBtn(settings.background_treatment === o.id)}
+                  onClick={() => set({ background_treatment: null })}
+                  className={singleBtn(!settings.background_treatment)}
                 >
-                  {lang === "ar" ? o.ar : o.en}
+                  {t("Auto", "تلقائي")}
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 5. Content Components — multi-select */}
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
-              {t("Content Components", "مكوّنات المحتوى")}
-              <span className="ml-2 normal-case text-[10px] text-muted-foreground/70">
-                {t("pick any you want on the page", "اختر ما تريد ظهوره في الصفحة")}
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {CONTENT_COMPONENT_OPTIONS.map((o) => {
-                const active = (settings.content_components ?? []).includes(o.id);
-                return (
+                {BACKGROUND_TREATMENT_OPTIONS.map((o) => (
                   <button
                     key={o.id}
                     type="button"
-                    onClick={() =>
-                      set({ content_components: toggleInArray(settings.content_components, o.id) })
-                    }
-                    className={multiBtn(active)}
+                    onClick={() => set({ background_treatment: o.id })}
+                    className={singleBtn(settings.background_treatment === o.id)}
                   >
                     {lang === "ar" ? o.ar : o.en}
                   </button>
-                );
-              })}
-            </div>
-          </div>
+                ))}
+              </div>
+            </SettingsDropdownSection>
 
-          {/* 6. Layout Pattern — single-select */}
-          <div>
-            <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-1.5">
-              {t("Layout Pattern", "نمط التخطيط")}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => set({ layout_pattern: null })}
-                className={singleBtn(!settings.layout_pattern)}
-              >
-                {t("Auto", "تلقائي")}
-              </button>
-              {LAYOUT_PATTERN_OPTIONS.map((o) => (
+            <SettingsDropdownSection
+              titleEn="Content Components"
+              titleAr="مكوّنات المحتوى"
+              summary={contentSummary}
+              helperEn="Pick any you want on the page"
+              helperAr="اختر ما تريد ظهوره في الصفحة"
+            >
+              <div className="flex flex-wrap gap-2">
+                {CONTENT_COMPONENT_OPTIONS.map((o) => {
+                  const active = (settings.content_components ?? []).includes(o.id);
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => set({ content_components: toggleInArray(settings.content_components, o.id) })}
+                      className={multiBtn(active)}
+                    >
+                      {lang === "ar" ? o.ar : o.en}
+                    </button>
+                  );
+                })}
+              </div>
+            </SettingsDropdownSection>
+
+            <SettingsDropdownSection
+              titleEn="Layout Pattern"
+              titleAr="نمط التخطيط"
+              summary={layoutSummary}
+            >
+              <div className="flex flex-wrap gap-2">
                 <button
-                  key={o.id}
                   type="button"
-                  onClick={() => set({ layout_pattern: o.id })}
-                  className={singleBtn(settings.layout_pattern === o.id)}
+                  onClick={() => set({ layout_pattern: null })}
+                  className={singleBtn(!settings.layout_pattern)}
                 >
-                  {lang === "ar" ? o.ar : o.en}
+                  {t("Auto", "تلقائي")}
                 </button>
-              ))}
-            </div>
+                {LAYOUT_PATTERN_OPTIONS.map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    onClick={() => set({ layout_pattern: o.id })}
+                    className={singleBtn(settings.layout_pattern === o.id)}
+                  >
+                    {lang === "ar" ? o.ar : o.en}
+                  </button>
+                ))}
+              </div>
+            </SettingsDropdownSection>
           </div>
         </div>
       )}
@@ -1467,9 +1616,7 @@ const A4Tab: React.FC = () => {
   const [expandedContent, setExpandedContent] = useState("");
   const [isExpanding, setIsExpanding] = useState(false);
   const [decorWanted, setDecorWanted] = useState<string[]>([]);
-  const [decorUnwanted, setDecorUnwanted] = useState<string[]>([]);
   const [customWanted, setCustomWanted] = useState("");
-  const [customUnwanted, setCustomUnwanted] = useState("");
 
   const theme = themeId ? findTheme(themeId) : null;
   const schema = theme ? getFormSchema(theme, purposeId) : [];
@@ -1496,9 +1643,7 @@ const A4Tab: React.FC = () => {
     setExpandedContent("");
     setIsExpanding(false);
     setDecorWanted([]);
-    setDecorUnwanted([]);
     setCustomWanted("");
-    setCustomUnwanted("");
   }, []);
 
   // When theme changes, re-init formState with default values from schema
@@ -1581,7 +1726,7 @@ const A4Tab: React.FC = () => {
         creative_settings: creativeSettings,
         input_mode: inputMode,
         decorations_wanted: decorWanted,
-        decorations_unwanted: decorUnwanted,
+        decorations_unwanted: [],
       });
 
       if (!res.success || !res.batch_id) {
@@ -1612,7 +1757,7 @@ const A4Tab: React.FC = () => {
       setFatalError((e as Error).message);
       setStage("failed");
     }
-  }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, inputMode, expandedContent, decorWanted, decorUnwanted, t]);
+  }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, inputMode, expandedContent, decorWanted, t]);
 
   // --- Expand idea -----------------------------------------------------------
   const handleExpandIdea = useCallback(async () => {
@@ -1645,15 +1790,13 @@ const A4Tab: React.FC = () => {
   }, [theme, ideaText, purposeId, formState.bilingual, t]);
 
   // --- Chip helpers ----------------------------------------------------------
-  const toggleChip = useCallback((side: "want" | "unwant", value: string) => {
+  const toggleChip = useCallback((value: string) => {
     const v = value.trim();
     if (!v) return;
-    const setter = side === "want" ? setDecorWanted : setDecorUnwanted;
-    const other = side === "want" ? decorUnwanted : decorWanted;
-    const current = side === "want" ? decorWanted : decorUnwanted;
+    const current = decorWanted;
     const already = current.some((c) => c.toLowerCase() === v.toLowerCase());
     if (already) {
-      setter(current.filter((c) => c.toLowerCase() !== v.toLowerCase()));
+      setDecorWanted(current.filter((c) => c.toLowerCase() !== v.toLowerCase()));
       return;
     }
     if (current.length >= A4_MAX_CHIPS_PER_SIDE) {
@@ -1663,16 +1806,8 @@ const A4Tab: React.FC = () => {
       ));
       return;
     }
-    // Prevent same chip on both sides
-    if (other.some((c) => c.toLowerCase() === v.toLowerCase())) {
-      toast.error(t(
-        "That chip is already on the opposite side.",
-        "هذا العنصر موجود في الجانب المقابل.",
-      ));
-      return;
-    }
-    setter([...current, v]);
-  }, [decorWanted, decorUnwanted, t]);
+    setDecorWanted([...current, v]);
+  }, [decorWanted, t]);
 
   // Watch rows: when all rows are completed/failed, flip stage
   useEffect(() => {
@@ -1719,7 +1854,7 @@ const A4Tab: React.FC = () => {
   const currentThemeBadge = theme ? THEME_BADGES[theme.id] : null;
 
   return (
-    <div className="w-full max-w-4xl mx-auto px-1 pb-8" dir={lang === "ar" ? "rtl" : "ltr"}>
+    <div className="w-full max-w-6xl mx-auto px-0 sm:px-1 md:px-2 pb-8" dir={lang === "ar" ? "rtl" : "ltr"}>
       {/* ---------- Header strip: current theme + change button --------------- */}
       {theme && stage !== "pick" && (
         <div className="relative mb-4 overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
@@ -1805,7 +1940,7 @@ const A4Tab: React.FC = () => {
 
           {/* Dynamic form */}
           {canShowForm ? (
-            <div className="relative overflow-hidden rounded-2xl border border-border bg-card/95 p-4 shadow-sm">
+            <div className="relative overflow-hidden rounded-2xl border border-border bg-card/95 p-3 sm:p-4 md:p-6 shadow-sm">
               <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${currentThemeVisual.bg} opacity-70`} />
               <CurrentThemeIcon className={`pointer-events-none absolute -right-4 bottom-3 h-24 w-24 ${currentThemeVisual.text} opacity-[0.06]`} />
               <div className="relative">
@@ -1842,7 +1977,7 @@ const A4Tab: React.FC = () => {
                   <div className="text-[11px] uppercase tracking-wide text-muted-foreground mb-2">
                     {t("Input mode", "طريقة الإدخال")}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setInputMode("content_ready")}
@@ -1936,111 +2071,91 @@ const A4Tab: React.FC = () => {
                   </div>
                 )}
 
-                {/* --- Decorations I want / I don't want ------------------ */}
+                {/* --- Decorations I want ---------------------------------- */}
                 <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-4">
                   <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     {t("Decorations", "الزخارف")}
                     <span className="ml-2 normal-case text-[10px] text-muted-foreground/70">
-                      {t(`up to ${A4_MAX_CHIPS_PER_SIDE} per side`, `حتى ${A4_MAX_CHIPS_PER_SIDE} لكل جانب`)}
+                      {t(`pick up to ${A4_MAX_CHIPS_PER_SIDE}`, `اختر حتى ${A4_MAX_CHIPS_PER_SIDE}`)}
                     </span>
                   </div>
 
-                  {(["want", "unwant"] as const).map((side) => {
-                    const title = side === "want"
-                      ? t("Decorations I want", "زخارف أريدها")
-                      : t("Decorations I DON'T want", "زخارف لا أريدها");
-                    const selected = side === "want" ? decorWanted : decorUnwanted;
-                    const opposite = side === "want" ? decorUnwanted : decorWanted;
-                    const custom = side === "want" ? customWanted : customUnwanted;
-                    const setCustom = side === "want" ? setCustomWanted : setCustomUnwanted;
-                    const activeCls = side === "want"
-                      ? "bg-primary/15 text-primary border-primary/60 ring-1 ring-primary/30"
-                      : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/60 ring-1 ring-red-500/30";
-                    const oppositeCls = "opacity-40 cursor-not-allowed";
-
-                    return (
-                      <div key={side}>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="text-xs font-semibold text-foreground/85">{title}</div>
-                          <div className="text-[10px] text-muted-foreground">
-                            {selected.length}/{A4_MAX_CHIPS_PER_SIDE}
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {A4_UNIVERSAL_DECOR_CHIPS.map((chip) => {
-                            const label = lang === "ar" ? chip.label_ar : chip.label_en;
-                            const key = chip.label_en;
-                            const isSelected = selected.some((c) => c.toLowerCase() === key.toLowerCase());
-                            const isOnOther = opposite.some((c) => c.toLowerCase() === key.toLowerCase());
-                            return (
-                              <button
-                                key={chip.id}
-                                type="button"
-                                disabled={isOnOther}
-                                onClick={() => toggleChip(side, key)}
-                                className={`px-2.5 py-1 rounded-full border text-[11px] transition ${
-                                  isSelected
-                                    ? activeCls
-                                    : isOnOther
-                                      ? `border-border ${oppositeCls}`
-                                      : "border-border bg-background hover:border-primary/40"
-                                }`}
-                              >
-                                {label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        {selected.filter((v) => !A4_UNIVERSAL_DECOR_CHIPS.some((c) => c.label_en.toLowerCase() === v.toLowerCase())).length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {selected
-                              .filter((v) => !A4_UNIVERSAL_DECOR_CHIPS.some((c) => c.label_en.toLowerCase() === v.toLowerCase()))
-                              .map((v) => (
-                                <button
-                                  key={`custom-${side}-${v}`}
-                                  type="button"
-                                  onClick={() => toggleChip(side, v)}
-                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] ${activeCls}`}
-                                >
-                                  {v}
-                                  <X className="h-3 w-3" />
-                                </button>
-                              ))}
-                          </div>
-                        )}
-                        <div className="mt-2 flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={custom}
-                            onChange={(e) => setCustom(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                e.preventDefault();
-                                if (custom.trim()) {
-                                  toggleChip(side, custom.trim());
-                                  setCustom("");
-                                }
-                              }
-                            }}
-                            placeholder={t("Add your own…", "أضف عنصرك الخاص…")}
-                            className="flex-1 px-2.5 py-1.5 rounded-md border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (custom.trim()) {
-                                toggleChip(side, custom.trim());
-                                setCustom("");
-                              }
-                            }}
-                            className="px-2.5 py-1.5 rounded-md border border-border text-xs hover:bg-muted transition"
-                          >
-                            {t("Add", "أضف")}
-                          </button>
-                        </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="text-xs font-semibold text-foreground/85">{t("Decorations I want", "زخارف أريدها")}</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        {decorWanted.length}/{A4_MAX_CHIPS_PER_SIDE}
                       </div>
-                    );
-                  })}
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {A4_UNIVERSAL_DECOR_CHIPS.map((chip) => {
+                        const label = lang === "ar" ? chip.label_ar : chip.label_en;
+                        const key = chip.label_en;
+                        const isSelected = decorWanted.some((c) => c.toLowerCase() === key.toLowerCase());
+                        return (
+                          <button
+                            key={chip.id}
+                            type="button"
+                            onClick={() => toggleChip(key)}
+                            className={`px-2.5 py-1.5 rounded-lg border text-[11px] transition text-left ${
+                              isSelected
+                                ? "bg-primary/15 text-primary border-primary/60 ring-1 ring-primary/30"
+                                : "border-border bg-background hover:border-primary/40"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {decorWanted.filter((v) => !A4_UNIVERSAL_DECOR_CHIPS.some((c) => c.label_en.toLowerCase() === v.toLowerCase())).length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {decorWanted
+                          .filter((v) => !A4_UNIVERSAL_DECOR_CHIPS.some((c) => c.label_en.toLowerCase() === v.toLowerCase()))
+                          .map((v) => (
+                            <button
+                              key={`custom-want-${v}`}
+                              type="button"
+                              onClick={() => toggleChip(v)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full border text-[11px] bg-primary/15 text-primary border-primary/60 ring-1 ring-primary/30"
+                            >
+                              {v}
+                              <X className="h-3 w-3" />
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={customWanted}
+                        onChange={(e) => setCustomWanted(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (customWanted.trim()) {
+                              toggleChip(customWanted.trim());
+                              setCustomWanted("");
+                            }
+                          }
+                        }}
+                        placeholder={t("Add your own…", "أضف عنصرك الخاص…")}
+                        className="flex-1 px-2.5 py-1.5 rounded-md border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (customWanted.trim()) {
+                            toggleChip(customWanted.trim());
+                            setCustomWanted("");
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-md border border-border text-xs hover:bg-muted transition"
+                      >
+                        {t("Add", "أضف")}
+                      </button>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Logo color extract toggle, only when a logo is present */}

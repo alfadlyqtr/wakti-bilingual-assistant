@@ -3,6 +3,7 @@ import { Routes, Route, useLocation } from "react-router-dom";
 import { AppShellSkeleton } from "@/components/ui/AppShellSkeleton";
 import { AppLayout } from "@/components/AppLayout";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
+import { ImageShareNotificationProvider } from "@/components/notifications/ImageShareNotificationProvider";
 import { MusicShareNotificationProvider } from "@/components/notifications/MusicShareNotificationProvider";
 import { MessageNotificationProvider } from "@/components/notifications/MessageNotificationProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -162,13 +163,15 @@ export default function ConsumerRouter() {
         {/* ── Protected app routes ──────────────────────────────────────── */}
         <Route element={
           <GiftNotificationProvider>
-            <MusicShareNotificationProvider>
-              <MessageNotificationProvider>
-                <ErrorBoundary>
-                  <AppLayout />
-                </ErrorBoundary>
-              </MessageNotificationProvider>
-            </MusicShareNotificationProvider>
+            <ImageShareNotificationProvider>
+              <MusicShareNotificationProvider>
+                <MessageNotificationProvider>
+                  <ErrorBoundary>
+                    <AppLayout />
+                  </ErrorBoundary>
+                </MessageNotificationProvider>
+              </MusicShareNotificationProvider>
+            </ImageShareNotificationProvider>
           </GiftNotificationProvider>
         }>
           <Route path="/dashboard" element={<Dashboard />} />
