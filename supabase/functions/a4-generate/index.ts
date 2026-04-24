@@ -62,7 +62,8 @@ interface GenerateRequest {
 }
 
 const KIE_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
-const KIE_MODEL = "nano-banana-2";
+const KIE_TEXT_MODEL = "gpt-image-2-text-to-image";
+const KIE_IMAGE_MODEL = "gpt-image-2-image-to-image";
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -197,6 +198,21 @@ function splitContentIntoPages(rawContent: string, pageCount: 1 | 2 | 3, perPage
   return buckets.length === 0 ? [trimmed] : buckets;
 }
 
+function mapKieAspectRatio(aspectRatio: string): string {
+  if (aspectRatio === "2:3") return "3:4";
+  if (aspectRatio === "3:2") return "4:3";
+  if (
+    aspectRatio === "1:1"
+    || aspectRatio === "3:4"
+    || aspectRatio === "4:3"
+    || aspectRatio === "9:16"
+    || aspectRatio === "16:9"
+  ) {
+    return aspectRatio;
+  }
+  return "auto";
+}
+
 // -----------------------------------------------------------------------------
 // Kie createTask dispatch
 // -----------------------------------------------------------------------------
@@ -208,15 +224,15 @@ async function dispatchKieTask(opts: {
   apiKey: string;
 }): Promise<{ taskId: string } | { error: string }> {
   try {
+    const hasImageInputs = opts.imageInputs.length > 0;
     const payload = {
-      model: KIE_MODEL,
+      model: hasImageInputs ? KIE_IMAGE_MODEL : KIE_TEXT_MODEL,
       callBackUrl: opts.callbackUrl,
       input: {
         prompt: opts.prompt,
-        image_input: opts.imageInputs,
-        aspect_ratio: opts.aspectRatio,
-        resolution: "1K",
-        output_format: "jpg",
+        ...(hasImageInputs ? { input_urls: opts.imageInputs } : {}),
+        aspect_ratio: mapKieAspectRatio(opts.aspectRatio),
+        ...(!hasImageInputs ? { resolution: "1K" } : {}),
       },
     };
     const resp = await fetch(KIE_ENDPOINT, {

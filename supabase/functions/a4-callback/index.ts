@@ -22,7 +22,8 @@ const corsHeaders = {
 };
 
 const KIE_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
-const KIE_MODEL = "nano-banana-2";
+const KIE_TEXT_MODEL = "gpt-image-2-text-to-image";
+const KIE_IMAGE_MODEL = "gpt-image-2-image-to-image";
 const KIE_RECORD_INFO_ENDPOINT = "https://api.kie.ai/api/v1/jobs/recordInfo";
 
 function ok(body: unknown = { ok: true }) {
@@ -105,6 +106,21 @@ function extractTaskResult(parsed: any): {
 
   return out;
 }
+
+ function mapKieAspectRatio(aspectRatio: string): string {
+   if (aspectRatio === "2:3") return "3:4";
+   if (aspectRatio === "3:2") return "4:3";
+   if (
+     aspectRatio === "1:1"
+     || aspectRatio === "3:4"
+     || aspectRatio === "4:3"
+     || aspectRatio === "9:16"
+     || aspectRatio === "16:9"
+   ) {
+     return aspectRatio;
+   }
+   return "auto";
+ }
 
 async function fetchKieTaskDetail(
   taskId: string,
@@ -236,16 +252,16 @@ async function dispatchNextPage(
     imageInputs.push(page1ImageUrl);
 
     const callbackUrl = `${supabaseUrl}/functions/v1/a4-callback?batch_id=${row.batch_id}&page=${row.page_number}`;
+    const hasImageInputs = imageInputs.length > 0;
 
     const payload = {
-      model: KIE_MODEL,
+      model: hasImageInputs ? KIE_IMAGE_MODEL : KIE_TEXT_MODEL,
       callBackUrl: callbackUrl,
       input: {
         prompt,
-        image_input: imageInputs,
-        aspect_ratio: row.aspect_ratio || theme.aspect_ratio,
-        resolution: "1K",
-        output_format: "jpg",
+        ...(hasImageInputs ? { input_urls: imageInputs } : {}),
+        aspect_ratio: mapKieAspectRatio(row.aspect_ratio || theme.aspect_ratio),
+        ...(!hasImageInputs ? { resolution: "1K" } : {}),
       },
     };
 

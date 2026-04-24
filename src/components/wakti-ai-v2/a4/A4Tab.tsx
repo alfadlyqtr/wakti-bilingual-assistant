@@ -550,25 +550,30 @@ const FormFieldRenderer: React.FC<{
           />
         </div>
       );
-    case "toggle":
+    case "toggle": {
+      const isRtl = lang === "ar";
+      const onPos = isRtl ? "-translate-x-6" : "translate-x-6";
+      const offPos = isRtl ? "-translate-x-1" : "translate-x-1";
       return (
-        <div className={`${commonWrapperCls} flex items-center justify-between`}>
-          <label className="text-sm">{label}</label>
+        <div className={`${commonWrapperCls} flex items-center justify-between gap-3`}>
+          <label className="text-sm flex-1">{label}</label>
           <button
             type="button"
             onClick={() => onChange(!value)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            aria-pressed={!!value}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
               value ? "bg-primary" : "bg-muted"
             }`}
           >
             <span
               className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                value ? "translate-x-6" : "translate-x-1"
+                value ? onPos : offPos
               }`}
             />
           </button>
         </div>
       );
+    }
     case "select":
       return (
         <div className={commonWrapperCls}>

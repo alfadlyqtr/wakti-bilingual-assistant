@@ -6,6 +6,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+const VISUAL_ADS_MODEL = "gpt-image-2-image-to-image";
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -161,7 +163,7 @@ serve(async (req) => {
                 user_id: jobData.user_id,
                 image_url: url,
                 submode: "visual-ads",
-                quality: "nano-banana-2",
+                quality: VISUAL_ADS_MODEL,
                 meta: { storage_path: storagePath ? decodeURIComponent(storagePath) : null }
               });
               console.log("[webhook-visual-ads] Inserted image into user_generated_images gallery");

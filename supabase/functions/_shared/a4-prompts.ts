@@ -150,7 +150,13 @@ function getHeaderBlock(
   formState: Record<string, unknown>,
   hasLogoRef: boolean,
   pageNumber: number,
+  languageMode: "en" | "ar" | "bilingual" = "en",
 ): string {
+  const L = (en: string, ar: string) => {
+    if (languageMode === "ar") return ar;
+    if (languageMode === "bilingual") return `${en} / ${ar}`;
+    return en;
+  };
   // For multi-page, page 2+ uses a slim running header
   if (pageNumber > 1) {
     const title = String(formState.project_title ?? formState.report_title ?? formState.business_name ?? formState.company_name ?? formState.full_name ?? formState.card_title ?? formState.subject ?? formState.title ?? formState.event_name ?? "").trim();
@@ -170,7 +176,15 @@ function getHeaderBlock(
       const term = String(formState.term ?? "").trim();
       const duration = String(formState.duration ?? "").trim();
       const marks = String(formState.total_marks ?? "").trim();
-      return `Header: ${logoClause} Top-center: school name "${school}". Subject + grade row: "${subject} - ${grade}${term ? " (" + term + ")" : ""}". Top-right: two fill-in lines labeled "Name" and "Date" with underlines for handwriting.${duration ? ` Also show "Duration: ${duration} min".` : ""}${marks ? ` Show "Total Marks: ${marks}".` : ""}`;
+      const lblName = L("Name", "الاسم");
+      const lblDate = L("Date", "التاريخ");
+      const lblSubject = L("Subject", "المادة");
+      const lblGrade = L("Grade", "الصف");
+      const lblTerm = L("Term", "الفصل");
+      const lblDuration = L("Duration", "المدة");
+      const lblMin = L("min", "دقيقة");
+      const lblMarks = L("Total Marks", "الدرجة الكلية");
+      return `Header: ${logoClause} Top-center: school name "${school}". Meta row labels MUST be written exactly as follows (do NOT translate them to English): "${lblSubject}: ${subject}"${grade ? ` | "${lblGrade}: ${grade}"` : ""}${term ? ` | "${lblTerm}: ${term}"` : ""}. Top-right: two fill-in lines labeled "${lblName}" and "${lblDate}" with underlines for handwriting.${duration ? ` Also show "${lblDuration}: ${duration} ${lblMin}".` : ""}${marks ? ` Show "${lblMarks}: ${marks}".` : ""} CRITICAL: Every label in the header (name, date, subject, grade, term, duration, total marks) must render in the EXACT script shown above — never substitute with English words when the document language is Arabic.`;
     }
     case "school_project": {
       const school = String(formState.school_name ?? "").trim();
@@ -407,17 +421,22 @@ ${parts.join("\n")}`;
 function getVisualAssetsBlock(
   formState: Record<string, unknown>,
   theme: A4Theme,
+  languageMode: "en" | "ar" | "bilingual" = "en",
 ): string {
   const diagram = !!formState.include_diagram;
   const chart = !!formState.include_chart;
   const table = !!formState.include_table;
   const grading = !!formState.include_grading_circle;
+  const diagramColored = formState.diagram_colored !== false; // default: color
 
   const parts: string[] = [];
 
   if (diagram) {
+    const colorDirective = diagramColored
+      ? "Render the diagram in FULL COLOR: use clear natural colors appropriate to the subject (for example green leaves, brown roots, blue water, warm skin tones, realistic biology colors). Do NOT render a black-and-white schematic. Use soft clean vector fills with crisp labeled leader lines."
+      : "Render the diagram as clean black-and-white line art with crisp leader lines; no fills, no colors.";
     parts.push(
-      `Include a contextually relevant diagram illustrating the subject matter. Place it in a logical spot within the layout. Style: ${theme.diagram_default_style ?? "clean vector schematic, labeled with leader lines"}. Label parts clearly.`,
+      `Include a contextually relevant diagram illustrating the subject matter. Place it in a logical spot within the layout. ${colorDirective} Label parts clearly.`,
     );
   }
   if (chart) {
@@ -431,10 +450,15 @@ function getVisualAssetsBlock(
     );
   }
   if (grading) {
-    const totalMarks = Number(formState.total_marks ?? 0);
-    const denominator = totalMarks === 100 ? "100" : "10";
+    const totalMarksRaw = Number(formState.total_marks ?? 0);
+    const denominator = Number.isFinite(totalMarksRaw) && totalMarksRaw > 0 ? String(Math.round(totalMarksRaw)) : "10";
+    const finalGradeLabel = languageMode === "ar"
+      ? "الدرجة النهائية"
+      : languageMode === "bilingual"
+        ? "Final Grade / الدرجة النهائية"
+        : "Final Grade";
     parts.push(
-      `Bottom-right corner: render a bold circle. Inside the circle place a short blank line followed by "/ ${denominator}" for the teacher to fill in. Small label above the circle: "Final Grade".`,
+      `Bottom-right corner: render a bold circle. Inside the circle place a short blank line followed by "/ ${denominator}" for the teacher to fill in. Small label above the circle: "${finalGradeLabel}". The denominator MUST be exactly "${denominator}" — do not change it to 10 or 100.`,
     );
   }
 
@@ -667,8 +691,8 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   const languageRules = getLanguageRules(languageMode);
   const pageContext = getPageContextClause(pageNumber, totalPages, hasPrevPageReference);
   const brandColorDirective = getBrandColorDirective(brandColors);
-  const headerBlock = getHeaderBlock(theme, formStateForHeader, hasLogoReference, pageNumber);
-  const visualAssets = getVisualAssetsBlock(formState, theme);
+  const headerBlock = getHeaderBlock(theme, formStateForHeader, hasLogoReference, pageNumber, languageMode);
+  const visualAssets = getVisualAssetsBlock(formState, theme, languageMode);
   const design = input.designSettings ?? null;
   const creative = input.creativeSettings ?? null;
   const resolvedAspect = resolveAspectRatio(theme, design?.orientation);

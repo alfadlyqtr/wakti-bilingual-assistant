@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
+import { checkAndConsumeTrialToken, type TrialFeatureKey } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,10 +26,17 @@ function sanitizeError(msg: string): string {
     .replace(/^[:\s-]+/, '')
     .trim() || 'Video generation failed';
 }
+
+type VisualAdsJobInsertClient = {
+  from: (table: "visual_ads_jobs") => {
+    insert: (values: { user_id: string; task_id: string; status: string }) => Promise<{ error: { message: string } | null }>;
+  };
+};
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
 const KIE_IMAGE2VIDEO_MODEL = "grok-imagine/image-to-video";
 const KIE_TEXT2VIDEO_MODEL = "grok-imagine/text-to-video";
 const KIE_2IMAGES_MODEL = "bytedance/seedance-1.5-pro";
+const KIE_VISUAL_ADS_MODEL = "gpt-image-2-image-to-image";
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_STATUS_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
 
@@ -394,7 +401,7 @@ async function createVisualAdsTask(
   imageUrls: string[],
   prompt: string,
   aspectRatio?: string,
-  supabaseAdmin?: ReturnType<typeof createClient>,
+  supabaseAdmin?: VisualAdsJobInsertClient,
   userId?: string,
 ): Promise<{ task_id: string; status: string }> {
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
@@ -402,19 +409,18 @@ async function createVisualAdsTask(
 
   const input: Record<string, unknown> = {
     prompt: prompt.trim(),
-    image_input: sanitizedImageUrls,
+    input_urls: sanitizedImageUrls,
     aspect_ratio: validAspectRatio,
     resolution: "1K",
-    output_format: "png",
   };
 
   const requestBody = {
-    model: "nano-banana-2",
+    model: KIE_VISUAL_ADS_MODEL,
     input,
     callBackUrl: `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-visual-ads`,
   };
 
-  console.log("[kie-visual-ads] Creating task, model: nano-banana-2");
+  console.log("[kie-visual-ads] Creating task, model:", KIE_VISUAL_ADS_MODEL);
 
   const response = await fetch(KIE_CREATE_URL, {
     method: "POST",
@@ -496,7 +502,7 @@ serve(async (req) => {
 
     // ── Trial Token Check: detect generation_type for correct key ──
     const genType = body?.generation_type || 'image_to_video';
-    const trialKeyMap: Record<string, string> = {
+    const trialKeyMap: Record<string, TrialFeatureKey> = {
       'image_to_video': 'i2v',
       'text_to_video': 't2v',
       '2images_to_video': '2i2v',
@@ -508,7 +514,7 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_URL") || "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
       );
-      const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, trialFeatureKey as any, 1);
+      const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, trialFeatureKey, 1);
       if (!trial.allowed) {
         return new Response(
           JSON.stringify({ error: "TRIAL_LIMIT_REACHED", feature: trialFeatureKey }),
@@ -685,7 +691,13 @@ serve(async (req) => {
         Deno.env.get("SUPABASE_URL") || "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
       );
-      task = await createVisualAdsTask(imageUrls, masterPrompt, aspect_ratio, supabaseAdminForAds, user.id);
+      task = await createVisualAdsTask(
+        imageUrls,
+        masterPrompt,
+        aspect_ratio,
+        supabaseAdminForAds as unknown as VisualAdsJobInsertClient,
+        user.id,
+      );
     } else {
       // Image-to-Video: requires single image
       let imageUrl: string = image;
@@ -740,7 +752,13 @@ serve(async (req) => {
     await logAIFromRequest(req, {
       functionName: "freepik-image2video",
       provider: "kie.ai",
-      model: generationType === "text_to_video" ? KIE_TEXT2VIDEO_MODEL : generationType === "2images_to_video" ? KIE_2IMAGES_MODEL : KIE_IMAGE2VIDEO_MODEL,
+      model: generationType === "text_to_video"
+        ? KIE_TEXT2VIDEO_MODEL
+        : generationType === "2images_to_video"
+          ? KIE_2IMAGES_MODEL
+          : generationType === "visual_ads"
+            ? KIE_VISUAL_ADS_MODEL
+            : KIE_IMAGE2VIDEO_MODEL,
       inputText: prompt || image,
       outputText: result.videoUrl,
       durationMs: Date.now() - startTime,

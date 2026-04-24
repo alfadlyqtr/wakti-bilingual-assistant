@@ -98,6 +98,7 @@ export const A4_THEMES: A4Theme[] = [
       FIELD_LOGO,
       FIELD_BILINGUAL,
       { key: "include_diagram", label_en: "Include Diagram", label_ar: "تضمين رسم توضيحي", type: "toggle", default: false },
+      { key: "diagram_colored", label_en: "Colored Diagram", label_ar: "رسم ملوّن", type: "toggle", default: true },
       { key: "include_chart", label_en: "Include Chart", label_ar: "تضمين رسم بياني", type: "toggle", default: false },
       { key: "include_grading_circle", label_en: "Grading Circle", label_ar: "دائرة الدرجة", type: "toggle", default: true },
       FIELD_RAW("Paste your questions here", "الصق الأسئلة هنا"),
