@@ -13,7 +13,11 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { findTheme } from "../_shared/a4-themes.ts";
-import { compileMasterPrompt, type A4CreativeSettings } from "../_shared/a4-prompts.ts";
+import {
+  compileMasterPrompt,
+  type A4CreativeSettings,
+  type A4ReferenceImageRole,
+} from "../_shared/a4-prompts.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -246,6 +250,22 @@ async function dispatchNextPage(
       splitPages[splitPages.length - 1] ??
       String(formStateForPrompt.raw_content ?? "");
 
+    // Pull the guaranteed-obedience inputs stashed by a4-generate so pages 2+
+    // render with the same user_wishes and reference_image_role as page 1.
+    const stashedUserWishes =
+      typeof formStateForPrompt.__user_wishes__ === "string"
+        ? (formStateForPrompt.__user_wishes__ as string)
+        : null;
+    const stashedRole = formStateForPrompt.__reference_image_role__;
+    const referenceImageRole: A4ReferenceImageRole =
+      stashedRole === "portrait" ||
+      stashedRole === "logo" ||
+      stashedRole === "product" ||
+      stashedRole === "sample" ||
+      stashedRole === "none"
+        ? (stashedRole as A4ReferenceImageRole)
+        : "logo";
+
     const prompt = compileMasterPrompt({
       theme,
       purposeId: row.purpose_id ?? null,
@@ -259,6 +279,8 @@ async function dispatchNextPage(
       hasPrevPageReference: true,
       designSettings,
       creativeSettings,
+      userWishes: stashedUserWishes,
+      referenceImageRole,
     });
 
     const imageInputs: string[] = [];

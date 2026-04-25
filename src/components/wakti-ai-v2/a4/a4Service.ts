@@ -127,6 +127,11 @@ export interface A4CreativeSettings {
 
 export type A4InputMode = "content_ready" | "idea";
 
+// Role the uploaded reference image plays inside the rendered document.
+// Drives the REFERENCE IMAGE ROLE directive on the backend so the image model
+// knows exactly how to use the attachment (portrait photo vs logo vs product).
+export type A4ReferenceImageRole = "portrait" | "logo" | "product" | "sample" | "none";
+
 export const A4_MAX_CHIPS_PER_SIDE = 6;
 
 export interface A4DecorChip {
@@ -183,6 +188,10 @@ export interface A4GenerateRequest {
   input_mode?: A4InputMode;
   decorations_wanted?: string[];
   decorations_unwanted?: string[];
+  // Free-text user wishes, injected verbatim into the compiled prompt.
+  user_wishes?: string | null;
+  // Role of the uploaded reference image (portrait / logo / product / sample).
+  reference_image_role?: A4ReferenceImageRole | null;
 }
 
 export interface A4ExpandIdeaRequest {

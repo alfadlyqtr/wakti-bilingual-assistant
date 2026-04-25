@@ -27,9 +27,9 @@ import {
   compileMasterPrompt,
   type A4CreativeSettings,
   type A4DesignSettings,
+  type A4ReferenceImageRole,
 } from "../_shared/a4-prompts.ts";
 import {
-  runPromptEngineer,
   runIdeaExpand,
   A4_MAX_CHIPS_PER_SIDE,
   type A4InputMode,
@@ -55,6 +55,13 @@ interface GenerateRequest {
   input_mode?: A4InputMode; // "content_ready" | "idea"
   decorations_wanted?: string[];
   decorations_unwanted?: string[];
+  // NEW — guaranteed-obedience controls ------------------------------------
+  // Free-text user wishes. Injected VERBATIM into the compiled prompt so the
+  // user's explicit intent always reaches the image model.
+  user_wishes?: string | null;
+  // Role of the uploaded reference image. Drives the REFERENCE IMAGE ROLE
+  // directive in the compiled prompt (portrait / logo / product / sample).
+  reference_image_role?: A4ReferenceImageRole | null;
   // Special short-circuit: when mode="expand" we only run Gemini idea-expansion
   // and return { title, content } without touching the DB or Kie.
   mode?: "generate" | "expand";
@@ -395,6 +402,17 @@ serve(async (req) => {
   // Batch ID for this document
   const batchId = crypto.randomUUID();
 
+  // --- Guaranteed-obedience inputs (needed before logo/color extraction) ----
+  // user_wishes is free-text, injected verbatim into the compiled prompt.
+  // reference_image_role tells the image model how to use the attachment.
+  const userWishes = String(body.user_wishes ?? "").trim().slice(0, 2000) || null;
+  const allowedRoles: A4ReferenceImageRole[] = ["portrait", "logo", "product", "sample", "none"];
+  const referenceImageRole: A4ReferenceImageRole = allowedRoles.includes(
+    body.reference_image_role as A4ReferenceImageRole,
+  )
+    ? (body.reference_image_role as A4ReferenceImageRole)
+    : "logo"; // safe default — preserves legacy behavior when UI doesn't send one
+
   // --- Upload logo if provided -----------------------------------------------
   let logoSignedUrl: string | null = null;
   let brandColors: { primary?: string; secondary?: string } | null = null;
@@ -407,7 +425,10 @@ serve(async (req) => {
     );
     if (uploaded) logoSignedUrl = uploaded.signedUrl;
 
-    if (body.logo_color_extract) {
+    // Brand colors only make sense when the attachment is actually a logo.
+    // If the user uploaded a portrait / product / sample, skip extraction so
+    // we don't pull accent colors from skin tones or product photography.
+    if (body.logo_color_extract && referenceImageRole === "logo") {
       brandColors = await extractBrandColors(body.logo_data_url);
     }
   }
@@ -468,6 +489,9 @@ serve(async (req) => {
     __decor_unwanted__: decorUnwanted,
     __input_mode__: inputMode,
     __callback_token__: callbackToken,
+    // NEW — stash so a4-callback can reuse when compiling pages 2+
+    __user_wishes__: userWishes,
+    __reference_image_role__: referenceImageRole,
   };
 
   // --- Insert N placeholder rows ---------------------------------------------
@@ -508,8 +532,14 @@ serve(async (req) => {
   const page1Row = insertedRows.find((r) => r.page_number === 1);
   if (!page1Row) return json(500, { success: false, error: "Page 1 row missing" });
 
-  // --- Compile master prompt for page 1 (deterministic baseline / fallback) --
-  const fallbackPrompt = compileMasterPrompt({
+  // --- Compile master prompt for page 1 (DETERMINISTIC — OBEDIENT) ----------
+  // The Gemini "Prompt Engineer" was removed from the generation path because
+  // it was dropping user content and paraphrasing facts. The deterministic
+  // compiler is guaranteed to embed the raw content verbatim plus every
+  // structured input the user provided (theme, design, creative, decorations,
+  // user wishes, reference image role). What the user picks IS what the
+  // image model sees.
+  const compiledPrompt = compileMasterPrompt({
     theme,
     purposeId: body.purpose_id ?? null,
     formState,
@@ -522,82 +552,10 @@ serve(async (req) => {
     hasPrevPageReference: false,
     designSettings: designSettings,
     creativeSettings,
+    userWishes,
+    referenceImageRole,
   });
-
-  // --- Prompt Engineer (Gemini) -- try to produce a tighter cinematic prompt.
-  // If it fails validation, we silently keep the deterministic fallback.
-  let compiledPrompt = fallbackPrompt;
-  let promptSource: "engineer" | "fallback" = "fallback";
-  try {
-    const page1Content = splitPages[0] ?? rawContent;
-    const titleHint = String(
-      (formState as any).project_title ??
-        (formState as any).report_title ??
-        (formState as any).event_name ??
-        (formState as any).title ??
-        (formState as any).subject ??
-        "",
-    ).trim();
-    const subjectHint = String(
-      (formState as any).subject ??
-        (formState as any).topic ??
-        (formState as any).event_name ??
-        (formState as any).report_title ??
-        (formState as any).title ??
-        "",
-    ).trim() || null;
-    const brandName = String(
-      (formState as any).company_name ??
-        (formState as any).business_name ??
-        (formState as any).issuer_name ??
-        "",
-    ).trim() || null;
-    const creativeSummary = creativeSettings
-      ? [
-          creativeSettings.visual_recipe,
-          creativeSettings.illustration_style,
-          creativeSettings.layout_pattern,
-          creativeSettings.background_treatment,
-          ...(creativeSettings.accent_elements ?? []),
-          ...(creativeSettings.content_components ?? []),
-        ]
-          .filter(Boolean)
-          .join(", ") || null
-      : null;
-
-    const engineered = await runPromptEngineer({
-      theme_id: theme.id,
-      theme_name: theme.name_en,
-      theme_style_summary: theme.style_block,
-      purpose_id: body.purpose_id ?? null,
-      document_type_hint: theme.name_en,
-      language_mode: detectedLanguage,
-      orientation: designSettings?.orientation ?? "portrait",
-      page_number: 1,
-      total_pages: totalPages,
-      input_mode: inputMode,
-      subject_hint: subjectHint,
-      title_hint: titleHint || null,
-      brand_name: brandName,
-      brand_colors: brandColors
-        ? { primary: brandColors.primary ?? null, secondary: brandColors.secondary ?? null }
-        : null,
-      content: page1Content,
-      decorations_wanted: decorWanted,
-      decorations_unwanted: decorUnwanted,
-      creative_summary: creativeSummary,
-      has_logo_reference: !!logoSignedUrl,
-    });
-    if (engineered?.final_prompt) {
-      compiledPrompt = engineered.final_prompt;
-      promptSource = "engineer";
-      console.log("[a4-generate] using Prompt Engineer output");
-    } else {
-      console.log("[a4-generate] Prompt Engineer invalid, using deterministic fallback");
-    }
-  } catch (e) {
-    console.warn("[a4-generate] Prompt Engineer threw, using fallback:", (e as Error).message);
-  }
+  const promptSource = "deterministic" as const;
 
   // Dispatch Kie createTask for page 1
   const callbackUrl = buildCallbackUrl(SUPABASE_URL, batchId, 1, callbackToken);

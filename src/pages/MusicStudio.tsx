@@ -3265,8 +3265,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     //             close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal,
     //             audible breath support, authentic gulf vocal, strict khaleeji dialect,
     //             authentic khaleeji quarter-tone scale"
+    // GCC style lock — short, sharp, language-intent-first (5 load-bearing tags)
+    // Position #1: explicit language imperative (Jack Righteous Suno V5 best practice)
+    // Cut redundant/ornamental tags that diluted styleWeight across 14 items.
     const LOCK = (style: string) =>
-      `kuwaiti qatari, pure kuwaiti qatari dialect, authentic desert-coastal resonance, seasoned gulf vocalist timbre, ${style}, colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic gulf vocal, strict khaleeji dialect, authentic khaleeji quarter-tone scale`;
+      `Arabic vocals strictly in Kuwaiti-Qatari Gulf dialect, ${style}, authentic gulf male vocal, expressive melismatic mawwal, traditional khaleeji vocal phrasing`;
 
     // ── Single map: GCC identity anchors + non-GCC pass-through ──
     const STYLE_ANCHORS: Record<string, string> = {
@@ -3659,7 +3662,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   // ── Metatag Injector: wraps raw lyrics in Suno V5 structural brackets ──
-  function formatLyricsWithStructure(rawLyrics: string, isInstrumental: boolean, selectedInstruments: string[]): string {
+  function formatLyricsWithStructure(
+    rawLyrics: string,
+    isInstrumental: boolean,
+    selectedInstruments: string[],
+    isGccStyle: boolean = false,
+  ): string {
     if (isInstrumental) {
       return '(Intro)\n(Instrumental Build)\n(Drop)\n(Outro)';
     }
@@ -3676,11 +3684,36 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // ── Dynamic solo: let Suno pick the lead instrument from the style field context ──
     const soloTag: string | null = selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant') ? '(Instrumental Solo)' : null;
 
-    const labels = ['(Verse 1)', '(Chorus)', '(Verse 2)', '(Bridge)', '(Chorus)', '(Outro)'];
+    // ── GCC-only: per-stanza language detection so Suno locks the Gulf persona
+    //    for Arabic blocks and switches cleanly on English blocks. ──
+    const detectStanzaLang = (stanza: string): 'ar' | 'en' | 'mixed-ar' | 'mixed-en' => {
+      const arChars = (stanza.match(/[\u0600-\u06FF]/g) || []).length;
+      const latinChars = (stanza.match(/[A-Za-z]/g) || []).length;
+      const total = arChars + latinChars;
+      if (total === 0) return 'en';
+      const arRatio = arChars / total;
+      if (arRatio >= 0.7) return 'ar';
+      if (arRatio <= 0.3) return 'en';
+      return arRatio > 0.5 ? 'mixed-ar' : 'mixed-en';
+    };
+
+    const gccLangSuffix = (lang: ReturnType<typeof detectStanzaLang>): string => {
+      if (!isGccStyle) return '';
+      switch (lang) {
+        case 'ar':       return ' — Arabic, Khaleeji Gulf dialect';
+        case 'en':       return ' — English';
+        case 'mixed-ar': return ' — Mixed, lead Arabic Khaleeji Gulf dialect';
+        case 'mixed-en': return ' — Mixed, lead English';
+      }
+    };
+
+    const labels = ['Verse 1', 'Chorus', 'Verse 2', 'Bridge', 'Chorus', 'Outro'];
     const structured: string[] = ['(Intro)'];
 
     stanzas.forEach((stanza, i) => {
-      const label = labels[i] ?? `(Verse ${i + 1})`;
+      const baseLabel = labels[i] ?? `Verse ${i + 1}`;
+      const lang = detectStanzaLang(stanza);
+      const label = `(${baseLabel}${gccLangSuffix(lang)})`;
       structured.push(`${label}\n${stanza}`);
     });
 
@@ -3738,7 +3771,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const durationTarget = Math.min(150, duration);
 
       const rawLyrics = lyricsText.trim() || styleText.trim();
-      const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags);
+      const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags, isGccStyleSelected);
 
       // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
       const REGIONAL_NEGATIVE: Record<string, string> = {

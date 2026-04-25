@@ -75,6 +75,7 @@ import {
   type A4ContentComponent,
   type A4LayoutPattern,
   type A4InputMode,
+  type A4ReferenceImageRole,
 } from "./a4Service";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -1618,11 +1619,48 @@ const A4Tab: React.FC = () => {
   const [decorWanted, setDecorWanted] = useState<string[]>([]);
   const [customWanted, setCustomWanted] = useState("");
 
+  // --- Guaranteed-obedience controls ---------------------------------------
+  // Free-text user wishes. Injected VERBATIM into the final prompt on the
+  // backend so whatever the user types here reaches the image model as-is.
+  const [userWishes, setUserWishes] = useState<string>("");
+  // What role the uploaded reference image plays inside the rendered doc.
+  // Defaults are chosen per theme in the effect below, but user can override.
+  const [referenceImageRole, setReferenceImageRole] = useState<A4ReferenceImageRole>("logo");
+
   const theme = themeId ? findTheme(themeId) : null;
   const schema = theme ? getFormSchema(theme, purposeId) : [];
   const needsPurpose = theme ? themeRequiresPurpose(theme) : false;
   const canShowForm = !!theme && (!needsPurpose || !!purposeId);
   const maxPages = theme?.max_pages ?? 3;
+
+  // Pick a sensible default reference-image role per theme. The user can still
+  // override in the UI. Resume/CV and invitation cards default to PORTRAIT
+  // because users typically upload a face photo. Menus default to PRODUCT.
+  // Everything else defaults to LOGO.
+  const defaultRoleForTheme = useCallback((id: string | null): A4ReferenceImageRole => {
+    if (!id) return "logo";
+    if (id === "resume_cv" || id === "thank_you_invitation_card") return "portrait";
+    if (id === "menu_price_list") return "product";
+    return "logo";
+  }, []);
+
+  // When the theme changes, reset the role to its smart default so it matches
+  // the new document type. User can still override afterwards.
+  useEffect(() => {
+    setReferenceImageRole(defaultRoleForTheme(themeId));
+  }, [themeId, defaultRoleForTheme]);
+
+  // Dynamic label for the uploaded image based on chosen role.
+  const referenceImageLabel = useCallback((lang: "en" | "ar") => {
+    const map: Record<A4ReferenceImageRole, { en: string; ar: string }> = {
+      portrait: { en: "Portrait photo", ar: "صورة شخصية" },
+      logo: { en: "Logo", ar: "الشعار" },
+      product: { en: "Product photo", ar: "صورة المنتج" },
+      sample: { en: "Style sample", ar: "عينة نمطية" },
+      none: { en: "Ignore image", ar: "تجاهل الصورة" },
+    };
+    return map[referenceImageRole][lang];
+  }, [referenceImageRole]);
 
   // --- Reset handlers ---------------------------------------------------------
   const resetAll = useCallback(() => {
@@ -1644,6 +1682,8 @@ const A4Tab: React.FC = () => {
     setIsExpanding(false);
     setDecorWanted([]);
     setCustomWanted("");
+    setUserWishes("");
+    setReferenceImageRole("logo");
   }, []);
 
   // When theme changes, re-init formState with default values from schema
@@ -1727,6 +1767,8 @@ const A4Tab: React.FC = () => {
         input_mode: inputMode,
         decorations_wanted: decorWanted,
         decorations_unwanted: [],
+        user_wishes: userWishes.trim() || null,
+        reference_image_role: referenceImageRole,
       });
 
       if (!res.success || !res.batch_id) {
@@ -2070,6 +2112,74 @@ const A4Tab: React.FC = () => {
                     )}
                   </div>
                 )}
+
+                {/* --- What I want (free text) + Reference image role ------ */}
+                {/* Guarantees the user's explicit intent reaches the image     */}
+                {/* model. The free-text wishes are injected VERBATIM into the  */}
+                {/* compiled prompt. The reference-image role tells the model   */}
+                {/* how to use the attachment (portrait, logo, product, sample).*/}
+                <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-3">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {t("What I want", "ما أريده")}
+                  </div>
+                  <div>
+                    <textarea
+                      value={userWishes}
+                      onChange={(e) => setUserWishes(e.target.value.slice(0, 2000))}
+                      rows={3}
+                      maxLength={2000}
+                      placeholder={t(
+                        "Describe exactly what you want: tone, style, layout, must-haves… (appears in the final prompt verbatim)",
+                        "صف بالتحديد ما تريده: النبرة، الأسلوب، التخطيط، ما يجب أن يظهر… (سيظهر في الطلب النهائي حرفياً)",
+                      )}
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+                    />
+                    <div className="mt-1 flex justify-end text-[10px] text-muted-foreground">
+                      {userWishes.length}/2000
+                    </div>
+                  </div>
+
+                  {/* Reference image role — only meaningful when a logo/photo */}
+                  {/* has been uploaded. Always visible so the user can preset */}
+                  {/* it before uploading.                                     */}
+                  <div>
+                    <div className="text-xs font-semibold text-foreground/85 mb-1.5">
+                      {t("Uploaded image is a…", "الصورة المرفوعة هي…")}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                      {(["portrait", "logo", "product", "sample", "none"] as A4ReferenceImageRole[]).map((role) => {
+                        const labels: Record<A4ReferenceImageRole, { en: string; ar: string }> = {
+                          portrait: { en: "Portrait", ar: "صورة شخصية" },
+                          logo: { en: "Logo", ar: "شعار" },
+                          product: { en: "Product", ar: "منتج" },
+                          sample: { en: "Sample", ar: "عينة" },
+                          none: { en: "Ignore", ar: "تجاهل" },
+                        };
+                        const isSelected = referenceImageRole === role;
+                        return (
+                          <button
+                            key={role}
+                            type="button"
+                            onClick={() => setReferenceImageRole(role)}
+                            className={`px-2.5 py-1.5 rounded-lg border text-[11px] transition text-center ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background hover:bg-muted/40 border-border text-foreground/80"
+                            }`}
+                          >
+                            {t(labels[role].en, labels[role].ar)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      {t(
+                        "Current label: " + referenceImageLabel("en"),
+                        "التسمية الحالية: " + referenceImageLabel("ar"),
+                      )}
+                    </div>
+                  </div>
+                </div>
 
                 {/* --- Decorations I want ---------------------------------- */}
                 <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-4">

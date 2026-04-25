@@ -126,6 +126,8 @@ export interface A4CreativeSettings {
   layout_pattern?: A4LayoutPattern | null;
 }
 
+export type A4ReferenceImageRole = "portrait" | "logo" | "product" | "sample" | "none";
+
 export interface A4CompileInput {
   theme: A4Theme;
   purposeId: string | null;
@@ -139,6 +141,13 @@ export interface A4CompileInput {
   hasPrevPageReference: boolean;
   designSettings?: A4DesignSettings | null;
   creativeSettings?: A4CreativeSettings | null;
+  // NEW — user's free-text wishes, injected verbatim into the prompt.
+  // Whatever the user types here must reach the image model unmodified.
+  userWishes?: string | null;
+  // NEW — what role the uploaded reference image plays in the final document.
+  // Drives the REFERENCE IMAGE directive so the image model knows what to do
+  // with the attachment (put it as a portrait, small logo, product photo, etc.).
+  referenceImageRole?: A4ReferenceImageRole | null;
 }
 
 function getLanguageRules(mode: "en" | "ar" | "bilingual"): string {
@@ -836,6 +845,36 @@ function getLayoutPatternBlock(pattern: A4LayoutPattern | null | undefined): str
   }
 }
 
+function getReferenceImageDirective(
+  role: A4ReferenceImageRole | null | undefined,
+  hasLogoRef: boolean,
+): string {
+  if (!hasLogoRef) return "";
+  switch (role) {
+    case "portrait":
+      return "REFERENCE IMAGE ROLE\nThe attached reference image is the SUBJECT'S PORTRAIT PHOTO. Place it prominently in the HEADER ZONE (top-left or top-center depending on layout) as a clean portrait thumbnail — circular or rounded-square crop, face centered, consistent with the document's visual style. Do NOT treat the attached image as a logo, background texture, product, or stylistic inspiration. Do NOT recolor, illustrate, or redraw the person — render the photograph itself.";
+    case "logo":
+      return "REFERENCE IMAGE ROLE\nThe attached reference image is the ORGANIZATION'S LOGO. Place it small and clean in the top-left area (or top-right for RTL layouts). Preserve its exact colors, shape, and proportions. Do NOT stylize, recolor, redraw, or replace it.";
+    case "product":
+      return "REFERENCE IMAGE ROLE\nThe attached reference image is a PRODUCT PHOTO. Feature it inside the body zone where the layout naturally highlights a product (hero area, menu item, catalog card). Keep its colors and shape faithful. Do NOT use it as a logo or background.";
+    case "sample":
+      return "REFERENCE IMAGE ROLE\nThe attached reference image is a STYLE / LAYOUT SAMPLE provided only for visual reference. Match its overall mood, color palette, and structural rhythm, but do NOT copy its text, do NOT embed the sample image itself in the output, and do NOT treat it as a portrait or logo.";
+    case "none":
+      return "REFERENCE IMAGE ROLE\nIgnore the attached reference image. Do not place it anywhere in the rendered document.";
+    default:
+      // Safe default: treat as logo (legacy behavior)
+      return "REFERENCE IMAGE ROLE\nThe attached reference image is the ORGANIZATION'S LOGO. Place it small and clean in the top-left area (or top-right for RTL layouts). Preserve its exact colors, shape, and proportions. Do NOT stylize, recolor, redraw, or replace it.";
+  }
+}
+
+function getUserWishesBlock(wishes: string | null | undefined): string {
+  const text = (wishes ?? "").trim();
+  if (!text) return "";
+  // Highest-priority user intent. Positioned near the top of the prompt so
+  // the image model weighs it above theme defaults and negative lists.
+  return `USER WISHES (HIGHEST PRIORITY — honor these over theme defaults)\nThe user explicitly asked for the following. Interpret and satisfy every wish here, even if it conflicts with generic style defaults:\n\n${text}`;
+}
+
 export function compileMasterPrompt(input: A4CompileInput): string {
   const {
     theme,
@@ -847,6 +886,8 @@ export function compileMasterPrompt(input: A4CompileInput): string {
     brandColors,
     hasLogoReference,
     hasPrevPageReference,
+    userWishes,
+    referenceImageRole,
   } = input;
 
   // Title fallback: if the user left document title empty, synthesise one from
@@ -932,6 +973,11 @@ export function compileMasterPrompt(input: A4CompileInput): string {
     `VISUAL STYLE\n${theme.style_block}\n${backgroundDirective}\nAll text renders razor-sharp and anti-aliased, with consistent kerning, legible at 400% zoom.`,
   );
 
+  // USER WISHES sit very high in priority — right after the base style so the
+  // image model treats them as overrides on anything below. Inserted verbatim.
+  const userWishesBlock = getUserWishesBlock(userWishes);
+  if (userWishesBlock) sections.push(userWishesBlock);
+
   if (visualRecipe) sections.push(`VISUAL RECIPE\n${visualRecipe}`);
   if (illustrationStyle) sections.push(`ILLUSTRATION APPROACH\n${illustrationStyle}`);
   if (accentElements) sections.push(`ACCENT ELEMENTS\n${accentElements}`);
@@ -953,6 +999,16 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   sections.push(`LAYOUT BLUEPRINT\n${layoutBlueprint}`);
   if (layoutPattern) sections.push(`LAYOUT PATTERN\n${layoutPattern}`);
   sections.push(`HEADER\n${headerBlock}`);
+
+  // REFERENCE IMAGE ROLE — tells the image model exactly what to do with the
+  // attachment (portrait, logo, product, sample). Only added when an image
+  // was actually attached, to avoid confusing the model otherwise.
+  const referenceImageDirective = getReferenceImageDirective(
+    referenceImageRole,
+    hasLogoReference,
+  );
+  if (referenceImageDirective) sections.push(referenceImageDirective);
+
   sections.push(subjectAwareImagery);
   sections.push(noLoremGuard);
 
