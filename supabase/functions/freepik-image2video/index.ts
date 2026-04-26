@@ -2,8 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
 import { checkAndConsumeTrialToken, type TrialFeatureKey } from "../_shared/trial-tracker.ts";
-import { generateGemini } from "../_shared/gemini.ts";
-import { sanitizeUserInput, withUserInputGuard } from "../_shared/promptSafety.ts";
+import { sanitizeUserInput } from "../_shared/promptSafety.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -171,20 +170,23 @@ type VisualAdsSpec = {
   legacy_prompt?: string | null;
 };
 
-type VisualAdsPromptSections = {
-  system_rules: string[];
-  production_prompt: string;
-  hard_constraints: string[];
-  negative_guards: string[];
-  layout_instructions: string[];
+type VisualAdsPromptTemplate = {
+  prompt: string[];
+  role_assignments: string[];
+  composition_and_layout: string[];
+  allowed_text: string[];
+  style_and_mood: string[];
+  call_to_action: string[];
+  strict_rules: string[];
+  output: string[];
 };
 
-type VisualAdsCompiledPrompt = VisualAdsPromptSections & {
+type VisualAdsCompiledPrompt = {
   final_prompt: string;
-  used_fallback: boolean;
+  source: "template_compiler";
 };
 
-const VISUAL_ADS_PROMPT_ENGINEER_MODEL = "gemini-2.5-flash-lite";
+const VISUAL_ADS_PROMPT_ENGINEER_SOURCE = "template_compiler";
 
 function asString(value: unknown, maxLength = 400): string {
   if (typeof value !== "string") return "";
@@ -300,178 +302,251 @@ function normalizeVisualAdsSpec(raw: unknown, legacyPrompt: string): VisualAdsSp
   };
 }
 
-function buildVisualAdsPromptText(sections: VisualAdsPromptSections): string {
-  return [
-    "SYSTEM_RULES",
-    ...sections.system_rules.map((rule) => `- ${rule}`),
-    "",
-    "PRODUCTION_PROMPT",
-    sections.production_prompt,
-    "",
-    "HARD_CONSTRAINTS",
-    ...sections.hard_constraints.map((rule) => `- ${rule}`),
-    "",
-    "NEGATIVE_GUARDS",
-    ...sections.negative_guards.map((rule) => `- ${rule}`),
-    "",
-    "LAYOUT_INSTRUCTIONS",
-    ...sections.layout_instructions.map((rule) => `- ${rule}`),
-  ].join("\n").trim();
+function dedupeStrings(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = (value || "").trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(normalized);
+  }
+  return result;
 }
 
-function isValidVisualAdsPromptSections(raw: unknown): raw is VisualAdsPromptSections {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return false;
-  const record = raw as Record<string, unknown>;
-  if (!Array.isArray(record.system_rules) || record.system_rules.length < 3) return false;
-  if (!Array.isArray(record.hard_constraints) || record.hard_constraints.length < 3) return false;
-  if (!Array.isArray(record.negative_guards) || record.negative_guards.length < 2) return false;
-  if (!Array.isArray(record.layout_instructions) || record.layout_instructions.length < 3) return false;
-  if (typeof record.production_prompt !== "string" || record.production_prompt.trim().length < 80) return false;
-  return true;
+function humanizeToken(value: string): string {
+  return value.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function buildVisualAdsFallbackSections(spec: VisualAdsSpec, legacyPrompt: string): VisualAdsPromptSections {
-  const campaignPrompt = [
-    spec.campaign?.main_message_prompt,
-    spec.campaign?.main_message_detail_prompt,
-    spec.campaign?.main_message_custom_text,
-  ].filter((item): item is string => typeof item === "string" && item.length > 0).join(" ");
-  const featureChips = spec.campaign?.feature_chips?.length
-    ? spec.campaign.feature_chips
-    : (spec.text_policy?.allowed_feature_labels || []);
-  const stylePrompt = [
-    spec.style?.primary_style_prompt,
-    spec.style?.style_detail_prompt,
-    spec.style?.primary_style_custom_text,
-  ].filter((item): item is string => typeof item === "string" && item.length > 0).join(" ");
-  const assetSummary = (spec.assets || [])
-    .map((asset) => {
-      const details = [asset.role, asset.custom_role, asset.person_mode, asset.pose_mode, asset.reference_style, asset.logo_mode, asset.screenshot_device]
-        .filter((item): item is string => typeof item === "string" && item.length > 0)
-        .join(", ");
-      return `${asset.source_id || asset.image_ref || "asset"}: ${details || "use as tagged"}`;
-    })
-    .join("; ");
-  const allowedText = spec.text_policy?.allowed_text?.length ? spec.text_policy.allowed_text.join(" | ") : "";
+function startCase(value: string): string {
+  return humanizeToken(value)
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function ensureSentence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function getSourceKey(asset: VisualAdsSpecAsset, index: number): string {
+  return asset.source_id || `SOURCE_${index + 1}`;
+}
+
+function getRoleLabel(asset: VisualAdsSpecAsset): string {
+  const role = (asset.role || "").toLowerCase();
+  if (role === "screenshot") return "App Screenshot";
+  if (role === "background") return "Background";
+  if (role === "logo") return "Logo";
+  if (role === "person") return "Person";
+  if (role === "product") return "Product";
+  if (role === "icon") return "Icon";
+  if (role === "mascot") return "Mascot";
+  if (role === "illustration") return "Illustration";
+  if (role === "texture") return "Texture";
+  if (role === "prop") return "Prop";
+  return asset.custom_role ? startCase(asset.custom_role) : (role ? startCase(role) : "Asset");
+}
+
+function getRolePurpose(spec: VisualAdsSpec, asset: VisualAdsSpecAsset, sourceKey: string): string | null {
+  const primary = spec.composition?.primary_subjects || [];
+  const secondary = spec.composition?.secondary_subjects || [];
+  if (spec.composition?.background_source === sourceKey || (asset.role || "").toLowerCase() === "background") return "Foundation";
+  if (primary.includes(sourceKey)) return "Primary Subject";
+  if (secondary.includes(sourceKey)) return "Secondary Element";
+  const role = (asset.role || "").toLowerCase();
+  if (role === "logo") return "Secondary Element";
+  if (role === "screenshot" || role === "person" || role === "product") return "Primary Subject";
+  return null;
+}
+
+function findAsset(spec: VisualAdsSpec, role: string): { asset: VisualAdsSpecAsset; index: number } | null {
+  const assets = spec.assets || [];
+  const index = assets.findIndex((asset) => (asset.role || "").toLowerCase() === role);
+  if (index === -1) return null;
+  return { asset: assets[index], index };
+}
+
+function getAllowedText(spec: VisualAdsSpec): string[] {
+  return dedupeStrings([
+    ...(spec.text_policy?.allowed_text || []),
+    ...(spec.campaign?.feature_chips || []),
+    ...(spec.text_policy?.allowed_feature_labels || []),
+  ]);
+}
+
+function buildVisualAdsPromptTemplate(spec: VisualAdsSpec): VisualAdsPromptTemplate {
+  const assets = spec.assets || [];
+  const allowedText = getAllowedText(spec);
+  const screenshot = findAsset(spec, "screenshot");
+  const background = findAsset(spec, "background");
+  const logo = findAsset(spec, "logo");
+  const person = findAsset(spec, "person");
+  const product = findAsset(spec, "product");
+
+  const campaignDirection = dedupeStrings([
+    spec.campaign?.main_message_prompt || null,
+    spec.campaign?.main_message_detail_prompt || null,
+    spec.campaign?.main_message_custom_text || null,
+  ]);
+  const styleDirection = dedupeStrings([
+    spec.style?.primary_style_prompt || null,
+    spec.style?.style_detail_prompt || null,
+    spec.style?.primary_style_custom_text || null,
+  ]);
+
+  const promptLines = [
+    `Create a high-end ${spec.aspect_ratio || "9:16"} premium advertising poster with a unified, cinematic composition.`,
+    ...campaignDirection.length
+      ? [`Build the poster around this campaign direction: ${campaignDirection.map((item) => item.replace(/[.!?]+$/g, "")).join(" ")}.`]
+      : [],
+    ...(spec.objective ? [`Business objective: ${ensureSentence(spec.objective)}`] : []),
+  ];
+
+  const roleAssignments = assets.map((asset, index) => {
+    const sourceKey = getSourceKey(asset, index);
+    const roleLabel = getRoleLabel(asset);
+    const rolePurpose = getRolePurpose(spec, asset, sourceKey);
+    return `${sourceKey} → ${roleLabel}${rolePurpose ? ` (${rolePurpose})` : ""}`;
+  });
+
+  const compositionLines = dedupeStrings([
+    ...(screenshot ? [
+      `Place the app screenshot (${getSourceKey(screenshot.asset, screenshot.index)}) inside a realistic ${startCase(screenshot.asset.screenshot_device || "iphone")} device mockup, centered or slightly dominant in the frame.`,
+      `The screenshot must remain 100% unchanged and readable with no UI edits, no distortion, and no fake redesign.`,
+    ] : []),
+    ...(background ? [
+      `Use ${getSourceKey(background.asset, background.index)} as the full background foundation, preserving its identity while enhancing it with cinematic color grading, depth of field, and soft lighting effects.`,
+    ] : []),
+    ...(logo ? [
+      `Integrate the logo (${getSourceKey(logo.asset, logo.index)}) naturally into the composition, preferably in a clean top or bottom placement, keeping it exactly as provided with no redesign, no recolor, and no distortion.`,
+    ] : []),
+    ...(person ? [
+      person.asset.person_mode === "reference"
+        ? `Use the person in ${getSourceKey(person.asset, person.index)} as the identity reference and keep the final subject realistic, faithful, and recognizable.`
+        : `Keep the real person from ${getSourceKey(person.asset, person.index)} as the same exact subject in the final composition, preserving identity, face, skin tone, and realism.`,
+    ] : []),
+    ...(product && !screenshot ? [
+      `Make ${getSourceKey(product.asset, product.index)} the hero product element with premium scale, clean lighting, and polished presentation.`,
+    ] : []),
+    ...(allowedText.length ? [`If approved text is used in the poster, present it as clean callouts, quote bubbles, premium cards, or polished text placements with strong readability.`] : []),
+    ...(spec.composition?.layout_type ? [`Use a ${humanizeToken(spec.composition.layout_type)} layout with clear advertising hierarchy and strong visual balance.`] : []),
+    ...(spec.composition?.must_feel_unified ? [`The entire poster must feel like one cohesive premium composition, not a messy collage.`] : []),
+  ]);
+
+  const styleLines = dedupeStrings([
+    ...styleDirection,
+    ...(styleDirection.length ? [] : ["Premium polished advertising quality", "Clean visual hierarchy", "Luxury-level production finish"]),
+  ]).map((item) => item.replace(/[.!?]+$/g, ""));
+
+  const ctaText = spec.campaign?.cta_text || spec.text_policy?.allowed_text?.[0] || null;
+  const callToActionLines = ctaText
+    ? [`Display "${ctaText}" clearly and prominently as the main call to action.`]
+    : ["Keep the call to action clear, premium, and visually intentional."];
+
+  const strictRules = dedupeStrings([
+    spec.hard_constraints?.allow_invented_text === false || allowedText.length
+      ? "Do NOT add any extra text beyond the allowed phrases."
+      : null,
+    spec.hard_constraints?.allow_invented_names === false || spec.text_policy?.allow_generated_headline === false || spec.text_policy?.allow_generated_tagline === false
+      ? "Do NOT invent names, headlines, or taglines."
+      : null,
+    spec.hard_constraints?.allow_invented_testimonials === false || spec.text_policy?.allow_generated_testimonials === false || spec.text_policy?.allow_generated_social_proof_copy === false
+      ? "Do NOT invent testimonials, ratings, or social proof copy."
+      : null,
+    spec.hard_constraints?.must_preserve_screenshot_fidelity
+      ? "Do NOT modify the screenshot UI."
+      : null,
+    spec.hard_constraints?.must_preserve_logo_fidelity
+      ? "Do NOT alter the logo."
+      : null,
+    spec.hard_constraints?.must_preserve_background_identity
+      ? "Do NOT change the core identity of the background."
+      : null,
+    spec.hard_constraints?.must_preserve_exact_person_identity
+      ? "Do NOT replace the real person with a different face, body, or identity."
+      : null,
+    spec.campaign?.require_exact_feature_chips && (spec.campaign.feature_chips || []).length
+      ? "Use the approved key points exactly as written without renaming, paraphrasing, or substituting them."
+      : null,
+    spec.composition?.face_must_remain_visible
+      ? "Keep the face clearly visible in the final composition."
+      : null,
+    spec.composition?.device_must_not_block_face
+      ? "The device mockup must not block the face."
+      : null,
+    "Keep everything sharp, high-resolution, realistic, and production-ready.",
+  ]);
+
+  const outputLines = [
+    "One single cohesive poster",
+    `Aspect ratio: ${spec.aspect_ratio || "9:16"}`,
+    "Ultra clean, premium, production-ready quality",
+  ];
 
   return {
-    system_rules: [
-      "Treat the structured brief as the single source of truth.",
-      "Honor every tagged asset role exactly and preserve real identity fidelity before style.",
-      "Use only the approved CTA or text that appears in allowed_text.",
-      ...(featureChips.length ? ["Use the provided key points as required source-truth campaign points, not optional inspiration."] : []),
-      "Respect the requested aspect ratio and build one unified premium poster composition.",
-    ],
-    production_prompt: [
-      `Create one premium advertising poster in ${spec.aspect_ratio || "9:16"}.`,
-      campaignPrompt ? `Campaign intent: ${campaignPrompt}.` : "Campaign intent: premium advertising poster based on the selected UI brief.",
-      featureChips.length ? `Required key points: ${featureChips.join(" | ")}. Present them clearly in the composition when text or callout treatment is used.` : "",
-      stylePrompt ? `Style direction: ${stylePrompt}.` : "Style direction: keep it polished, premium, and faithful to the selected settings.",
-      assetSummary ? `Tagged assets: ${assetSummary}.` : "Use the uploaded assets strictly according to their tagged roles.",
-      allowedText ? `Allowed on-poster text: ${allowedText}.` : "Do not invent headline, tagline, testimonial, or unapproved marketing copy.",
-      spec.composition?.layout_type ? `Layout type: ${spec.composition?.layout_type}.` : "Layout type: one unified ad composition.",
-      spec.objective ? `Business objective: ${spec.objective}.` : "",
-      legacyPrompt ? `Legacy brief reference: ${legacyPrompt}` : "",
-    ].filter(Boolean).join(" "),
-    hard_constraints: [
-      spec.hard_constraints?.must_preserve_exact_person_identity ? "Preserve the exact same real person identity, face, skin tone, body shape, and clothing." : "Do not drift away from the tagged human subject.",
-      spec.hard_constraints?.must_preserve_logo_fidelity ? "Preserve logo fidelity exactly with no redraw, distortion, or restyling." : "Keep brand marks clean and faithful when present.",
-      spec.hard_constraints?.must_preserve_screenshot_fidelity ? "Preserve the screenshot UI faithfully and keep it readable inside the composition." : "If a screenshot is present, keep its interface readable.",
-      spec.hard_constraints?.must_preserve_background_identity ? "Keep the selected background recognizable as the real scene foundation." : "Keep the environment coherent with the tagged background.",
-      ...(spec.campaign?.require_exact_feature_chips && featureChips.length ? [`Use these exact key points without swapping them for different claims: ${featureChips.join(" | ")}.`] : []),
-      spec.composition?.face_must_remain_visible ? "The device or overlay must never block the person’s face." : "Avoid blocking the hero subject.",
-    ],
-    negative_guards: [
-      spec.hard_constraints?.allow_invented_text === false ? "Do not invent any headline, tagline, body copy, testimonial, or names outside allowed_text." : "Do not add unapproved marketing copy.",
-      ...(spec.campaign?.require_exact_feature_chips && featureChips.length ? ["Do not replace the provided key points with different claims, synonyms, or generic benefits."] : []),
-      spec.hard_constraints?.allow_invented_names === false ? "Do not invent brand names, usernames, or fake labels from the screenshot UI." : "Do not fabricate names from the UI.",
-      spec.hard_constraints?.allow_invented_testimonials === false ? "Do not fabricate testimonials, ratings, or social proof." : "Do not fabricate social proof.",
-      "Do not swap the real person for a prettier different model.",
-      "Do not redesign the logo, screenshot, or background into a different identity.",
-    ],
-    layout_instructions: [
-      `Use a ${spec.aspect_ratio || "9:16"} poster layout with a clear ad hierarchy.`,
-      spec.composition?.layout_type ? `Follow the ${spec.composition.layout_type} layout logic.` : "Follow a clean advertising poster layout.",
-      ...(featureChips.length ? ["If key points are provided, place them as clean callouts or a smart breakdown with strong readability."] : []),
-      spec.composition?.primary_subjects?.length ? `Primary subjects: ${spec.composition.primary_subjects.join(", ")}.` : "Keep the main tagged hero assets dominant.",
-      spec.composition?.secondary_subjects?.length ? `Secondary supporting subjects: ${spec.composition.secondary_subjects.join(", ")}.` : "Use secondary assets only as support.",
-      spec.composition?.must_feel_unified ? "The poster must feel like one unified composition, not a messy collage." : "Keep the composition unified.",
-    ],
+    prompt: promptLines,
+    role_assignments: roleAssignments,
+    composition_and_layout: compositionLines,
+    allowed_text: allowedText,
+    style_and_mood: styleLines,
+    call_to_action: callToActionLines,
+    strict_rules: strictRules,
+    output: outputLines,
   };
 }
 
-const VISUAL_ADS_PROMPT_ENGINEER_SYSTEM = withUserInputGuard(`You are the WAKTI Visual Ads Prompt Engineer.
-
-Your job is to convert a structured Poster Ads brief into a strict image-model instruction package.
-
-Rules:
-1. Output STRICT JSON only. No prose. No markdown fences. No commentary.
-2. The structured brief is the single source of truth. Do not ignore, soften, compress away, or replace any user-chosen requirement.
-3. You must preserve exact asset-role intent. If an image is tagged as person, logo, screenshot, or background, the final instructions must reflect that exact role.
-4. Preserve fidelity before style. Exact person identity, logo fidelity, screenshot fidelity, and background identity outrank stylistic polish.
-5. Layout instructions are mandatory. The layout_instructions array must never be empty.
-6. If allowed_text is limited, do not invent any extra marketing copy beyond that allowance.
-7. If feature_chips are provided, treat them as source-truth key points. Do not rename, replace, generalize, or invent different claims.
-8. If the brief forbids invented names or testimonials, explicitly reinforce that in negative_guards.
-9. Write for an image model. Be concrete, visual, direct, and production-ready.
-10. Respect the requested aspect ratio and build exactly one unified premium poster ad.
-11. Do not output placeholders such as TBD, maybe, optional, or generic fluff.
-
-Return JSON with this exact shape:
-{
-  "system_rules": string[],
-  "production_prompt": string,
-  "hard_constraints": string[],
-  "negative_guards": string[],
-  "layout_instructions": string[]
-}`);
-
-function extractGeminiText(result: unknown): string {
-  const candidate = result && typeof result === "object"
-    ? (result as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> }).candidates?.[0]
-    : undefined;
-  return candidate?.content?.parts?.map((part) => typeof part?.text === "string" ? part.text : "").join("").trim() || "";
+function buildVisualAdsPromptText(template: VisualAdsPromptTemplate): string {
+  return [
+    "Prompt:",
+    "",
+    ...template.prompt,
+    "",
+    "Use the provided images with strict role assignment:",
+    "",
+    ...template.role_assignments,
+    "",
+    "Composition & Layout:",
+    "",
+    ...template.composition_and_layout,
+    "",
+    "Allowed Text ONLY:",
+    "",
+    ...(template.allowed_text.length
+      ? template.allowed_text.map((item) => `\"${item}\"`)
+      : ["No extra on-poster text beyond what is already approved in the brief."]),
+    "",
+    "Style & Mood:",
+    "",
+    ...template.style_and_mood,
+    "",
+    "Call to Action:",
+    "",
+    ...template.call_to_action,
+    "",
+    "Strict Rules:",
+    "",
+    ...template.strict_rules,
+    "",
+    "Output:",
+    "",
+    ...template.output,
+  ].join("\n").trim();
 }
 
-async function compileVisualAdsPrompt(rawSpec: unknown, legacyPrompt: string): Promise<VisualAdsCompiledPrompt> {
+function compileVisualAdsPrompt(rawSpec: unknown, legacyPrompt: string): VisualAdsCompiledPrompt {
   const spec = normalizeVisualAdsSpec(rawSpec, legacyPrompt);
-  const fallbackSections = buildVisualAdsFallbackSections(spec, spec.legacy_prompt || legacyPrompt);
-
-  try {
-    const geminiResult = await generateGemini(
-      VISUAL_ADS_PROMPT_ENGINEER_MODEL,
-      [{ role: "user", parts: [{ text: JSON.stringify({ brief: spec }) }] }],
-      VISUAL_ADS_PROMPT_ENGINEER_SYSTEM,
-      {
-        temperature: 0.2,
-        maxOutputTokens: 1800,
-        response_mime_type: "application/json",
-      },
-    );
-    const text = extractGeminiText(geminiResult);
-    if (!text) {
-      throw new Error("empty Gemini response");
-    }
-    const parsed = JSON.parse(text) as unknown;
-    if (!isValidVisualAdsPromptSections(parsed)) {
-      throw new Error("invalid Gemini prompt section shape");
-    }
-    const compiled = parsed as VisualAdsPromptSections;
-    console.log("[kie-visual-ads] Prompt engineer source: gemini");
-    return {
-      ...compiled,
-      final_prompt: buildVisualAdsPromptText(compiled),
-      used_fallback: false,
-    };
-  } catch (error) {
-    console.warn("[kie-visual-ads] Prompt engineer fallback:", error instanceof Error ? error.message : error);
-    console.log("[kie-visual-ads] Prompt engineer source: fallback");
-    return {
-      ...fallbackSections,
-      final_prompt: buildVisualAdsPromptText(fallbackSections),
-      used_fallback: true,
-    };
-  }
+  const template = buildVisualAdsPromptTemplate(spec);
+  console.log(`[kie-visual-ads] Prompt engineer source: ${VISUAL_ADS_PROMPT_ENGINEER_SOURCE}`);
+  return {
+    final_prompt: buildVisualAdsPromptText(template),
+    source: VISUAL_ADS_PROMPT_ENGINEER_SOURCE,
+  };
 }
 
 function sanitizeImageUrl(url: string): string {
@@ -1064,7 +1139,7 @@ serve(async (req) => {
         ? sanitizeUserInput(body.prompt, { maxLength: 7000, label: "visual_ads_prompt" })
         : "";
       const compiledPrompt = await compileVisualAdsPrompt(body.visual_ads_spec, legacyPrompt);
-      console.log(`[kie-visual-ads] Using compiled prompt source: ${compiledPrompt.used_fallback ? "fallback" : "gemini"}`);
+      console.log(`[kie-visual-ads] Using compiled prompt source: ${compiledPrompt.source}`);
       const supabaseAdminForAds = createClient(
         Deno.env.get("SUPABASE_URL") || "",
         Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""

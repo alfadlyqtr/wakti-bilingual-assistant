@@ -566,7 +566,7 @@ serve(async (req) => {
     body.reference_image_role as A4ReferenceImageRole,
   )
     ? (body.reference_image_role as A4ReferenceImageRole)
-    : "logo"; // safe default — preserves legacy behavior when UI doesn't send one
+    : "none";
 
   // --- Upload logo if provided -----------------------------------------------
   let logoSignedUrl: string | null = null;

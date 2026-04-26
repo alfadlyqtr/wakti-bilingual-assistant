@@ -190,6 +190,7 @@ function getHeaderBlock(
   theme: A4Theme,
   formState: Record<string, unknown>,
   hasLogoRef: boolean,
+  referenceImageRole: A4ReferenceImageRole | null | undefined,
   pageNumber: number,
   languageMode: "en" | "ar" | "bilingual" = "en",
 ): string {
@@ -201,11 +202,13 @@ function getHeaderBlock(
   // For multi-page, page 2+ uses a slim running header
   if (pageNumber > 1) {
     const title = String(formState.project_title ?? formState.report_title ?? formState.poster_title ?? formState.business_name ?? formState.company_name ?? formState.full_name ?? formState.card_title ?? formState.subject ?? formState.course_name ?? formState.title ?? formState.event_name ?? "").trim();
-    const fallbackTitle = L("Document", "مستند");
-    return `Slim running header only: document title "${title || fallbackTitle}" aligned per language direction. No logo repetition needed unless it fits elegantly.`;
+    if (!title) {
+      return `Slim running header only if page 1 already established a visible title. Do not invent a new running title on this page.`;
+    }
+    return `Slim running header only: document title "${title}" aligned per language direction. Do not repeat the reference image unless the user explicitly uses it as a logo.`;
   }
 
-  const logoClause = hasLogoRef
+  const logoClause = hasLogoRef && referenceImageRole === "logo"
     ? "Top-left area: render the reference logo EXACTLY as provided — do not stylize, recolor, or redesign it. Keep its original proportions and colors."
     : "";
 
@@ -248,7 +251,7 @@ function getHeaderBlock(
       const level = String(formState.education_level ?? "").trim();
       const faculty = String(formState.department_or_faculty ?? "").trim();
       const supervisor = String(formState.teacher_or_supervisor ?? "").trim();
-      const title = String(formState.project_title ?? formState.__fallback_title__ ?? "").trim();
+      const title = String(formState.project_title ?? "").trim();
       const date = String(formState.submission_date ?? "").trim();
       const meta = [
         student ? `${L("Student", "الطالب")}: ${student}` : "",
@@ -261,10 +264,10 @@ function getHeaderBlock(
         school,
         date ? `${L("Date", "التاريخ")}: ${date}` : "",
       ].filter(Boolean).join(" | ");
-      return `Header: ${logoClause} Large H1 title centered: "${title}". Meta row below title: "${meta}".`;
+      return `Header: ${logoClause}${title ? ` Large H1 title centered: "${title}".` : ""}${meta ? ` Meta row below title: "${meta}".` : ""}`;
     }
     case "academic_report": {
-      const title = String(formState.title ?? formState.__fallback_title__ ?? "").trim();
+      const title = String(formState.title ?? "").trim();
       const institution = String(formState.institution_name ?? "").trim();
       const department = String(formState.department_or_faculty ?? "").trim();
       const course = String(formState.course_name ?? "").trim();
@@ -287,10 +290,10 @@ function getHeaderBlock(
         semester ? `${L("Semester", "الفصل الدراسي")}: ${semester}` : "",
         date ? `${L("Date", "التاريخ")}: ${date}` : "",
       ].filter(Boolean).join(" | ");
-      return `Header: ${logoClause} Academic title block with the main title "${title}". Secondary meta line: "${meta}".`;
+      return `Header: ${logoClause}${title ? ` Academic title block with the main title "${title}".` : ""}${meta ? ` Secondary meta line: "${meta}".` : ""}`;
     }
     case "study_handout": {
-      const topic = String(formState.topic ?? formState.__fallback_title__ ?? "").trim();
+      const topic = String(formState.topic ?? "").trim();
       const course = String(formState.course_name ?? "").trim();
       const teacher = String(formState.teacher_name ?? "").trim();
       const grade = String(formState.grade ?? "").trim();
@@ -303,22 +306,22 @@ function getHeaderBlock(
         level && level !== grade ? `${L("Level", "المستوى")}: ${level}` : "",
         focus ? `${L("Focus", "التركيز")}: ${focus}` : "",
       ].filter(Boolean).join(" | ");
-      return `Header: ${logoClause} Clear study-handout title at the top: "${topic}".${meta ? ` Compact supporting meta row: "${meta}".` : ""}`;
+      return `Header: ${logoClause}${topic ? ` Clear study-handout title at the top: "${topic}".` : ""}${meta ? ` Compact supporting meta row: "${meta}".` : ""}`;
     }
     case "research_poster": {
-      const title = String(formState.poster_title ?? formState.__fallback_title__ ?? "").trim();
+      const title = String(formState.poster_title ?? "").trim();
       const institution = String(formState.institution_name ?? "").trim();
       const department = String(formState.department_or_faculty ?? "").trim();
       const authors = String(formState.authors ?? "").trim();
       const supervisor = String(formState.supervisor_name ?? "").trim();
       const event = String(formState.event_name ?? formState.conference_name ?? "").trim();
       const meta = [institution, department, authors, supervisor ? `${L("Supervisor", "المشرف")}: ${supervisor}` : "", event].filter(Boolean).join(" | ");
-      return `Header: ${logoClause} Large scientific poster title across the top: "${title}".${meta ? ` Author and affiliation line below: "${meta}".` : ""}`;
+      return `Header: ${logoClause}${title ? ` Large scientific poster title across the top: "${title}".` : ""}${meta ? ` Author and affiliation line below: "${meta}".` : ""}`;
     }
     case "corporate_brief": {
       const company = String(formState.company_name ?? "").trim();
       const dept = String(formState.department ?? formState.client_name ?? "").trim();
-      const title = String(formState.report_title ?? formState.__fallback_title__ ?? "").trim();
+      const title = String(formState.report_title ?? "").trim();
       const period = String(formState.period ?? "").trim();
       const author = String(formState.author ?? "").trim();
       const ref = String(formState.doc_ref ?? "").trim();
@@ -419,7 +422,7 @@ function getHeaderBlock(
       const linkedin = String(formState.linkedin ?? "").trim();
       const contactBits = [email, phone, location, website, linkedin].filter(Boolean).join(" | ");
       const summary = String(formState.summary ?? "").trim();
-      return `Header: professional resume masthead. ${logoClause} Large candidate name "${fullName}" at top.${role ? ` Role subtitle directly beneath: "${role}".` : ""}${contactBits ? ` Compact contact row below: "${contactBits}".` : ""}${summary ? ` Short professional summary preview immediately below the contact row.` : ""}`;
+      return `Header: professional resume masthead. ${logoClause} Large candidate name "${fullName}" at top.${role ? ` Role subtitle directly beneath: "${role}".` : ""}${contactBits ? ` Compact contact row below: "${contactBits}".` : ""}${summary ? " Include a short professional summary block using ONLY the provided summary text." : ""}`;
     }
     case "clean_minimal": {
       const title = String(formState.title ?? formState.event_name ?? formState.subject ?? "").trim();
@@ -744,21 +747,6 @@ function getBackgroundTreatmentBlock(bg: A4BackgroundTreatment | null | undefine
   }
 }
 
-// Themes where topic elaboration is welcome (educational / explanatory).
-// For these themes we soften the "never invent" rule so the model can fill
-// sparse content with accurate facts about the stated topic instead of
-// falling back to Lorem Ipsum.
-const ELABORATION_FRIENDLY_THEMES = new Set<string>([
-  "craft_infographic",
-  "comic_explainer",
-  "school_project",
-  "official_exam",
-  "academic_report",
-  "study_handout",
-  "research_poster",
-  "clean_minimal",
-]);
-
 // Themes where grading_circle makes sense. Everywhere else it gets stripped.
 const GRADING_CIRCLE_THEMES = new Set<string>(["official_exam"]);
 
@@ -806,31 +794,18 @@ function getContentComponentsBlock(
 
   if (!hasNumbers) {
     filtered = filtered.filter((c) => !numericOnly.has(c));
-    const hadChart = components.some((c) => numericOnly.has(c));
-    if (hadChart && !filtered.includes("info_cards")) {
-      filtered.push("info_cards");
-    }
   }
 
   const pieces = filtered.map((c) => map[c]).filter(Boolean);
   if (pieces.length === 0) return "";
 
-  const isElaborationFriendly = ELABORATION_FRIENDLY_THEMES.has(themeId);
-
-  const rules = isElaborationFriendly
-    ? [
-        `Content components to include: ${pieces.join("; ")}.`,
-        "Integrate each component into the layout where it logically fits.",
-        "RULE: If the provided content is brief, elaborate each card using short, accurate, age-appropriate facts about the stated topic, written in the SAME LANGUAGE as the content.",
-        "Stay factually correct. Do NOT fabricate brand names, product names, company names, numeric statistics, dates, or specific integrations that are not common knowledge about the topic.",
-      ]
-    : [
-        `Content components to include: ${pieces.join("; ")}.`,
-        "Integrate each component into the layout where it logically fits.",
-        "CRITICAL: Populate every component ONLY with data that already exists in the content above.",
-        "Do NOT invent numbers, labels, company names, product names, technology names, brand names, integrations, or examples.",
-        "If a component has no matching data source in the content, OMIT that component entirely and replace it with a short qualitative summary card built from words that ARE in the content.",
-      ];
+  const rules = [
+    `Content components to include: ${pieces.join("; ")}.`,
+    "Integrate each component into the layout where it logically fits.",
+    "CRITICAL: Populate every component ONLY with data that already exists in the provided content and structured form fields.",
+    "Do NOT invent numbers, labels, company names, product names, technology names, brand names, integrations, examples, or supporting sentences.",
+    "If a component has no matching data source in the provided content, OMIT that component entirely.",
+  ];
 
   return rules.join(" ");
 }
@@ -927,9 +902,7 @@ function getDecorationsBlock(
 function getUserWishesBlock(wishes: string | null | undefined): string {
   const text = (wishes ?? "").trim();
   if (!text) return "";
-  // Highest-priority user intent. Positioned near the top of the prompt so
-  // the image model weighs it above theme defaults and negative lists.
-  return `USER WISHES (HIGHEST PRIORITY — honor these over theme defaults)\nThe user explicitly asked for the following. Interpret and satisfy every wish here, even if it conflicts with generic style defaults:\n\n${text}`;
+  return `USER WISHES\nThe following text comes directly from the user. Preserve its meaning exactly and do not ignore any part of it unless it directly conflicts with another explicit frontend input.\n\n${text}`;
 }
 
 export function compileMasterPrompt(input: A4CompileInput): string {
@@ -947,30 +920,10 @@ export function compileMasterPrompt(input: A4CompileInput): string {
     referenceImageRole,
   } = input;
 
-  // Title fallback: if the user left document title empty, synthesise one from
-  // the most likely entity field + theme label so the model never invents a title.
-  const entityName = String(
-    formState.company_name
-      ?? formState.business_name
-      ?? formState.institution_name
-      ?? formState.school_name
-      ?? formState.issuer_name
-      ?? formState.sender_name
-      ?? formState.full_name
-      ?? formState.poster_title
-      ?? "",
-  ).trim();
-  const themeLabel = (theme as unknown as { name_en?: string }).name_en ?? "Document";
-  const fallbackTitle = entityName ? `${entityName} — ${themeLabel}` : themeLabel;
-  const formStateForHeader: Record<string, unknown> = {
-    ...formState,
-    __fallback_title__: fallbackTitle,
-  };
-
   const languageRules = getLanguageRules(languageMode);
   const pageContext = getPageContextClause(pageNumber, totalPages, hasPrevPageReference);
   const brandColorDirective = getBrandColorDirective(brandColors);
-  const headerBlock = getHeaderBlock(theme, formStateForHeader, hasLogoReference, pageNumber, languageMode);
+  const headerBlock = getHeaderBlock(theme, formState, hasLogoReference, referenceImageRole, pageNumber, languageMode);
   const visualAssets = getVisualAssetsBlock(formState, theme, languageMode);
   const design = input.designSettings ?? null;
   const creative = input.creativeSettings ?? null;
@@ -1002,10 +955,8 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   const subjectAwareImagery =
     "SUBJECT-AWARE IMAGERY\nAll decorative elements, icons, spot illustrations, craft shapes, and small accents MUST be semantically tied to the document's subject matter (derived from the header, topic, title, or content). Do NOT use generic weather motifs (clouds, rain, water drops, cotton) unless the subject is literally about weather or water. Do NOT reuse the same stock motifs across different topics. If a motif has no connection to the subject, omit it.";
 
-  // No-Lorem guard: prevents the classic placeholder-text fallback when the
-  // provided content is sparse.
   const noLoremGuard =
-    "NO PLACEHOLDER TEXT\nNEVER render Lorem Ipsum, placeholder Latin, 'sample text', or meaningless filler inside any card, label, or body block. Every rendered character must be meaningful text. If the provided content is brief and a card would otherwise be empty, write a short, accurate, on-topic sentence in the SAME LANGUAGE as the content.";
+    "NO PLACEHOLDER TEXT\nNEVER render Lorem Ipsum, placeholder Latin, 'sample text', or meaningless filler inside any card, label, or body block. Every rendered character must come from the provided content, the structured form fields, or explicit user wishes. If a requested layout area has no supporting content, omit that area instead of inventing text.";
 
   const backgroundDirective = backgroundTreatment
     || (design?.background_color
@@ -1024,19 +975,24 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   const sections: string[] = [];
 
   sections.push(
-    `Generate a flat 2D digital A4 ${orientationLabel} document \u2014 the final image should look indistinguishable from a crisp PDF export viewed on screen. Aspect ratio ${resolvedAspect}.`,
+    `Generate a flat 2D digital A4 ${orientationLabel} document — the final image should look indistinguishable from a crisp PDF export viewed on screen. Treat this as a document layout and rendering task, not a painterly scene. Aspect ratio ${resolvedAspect}.`,
   );
 
+  const styleLines: string[] = [
+    theme.style_block,
+    backgroundDirective,
+    "All text renders razor-sharp and anti-aliased, with consistent kerning, legible at 400% zoom.",
+  ];
+  if (visualRecipe) {
+    styleLines.splice(1, 0, `User-selected visual recipe: ${visualRecipe}`);
+  }
   sections.push(
-    `VISUAL STYLE\n${theme.style_block}\n${backgroundDirective}\nAll text renders razor-sharp and anti-aliased, with consistent kerning, legible at 400% zoom.`,
+    `VISUAL STYLE\n${styleLines.join("\n")}`,
   );
 
-  // USER WISHES sit very high in priority — right after the base style so the
-  // image model treats them as overrides on anything below. Inserted verbatim.
   const userWishesBlock = getUserWishesBlock(userWishes);
   if (userWishesBlock) sections.push(userWishesBlock);
 
-  if (visualRecipe) sections.push(`VISUAL RECIPE\n${visualRecipe}`);
   if (illustrationStyle) sections.push(`ILLUSTRATION APPROACH\n${illustrationStyle}`);
   if (accentElements) sections.push(`ACCENT ELEMENTS\n${accentElements}`);
   if (decorationsBlock) sections.push(decorationsBlock);

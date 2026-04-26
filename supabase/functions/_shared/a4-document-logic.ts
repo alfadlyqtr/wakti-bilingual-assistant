@@ -24,6 +24,15 @@ function normalizeScalar(value: unknown): string {
   return "";
 }
 
+function humanizeFieldKey(key: string): string {
+  const cleaned = key
+    .replace(/^include_/, "")
+    .replace(/^is_/, "")
+    .replace(/_/g, " ")
+    .trim();
+  return cleaned.replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function fieldLabel(
   labels: { en: string; ar: string },
   languageMode: "en" | "ar" | "bilingual",
@@ -60,6 +69,7 @@ export function buildNormalizedA4Content(opts: {
   const schema = getThemeFormSchema(theme, purposeId ?? null);
   const rawContent = normalizeScalar(formState.raw_content);
   const blocks: string[] = [];
+  const handledKeys = new Set<string>();
 
   for (const field of schema) {
     if (
@@ -70,6 +80,7 @@ export function buildNormalizedA4Content(opts: {
     ) {
       continue;
     }
+    handledKeys.add(field.key);
     const value = formState[field.key];
     if (field.type === "image") continue;
     if (field.type === "toggle") {
@@ -80,6 +91,30 @@ export function buildNormalizedA4Content(opts: {
     if (!normalized) continue;
     const label = fieldLabel({ en: field.label_en, ar: field.label_ar }, detectedLanguage);
     if (field.type === "textarea") {
+      blocks.push(`${label}\n${normalized}`);
+      continue;
+    }
+    blocks.push(`${label}: ${normalized}`);
+  }
+
+  for (const [key, value] of Object.entries(formState)) {
+    if (
+      handledKeys.has(key) ||
+      key === "raw_content" ||
+      key === "logo" ||
+      key === "bilingual" ||
+      key.startsWith("__")
+    ) {
+      continue;
+    }
+    if (typeof value === "boolean") {
+      if (value) blocks.push(humanizeFieldKey(key));
+      continue;
+    }
+    const normalized = normalizeScalar(value);
+    if (!normalized) continue;
+    const label = humanizeFieldKey(key);
+    if (normalized.includes("\n")) {
       blocks.push(`${label}\n${normalized}`);
       continue;
     }
