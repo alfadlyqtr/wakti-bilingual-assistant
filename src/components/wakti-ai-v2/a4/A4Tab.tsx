@@ -49,6 +49,8 @@ import {
   A4_THEMES,
   findTheme,
   getFormSchema,
+  getThemeDocumentLane,
+  isBasicFieldForTheme,
   themeRequiresPurpose,
   searchThemes,
   type A4Theme,
@@ -63,6 +65,7 @@ import {
   fileToDataUrl,
   fetchUrlContent,
   expandIdea,
+  retryA4Page,
   A4_UNIVERSAL_DECOR_CHIPS,
   A4_MAX_CHIPS_PER_SIDE,
   type A4DocumentRow,
@@ -81,6 +84,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 type Stage = "pick" | "form" | "generating" | "done" | "failed";
 type PageChoice = "auto" | 1 | 2 | 3;
+// F3: explicit document language switch. "auto" = let backend detect.
+type LanguageChoice = "auto" | "en" | "ar" | "bilingual";
 
 type AssetPickerMode = "photos" | "qrs";
 
@@ -761,7 +766,9 @@ const FormFieldRenderer: React.FC<{
 const PageCarousel: React.FC<{
   rows: A4DocumentRow[];
   aspectRatio: "2:3" | "3:4" | "3:2" | "4:3";
-}> = ({ rows, aspectRatio }) => {
+  onRetryPage?: (row: A4DocumentRow) => void;
+  retryingRowId?: string | null;
+}> = ({ rows, aspectRatio, onRetryPage, retryingRowId }) => {
   const { t } = useTL();
   const [idx, setIdx] = useState(0);
   const total = rows.length;
@@ -793,6 +800,23 @@ const PageCarousel: React.FC<{
             <div className="text-xs text-muted-foreground line-clamp-3">
               {row.error_message || t("Unknown error", "خطأ غير معروف")}
             </div>
+            {onRetryPage && (
+              <button
+                type="button"
+                onClick={() => onRetryPage(row)}
+                disabled={retryingRowId === row.id}
+                className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-60 disabled:cursor-not-allowed transition active:scale-95"
+              >
+                {retryingRowId === row.id ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <RefreshCcw className="h-3 w-3" />
+                )}
+                {retryingRowId === row.id
+                  ? t("Retrying…", "جاري إعادة المحاولة…")
+                  : t("Retry this page", "أعد محاولة هذه الصفحة")}
+              </button>
+            )}
           </div>
         ) : (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
@@ -1609,6 +1633,12 @@ const A4Tab: React.FC = () => {
   const [rows, setRows] = useState<A4DocumentRow[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fatalError, setFatalError] = useState<string | null>(null);
+  // F3: explicit language picker. Defaults to "auto" so users with mixed
+  // content get the right behaviour without thinking. Replaces the legacy
+  // bilingual boolean toggle.
+  const [languageChoice, setLanguageChoice] = useState<LanguageChoice>("auto");
+  // F14: track which row is currently being retried to disable its button.
+  const [retryingRowId, setRetryingRowId] = useState<string | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
 
   // --- Prompt Engineer UI state ---------------------------------------------
@@ -1626,12 +1656,20 @@ const A4Tab: React.FC = () => {
   // What role the uploaded reference image plays inside the rendered doc.
   // Defaults are chosen per theme in the effect below, but user can override.
   const [referenceImageRole, setReferenceImageRole] = useState<A4ReferenceImageRole>("logo");
+  const [formMode, setFormMode] = useState<"basic" | "advanced">("basic");
 
   const theme = themeId ? findTheme(themeId) : null;
   const schema = theme ? getFormSchema(theme, purposeId) : [];
   const needsPurpose = theme ? themeRequiresPurpose(theme) : false;
   const canShowForm = !!theme && (!needsPurpose || !!purposeId);
   const maxPages = theme?.max_pages ?? 3;
+  const documentLane = theme ? getThemeDocumentLane(theme.id, purposeId) : null;
+  const visibleSchema = useMemo(() => {
+    if (!theme) return [];
+    if (formMode === "advanced") return schema;
+    return schema.filter((field) => isBasicFieldForTheme(theme.id, field.key));
+  }, [theme, schema, formMode]);
+  const hiddenAdvancedFieldCount = Math.max(0, schema.length - visibleSchema.length);
 
   // Pick a sensible default reference-image role per theme. The user can still
   // override in the UI. Resume/CV and invitation cards default to PORTRAIT
@@ -1684,6 +1722,9 @@ const A4Tab: React.FC = () => {
     setCustomWanted("");
     setUserWishes("");
     setReferenceImageRole("logo");
+    setFormMode("basic");
+    setLanguageChoice("auto");
+    setRetryingRowId(null);
   }, []);
 
   // When theme changes, re-init formState with default values from schema
@@ -1698,6 +1739,7 @@ const A4Tab: React.FC = () => {
       ...prev,
       orientation: prev.orientation === "landscape" ? "landscape" : "portrait",
     }));
+    setFormMode("basic");
   }, [themeId, purposeId]);
 
   // Cleanup subscription on unmount
@@ -1706,7 +1748,7 @@ const A4Tab: React.FC = () => {
   // --- Validate required fields ----------------------------------------------
   const missingRequired = useMemo(() => {
     if (!theme) return [];
-    return schema.filter((f) => {
+    return visibleSchema.filter((f) => {
       if (!f.required) return false;
       // In idea mode, raw_content is supplied by the expanded preview, not the form.
       if (inputMode === "idea" && f.key === "raw_content" && expandedContent.trim()) {
@@ -1715,15 +1757,16 @@ const A4Tab: React.FC = () => {
       const v = formState[f.key];
       return v === undefined || v === null || (typeof v === "string" && !v.trim());
     });
-  }, [theme, schema, formState, inputMode, expandedContent]);
+  }, [theme, visibleSchema, formState, inputMode, expandedContent]);
 
   // --- Submit -----------------------------------------------------------------
   const handleGenerate = useCallback(async () => {
     if (!theme) return;
     if (missingRequired.length > 0) {
+      // F19: use AR labels in the AR toast (was incorrectly using EN labels).
       toast.error(t(
         `Missing required: ${missingRequired.map((f) => f.label_en).join(", ")}`,
-        `حقول مطلوبة: ${missingRequired.map((f) => f.label_ar).join(", ")}`,
+        `حقول مطلوبة: ${missingRequired.map((f) => f.label_ar).join("، ")}`,
       ));
       return;
     }
@@ -1734,7 +1777,12 @@ const A4Tab: React.FC = () => {
     const logoDataUrl = typeof formState.logo === "string" ? (formState.logo as string) : null;
     const { logo: _logo, ...cleanForm } = formState;
 
-    const languageMode = formState.bilingual === true ? "bilingual" : "en";
+    // F3: tri-state language selection. Backend treats "auto" as detect-from-
+    // content. Honor the legacy bilingual toggle only when the user has not
+    // touched the new picker (defensive: schema may still inject `bilingual`).
+    const languageMode: "auto" | "en" | "ar" | "bilingual" = languageChoice === "auto"
+      ? (formState.bilingual === true ? "bilingual" : "auto")
+      : languageChoice;
 
     // If user is in idea mode and has approved an expanded preview, use that
     // as the raw_content override. If they're in idea mode but haven't expanded
@@ -1811,18 +1859,25 @@ const A4Tab: React.FC = () => {
     }
     setIsExpanding(true);
     try {
-      const languageMode = formState.bilingual === true ? "bilingual" : "en";
+      // Map "auto" to a concrete language for expansion (Gemini cannot detect
+      // intent from a 1-line idea). Default to English; users in AR can pick.
+      const expansionLang = languageChoice === "auto"
+        ? (formState.bilingual === true ? "bilingual" : "en")
+        : languageChoice;
       const res = await expandIdea({
         theme_id: theme.id,
         purpose_id: purposeId,
         idea_text: idea,
-        language_mode: languageMode,
+        language_mode: expansionLang,
       });
       if (!res.success || !res.content) {
         toast.error(res.error || t("Expansion failed", "فشل التوسيع"));
         return;
       }
       setExpandedContent(res.content);
+      // F18: also push into formState.raw_content so toggling input modes
+      // doesn't lose the work. Both fields stay in sync.
+      setFormState((prev) => ({ ...prev, raw_content: res.content }));
       toast.success(t("Draft ready — review and edit below.", "المسودة جاهزة — راجعها وحررها بالأسفل."));
     } catch (e) {
       toast.error(`${t("Expansion failed", "فشل التوسيع")}: ${(e as Error).message}`);
@@ -1861,6 +1916,35 @@ const A4Tab: React.FC = () => {
     unsubRef.current?.();
     unsubRef.current = null;
   }, [rows, stage]);
+
+  // --- Retry single failed page (F14) ---------------------------------------
+  // Re-dispatch through a4-generate's mode="retry_page" path. Subscription
+  // already streams the row updates, so we don't need to refetch the batch
+  // — the row will flip back to "generating" and then "completed"/"failed".
+  const handleRetryPage = useCallback(async (row: A4DocumentRow) => {
+    if (!theme) return;
+    if (retryingRowId) return;
+    try {
+      setRetryingRowId(row.id);
+      const res = await retryA4Page(row.id, row.theme_id || theme.id);
+      if (!res.success) {
+        toast.error(res.error || t("Retry failed", "فشلت إعادة المحاولة"));
+        return;
+      }
+      // Optimistically flip the local row to "generating" until Realtime catches up.
+      setRows((prev) => prev.map((r) =>
+        r.id === row.id ? { ...r, status: "generating", error_message: null } : r,
+      ));
+      // If we were in "failed" stage but now have at least one in-flight page,
+      // hop back to the generating stage so the carousel re-attaches its loop.
+      if (stage === "failed") setStage("generating");
+      toast.success(t("Retry dispatched", "تمت إعادة المحاولة"));
+    } catch (e) {
+      toast.error(`${t("Retry failed", "فشلت إعادة المحاولة")}: ${(e as Error).message}`);
+    } finally {
+      setRetryingRowId(null);
+    }
+  }, [theme, retryingRowId, stage, t]);
 
   // --- PDF download -----------------------------------------------------------
   const handleDownloadPdf = useCallback(async () => {
@@ -1992,15 +2076,65 @@ const A4Tab: React.FC = () => {
                     "هذا النموذج يساعد في توجيه التصميم — املأ فقط الأجزاء التي تهمك."
                   )}
                 </div>
-                <DesignSettingsPanel
-                  settings={designSettings}
-                  onChange={setDesignSettings}
-                />
-                <CreativeSettingsPanel
-                  settings={creativeSettings}
-                  onChange={setCreativeSettings}
-                />
-                {schema.map((field) => {
+                <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {t("Builder mode", "وضع الإنشاء")}
+                      </div>
+                      <div className="text-xs text-foreground/80 mt-1">
+                        {documentLane === "formal"
+                          ? t("This document defaults to a cleaner, accuracy-first flow.", "هذا المستند يبدأ بمسار أبسط يركز على الدقة والوضوح.")
+                          : t("This document defaults to a lighter, creativity-first flow.", "هذا المستند يبدأ بمسار أخف يركز على الشكل والإبداع.")}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-1.5 sm:w-[240px]">
+                      <button
+                        type="button"
+                        onClick={() => setFormMode("basic")}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium transition ${
+                          formMode === "basic"
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background hover:bg-muted/40 border-border text-foreground/80"
+                        }`}
+                      >
+                        {t("Basic", "أساسي")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormMode("advanced")}
+                        className={`px-3 py-2 rounded-lg border text-xs font-medium transition ${
+                          formMode === "advanced"
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "bg-background hover:bg-muted/40 border-border text-foreground/80"
+                        }`}
+                      >
+                        {t("Advanced", "متقدم")}
+                      </button>
+                    </div>
+                  </div>
+                  {formMode === "basic" && hiddenAdvancedFieldCount > 0 && (
+                    <div className="text-[11px] text-muted-foreground">
+                      {t(
+                        `${hiddenAdvancedFieldCount} advanced field${hiddenAdvancedFieldCount === 1 ? "" : "s"} and all styling controls are hidden for a simpler flow.`,
+                        `تم إخفاء ${hiddenAdvancedFieldCount} من الحقول المتقدمة مع إعدادات التصميم لتبسيط المسار.`
+                      )}
+                    </div>
+                  )}
+                </div>
+                {formMode === "advanced" && (
+                  <>
+                    <DesignSettingsPanel
+                      settings={designSettings}
+                      onChange={setDesignSettings}
+                    />
+                    <CreativeSettingsPanel
+                      settings={creativeSettings}
+                      onChange={setCreativeSettings}
+                    />
+                  </>
+                )}
+                {visibleSchema.map((field) => {
                   // In idea mode we replace the raw_content textarea with the
                   // idea + expand + editable preview UI below.
                   if (inputMode === "idea" && field.key === "raw_content") return null;
@@ -2113,11 +2247,48 @@ const A4Tab: React.FC = () => {
                   </div>
                 )}
 
+                {/* --- F3: Document Language picker ------------------------ */}
+                <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-2">
+                  <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    {t("Document language", "لغة المستند")}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                    {([
+                      { id: "auto", en: "Auto", ar: "تلقائي", hint_en: "Detect from content", hint_ar: "كشف تلقائي من المحتوى" },
+                      { id: "en", en: "English", ar: "إنجليزية" },
+                      { id: "ar", en: "Arabic", ar: "العربية" },
+                      { id: "bilingual", en: "Bilingual", ar: "ثنائي اللغة" },
+                    ] as Array<{ id: LanguageChoice; en: string; ar: string; hint_en?: string; hint_ar?: string }>).map((opt) => {
+                      const active = languageChoice === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setLanguageChoice(opt.id)}
+                          className={`px-2.5 py-1.5 rounded-lg border text-[11px] transition text-center ${
+                            active
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-background hover:bg-muted/40 border-border text-foreground/80"
+                          }`}
+                        >
+                          <div className="font-semibold">{lang === "ar" ? opt.ar : opt.en}</div>
+                          {(opt.hint_en || opt.hint_ar) && (
+                            <div className={`text-[9px] mt-0.5 ${active ? "opacity-90" : "text-muted-foreground"}`}>
+                              {lang === "ar" ? opt.hint_ar : opt.hint_en}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 {/* --- What I want (free text) + Reference image role ------ */}
                 {/* Guarantees the user's explicit intent reaches the image     */}
                 {/* model. The free-text wishes are injected VERBATIM into the  */}
                 {/* compiled prompt. The reference-image role tells the model   */}
                 {/* how to use the attachment (portrait, logo, product, sample).*/}
+                {formMode === "advanced" ? (
                 <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-3">
                   <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     {t("What I want", "ما أريده")}
@@ -2128,6 +2299,8 @@ const A4Tab: React.FC = () => {
                       onChange={(e) => setUserWishes(e.target.value.slice(0, 2000))}
                       rows={3}
                       maxLength={2000}
+                      aria-label={t("What I want", "ما أريده")}
+                      title={t("What I want", "ما أريده")}
                       placeholder={t(
                         "Describe exactly what you want: tone, style, layout, must-haves… (appears in the final prompt verbatim)",
                         "صف بالتحديد ما تريده: النبرة، الأسلوب، التخطيط، ما يجب أن يظهر… (سيظهر في الطلب النهائي حرفياً)",
@@ -2139,9 +2312,10 @@ const A4Tab: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Reference image role — only meaningful when a logo/photo */}
-                  {/* has been uploaded. Always visible so the user can preset */}
-                  {/* it before uploading.                                     */}
+                  {/* Reference image role — F15: only render when an image    */}
+                  {/* has actually been attached. Showing the chip strip with   */}
+                  {/* no upload is confusing because none of the choices apply. */}
+                  {typeof formState.logo === "string" && (formState.logo as string).length > 0 && (
                   <div>
                     <div className="text-xs font-semibold text-foreground/85 mb-1.5">
                       {t("Uploaded image is a…", "الصورة المرفوعة هي…")}
@@ -2179,9 +2353,12 @@ const A4Tab: React.FC = () => {
                       )}
                     </div>
                   </div>
+                  )}
                 </div>
+                ) : null}
 
                 {/* --- Decorations I want ---------------------------------- */}
+                {formMode === "advanced" ? (
                 <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-4">
                   <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
                     {t("Decorations", "الزخارف")}
@@ -2267,9 +2444,10 @@ const A4Tab: React.FC = () => {
                     </div>
                   </div>
                 </div>
+                ) : null}
 
                 {/* Logo color extract toggle, only when a logo is present */}
-                {typeof formState.logo === "string" && (formState.logo as string).length > 0 && (
+                {formMode === "advanced" && typeof formState.logo === "string" && (formState.logo as string).length > 0 && (
                   <div className="mb-3 flex items-center justify-between pt-2 border-t">
                     <label className="text-sm">
                       {t("Extract brand colors from logo", "استخراج ألوان العلامة التجارية من الشعار")}
@@ -2277,6 +2455,8 @@ const A4Tab: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setExtractColors((v) => !v)}
+                      aria-label={t("Extract brand colors from logo", "استخراج ألوان العلامة التجارية من الشعار")}
+                      title={t("Extract brand colors from logo", "استخراج ألوان العلامة التجارية من الشعار")}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                         extractColors ? "bg-primary" : "bg-muted"
                       }`}
@@ -2291,7 +2471,7 @@ const A4Tab: React.FC = () => {
                 )}
 
               {/* Page count chip row */}
-              {maxPages > 1 && (
+              {formMode === "advanced" && maxPages > 1 && (
                 <div className="pt-3 border-t">
                   <div className="text-xs font-medium mb-2 text-foreground/70">
                     {t("Number of pages", "عدد الصفحات")}
@@ -2356,14 +2536,14 @@ const A4Tab: React.FC = () => {
               "يتم إنشاء المستند. عادةً يستغرق 30–60 ثانية لكل صفحة.",
             )}
           </div>
-          <PageCarousel rows={rows} aspectRatio={aspectRatio} />
+          <PageCarousel rows={rows} aspectRatio={aspectRatio} onRetryPage={handleRetryPage} retryingRowId={retryingRowId} />
         </div>
       )}
 
       {/* ---------- STAGE: DONE ----------------------------------------------- */}
       {stage === "done" && (
         <div>
-          <PageCarousel rows={rows} aspectRatio={aspectRatio} />
+          <PageCarousel rows={rows} aspectRatio={aspectRatio} onRetryPage={handleRetryPage} retryingRowId={retryingRowId} />
           <div className="mt-5 flex flex-col sm:flex-row gap-2 justify-center">
             <button
               onClick={handleDownloadPdf}

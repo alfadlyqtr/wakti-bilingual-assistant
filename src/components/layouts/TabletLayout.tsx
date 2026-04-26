@@ -4,6 +4,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { TabletHeader } from "@/components/TabletHeader";
 import { DesktopSidebar } from "@/components/DesktopSidebar";
 import { useLocation } from "react-router-dom";
+import { getScopedStorageItem } from "@/utils/userScopedStorage";
 
 interface TabletLayoutProps {
   children: React.ReactNode;
@@ -12,7 +13,7 @@ interface TabletLayoutProps {
 export function TabletLayout({ children }: TabletLayoutProps) {
   const location = useLocation();
   const [dashboardLook, setDashboardLook] = useState<string>(
-    () => localStorage.getItem('wakti_dashboard_look') || 'homescreen'
+    () => getScopedStorageItem('wakti_dashboard_look', undefined, 'wakti_dashboard_look') || 'homescreen'
   );
 
   useEffect(() => {

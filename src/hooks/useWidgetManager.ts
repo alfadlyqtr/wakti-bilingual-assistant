@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import React from "react";
+import { getScopedStorageItem, migrateLegacyScopedStorage, setScopedStorageItem } from "@/utils/userScopedStorage";
 
 const DEFAULT_WIDGET_ORDER = ["nav", "calendar", "journal", "tr", "whoop", "maw3d", "quote"];
 
@@ -35,9 +36,10 @@ const sanitizeOrderInput = (value: unknown): string[] | null => {
   return mergeOrder(typed);
 };
 
-const getLocalOrder = (): string[] => {
+const getLocalOrder = (userId?: string | null): string[] => {
   try {
-    const stored = localStorage.getItem("widgetOrder");
+    migrateLegacyScopedStorage('widgetOrder', userId, 'widgetOrder');
+    const stored = getScopedStorageItem("widgetOrder", userId, 'widgetOrder');
     if (stored) {
       const parsed = JSON.parse(stored);
       const sanitized = sanitizeOrderInput(parsed);
@@ -51,9 +53,9 @@ const getLocalOrder = (): string[] => {
   return [...DEFAULT_WIDGET_ORDER];
 };
 
-const saveLocalOrder = (order: string[]) => {
+const saveLocalOrder = (order: string[], userId?: string | null) => {
   try {
-    localStorage.setItem("widgetOrder", JSON.stringify(order));
+    setScopedStorageItem("widgetOrder", JSON.stringify(order), userId);
   } catch (error) {
     console.error("Error saving widget order to localStorage:", error);
   }
@@ -89,7 +91,7 @@ export const useWidgetManager = (language: "en" | "ar") => {
     showJournalWidget: true,
   });
   const [profileSettings, setProfileSettings] = useState<Record<string, any> | null>(null);
-  const [currentOrder, setCurrentOrder] = useState<string[]>(() => getLocalOrder());
+  const [currentOrder, setCurrentOrder] = useState<string[]>(() => getLocalOrder(user?.id));
 
   useEffect(() => {
     if (!user) {
@@ -130,10 +132,10 @@ export const useWidgetManager = (language: "en" | "ar") => {
 
         const orderFromDb = sanitizeOrderInput(widgetPrefs.order);
         if (orderFromDb) {
-          saveLocalOrder(orderFromDb);
+          saveLocalOrder(orderFromDb, user.id);
           setCurrentOrder(orderFromDb);
         } else {
-          const fallback = getLocalOrder();
+          const fallback = getLocalOrder(user.id);
           setCurrentOrder(fallback);
         }
       } catch (error) {
@@ -149,7 +151,7 @@ export const useWidgetManager = (language: "en" | "ar") => {
           showWhoopWidget: true,
           showJournalWidget: true,
         });
-        const fallback = getLocalOrder();
+        const fallback = getLocalOrder(user.id);
         setCurrentOrder(fallback);
       }
     };
@@ -163,17 +165,17 @@ export const useWidgetManager = (language: "en" | "ar") => {
 
   // Live update widget visibility when Settings dispatches the custom event (dashboard mode only)
   useEffect(() => {
-    const handleWidgetSettingsChanged = (e: any) => {
-      const prefs = (e && e.detail) || {};
-      if (prefs.mode === 'homescreen') return; // homescreen mode handled in HomeScreen.tsx
+    const handleWidgetSettingsChanged = (prefs: any) => {
+      const nextPrefs = prefs || {};
+      if (nextPrefs.mode === 'homescreen') return; // homescreen mode handled in HomeScreen.tsx
       setWidgetSettings({
-        showNavWidget: prefs.showNavWidget !== false,
-        showCalendarWidget: prefs.showCalendarWidget !== false,
-        showTRWidget: prefs.showTRWidget !== false,
-        showMaw3dWidget: prefs.showMaw3dWidget !== false,
-        showQuoteWidget: prefs.showQuoteWidget !== false,
-        showWhoopWidget: prefs.showWhoopWidget !== false,
-        showJournalWidget: prefs.showJournalWidget !== false,
+        showNavWidget: nextPrefs.showNavWidget !== false,
+        showCalendarWidget: nextPrefs.showCalendarWidget !== false,
+        showTRWidget: nextPrefs.showTRWidget !== false,
+        showMaw3dWidget: nextPrefs.showMaw3dWidget !== false,
+        showQuoteWidget: nextPrefs.showQuoteWidget !== false,
+        showWhoopWidget: nextPrefs.showWhoopWidget !== false,
+        showJournalWidget: nextPrefs.showJournalWidget !== false,
       });
     };
 
@@ -344,7 +346,7 @@ export const useWidgetManager = (language: "en" | "ar") => {
   };
 
   const persistWidgetOrder = async (order: string[]) => {
-    saveLocalOrder(order);
+    saveLocalOrder(order, user?.id);
     await saveWidgetOrderToSupabase(order);
   };
 
@@ -362,13 +364,11 @@ export const useWidgetManager = (language: "en" | "ar") => {
 
     void persistWidgetOrder(newOrder)
       .then(() => {
-        toast.success(language === "ar" ? "?? ??? ????? ???????" : "Widget arrangement saved");
+        toast.success(language === "ar" ? "تم حفظ ترتيب الويدجات" : "Widget arrangement saved");
       })
       .catch((error) => {
         console.error("Error persisting widget order:", error);
-        toast.error(
-          language === "ar" ? "???? ??? ????? ???????" : "Couldn't save widget order"
-        );
+        toast.error(language === "ar" ? "تعذر حفظ ترتيب الويدجات" : "Couldn't save widget order");
       });
   };
 

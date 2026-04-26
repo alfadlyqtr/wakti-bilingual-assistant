@@ -73,7 +73,7 @@ const cors = {
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "google:4@1";
+const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "openai:gpt-image@2";
 const MODEL_BEST = Deno.env.get("RUNWARE_BEST_FAST_MODEL") || "google:4@3";
 // google:4@1 valid 9:16 = 768x1344 | google:4@3 valid 9:16 = 1536x2752
 const STEPS = parseInt(Deno.env.get("WAKTI_T2I_STEPS") ?? "28", 10);
@@ -92,6 +92,7 @@ function isRetryableRunwareErrorMessage(message: string): boolean {
 function getDimensionsForModel(model: string): { width: number; height: number } {
   if (model === "google:4@3") return { width: 1536, height: 2752 };
   if (model === "google:4@2") return { width: 768, height: 1376 };
+  if (model === "openai:gpt-image@2") return { width: 1024, height: 1536 };
   // google:4@1 and fallback: 768x1344 (9:16)
   return { width: 768, height: 1344 };
 }
@@ -152,6 +153,7 @@ function findFirstImage(node: unknown): { url?: string; dataURI?: string } | nul
 async function runwareGenerate(positivePrompt: string, model: string, signal?: AbortSignal) {
   const { width, height } = getDimensionsForModel(model);
   const isGoogleModel = model.startsWith("google:");
+  const isOpenAIImageModel = model.startsWith("openai:gpt-image");
   const inferenceTask: Record<string, unknown> = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
@@ -164,7 +166,14 @@ async function runwareGenerate(positivePrompt: string, model: string, signal?: A
     includeCost: true,
     outputQuality: 85,
   };
-  if (!isGoogleModel) {
+  if (isOpenAIImageModel) {
+    inferenceTask.providerSettings = {
+      openai: {
+        quality: "low",
+      },
+    };
+  }
+  if (!isGoogleModel && !isOpenAIImageModel) {
     inferenceTask.outputFormat = "WEBP";
     inferenceTask.CFGScale = CFG;
     inferenceTask.steps = STEPS;

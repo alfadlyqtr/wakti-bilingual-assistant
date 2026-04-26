@@ -23,6 +23,7 @@ import { useUnreadContext } from "@/contexts/UnreadContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
 import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
+import { getScopedStorageItem } from "@/utils/userScopedStorage";
 
 export function DesktopHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
@@ -162,7 +163,7 @@ export function DesktopHeader() {
     shouldGlowLogo && "wakti-logo-glow--pulse"
   );
 
-  const isHomescreenMode = (localStorage.getItem('wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
+  const isHomescreenMode = (getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
 
   const [bgMusicSrc, setBgMusicSrc] = useState<string | null>(null);
 

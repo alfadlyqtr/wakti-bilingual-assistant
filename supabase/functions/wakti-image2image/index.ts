@@ -62,8 +62,13 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY")!;
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "google:4@1";
+const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "openai:gpt-image@2";
 const MODEL_BEST = Deno.env.get("RUNWARE_BEST_FAST_MODEL") || "google:4@3";
+
+function getDimensionsForModel(model: string): { width?: number; height?: number } {
+  if (model === "openai:gpt-image@2") return { width: 1024, height: 1536 };
+  return {};
+}
 
 function isRetryableRunwareErrorMessage(message: string): boolean {
   const normalized = message.toLowerCase();
@@ -179,21 +184,41 @@ async function uploadAndSignReferenceImage(params: {
 }
 
 async function callRunwareI2I(finalPrompt: string, referenceImages: string[], model: string): Promise<unknown> {
-  // For google:4@1 and google:4@3 in i2i mode, omit width/height so the model
-  // automatically matches the reference image aspect ratio.
+  const { width, height } = getDimensionsForModel(model);
+  const isOpenAIImageModel = model.startsWith("openai:gpt-image");
+  const inferenceTask: Record<string, unknown> = {
+    taskType: "imageInference",
+    taskUUID: genUUID(),
+    model,
+    positivePrompt: finalPrompt,
+    numberResults: 1,
+    outputType: ["dataURI", "URL"],
+    includeCost: true,
+    outputQuality: 85,
+  };
+
+  if (width && height) {
+    inferenceTask.width = width;
+    inferenceTask.height = height;
+  }
+
+  if (isOpenAIImageModel) {
+    inferenceTask.providerSettings = {
+      openai: {
+        quality: "low",
+      },
+    };
+    inferenceTask.inputs = {
+      referenceImages,
+    };
+  } else {
+    // For google:4@3 in i2i mode, omit width/height so the model automatically matches the reference image aspect ratio.
+    inferenceTask.referenceImages = referenceImages;
+  }
+
   const payload = [
     { taskType: "authentication", apiKey: RUNWARE_API_KEY },
-    {
-      taskType: "imageInference",
-      taskUUID: genUUID(),
-      model,
-      positivePrompt: finalPrompt,
-      numberResults: 1,
-      outputType: ["dataURI", "URL"],
-      includeCost: true,
-      referenceImages,
-      outputQuality: 85,
-    }
+    inferenceTask
   ];
 
   const r = await fetch("https://api.runware.ai/v1", {

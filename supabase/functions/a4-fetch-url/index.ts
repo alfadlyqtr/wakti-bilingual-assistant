@@ -80,6 +80,89 @@ function htmlToText(html: string): { title: string; text: string } {
   return { title, text: out };
 }
 
+// -----------------------------------------------------------------------------
+// SSRF guard (F5)
+// -----------------------------------------------------------------------------
+// Block private / loopback / link-local / cloud-metadata addresses so an
+// authenticated user cannot weaponize this fetcher to probe the Supabase
+// edge network or LAN. We resolve the URL hostname via Deno DNS and check
+// every resolved IP. Hostnames that look like raw IPs are also checked.
+function isBlockedIp(ip: string): boolean {
+  // IPv4 private + loopback + link-local + multicast/reserved
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+  if (v4) {
+    const a = Number(v4[1]);
+    const b = Number(v4[2]);
+    if (a === 10) return true;                            // 10.0.0.0/8
+    if (a === 127) return true;                           // loopback
+    if (a === 0) return true;                             // 0.0.0.0/8
+    if (a === 169 && b === 254) return true;              // link-local + AWS/GCP metadata
+    if (a === 172 && b >= 16 && b <= 31) return true;     // 172.16.0.0/12
+    if (a === 192 && b === 168) return true;              // 192.168.0.0/16
+    if (a === 100 && b >= 64 && b <= 127) return true;    // CGNAT 100.64.0.0/10
+    if (a >= 224) return true;                            // multicast / reserved
+    return false;
+  }
+  // IPv6: block loopback (::1), unspecified (::), link-local (fe80::/10),
+  // unique-local (fc00::/7), mapped IPv4, and metadata-style addresses.
+  const lower = ip.toLowerCase();
+  if (lower === "::1" || lower === "::" || lower === "0:0:0:0:0:0:0:0" || lower === "0:0:0:0:0:0:0:1") return true;
+  if (lower.startsWith("fe80:") || lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) return true;
+  if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // ULA
+  if (lower.startsWith("::ffff:")) {
+    const mapped = lower.replace("::ffff:", "");
+    if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(mapped)) return isBlockedIp(mapped);
+  }
+  return false;
+}
+
+async function assertSafeHostname(hostname: string): Promise<string | null> {
+  const host = hostname.replace(/^\[|\]$/g, ""); // strip IPv6 brackets
+  // Reject obvious metadata names + localhost aliases up front.
+  const lowerHost = host.toLowerCase();
+  if (
+    lowerHost === "localhost"
+    || lowerHost === "ip6-localhost"
+    || lowerHost === "metadata.google.internal"
+    || lowerHost.endsWith(".local")
+    || lowerHost.endsWith(".internal")
+  ) {
+    return "Hostname not allowed";
+  }
+  // If host is already a literal IP, validate directly.
+  if (/^[0-9a-fA-F:.]+$/.test(host) && (host.includes(":") || /^\d{1,3}(\.\d{1,3}){3}$/.test(host))) {
+    if (isBlockedIp(host)) return "Private or reserved IP not allowed";
+    return null;
+  }
+  // Otherwise resolve DNS and check every record.
+  try {
+    const records: { records: string[]; }[] = [];
+    for (const recordType of ["A", "AAAA"] as const) {
+      try {
+        const res = await Deno.resolveDns(host, recordType);
+        if (Array.isArray(res) && res.length > 0) {
+          records.push({ records: res as unknown as string[] });
+        }
+      } catch {
+        // ignore individual record-type failures
+      }
+    }
+    if (records.length === 0) {
+      return "Could not resolve hostname";
+    }
+    for (const r of records) {
+      for (const ip of r.records) {
+        if (isBlockedIp(String(ip))) {
+          return "Hostname resolves to a private/reserved IP";
+        }
+      }
+    }
+    return null;
+  } catch (e) {
+    return `DNS check failed: ${(e as Error).message}`;
+  }
+}
+
 function detectDominantLanguage(text: string): "en" | "ar" | "mixed" {
   const sample = text.slice(0, 4000);
   const arabicChars = (sample.match(/[\u0600-\u06FF]/g) ?? []).length;
@@ -167,7 +250,15 @@ serve(async (req) => {
     return json(400, { success: false, error: "Only http(s) URLs allowed" });
   }
 
-  // Fetch the page (10s timeout, small size cap via abort)
+  // SSRF guard (F5): never let an authenticated user reach private/reserved IPs
+  // through this proxy. Reject metadata endpoints and LAN ranges.
+  const blockReason = await assertSafeHostname(parsed.hostname);
+  if (blockReason) {
+    return json(400, { success: false, error: `URL not allowed: ${blockReason}` });
+  }
+
+  // Fetch the page (15s timeout + ~3 MB byte cap to bound memory)
+  const MAX_RESPONSE_BYTES = 3 * 1024 * 1024;
   let html = "";
   let fetchedTitle = "";
   try {
@@ -192,7 +283,35 @@ serve(async (req) => {
     if (!contentType.includes("text/html") && !contentType.includes("application/xhtml")) {
       return json(415, { success: false, error: `Unsupported content-type: ${contentType}` });
     }
-    html = await resp.text();
+    // Reject up front when content-length exceeds the cap to avoid streaming
+    // megabytes only to discard them.
+    const contentLength = Number(resp.headers.get("content-length") || "0");
+    if (contentLength > MAX_RESPONSE_BYTES) {
+      return json(413, { success: false, error: "Page too large" });
+    }
+    // Stream the body and bail out if it grows past the cap.
+    const reader = resp.body?.getReader();
+    if (!reader) {
+      html = await resp.text();
+    } else {
+      const decoder = new TextDecoder();
+      let total = 0;
+      const parts: string[] = [];
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          total += value.byteLength;
+          if (total > MAX_RESPONSE_BYTES) {
+            try { reader.cancel(); } catch { /* ignore */ }
+            return json(413, { success: false, error: "Page too large" });
+          }
+          parts.push(decoder.decode(value, { stream: true }));
+        }
+      }
+      parts.push(decoder.decode());
+      html = parts.join("");
+    }
   } catch (e) {
     return json(502, { success: false, error: `Fetch error: ${(e as Error).message}` });
   }

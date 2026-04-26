@@ -62,6 +62,8 @@ import { useWhoopData } from "@/hooks/useWhoopData";
 import { useJournalData } from "@/hooks/useJournalData";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
+import { toast } from "sonner";
+import { getScopedStorageItem, migrateLegacyScopedStorage, removeScopedStorageItem, setActiveScopedUserId, setScopedStorageItem } from "@/utils/userScopedStorage";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
 const ALL_APPS = [
@@ -85,7 +87,7 @@ const ALL_APPS = [
 const DEFAULT_ORDER = ALL_APPS.map(a => a.id);
 const DEFAULT_DOCK  = ["wakti-ai", "calendar", "tr", "maw3d", "journal"];
 const MAX_DOCK_MOBILE  = 3;
-const MAX_DOCK_DESKTOP = 5;
+const MAX_DOCK_DESKTOP = 3;
 // ── Per-user localStorage key helpers ─────────────────────────────────────────
 // Keys are scoped to the logged-in user so different accounts on the same browser
 // never bleed their homescreen data into each other.
@@ -104,6 +106,7 @@ const LS_UNIFIED_BASE      = "homescreen_unified_grid_v6";
 const LS_WIDGETS_BASE      = "homescreen_widgets_v1";
 const LS_HSBG_BASE         = "homescreen_bg_style_v1";
 const LS_HSBG_ACTIVE_BASE  = "homescreen_bg_style_active";
+const LS_BG_CHOICE_BASE    = "homescreen_bg_choice_v1";
 const LS_DOCK_COLOR_BASE   = "homescreen_dock_color";
 
 // Read the currently-cached user ID (set on login) so useState initialisers can
@@ -118,11 +121,14 @@ const LS_HEADER_COLOR_KEY = () => lsKey(_cachedUid(), LS_HEADER_COLOR_BASE);
 const LS_UNIFIED_KEY      = () => lsKey(_cachedUid(), LS_UNIFIED_BASE);
 const LS_WIDGETS_KEY      = () => lsKey(_cachedUid(), LS_WIDGETS_BASE);
 const LS_HSBG_KEY         = () => lsKey(_cachedUid(), LS_HSBG_BASE);
+const LS_BG_CHOICE_KEY    = () => lsKey(_cachedUid(), LS_BG_CHOICE_BASE);
 
 // Widget IDs used in the unified grid
 const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
+type BgChoice = 'default' | 'wallpaper' | 'style';
+const DEFAULT_HS_WIDGETS = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
 
 // ── Strict Hardcoded Grid Layout using grid-template-areas ──
 // 3 big rows x 2 big cols = 24 cells.
@@ -505,7 +511,7 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
   whoopData?: any;
 }) {
   const [activeTab, setActiveTab] = useState<'whoop' | 'healthkit'>(
-    () => (localStorage.getItem('vitality_widget_tab') as 'whoop' | 'healthkit') || 'whoop'
+    () => (getScopedStorageItem('vitality_widget_tab', undefined, 'vitality_widget_tab') as 'whoop' | 'healthkit') || 'whoop'
   );
 
   // Real HealthKit data state
@@ -572,7 +578,7 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
       <div className="flex justify-center">
         <button
           title={activeTab === 'whoop' ? 'Switch to HealthKit' : 'Switch to WHOOP'}
-          onClick={(e) => { e.stopPropagation(); setActiveTab(t => { const next = t === 'whoop' ? 'healthkit' : 'whoop'; localStorage.setItem('vitality_widget_tab', next); return next; }); }}
+          onClick={(e) => { e.stopPropagation(); setActiveTab(t => { const next = t === 'whoop' ? 'healthkit' : 'whoop'; setScopedStorageItem('vitality_widget_tab', next); return next; }); }}
           className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/15 border border-white/25 active:scale-95 transition-all"
         >
           <Activity className={`w-3 h-3 ${activeTab === 'whoop' ? 'text-white' : 'text-white/70'}`} strokeWidth={2.5} />
@@ -1815,9 +1821,21 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 50;
   });
   const [headerColor,     setHeaderColor]     = useState<string>(() => localStorage.getItem(LS_HEADER_COLOR_KEY()) || "");
+  const [bgChoice,        setBgChoice]        = useState<BgChoice>(() => {
+    const savedChoice = localStorage.getItem(LS_BG_CHOICE_KEY()) as BgChoice | null;
+    if (savedChoice === 'default' || savedChoice === 'wallpaper' || savedChoice === 'style') return savedChoice;
+    if (localStorage.getItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE)) === 'true') return 'style';
+    const savedBg = localStorage.getItem(LS_BG_KEY());
+    return savedBg && savedBg !== DEFAULT_BG_DARK && savedBg !== DEFAULT_BG_LIGHT ? 'wallpaper' : 'default';
+  });
 
   // Homescreen background style from Settings — cached in localStorage for instant restore
-  const [hsBgActive, setHsBgActive] = useState<boolean>(() => localStorage.getItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE)) === 'true');
+  const [hsBgActive, setHsBgActive] = useState<boolean>(() => {
+    const savedChoice = localStorage.getItem(LS_BG_CHOICE_KEY()) as BgChoice | null;
+    if (savedChoice === 'style') return true;
+    if (savedChoice === 'default' || savedChoice === 'wallpaper') return false;
+    return localStorage.getItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE)) === 'true';
+  });
   const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(() => {
     try {
       const cached = JSON.parse(localStorage.getItem(LS_HSBG_KEY()) || 'null');
@@ -1841,10 +1859,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_left')) || ''; } catch { return ''; } });
   const [bgGradRight,     setBgGradRight]     = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_right')) || ''; } catch { return ''; } });
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
+  const [saveState,       setSaveState]       = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const bgInputRef    = useRef<HTMLInputElement>(null);
   const _pendingDock  = useRef<string[]>([]);
   const _effectiveRef = useRef<string[]>([]);
-  const _hasLoadedFromSupabase = useRef(false);
+  const saveStateTimerRef = useRef<number | null>(null);
+  const lastSaveErrorAtRef = useRef(0);
 
   const { tasks, reminders }  = useOptimizedTRData();
   const { events, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1886,11 +1906,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     if (prevUid === user.id) return;
     // Different user — clear ALL old cached keys so they don't bleed through
     if (prevUid) {
-      [LS_ORDER_BASE,LS_DOCK_BASE,LS_QUOTE_BASE,LS_BG_BASE,LS_BG_POS_Y_BASE,LS_HEADER_COLOR_BASE,LS_UNIFIED_BASE,LS_WIDGETS_BASE,LS_HSBG_BASE]
+      [LS_ORDER_BASE,LS_DOCK_BASE,LS_QUOTE_BASE,LS_BG_BASE,LS_BG_POS_Y_BASE,LS_HEADER_COLOR_BASE,LS_UNIFIED_BASE,LS_WIDGETS_BASE,LS_HSBG_BASE,LS_BG_CHOICE_BASE]
         .forEach(base => localStorage.removeItem(lsKey(prevUid, base)));
     }
-    localStorage.setItem(LS_ACTIVE_USER, user.id);
-    _hasLoadedFromSupabase.current = false; // force re-fetch for new user
+    setActiveScopedUserId(user.id);
+    migrateLegacyScopedStorage('vitality_widget_tab', user.id, 'vitality_widget_tab');
     // Reset state to defaults so the new user starts clean until Supabase loads
     setDockIds(sanitizeDock(DEFAULT_DOCK));
     setIconOrder(sanitizeOrder(DEFAULT_ORDER));
@@ -1898,34 +1918,78 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setBgImage(theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
     setBgPositionY(50);
     setHeaderColor("");
+    setBgChoice('default');
     setHsBg({ mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false });
-    setHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false });
+    setHsBgActive(false);
+    setHsWidgets({ ...DEFAULT_HS_WIDGETS });
     setUnifiedGrid([]);
-  }, [user?.id]);
+  }, [theme, user?.id]);
 
   useEffect(() => { setQuote(getQuoteForDisplay()); }, []);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(iconOrder)); }, [iconOrder, user?.id]);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_DOCK_KEY(),  JSON.stringify(dockIds));  }, [dockIds, user?.id]);
 
-  // Swap default BG when theme changes — only if no custom BG is set
-  useEffect(() => {
-    if (hsBgActive) return; // custom gradient is active, leave it alone
-    const saved = localStorage.getItem(LS_BG_KEY());
-    const isShowingDefault = !saved || saved === DEFAULT_BG_DARK || saved === DEFAULT_BG_LIGHT;
-    if (isShowingDefault) {
-      const next = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
-      setBgImage(next);
+  const clearSaveStateTimer = useCallback(() => {
+    if (saveStateTimerRef.current !== null) {
+      window.clearTimeout(saveStateTimerRef.current);
+      saveStateTimerRef.current = null;
     }
-  }, [theme]);
+  }, []);
 
-  const syncToSupabase = useCallback(async (patch: Record<string, any>) => {
-    if (!user) return;
+  const settleSaveState = useCallback((nextState: 'saved' | 'error') => {
+    clearSaveStateTimer();
+    setSaveState(nextState);
+    saveStateTimerRef.current = window.setTimeout(() => {
+      setSaveState('idle');
+      saveStateTimerRef.current = null;
+    }, nextState === 'saved' ? 1200 : 2200);
+  }, [clearSaveStateTimer]);
+
+  const reportSaveError = useCallback(() => {
+    settleSaveState('error');
+    const now = Date.now();
+    if (now - lastSaveErrorAtRef.current < 2500) return;
+    lastSaveErrorAtRef.current = now;
+    toast.error(language === 'ar' ? 'تعذر حفظ إعدادات الشاشة الرئيسية' : 'Could not save home screen changes');
+  }, [language, settleSaveState]);
+
+  useEffect(() => {
+    return () => clearSaveStateTimer();
+  }, [clearSaveStateTimer]);
+
+  const setBgChoiceState = useCallback((nextChoice: BgChoice) => {
+    setBgChoice(nextChoice);
+    setHsBgActive(nextChoice === 'style');
+    if (user?.id) setScopedStorageItem(LS_BG_CHOICE_BASE, nextChoice, user.id);
+    if (user?.id) setScopedStorageItem(LS_HSBG_ACTIVE_BASE, String(nextChoice === 'style'), user.id);
+  }, [user?.id]);
+
+  const syncToSupabase = useCallback(async (homescreenPatch: Record<string, any> = {}, rootPatch: Record<string, any> = {}) => {
+    if (!user) return false;
+    clearSaveStateTimer();
+    setSaveState('saving');
     try {
-      const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
+      const { data, error } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
+      if (error) throw error;
       const cur = (data?.settings as any) || {};
-      await supabase.from("profiles").update({ settings: { ...cur, homescreen: { ...(cur.homescreen || {}), ...patch } } }).eq("id", user.id);
-    } catch { /* silent */ }
-  }, [user]);
+      const nextSettings = {
+        ...cur,
+        ...rootPatch,
+        homescreen: {
+          ...(cur.homescreen || {}),
+          ...homescreenPatch,
+        },
+      };
+      const { error: updateError } = await supabase.from("profiles").update({ settings: nextSettings }).eq("id", user.id);
+      if (updateError) throw updateError;
+      settleSaveState('saved');
+      return true;
+    } catch (error) {
+      console.error('HomeScreen save failed:', error);
+      reportSaveError();
+      return false;
+    }
+  }, [clearSaveStateTimer, reportSaveError, settleSaveState, user]);
 
   // Load homescreenWidgets from Supabase and clamp to max 3
   const clampHsWidgets = (raw: Record<string, boolean>) => {
@@ -1938,159 +2002,118 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     return result;
   };
 
-  // ── Always load homescreenBg from Supabase — never skipped by local-cache guard ──
   useEffect(() => {
-    if (!user) return;
-    (async () => {
-      try {
-        const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
-        const s = (data?.settings as any);
-        if (s?.homescreenBg) {
-          const bg = s.homescreenBg;
-          const newBg = {
-            mode:   bg.mode   === 'gradient' ? 'gradient' : 'solid' as 'solid'|'gradient',
-            color1: bg.color1 || '',
-            color2: bg.color2 || '',
-            color3: bg.color3 || '',
-            angle:  typeof bg.angle === 'number' ? bg.angle : 180,
-            glow:   typeof bg.glow === 'boolean' ? bg.glow : false,
-          };
-          const newBgJson = JSON.stringify(newBg);
-          setHsBg(prev => JSON.stringify(prev) === newBgJson ? prev : newBg);
-          localStorage.setItem(LS_HSBG_KEY(), newBgJson);
-          setHsBgActive(true);
-          localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'true');
-        } else if (s?.homescreen?.bgImage) {
-          const img = s.homescreen.bgImage;
-          setBgImage(prev => prev === img ? prev : img);
-          localStorage.setItem(LS_BG_KEY(), img);
+    if (!user?.id || !profile) return;
+    const s = (profile.settings as any) || {};
+    const hs = s?.homescreen || {};
+    const VALID_WIDGET_KEYS = new Set(['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
+    const rawWidgets = hs?.homescreenWidgets || s?.homescreenWidgets;
+    const strippedWidgets: Record<string, boolean> = {};
+    if (rawWidgets) {
+      for (const k of Object.keys(rawWidgets)) {
+        if (VALID_WIDGET_KEYS.has(k)) strippedWidgets[k] = rawWidgets[k];
+      }
+    }
+    const nextWidgets = clampHsWidgets({ ...DEFAULT_HS_WIDGETS, ...strippedWidgets });
+    const nextWidgetsJson = JSON.stringify(nextWidgets);
+    setHsWidgets(prev => JSON.stringify(prev) === nextWidgetsJson ? prev : nextWidgets);
+    localStorage.setItem(LS_WIDGETS_KEY(), nextWidgetsJson);
+
+    if (Array.isArray(hs?.unifiedGrid) && hs.unifiedGrid.length > 0) {
+      const enabledWidgets = new Set(WIDGET_IDS.filter(k => nextWidgets[k as keyof typeof nextWidgets]).map(k => `widget::${k}`));
+      const seen = new Set<string>();
+      const grid: string[] = [];
+      for (const id of hs.unifiedGrid) {
+        if (seen.has(id)) continue;
+        seen.add(id);
+        if (id.startsWith('widget::')) {
+          if (enabledWidgets.has(id)) grid.push(id);
+        } else if (id.startsWith('app::')) {
+          if (VALID_IDS.has(id.replace('app::',''))) grid.push(id);
+        } else if (id.startsWith('empty-w::') || id.startsWith('empty-i::')) {
+          grid.push(id);
         }
-      } catch { /* silent */ }
-    })();
-  }, [user?.id]);
+      }
+      for (const w of enabledWidgets) { if (!seen.has(w)) grid.push(w); }
+      for (const appId of DEFAULT_ORDER) {
+        const key = `app::${appId}`;
+        if (!seen.has(key)) grid.push(key);
+      }
+      const gridJson = JSON.stringify(grid);
+      setUnifiedGrid(prev => JSON.stringify(prev) === gridJson ? prev : grid);
+      localStorage.setItem(LS_UNIFIED_KEY(), gridJson);
+    }
 
-  // ── Load ALL homescreen settings from Supabase on every login ──
-  // Supabase is the single source of truth for cross-device sync.
-  // localStorage is only a write-cache for instant UI restore on the same device.
-  useEffect(() => {
-    if (!user) return;
-    if (_hasLoadedFromSupabase.current) return; // already ran for this user session
-    _hasLoadedFromSupabase.current = true;
-    (async () => {
-      try {
-        const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
-        const s = (data?.settings as any);
+    if (Array.isArray(hs.dockIds)) {
+      const d = sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP);
+      setDockIds(prev => JSON.stringify(prev) === JSON.stringify(d) ? prev : d);
+      localStorage.setItem(LS_DOCK_KEY(), JSON.stringify(d));
+    }
 
-        // ── Widgets ──
-        // Read from homescreen.homescreenWidgets (nested) — same path as save.
-        // Fall back to root s.homescreenWidgets for migration only.
-        // Strip ALL legacy/unknown keys so they can't inflate the widget count.
-        const VALID_WIDGET_KEYS = new Set(['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
-        const rawWidgets = s?.homescreen?.homescreenWidgets || s?.homescreenWidgets;
-        if (rawWidgets) {
-          const stripped: Record<string, boolean> = {};
-          for (const k of Object.keys(rawWidgets)) {
-            if (VALID_WIDGET_KEYS.has(k)) stripped[k] = rawWidgets[k];
-          }
-          const clamped = clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...stripped });
-          const clampedJson = JSON.stringify(clamped);
-          setHsWidgets(prev => JSON.stringify(prev) === clampedJson ? prev : clamped);
-          localStorage.setItem(LS_WIDGETS_KEY(), clampedJson);
+    if (Array.isArray(hs.iconOrder)) {
+      const o = sanitizeOrder(hs.iconOrder);
+      setIconOrder(prev => JSON.stringify(prev) === JSON.stringify(o) ? prev : o);
+      localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(o));
+    }
+
+    if (typeof hs.showQuote === 'boolean') {
+      setShowQuote(prev => prev === hs.showQuote ? prev : hs.showQuote);
+      localStorage.setItem(LS_QUOTE_KEY(), String(hs.showQuote));
+    }
+
+    const resolvedChoice: BgChoice = hs.bgChoice === 'style' || hs.bgChoice === 'wallpaper' || hs.bgChoice === 'default'
+      ? hs.bgChoice
+      : (typeof hs.bgImage === 'string' && hs.bgImage ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default');
+    setBgChoiceState(resolvedChoice);
+
+    const remoteBg = s?.homescreenBg
+      ? {
+          mode: s.homescreenBg.mode === 'gradient' ? 'gradient' : 'solid' as 'solid'|'gradient',
+          color1: s.homescreenBg.color1 || '',
+          color2: s.homescreenBg.color2 || '',
+          color3: s.homescreenBg.color3 || '',
+          angle: typeof s.homescreenBg.angle === 'number' ? s.homescreenBg.angle : 180,
+          glow: typeof s.homescreenBg.glow === 'boolean' ? s.homescreenBg.glow : false,
         }
+      : { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false };
+    const remoteBgJson = JSON.stringify(remoteBg);
+    setHsBg(prev => JSON.stringify(prev) === remoteBgJson ? prev : remoteBg);
+    if (s?.homescreenBg) localStorage.setItem(LS_HSBG_KEY(), remoteBgJson);
+    else removeScopedStorageItem(LS_HSBG_BASE, user.id);
 
-        // ── Unified grid ──
-        if (Array.isArray(s?.homescreen?.unifiedGrid) && s.homescreen.unifiedGrid.length > 0) {
-          const rawW = s?.homescreen?.homescreenWidgets || s?.homescreenWidgets;
-          const strippedW: Record<string, boolean> = {};
-          if (rawW) { for (const k of Object.keys(rawW)) { if (VALID_WIDGET_KEYS.has(k)) strippedW[k] = rawW[k]; } }
-          const widgetState = rawW
-            ? clampHsWidgets({ showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false, ...strippedW })
-            : { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
-          const saved: string[] = s.homescreen.unifiedGrid;
-          const enabledWidgets = new Set(WIDGET_IDS.filter(k => widgetState[k as keyof typeof widgetState]).map(k => `widget::${k}`));
-          const seen = new Set<string>();
-          const grid: string[] = [];
-          for (const id of saved) {
-            if (seen.has(id)) continue;
-            seen.add(id);
-            if (id.startsWith('widget::')) {
-              if (enabledWidgets.has(id)) grid.push(id);
-            } else if (id.startsWith('app::')) {
-              if (VALID_IDS.has(id.replace('app::',''))) grid.push(id);
-            } else if (id.startsWith('empty-w::') || id.startsWith('empty-i::')) {
-              grid.push(id);
-            }
-          }
-          for (const w of enabledWidgets) { if (!seen.has(w)) grid.push(w); }
-          for (const appId of DEFAULT_ORDER) {
-            const key = `app::${appId}`;
-            if (!seen.has(key)) grid.push(key);
-          }
-          const gridJson = JSON.stringify(grid);
-          setUnifiedGrid(prev => JSON.stringify(prev) === gridJson ? prev : grid);
-          localStorage.setItem(LS_UNIFIED_KEY(), gridJson);
-        }
+    const nextBgPosition = typeof hs.bgPositionY === 'number' ? Math.max(0, Math.min(100, hs.bgPositionY)) : 50;
+    setBgPositionY(prev => prev === nextBgPosition ? prev : nextBgPosition);
+    localStorage.setItem(LS_BG_POS_Y_KEY(), String(nextBgPosition));
 
-        const hs = s?.homescreen;
-        if (!hs) return;
+    if (resolvedChoice === 'wallpaper' && typeof hs.bgImage === 'string' && hs.bgImage) {
+      setBgImage(prev => prev === hs.bgImage ? prev : hs.bgImage);
+      localStorage.setItem(LS_BG_KEY(), hs.bgImage);
+    } else if (resolvedChoice === 'default') {
+      const nextDefaultBg = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
+      setBgImage(prev => prev === nextDefaultBg ? prev : nextDefaultBg);
+      removeScopedStorageItem(LS_BG_BASE, user.id);
+    }
 
-        // ── Dock ──
-        if (Array.isArray(hs.dockIds)) {
-          const d = sanitizeDock(hs.dockIds);
-          setDockIds(prev => JSON.stringify(prev) === JSON.stringify(d) ? prev : d);
-          localStorage.setItem(LS_DOCK_KEY(), JSON.stringify(d));
-        }
+    if (typeof hs.headerColor === 'string') {
+      setHeaderColor(prev => prev === hs.headerColor ? prev : hs.headerColor);
+      if (hs.headerColor) localStorage.setItem(LS_HEADER_COLOR_KEY(), hs.headerColor);
+      else localStorage.removeItem(LS_HEADER_COLOR_KEY());
+    }
 
-        // ── Icon order ──
-        if (Array.isArray(hs.iconOrder)) {
-          const o = sanitizeOrder(hs.iconOrder);
-          setIconOrder(prev => JSON.stringify(prev) === JSON.stringify(o) ? prev : o);
-          localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(o));
-        }
-
-        // ── Quote toggle ──
-        if (typeof hs.showQuote === "boolean") {
-          setShowQuote(prev => prev === hs.showQuote ? prev : hs.showQuote);
-          localStorage.setItem(LS_QUOTE_KEY(), String(hs.showQuote));
-        }
-
-        // ── BG image (only if no gradient BG is active) ──
-        if (hs.bgImage && !s?.homescreenBg) {
-          setBgImage(prev => prev === hs.bgImage ? prev : hs.bgImage);
-          localStorage.setItem(LS_BG_KEY(), hs.bgImage);
-        }
-
-        // ── BG position ──
-        if (typeof hs.bgPositionY === "number") {
-          const nextPos = Math.max(0, Math.min(100, hs.bgPositionY));
-          setBgPositionY(prev => prev === nextPos ? prev : nextPos);
-          localStorage.setItem(LS_BG_POS_Y_KEY(), String(nextPos));
-        }
-
-        // ── Header color ──
-        if (typeof hs.headerColor === "string") {
-          setHeaderColor(prev => prev === hs.headerColor ? prev : hs.headerColor);
-          if (hs.headerColor) localStorage.setItem(LS_HEADER_COLOR_KEY(), hs.headerColor);
-          else localStorage.removeItem(LS_HEADER_COLOR_KEY());
-        }
-
-        // ── Dock color ──
-        if (typeof hs.dockColor === "string") {
-          setDockColor(prev => prev === hs.dockColor ? prev : hs.dockColor);
-          try { if (hs.dockColor) localStorage.setItem(lsKey(user.id, LS_DOCK_COLOR_BASE), hs.dockColor); else localStorage.removeItem(lsKey(user.id, LS_DOCK_COLOR_BASE)); } catch {}
-        }
-
-      } catch { /* silent */ }
-    })();
-  }, [user?.id]);
+    if (typeof hs.dockColor === 'string') {
+      setDockColor(prev => prev === hs.dockColor ? prev : hs.dockColor);
+      if (hs.dockColor) localStorage.setItem(lsKey(user.id, LS_DOCK_COLOR_BASE), hs.dockColor);
+      else localStorage.removeItem(lsKey(user.id, LS_DOCK_COLOR_BASE));
+    }
+  }, [profile, setBgChoiceState, theme, user?.id]);
 
   // Live update from Settings page widget toggle events
   useEffect(() => {
-    const handler = (e: any) => {
-      const detail = e?.detail || {};
-      if (detail.mode !== 'homescreen') return;
+    const handler = (detail: any) => {
+      const nextDetail = detail || {};
+      if (nextDetail.mode !== 'homescreen') return;
       setHsWidgets(prev => {
-        const next = clampHsWidgets({ ...prev, ...detail });
+        const next = clampHsWidgets({ ...prev, ...nextDetail });
         localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(next));
         // Sync enabled/disabled widgets into unified grid
         setUnifiedGrid(grid => {
@@ -2111,8 +2134,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Live update from Settings page background style changes
   useEffect(() => {
-    const handler = (e: any) => {
-      const d = e?.detail;
+    const handler = (d: any) => {
       if (!d) return;
       const updated = {
         mode:   d.mode === 'gradient' ? 'gradient' as const : 'solid' as const,
@@ -2124,9 +2146,20 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       };
       setHsBg(updated);
       localStorage.setItem(LS_HSBG_KEY(), JSON.stringify(updated));
+      if (bgChoice !== 'wallpaper') {
+        setBgChoiceState('style');
+        removeScopedStorageItem(LS_BG_BASE, user?.id);
+      }
     };
     return onEvent('homescreenBgChanged', handler);
-  }, []);
+  }, [bgChoice, setBgChoiceState, user?.id]);
+
+  useEffect(() => {
+    if (bgChoice !== 'default') return;
+    const next = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
+    setBgImage(prev => prev === next ? prev : next);
+    if (user?.id) removeScopedStorageItem(LS_BG_BASE, user.id);
+  }, [bgChoice, theme, user?.id]);
 
   // ── Sensors ──
   const sensors = useSensors(
@@ -2228,108 +2261,70 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   }, [syncToSupabase]);
 
   // ── BG ──
-  const handleBgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBgChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const url = ev.target?.result as string;
+    if (!file || !user?.id) return;
+    try {
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+      const path = `homescreen/${user.id}/wallpapers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('images').upload(path, file, { contentType: file.type || undefined, upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: publicData } = supabase.storage.from('images').getPublicUrl(path);
+      const url = publicData?.publicUrl;
+      if (!url) throw new Error('wallpaper_public_url_missing');
       setBgImage(url);
       setBgPositionY(50);
-      setHsBgActive(false);
+      setBgChoiceState('wallpaper');
       localStorage.setItem(LS_BG_KEY(), url);
       localStorage.setItem(LS_BG_POS_Y_KEY(), '50');
-      localStorage.removeItem(LS_HSBG_KEY());
-      localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'false');
-      // Clear gradient BG from Supabase so it doesn't re-apply on reload
-      if (user) {
-        (async () => {
-          try {
-            const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
-            const cur = (data?.settings as any) || {};
-            await supabase.from("profiles").update({ settings: { ...cur, homescreenBg: null, homescreen: { ...(cur.homescreen || {}), bgImage: url, bgPositionY: 50 } } }).eq("id", user.id);
-          } catch { /* silent */ }
-        })();
-      }
-    };
-    reader.readAsDataURL(file);
+      await syncToSupabase({ bgChoice: 'wallpaper', bgImage: url, bgPositionY: 50 });
+    } catch (error) {
+      console.error('Wallpaper upload failed:', error);
+      reportSaveError();
+    } finally {
+      e.target.value = '';
+    }
   };
   const removeBg = () => {
     setBgImage(defaultBg);
     setBgPositionY(50);
-    setHsBgActive(false);
-    localStorage.removeItem(LS_BG_KEY());
-    localStorage.removeItem(LS_BG_POS_Y_KEY());
-    localStorage.removeItem(LS_HSBG_KEY());
-    localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'false');
-    // Clear both bgImage and homescreenBg gradient from Supabase
-    if (user) {
-      (async () => {
-        try {
-          const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
-          const cur = (data?.settings as any) || {};
-          await supabase.from("profiles").update({ settings: { ...cur, homescreenBg: null, homescreen: { ...(cur.homescreen || {}), bgImage: '', bgPositionY: 50 } } }).eq("id", user.id);
-        } catch { /* silent */ }
-      })();
-    }
+    setBgChoiceState('default');
+    removeScopedStorageItem(LS_BG_BASE, user?.id);
+    removeScopedStorageItem(LS_BG_POS_Y_BASE, user?.id);
+    removeScopedStorageItem(LS_HSBG_BASE, user?.id);
+    void syncToSupabase({ bgChoice: 'default', bgImage: '', bgPositionY: 50 }, { homescreenBg: null });
   };
   const saveBgPositionY = (value: number) => {
     const next = Math.max(0, Math.min(100, value));
     setBgPositionY(next);
     localStorage.setItem(LS_BG_POS_Y_KEY(), String(next));
-    syncToSupabase({ bgPositionY: next });
+    void syncToSupabase({ bgPositionY: next });
   };
   const saveBgStyle = () => {
     const patch = { mode: hsBg.mode, color1: hsBg.color1, color2: hsBg.color2, color3: hsBg.color3, angle: hsBg.angle, glow: hsBg.glow };
     localStorage.setItem(LS_HSBG_KEY(), JSON.stringify(patch));
-    localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'true');
-    setHsBgActive(true);
-    // Clear default BG image so custom style shows through
-    if (bgImage === defaultBg || bgImage === DEFAULT_BG_DARK || bgImage === DEFAULT_BG_LIGHT) {
-      setBgImage('');
-      localStorage.removeItem(LS_BG_KEY());
-    }
-    // Save to Supabase — homescreenBg lives at root level of settings so the
-    // always-running BG effect can pick it up on any device / fresh load
-    if (user) {
-      (async () => {
-        try {
-          const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
-          const cur = (data?.settings as any) || {};
-          await supabase
-            .from("profiles")
-            .update({
-              settings: {
-                ...cur,
-                homescreenBg: patch,
-                homescreen: {
-                  ...(cur.homescreen || {}),
-                  bgImage: isDefaultBgImage ? '' : bgImage,
-                },
-              },
-            })
-            .eq("id", user.id);
-        } catch { /* silent */ }
-      })();
-    }
-    emitEvent('homescreenBgChanged');
+    setBgChoiceState('style');
+    setBgImage('');
+    removeScopedStorageItem(LS_BG_BASE, user?.id);
+    void syncToSupabase({ bgChoice: 'style', bgImage: '' }, { homescreenBg: patch });
+    emitEvent('homescreenBgChanged', patch);
     setBgPanelOpen(false);
   };
   const saveHeaderColor = (color: string) => {
     setHeaderColor(color);
     localStorage.setItem(LS_HEADER_COLOR_KEY(), color);
-    syncToSupabase({ headerColor: color });
+    void syncToSupabase({ headerColor: color });
   };
   const removeHeaderColor = () => {
     setHeaderColor("");
     localStorage.removeItem(LS_HEADER_COLOR_KEY());
-    syncToSupabase({ headerColor: "" });
+    void syncToSupabase({ headerColor: "" });
   };
   const toggleQuote = () => {
     const next = !showQuote;
     setShowQuote(next);
     localStorage.setItem(LS_QUOTE_KEY(), String(next));
-    syncToSupabase({ showQuote: next });
+    void syncToSupabase({ showQuote: next });
   };
 
   const toggleHsWidget = (key: keyof typeof hsWidgets) => {
@@ -2341,7 +2336,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       if (!isOn && activeCount >= 3) return prev;
       const next = { ...prev, [key]: !isOn };
       localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(next));
-      syncToSupabase({ homescreenWidgets: next });
+      void syncToSupabase({ homescreenWidgets: next });
       // Sync unified grid
       setUnifiedGrid(grid => {
         const widgetId = `widget::${key}`;
@@ -2561,13 +2556,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // ── Theme-aware surface colors ──
   const isDark = theme === "dark";
   const defaultBg = isDark ? DEFAULT_BG_DARK : DEFAULT_BG_LIGHT;
-  const hasUserImage = !!bgImage && bgImage !== defaultBg;
-  const isDefaultBgImage = bgImage === defaultBg || bgImage === DEFAULT_BG_DARK || bgImage === DEFAULT_BG_LIGHT;
-  const hasBg  = hasUserImage || (!!bgImage && !hsBgActive);
+  const hasUserImage = bgChoice === 'wallpaper' && !!bgImage;
+  const isDefaultBgImage = bgChoice === 'default' || bgImage === defaultBg || bgImage === DEFAULT_BG_DARK || bgImage === DEFAULT_BG_LIGHT;
+  const hasBg  = !!bgImage && bgChoice !== 'style';
   const wallpaperTranslateY = `${(bgPositionY - 50) * 1.2}%`;
 
   // Whether any custom/user background is active (wallpaper image OR solid/gradient)
-  const hasAnyBg = hasBg || (hsBgActive && !hasUserImage);
+  const hasAnyBg = hasBg || bgChoice === 'style';
 
   // Greeting text — custom header color overrides, then universal white-on-blur when any bg, else theme default
   const headColor = headerColor || (hasAnyBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541");
@@ -2603,8 +2598,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const editBarGlass = "bg-black/40 backdrop-blur-xl border-b border-white/10";
 
   // Custom background from Settings (solid/gradient) — only active when user explicitly saved
-  const hasCustomBg = hsBgActive && !hasUserImage;
-  const hasWallpaperImage = !!bgImage && !hasCustomBg;
+  const hasCustomBg = bgChoice === 'style';
+  const hasWallpaperImage = !!bgImage && bgChoice !== 'style';
   const customBgStyle = hasCustomBg
     ? hsBg.mode === 'gradient'
       ? hsBg.color3
@@ -2752,7 +2747,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             const activeWidgetCount = WIDGET_OPTIONS.filter(w => hsWidgets[w.key]).length;
             return (
               <div style={{ position: 'fixed', top: 76, left: 12, right: 12, zIndex: 60, isolation: 'isolate', pointerEvents: 'auto', backgroundColor: 'rgba(30,41,59,0.96)', border: '2px solid #64748b', borderRadius: '18px', padding: '12px', boxShadow: '0 22px 80px rgba(0,0,0,0.62)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', animation: 'hs-edit-sheet-in 0.24s cubic-bezier(0.22,1,0.36,1) forwards', maxHeight: 'calc(100vh - 108px)', overflowY: 'auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '10px' }}>
+                  <div style={{ minHeight: '24px', display: 'flex', alignItems: 'center' }}>
+                    {saveState === 'saving' && <span style={{ color: '#93c5fd', fontSize: '12px', fontWeight: 700 }}>{language === 'ar' ? 'جارٍ الحفظ...' : 'Saving...'}</span>}
+                    {saveState === 'saved' && <span style={{ color: '#86efac', fontSize: '12px', fontWeight: 700 }}>{language === 'ar' ? 'تم الحفظ' : 'Saved'}</span>}
+                    {saveState === 'error' && <span style={{ color: '#fca5a5', fontSize: '12px', fontWeight: 700 }}>{language === 'ar' ? 'فشل الحفظ' : 'Save failed'}</span>}
+                  </div>
                   <button onClick={() => setEditMode(false)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '999px', backgroundColor: '#16a34a', border: '2px solid #22c55e', color: '#ffffff', fontSize: '12px', fontWeight: 700 }}>
                     <Check style={{ width: '14px', height: '14px' }} />
                     <span>{language === 'ar' ? 'تم' : 'Done'}</span>
@@ -2801,7 +2801,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       setBgGradRight('');
                       try { localStorage.removeItem(lsKey(uid,'hs_grad_left')); localStorage.removeItem(lsKey(uid,'hs_grad_right')); } catch {}
                       // Reset custom BG style active flag
-                      setHsBgActive(false);
+                      setBgChoiceState('default');
                       setHsBg({ mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false });
                       try { localStorage.removeItem(lsKey(uid, LS_HSBG_ACTIVE_BASE)); } catch {}
                       try { localStorage.removeItem(LS_HSBG_KEY()); } catch {}
@@ -3190,10 +3190,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               <div className="mt-4 flex items-center justify-between rounded-xl border border-border/40 px-3 py-2.5">
                 <span className="text-xs font-semibold">{language === 'ar' ? 'لون خلفية الدوك' : 'Dock Background'}</span>
                 <div className="flex items-center gap-2">
-                  <input type="color" title="Dock background color" value={dockColor || (isDark ? '#0c0f14' : '#060541')} onChange={e => { setDockColor(e.target.value); localStorage.setItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE), e.target.value); syncToSupabase({ dockColor: e.target.value }); }}
+                  <input type="color" title="Dock background color" value={dockColor || (isDark ? '#0c0f14' : '#060541')} onChange={e => { setDockColor(e.target.value); localStorage.setItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE), e.target.value); void syncToSupabase({ dockColor: e.target.value }); }}
                     className="w-7 h-7 rounded-lg cursor-pointer border border-border/30 p-0.5 bg-transparent" />
                   {dockColor && (
-                    <button onClick={() => { setDockColor(''); localStorage.removeItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)); syncToSupabase({ dockColor: '' }); }}
+                    <button onClick={() => { setDockColor(''); localStorage.removeItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)); void syncToSupabase({ dockColor: '' }); }}
                       className="text-[10px] px-2 py-1 rounded-full bg-red-500/20 text-red-500 border border-red-500/30 font-semibold">
                       {language === 'ar' ? 'إعادة' : 'Reset'}
                     </button>
@@ -3216,11 +3216,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             onSelect={(imageUrl) => {
               setBgImage(imageUrl);
               setBgPositionY(50);
-              setHsBgActive(false);
+              setBgChoiceState('wallpaper');
               localStorage.setItem(LS_BG_KEY(), imageUrl);
               localStorage.setItem(LS_BG_POS_Y_KEY(), '50');
-              localStorage.setItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE), 'false');
-              syncToSupabase({ bgImage: imageUrl, bgPositionY: 50 });
+              void syncToSupabase({ bgChoice: 'wallpaper', bgImage: imageUrl, bgPositionY: 50 });
               setSavedImagesOpen(false);
             }}
             onClose={() => setSavedImagesOpen(false)}

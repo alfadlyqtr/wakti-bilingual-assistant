@@ -4,6 +4,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { DesktopHeader } from "@/components/DesktopHeader";
 import { DesktopSidebar } from "@/components/DesktopSidebar";
 import { useLocation } from "react-router-dom";
+import { getScopedStorageItem } from "@/utils/userScopedStorage";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
@@ -12,7 +13,7 @@ interface DesktopLayoutProps {
 export function DesktopLayout({ children }: DesktopLayoutProps) {
   const location = useLocation();
   const [dashboardLook, setDashboardLook] = useState<string>(
-    () => localStorage.getItem('wakti_dashboard_look') || 'homescreen'
+    () => getScopedStorageItem('wakti_dashboard_look', undefined, 'wakti_dashboard_look') || 'homescreen'
   );
 
   useEffect(() => {

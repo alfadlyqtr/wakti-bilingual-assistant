@@ -181,7 +181,9 @@ export interface A4GenerateRequest {
   logo_data_url?: string | null;
   logo_color_extract?: boolean;
   requested_pages?: "auto" | 1 | 2 | 3;
-  language_mode?: "en" | "ar" | "bilingual";
+  // F11: "auto" lets the backend detect from the content. Tri-state UI sends
+  // one of "en" | "ar" | "bilingual" | "auto".
+  language_mode?: "en" | "ar" | "bilingual" | "auto";
   design_settings?: A4DesignSettings | null;
   creative_settings?: A4CreativeSettings | null;
   // --- Prompt Engineer controls --------------------------------------------
@@ -314,6 +316,31 @@ export interface A4HistoryBatch {
   rows: A4DocumentRow[];
 }
 
+// F14: Re-dispatch a single failed page row.
+export interface A4RetryPageResponse {
+  success: boolean;
+  error?: string;
+  batch_id?: string;
+}
+export async function retryA4Page(rowId: string, themeId: string): Promise<A4RetryPageResponse> {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const token = sessionData?.session?.access_token;
+  if (!token) return { success: false, error: "Not signed in" };
+  const resp = await supabase.functions.invoke<A4RetryPageResponse>("a4-generate", {
+    body: {
+      mode: "retry_page",
+      row_id: rowId,
+      theme_id: themeId,
+      form_state: {}, // required by interface but unused for retry
+    },
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (resp.error) {
+    return { success: false, error: await getEdgeFunctionErrorMessage(resp.error) };
+  }
+  return resp.data ?? { success: false, error: "Empty response" };
+}
+
 export async function generateA4Document(
   req: A4GenerateRequest,
 ): Promise<A4GenerateResponse> {
@@ -382,14 +409,11 @@ export async function fetchBatch(batchId: string): Promise<A4DocumentRow[]> {
 }
 
 export async function fetchA4History(limit = 60): Promise<A4HistoryBatch[]> {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
-  if (!userId) return [];
-
+  // F17: RLS already restricts SELECT to auth.uid() = user_id, so the explicit
+  // user-id filter + auth.getUser() round trip are redundant. Trust RLS.
   const { data, error } = await supabase
     .from("user_a4_documents")
     .select("*")
-    .eq("user_id", userId)
     .order("updated_at", { ascending: false })
     .limit(Math.max(limit * 3, 120));
 
@@ -474,6 +498,10 @@ export function getA4DownloadBaseName(rows: A4DocumentRow[], fallback = "wakti-a
   return sanitizeFilename(rows[0]?.title ?? fallback);
 }
 
+// F8: Real A4 page size in points (1pt = 1/72in). 210mm x 297mm.
+const A4_PORTRAIT_W = 595.28;
+const A4_PORTRAIT_H = 841.89;
+
 export async function downloadA4RowsAsPdf(rows: A4DocumentRow[], fallbackName = "wakti-a4") {
   const completed = getCompletedRows(rows);
   if (completed.length === 0) throw new Error("No completed A4 pages available");
@@ -489,13 +517,55 @@ export async function downloadA4RowsAsPdf(rows: A4DocumentRow[], fallbackName = 
     } catch {
       embedded = await pdfDoc.embedPng(bytes);
     }
-    const page = pdfDoc.addPage([embedded.width, embedded.height]);
-    page.drawImage(embedded, { x: 0, y: 0, width: embedded.width, height: embedded.height });
+
+    // F8: Force every page to a true A4 sheet, choosing portrait or landscape
+    // from the rendered image's aspect. Fit the image inside the page while
+    // preserving its aspect ratio, then center it. This produces a printable,
+    // press-ready PDF instead of arbitrary-pixel-size pages.
+    const isLandscape = embedded.width > embedded.height;
+    const pageW = isLandscape ? A4_PORTRAIT_H : A4_PORTRAIT_W;
+    const pageH = isLandscape ? A4_PORTRAIT_W : A4_PORTRAIT_H;
+    const scale = Math.min(pageW / embedded.width, pageH / embedded.height);
+    const drawW = embedded.width * scale;
+    const drawH = embedded.height * scale;
+    const offsetX = (pageW - drawW) / 2;
+    const offsetY = (pageH - drawH) / 2;
+
+    const page = pdfDoc.addPage([pageW, pageH]);
+    page.drawImage(embedded, { x: offsetX, y: offsetY, width: drawW, height: drawH });
   }
 
   const bytes = await pdfDoc.save();
   const blob = new Blob([bytes as BlobPart], { type: "application/pdf" });
   triggerDownload(blob, `${getA4DownloadBaseName(completed, fallbackName)}.pdf`);
+}
+
+// F16: Refresh a signed URL when it's older than ~50 weeks. The bucket is
+// private and the original URL was signed for 1 year; refreshing keeps long-
+// term saved batches openable forever without exposing the bucket publicly.
+export async function refreshA4SignedUrlIfStale(row: A4DocumentRow): Promise<string | null> {
+  if (!row.image_url) return null;
+  const updatedMs = new Date(row.updated_at || row.created_at || 0).getTime();
+  const ageMs = Date.now() - (Number.isFinite(updatedMs) ? updatedMs : 0);
+  const FIFTY_WEEKS_MS = 50 * 7 * 24 * 60 * 60 * 1000;
+  if (ageMs < FIFTY_WEEKS_MS) return row.image_url;
+  // Storage path follows the convention used by a4-callback when it persists
+  // the page: `<user_id>/<batch_id>/page_<n>.jpg`.
+  const path = `${row.user_id}/${row.batch_id}/page_${row.page_number}.jpg`;
+  const { data, error } = await supabase
+    .storage
+    .from("a4-documents")
+    .createSignedUrl(path, 60 * 60 * 24 * 365);
+  if (error || !data?.signedUrl) {
+    console.warn("[a4Service] refresh signed URL failed:", error?.message);
+    return row.image_url;
+  }
+  // Persist the refreshed URL so future reads are fast.
+  await supabase
+    .from("user_a4_documents")
+    .update({ image_url: data.signedUrl })
+    .eq("id", row.id);
+  return data.signedUrl;
 }
 
 export async function downloadA4RowsAsJpgs(rows: A4DocumentRow[], fallbackName = "wakti-a4") {

@@ -27,6 +27,7 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
+import { getScopedStorageItem } from "@/utils/userScopedStorage";
 
 interface AppHeaderProps {
   unreadTotal?: number;
@@ -42,17 +43,18 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   // Local override for immediate avatar display before refetch completes
   const [immediateAvatarUrl, setImmediateAvatarUrl] = useState<string | null | undefined>(undefined);
   const hasTriedSignedFallbackRef = useRef(false);
-  
+
   // Check if we're on the Wakti AI V2 page
   const isWaktiAIPage = location.pathname === '/wakti-ai';
 
   // Detect homescreen mode from localStorage — default is 'homescreen' when key absent
-  const isHomescreenMode = (localStorage.getItem('wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
-  
+  const isHomescreenMode = (getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
+
   const handleLogout = async () => {
     await signOut();
     navigate('/login');
   };
+
   
   // Add cache-busting to avatar URL
   const getCacheBustedAvatarUrl = (url: string | null | undefined) => {

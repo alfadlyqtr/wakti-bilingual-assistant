@@ -83,7 +83,11 @@ serve(async (req) => {
     const customMode = Boolean(body?.customMode ?? true);
     const instrumental = Boolean(body?.instrumental ?? false);
     const rawModel = (body?.model || "").toString().trim();
-    const model = (rawModel === "V5_5") ? "V5_5" : "V5_5"; // strict: always force V5_5
+    // Accept the valid Kie/Suno model set. V4_5PLUS is used for GCC tracks (more dialect-
+    // obedient per Kie docs); V5_5 remains default for non-GCC. Unknown values fall back
+    // to V5_5 so a client typo never hard-fails generation.
+    const ALLOWED_MODELS = new Set(["V5_5", "V5", "V4_5PLUS", "V4_5", "V4_5ALL", "V4"]);
+    const model = ALLOWED_MODELS.has(rawModel) ? rawModel : "V5_5";
     const negativeTags = (body?.negativeTags || "").toString().trim();
     const vocalGender = body?.vocalGender as "m" | "f" | undefined;
     const styleWeight = typeof body?.styleWeight === "number" ? body.styleWeight : undefined;

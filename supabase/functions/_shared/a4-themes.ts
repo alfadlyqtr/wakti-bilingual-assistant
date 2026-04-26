@@ -31,6 +31,8 @@ export interface A4PurposeChip {
   label_ar: string;
 }
 
+export type A4DocumentLane = "formal" | "visual";
+
 export interface A4Theme {
   id: string;
   name_en: string;
@@ -953,6 +955,31 @@ export function getThemeFormSchema(theme: A4Theme, purposeId: string | null | un
 
 export function themeRequiresPurpose(theme: A4Theme): boolean {
   return !!theme.purpose_chips && !!theme.form_schema_by_purpose && !theme.form_schema;
+}
+
+export function getThemeDocumentLane(themeId: string, purposeId?: string | null): A4DocumentLane {
+  if (themeId === "clean_minimal") {
+    if (purposeId === "report" || purposeId === "letter" || purposeId === "notice") {
+      return "formal";
+    }
+    return "visual";
+  }
+
+  if (
+    themeId === "official_exam" ||
+    themeId === "school_project" ||
+    themeId === "academic_report" ||
+    themeId === "study_handout" ||
+    themeId === "research_poster" ||
+    themeId === "corporate_brief" ||
+    themeId === "invoice_receipt" ||
+    themeId === "menu_price_list" ||
+    themeId === "resume_cv"
+  ) {
+    return "formal";
+  }
+
+  return "visual";
 }
 
 export function maxPagesForTheme(theme: A4Theme): 1 | 2 | 3 {

@@ -1,11 +1,13 @@
 // @ts-nocheck
 
 import { supabase } from "@/integrations/supabase/client";
+import { getScopedStorageItem, migrateLegacyScopedStorage, setScopedStorageItem } from "@/utils/userScopedStorage";
 
 // Simple localStorage-based widget order management
-export const getWidgetOrder = () => {
+export const getWidgetOrder = (userId?: string | null) => {
   try {
-    const storedOrder = localStorage.getItem('widgetOrder');
+    migrateLegacyScopedStorage('widgetOrder', userId, 'widgetOrder');
+    const storedOrder = getScopedStorageItem('widgetOrder', userId, 'widgetOrder');
     if (storedOrder) {
       const parsed = JSON.parse(storedOrder);
       console.log('Loaded widget order from localStorage:', parsed);
@@ -21,10 +23,10 @@ export const getWidgetOrder = () => {
   return defaultOrder;
 };
 
-export const saveWidgetOrder = async (newOrder: string[]) => {
+export const saveWidgetOrder = async (newOrder: string[], userId?: string | null) => {
   try {
     // Save to localStorage immediately
-    localStorage.setItem('widgetOrder', JSON.stringify(newOrder));
+    setScopedStorageItem('widgetOrder', JSON.stringify(newOrder), userId);
     console.log('Widget order saved to localStorage:', newOrder);
   } catch (error) {
     console.error('Error saving widget order:', error);
@@ -86,9 +88,10 @@ export async function saveRemoteWidgetPrefs(widgetsDbPrefs: any) {
   }
 }
 
-export const getUserPreferences = () => {
+export const getUserPreferences = (userId?: string | null) => {
   try {
-    const storedPreferences = localStorage.getItem('widgetVisibility');
+    migrateLegacyScopedStorage('widgetVisibility', userId, 'widgetVisibility');
+    const storedPreferences = getScopedStorageItem('widgetVisibility', userId, 'widgetVisibility');
     if (storedPreferences) {
       return JSON.parse(storedPreferences);
     }
@@ -107,9 +110,9 @@ export const getUserPreferences = () => {
   };
 };
 
-export const saveUserPreferences = (preferences: any) => {
+export const saveUserPreferences = (preferences: any, userId?: string | null) => {
   try {
-    localStorage.setItem('widgetVisibility', JSON.stringify(preferences));
+    setScopedStorageItem('widgetVisibility', JSON.stringify(preferences), userId);
   } catch (error) {
     console.error('Error saving widget preferences:', error);
   }

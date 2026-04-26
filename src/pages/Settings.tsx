@@ -36,6 +36,7 @@ import { useAccessibility } from "@/hooks/useAccessibility";
 import { COLOR_BLIND_MODES } from "@/components/accessibility/ColorBlindFilters";
 import { useTextSize } from "@/hooks/useTextSize";
 import { useToastHelper } from "@/hooks/use-toast-helper";
+import { getScopedStorageItem, migrateLegacyScopedStorage, setScopedStorageItem } from "@/utils/userScopedStorage";
 
 export default function Settings() {
   const { theme, setTheme, language, setLanguage } = useTheme();
@@ -82,7 +83,7 @@ export default function Settings() {
 
   // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = new home screen look)
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
-    const cached = localStorage.getItem('wakti_dashboard_look');
+    const cached = getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
     return cached === 'dashboard' ? 'dashboard' : 'homescreen';
   });
 
@@ -104,6 +105,11 @@ export default function Settings() {
       loadSettingsFromProfile();
     }
   }, [cachedProfile]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    migrateLegacyScopedStorage('wakti_dashboard_look', user.id, 'wakti_dashboard_look');
+  }, [user?.id]);
 
   const loadSettingsFromProfile = () => {
     try {
@@ -214,7 +220,7 @@ export default function Settings() {
   const updateDashboardLook = async (look: 'dashboard' | 'homescreen') => {
     try {
       setDashboardLook(look);
-      localStorage.setItem('wakti_dashboard_look', look);
+      setScopedStorageItem('wakti_dashboard_look', look, user?.id);
 
       const currentSettings = (cachedProfile?.settings as any) || {};
 

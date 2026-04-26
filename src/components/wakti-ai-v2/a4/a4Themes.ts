@@ -33,6 +33,8 @@ export interface A4PurposeChip {
   label_ar: string;
 }
 
+export type A4DocumentLane = "formal" | "visual";
+
 export interface A4Theme {
   id: string;
   name_en: string;
@@ -855,6 +857,244 @@ export function getFormSchema(theme: A4Theme, purposeId: string | null): A4FormF
 
 export function themeRequiresPurpose(theme: A4Theme): boolean {
   return !!theme.purpose_chips && !!theme.form_schema_by_purpose && !theme.form_schema;
+}
+
+export function getThemeDocumentLane(themeId: string, purposeId?: string | null): A4DocumentLane {
+  if (themeId === "clean_minimal") {
+    if (purposeId === "report" || purposeId === "letter" || purposeId === "notice") {
+      return "formal";
+    }
+    return "visual";
+  }
+
+  if (
+    themeId === "official_exam" ||
+    themeId === "school_project" ||
+    themeId === "academic_report" ||
+    themeId === "study_handout" ||
+    themeId === "research_poster" ||
+    themeId === "corporate_brief" ||
+    themeId === "invoice_receipt" ||
+    themeId === "menu_price_list" ||
+    themeId === "resume_cv"
+  ) {
+    return "formal";
+  }
+
+  return "visual";
+}
+
+const BASIC_FIELD_KEYS_BY_THEME: Record<string, string[]> = {
+  official_exam: [
+    "institution_name",
+    "education_level",
+    "subject",
+    "teacher_name",
+    "grade",
+    "term",
+    "duration",
+    "total_marks",
+    "instructions",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  school_project: [
+    "institution_name",
+    "education_level",
+    "student_name",
+    "student_id",
+    "grade",
+    "department_or_faculty",
+    "subject",
+    "teacher_or_supervisor",
+    "submission_date",
+    "project_title",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  academic_report: [
+    "institution_name",
+    "department_or_faculty",
+    "course_name",
+    "student_name",
+    "student_id",
+    "instructor_name",
+    "supervisor_name",
+    "year_or_semester",
+    "submission_date",
+    "title",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  study_handout: [
+    "topic",
+    "course_name",
+    "teacher_name",
+    "grade",
+    "education_level",
+    "focus_area",
+    "session_title",
+    "exam_scope",
+    "formula_focus",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  research_poster: [
+    "poster_title",
+    "institution_name",
+    "department_or_faculty",
+    "authors",
+    "supervisor_name",
+    "conference_name",
+    "event_name",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  corporate_brief: [
+    "company_name",
+    "department",
+    "client_name",
+    "report_title",
+    "period",
+    "author",
+    "doc_ref",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  certificate: [
+    "issuer_name",
+    "recipient_name",
+    "achievement",
+    "issue_date",
+    "signatory_name",
+    "signatory_title",
+    "certificate_title",
+    "program_name",
+    "category_or_reason",
+    "logo",
+    "bilingual",
+  ],
+  event_flyer: [
+    "event_name",
+    "date",
+    "time",
+    "venue",
+    "tagline",
+    "description",
+    "cta",
+    "headline_image",
+    "logo",
+    "bilingual",
+  ],
+  craft_infographic: [
+    "topic",
+    "institution_name",
+    "student_name",
+    "grade",
+    "subject",
+    "teacher_or_supervisor",
+    "company_name",
+    "department",
+    "audience",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  comic_explainer: [
+    "title",
+    "panel_count",
+    "raw_content",
+    "logo",
+  ],
+  clean_minimal: [
+    "title",
+    "subtitle",
+    "author",
+    "date",
+    "sender_name",
+    "recipient_name",
+    "subject",
+    "issuer",
+    "event_name",
+    "venue",
+    "cta",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  invoice_receipt: [
+    "company_name",
+    "client_name",
+    "invoice_number",
+    "receipt_number",
+    "issue_date",
+    "due_date",
+    "paid_method",
+    "currency",
+    "payment_terms",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  menu_price_list: [
+    "business_name",
+    "subtitle",
+    "currency",
+    "contact_info",
+    "working_hours",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  thank_you_invitation_card: [
+    "sender_name",
+    "recipient_name",
+    "card_title",
+    "date",
+    "host_name",
+    "event_name",
+    "event_date",
+    "time",
+    "venue",
+    "dress_code",
+    "rsvp",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+  resume_cv: [
+    "full_name",
+    "desired_role",
+    "email",
+    "phone",
+    "location",
+    "website",
+    "linkedin",
+    "summary",
+    "education",
+    "experience",
+    "skills",
+    "languages",
+    "certifications",
+    "logo",
+    "bilingual",
+    "raw_content",
+  ],
+};
+
+export function isBasicFieldForTheme(
+  themeId: string,
+  fieldKey: string,
+): boolean {
+  const keys = BASIC_FIELD_KEYS_BY_THEME[themeId];
+  if (!keys) return true;
+  return keys.includes(fieldKey);
 }
 
 export function searchThemes(query: string): A4Theme[] {

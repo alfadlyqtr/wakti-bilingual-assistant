@@ -10,6 +10,7 @@ import { HomeScreen } from "@/components/dashboard/HomeScreen";
 import { useWidgetManager } from "@/hooks/useWidgetManager";
 import { supabase } from "@/integrations/supabase/client";
 import { t } from "@/utils/translations";
+import { getScopedStorageItem, migrateLegacyScopedStorage, setScopedStorageItem } from "@/utils/userScopedStorage";
 
 export default function Dashboard() {
   const { language } = useTheme();
@@ -19,9 +20,14 @@ export default function Dashboard() {
   const [refreshKey, setRefreshKey] = useState(0);
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
     // Instant load from localStorage — no flash
-    const cached = localStorage.getItem('wakti_dashboard_look');
+    const cached = getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
     return cached === 'dashboard' ? 'dashboard' : 'homescreen';
   });
+
+  useEffect(() => {
+    if (!user?.id) return;
+    migrateLegacyScopedStorage('wakti_dashboard_look', user.id, 'wakti_dashboard_look');
+  }, [user?.id]);
 
   // Sync from cached profile (source of truth) + cache to localStorage
   useEffect(() => {
@@ -29,7 +35,7 @@ export default function Dashboard() {
     const savedLook = (profile.settings as any)?.dashboardLook;
     if (savedLook === 'dashboard' || savedLook === 'homescreen') {
       setDashboardLook(savedLook);
-      localStorage.setItem('wakti_dashboard_look', savedLook);
+      setScopedStorageItem('wakti_dashboard_look', savedLook, user?.id);
     }
   }, [profile]);
 
@@ -39,11 +45,11 @@ export default function Dashboard() {
       // Narrow eventBus payload to the strict state type before setState.
       if (val !== 'dashboard' && val !== 'homescreen') return;
       setDashboardLook(val);
-      localStorage.setItem('wakti_dashboard_look', val);
+      setScopedStorageItem('wakti_dashboard_look', val, user?.id);
       setRefreshKey(prev => prev + 1);
     };
     return onEvent('dashboardLookChanged', handleDashboardLookChange);
-  }, []);
+  }, [user?.id]);
 
   // Add a body class while on Dashboard so CSS can hide the scrollbar for this page only
   useEffect(() => {

@@ -148,6 +148,13 @@ export interface A4CompileInput {
   // Drives the REFERENCE IMAGE directive so the image model knows what to do
   // with the attachment (put it as a portrait, small logo, product photo, etc.).
   referenceImageRole?: A4ReferenceImageRole | null;
+  // NEW (F1) — user-picked decoration chips ("botanical leaves", "gold foil",
+  // custom strings, etc.). Consumed verbatim by the compiler so the user's
+  // choices reach the image model. Capped upstream to A4_MAX_CHIPS_PER_SIDE.
+  decorationsWanted?: string[] | null;
+  // NEW (F1) — decoration motifs the user explicitly does NOT want. Rendered
+  // as a short positive-framing exclusion line so the image model avoids them.
+  decorationsUnwanted?: string[] | null;
 }
 
 function getLanguageRules(mode: "en" | "ar" | "bilingual"): string {
@@ -194,7 +201,8 @@ function getHeaderBlock(
   // For multi-page, page 2+ uses a slim running header
   if (pageNumber > 1) {
     const title = String(formState.project_title ?? formState.report_title ?? formState.poster_title ?? formState.business_name ?? formState.company_name ?? formState.full_name ?? formState.card_title ?? formState.subject ?? formState.course_name ?? formState.title ?? formState.event_name ?? "").trim();
-    return `Slim running header only: document title "${title || "Document"}" aligned per language direction. No logo repetition needed unless it fits elegantly.`;
+    const fallbackTitle = L("Document", "مستند");
+    return `Slim running header only: document title "${title || fallbackTitle}" aligned per language direction. No logo repetition needed unless it fits elegantly.`;
   }
 
   const logoClause = hasLogoRef
@@ -321,9 +329,9 @@ function getHeaderBlock(
       if (ref) lines.push(`Top-right: reference code "${ref}" in small monospaced style.`);
       if (title) lines.push(`Below header, full-width H1 title: "${title}".`);
       const meta: string[] = [];
-      if (period) meta.push(`"Period: ${period}"`);
-      if (author) meta.push(`"Prepared by: ${author}"`);
-      if (meta.length) lines.push(`Meta row: ${meta.join(" | ")}.`);
+      if (period) meta.push(`"${L("Period", "الفترة")}: ${period}"`);
+      if (author) meta.push(`"${L("Prepared by", "إعداد")}: ${author}"`);
+      if (meta.length) lines.push(`Meta row: ${meta.join(" | ")}. CRITICAL: All default labels must render in the active document language.`);
       return `Header: ${lines.join(" ")}`;
     }
     case "certificate": {
@@ -334,7 +342,10 @@ function getHeaderBlock(
       const date = String(formState.issue_date ?? "").trim();
       const sigName = String(formState.signatory_name ?? "").trim();
       const sigTitle = String(formState.signatory_title ?? "").trim();
-      return `Layout: fully centered. Top: "${issuer}".${certTitle ? ` Prominent certificate title beneath the issuer: "${certTitle}".` : ""} Middle: an elegant "This is to certify that" line, then recipient name "${recipient}" rendered large and beautifully. Below: "${achievement}". Bottom-left: date "${date}". Bottom-right: signature line with "${sigName}${sigTitle ? ", " + sigTitle : ""}" beneath. ${logoClause ? "Logo or seal centered at the very bottom." : ""}`;
+      const lblCertify = L("This is to certify that", "يشهد هذا بأن");
+      const lblDateCert = L("Date", "التاريخ");
+      const lblSignature = L("Signature", "التوقيع");
+      return `Layout: fully centered. Top: "${issuer}".${certTitle ? ` Prominent certificate title beneath the issuer: "${certTitle}".` : ""} Middle: an elegant "${lblCertify}" line, then recipient name "${recipient}" rendered large and beautifully. Below: "${achievement}". Bottom-left: ${lblDateCert} "${date}". Bottom-right: ${lblSignature} line with "${sigName}${sigTitle ? ", " + sigTitle : ""}" beneath. ${logoClause ? "Logo or seal centered at the very bottom." : ""} CRITICAL: All default labels must render in the active document language.`;
     }
     case "event_flyer": {
       const event = String(formState.event_name ?? "").trim();
@@ -366,9 +377,14 @@ function getHeaderBlock(
       const dueDate = String(formState.due_date ?? "").trim();
       const currency = String(formState.currency ?? "").trim();
       const paymentTerms = String(formState.payment_terms ?? formState.paid_method ?? "").trim();
-      const docLabel = invoiceNo ? "Invoice" : "Receipt";
       const docNumber = invoiceNo || receiptNo;
-      return `Header: ${logoClause} Top-left: business name "${business}". Top-right: ${docLabel.toUpperCase()}${docNumber ? ' number "' + docNumber + '"' : ""}. Below header: customer line "${client || "Customer"}" and date "${issueDate}".${dueDate ? ` Also show due date "${dueDate}".` : ""}${currency ? ` Show currency "${currency}" in the totals block.` : ""}${paymentTerms ? ` Add small payment info line: "${paymentTerms}".` : ""}`;
+      const lblInvoice = L("Invoice", "فاتورة");
+      const lblReceipt = L("Receipt", "إيصال");
+      const lblCustomer = L("Customer", "العميل");
+      const lblDueDate = L("Due date", "تاريخ الاستحقاق");
+      const lblCurrency = L("Currency", "العملة");
+      const docLabelLocalized = invoiceNo ? lblInvoice : lblReceipt;
+      return `Header: ${logoClause} Top-left: business name "${business}". Top-right: ${docLabelLocalized}${docNumber ? ' number "' + docNumber + '"' : ""}. Below header: customer line "${client || lblCustomer}" and date "${issueDate}".${dueDate ? ` Also show ${lblDueDate} "${dueDate}".` : ""}${currency ? ` Show ${lblCurrency} "${currency}" in the totals block.` : ""}${paymentTerms ? ` Add small payment info line: "${paymentTerms}".` : ""} CRITICAL: Render every default label in the EXACT script of the document language — do not substitute English labels in Arabic output.`;
     }
     case "menu_price_list": {
       const business = String(formState.business_name ?? "").trim();
@@ -386,10 +402,12 @@ function getHeaderBlock(
       const eventDate = String(formState.event_date ?? formState.date ?? "").trim();
       const venue = String(formState.venue ?? "").trim();
       const rsvp = String(formState.rsvp ?? "").trim();
+      const lblInvitation = L("Invitation", "دعوة");
+      const lblThankYou = L("Thank You", "شكراً لكم");
       if (host || event) {
-        return `Layout: elegant invitation card. ${logoClause} Main centered title: "${event || "Invitation"}". Supporting host line: "${host}".${eventDate ? ` Event date line: "${eventDate}".` : ""}${venue ? ` Venue line: "${venue}".` : ""}${rsvp ? ` RSVP line near bottom: "${rsvp}".` : ""}`;
+        return `Layout: elegant invitation card. ${logoClause} Main centered title: "${event || lblInvitation}". Supporting host line: "${host}".${eventDate ? ` Event date line: "${eventDate}".` : ""}${venue ? ` Venue line: "${venue}".` : ""}${rsvp ? ` RSVP line near bottom: "${rsvp}".` : ""} CRITICAL: All default labels must render in the active document language.`;
       }
-      return `Layout: elegant thank-you card. ${logoClause} Main centered heading: "${cardTitle || "Thank You"}".${recipient ? ` Addressed to "${recipient}".` : ""}${sender ? ` Signature or from-line near the bottom: "${sender}".` : ""}${eventDate ? ` Small date line: "${eventDate}".` : ""}`;
+      return `Layout: elegant thank-you card. ${logoClause} Main centered heading: "${cardTitle || lblThankYou}".${recipient ? ` Addressed to "${recipient}".` : ""}${sender ? ` Signature or from-line near the bottom: "${sender}".` : ""}${eventDate ? ` Small date line: "${eventDate}".` : ""} CRITICAL: All default labels must render in the active document language.`;
     }
     case "resume_cv": {
       const fullName = String(formState.full_name ?? "").trim();
@@ -867,6 +885,45 @@ function getReferenceImageDirective(
   }
 }
 
+// Build a single "DECORATIONS" block from the user's chip selections (F1).
+// Wanted chips are merged into a positive-framing instruction; unwanted chips
+// become a short exclusion line at the end. Empty arrays => empty block.
+function getDecorationsBlock(
+  wanted: string[] | null | undefined,
+  unwanted: string[] | null | undefined,
+): string {
+  const cleanList = (arr: string[] | null | undefined): string[] => {
+    if (!Array.isArray(arr)) return [];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of arr) {
+      const v = String(raw ?? "").trim();
+      if (!v) continue;
+      const k = v.toLowerCase();
+      if (seen.has(k)) continue;
+      seen.add(k);
+      out.push(v);
+      if (out.length >= 8) break;
+    }
+    return out;
+  };
+  const w = cleanList(wanted);
+  const u = cleanList(unwanted);
+  if (w.length === 0 && u.length === 0) return "";
+  const lines: string[] = [];
+  if (w.length > 0) {
+    lines.push(
+      `USER-PICKED DECORATIONS (HIGH PRIORITY) — Integrate these motifs naturally into the design where they fit the subject and theme: ${w.join(", ")}. Use them tastefully so they enhance rather than compete with the content.`,
+    );
+  }
+  if (u.length > 0) {
+    lines.push(
+      `EXCLUDED DECORATIONS — Do not include any of the following motifs anywhere in the rendered page: ${u.join(", ")}.`,
+    );
+  }
+  return lines.join("\n");
+}
+
 function getUserWishesBlock(wishes: string | null | undefined): string {
   const text = (wishes ?? "").trim();
   if (!text) return "";
@@ -925,6 +982,7 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   const illustrationStyle = getIllustrationStyleBlock(creative?.illustration_style);
   const accentElements = getAccentElementsBlock(creative?.accent_elements);
   const backgroundTreatment = getBackgroundTreatmentBlock(creative?.background_treatment);
+  const decorationsBlock = getDecorationsBlock(input.decorationsWanted, input.decorationsUnwanted);
   const contentComponents = getContentComponentsBlock(
     creative?.content_components,
     rawContent,
@@ -981,6 +1039,7 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   if (visualRecipe) sections.push(`VISUAL RECIPE\n${visualRecipe}`);
   if (illustrationStyle) sections.push(`ILLUSTRATION APPROACH\n${illustrationStyle}`);
   if (accentElements) sections.push(`ACCENT ELEMENTS\n${accentElements}`);
+  if (decorationsBlock) sections.push(decorationsBlock);
 
   // Slim TYPOGRAPHY: only send Arabic rules when the document actually uses Arabic.
   if (languageMode === "ar" || languageMode === "bilingual") {

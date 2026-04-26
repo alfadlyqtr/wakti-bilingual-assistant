@@ -63,159 +63,11 @@ export const A4_MAX_CHIPS_PER_SIDE = 6;
 // =============================================================================
 export type A4InputMode = "content_ready" | "idea";
 
-export interface A4PromptEngineerBrief {
-  theme_id: string;
-  theme_name: string;
-  theme_style_summary: string;
-  purpose_id: string | null;
-  document_type_hint: string;
-  language_mode: "en" | "ar" | "bilingual";
-  orientation: "portrait" | "landscape";
-  page_number: number;
-  total_pages: number;
-  input_mode: A4InputMode;
-  subject_hint: string | null;
-  title_hint: string | null;
-  brand_name: string | null;
-  brand_colors: { primary?: string | null; secondary?: string | null } | null;
-  content: string;
-  decorations_wanted: string[];
-  decorations_unwanted: string[];
-  creative_summary: string | null;
-  has_logo_reference: boolean;
-}
-
-export interface A4PromptEngineerResult {
-  subject: string;
-  final_prompt: string;
-  included_motifs: string[];
-  excluded_motifs: string[];
-}
-
-// =============================================================================
-// Gemini system instruction + schema
-// =============================================================================
-const SYSTEM_INSTRUCTION = `You are the WAKTI A4 Prompt Engineer. Your single job is to turn a structured brief into ONE beautiful, subject-anchored final prompt for the Nano Banana 2 image model so it produces a clean 2D A4 document image.
-
-Hard rules — never violate:
-1. Output STRICT JSON only. No prose. No markdown fences. No commentary.
-2. Anchor the prompt to the real SUBJECT. Never produce generic "modern beautiful design" fluff.
-3. Respect language_mode exactly: "en" = English only, "ar" = Arabic only, "bilingual" = both side-by-side.
-4. Never include any motif listed in decorations_unwanted. Treat that list as absolute exclusions.
-5. Include the motifs from decorations_wanted naturally, not as a bullet list.
-6. When input_mode="content_ready", treat the provided content as source truth. Do NOT rewrite facts, numbers, names, or claims.
-7. Produce a clean flat 2D A4 DOCUMENT. Never describe mockups, 3D renders, hands holding paper, desks, photographed scenes, folded corners, or isometric views.
-8. Readability first. Typography must remain legible.
-9. Keep the final prompt between 120 and 260 words — rich but not bloated.
-10. Use positive framing. Describe what the design IS, not what it should avoid (except for the short exclusion line at the end).
-
-The final prompt must naturally cover:
-- Subject opener (what this document is about)
-- Document type feel (report, flyer, menu, certificate, brief, etc.)
-- Theme styling mood
-- Layout guidance (header / body / footer or clear zones)
-- Decorative language from decorations_wanted
-- A short explicit exclusion line derived from decorations_unwanted
-- Language requirement
-- Instruction to render the provided content verbatim (when content_ready)
-- Clean flat 2D A4 document rendering with readable typography
-
-Return JSON with this exact shape:
-{
-  "subject": string,
-  "final_prompt": string,
-  "included_motifs": string[],
-  "excluded_motifs": string[]
-}`;
-
-// =============================================================================
-// Validation
-// =============================================================================
-function isValidResult(raw: unknown): raw is A4PromptEngineerResult {
-  if (!raw || typeof raw !== "object") return false;
-  const r = raw as Record<string, unknown>;
-  if (typeof r.subject !== "string" || !r.subject.trim()) return false;
-  if (typeof r.final_prompt !== "string") return false;
-  const fp = r.final_prompt.trim();
-  if (fp.length < 200 || fp.length > 3500) return false;
-  if (!Array.isArray(r.included_motifs)) return false;
-  if (!Array.isArray(r.excluded_motifs)) return false;
-  return true;
-}
-
-function violatesExclusions(finalPrompt: string, unwanted: string[]): string | null {
-  const lower = finalPrompt.toLowerCase();
-  for (const motif of unwanted) {
-    const m = (motif || "").trim().toLowerCase();
-    if (!m) continue;
-    // Only flag when the motif appears in a positive context (no "no ", "without ", "avoid ")
-    const idx = lower.indexOf(m);
-    if (idx === -1) continue;
-    const before = lower.slice(Math.max(0, idx - 20), idx);
-    if (/\b(no|without|avoid|exclude|not|never)\s*$/.test(before)) continue;
-    return motif;
-  }
-  return null;
-}
-
-// =============================================================================
-// Prompt Engineer call
-// =============================================================================
-export async function runPromptEngineer(
-  brief: A4PromptEngineerBrief,
-): Promise<A4PromptEngineerResult | null> {
-  try {
-    const userPayload = {
-      brief,
-      instructions:
-        "Engineer the single best final prompt for a clean flat 2D A4 document image. Respect every hard rule. Return strict JSON.",
-    };
-    const contents: GeminiContent[] = [
-      {
-        role: "user",
-        parts: [{ text: JSON.stringify(userPayload) }],
-      },
-    ];
-
-    const result = await generateGemini(
-      "gemini-2.5-flash",
-      contents,
-      SYSTEM_INSTRUCTION,
-      {
-        temperature: 0.4,
-        maxOutputTokens: 1800,
-        response_mime_type: "application/json",
-      },
-    );
-
-    const text: string = result?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-    if (!text) {
-      console.warn("[a4-prompt-engineer] empty response");
-      return null;
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(text);
-    } catch (e) {
-      console.warn("[a4-prompt-engineer] JSON parse failed:", (e as Error).message);
-      return null;
-    }
-    if (!isValidResult(parsed)) {
-      console.warn("[a4-prompt-engineer] invalid shape");
-      return null;
-    }
-    const res = parsed as A4PromptEngineerResult;
-    const violation = violatesExclusions(res.final_prompt, brief.decorations_unwanted);
-    if (violation) {
-      console.warn(`[a4-prompt-engineer] exclusion violation: ${violation}`);
-      return null;
-    }
-    return res;
-  } catch (e) {
-    console.warn("[a4-prompt-engineer] call failed:", (e as Error).message);
-    return null;
-  }
-}
+// NOTE (F2): The legacy Gemini "Prompt Engineer" middleman + its exclusion
+// validator have been removed. The deterministic compiler in
+// `_shared/a4-prompts.ts` is the single source of truth for the master prompt.
+// All prior interfaces, system instructions, and helper functions for the
+// middleman were dead code with no callers and have been deleted.
 
 // =============================================================================
 // Idea expansion (separate small call, used by expand mode)
@@ -310,11 +162,17 @@ export async function runIdeaExpand(
   try {
     let expanded = await requestIdeaExpand(req, false);
     if (req.language_mode === "bilingual" && !isStrongBilingualDraft(expanded)) {
-      expanded = await requestIdeaExpand(req, true);
+      const retry = await requestIdeaExpand(req, true);
+      // F20: never throw away a usable draft. If the retry is stronger,
+      // prefer it; otherwise keep whichever attempt produced content.
+      if (retry && (!expanded || isStrongBilingualDraft(retry))) {
+        expanded = retry;
+      }
     }
-    if (req.language_mode === "bilingual" && !isStrongBilingualDraft(expanded)) {
-      return null;
-    }
+    // F20: previously returned null when the bilingual draft was weak. That
+    // hard-failed the user with a vague error. Now we return whatever we got
+    // (still better than nothing) so the user can edit it manually before
+    // generation. The caller can inspect the content if it wants to warn.
     return expanded;
   } catch (e) {
     console.warn("[a4-idea-expand] failed:", (e as Error).message);

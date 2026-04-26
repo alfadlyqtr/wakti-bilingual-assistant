@@ -1543,13 +1543,30 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastNotice, setLastNotice] = useState<string | null>(null);
 
-  const isGccStyleSelected = useMemo(() => {
-    const gccKeywords = ['gcc', 'khaleeji', 'khaleeji', 'gulf', 'خليجي', 'خليج', 'شلات', 'شيلة', 'sheilat', 'samri', 'jalsa', 'جلسة', 'عرضة', 'ardah'];
-    return includeTags.some((tag) => {
-      const value = (tag || '').toLowerCase();
-      return gccKeywords.some((keyword) => value.includes(keyword));
-    });
-  }, [includeTags]);
+  // ── Canonical GCC style catalog (single source of truth for GCC detection) ──
+  // Used by isGccStyleSelected, formatLyricsWithStructure (per-stanza Khaleeji language tags),
+  // GCC-safe instrument/rhythm recommendation filters, and the negative-tag merger in
+  // handleGenerate. Keep in sync with the GCC entries in STYLE_GROUPS (EN + AR).
+  const GCC_STYLE_SET = useMemo(() => new Set<string>([
+    // ── EN canonical IDs ──
+    'GCC Pop', 'Khaleeji Pop', 'GCC Rap', 'GCC Romantic', 'GCC Elegant', 'GCC Party', 'GCC Wedding',
+    'GCC Radio Pop', 'GCC Dance Pop', 'GCC Electro Pop', 'GCC Synth Pop',
+    'Modern Khaleeji Fusion', 'English GCC Pop',
+    'GCC R&B Pop', 'Luxury GCC Pop', 'Cinematic GCC', 'GCC Anthem', 'National Event GCC',
+    'GCC Traditional', 'Sheilat', 'Samri', 'Ardah', 'Jalsa', 'Liwa', 'GCC Shaabi', 'Zar', 'Khaleeji Trap',
+    // ── AR display labels (mirror IDs used in pickers + mappings) ──
+    'بوب خليجي', 'خليجي راب', 'خليجي عصري',
+    'خليجي رومانسي', 'خليجي أنيق', 'خليجي حفلات', 'خليجي أعراس',
+    'خليجي إذاعي', 'خليجي دانس', 'خليجي إلكتروني', 'خليجي سينث بوب',
+    'فيوجن خليجي', 'إنجليزي بطابع خليجي',
+    'خليجي آر أند بي', 'خليجي فاخر', 'خليجي سينمائي', 'خليجي جماهيري', 'مناسبات وطنية خليجية',
+    'خليجي تراثي', 'شيلات', 'سامري', 'جلسة', 'ليوان', 'شعبي خليجي',
+  ]), []);
+
+  const isGccStyleSelected = useMemo(
+    () => includeTags.some((tag) => GCC_STYLE_SET.has(tag)),
+    [includeTags, GCC_STYLE_SET]
+  );
 
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsLimit, setSongsLimit] = useState(30);
@@ -1640,6 +1657,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'GCC Shaabi':           ['oud', 'qanun', 'riq', 'tabla', 'ney'],
       'شعبي خليجي':           ['tar', 'tabla', 'darbuka', 'rebab', 'group chant'],
       'Khaleeji Trap':        ['808 bass', 'trap hi-hats', 'mirwas', 'darbuka', 'synth lead'],
+      'Ardah':                ['tabl', 'mirwas', 'frame drum', 'darbuka', 'group chant'],
+      'Zar':                  ['tanbura', 'frame drum', 'mirwas', 'darbuka', 'group chant'],
       // ── Other Arabic ──
       'Egyptian':             ['oud', 'qanun', 'ney', 'tabla', 'darbuka'],
       'مصري':                 ['oud', 'qanun', 'ney', 'tabla', 'darbuka'],
@@ -2700,11 +2719,42 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     onQuotaChange?.({ remaining: songsRemaining, limit: songsLimit, used: songsUsed });
   }, [onQuotaChange, songsRemaining, songsLimit, songsUsed]);
 
+  function normalizeAmpLyricsResult(text: string, mode: 'idea' | 'expand' | 'gcc_enhance'): string {
+    const normalized = text.replace(/\r\n/g, '\n').trim();
+    if (!normalized || mode === 'gcc_enhance') return normalized;
+
+    const cleaned = normalized
+      .split('\n')
+      .map((line) => line.trim())
+      .reduce<string[]>((acc, line) => {
+        if (!line) {
+          if (acc.length > 0 && acc[acc.length - 1] !== '') acc.push('');
+          return acc;
+        }
+
+        if (/^\[[^\]]+\]$/.test(line) || /^\((?:[^)]*(?:solo|instrumental(?:\s+build)?|drop|intro|outro|pre-chorus|verse|chorus|bridge|spoken|whispered|call and response)[^)]*)\)$/i.test(line)) {
+          if (acc.length > 0 && acc[acc.length - 1] !== '') acc.push('');
+          return acc;
+        }
+
+        acc.push(line);
+        return acc;
+      }, []);
+
+    return cleaned.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  }
+
   // Simple Amp - expand user lyrics into structured song
   async function handleAmp() {
-    const userInput = lyricsText.trim() || styleText.trim() || title.trim();
+    const userInput = ampMode === 'idea'
+      ? (lyricsText.trim() || styleText.trim() || title.trim())
+      : lyricsText.trim();
     if (!userInput) {
-      toast.error(isAr ? 'اكتب كلمات أولاً' : 'Write some lyrics first');
+      toast.error(isAr ? (ampMode === 'idea' ? 'اكتب فكرة أو كلمات أولاً' : 'اكتب كلمات أولاً') : (ampMode === 'idea' ? 'Write an idea or some lyrics first' : 'Write some lyrics first'));
+      return;
+    }
+    if (ampMode === 'expand' && !lyricsText.trim()) {
+      toast.error(isAr ? 'اكتب كلمات أولاً للتوسيع' : 'Write lyrics first for Expand');
       return;
     }
     if (ampMode === 'gcc_enhance' && !lyricsText.trim()) {
@@ -2726,14 +2776,19 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           ampMode: ampMode,
           duration: duration,
           style: kieStyle || includeTags.join(', '),
+          styleTags: includeTags,
           rhythm: rhythmTags[0] || '',
+          rhythmTags: rhythmTags,
           instruments: instrumentTags.join(', '),
+          instrumentTags: instrumentTags,
           mood: moodTags[0] || '',
+          moodTags: moodTags,
+          vocalType: vocalType,
           title: title.trim(),
         }
       });
       if (error) throw error;
-      const expandedLyrics = (data?.text || '').toString();
+      const expandedLyrics = normalizeAmpLyricsResult((data?.text || '').toString(), ampMode);
       if (!expandedLyrics) throw new Error(isAr ? 'تعذّر التوسيع' : 'Expansion failed');
       if (ampMode === 'gcc_enhance') {
         isGccEnhanceRef.current = true;
@@ -3151,7 +3206,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   // Build style string from chips + styleText
   // Narrow pronunciation-only negatives — blocks Arabic dialect drift, English stays allowed
-  const GCC_DIALECT_BLOCK = 'egyptian, levantine, maghrebi, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss';
+  // Pronunciation-defect shield. Dialect names (egyptian/levantine/etc.) tell Suno WHAT to
+  // avoid by label; phonetic tokens (hard final qaf, rolled r, khutbah cadence, etc.) tell
+  // Suno HOW the mouth should NOT sound. Both layers reinforce each other.
+  const GCC_DIALECT_BLOCK = 'egyptian, levantine, maghrebi, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence, hijazi accent, andalusi accent';
   const GCC_DIALECT_BLOCK_AR = 'مصري، شامي، مغربي، فصحى، شمال أفريقي، سوداني، غير خليجي، جودة منخفضة';
 
   const GCC_PRONUNCIATION_NEGATIVES: Record<string, string> = {
@@ -3265,11 +3323,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     //             close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal,
     //             audible breath support, authentic gulf vocal, strict khaleeji dialect,
     //             authentic khaleeji quarter-tone scale"
-    // GCC style lock — short, sharp, language-intent-first (5 load-bearing tags)
-    // Position #1: explicit language imperative (Jack Righteous Suno V5 best practice)
-    // Cut redundant/ornamental tags that diluted styleWeight across 14 items.
+    // GCC style lock — restored to the previously-working long anchor.
+    // The short 5-tag variant was a regression that weakened Gulf vocal identity;
+    // reverting to the original tag stack that consistently produced authentic
+    // Khaleeji pronunciation before the change.
     const LOCK = (style: string) =>
-      `Arabic vocals strictly in Kuwaiti-Qatari Gulf dialect, ${style}, authentic gulf male vocal, expressive melismatic mawwal, traditional khaleeji vocal phrasing`;
+      `kuwaiti qatari, pure kuwaiti qatari dialect, authentic desert-coastal resonance, seasoned gulf vocalist timbre, ${style}, colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic gulf vocal, strict khaleeji dialect, authentic khaleeji quarter-tone scale`;
 
     // ── Single map: GCC identity anchors + non-GCC pass-through ──
     const STYLE_ANCHORS: Record<string, string> = {
@@ -3644,13 +3703,19 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // ── Layer 5: User freeform text ──
     const freeText = styleText.trim() || null;
 
-    // ── Identity Sandwich: Anchor → Instruments → Rhythm → Mood → FreeText ──
+    // ── Identity Sandwich: Anchor → Instruments → Rhythm → Mood → FreeText → Tail Anchor ──
+    // Suno V5/V4.5+ weights repeated tokens harder, so for GCC styles we bookend the style
+    // string with a second dialect imperative at the tail. This stops user freetext, rhythm,
+    // and mood words from diluting the Khaleeji identity signal.
     const parts: string[] = [];
-    if (styleAnchor) parts.push(styleAnchor);                          // 1. Consolidated identity anchor
+    if (styleAnchor) parts.push(styleAnchor);                          // 1. Head identity anchor
     if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', ')); // 2. User instruments
     if (rhythmLabel) parts.push(rhythmLabel);                          // 3. Rhythm
     if (moodLabel) parts.push(moodLabel);                              // 4. Mood
     if (freeText) parts.push(freeText);                                // 5. User text
+    if (isGccStyle || isGccStyleSelected) {                            // 6. Tail dialect reinforcement (GCC only)
+      parts.push('authentic Khaleeji Gulf vocal pronunciation, strict Saudi-Kuwaiti-Qatari dialect, no MSA, no Egyptian, no Levantine');
+    }
 
     // ── Clean-up pass: trim each fragment, drop single-char empties, collapse duplicate commas ──
     const raw = parts
@@ -3667,9 +3732,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     isInstrumental: boolean,
     selectedInstruments: string[],
     isGccStyle: boolean = false,
+    targetSeconds: number = 30,
   ): string {
     if (isInstrumental) {
-      return '(Intro)\n(Instrumental Build)\n(Drop)\n(Outro)';
+      return '[Intro]\n[Instrumental Build]\n[Drop]\n[Outro]';
     }
 
     const text = rawLyrics.trim();
@@ -3679,10 +3745,34 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     if (/[\[(]\s*\w/.test(text)) return text;
 
     // Split on double line breaks to detect natural stanzas
-    const stanzas = text.split(/\n{2,}/).map((s) => s.trim()).filter(Boolean);
+    const stanzas = text
+      .split(/\n{2,}/)
+      .map((stanza) => stanza
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !/^[\-‐‑‒–—―⸺⸻_~•·]+$/.test(line))
+        .join('\n')
+        .trim())
+      .filter(Boolean);
+    const normalizedTargetSeconds =
+      targetSeconds <= 30 ? 30 :
+      targetSeconds <= 60 ? 60 :
+      targetSeconds <= 90 ? 90 :
+      targetSeconds <= 120 ? 120 :
+      targetSeconds <= 150 ? 150 : 200;
+    const durationPlan = normalizedTargetSeconds === 30
+      ? { labels: ['Verse 1', 'Chorus'], stanzaLimit: 2, allowAutoSolo: false }
+      : normalizedTargetSeconds === 60
+        ? { labels: ['Verse 1', 'Chorus', 'Verse 2'], stanzaLimit: 3, allowAutoSolo: false }
+        : normalizedTargetSeconds === 90
+          ? { labels: ['Verse 1', 'Chorus', 'Verse 2', 'Chorus'], stanzaLimit: 4, allowAutoSolo: false }
+          : normalizedTargetSeconds === 120
+            ? { labels: ['Verse 1', 'Chorus', 'Verse 2', 'Bridge', 'Chorus'], stanzaLimit: 5, allowAutoSolo: false }
+            : { labels: ['Verse 1', 'Chorus', 'Verse 2', 'Bridge', 'Chorus'], stanzaLimit: 5, allowAutoSolo: true };
+    const arrangedStanzas = stanzas.slice(0, durationPlan.stanzaLimit);
 
     // ── Dynamic solo: let Suno pick the lead instrument from the style field context ──
-    const soloTag: string | null = selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant') ? '(Instrumental Solo)' : null;
+    const soloTag: string | null = durationPlan.allowAutoSolo && arrangedStanzas.length >= durationPlan.stanzaLimit && selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant') ? '[Instrumental Solo]' : null;
 
     // ── GCC-only: per-stanza language detection so Suno locks the Gulf persona
     //    for Arabic blocks and switches cleanly on English blocks. ──
@@ -3697,28 +3787,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return arRatio > 0.5 ? 'mixed-ar' : 'mixed-en';
     };
 
-    const gccLangSuffix = (lang: ReturnType<typeof detectStanzaLang>): string => {
+    // ── Vocal directive per stanza (bracketed — Suno V5/V4.5+ parses [ ] as structural) ──
+    const gccVocalDirective = (lang: ReturnType<typeof detectStanzaLang>): string => {
       if (!isGccStyle) return '';
       switch (lang) {
-        case 'ar':       return ' — Arabic, Khaleeji Gulf dialect';
-        case 'en':       return ' — English';
-        case 'mixed-ar': return ' — Mixed, lead Arabic Khaleeji Gulf dialect';
-        case 'mixed-en': return ' — Mixed, lead English';
+        case 'ar':       return '[Vocal: Khaleeji Arabic — Gulf dialect, Saudi-Kuwaiti-Qatari, NOT MSA, NOT Egyptian]';
+        case 'en':       return '[Vocal: English]';
+        case 'mixed-ar': return '[Vocal: Khaleeji Arabic on Arabic lines, neutral English on English lines, no accent reset between lines]';
+        case 'mixed-en': return '[Vocal: English lead, Khaleeji Arabic on Arabic lines, no accent reset between lines]';
       }
     };
 
-    const labels = ['Verse 1', 'Chorus', 'Verse 2', 'Bridge', 'Chorus', 'Outro'];
-    const structured: string[] = ['(Intro)'];
+    const labels = durationPlan.labels;
+    const structured: string[] = ['[Intro]'];
 
-    stanzas.forEach((stanza, i) => {
-      const baseLabel = labels[i] ?? `Verse ${i + 1}`;
+    arrangedStanzas.forEach((stanza, i) => {
+      const baseLabel = `[${labels[i] ?? `Verse ${i + 1}`}]`;
       const lang = detectStanzaLang(stanza);
-      const label = `(${baseLabel}${gccLangSuffix(lang)})`;
-      structured.push(`${label}\n${stanza}`);
+      const vocalDir = gccVocalDirective(lang);
+      structured.push(vocalDir ? `${baseLabel}\n${vocalDir}\n${stanza}` : `${baseLabel}\n${stanza}`);
     });
 
     if (soloTag) structured.push(soloTag);
-    if (!structured.some((s) => s.startsWith('(Outro)'))) structured.push('(Outro)');
+    if (!structured.some((s) => s.startsWith('[Outro]'))) structured.push('[Outro]');
 
     return structured.join('\n\n');
   }
@@ -3768,10 +3859,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
       const kieStyle = buildKieStyleString();
-      const durationTarget = Math.min(150, duration);
+      const durationTarget = Math.min(200, duration);
 
       const rawLyrics = lyricsText.trim() || styleText.trim();
-      const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags, isGccStyleSelected);
+      const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags, isGccStyleSelected, durationTarget);
 
       // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
       const REGIONAL_NEGATIVE: Record<string, string> = {
@@ -3980,7 +4071,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         'Synthpop':      'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
         'Electropop':    'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
       };
-      const regionalShield = includeTags.length > 0 ? REGIONAL_NEGATIVE[includeTags[0]] : undefined;
       const isAnasheedStyle = includeTags.some((tag) => tag === 'Anasheed' || tag === 'أناشيد');
       const POP_KEYS = new Set(['pop','Dance Pop','Teen Pop','Power Pop','Pop Rock','Indie Pop','Bubblegum Pop','K-Pop','J-Pop','Latin Pop','80s pop','90s pop','Synthpop','Electropop']);
       const isPopStyle = includeTags.some((tag) => POP_KEYS.has(tag));
@@ -4004,21 +4094,91 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const isWorldMiscStyle = includeTags.some((tag) => WORLD_MISC_KEYS.has(tag));
       const ELECTRONIC_KEYS = new Set(['Lo-Fi','House','Deep House','Tech House','Trance','Techno','Dubstep','Drum & Bass','EDM','Electro','Hardcore','IDM','ambient','synthwave','chillwave','Vaporwave','Glitch','Witch House','Grime','UK Garage','2-Step','Electro Swing','Chiptune']);
       const isElectronicStyle = includeTags.some((tag) => ELECTRONIC_KEYS.has(tag));
-      // ── GCC Morocco-Killer default (sacred — untouched) ──
-      const finalNegativeTags = regionalShield
-        ?? 'moroccan, darija, gnawa, chaabi, maghrebi rhythm, egyptian, levantine, fusha, msa, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, noise, hiss, distorted, low quality';
+      // ── Multi-tag negative shield merger ──
+      // Combines GCC pronunciation negatives (highest priority — dialect lock) with
+      // per-style regional shields for EVERY selected tag (not just the first). Falls back
+      // to the proven Morocco-Killer default if a GCC tag is selected but no per-style
+      // regional shield matched. Tokens are deduped and ordered so the most discriminating
+      // dialect tokens land first.
+      //
+      // Length cap: Kie enforces a HARD 200-character limit on negativeTags across all
+      // models (verified empirically by 422 response: "The length of music negativeStyle
+      // cannot exceed 200 characters"). This is undocumented in their public API docs but
+      // is a real server-side validation. Our prioritized merger ensures the most
+      // discriminating GCC dialect tokens land in the first 200 chars; remaining tokens
+      // are dropped at clean comma boundaries (never mid-token).
+      const NEG_TAGS_MAX_CHARS = 200;
+      const GCC_DEFAULT_NEGATIVES = 'moroccan, darija, gnawa, chaabi, maghrebi rhythm, egyptian, levantine, fusha, msa, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, noise, hiss, distorted, low quality, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence, hijazi accent, andalusi accent';
+      const tokenizeNeg = (s: string): string[] => s
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
+      const orderedDedupeNeg = (tokens: string[]): string[] => {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const t of tokens) {
+          const key = t.toLowerCase();
+          if (!seen.has(key)) { seen.add(key); out.push(t); }
+        }
+        return out;
+      };
+      const fitNegativeTags = (tokens: string[]): string => {
+        let acc = '';
+        for (const t of tokens) {
+          const next = acc ? `${acc}, ${t}` : t;
+          if (next.length > NEG_TAGS_MAX_CHARS) break;
+          acc = next;
+        }
+        return acc;
+      };
+
+      const gccPronunciationTokens: string[] = [];
+      const regionalTokens: string[] = [];
+      let hasGccTag = false;
+      for (const tag of includeTags) {
+        if (GCC_STYLE_SET.has(tag)) hasGccTag = true;
+        const pron = GCC_PRONUNCIATION_NEGATIVES[tag];
+        if (pron) gccPronunciationTokens.push(...tokenizeNeg(pron));
+        const reg = REGIONAL_NEGATIVE[tag];
+        if (reg) regionalTokens.push(...tokenizeNeg(reg));
+      }
+      if (hasGccTag && regionalTokens.length === 0) {
+        regionalTokens.push(...tokenizeNeg(GCC_DEFAULT_NEGATIVES));
+      }
+      const finalNegativeTags = fitNegativeTags(
+        orderedDedupeNeg([...gccPronunciationTokens, ...regionalTokens])
+      );
+
+      // ── Final style string (resolved with GCC fallback) ──
+      const GCC_FALLBACK_STYLE = 'kuwaiti qatari, pure kuwaiti qatari dialect, authentic desert-coastal resonance, seasoned gulf vocalist timbre, khaleeji pop, colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic gulf vocal, strict khaleeji dialect, authentic khaleeji quarter-tone scale';
+      const resolvedStyle = (kieStyle || GCC_FALLBACK_STYLE).slice(0, 1000);
+      // ── Bulletproof GCC detection ──
+      // 1) Chip-based: the canonical set (most precise).
+      // 2) Content-based: the resolved style string contains a GCC marker. This catches
+      //    chip/label mismatches AND the fallback case (fallback IS GCC by definition).
+      // Either path forces GCC model + styleWeight so Khaleeji identity is never lost
+      // due to a label drift between STYLE_GROUPS / GCC_STYLE_SET / STYLE_ANCHORS.
+      const GCC_STYLE_MARKERS = /\b(khaleeji|kuwaiti|qatari|saudi|emirati|bahraini|omani|gulf|sheilat|samri|ardah|liwa|jalsa|mawwal)\b/i;
+      const isGccEffective = isGccStyleSelected || GCC_STYLE_MARKERS.test(resolvedStyle);
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
-        style: (kieStyle || 'kuwaiti qatari, pure kuwaiti qatari dialect, authentic desert-coastal resonance, seasoned gulf vocalist timbre, khaleeji pop, colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic gulf vocal, strict khaleeji dialect, authentic khaleeji quarter-tone scale').slice(0, 1000),
+        style: resolvedStyle,
         customMode: true,
         instrumental,
+        // Model: always V5_5 (best musicality + best vocal quality). Tested V4_5PLUS
+        // for GCC dialect obedience and it produced non-Gulf (Egyptian/Levantine) output,
+        // so reverted. GCC identity is now enforced through styleWeight 0.95, tail dialect
+        // anchor in the style string, and a prioritized negativeTags shield instead.
         model: 'V5_5',
         duration_seconds: durationTarget,
-        styleWeight: isAnasheedStyle ? 0.95 : isClassicalStyle ? 0.90 : isReggaeStyle ? 0.80 : isPopStyle ? 0.75 : isMetalStyle ? 0.75 : isRootsStyle ? 0.75 : isWorldMiscStyle ? 0.75 : isElectronicStyle ? 0.75 : isUrbanStyle ? 0.70 : isRockStyle ? 0.70 : isPunkStyle ? 0.70 : isJazzBluesStyle ? 0.70 : 0.85,
+        // GCC lifted to 0.95 (identity-locked tier, matching Anasheed). Treats Khaleeji
+        // dialect as non-negotiable identity so user freetext / instruments / rhythm cannot
+        // dilute the vocal signal.
+        styleWeight: isAnasheedStyle ? 0.95 : isClassicalStyle ? 0.90 : isReggaeStyle ? 0.80 : isPopStyle ? 0.75 : isMetalStyle ? 0.75 : isRootsStyle ? 0.75 : isWorldMiscStyle ? 0.75 : isElectronicStyle ? 0.75 : isUrbanStyle ? 0.70 : isRockStyle ? 0.70 : isPunkStyle ? 0.70 : isJazzBluesStyle ? 0.70 : isGccEffective ? 0.95 : 0.85,
         weirdnessConstraint: isAnasheedStyle ? 0.15 : isClassicalStyle ? 0.20 : isReggaeStyle ? 0.35 : isPopStyle ? 0.45 : isMetalStyle ? 0.40 : isRootsStyle ? 0.40 : isWorldMiscStyle ? 0.40 : isElectronicStyle ? 0.40 : isUrbanStyle ? 0.45 : isRockStyle ? 0.45 : isPunkStyle ? 0.50 : isJazzBluesStyle ? 0.50 : 0.30,
         audioWeight: 0.8,
-        negativeTags: finalNegativeTags.slice(0, 200),
+        negativeTags: finalNegativeTags,
       };
 
       if (!instrumental) invokeBody.prompt = structuredPrompt;
@@ -5024,16 +5184,19 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
             <div className="flex items-center gap-3 pt-1">
               <select
                 value={duration}
-                onChange={(e) => setDuration(Math.min(150, Math.max(10, parseInt(e.target.value || '30'))))}
+                onChange={(e) => {
+                  const nextDuration = parseInt(e.target.value || '30', 10);
+                  setDuration([30, 60, 90, 120, 150, 200].includes(nextDuration) ? nextDuration : 30);
+                }}
                 title={isAr ? 'المدة' : 'Duration'}
                 className="flex-shrink-0 px-3 py-2 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
               >
-                <option value={10}>0:10</option>
                 <option value={30}>0:30</option>
                 <option value={60}>1:00</option>
                 <option value={90}>1:30</option>
                 <option value={120}>2:00</option>
                 <option value={150}>2:30</option>
+                <option value={200}>3:20</option>
               </select>
               <button
                 type="button"

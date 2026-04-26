@@ -111,18 +111,10 @@ function extractTaskResult(parsed: any): {
   return out;
 }
 
+// F7: pass through every supported ratio verbatim. Kie supports 2:3 + 3:2.
 function mapKieAspectRatio(aspectRatio: string): string {
-  if (aspectRatio === "2:3") return "3:4";
-  if (aspectRatio === "3:2") return "4:3";
-  if (
-    aspectRatio === "1:1"
-    || aspectRatio === "3:4"
-    || aspectRatio === "4:3"
-    || aspectRatio === "9:16"
-    || aspectRatio === "16:9"
-  ) {
-    return aspectRatio;
-  }
+  const supported = new Set(["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9"]);
+  if (supported.has(aspectRatio)) return aspectRatio;
   return "auto";
 }
 
@@ -266,6 +258,14 @@ async function dispatchNextPage(
         ? (stashedRole as A4ReferenceImageRole)
         : "logo";
 
+    // Forward decoration chips picked by the user so pages 2+ honour them too.
+    const decorWanted = Array.isArray(formStateForPrompt.__decor_wanted__)
+      ? (formStateForPrompt.__decor_wanted__ as string[])
+      : [];
+    const decorUnwanted = Array.isArray(formStateForPrompt.__decor_unwanted__)
+      ? (formStateForPrompt.__decor_unwanted__ as string[])
+      : [];
+
     const prompt = compileMasterPrompt({
       theme,
       purposeId: row.purpose_id ?? null,
@@ -281,6 +281,8 @@ async function dispatchNextPage(
       creativeSettings,
       userWishes: stashedUserWishes,
       referenceImageRole,
+      decorationsWanted: decorWanted,
+      decorationsUnwanted: decorUnwanted,
     });
 
     const imageInputs: string[] = [];
@@ -302,7 +304,7 @@ async function dispatchNextPage(
         prompt,
         ...(hasImageInputs ? { input_urls: imageInputs } : {}),
         aspect_ratio: mapKieAspectRatio(row.aspect_ratio || theme.aspect_ratio),
-        ...(!hasImageInputs ? { resolution: "1K" } : {}),
+        resolution: row.resolution === "2K" ? "2K" : "1K",
       },
     };
 
@@ -393,11 +395,36 @@ serve(async (req) => {
     }
     const row = rows[0];
     const formState = (row.form_state as Record<string, unknown> | null) ?? null;
-    const expectedToken = String(formState?.__callback_token__ ?? "").trim();
+    let expectedToken = String(formState?.__callback_token__ ?? "").trim();
+
+    // F12: pages 2+ store only the slim token; page 1 holds the full settings.
+    // If we're on a page 2+ row, fetch the page 1 form_state so we can also
+    // validate the token there (defense-in-depth) and reuse settings later.
+    if (!expectedToken && row.page_number > 1) {
+      const { data: page1Row } = await svc
+        .from("user_a4_documents")
+        .select("form_state")
+        .eq("batch_id", row.batch_id)
+        .eq("page_number", 1)
+        .maybeSingle();
+      const p1fs = (page1Row?.form_state as Record<string, unknown> | null) ?? null;
+      expectedToken = String(p1fs?.__callback_token__ ?? "").trim();
+    }
 
     if (!expectedToken || qToken !== expectedToken) {
       console.warn(`[a4-callback] invalid callback token for batch=${row.batch_id} page=${row.page_number}`);
       return ok();
+    }
+
+    // F9: Idempotency. If we already completed this row with the same Kie
+    // result URL (or any URL when none provided) just ack and exit so a Kie
+    // retry cannot re-download, re-upload, or re-dispatch downstream pages.
+    if (row.status === "completed" && row.image_url) {
+      const sameTask = result.imageUrl ? row.kie_raw_url === result.imageUrl : true;
+      if (sameTask) {
+        console.log(`[a4-callback] idempotent ack for already-completed page=${row.page_number} batch=${row.batch_id}`);
+        return ok();
+      }
     }
 
     const taskIdForLookup = result.taskId || row.kie_task_id || undefined;

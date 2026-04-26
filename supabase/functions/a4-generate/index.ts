@@ -24,6 +24,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { generateGemini, buildVisionContent } from "../_shared/gemini.ts";
 import { findTheme, maxPagesForTheme, themeRequiresPurpose } from "../_shared/a4-themes.ts";
 import {
+  buildNormalizedA4Content,
+  chooseA4Resolution,
+  type A4Resolution,
+} from "../_shared/a4-document-logic.ts";
+import {
   compileMasterPrompt,
   type A4CreativeSettings,
   type A4DesignSettings,
@@ -48,7 +53,9 @@ interface GenerateRequest {
   logo_data_url?: string | null; // base64 data URL uploaded from client
   logo_color_extract?: boolean;
   requested_pages?: "auto" | 1 | 2 | 3;
-  language_mode?: "en" | "ar" | "bilingual";
+  // "auto" (F11) means: let the backend detect from the content. The
+  // tri-state UI sends "en" | "ar" | "bilingual" | "auto".
+  language_mode?: "en" | "ar" | "bilingual" | "auto";
   design_settings?: A4DesignSettings | null;
   creative_settings?: A4CreativeSettings | null;
   // --- Prompt Engineer controls (new) --------------------------------------
@@ -62,10 +69,12 @@ interface GenerateRequest {
   // Role of the uploaded reference image. Drives the REFERENCE IMAGE ROLE
   // directive in the compiled prompt (portrait / logo / product / sample).
   reference_image_role?: A4ReferenceImageRole | null;
-  // Special short-circuit: when mode="expand" we only run Gemini idea-expansion
-  // and return { title, content } without touching the DB or Kie.
-  mode?: "generate" | "expand";
+  // Special short-circuits:
+  //   mode="expand" runs Gemini idea-expansion only (no DB writes, no Kie).
+  //   mode="retry_page" (F14) re-dispatches a single failed page row.
+  mode?: "generate" | "expand" | "retry_page";
   idea_text?: string; // only used with mode="expand"
+  row_id?: string; // only used with mode="retry_page"
 }
 
 const KIE_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
@@ -82,21 +91,38 @@ function json(status: number, body: unknown) {
 // -----------------------------------------------------------------------------
 // Upload logo data URL to a4-documents bucket
 // -----------------------------------------------------------------------------
+// F6: Server-side cap. The frontend caps at 5 MB but a direct API caller
+// could ship anything; reject before we decode + store.
+const LOGO_MAX_BYTES = 8 * 1024 * 1024;
+const LOGO_ALLOWED_MIME = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
 async function uploadLogoFromDataUrl(
   svc: any,
   userId: string,
   batchId: string,
   dataUrl: string,
-): Promise<{ signedUrl: string; storagePath: string } | null> {
+): Promise<{ signedUrl: string; storagePath: string } | { error: string } | null> {
   try {
     const m = dataUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
     if (!m) {
       console.warn("[a4-generate] logo data URL invalid");
-      return null;
+      return { error: "Logo must be an image data URL" };
     }
-    const mime = m[1];
+    const mime = m[1].toLowerCase();
+    if (!LOGO_ALLOWED_MIME.has(mime)) {
+      return { error: `Logo MIME ${mime} not allowed (jpeg/png/webp only)` };
+    }
     const b64 = m[2];
+    // Approximate decoded byte size from base64 length (avoids decoding huge
+    // payloads just to measure them).
+    const approxBytes = Math.floor(b64.length * 0.75);
+    if (approxBytes > LOGO_MAX_BYTES) {
+      return { error: `Logo too large (${Math.round(approxBytes / 1024 / 1024)} MB; max 8 MB)` };
+    }
     const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    if (bytes.byteLength > LOGO_MAX_BYTES) {
+      return { error: `Logo too large (${Math.round(bytes.byteLength / 1024 / 1024)} MB; max 8 MB)` };
+    }
     const ext = mime.split("/")[1] === "jpeg" ? "jpg" : mime.split("/")[1];
     const storagePath = `${userId}/${batchId}/logo.${ext}`;
     const { error: upErr } = await svc.storage
@@ -116,7 +142,7 @@ async function uploadLogoFromDataUrl(
     return { signedUrl: signed.signedUrl, storagePath };
   } catch (e) {
     console.error("[a4-generate] uploadLogoFromDataUrl error:", (e as Error).message);
-    return null;
+    return { error: (e as Error).message };
   }
 }
 
@@ -159,25 +185,6 @@ async function extractBrandColors(
 }
 
 // -----------------------------------------------------------------------------
-// Language detection — simple unicode scan, no AI.
-// -----------------------------------------------------------------------------
-function detectLanguage(text: string): "en" | "ar" | "bilingual" {
-  if (!text) return "en";
-  // Arabic unicode ranges: Arabic (0600-06FF), Arabic Supplement (0750-077F), Arabic Extended-A (08A0-08FF), Arabic Presentation Forms (FB50-FDFF, FE70-FEFF)
-  const arabicRe = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/g;
-  const latinRe = /[A-Za-z]/g;
-  const arabicCount = (text.match(arabicRe) ?? []).length;
-  const latinCount = (text.match(latinRe) ?? []).length;
-  if (arabicCount === 0) return "en";
-  if (latinCount === 0) return "ar";
-  // Both present: if one dominates heavily, pick it; otherwise bilingual.
-  const ratio = arabicCount / (arabicCount + latinCount);
-  if (ratio > 0.8) return "ar";
-  if (ratio < 0.2) return "en";
-  return "bilingual";
-}
-
-// -----------------------------------------------------------------------------
 // Content splitter — deterministic, paragraph-boundary split for multi-page.
 // -----------------------------------------------------------------------------
 function splitContentIntoPages(rawContent: string, pageCount: 1 | 2 | 3, perPageBudget: number): string[] {
@@ -205,18 +212,12 @@ function splitContentIntoPages(rawContent: string, pageCount: 1 | 2 | 3, perPage
   return buckets.length === 0 ? [trimmed] : buckets;
 }
 
+// F7: Kie's gpt-image-2 supports 2:3 and 3:2 directly. The earlier remap
+// (2:3 -> 3:4) silently distorted A4 output. Pass through every supported
+// ratio verbatim and only fall back to "auto" for unknown values.
 function mapKieAspectRatio(aspectRatio: string): string {
-  if (aspectRatio === "2:3") return "3:4";
-  if (aspectRatio === "3:2") return "4:3";
-  if (
-    aspectRatio === "1:1"
-    || aspectRatio === "3:4"
-    || aspectRatio === "4:3"
-    || aspectRatio === "9:16"
-    || aspectRatio === "16:9"
-  ) {
-    return aspectRatio;
-  }
+  const supported = new Set(["1:1", "2:3", "3:2", "3:4", "4:3", "9:16", "16:9"]);
+  if (supported.has(aspectRatio)) return aspectRatio;
   return "auto";
 }
 
@@ -242,6 +243,7 @@ async function dispatchKieTask(opts: {
   aspectRatio: string;
   callbackUrl: string;
   apiKey: string;
+  resolution: A4Resolution;
 }): Promise<{ taskId: string } | { error: string }> {
   try {
     const hasImageInputs = opts.imageInputs.length > 0;
@@ -252,7 +254,7 @@ async function dispatchKieTask(opts: {
         prompt: opts.prompt,
         ...(hasImageInputs ? { input_urls: opts.imageInputs } : {}),
         aspect_ratio: mapKieAspectRatio(opts.aspectRatio),
-        ...(!hasImageInputs ? { resolution: "1K" } : {}),
+        resolution: opts.resolution,
       },
     };
     const resp = await fetch(KIE_ENDPOINT, {
@@ -327,6 +329,29 @@ serve(async (req) => {
     return json(400, { success: false, error: "Invalid JSON body" });
   }
 
+  // F10: Per-user rate limit. Cap distinct batches in the trailing hour to
+  // protect Kie + Gemini cost. "expand" mode is also counted lightly because
+  // it triggers a Gemini call. Service role bypasses RLS so we can count
+  // accurately even though the user's JWT was used above.
+  if (body.mode !== "expand") {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { data: recent, error: rateErr } = await supabaseService
+      .from("user_a4_documents")
+      .select("batch_id", { count: "exact" })
+      .eq("user_id", user.id)
+      .gte("created_at", oneHourAgo);
+    if (!rateErr && Array.isArray(recent)) {
+      const distinctBatches = new Set(recent.map((r: any) => r.batch_id)).size;
+      const HOURLY_BATCH_CAP = 12;
+      if (distinctBatches >= HOURLY_BATCH_CAP) {
+        return json(429, {
+          success: false,
+          error: `Hourly limit reached (${HOURLY_BATCH_CAP} documents/hour). Please try again later.`,
+        });
+      }
+    }
+  }
+
   const theme = findTheme(body.theme_id);
   if (!theme) {
     return json(400, { success: false, error: `Unknown theme_id: ${body.theme_id}` });
@@ -360,6 +385,139 @@ serve(async (req) => {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // RETRY MODE (F14) — re-dispatch a single failed page row owned by the user.
+  // Does not create new rows. Reuses the stashed internals on page 1 for prompt
+  // compilation. For pages 2+, falls back to page 1's image as the style anchor
+  // when it is already completed; otherwise dispatches as a text-to-image task.
+  // ---------------------------------------------------------------------------
+  if (body.mode === "retry_page") {
+    const rowId = String(body.row_id ?? "").trim();
+    if (!rowId) return json(400, { success: false, error: "row_id is required" });
+
+    const { data: targetRow, error: rowErr } = await supabaseService
+      .from("user_a4_documents")
+      .select("*")
+      .eq("id", rowId)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (rowErr || !targetRow) {
+      return json(404, { success: false, error: "Row not found or not yours" });
+    }
+    if (targetRow.status !== "failed") {
+      return json(400, { success: false, error: `Cannot retry a row with status="${targetRow.status}"` });
+    }
+
+    // Load page 1 to recover full settings (slim rows for pages 2+ only carry the token).
+    const { data: page1Row } = await supabaseService
+      .from("user_a4_documents")
+      .select("*")
+      .eq("batch_id", targetRow.batch_id)
+      .eq("page_number", 1)
+      .maybeSingle();
+    const sourceFs = (page1Row?.form_state as Record<string, unknown> | null)
+      ?? (targetRow.form_state as Record<string, unknown> | null)
+      ?? {};
+
+    const stashedDesign = (sourceFs.__design_settings__ as A4DesignSettings | null) ?? null;
+    const stashedCreative = (sourceFs.__creative_settings__ as A4CreativeSettings | null) ?? null;
+    const stashedLang = sourceFs.__language_mode__;
+    const langForRetry: "en" | "ar" | "bilingual" =
+      stashedLang === "ar" || stashedLang === "bilingual" || stashedLang === "en"
+        ? stashedLang
+        : "en";
+    const splitPagesArr = Array.isArray(sourceFs.__split_pages__)
+      ? (sourceFs.__split_pages__ as string[])
+      : [];
+    const rawForRetry =
+      splitPagesArr[targetRow.page_number - 1]
+      ?? splitPagesArr[splitPagesArr.length - 1]
+      ?? String(sourceFs.raw_content ?? "");
+    const stashedRoleRaw = sourceFs.__reference_image_role__;
+    const roleForRetry: A4ReferenceImageRole =
+      stashedRoleRaw === "portrait" ||
+      stashedRoleRaw === "logo" ||
+      stashedRoleRaw === "product" ||
+      stashedRoleRaw === "sample" ||
+      stashedRoleRaw === "none"
+        ? stashedRoleRaw as A4ReferenceImageRole
+        : "logo";
+    const stashedWishes = typeof sourceFs.__user_wishes__ === "string"
+      ? (sourceFs.__user_wishes__ as string)
+      : null;
+    const decorWantedRetry = Array.isArray(sourceFs.__decor_wanted__)
+      ? (sourceFs.__decor_wanted__ as string[])
+      : [];
+    const decorUnwantedRetry = Array.isArray(sourceFs.__decor_unwanted__)
+      ? (sourceFs.__decor_unwanted__ as string[])
+      : [];
+    const callbackTokenRetry = String(sourceFs.__callback_token__ ?? "").trim();
+    if (!callbackTokenRetry) {
+      return json(500, { success: false, error: "Missing callback token; cannot retry safely" });
+    }
+
+    // Pull the logo URL from page 1 (stored there pre-success). Page 2+ rows
+    // store the page 1 image URL in reference_image_url after success.
+    const logoForRetry: string | null =
+      (page1Row?.reference_image_url as string | null) ?? null;
+    const page1ImageUrl: string | null =
+      targetRow.page_number > 1 ? ((page1Row?.image_url as string | null) ?? null) : null;
+
+    const compiled = compileMasterPrompt({
+      theme,
+      purposeId: targetRow.purpose_id ?? null,
+      formState: sourceFs,
+      rawContent: rawForRetry,
+      pageNumber: targetRow.page_number,
+      totalPages: targetRow.total_pages,
+      languageMode: langForRetry,
+      brandColors: null,
+      hasLogoReference: !!logoForRetry,
+      hasPrevPageReference: !!page1ImageUrl,
+      designSettings: stashedDesign,
+      creativeSettings: stashedCreative,
+      userWishes: stashedWishes,
+      referenceImageRole: roleForRetry,
+      decorationsWanted: decorWantedRetry,
+      decorationsUnwanted: decorUnwantedRetry,
+    });
+
+    const retryInputs: string[] = [];
+    if (logoForRetry) retryInputs.push(logoForRetry);
+    if (page1ImageUrl) retryInputs.push(page1ImageUrl);
+
+    const retryCallbackUrl = buildCallbackUrl(SUPABASE_URL, targetRow.batch_id, targetRow.page_number, callbackTokenRetry);
+    const retryDispatch = await dispatchKieTask({
+      prompt: compiled,
+      imageInputs: retryInputs,
+      aspectRatio: targetRow.aspect_ratio || theme.aspect_ratio,
+      callbackUrl: retryCallbackUrl,
+      apiKey: KIE_API_KEY,
+      resolution: targetRow.resolution === "2K" ? "2K" : "1K",
+    });
+    if ("error" in retryDispatch) {
+      return json(502, { success: false, error: `Kie retry dispatch failed: ${retryDispatch.error}` });
+    }
+    await supabaseService
+      .from("user_a4_documents")
+      .update({
+        kie_task_id: retryDispatch.taskId,
+        compiled_prompt: compiled,
+        status: "generating",
+        error_message: null,
+      })
+      .eq("id", targetRow.id);
+    return json(200, {
+      success: true,
+      batch_id: targetRow.batch_id,
+      total_pages: targetRow.total_pages,
+      detected_language: langForRetry,
+      brand_colors: null,
+      prompt_source: "deterministic",
+      notes: "retry dispatched",
+    });
+  }
+
   // Validate purpose chip if theme requires one
   const requiresPurpose = themeRequiresPurpose(theme);
   if (requiresPurpose) {
@@ -381,9 +539,6 @@ serve(async (req) => {
   const formState = designSettings
     ? { ...rawFormState, __design_settings__: designSettings }
     : rawFormState;
-  const rawContent = String((rawFormState as any).raw_content ?? "");
-  const languageMode: "en" | "ar" | "bilingual" =
-    body.language_mode === "ar" ? "ar" : body.language_mode === "bilingual" ? "bilingual" : "en";
   const requestedPages = body.requested_pages ?? "auto";
   const maxPages = maxPagesForTheme(theme);
 
@@ -423,21 +578,38 @@ serve(async (req) => {
       batchId,
       body.logo_data_url,
     );
-    if (uploaded) logoSignedUrl = uploaded.signedUrl;
+    if (uploaded && "error" in uploaded) {
+      // F6: surface size/MIME failures to the caller instead of silently
+      // dropping the logo — the user explicitly asked for it.
+      return json(400, { success: false, error: uploaded.error });
+    }
+    if (uploaded && "signedUrl" in uploaded) {
+      logoSignedUrl = uploaded.signedUrl;
+    }
 
     // Brand colors only make sense when the attachment is actually a logo.
     // If the user uploaded a portrait / product / sample, skip extraction so
     // we don't pull accent colors from skin tones or product photography.
-    if (body.logo_color_extract && referenceImageRole === "logo") {
+    if (body.logo_color_extract && referenceImageRole === "logo" && logoSignedUrl) {
       brandColors = await extractBrandColors(body.logo_data_url);
     }
   }
 
   // --- Direct pipeline: detect language + split content (no AI middleman) ----
-  // Honor explicit language_mode from the client; else detect from raw content.
-  const detectedLanguage: "en" | "ar" | "bilingual" = body.language_mode
-    ? languageMode
-    : detectLanguage(rawContent);
+  // F11: when the UI passes "auto" (or omits the field) we run the unicode
+  // detector on the actual content. Otherwise honor the explicit choice.
+  const explicit: "en" | "ar" | "bilingual" | null =
+    body.language_mode === "en" || body.language_mode === "ar" || body.language_mode === "bilingual"
+      ? body.language_mode
+      : null;
+  const normalized = buildNormalizedA4Content({
+    theme,
+    purposeId: body.purpose_id ?? null,
+    formState: rawFormState,
+    explicitLanguage: explicit,
+  });
+  const rawContent = normalized.content;
+  const detectedLanguage: "en" | "ar" | "bilingual" = normalized.detectedLanguage;
 
   // Decide page count: explicit requested_pages wins, otherwise auto-estimate
   // from content length against the theme's per-page budget.
@@ -455,6 +627,13 @@ serve(async (req) => {
   if (splitPages.length > 0 && splitPages.length < totalPages) {
     totalPages = splitPages.length as 1 | 2 | 3;
   }
+  const selectedResolution = chooseA4Resolution({
+    themeId: theme.id,
+    purposeId: body.purpose_id ?? null,
+    totalPages,
+    normalizedContent: rawContent,
+    formState: rawFormState,
+  });
 
   // Sanitize decoration chips (cap at max per side, trim, filter empty/dupes)
   const sanitizeChips = (arr: unknown): string[] => {
@@ -476,15 +655,29 @@ serve(async (req) => {
   const decorUnwanted = sanitizeChips(body.decorations_unwanted);
   const inputMode: A4InputMode = body.input_mode === "idea" ? "idea" : "content_ready";
 
+  // F13: Lightweight moderation log for free-text user wishes. Logged to
+  // edge-function logs only — not stored in DB — so abuse can be reviewed
+  // without exposing the raw text in user-readable surfaces. Truncated to
+  // keep logs manageable.
+  if (userWishes) {
+    const sample = userWishes.slice(0, 200).replace(/\s+/g, " ");
+    console.log(`[a4-generate] user_wishes user=${user.id} len=${userWishes.length} sample="${sample}"`);
+  }
+
   // Stash creative_settings + split pages inside form_state internal keys so
   // a4-callback can recompile pages 2+ without a schema change.
   const creativeSettings = body.creative_settings ?? null;
   const callbackToken = crypto.randomUUID();
-  const formStateWithInternals: Record<string, unknown> = {
+  // F12: Page 1 stores the FULL internals (split pages, settings, wishes,
+  // chips). Pages 2+ store only what their callback needs to validate the
+  // token and look up page 1 — no duplicated split text. The callback
+  // already fetches page 1's form_state for prompt compilation.
+  const fullInternals: Record<string, unknown> = {
     ...formState,
     __creative_settings__: creativeSettings,
     __split_pages__: splitPages,
     __language_mode__: detectedLanguage,
+    __resolution__: selectedResolution,
     __decor_wanted__: decorWanted,
     __decor_unwanted__: decorUnwanted,
     __input_mode__: inputMode,
@@ -492,6 +685,9 @@ serve(async (req) => {
     // NEW — stash so a4-callback can reuse when compiling pages 2+
     __user_wishes__: userWishes,
     __reference_image_role__: referenceImageRole,
+  };
+  const slimInternals: Record<string, unknown> = {
+    __callback_token__: callbackToken,
   };
 
   // --- Insert N placeholder rows ---------------------------------------------
@@ -509,11 +705,11 @@ serve(async (req) => {
       total_pages: totalPages,
       theme_id: theme.id,
       purpose_id: body.purpose_id ?? null,
-      form_state: formStateWithInternals,
+      form_state: i === 1 ? fullInternals : slimInternals,
       gemini_output: null,
       status: i === 1 ? "generating" : "queued",
       aspect_ratio: resolvedAspect,
-      resolution: "1K",
+      resolution: selectedResolution,
       title: titleForMeta,
       reference_image_url: null,
     });
@@ -554,6 +750,9 @@ serve(async (req) => {
     creativeSettings,
     userWishes,
     referenceImageRole,
+    // F1: forward user-picked decoration chips into the prompt.
+    decorationsWanted: decorWanted,
+    decorationsUnwanted: decorUnwanted,
   });
   const promptSource = "deterministic" as const;
 
@@ -565,6 +764,7 @@ serve(async (req) => {
     aspectRatio: resolvedAspect,
     callbackUrl,
     apiKey: KIE_API_KEY,
+    resolution: selectedResolution,
   });
 
   if ("error" in kieResult) {

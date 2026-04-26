@@ -23,6 +23,7 @@ import { useUnreadContext } from "@/contexts/UnreadContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
 import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
+import { getScopedStorageItem } from "@/utils/userScopedStorage";
 
 export function TabletHeader() {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
@@ -78,7 +79,7 @@ export function TabletHeader() {
     ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl.trim()) : undefined)
     : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url.trim()) : undefined);
   
-  const isHomescreenMode = (localStorage.getItem('wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
+  const isHomescreenMode = (getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
 
   // Define menu items with icons
   const menuItems = [
