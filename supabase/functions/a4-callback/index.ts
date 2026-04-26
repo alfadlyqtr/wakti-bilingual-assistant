@@ -256,7 +256,7 @@ async function dispatchNextPage(
       stashedRole === "sample" ||
       stashedRole === "none"
         ? (stashedRole as A4ReferenceImageRole)
-        : "logo";
+        : "none";
 
     // Forward decoration chips picked by the user so pages 2+ honour them too.
     const decorWanted = Array.isArray(formStateForPrompt.__decor_wanted__)

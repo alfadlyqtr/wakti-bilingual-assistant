@@ -9,18 +9,18 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
 };
 
- interface SunoTrack {
-   id: string;
-   audioUrl: string;
-   streamAudioUrl?: string;
-   imageUrl?: string;
-   prompt?: string;
-   modelName?: string;
-   title?: string;
-   tags?: string;
-   createTime?: string | number;
-   duration?: number;
- }
+interface SunoTrack {
+  id: string;
+  audioUrl: string;
+  streamAudioUrl?: string;
+  imageUrl?: string;
+  prompt?: string;
+  modelName?: string;
+  title?: string;
+  tags?: string;
+  createTime?: string | number;
+  duration?: number;
+}
 
 function getModelLimits(model: string) {
   if (model === "V4") {
@@ -28,6 +28,71 @@ function getModelLimits(model: string) {
   }
 
   return { prompt: 5000, style: 1000 };
+}
+
+const GCC_STYLE_MARKERS = /\b(khaleeji|kuwaiti|qatari|saudi|emirati|bahraini|omani|gulf|sheilat|samri|ardah|liwa|jalsa|mawwal)\b/i;
+const GCC_LANGUAGE_TAG = "[Language: Khaleeji Arabic / Gulf Arabic / ar-KW ar-QA ar-SA]";
+const GCC_NEGATIVE_TOKENS = [
+  "egyptian",
+  "levantine",
+  "maghrebi",
+  "standard arabic",
+  "fusha",
+  "msa",
+  "lebanese",
+  "syrian",
+  "iraqi",
+  "non-gulf",
+  "non-khaleeji",
+  "generic arabic pop",
+  "quranic recitation",
+  "news anchor delivery",
+  "mispronounced",
+];
+
+function buildGccPersonaLine(vocalGender?: "m" | "f"): string {
+  if (vocalGender === "f") {
+    return "[Vocal persona: seasoned Khaleeji female singer, warm Gulf accent, refined jalsa phrasing, expressive breathy entries, controlled melisma, no MSA pronunciation]";
+  }
+
+  if (vocalGender === "m") {
+    return "[Vocal persona: seasoned Khaleeji male singer, warm Gulf accent, textured chest voice, refined jalsa phrasing, controlled mawwal, no MSA pronunciation]";
+  }
+
+  return "[Vocal persona: seasoned Khaleeji vocalist, warm Gulf accent, refined jalsa phrasing, controlled mawwal, no MSA pronunciation]";
+}
+
+function fitCommaSeparatedTokens(tokens: string[], maxLength: number): string {
+  let out = "";
+
+  for (const token of tokens) {
+    const clean = token.trim();
+    if (!clean) continue;
+    const next = out ? `${out}, ${clean}` : clean;
+    if (next.length > maxLength) break;
+    out = next;
+  }
+
+  return out;
+}
+
+function buildGccNegativeTags(): string {
+  return fitCommaSeparatedTokens(GCC_NEGATIVE_TOKENS, 200);
+}
+
+function applyGccPromptShaping(prompt: string, vocalGender?: "m" | "f"): string {
+  const trimmed = prompt.trim();
+  if (!trimmed) return trimmed;
+
+  const prefix: string[] = [];
+  if (!trimmed.includes(GCC_LANGUAGE_TAG)) {
+    prefix.push(GCC_LANGUAGE_TAG);
+  }
+  if (!trimmed.includes("[Vocal persona:")) {
+    prefix.push(buildGccPersonaLine(vocalGender));
+  }
+
+  return prefix.length > 0 ? `${prefix.join("\n")}\n${trimmed}` : trimmed;
 }
 
 serve(async (req) => {
@@ -97,6 +162,11 @@ serve(async (req) => {
     const personaModel = (body?.personaModel || "").toString().trim();
     const durationHint = typeof body?.duration_seconds === "number" ? body.duration_seconds : null;
     const { prompt: promptLimit, style: styleLimit } = getModelLimits(model);
+    const isGccEffective = GCC_STYLE_MARKERS.test(style);
+    const effectivePrompt = !instrumental && isGccEffective ? applyGccPromptShaping(prompt, vocalGender) : prompt;
+    const effectiveNegativeTags = isGccEffective ? buildGccNegativeTags() : negativeTags;
+    const effectiveWeirdnessConstraint = isGccEffective ? 0.55 : weirdnessConstraint;
+    const effectiveAudioWeight = isGccEffective ? 0.65 : audioWeight;
 
     if (title.length > 80) {
       throw new Error("Title exceeds 80 characters");
@@ -107,10 +177,10 @@ serve(async (req) => {
         throw new Error(`Style exceeds ${styleLimit} characters for model ${model}`);
       }
 
-      if (!instrumental && prompt.length > promptLimit) {
+      if (!instrumental && effectivePrompt.length > promptLimit) {
         throw new Error(`Prompt exceeds ${promptLimit} characters for model ${model}`);
       }
-    } else if (prompt.length > 500) {
+    } else if (effectivePrompt.length > 500) {
       throw new Error("Non-custom mode prompt exceeds 500 characters");
     }
 
@@ -122,14 +192,14 @@ serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (!instrumental && (!style || !title || !prompt)) {
-        console.error("[music-generate] Validation failed: lyrical missing fields", { style: !!style, title: !!title, prompt: !!prompt });
+      if (!instrumental && (!style || !title || !effectivePrompt)) {
+        console.error("[music-generate] Validation failed: lyrical missing fields", { style: !!style, title: !!title, prompt: !!effectivePrompt });
         return new Response(JSON.stringify({ error: "Custom lyrical mode requires style, title, and prompt (lyrics)" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     } else {
-      if (!prompt) {
+      if (!effectivePrompt) {
         return new Response(JSON.stringify({ error: "Non-custom mode requires prompt" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -145,24 +215,24 @@ serve(async (req) => {
       callBackUrl: CALLBACK_URL,
     };
 
-    if (!instrumental && prompt) {
-      kiePayload.prompt = prompt;
+    if (!instrumental && effectivePrompt) {
+      kiePayload.prompt = effectivePrompt;
     }
 
     if (customMode) {
       kiePayload.style = style;
       kiePayload.title = title;
       if (durationHint) kiePayload.duration = Math.round(durationHint);
-      if (negativeTags) kiePayload.negativeTags = negativeTags;
+      if (effectiveNegativeTags) kiePayload.negativeTags = effectiveNegativeTags;
       if (vocalGender && !instrumental) kiePayload.vocalGender = vocalGender;
       if (styleWeight !== undefined) kiePayload.styleWeight = styleWeight;
-      if (weirdnessConstraint !== undefined) kiePayload.weirdnessConstraint = weirdnessConstraint;
-      if (audioWeight !== undefined) kiePayload.audioWeight = audioWeight;
+      if (effectiveWeirdnessConstraint !== undefined) kiePayload.weirdnessConstraint = effectiveWeirdnessConstraint;
+      if (effectiveAudioWeight !== undefined) kiePayload.audioWeight = effectiveAudioWeight;
       if (personaId) kiePayload.personaId = personaId;
       if (personaModel) kiePayload.personaModel = personaModel;
     }
 
-    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, styleLen: style.length, promptLen: prompt.length });
+    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, styleLen: style.length, promptLen: effectivePrompt.length });
     console.log("[music-generate] KIE payload keys:", Object.keys(kiePayload));
 
     const kieResp = await fetch("https://api.kie.ai/api/v1/generate", {
@@ -201,14 +271,14 @@ serve(async (req) => {
     // Audit payload stored inside meta JSONB (no separate column needed)
     const requestPayload: Record<string, unknown> = {
       customMode, instrumental, model,
-      prompt: prompt || null,
+      prompt: effectivePrompt || null,
       style: style || null,
       title: title || null,
-      negativeTags: negativeTags || null,
+      negativeTags: effectiveNegativeTags || null,
       vocalGender: vocalGender || null,
       styleWeight: styleWeight ?? null,
-      weirdnessConstraint: weirdnessConstraint ?? null,
-      audioWeight: audioWeight ?? null,
+      weirdnessConstraint: effectiveWeirdnessConstraint ?? null,
+      audioWeight: effectiveAudioWeight ?? null,
       duration_seconds: durationHint,
     };
 
@@ -221,7 +291,7 @@ serve(async (req) => {
           user_id: user.id,
           task_id: taskId,
           title: title || null,
-          prompt: prompt || null,
+          prompt: effectivePrompt || null,
           include_styles: style ? [style] : null,
           requested_duration_seconds: durationHint ? Math.round(durationHint) : null,
           provider: "kie",
@@ -236,7 +306,7 @@ serve(async (req) => {
             customMode,
             instrumental,
             style: style || null,
-            negativeTags: negativeTags || null,
+            negativeTags: effectiveNegativeTags || null,
             vocalGender: vocalGender || null,
             request_payload: requestPayload,
           },

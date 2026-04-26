@@ -1888,7 +1888,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               const { data: { session } } = await supabase.auth.getSession();
               if (!session?.access_token) throw new Error('Not authenticated');
 
-              const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/freepik-image2video`, {
+              const visualAdsRemoteUrls = validImages.filter((image) => typeof image === 'string' && !image.startsWith('data:image/'));
+              const visualAdsDataUris = validImages.filter((image) => typeof image === 'string' && image.startsWith('data:image/'));
+              const visualAdsFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/freepik-visual-ads`;
+
+              const res = await fetch(visualAdsFunctionUrl, {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
@@ -1896,8 +1900,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 },
                 body: JSON.stringify({
                   mode: 'async',
+                  action: 'create',
                   generation_type: 'visual_ads',
+                  generationMode: 'visual_ads',
                   images: validImages,
+                  input_urls: visualAdsRemoteUrls,
+                  uploaded_images: visualAdsDataUris,
                   prompt: finalPromptForKie,
                   visual_ads_spec: visualAdsSpec,
                   aspect_ratio: visualState.campaignDNA.platform,
@@ -1970,8 +1978,44 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                         .eq('task_id', taskId)
                         .maybeSingle();
                       if (data) handleRow(data as any);
+                      if (data?.status === 'COMPLETED' || data?.status === 'FAILED') return;
+
+                      const statusRes = await fetch(visualAdsFunctionUrl, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          'Authorization': `Bearer ${session.access_token}`,
+                        },
+                        body: JSON.stringify({
+                          mode: 'status',
+                          generation_type: 'visual_ads',
+                          task_id: taskId,
+                        }),
+                      });
+                      if (!statusRes.ok) return;
+
+                      const statusPayload = await statusRes.json().catch(() => null);
+                      const statusData = statusPayload?.data;
+                      if (statusData?.status === 'COMPLETED') {
+                        const generatedUrls = Array.isArray(statusData.generated)
+                          ? statusData.generated.filter((url: unknown): url is string => typeof url === 'string' && url.length > 0)
+                          : [];
+                        const finalUrl = generatedUrls[0] || (typeof statusData.video?.url === 'string' ? statusData.video.url : null);
+                        if (finalUrl) {
+                          settle(() => {
+                            stopProgress();
+                            setResultImageUrl(finalUrl);
+                            setResultUrls(generatedUrls.length ? generatedUrls : [finalUrl]);
+                            setIsSaved(false);
+                            setSavedBucketUrl(null);
+                            setSavedSourceUrl(null);
+                            resolve();
+                          });
+                        }
+                      } else if (statusData?.status === 'FAILED') {
+                        settle(() => reject(new Error(statusData.error || 'Ad generation failed')));
+                      }
                     } catch (e) {
-                      // ignore polling errors
                     }
                   }, 10000); // Poll every 10 seconds
 

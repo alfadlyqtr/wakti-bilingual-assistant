@@ -302,20 +302,6 @@ function normalizeVisualAdsSpec(raw: unknown, legacyPrompt: string): VisualAdsSp
   };
 }
 
-function dedupeStrings(values: Array<string | null | undefined>): string[] {
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of values) {
-    const normalized = (value || "").trim();
-    if (!normalized) continue;
-    const key = normalized.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    result.push(normalized);
-  }
-  return result;
-}
-
 function humanizeToken(value: string): string {
   return value.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
 }
@@ -326,12 +312,6 @@ function startCase(value: string): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
-}
-
-function ensureSentence(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 
 function getSourceKey(asset: VisualAdsSpecAsset, index: number): string {
@@ -365,127 +345,184 @@ function getRolePurpose(spec: VisualAdsSpec, asset: VisualAdsSpecAsset, sourceKe
   return null;
 }
 
-function findAsset(spec: VisualAdsSpec, role: string): { asset: VisualAdsSpecAsset; index: number } | null {
-  const assets = spec.assets || [];
-  const index = assets.findIndex((asset) => (asset.role || "").toLowerCase() === role);
-  if (index === -1) return null;
-  return { asset: assets[index], index };
-}
-
-function getAllowedText(spec: VisualAdsSpec): string[] {
-  return dedupeStrings([
-    ...(spec.text_policy?.allowed_text || []),
-    ...(spec.campaign?.feature_chips || []),
-    ...(spec.text_policy?.allowed_feature_labels || []),
-  ]);
+function getDeviceMockupLabel(device: string | null | undefined): string {
+  switch ((device || "iphone").toLowerCase()) {
+    case "samsung": return "realistic Samsung Galaxy device mockup";
+    case "laptop": return "realistic laptop mockup";
+    case "tablet": return "realistic tablet mockup";
+    case "monitor-tv": return "realistic monitor / TV display mockup";
+    case "billboard": return "realistic outdoor billboard mockup";
+    case "iphone":
+    default: return "realistic iPhone device mockup";
+  }
 }
 
 function buildVisualAdsPromptTemplate(spec: VisualAdsSpec): VisualAdsPromptTemplate {
+  const ratio = spec.aspect_ratio || "9:16";
   const assets = spec.assets || [];
-  const allowedText = getAllowedText(spec);
-  const screenshot = findAsset(spec, "screenshot");
-  const background = findAsset(spec, "background");
-  const logo = findAsset(spec, "logo");
-  const person = findAsset(spec, "person");
-  const product = findAsset(spec, "product");
 
-  const campaignDirection = dedupeStrings([
-    spec.campaign?.main_message_prompt || null,
-    spec.campaign?.main_message_detail_prompt || null,
-    spec.campaign?.main_message_custom_text || null,
-  ]);
-  const styleDirection = dedupeStrings([
-    spec.style?.primary_style_prompt || null,
-    spec.style?.style_detail_prompt || null,
-    spec.style?.primary_style_custom_text || null,
-  ]);
-
-  const promptLines = [
-    `Create a high-end ${spec.aspect_ratio || "9:16"} premium advertising poster with a unified, cinematic composition.`,
-    ...campaignDirection.length
-      ? [`Build the poster around this campaign direction: ${campaignDirection.map((item) => item.replace(/[.!?]+$/g, "")).join(" ")}.`]
-      : [],
-    ...(spec.objective ? [`Business objective: ${ensureSentence(spec.objective)}`] : []),
+  // ---------- Section 1: opening + campaign direction + variant ----------
+  const promptLines: string[] = [
+    `Create a high-end ${ratio} premium advertising poster with a unified, cinematic composition.`,
   ];
+  const campaignText = (spec.campaign?.main_message_custom_text || spec.campaign?.main_message_prompt || "").trim();
+  if (campaignText) {
+    promptLines.push(`Build the poster around this campaign direction: ${campaignText.replace(/[.!?]+$/g, "")}.`);
+  }
+  const variantText = (spec.campaign?.main_message_detail_prompt || "").trim();
+  if (variantText) {
+    promptLines.push(variantText);
+  }
 
+  // ---------- Section 2: role assignments ----------
   const roleAssignments = assets.map((asset, index) => {
     const sourceKey = getSourceKey(asset, index);
     const roleLabel = getRoleLabel(asset);
-    const rolePurpose = getRolePurpose(spec, asset, sourceKey);
-    return `${sourceKey} → ${roleLabel}${rolePurpose ? ` (${rolePurpose})` : ""}`;
+    const purpose = getRolePurpose(spec, asset, sourceKey) || "Supporting Element";
+    return `${sourceKey} → ${roleLabel} (${purpose})`;
   });
 
-  const compositionLines = dedupeStrings([
-    ...(screenshot ? [
-      `Place the app screenshot (${getSourceKey(screenshot.asset, screenshot.index)}) inside a realistic ${startCase(screenshot.asset.screenshot_device || "iphone")} device mockup, centered or slightly dominant in the frame.`,
-      `The screenshot must remain 100% unchanged and readable with no UI edits, no distortion, and no fake redesign.`,
-    ] : []),
-    ...(background ? [
-      `Use ${getSourceKey(background.asset, background.index)} as the full background foundation, preserving its identity while enhancing it with cinematic color grading, depth of field, and soft lighting effects.`,
-    ] : []),
-    ...(logo ? [
-      `Integrate the logo (${getSourceKey(logo.asset, logo.index)}) naturally into the composition, preferably in a clean top or bottom placement, keeping it exactly as provided with no redesign, no recolor, and no distortion.`,
-    ] : []),
-    ...(person ? [
-      person.asset.person_mode === "reference"
-        ? `Use the person in ${getSourceKey(person.asset, person.index)} as the identity reference and keep the final subject realistic, faithful, and recognizable.`
-        : `Keep the real person from ${getSourceKey(person.asset, person.index)} as the same exact subject in the final composition, preserving identity, face, skin tone, and realism.`,
-    ] : []),
-    ...(product && !screenshot ? [
-      `Make ${getSourceKey(product.asset, product.index)} the hero product element with premium scale, clean lighting, and polished presentation.`,
-    ] : []),
-    ...(allowedText.length ? [`If approved text is used in the poster, present it as clean callouts, quote bubbles, premium cards, or polished text placements with strong readability.`] : []),
-    ...(spec.composition?.layout_type ? [`Use a ${humanizeToken(spec.composition.layout_type)} layout with clear advertising hierarchy and strong visual balance.`] : []),
-    ...(spec.composition?.must_feel_unified ? [`The entire poster must feel like one cohesive premium composition, not a messy collage.`] : []),
-  ]);
+  // ---------- Section 3: composition per asset ----------
+  const compositionLines: string[] = [];
+  const featureChips = (spec.campaign?.feature_chips || []).filter((s) => Boolean((s || "").trim()));
+  const hasScreenshot = assets.some((a) => (a.role || "").toLowerCase() === "screenshot");
 
-  const styleLines = dedupeStrings([
-    ...styleDirection,
-    ...(styleDirection.length ? [] : ["Premium polished advertising quality", "Clean visual hierarchy", "Luxury-level production finish"]),
-  ]).map((item) => item.replace(/[.!?]+$/g, ""));
+  for (let i = 0; i < assets.length; i++) {
+    const asset = assets[i];
+    const sourceKey = getSourceKey(asset, i);
+    const role = (asset.role || "").toLowerCase();
 
-  const ctaText = spec.campaign?.cta_text || spec.text_policy?.allowed_text?.[0] || null;
-  const callToActionLines = ctaText
-    ? [`Display "${ctaText}" clearly and prominently as the main call to action.`]
-    : ["Keep the call to action clear, premium, and visually intentional."];
+    if (role === "screenshot") {
+      compositionLines.push(`Place the app screenshot (${sourceKey}) inside a ${getDeviceMockupLabel(asset.screenshot_device)}, centered or slightly dominant in the frame.`);
+      compositionLines.push(`The screenshot must remain 100% unchanged and readable with no UI edits, no distortion, and no fake redesign.`);
+    } else if (role === "background") {
+      compositionLines.push(`Use ${sourceKey} as the actual full-scene background foundation of the final poster, preserving its identity while enhancing it with cinematic color grading, depth of field, and soft lighting.`);
+      compositionLines.push(`Composite the other uploaded assets into ${sourceKey}. Do not let any non-background upload replace this scene or become the main backdrop.`);
+    } else if (role === "logo") {
+      if ((asset.logo_mode || "").toLowerCase() === "transparent") {
+        compositionLines.push(`Integrate the logo (${sourceKey}) as a clean transparent flat logo, preserving its exact shape and original colors, with no background, no box, no card, no drop shadow, and no halo around it.`);
+      } else {
+        compositionLines.push(`Integrate the logo (${sourceKey}) naturally into the composition, preferably in a clean top or bottom placement, keeping it exactly as provided with no redesign, no recolor, and no distortion.`);
+      }
+    } else if (role === "person") {
+      const personMode = (asset.person_mode || "exact").toLowerCase();
+      if (personMode === "reference") {
+        if ((asset.reference_style || "realistic").toLowerCase() === "character") {
+          compositionLines.push(`Use the person in ${sourceKey} as a reference and turn them into a styled character that still resembles them.`);
+        } else {
+          compositionLines.push(`Use the person in ${sourceKey} as the identity reference for a realistic human subject in the final composition.`);
+        }
+      } else {
+        const pose = (asset.pose_mode || "same-pose").toLowerCase();
+        if (pose === "upper-body") {
+          compositionLines.push(`Use the exact same real individual from ${sourceKey} in a clear upper-body framing so the face stays large, readable, and unmistakable. Do not change the facial identity or swap them for a different-looking person.`);
+        } else if (pose === "adapted-pose") {
+          compositionLines.push(`Use the exact same real individual from ${sourceKey}, preserving face, skin tone, body type, hair, and overall identity exactly.`);
+          compositionLines.push(`This is an explicit new-pose request for ${sourceKey}: create a clearly different natural pose for the final poster while keeping the exact same real person. Change the pose only, never the identity.`);
+        } else {
+          compositionLines.push(`Use the exact same real individual from ${sourceKey}, not a similar-looking or upgraded version. Keep the closest possible pose and framing to the original. Do not reinterpret, beautify, or substitute the face.`);
+        }
+      }
+    } else if (role === "product") {
+      if (hasScreenshot) {
+        compositionLines.push(`Place ${sourceKey} as a complementary product element supporting the screenshot.`);
+      } else {
+        compositionLines.push(`Make ${sourceKey} the hero product element with premium scale, clean lighting, and polished presentation.`);
+      }
+    } else if (role === "icon") {
+      compositionLines.push(`Place ${sourceKey} as a clean supporting icon, preserving its exact shape and colors.`);
+    } else if (role === "prop") {
+      compositionLines.push(`Use ${sourceKey} as a supporting prop that complements the main subject without competing with it.`);
+    } else if (role === "mascot") {
+      compositionLines.push(`Feature the mascot from ${sourceKey} as a friendly recognizable character, preserving its identity exactly.`);
+    } else if (role === "texture") {
+      compositionLines.push(`Use ${sourceKey} as a subtle textural layer that adds depth without overpowering the main subjects.`);
+    } else if (role === "illustration") {
+      compositionLines.push(`Integrate the illustration from ${sourceKey} faithfully, preserving its style, colors, and shapes.`);
+    } else if (asset.custom_role) {
+      compositionLines.push(`Use ${sourceKey} as a ${asset.custom_role} element integrated naturally into the composition.`);
+    } else {
+      compositionLines.push(`Use ${sourceKey} as a supporting element integrated naturally into the composition.`);
+    }
+  }
 
-  const strictRules = dedupeStrings([
-    spec.hard_constraints?.allow_invented_text === false || allowedText.length
-      ? "Do NOT add any extra text beyond the allowed phrases."
-      : null,
-    spec.hard_constraints?.allow_invented_names === false || spec.text_policy?.allow_generated_headline === false || spec.text_policy?.allow_generated_tagline === false
-      ? "Do NOT invent names, headlines, or taglines."
-      : null,
-    spec.hard_constraints?.allow_invented_testimonials === false || spec.text_policy?.allow_generated_testimonials === false || spec.text_policy?.allow_generated_social_proof_copy === false
-      ? "Do NOT invent testimonials, ratings, or social proof copy."
-      : null,
-    spec.hard_constraints?.must_preserve_screenshot_fidelity
-      ? "Do NOT modify the screenshot UI."
-      : null,
-    spec.hard_constraints?.must_preserve_logo_fidelity
-      ? "Do NOT alter the logo."
-      : null,
-    spec.hard_constraints?.must_preserve_background_identity
-      ? "Do NOT change the core identity of the background."
-      : null,
-    spec.hard_constraints?.must_preserve_exact_person_identity
-      ? "Do NOT replace the real person with a different face, body, or identity."
-      : null,
-    spec.campaign?.require_exact_feature_chips && (spec.campaign.feature_chips || []).length
-      ? "Use the approved key points exactly as written without renaming, paraphrasing, or substituting them."
-      : null,
-    spec.composition?.face_must_remain_visible
-      ? "Keep the face clearly visible in the final composition."
-      : null,
-    spec.composition?.device_must_not_block_face
-      ? "The device mockup must not block the face."
-      : null,
-    "Keep everything sharp, high-resolution, realistic, and production-ready.",
-  ]);
+  if (featureChips.length > 0) {
+    compositionLines.push(`Add subtle floating testimonial-style quote bubbles or premium feature cards around the main subject to create a sense of social proof.`);
+  }
 
+  // ---------- Section 4: allowed text (CTA first, then feature chips, verbatim) ----------
+  const allowedText: string[] = [];
+  const ctaText = (spec.campaign?.cta_text || "").trim();
+  if (ctaText) allowedText.push(ctaText);
+  for (const chip of featureChips) {
+    const trimmed = chip.trim();
+    if (trimmed && !allowedText.includes(trimmed)) allowedText.push(trimmed);
+  }
+
+  // ---------- Section 5: style + variant (split style on commas to bullets) ----------
+  const styleLines: string[] = [];
+  const styleText = (spec.style?.primary_style_custom_text || spec.style?.primary_style_prompt || "").trim();
+  if (styleText) {
+    const parts = styleText.split(",").map((s) => s.trim()).filter(Boolean);
+    for (const p of parts) {
+      const cleaned = p.replace(/[.!?]+$/g, "");
+      styleLines.push(cleaned.charAt(0).toUpperCase() + cleaned.slice(1));
+    }
+  }
+  const styleVariantText = (spec.style?.style_detail_prompt || "").trim();
+  if (styleVariantText) {
+    styleLines.push(styleVariantText);
+  }
+  if (styleLines.length === 0) {
+    styleLines.push("Premium polished advertising quality");
+    styleLines.push("Clean visual hierarchy");
+    styleLines.push("Luxury-level production finish");
+  }
+
+  // ---------- Section 6: CTA (only if CTA picked) ----------
+  const callToActionLines: string[] = [];
+  if (ctaText) {
+    callToActionLines.push(`Display "${ctaText}" clearly and prominently as the main call to action (button or highlighted text).`);
+  }
+
+  // ---------- Section 7: strict rules ----------
+  const hasLogo = assets.some((a) => (a.role || "").toLowerCase() === "logo");
+  const hasTransparentLogo = assets.some((a) => (a.role || "").toLowerCase() === "logo" && (a.logo_mode || "").toLowerCase() === "transparent");
+  const hasBackground = assets.some((a) => (a.role || "").toLowerCase() === "background");
+  const hasPerson = assets.some((a) => (a.role || "").toLowerCase() === "person");
+  const hasExactPerson = assets.some((a) => (a.role || "").toLowerCase() === "person" && (a.person_mode || "exact").toLowerCase() !== "reference");
+  const hasNewPosePerson = assets.some((a) => (a.role || "").toLowerCase() === "person" && (a.person_mode || "exact").toLowerCase() !== "reference" && (a.pose_mode || "same-pose").toLowerCase() === "adapted-pose");
+
+  const strictRules: string[] = [
+    "Do NOT add any extra text beyond the allowed phrases listed above.",
+    "Do NOT invent names, headlines, taglines, or brand copy.",
+    "Do NOT invent testimonials, ratings, reviews, or social proof copy.",
+  ];
+  if (hasScreenshot) strictRules.push("Do NOT modify the screenshot UI.");
+  if (hasLogo) strictRules.push("Do NOT alter the logo.");
+  if (hasTransparentLogo) {
+    strictRules.push("Do NOT place the logo inside a background box, card, frame, or shape — it must stay transparent and flat.");
+    strictRules.push("Do NOT add shadows, glow, halo, or 3D effects behind the logo.");
+  }
+  if (hasBackground) {
+    strictRules.push("Do NOT change the core identity of the background.");
+    strictRules.push("The approved background image must remain the real base scene of the poster. Do NOT swap it for a different location, room, skyline, texture, or backdrop.");
+    strictRules.push("Do NOT keep or import the original background from non-background uploads into the final scene unless that upload was explicitly tagged as Background.");
+  }
+  if (hasExactPerson) strictRules.push("Do NOT replace the real person with a different face, body, or identity.");
+  if (hasNewPosePerson) strictRules.push("For any person tagged as New pose, you must create a clearly new pose while preserving the exact same real person. Do NOT keep the original pose if the brief asks for a new one.");
+  if (featureChips.length > 0) {
+    strictRules.push("Use the approved key points exactly as written without renaming, paraphrasing, or substituting them.");
+  }
+  if (hasPerson && hasScreenshot) {
+    strictRules.push("Keep the face clearly visible. The device mockup must not block the face.");
+  }
+  strictRules.push("Keep everything sharp, high-resolution, realistic, and production-ready.");
+
+  // ---------- Section 8: output ----------
   const outputLines = [
     "One single cohesive poster",
-    `Aspect ratio: ${spec.aspect_ratio || "9:16"}`,
+    `Aspect ratio: ${ratio}`,
     "Ultra clean, premium, production-ready quality",
   ];
 
@@ -502,49 +539,70 @@ function buildVisualAdsPromptTemplate(spec: VisualAdsSpec): VisualAdsPromptTempl
 }
 
 function buildVisualAdsPromptText(template: VisualAdsPromptTemplate): string {
-  return [
-    "Prompt:",
-    "",
-    ...template.prompt,
-    "",
-    "Use the provided images with strict role assignment:",
-    "",
-    ...template.role_assignments,
-    "",
-    "Composition & Layout:",
-    "",
-    ...template.composition_and_layout,
-    "",
-    "Allowed Text ONLY:",
-    "",
-    ...(template.allowed_text.length
-      ? template.allowed_text.map((item) => `\"${item}\"`)
-      : ["No extra on-poster text beyond what is already approved in the brief."]),
-    "",
-    "Style & Mood:",
-    "",
-    ...template.style_and_mood,
-    "",
-    "Call to Action:",
-    "",
-    ...template.call_to_action,
-    "",
-    "Strict Rules:",
-    "",
-    ...template.strict_rules,
-    "",
-    "Output:",
-    "",
-    ...template.output,
-  ].join("\n").trim();
+  const lines: string[] = [];
+
+  // Section 1: opening (no "Prompt:" header — matches the gold-standard example)
+  for (const line of template.prompt) lines.push(line);
+  lines.push("");
+
+  // Section 2: role assignments
+  lines.push("Use the provided images with strict role assignment:");
+  lines.push("");
+  for (const line of template.role_assignments) lines.push(line);
+  lines.push("");
+
+  // Section 3: composition & layout
+  lines.push("Composition & Layout:");
+  lines.push("");
+  for (const line of template.composition_and_layout) lines.push(line);
+  lines.push("");
+
+  // Section 4: allowed text
+  lines.push("Allowed Text ONLY:");
+  lines.push("");
+  if (template.allowed_text.length) {
+    for (const item of template.allowed_text) lines.push(`"${item}"`);
+  } else {
+    lines.push("No extra on-poster text beyond what is already approved in the brief.");
+  }
+  lines.push("");
+
+  // Section 5: style & mood
+  lines.push("Style & Mood:");
+  lines.push("");
+  for (const line of template.style_and_mood) lines.push(line);
+  lines.push("");
+
+  // Section 6: call to action (skip entirely if no CTA)
+  if (template.call_to_action.length > 0) {
+    lines.push("Call to Action:");
+    lines.push("");
+    for (const line of template.call_to_action) lines.push(line);
+    lines.push("");
+  }
+
+  // Section 7: strict rules
+  lines.push("Strict Rules:");
+  lines.push("");
+  for (const line of template.strict_rules) lines.push(line);
+  lines.push("");
+
+  // Section 8: output
+  lines.push("Output:");
+  lines.push("");
+  for (const line of template.output) lines.push(line);
+
+  return lines.join("\n").trim();
 }
 
 function compileVisualAdsPrompt(rawSpec: unknown, legacyPrompt: string): VisualAdsCompiledPrompt {
   const spec = normalizeVisualAdsSpec(rawSpec, legacyPrompt);
   const template = buildVisualAdsPromptTemplate(spec);
+  const finalPrompt = buildVisualAdsPromptText(template);
   console.log(`[kie-visual-ads] Prompt engineer source: ${VISUAL_ADS_PROMPT_ENGINEER_SOURCE}`);
+  console.log(`[kie-visual-ads] Final prompt:\n${finalPrompt}`);
   return {
-    final_prompt: buildVisualAdsPromptText(template),
+    final_prompt: finalPrompt,
     source: VISUAL_ADS_PROMPT_ENGINEER_SOURCE,
   };
 }
@@ -672,8 +730,10 @@ async function createVideoTask(
 
   const input: Record<string, unknown> = isTwoImages
     ? {
-        // Seedance API: uses input_urls, supports resolution/fixed_lens/generate_audio
+        // Seedance API: uses input_urls, supports resolution/fixed_lens/generate_audio.
+        // Send image_urls too so the provider accepts the payload regardless of expected field name.
         input_urls: sanitizedImageUrls,
+        image_urls: sanitizedImageUrls,
         aspect_ratio: validAspectRatio,
         resolution: validResolution,
         duration: validDuration,
@@ -681,8 +741,10 @@ async function createVideoTask(
         generate_audio: generateAudio || false,
       }
     : {
-        // Grok Imagine API: image_urls array, supports mode
+        // Grok Imagine API: image_urls array, supports mode.
+        // Mirror under input_urls for provider variants that expect that key.
         image_urls: sanitizedImageUrls,
+        input_urls: sanitizedImageUrls,
         duration: validDuration,
         resolution: validResolution,
         mode: validMode,
@@ -855,10 +917,13 @@ async function createVisualAdsTask(
 ): Promise<{ task_id: string; status: string }> {
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const validAspectRatio = ["1:1", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
+  const callbackUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-visual-ads`;
 
   const input: Record<string, unknown> = {
     prompt: prompt.trim(),
+    // Send both keys so the provider accepts the payload regardless of which it expects.
     input_urls: sanitizedImageUrls,
+    image_urls: sanitizedImageUrls,
     aspect_ratio: validAspectRatio,
     resolution: "1K",
   };
@@ -866,7 +931,9 @@ async function createVisualAdsTask(
   const requestBody = {
     model: KIE_VISUAL_ADS_MODEL,
     input,
-    callBackUrl: `${Deno.env.get("SUPABASE_URL")}/functions/v1/webhook-visual-ads`,
+    callBackUrl: callbackUrl,
+    callbackUrl,
+    callback_url: callbackUrl,
   };
 
   console.log("[kie-visual-ads] Creating task, model:", KIE_VISUAL_ADS_MODEL);

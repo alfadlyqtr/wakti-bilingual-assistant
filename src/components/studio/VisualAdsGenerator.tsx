@@ -998,6 +998,18 @@ export default function VisualAdsGenerator({
       setActiveStep(2);
       return;
     }
+    if (!state.creativeSoul.mainMessage) {
+      toast.error(language === 'ar' ? 'اختر الرسالة الرئيسية قبل الإنشاء' : 'Pick a main message before generating');
+      setActiveStep(3);
+      setOpenBriefSection(1);
+      return;
+    }
+    if (!state.creativeSoul.style) {
+      toast.error(language === 'ar' ? 'اختر نمطاً بصرياً قبل الإنشاء' : 'Pick a visual style before generating');
+      setActiveStep(3);
+      setOpenBriefSection(1);
+      return;
+    }
     if (state.creativeSoul.mainMessage === 'custom' && !normalizeWordLimitedValue(state.creativeSoul.customMainMessage || '')) {
       toast.error(language === 'ar' ? 'اكتب الفكرة المخصصة في القسم الأول' : 'Write your custom ad angle in section 1');
       setActiveStep(3);

@@ -157,7 +157,7 @@ export interface A4CompileInput {
   decorationsUnwanted?: string[] | null;
 }
 
-function getLanguageRules(mode: "en" | "ar" | "bilingual"): string {
+function _getLanguageRules(mode: "en" | "ar" | "bilingual"): string {
   if (mode === "ar") {
     return "Entire document in Arabic. Right-to-left (RTL) alignment throughout. Arabic text flows RTL. Western digits (0123) and Latin brand names remain left-to-right within their local context. Use Noto Sans Arabic or equivalent modern Arabic sans-serif with correct letter joining.";
   }
@@ -167,7 +167,7 @@ function getLanguageRules(mode: "en" | "ar" | "bilingual"): string {
   return "Entire document in English. Left-to-right (LTR) alignment throughout. Clean sans-serif typography (Inter, Helvetica, or Arial).";
 }
 
-function getPageContextClause(pageNumber: number, totalPages: number, hasPrevPageRef: boolean): string {
+function _getPageContextClause(pageNumber: number, totalPages: number, hasPrevPageRef: boolean): string {
   if (totalPages === 1) return "This is a single-page document.";
   if (pageNumber === 1) {
     return `This is PAGE 1 of ${totalPages}. Establish the visual style, header layout, font sizes, margins, and color palette that pages 2 and 3 will match.`;
@@ -186,7 +186,7 @@ function getBrandColorDirective(
   return `Primary accent color: ${brandColors.primary}. ${secondary}Apply to headers, accent bars, borders, and table header rows. Do NOT color body text — body text stays near-black for readability.`;
 }
 
-function getHeaderBlock(
+function _getHeaderBlock(
   theme: A4Theme,
   formState: Record<string, unknown>,
   hasLogoRef: boolean,
@@ -422,7 +422,8 @@ function getHeaderBlock(
       const linkedin = String(formState.linkedin ?? "").trim();
       const contactBits = [email, phone, location, website, linkedin].filter(Boolean).join(" | ");
       const summary = String(formState.summary ?? "").trim();
-      return `Header: professional resume masthead. ${logoClause} Large candidate name "${fullName}" at top.${role ? ` Role subtitle directly beneath: "${role}".` : ""}${contactBits ? ` Compact contact row below: "${contactBits}".` : ""}${summary ? " Include a short professional summary block using ONLY the provided summary text." : ""}`;
+      void summary;
+      return `Header: professional resume masthead.${logoClause ? ` ${logoClause}` : ""} Large candidate name "${fullName}" at top.${role ? ` Role subtitle directly beneath: "${role}".` : ""}${contactBits ? ` Compact contact row below: "${contactBits}".` : ""}`;
     }
     case "clean_minimal": {
       const title = String(formState.title ?? formState.event_name ?? formState.subject ?? "").trim();
@@ -538,49 +539,24 @@ function getDesignPreferencesBlock(
   if (!design) return "";
   const parts: string[] = [];
 
-  if (design.background_color) {
-    parts.push(
-      `- DOCUMENT BACKGROUND COLOR: ${design.background_color}. Fill the entire page background with this color. Do NOT default to pure white if this is set.`,
-    );
-  }
-  if (design.text_color) {
-    parts.push(
-      `- BODY TEXT COLOR: ${design.text_color}. Apply to all body text and default headings. Ensure strong readable contrast against the background.`,
-    );
-  }
+  if (design.background_color) parts.push(`Background: ${design.background_color}`);
+  if (design.text_color) parts.push(`Text color: ${design.text_color}`);
   if (design.accent_color) {
-    parts.push(
-      `- ACCENT / BORDER COLOR: ${design.accent_color}. Apply to borders, section dividers, accent bars, table header rows, bullet markers, and small emphasis elements. Use it consistently, never randomly.`,
-    );
+    parts.push(`Accent color: ${design.accent_color} (used consistently for dividers, highlights, bullets, borders)`);
   }
-  if (design.font_family) {
-    parts.push(`- FONT FAMILY: ${fontFamilyLabel(design.font_family)}. Use this consistently for headings and body text.`);
-  }
-  if (design.border_style) {
-    parts.push(`- BORDER STYLE: ${borderStyleLabel(design.border_style)}`);
-  }
+  if (design.font_family) parts.push(`Font: ${fontFamilyLabel(design.font_family)}`);
+  if (design.border_style) parts.push(`Borders: ${borderStyleLabel(design.border_style)}`);
   if (typeof design.include_decorative_images === "boolean") {
-    if (design.include_decorative_images) {
-      parts.push(
-        "- DECORATIVE IMAGES: YES. Integrate contextually relevant illustrations, icons, or small spot images that match the subject matter. Keep them clean, on-brand, and non-photographic unless the theme explicitly calls for photos. They must never compete with text or reduce readability.",
-      );
-    } else {
-      parts.push(
-        "- DECORATIVE IMAGES: NO. Render a text-first layout. Only allow minimal iconography if it clarifies meaning (like bullet icons or section markers).",
-      );
-    }
+    parts.push(design.include_decorative_images
+      ? "Decorative images: yes, contextually relevant and never competing with text"
+      : "Decorative images: no, text-first layout");
   }
-  if (design.density) {
-    parts.push(`- PAGE DENSITY: ${densityLabel(design.density)}`);
-  }
-  if (design.tone) {
-    parts.push(`- DESIGN TONE: ${toneLabel(design.tone)}`);
-  }
+  if (design.density) parts.push(`Density: ${densityLabel(design.density)}`);
+  if (design.tone) parts.push(`Tone: ${toneLabel(design.tone)}`);
 
   if (parts.length === 0) return "";
 
-  return `USER DESIGN PREFERENCES (HIGH PRIORITY — these OVERRIDE the theme's default palette and typography where they conflict, while preserving the theme's layout DNA):
-${parts.join("\n")}`;
+  return `USER DESIGN PREFERENCES\n${parts.join("\n")}`;
 }
 
 function getVisualAssetsBlock(
@@ -905,10 +881,26 @@ function getUserWishesBlock(wishes: string | null | undefined): string {
   return `USER WISHES\nThe following text comes directly from the user. Preserve its meaning exactly and do not ignore any part of it unless it directly conflicts with another explicit frontend input.\n\n${text}`;
 }
 
+// =============================================================================
+// PROMPT ENGINEER — PURE STRUCTURER (no creative opinions)
+// =============================================================================
+// Contract:
+//   1. The frontend captures everything the user picks/types.
+//   2. This function arranges that input into clean labeled sections.
+//   3. The image model renders the document.
+//
+// Rules:
+//   - We do NOT add theme style paragraphs, layout lectures, or imagery
+//     guidance the user didn't ask for.
+//   - Every block below is gated on real user input. If the user didn't pick
+//     it, it does not appear in the prompt.
+//   - The user's structured fields are already concatenated into rawContent
+//     by buildNormalizedA4Content(), so we don't re-emit them as prose.
+//   - User wishes and content are passed through verbatim.
+// =============================================================================
 export function compileMasterPrompt(input: A4CompileInput): string {
   const {
     theme,
-    formState,
     rawContent,
     pageNumber,
     totalPages,
@@ -920,132 +912,115 @@ export function compileMasterPrompt(input: A4CompileInput): string {
     referenceImageRole,
   } = input;
 
-  const languageRules = getLanguageRules(languageMode);
-  const pageContext = getPageContextClause(pageNumber, totalPages, hasPrevPageReference);
-  const brandColorDirective = getBrandColorDirective(brandColors);
-  const headerBlock = getHeaderBlock(theme, formState, hasLogoReference, referenceImageRole, pageNumber, languageMode);
-  const visualAssets = getVisualAssetsBlock(formState, theme, languageMode);
   const design = input.designSettings ?? null;
   const creative = input.creativeSettings ?? null;
+  const orientation = design?.orientation ?? "portrait";
   const resolvedAspect = resolveAspectRatio(theme, design?.orientation);
-  const designPrefs = getDesignPreferencesBlock(design);
-  const orientationLabel = design?.orientation ?? "portrait";
 
+  const sections: string[] = [];
+
+  // 1. Opening — what the user is asking for, in one line.
+  const themeLabel = theme.name_en === theme.name_ar
+    ? theme.name_en
+    : `${theme.name_en} (${theme.name_ar})`;
+  sections.push(
+    `Generate a single flat 2D digital A4 ${orientation} document image. The final image must look like a crisp, professional PDF export — sharp text, clean layout, real document feel. Aspect ratio ${resolvedAspect}. Document type: ${themeLabel}.`,
+  );
+
+  // 2. Language — short, direct.
+  if (languageMode === "ar") {
+    sections.push(
+      "LANGUAGE\nArabic. Render all text in Arabic with proper RTL direction and a modern Arabic sans-serif font with correct letter joining (e.g. Noto Sans Arabic).",
+    );
+  } else if (languageMode === "bilingual") {
+    sections.push(
+      "LANGUAGE\nBilingual (English + Arabic). Render English text in modern Latin sans-serif and Arabic text in modern Arabic sans-serif, each in its own block with proper LTR/RTL direction per language.",
+    );
+  } else {
+    sections.push("LANGUAGE\nEnglish. Render text in modern Latin sans-serif typography.");
+  }
+
+  // 3. Page context — only when multi-page.
+  if (totalPages > 1) {
+    if (pageNumber === 1) {
+      sections.push(
+        `PAGE CONTEXT\nThis is page 1 of ${totalPages}. Establish the visual style, header layout, font sizes, margins, and color palette that pages 2 and 3 must match.`,
+      );
+    } else {
+      const refClause = hasPrevPageReference
+        ? " The reference image provided is page 1. Match its visual style, header layout, font sizes, margins, and color palette EXACTLY."
+        : "";
+      sections.push(`PAGE CONTEXT\nThis is page ${pageNumber} of ${totalPages}.${refClause}`);
+    }
+  }
+
+  // 4. Reference image role — only when the user actually uploaded one.
+  if (hasLogoReference) {
+    const roleDirective = getReferenceImageDirective(referenceImageRole, hasLogoReference);
+    if (roleDirective) sections.push(roleDirective);
+  }
+
+  // 5. Brand colors — only when extracted from a real logo upload.
+  const brandColorDirective = getBrandColorDirective(brandColors);
+  if (brandColorDirective) sections.push(`BRAND COLORS\n${brandColorDirective}`);
+
+  // 6. User design preferences — only what the user actually picked.
+  const designPrefs = getDesignPreferencesBlock(design);
+  if (designPrefs) sections.push(designPrefs);
+
+  // 7. User creative selections — each block is empty when the user didn't pick.
   const visualRecipe = getVisualRecipeBlock(creative?.visual_recipe);
+  if (visualRecipe) sections.push(`VISUAL RECIPE\n${visualRecipe}`);
+
   const illustrationStyle = getIllustrationStyleBlock(creative?.illustration_style);
+  if (illustrationStyle) sections.push(`ILLUSTRATION APPROACH\n${illustrationStyle}`);
+
   const accentElements = getAccentElementsBlock(creative?.accent_elements);
+  if (accentElements) sections.push(`ACCENT ELEMENTS\n${accentElements}`);
+
   const backgroundTreatment = getBackgroundTreatmentBlock(creative?.background_treatment);
-  const decorationsBlock = getDecorationsBlock(input.decorationsWanted, input.decorationsUnwanted);
+  if (backgroundTreatment) sections.push(`BACKGROUND\n${backgroundTreatment}`);
+
+  const layoutPattern = getLayoutPatternBlock(creative?.layout_pattern);
+  if (layoutPattern) sections.push(`LAYOUT PATTERN\n${layoutPattern}`);
+
   const contentComponents = getContentComponentsBlock(
     creative?.content_components,
     rawContent,
     theme.id,
   );
-  const layoutPattern = getLayoutPatternBlock(creative?.layout_pattern);
+  if (contentComponents) sections.push(`CONTENT COMPONENTS\n${contentComponents}`);
 
-  // Orientation override: when user picks landscape, prepend an aggressive
-  // directive so the theme's portrait-flavoured blueprint does not override it.
-  const orientation = design?.orientation ?? "portrait";
-  const orientationOverride = orientation === "landscape"
-    ? "ORIENTATION\nThis is a LANDSCAPE page (wider than tall). Fill the full frame edge-to-edge. Arrange body sections HORIZONTALLY — cards or panels should flow left-to-right in a row (or multi-row grid), not stack vertically. The header sits across the top, body fills the wide middle, footer across the bottom. If any downstream instruction describes a vertical reading flow, adapt it to a horizontal flow while preserving the visual style."
-    : "";
+  // 8. User-picked visual asset toggles (include diagram / chart / table /
+  //    grading circle). Only when the user toggled them on.
+  const visualAssets = getVisualAssetsBlock(input.formState, theme, languageMode);
+  if (visualAssets) sections.push(`VISUAL ASSETS\n${visualAssets}`);
 
-  // Subject-aware imagery rule: forbid generic fallback motifs that don't
-  // relate to the actual document topic.
-  const subjectAwareImagery =
-    "SUBJECT-AWARE IMAGERY\nAll decorative elements, icons, spot illustrations, craft shapes, and small accents MUST be semantically tied to the document's subject matter (derived from the header, topic, title, or content). Do NOT use generic weather motifs (clouds, rain, water drops, cotton) unless the subject is literally about weather or water. Do NOT reuse the same stock motifs across different topics. If a motif has no connection to the subject, omit it.";
+  // 9. Decorations — only what the user explicitly picked.
+  const decorationsBlock = getDecorationsBlock(input.decorationsWanted, input.decorationsUnwanted);
+  if (decorationsBlock) sections.push(decorationsBlock);
 
-  const noLoremGuard =
-    "NO PLACEHOLDER TEXT\nNEVER render Lorem Ipsum, placeholder Latin, 'sample text', or meaningless filler inside any card, label, or body block. Every rendered character must come from the provided content, the structured form fields, or explicit user wishes. If a requested layout area has no supporting content, omit that area instead of inventing text.";
-
-  const backgroundDirective = backgroundTreatment
-    || (design?.background_color
-      ? `Background: solid ${design.background_color}, edge-to-edge.`
-      : `Background: ${theme.id === "certificate" ? "cream or pearl-white" : "pure white"} (unless the theme aesthetic above specifies otherwise).`);
-
-  const layoutBlueprint = theme.layout_blueprint
-    ?? "Use a clean top-to-bottom layout: header zone, body zone, footer zone. Keep margins consistent and spacing generous.";
-
-  // Prompt is composed per Google's Nano Banana prompting guide:
-  //   - Strong verb opening ("Generate...")
-  //   - Positive framing throughout (describe what you want, never what to avoid)
-  //   - Content to render passes through verbatim so the model renders it exactly
-  //   - Spatial blueprint + creative direction like a creative director would
-
-  const sections: string[] = [];
-
-  sections.push(
-    `Generate a flat 2D digital A4 ${orientationLabel} document — the final image should look indistinguishable from a crisp PDF export viewed on screen. Treat this as a document layout and rendering task, not a painterly scene. Aspect ratio ${resolvedAspect}.`,
-  );
-
-  const styleLines: string[] = [
-    theme.style_block,
-    backgroundDirective,
-    "All text renders razor-sharp and anti-aliased, with consistent kerning, legible at 400% zoom.",
-  ];
-  if (visualRecipe) {
-    styleLines.splice(1, 0, `User-selected visual recipe: ${visualRecipe}`);
-  }
-  sections.push(
-    `VISUAL STYLE\n${styleLines.join("\n")}`,
-  );
-
+  // 10. User wishes — verbatim. Highest priority.
   const userWishesBlock = getUserWishesBlock(userWishes);
   if (userWishesBlock) sections.push(userWishesBlock);
 
-  if (illustrationStyle) sections.push(`ILLUSTRATION APPROACH\n${illustrationStyle}`);
-  if (accentElements) sections.push(`ACCENT ELEMENTS\n${accentElements}`);
-  if (decorationsBlock) sections.push(decorationsBlock);
-
-  // Slim TYPOGRAPHY: only send Arabic rules when the document actually uses Arabic.
-  if (languageMode === "ar" || languageMode === "bilingual") {
-    sections.push(
-      `TYPOGRAPHY\nEnglish and Latin text uses clean modern sans-serif (Inter, Helvetica, or Arial). Arabic text uses Noto Sans Arabic or an equivalent modern Arabic sans-serif with proper letter joining. Numbers use Western digits (0123456789) unless the source content itself uses Arabic-Indic digits. Within any single text block, typography stays consistent.`,
-    );
-  } else {
-    sections.push(
-      `TYPOGRAPHY\nClean modern sans-serif (Inter, Helvetica, or Arial). Consistent kerning. Western digits. Proper typographic punctuation and fractions. No mixed fonts within the same block.`,
-    );
-  }
-
-  sections.push(`LANGUAGE\n${languageRules}`);
-  sections.push(`PAGE CONTEXT\n${pageContext}`);
-  if (orientationOverride) sections.push(orientationOverride);
-  sections.push(`LAYOUT BLUEPRINT\n${layoutBlueprint}`);
-  if (layoutPattern) sections.push(`LAYOUT PATTERN\n${layoutPattern}`);
-  sections.push(`HEADER\n${headerBlock}`);
-
-  // REFERENCE IMAGE ROLE — tells the image model exactly what to do with the
-  // attachment (portrait, logo, product, sample). Only added when an image
-  // was actually attached, to avoid confusing the model otherwise.
-  const referenceImageDirective = getReferenceImageDirective(
-    referenceImageRole,
-    hasLogoReference,
-  );
-  if (referenceImageDirective) sections.push(referenceImageDirective);
-
-  sections.push(subjectAwareImagery);
-  sections.push(noLoremGuard);
-
-  if (designPrefs) sections.push(designPrefs);
-  if (brandColorDirective) sections.push(`BRAND ACCENT COLORS\n${brandColorDirective}`);
-
+  // 11. CONTENT TO RENDER — every structured field + raw content the user
+  //     provided, passed through verbatim.
   const trimmedContent = (rawContent ?? "").trim();
   if (trimmedContent) {
     sections.push(
-      `CONTENT TO RENDER\nRender the following content inside the body zone of the layout. Preserve every word, number, punctuation mark, and symbol exactly as written. Respect every paragraph, list, question, and heading. Keep it razor-sharp and perfectly legible.\n\n${trimmedContent}`,
+      `CONTENT TO RENDER (preserve every word, number, and punctuation mark exactly as written):\n\n${trimmedContent}`,
     );
   }
 
-  if (contentComponents) sections.push(`CONTENT COMPONENTS\n${contentComponents}`);
-  if (visualAssets) sections.push(`VISUAL ASSETS\n${visualAssets}`);
-
+  // 12. Footer — small wakti.qa attribution + page indicator on multi-page.
   const footerLine = totalPages > 1
-    ? `FOOTER\nBottom center of the page, in small 7pt light gray text: "wakti.qa"\nBottom right, small matching type: "Page ${pageNumber} of ${totalPages}"`
-    : `FOOTER\nBottom center of the page, in small 7pt light gray text: "wakti.qa"`;
+    ? `FOOTER\nBottom center, small light gray text: "wakti.qa"\nBottom right, small matching type: "Page ${pageNumber} of ${totalPages}"`
+    : `FOOTER\nBottom center, small light gray text: "wakti.qa"`;
   sections.push(footerLine);
 
-  sections.push("Render the final image now.");
+  // 13. Final render instruction.
+  sections.push("Render the final A4 document image now. All text must be razor-sharp, anti-aliased, and legible. The output should look like a polished professional document.");
 
   return sections.join("\n\n");
 }
