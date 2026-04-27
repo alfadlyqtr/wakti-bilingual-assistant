@@ -221,6 +221,20 @@ Deno.serve(async (req: Request) => {
 
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 
+        // Preserve any existing refresh_token if Google didn't return a new one
+        // (Google only returns refresh_token on first consent unless prompt=consent)
+        let refreshTokenToStore: string | null = tokens.refresh_token ?? null;
+        if (!refreshTokenToStore) {
+          const { data: existing } = await supabase
+            .from("user_youtube_tokens")
+            .select("refresh_token")
+            .eq("user_id", userId)
+            .maybeSingle();
+          if (existing?.refresh_token) {
+            refreshTokenToStore = existing.refresh_token as string;
+          }
+        }
+
         // Upsert into user_youtube_tokens
         const { error: upsertErr } = await supabase
           .from("user_youtube_tokens")
@@ -228,7 +242,7 @@ Deno.serve(async (req: Request) => {
             {
               user_id: userId,
               access_token: tokens.access_token,
-              refresh_token: tokens.refresh_token ?? null,
+              refresh_token: refreshTokenToStore,
               expires_at: expiresAt,
               channel_id: channelInfo?.channel_id ?? null,
               channel_title: channelInfo?.channel_title ?? null,

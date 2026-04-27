@@ -55,6 +55,13 @@ async function verifyUser(req: Request): Promise<string | null> {
   return user.id;
 }
 
+class YouTubeReconnectRequiredError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "YouTubeReconnectRequiredError";
+  }
+}
+
 async function refreshAccessToken(refreshToken: string): Promise<{ access_token: string; expires_in: number }> {
   const params = new URLSearchParams({
     client_id: GOOGLE_CLIENT_ID,
@@ -70,8 +77,34 @@ async function refreshAccessToken(refreshToken: string): Promise<{ access_token:
   });
 
   const data = await res.json();
-  if (data.error) throw new Error(data.error_description || data.error);
+  if (data.error) {
+    // invalid_grant = refresh token revoked/expired/invalid. User must reconnect.
+    if (data.error === "invalid_grant") {
+      throw new YouTubeReconnectRequiredError(
+        data.error_description || "YouTube token has been expired or revoked. Please reconnect your YouTube account."
+      );
+    }
+    throw new Error(data.error_description || data.error);
+  }
   return data;
+}
+
+async function deleteYouTubeTokens(userId: string): Promise<void> {
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/user_youtube_tokens?user_id=eq.${encodeURIComponent(userId)}`,
+      {
+        method: "DELETE",
+        headers: {
+          "apikey": SUPABASE_SERVICE_ROLE_KEY,
+          "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          "Prefer": "return=minimal",
+        },
+      }
+    );
+  } catch (e) {
+    console.error("Failed to delete stale YouTube tokens:", e);
+  }
 }
 
 interface YouTubeTokenRow {
@@ -102,7 +135,7 @@ async function getValidAccessToken(
 
   if (isExpired) {
     if (!row.refresh_token) {
-      throw new Error("YouTube token expired and no refresh token available. Please reconnect your YouTube account.");
+      throw new YouTubeReconnectRequiredError("YouTube token expired and no refresh token available. Please reconnect your YouTube account.");
     }
     const refreshed = await refreshAccessToken(row.refresh_token);
     const newExpiresAt = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
@@ -168,6 +201,9 @@ async function initiateResumableUpload(
 
   if (!res.ok) {
     const errBody = await res.text();
+    if (res.status === 401) {
+      throw new YouTubeReconnectRequiredError(`YouTube rejected access token. Please reconnect your YouTube account. ${errBody}`);
+    }
     throw new Error(`Failed to initiate YouTube upload: ${res.status} ${errBody}`);
   }
 
@@ -209,9 +245,12 @@ Deno.serve(async (req: Request) => {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
+  let capturedUserId: string | null = null;
+
   try {
     const userId = await verifyUser(req);
     if (!userId) return jsonResponse({ error: "Unauthorized" }, 401);
+    capturedUserId = userId;
 
     const body = await req.json();
     const {
@@ -292,6 +331,13 @@ Deno.serve(async (req: Request) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Internal server error";
     console.error("youtube-upload error:", message);
+    if (err instanceof YouTubeReconnectRequiredError) {
+      // Clear stale tokens so the UI reflects disconnected state.
+      if (capturedUserId) {
+        await deleteYouTubeTokens(capturedUserId);
+      }
+      return jsonResponse({ error: message, reconnect_required: true }, 401);
+    }
     return jsonResponse({ error: message }, 500);
   }
 });

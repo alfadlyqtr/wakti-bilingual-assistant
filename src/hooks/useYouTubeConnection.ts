@@ -162,7 +162,20 @@ export function useYouTubeConnection() {
     });
 
     const json = await resp.json();
-    if (json.error) throw new Error(json.error);
+    if (json.error) {
+      if (json.reconnect_required) {
+        setConnection({
+          connected: false,
+          loading: false,
+          connecting: false,
+          channelTitle: null,
+          channelThumbnail: null,
+        });
+      }
+      const err = new Error(json.error) as Error & { reconnectRequired?: boolean };
+      err.reconnectRequired = !!json.reconnect_required;
+      throw err;
+    }
     return { videoId: json.video_id, videoUrl: json.video_url };
   }, []);
 

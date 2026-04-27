@@ -5809,11 +5809,13 @@ function MusicTrackYouTubeDialog({
   language,
   onClose,
   onPublished,
+  onVideoRendered,
 }: {
-  track: { id: string; title: string | null; prompt: string | null; cover_url: string | null; play_url?: string | null; storage_path: string | null };
+  track: { id: string; title: string | null; prompt: string | null; cover_url: string | null; play_url?: string | null; storage_path: string | null; meta?: Record<string, unknown> | null };
   language: string;
   onClose: () => void;
   onPublished?: (videoUrl: string) => void;
+  onVideoRendered?: (videoUrl: string) => void;
 }) {
   const isAr = language === 'ar';
   const { user } = useAuth();
@@ -5822,7 +5824,10 @@ function MusicTrackYouTubeDialog({
   type CoverMode = 'default' | 'upload' | 'saved';
   type Stage = 'pick' | 'rendering' | 'publish';
 
-  const [stage, setStage] = useState<Stage>('pick');
+  // If a video was already rendered for this track, skip straight to the publish stage.
+  const existingVideoUrl = (track.meta as any)?.video_url as string | undefined;
+
+  const [stage, setStage] = useState<Stage>(existingVideoUrl ? 'publish' : 'pick');
   const [coverMode, setCoverMode] = useState<CoverMode>('default');
   const [uploadedImageUrl, setUploadedImageUrl] = useState<string | null>(null);
   const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
@@ -5831,7 +5836,7 @@ function MusicTrackYouTubeDialog({
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const [selectedSavedImageUrl, setSelectedSavedImageUrl] = useState<string | null>(null);
   const [visualizerOn, setVisualizerOn] = useState(false);
-  const [renderedVideoUrl, setRenderedVideoUrl] = useState<string | null>(null);
+  const [renderedVideoUrl, setRenderedVideoUrl] = useState<string | null>(existingVideoUrl || null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [renderProgress, setRenderProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -6106,6 +6111,7 @@ function MusicTrackYouTubeDialog({
 
       setRenderProgress(100);
       setRenderedVideoUrl(videoUrl);
+      onVideoRendered?.(videoUrl);
       setStage('publish');
     } catch (err: unknown) {
       setRenderError(err instanceof Error ? err.message : (isAr ? 'فشل تحويل الصوت لفيديو' : 'Failed to convert audio to video'));
@@ -7405,6 +7411,15 @@ function EditorTab() {
           track={trackYouTubeTarget}
           language={language}
           onClose={() => setTrackYouTubeTarget(null)}
+          onVideoRendered={async (videoUrl) => {
+            const id = trackYouTubeTarget.id;
+            const currentMeta = ((trackYouTubeTarget.meta as Record<string, unknown> | null) ?? {});
+            const nextMeta = { ...currentMeta, video_url: videoUrl };
+            setTracks(prev => prev.map(t => t.id === id ? { ...t, meta: nextMeta } : t));
+            try {
+              await (supabase as any).from('user_music_tracks').update({ meta: nextMeta }).eq('id', id);
+            } catch { /* non-critical */ }
+          }}
           onPublished={async (videoUrl) => {
             const id = trackYouTubeTarget.id;
             const currentMeta = ((trackYouTubeTarget.meta as Record<string, unknown> | null) ?? {});

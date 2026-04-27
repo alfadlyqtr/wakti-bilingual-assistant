@@ -184,8 +184,19 @@ export default function YouTubePublishBar({
       toast.success(isAr ? 'تم النشر على يوتيوب!' : 'Published to YouTube!');
     } catch (err: unknown) {
       setUploadState('error');
-      const message = err instanceof Error ? err.message : 'Upload failed';
-      toast.error(message);
+      const reconnectRequired = !!(err as { reconnectRequired?: boolean })?.reconnectRequired;
+      const fallback = err instanceof Error ? err.message : 'Upload failed';
+      if (reconnectRequired) {
+        setIsDialogOpen(false);
+        toast.error(
+          isAr
+            ? 'انتهت صلاحية ربط يوتيوب. يرجى إعادة ربط حسابك.'
+            : 'Your YouTube connection expired. Please reconnect your YouTube account.',
+          { duration: 6000 }
+        );
+      } else {
+        toast.error(fallback);
+      }
     }
   };
 
