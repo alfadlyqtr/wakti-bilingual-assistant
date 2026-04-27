@@ -59,6 +59,36 @@ export function useYouTubeConnection() {
     checkConnection();
   }, [checkConnection]);
 
+  // When the app/page regains focus (e.g. user returns from external OAuth browser),
+  // re-check the YouTube connection so 'connecting' / 'Opening...' state unsticks.
+  useEffect(() => {
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        checkConnection();
+      }
+    };
+    const handleFocus = () => {
+      checkConnection();
+    };
+    document.addEventListener('visibilitychange', handleVisible);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisible);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [checkConnection]);
+
+  // Hard watchdog: if we've been 'connecting' for more than 2 minutes, reset so the
+  // user can retry instead of being stuck on the Opening... state forever.
+  useEffect(() => {
+    if (!connection.connecting) return;
+    const timeoutId = setTimeout(() => {
+      setConnection(prev => (prev.connecting ? { ...prev, connecting: false } : prev));
+      checkConnection();
+    }, 2 * 60 * 1000);
+    return () => clearTimeout(timeoutId);
+  }, [connection.connecting, checkConnection]);
+
   const connectYouTube = useCallback(async () => {
     setConnection(prev => ({ ...prev, connecting: true }));
     try {
