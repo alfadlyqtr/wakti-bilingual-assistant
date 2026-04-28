@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialToken, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,13 +57,13 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const STORAGE_BUCKET = "generated-files";
 const SIGNED_URL_EXPIRES_SECONDS = 10 * 60;
+const KIE_API_KEY = Deno.env.get("KIE_API_KEY");
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY")!;
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "openai:gpt-image@2";
-const MODEL_BEST = Deno.env.get("RUNWARE_BEST_FAST_MODEL") || "google:4@3";
+const MODEL_BEST = "nano-banana-2";
 
 function getDimensionsForModel(model: string): { width?: number; height?: number } {
   if (model === "openai:gpt-image@2") return { width: 1024, height: 1536 };
@@ -79,43 +79,99 @@ function isRetryableRunwareErrorMessage(message: string): boolean {
     || normalized.includes("abort");
 }
 
-const isArabic = (s: string) => /[\u0600-\u06FF]/.test(s || "");
-
-async function translateToEnglishIfArabic(prompt: string): Promise<string> {
-  try {
-    if (!isArabic(prompt)) return prompt;
-    if (!OPENAI_API_KEY) return prompt;
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 10000);
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "You are an expert image prompt translator. Translate Arabic image prompts to English for image generation models. Return ONLY the English translation, nothing else." },
-          { role: "user", content: `Translate this image prompt to English: ${prompt}` }
-        ],
-        max_tokens: 300,
-        temperature: 0.1
-      }),
-      signal: controller.signal
-    });
-    clearTimeout(tid);
-    if (!resp.ok) return prompt;
-    const json = await resp.json().catch(() => null);
-    const txt = json?.choices?.[0]?.message?.content?.trim();
-    return txt || prompt;
-  } catch {
-    return prompt;
+function extractImageUrls(data: unknown): string[] {
+  const urls: string[] = [];
+  if (typeof (data as { resultJson?: unknown } | null)?.resultJson === "string" && (data as { resultJson: string }).resultJson) {
+    try {
+      const parsed = JSON.parse((data as { resultJson: string }).resultJson);
+      if (Array.isArray(parsed?.resultUrls)) {
+        for (const u of parsed.resultUrls) {
+          if (typeof u === "string" && u.startsWith("http")) urls.push(u);
+        }
+      }
+    } catch {
+      // ignore malformed resultJson and continue scanning
+    }
   }
+  if (urls.length > 0) return urls;
+  const seen = new Set<string>();
+  const scan = (obj: unknown, depth = 0) => {
+    if (!obj || typeof obj !== "object" || depth > 8) return;
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (typeof v === "string" && v.startsWith("http") && !seen.has(v)) {
+        const keyLooksImagey = /url|image|img|src|uri|link|photo|pic/i.test(k);
+        const hasImageExt = /\.(png|jpg|jpeg|webp)/i.test(v);
+        if (keyLooksImagey || hasImageExt) {
+          seen.add(v);
+          urls.push(v);
+        }
+      } else if (v && typeof v === "object") {
+        scan(v, depth + 1);
+      }
+    }
+  };
+  scan(data);
+  return urls;
+}
+
+async function pollKieTaskForImage(taskId: string): Promise<string> {
+  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+  const deadline = Date.now() + 180000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    const resp = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
+      headers: { Authorization: `Bearer ${KIE_API_KEY}` },
+    });
+    const rawText = await resp.text();
+    if (!resp.ok) {
+      throw new Error(`KIE poll failed ${resp.status}: ${rawText.slice(0, 200)}`);
+    }
+    const json = JSON.parse(rawText);
+    const rawStatus = (json?.data?.state || json?.data?.status || json?.data?.taskStatus || "").toString().toLowerCase();
+    const imageUrls = extractImageUrls(json?.data);
+    const isDone = rawStatus === "success" || rawStatus === "completed" || rawStatus === "finished"
+      || rawStatus === "succeed" || rawStatus === "done" || rawStatus === "2";
+    const isFailed = rawStatus === "failed" || rawStatus === "error" || rawStatus === "fail" || rawStatus === "3";
+    if (isFailed) {
+      throw new Error(`KIE task failed: ${rawStatus}`);
+    }
+    if ((isDone || imageUrls.length > 0) && imageUrls[0]) {
+      return imageUrls[0];
+    }
+  }
+  throw new Error("KIE generation timed out");
+}
+
+async function generateBestWithKie(finalPrompt: string, referenceUrls: string[]): Promise<string> {
+  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+  const submitResp = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL_BEST,
+      input: {
+        prompt: finalPrompt,
+        image_input: referenceUrls,
+        resolution: "1K",
+        output_format: "jpg",
+      },
+    }),
+  });
+  const submitText = await submitResp.text();
+  if (!submitResp.ok) {
+    throw new Error(`KIE i2i submit failed ${submitResp.status}: ${submitText.slice(0, 200)}`);
+  }
+  const submitJson = JSON.parse(submitText);
+  const taskId = submitJson?.data?.taskId;
+  if (!taskId) throw new Error(`No taskId in KIE i2i response: ${submitText.slice(0, 200)}`);
+  return await pollKieTaskForImage(taskId);
 }
 
 function genUUID(): string {
   try { return crypto.randomUUID(); } catch { return `${Date.now()}-${Math.random().toString(16).slice(2)}`; }
 }
 
-function findTaskUUID(obj: unknown): string | null {
+function _findTaskUUID(obj: unknown): string | null {
   const isUUID = (v: unknown): v is string => typeof v === 'string' && /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i.test(v);
   if (!obj || typeof obj !== 'object') return null;
   const rec = obj as Record<string, unknown>;
@@ -126,7 +182,7 @@ function findTaskUUID(obj: unknown): string | null {
   for (const k in rec) {
     const v = rec[k];
     if (v && typeof v === 'object') {
-      const found = findTaskUUID(v);
+      const found = _findTaskUUID(v);
       if (found) return found;
     }
   }
@@ -148,10 +204,10 @@ function pickFirstResultNode(container: unknown): unknown | null {
   return null;
 }
 
-async function safeJson(resp: Response): Promise<any> {
+async function safeJson(resp: Response): Promise<unknown> {
   const text = await resp.text();
   if (!text || text.trim().length === 0) return null;
-  try { return JSON.parse(text); } catch { return { __raw: text }; }
+  try { return JSON.parse(text) as unknown; } catch { return { __raw: text } as { __raw: string }; }
 }
 
 async function uploadAndSignReferenceImage(params: {
@@ -245,27 +301,27 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    if (!RUNWARE_API_KEY) {
+    const body = await req.json().catch(() => ({}));
+    const quality = body?.quality === "best_fast" ? "best_fast" : "fast";
+    const selectedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
+    const image_base64_raw = (body?.image_base64 || body?.image || "").toString();
+    const image_base64_raw_2 = (body?.image_base64_2 || "").toString();
+    const image_base64s = Array.isArray(body?.image_base64s) ? body.image_base64s : [];
+
+    const user_prompt = body?.user_prompt as string | undefined;
+    const user_id = body?.user_id as string | undefined;
+    let trialPayload = null;
+
+    const inputImages = image_base64s.length > 0
+      ? image_base64s
+      : [image_base64_raw, image_base64_raw_2].filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+
+    if (quality !== "best_fast" && !RUNWARE_API_KEY) {
       return new Response(
         JSON.stringify({ error: "Missing RUNWARE_API_KEY", code: "CONFIG_ERROR" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const body = await req.json().catch(() => ({}));
-    const image_base64_raw = body?.image_base64 as string | undefined;
-    const image_base64_raw_2 = body?.image_base64_2 as string | undefined;
-    const image_base64s = Array.isArray(body?.image_base64s)
-      ? body.image_base64s.filter((v: unknown) => typeof v === "string" && v.trim().length > 0).slice(0, 4) as string[]
-      : [];
-    const user_prompt = body?.user_prompt as string | undefined;
-    const user_id = body?.user_id as string | undefined;
-    const quality = body?.quality === "best_fast" ? "best_fast" : "fast";
-    const selectedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
-
-    const inputImages = image_base64s.length > 0
-      ? image_base64s
-      : [image_base64_raw, image_base64_raw_2].filter((v): v is string => typeof v === "string" && v.trim().length > 0);
 
     if (inputImages.length === 0 || !user_prompt || !user_id) {
       return new Response(
@@ -275,10 +331,10 @@ serve(async (req: Request) => {
     }
 
     // ── Trial Token Check: i2i ──
-    const trial = await checkAndConsumeTrialToken(supabase, user_id, 'i2i', 2);
+    const trial = await checkTrialAccess(supabase, user_id, 'i2i', 2);
     if (!trial.allowed) {
       return new Response(
-        JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'i2i' }),
+        JSON.stringify(buildTrialErrorPayload('i2i', trial)),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -311,7 +367,31 @@ serve(async (req: Request) => {
       }
     }
 
-    const finalPrompt = await translateToEnglishIfArabic(user_prompt);
+    const finalPrompt = user_prompt;
+    if (quality === "best_fast") {
+      const stableUrl = await generateBestWithKie(finalPrompt, referenceUrls);
+
+      await logAIFromRequest(req, {
+        functionName: "wakti-image2image",
+        provider: quality === "best_fast" ? "kie-nano-banana-2" : "runware",
+        model: selectedModel,
+        inputText: user_prompt,
+        status: "success"
+      });
+
+      const consumeTrial = await checkAndConsumeTrialToken(supabase, user_id, 'i2i', 2);
+      if (consumeTrial.allowed) {
+        trialPayload = buildTrialSuccessPayload('i2i', consumeTrial);
+      } else {
+        console.warn('[wakti-image2image] Trial consume skipped after success:', consumeTrial.reason);
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, url: stableUrl, model: selectedModel, quality, trial: trialPayload }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const rw = await callRunwareI2IWithRetry(finalPrompt, referenceUrls, selectedModel);
     const node = (pickFirstResultNode(rw) || rw) as Record<string, unknown>;
 
@@ -369,8 +449,15 @@ serve(async (req: Request) => {
         status: "success"
       });
 
+      const consumeTrial = await checkAndConsumeTrialToken(supabase, user_id, 'i2i', 2);
+      if (consumeTrial.allowed) {
+        trialPayload = buildTrialSuccessPayload('i2i', consumeTrial);
+      } else {
+        console.warn('[wakti-image2image] Trial consume skipped after success:', consumeTrial.reason);
+      }
+
       return new Response(
-        JSON.stringify({ success: true, url: stableUrl, model: selectedModel, quality }),
+        JSON.stringify({ success: true, url: stableUrl, model: selectedModel, quality, trial: trialPayload }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -381,9 +468,10 @@ serve(async (req: Request) => {
     );
   } catch (err: unknown) {
     const message = (err as Error)?.message || String(err);
-    let parsed: any = null;
+    let parsed: Record<string, unknown> | null = null;
     try {
-      parsed = JSON.parse(message);
+      const parsedValue = JSON.parse(message) as unknown;
+      parsed = parsedValue && typeof parsedValue === "object" ? parsedValue as Record<string, unknown> : null;
     } catch {
       parsed = null;
     }
@@ -395,7 +483,7 @@ serve(async (req: Request) => {
     await logAIFromRequest(req, {
       functionName: "wakti-image2image",
       provider: "runware",
-      model: parsed?.model || "unknown",
+      model: typeof parsed?.model === "string" ? parsed.model : "unknown",
       status: "error",
       errorMessage: message
     });

@@ -4,6 +4,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
+import { emitEvent } from '@/utils/eventBus';
 import { toast } from 'sonner';
 import { ImageSharePickerDialog } from '@/components/studio/ImageSharePickerDialog';
 import { Button } from '@/components/ui/button';
@@ -64,6 +65,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
+  const generateLockRef = useRef(false);
 
   // Result
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
@@ -97,9 +99,35 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   // Save state
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
-  const [savedBucketUrl, setSavedBucketUrl] = useState<string | null>(null);
   const [savedImageId, setSavedImageId] = useState<string | null>(null);
   const [savedSourceUrl, setSavedSourceUrl] = useState<string | null>(null);
+  const [savedBucketUrl, setSavedBucketUrl] = useState<string | null>(null);
+  const [selectedSavedImageId, setSelectedSavedImageId] = useState<string | null>(null);
+  const [savingGeneratedId, setSavingGeneratedId] = useState<string | null>(null);
+  const bgCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
+
+  const emitTrialBlocked = useCallback((payload: any, fallbackFeature: string) => {
+    emitEvent('wakti-trial-limit-reached', {
+      feature: payload?.feature || fallbackFeature,
+      reason: payload?.reason,
+      code: payload?.code,
+      consumed: payload?.consumed,
+      limit: payload?.limit,
+      remaining: payload?.remaining,
+    });
+  }, []);
+
+  const emitTrialFinished = useCallback((payload: any, fallbackFeature: string) => {
+    if (payload?.trial?.justExhausted || payload?.trial?.remaining === 0) {
+      emitEvent('wakti-trial-quota-finished', {
+        feature: payload?.trial?.feature || fallbackFeature,
+        consumed: payload?.trial?.consumed,
+        limit: payload?.trial?.limit,
+        remaining: payload?.trial?.remaining,
+      });
+    }
+  }, []);
+
   const [shareImageTarget, setShareImageTarget] = useState<{ id: string; title: string; imageUrl: string | null } | null>(null);
 
   // Pick from saved state
@@ -351,7 +379,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     });
     const submitJson = await submitResp.json().catch(() => ({} as any));
     if (submitJson?.error === 'TRIAL_LIMIT_REACHED') {
-      window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: submitJson?.feature || 't2i' } }));
+      emitTrialBlocked(submitJson, 't2i');
       return [];
     }
     if (!submitResp.ok || !submitJson?.success) {
@@ -381,7 +409,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     });
     const submitJson = await submitResp.json().catch(() => ({} as any));
     if (submitJson?.error === 'TRIAL_LIMIT_REACHED') {
-      window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: submitJson?.feature || 'i2i' } }));
+      emitTrialBlocked(submitJson, 'i2i');
       return [];
     }
     if (!submitResp.ok || !submitJson?.success) {
@@ -405,11 +433,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
       if (json?.error === 'TRIAL_LIMIT_REACHED') {
-        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: json?.feature || 't2i' } }));
+        emitTrialBlocked(json, 't2i');
         return null as unknown as string;
       }
       throw new Error(json?.error || 'Text2Image failed');
     }
+    emitTrialFinished(json, 't2i');
     return json.url as string;
   };
 
@@ -430,11 +459,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
       if (json?.error === 'TRIAL_LIMIT_REACHED') {
-        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: json?.feature || 'i2i' } }));
+        emitTrialBlocked(json, 'i2i');
         return null as unknown as string;
       }
       throw new Error(json?.error || 'Image2Image failed');
     }
+    emitTrialFinished(json, 'i2i');
     return json.url as string;
   };
 
@@ -465,13 +495,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok) {
       if (json?.error === 'TRIAL_LIMIT_REACHED') {
-        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: json?.feature || 'bg_removal' } }));
+        emitTrialBlocked(json, 'bg_removal');
         return null as unknown as string;
       }
       throw new Error(json?.error || 'Background edit failed');
     }
     const outUrl = json?.imageUrl || json?.URL || json?.imageDataURI || json?.dataURI || null;
     if (!outUrl) throw new Error('No image generated');
+    emitTrialFinished(json, 'bg_removal');
     return outUrl as string;
   };
 
@@ -629,6 +660,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   // ─── Main generate handler ───
   const handleGenerate = useCallback(async () => {
+    if (generateLockRef.current || isGenerating) {
+      return;
+    }
+
     if (submode === 'draw') {
       drawCanvasRef.current?.triggerManualGeneration();
       return;
@@ -643,6 +678,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       return;
     }
 
+    generateLockRef.current = true;
     setIsGenerating(true);
     setResultError(null);
     setResultImageUrl(null);
@@ -697,6 +733,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       toast.error(msg);
     } finally {
       setIsGenerating(false);
+      generateLockRef.current = false;
     }
     // Auto-save is fire-and-forget — skip for Quick (Grok) since user must choose which image to save
     if (generatedUrl && quality !== 'quick' && submode !== 'visual-ads') {
@@ -2168,46 +2205,53 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
         {/* Quality toggle (T2I + I2I) */}
         {(submode === 'text2image' || submode === 'image2image') && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              {language === 'ar' ? 'الجودة' : 'Quality'}
-            </span>
-            <div className="flex bg-muted/50 rounded-lg p-0.5">
-              <button
-                onClick={() => setQuality('quick')}
-                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
-                  quality === 'quick'
-                    ? 'bg-gradient-to-r from-purple-500 to-violet-500 text-white shadow-md'
-                    : 'text-muted-foreground'
-                }`}
-              >
-                {language === 'ar' ? 'سريع جداً' : 'Quick'}
-              </button>
-              <button
-                onClick={() => setQuality('fast')}
-                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
-                  quality === 'fast'
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
-                    : 'text-muted-foreground'
-                }`}
-              >
-                {language === 'ar' ? 'سريع' : 'Fast'}
-              </button>
-              <button
-                onClick={() => setQuality('best_fast')}
-                className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
-                  quality === 'best_fast'
-                    ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
-                    : 'text-muted-foreground'
-                }`}
-              >
-                {language === 'ar' ? 'أفضل' : 'Best'}
-              </button>
-            </div>
-            {quality === 'quick' && (
-              <span className="text-[10px] text-purple-500 dark:text-purple-400 font-medium">
-                {language === 'ar' ? '✦ متعدد الصور' : '✦ Multiple images'}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {language === 'ar' ? 'الجودة' : 'Quality'}
               </span>
+              <div className="flex bg-muted/50 rounded-lg p-0.5">
+                <button
+                  onClick={() => setQuality('quick')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                    quality === 'quick'
+                      ? 'bg-gradient-to-r from-purple-500 to-violet-500 text-white shadow-md'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {language === 'ar' ? 'سريع جداً' : 'Quick'}
+                </button>
+                <button
+                  onClick={() => setQuality('fast')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                    quality === 'fast'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {language === 'ar' ? 'سريع' : 'Fast'}
+                </button>
+                <button
+                  onClick={() => setQuality('best_fast')}
+                  className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 ${
+                    quality === 'best_fast'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {language === 'ar' ? 'أفضل' : 'Best'}
+                </button>
+              </div>
+              {quality === 'quick' && (
+                <span className="text-[10px] text-purple-500 dark:text-purple-400 font-medium">
+                  {language === 'ar' ? '✦ متعدد الصور' : '✦ Multiple images'}
+                </span>
+              )}
+            </div>
+            {language === 'ar' && quality === 'quick' && (
+              <div className="text-[10px] font-medium text-muted-foreground/80">
+                ضعيف للنصوص
+              </div>
             )}
           </div>
         )}

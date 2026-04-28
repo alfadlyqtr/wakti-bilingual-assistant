@@ -36,23 +36,58 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const { user } = useAuth();
 
   const { language } = useTheme();
+  const navigate = useNavigate();
 
   // Trial limit bouncer — during 24h trial, show friendly bilingual toast (NOT the full paywall)
   React.useEffect(() => {
-    return onEvent('wakti-trial-limit-reached', ({ feature }) => {
-      const msg = language === 'ar'
-        ? `Ù„Ù‚Ø¯ ÙˆØµÙ„Øª Ù„Ù„Ø­Ø¯ Ø§Ù„Ù…Ø¬Ø§Ù†ÙŠ Ù„Ù‡Ø°Ù‡ Ø§Ù„Ù…ÙŠØ²Ø©. Ø§Ø´ØªØ±Ùƒ ÙÙŠ ÙˆÙƒØªÙŠ Ù„Ù„Ø§Ø³ØªÙ…ØªØ§Ø¹ Ø¨ÙˆØµÙˆÙ„ ØºÙŠØ± Ù…Ø­Ø¯ÙˆØ¯! ðŸš€`
-        : `You've reached the free limit for this feature. Subscribe to Wakti for unlimited access! ðŸš€`;
-      toast.error(msg, { duration: 6000, id: `trial-limit-${feature || 'unknown'}` });
+    const offLimitReached = onEvent('wakti-trial-limit-reached', ({ feature, reason }) => {
+      const msg = (() => {
+        if (language === 'ar') {
+          if (reason === 'feature_locked') return 'هذه الميزة غير مشمولة في تجربة الـ 24 ساعة. اشترك لفتحها.';
+          if (reason === 'trial_expired') return 'انتهت تجربة الـ 24 ساعة. اشترك للمتابعة من الحساب والفوترة.';
+          return 'لقد استخدمت حصتك المجانية لهذه الميزة. اشترك للمتابعة بدون حدود.';
+        }
+
+        if (reason === 'feature_locked') return 'This feature is not included in the 24-hour trial. Subscribe to unlock it.';
+        if (reason === 'trial_expired') return 'Your 24-hour trial has ended. Subscribe from Account & Billing to continue.';
+        return 'You used your free quota for this feature. Subscribe to continue without limits.';
+      })();
+
+      toast.error(msg, {
+        duration: 6500,
+        id: `trial-limit-${feature || 'unknown'}`,
+        action: {
+          label: language === 'ar' ? 'الفوترة' : 'Billing',
+          onClick: () => navigate('/account?tab=billing'),
+        },
+      });
     });
-  }, [language]);
+
+    const offQuotaFinished = onEvent('wakti-trial-quota-finished', ({ feature }) => {
+      const msg = language === 'ar'
+        ? 'استخدمت آخر محاولة مجانية لهذه الميزة. للاستخدام القادم اشترك من الحساب والفوترة.'
+        : 'You just used your last free try for this feature. For the next one, subscribe in Account & Billing.';
+
+      toast.message(msg, {
+        duration: 6500,
+        id: `trial-finished-${feature || 'unknown'}`,
+        action: {
+          label: language === 'ar' ? 'اشترك' : 'Subscribe',
+          onClick: () => navigate('/account?tab=billing'),
+        },
+      });
+    });
+
+    return () => {
+      offLimitReached();
+      offQuotaFinished();
+    };
+  }, [language, navigate]);
 
   // Unified notification system - subscribes to notification_history for all notification types
   // including task_due, reminder_due, messages, contacts, RSVPs, etc.
   // This hook automatically shows in-app toasts when new notifications arrive
   useNotificationHistory();
-  
-  const navigate = useNavigate();
   
   // Set up push notification click handler (Natively/OneSignal)
   // This handles navigation when user taps a push notification

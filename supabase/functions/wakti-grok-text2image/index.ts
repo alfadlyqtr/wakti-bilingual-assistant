@@ -12,40 +12,8 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY")!;
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-const isArabic = (s: string) => /[\u0600-\u06FF]/.test(s || "");
-
-async function translateToEnglishIfArabic(prompt: string): Promise<string> {
-  try {
-    if (!isArabic(prompt)) return prompt;
-    if (!OPENAI_API_KEY) return prompt;
-    const controller = new AbortController();
-    const tid = setTimeout(() => controller.abort(), 10000);
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "Translate Arabic image prompts to English. Return ONLY the English translation." },
-          { role: "user", content: `Translate this to English: ${prompt}` },
-        ],
-        max_tokens: 300,
-        temperature: 0.1,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(tid);
-    if (!resp.ok) return prompt;
-    const j = await resp.json();
-    return j?.choices?.[0]?.message?.content?.trim() || prompt;
-  } catch {
-    return prompt;
-  }
-}
 
 // Extract image URLs from KIE response
 // KIE returns: data.state = "success", data.resultJson = JSON string with { resultUrls: ["..."] }
@@ -172,7 +140,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const finalPrompt = await translateToEnglishIfArabic(prompt);
+    const finalPrompt = prompt;
     console.log(`[grok-t2i] submit prompt="${finalPrompt.slice(0, 100)}" aspect=${aspectRatio}`);
 
     const submitResp = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {

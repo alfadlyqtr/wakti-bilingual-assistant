@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialToken, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 // ─── AI Logger (inlined) ───
 interface AILogParams {
@@ -71,10 +71,10 @@ const cors = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
 };
 const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const KIE_API_KEY = Deno.env.get("KIE_API_KEY");
 
 const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "openai:gpt-image@2";
-const MODEL_BEST = Deno.env.get("RUNWARE_BEST_FAST_MODEL") || "google:4@3";
+const MODEL_BEST = "nano-banana-2";
 // google:4@1 valid 9:16 = 768x1344 | google:4@3 valid 9:16 = 1536x2752
 const STEPS = parseInt(Deno.env.get("WAKTI_T2I_STEPS") ?? "28", 10);
 const CFG = parseFloat(Deno.env.get("WAKTI_T2I_CFG") ?? "5.5");
@@ -89,6 +89,94 @@ function isRetryableRunwareErrorMessage(message: string): boolean {
     || normalized.includes("abort");
 }
 
+function extractKieImageUrls(data: any): string[] {
+  const urls: string[] = [];
+  if (typeof data?.resultJson === "string" && data.resultJson) {
+    try {
+      const parsed = JSON.parse(data.resultJson);
+      if (Array.isArray(parsed?.resultUrls)) {
+        for (const u of parsed.resultUrls) {
+          if (typeof u === "string" && u.startsWith("http")) urls.push(u);
+        }
+      }
+    } catch {
+      // ignore malformed resultJson and continue scanning
+    }
+  }
+  if (urls.length > 0) return urls;
+  const seen = new Set<string>();
+  const scan = (obj: any, depth = 0) => {
+    if (!obj || typeof obj !== "object" || depth > 8) return;
+    for (const [k, v] of Object.entries(obj)) {
+      if (typeof v === "string" && v.startsWith("http") && !seen.has(v)) {
+        const keyLooksImagey = /url|image|img|src|uri|link|photo|pic/i.test(k);
+        const hasImageExt = /\.(png|jpg|jpeg|webp)/i.test(v);
+        if (keyLooksImagey || hasImageExt) {
+          seen.add(v);
+          urls.push(v);
+        }
+      } else if (v && typeof v === "object") {
+        scan(v, depth + 1);
+      }
+    }
+  };
+  scan(data);
+  return urls;
+}
+
+async function pollKieTaskForImage(taskId: string): Promise<string> {
+  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+  const deadline = Date.now() + TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    const resp = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
+      headers: { Authorization: `Bearer ${KIE_API_KEY}` },
+    });
+    const rawText = await resp.text();
+    if (!resp.ok) {
+      throw new Error(`KIE poll failed ${resp.status}: ${rawText.slice(0, 200)}`);
+    }
+    const json = JSON.parse(rawText);
+    const rawStatus = (json?.data?.state || json?.data?.status || json?.data?.taskStatus || "").toString().toLowerCase();
+    const imageUrls = extractKieImageUrls(json?.data);
+    const isDone = rawStatus === "success" || rawStatus === "completed" || rawStatus === "finished"
+      || rawStatus === "succeed" || rawStatus === "done" || rawStatus === "2";
+    const isFailed = rawStatus === "failed" || rawStatus === "error" || rawStatus === "fail" || rawStatus === "3";
+    if (isFailed) {
+      throw new Error(`KIE task failed: ${rawStatus}`);
+    }
+    if ((isDone || imageUrls.length > 0) && imageUrls[0]) {
+      return imageUrls[0];
+    }
+  }
+  throw new Error("KIE generation timed out");
+}
+
+async function generateBestWithKie(prompt: string, aspectRatio: string): Promise<string> {
+  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+  const submitResp = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL_BEST,
+      input: {
+        prompt,
+        aspect_ratio: aspectRatio || "auto",
+        resolution: "1K",
+        output_format: "jpg",
+      },
+    }),
+  });
+  const submitText = await submitResp.text();
+  if (!submitResp.ok) {
+    throw new Error(`KIE submit failed ${submitResp.status}: ${submitText.slice(0, 200)}`);
+  }
+  const submitJson = JSON.parse(submitText);
+  const taskId = submitJson?.data?.taskId;
+  if (!taskId) throw new Error(`No taskId in KIE response: ${submitText.slice(0, 200)}`);
+  return await pollKieTaskForImage(taskId);
+}
+
 function getDimensionsForModel(model: string): { width: number; height: number } {
   if (model === "google:4@3") return { width: 1536, height: 2752 };
   if (model === "google:4@2") return { width: 768, height: 1376 };
@@ -97,44 +185,8 @@ function getDimensionsForModel(model: string): { width: number; height: number }
   return { width: 768, height: 1344 };
 }
 
-const isArabic = (s: string)=>/[\u0600-\u06FF]/.test(s || "");
-
-async function translateIfArabic(prompt: string) {
-  try {
-    if (!isArabic(prompt)) return prompt;
-    if (!OPENAI_API_KEY) return prompt;
-    const controller = new AbortController();
-    const tid = setTimeout(()=>controller.abort(), 10000);
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: "Translate Arabic image prompts to English. Return ONLY the English translation." },
-          { role: "user", content: `Translate this to English: ${prompt}` }
-        ],
-        max_tokens: 300,
-        temperature: 0.1
-      }),
-      signal: controller.signal
-    });
-    clearTimeout(tid);
-    if (!resp.ok) return prompt;
-    const json = await resp.json().catch(()=>null);
-    const txt = json?.choices?.[0]?.message?.content?.trim();
-    return txt || prompt;
-  } catch  {
-    return prompt;
-  }
-}
-
-
-const IMAGE_URL_KEYS = ["imageURL","URL","url","outputUrl","outputURL"] as const;
-const IMAGE_DATAURI_KEYS = ["imageDataURI","dataURI","dataUrl","data_uri"] as const;
+const IMAGE_URL_KEYS = ["imageURL", "URL", "url", "outputUrl", "outputURL"] as const;
+const IMAGE_DATAURI_KEYS = ["imageDataURI", "dataURI", "dataUrl", "data_uri"] as const;
 
 function findFirstImage(node: unknown): { url?: string; dataURI?: string } | null {
   const visited = new Set<object>();
@@ -183,8 +235,8 @@ async function runwareGenerate(positivePrompt: string, model: string, signal?: A
     inferenceTask
   ];
   const controller = new AbortController();
-  const tid = setTimeout(()=>controller.abort(), TIMEOUT_MS);
-  if (signal) signal.addEventListener("abort", ()=>controller.abort());
+  const tid = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  if (signal) signal.addEventListener("abort", () => controller.abort());
   try {
     const res = await fetch("https://api.runware.ai/v1", {
       method: "POST",
@@ -213,44 +265,56 @@ async function runwareGenerateWithRetry(positivePrompt: string, model: string, s
   }
 }
 
-Deno.serve(async (req)=>{
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: { ...cors } });
   const startTime = Date.now();
   let usedModel = MODEL_FAST;
+  let usedProvider = "runware";
   let promptText = "";
 
   try {
     if (req.method !== "POST") return new Response(JSON.stringify({ success: false, error: "Method not allowed" }), { status: 405, headers: { ...cors, "Content-Type": "application/json" } });
-    if (!RUNWARE_API_KEY) return new Response(JSON.stringify({ success: false, error: "RUNWARE_API_KEY not configured" }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
 
-    const body = await req.json().catch(()=>({}));
+    const body = await req.json().catch(() => ({ }));
     const prompt = (body?.prompt || "").toString();
     const quality = (body?.quality || "fast").toString();
     const userId = body?.user_id || null;
     promptText = prompt;
+    const supabaseAdmin = userId
+      ? createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
+      : null;
 
     if (!prompt.trim()) return new Response(JSON.stringify({ success: false, error: "Missing prompt" }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
 
     // ── Trial Token Check ──
-    if (userId) {
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
-      const trial = await checkAndConsumeTrialToken(supabaseAdmin, userId, 't2i', 2);
+    if (userId && supabaseAdmin) {
+      const trial = await checkTrialAccess(supabaseAdmin, userId, 't2i', 2);
       if (!trial.allowed) {
         return new Response(
-          JSON.stringify({ success: false, error: 'TRIAL_LIMIT_REACHED', feature: 't2i' }),
+          JSON.stringify({ success: false, ...buildTrialErrorPayload('t2i', trial) }),
           { status: 403, headers: { ...cors, 'Content-Type': 'application/json' } }
         );
       }
     }
     // ── End Trial Token Check ──
 
-    const translated = await translateIfArabic(prompt);
+    const finalPrompt = prompt;
     usedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
+    usedProvider = quality === "best_fast" ? "kie-nano-banana-2" : "runware";
 
-    const { url } = await runwareGenerateWithRetry(translated, usedModel, req.signal);
+    let url: string | null = null;
+    if (quality === "best_fast") {
+      url = await generateBestWithKie(finalPrompt, (body?.aspect_ratio || "9:16").toString());
+    } else {
+      if (!RUNWARE_API_KEY) {
+        return new Response(JSON.stringify({ success: false, error: "RUNWARE_API_KEY not configured" }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+      }
+      const result = await runwareGenerateWithRetry(finalPrompt, usedModel, req.signal);
+      url = result.url;
+    }
     if (!url) {
       await logAI({
         functionName: "text2image",
@@ -260,9 +324,19 @@ Deno.serve(async (req)=>{
         durationMs: Date.now() - startTime,
         status: "error",
         errorMessage: "No image returned",
-        metadata: { provider: "runware", quality }
+        metadata: { provider: usedProvider, quality }
       });
       return new Response(JSON.stringify({ success: false, error: "No image returned" }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
+    let trialPayload = null;
+    if (userId && supabaseAdmin) {
+      const consumeTrial = await checkAndConsumeTrialToken(supabaseAdmin, userId, 't2i', 2);
+      if (consumeTrial.allowed) {
+        trialPayload = buildTrialSuccessPayload('t2i', consumeTrial);
+      } else {
+        console.warn('[wakti-text2image] Trial consume skipped after success:', consumeTrial.reason);
+      }
     }
 
     // Log successful AI usage
@@ -273,10 +347,10 @@ Deno.serve(async (req)=>{
       inputText: prompt,
       durationMs: Date.now() - startTime,
       status: "success",
-      metadata: { provider: "runware", quality, translated: translated !== prompt }
+      metadata: { provider: usedProvider, quality, translated: false }
     });
 
-    return new Response(JSON.stringify({ success: true, url, model: usedModel, quality }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, url, model: usedModel, quality, trial: trialPayload }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
   } catch (err) {
     const msg = String((err as any)?.message || err);
     const normalized = /abort/i.test(msg) ? "Generation timed out. Please try again with a shorter prompt or try Fast quality." : msg;
@@ -288,7 +362,7 @@ Deno.serve(async (req)=>{
       durationMs: Date.now() - startTime,
       status: "error",
       errorMessage: normalized,
-      metadata: { provider: "runware" }
+      metadata: { provider: usedProvider }
     });
 
     return new Response(JSON.stringify({ success: false, error: normalized }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });

@@ -4,6 +4,8 @@ import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
+import { normalizeSmartText, readSavedSmartTexts, writeSavedSmartTexts, type SavedSmartTextItem } from '@/utils/smartTextUtils';
+import { emitEvent } from '@/utils/eventBus';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import DiagramsTab from './DiagramsTab';
@@ -535,16 +537,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   // Saved texts (persisted)
   const SAVED_TEXTS_KEY = 'wakti_saved_texts_v1';
-  const [savedTextsList, setSavedTextsList] = useState<{ id: string; text: string; savedAt: string }[]>([]);
+  const [savedTextsList, setSavedTextsList] = useState<SavedSmartTextItem[]>([]);
   const [savedCount, setSavedCount] = useState(0);
 
   const loadSavedTexts = () => {
     try {
-      const raw = localStorage.getItem(SAVED_TEXTS_KEY);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) setSavedTextsList(arr);
-      }
+      const items = readSavedSmartTexts(SAVED_TEXTS_KEY);
+      setSavedTextsList(items);
+      writeSavedSmartTexts(SAVED_TEXTS_KEY, items);
     } catch { }
   };
 
@@ -558,9 +558,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       const raw = localStorage.getItem(CACHE_KEY);
       if (raw) {
         const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) setCachedTexts(arr.filter((s) => typeof s === 'string').slice(0, 3));
+        if (Array.isArray(arr)) setCachedTexts(arr.filter((s) => typeof s === 'string').map((s) => normalizeSmartText(s)).filter(Boolean).slice(0, 3));
       }
     } catch { }
+    loadSavedTexts();
   }, []);
 
   useEffect(() => {
@@ -767,7 +768,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     return { mainText: t, notes };
   }, []);
 
-  const parsedText = useMemo(() => splitNotesFromText(generatedText), [generatedText, splitNotesFromText]);
+  const parsedText = useMemo(() => splitNotesFromText(normalizeSmartText(generatedText)), [generatedText, splitNotesFromText]);
 
   const handleCopy = useCallback(async () => {
     try {
@@ -864,18 +865,17 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   }, [isLoading, parsedText.mainText]);
 
   const handleSaveText = useCallback(() => {
-    const text = parsedText.mainText.trim();
+    const text = normalizeSmartText(parsedText.mainText).trim();
     if (!text) return;
     try {
-      const raw = localStorage.getItem(SAVED_TEXTS_KEY);
-      const existing: { id: string; text: string; savedAt: string }[] = raw ? JSON.parse(raw) : [];
-      if (existing.some(s => s.text === text)) {
+      const existing = readSavedSmartTexts(SAVED_TEXTS_KEY);
+      if (existing.some((s) => normalizeSmartText(s.text) === text)) {
         toast.info(language === 'ar' ? 'النص محفوظ مسبقاً' : 'Already saved');
         return;
       }
-      const entry = { id: Date.now().toString(), text, savedAt: new Date().toISOString() };
-      const next = [entry, ...existing].slice(0, 20);
-      localStorage.setItem(SAVED_TEXTS_KEY, JSON.stringify(next));
+      const entry: SavedSmartTextItem = { id: Date.now().toString(), text, savedAt: new Date().toISOString() };
+      const next = [entry, ...existing];
+      writeSavedSmartTexts(SAVED_TEXTS_KEY, next);
       setSavedTextsList(next);
       setSavedCount(c => c + 1);
       toast.success(language === 'ar' ? 'تم الحفظ في المحفوظات' : 'Saved to Saved tab');
@@ -884,7 +884,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   const copyWithFeedback = useCallback(async (text: string) => {
     try {
-      await safeCopyToClipboard(text);
+      await safeCopyToClipboard(normalizeSmartText(text));
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch { }
@@ -909,28 +909,32 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
 
   const handleShare = useCallback(async () => {
     try {
-      const text = parsedText.mainText;
+      const text = normalizeSmartText(parsedText.mainText);
       if (!text) return;
       const shareTitle = parsedGenerated.hasFillFormat && parsedGenerated.subject
         ? parsedGenerated.subject
         : 'Wakti • Smart Text';
-      const shareText = parsedGenerated.hasFillFormat && parsedGenerated.message
+      const shareText = normalizeSmartText(parsedGenerated.hasFillFormat && parsedGenerated.message
         ? parsedGenerated.message
-        : text;
+        : text);
       if (navigator.share) {
         await navigator.share({
           title: shareTitle,
           text: shareText,
         });
       } else {
-        const mailto = `mailto:?subject=${encodeURIComponent(shareTitle)}&body=${encodeURIComponent(shareText)}`;
-        window.location.href = mailto;
+        const fallbackText = parsedGenerated.hasFillFormat
+          ? `Subject: ${shareTitle}\n\n${shareText}`
+          : shareText;
+        const copiedOk = await safeCopyToClipboard(fallbackText);
+        if (!copiedOk) throw new Error('Share failed');
+        toast.success(language === 'ar' ? 'تم نسخ النص. الصقه في التطبيق الذي تريده' : 'Text copied. Paste it wherever you want');
       }
     } catch (e) {
       console.error('Share failed:', e);
       setError(e?.message || 'Share failed');
     }
-  }, [parsedGenerated.hasFillFormat, parsedGenerated.message, parsedGenerated.subject, parsedText.mainText]);
+  }, [language, parsedGenerated.hasFillFormat, parsedGenerated.message, parsedGenerated.subject, parsedText.mainText]);
 
   const handleGenerate = useCallback(async (promptOverride?: string) => {
     if (!promptOverride && !canGenerate) return;
@@ -996,7 +1000,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         if (responseContentType.includes('application/json')) {
           const errorPayload = await response.json();
           if (errorPayload?.error === 'TRIAL_LIMIT_REACHED') {
-            window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: errorPayload?.feature || (body.mode === 'reply' ? 'reply' : 'compose') } }));
+            emitEvent('wakti-trial-limit-reached', {
+              feature: errorPayload?.feature || (body.mode === 'reply' ? 'reply' : 'compose'),
+              reason: errorPayload?.reason,
+              code: errorPayload?.code,
+              consumed: errorPayload?.consumed,
+              limit: errorPayload?.limit,
+              remaining: errorPayload?.remaining,
+            });
             return;
           }
           setError(errorPayload?.error || 'Failed to generate text');
@@ -1011,7 +1022,14 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       if (responseContentType.includes('application/json')) {
         const jsonPayload = await response.json();
         if (jsonPayload?.error === 'TRIAL_LIMIT_REACHED') {
-          window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: jsonPayload?.feature || (body.mode === 'reply' ? 'reply' : 'compose') } }));
+          emitEvent('wakti-trial-limit-reached', {
+            feature: jsonPayload?.feature || (body.mode === 'reply' ? 'reply' : 'compose'),
+            reason: jsonPayload?.reason,
+            code: jsonPayload?.code,
+            consumed: jsonPayload?.consumed,
+            limit: jsonPayload?.limit,
+            remaining: jsonPayload?.remaining,
+          });
           return;
         }
 
@@ -2011,11 +2029,11 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               )}
 
               {/* Sub-tabs for Generated: Current vs Saved */}
-              <div className="flex bg-muted/50 p-1 rounded-lg w-fit mb-4">
+              <div className="grid grid-cols-2 gap-1 bg-muted/50 p-1 rounded-lg w-full mb-4">
                 <button
                   type="button"
                   onClick={() => setGeneratedSubTab('current')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-all ${
                     generatedSubTab === 'current' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
@@ -2024,7 +2042,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                 <button
                   type="button"
                   onClick={() => setGeneratedSubTab('saved')}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${
+                  className={`w-full px-4 py-2 rounded-md text-sm font-medium transition-all ${
                     generatedSubTab === 'saved' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >

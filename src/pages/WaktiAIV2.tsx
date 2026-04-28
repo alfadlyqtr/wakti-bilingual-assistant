@@ -14,6 +14,7 @@ import { ChatInput, ChatSubmode, ReplyContext } from '@/components/wakti-ai-v2/C
 import { ChatDrawers } from '@/components/wakti-ai-v2/ChatDrawers';
 import { ConversationSidebar } from '@/components/wakti-ai-v2/ConversationSidebar';
 import { HelpfulMemoryOnboardingPopup } from '@/components/wakti-ai-v2/HelpfulMemoryOnboardingPopup';
+import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { AnnouncementService } from '@/services/AnnouncementService';
 import { HelpfulMemoryService } from '@/services/HelpfulMemoryService';
 import { cn } from '@/lib/utils';
@@ -1060,94 +1061,7 @@ const WaktiAIV2 = () => {
 
   return (
     <div className="wakti-ai-page-container" style={{ position: 'relative' }}>
-
-      {/* Trial limit overlay — shades the page, centered subscribe card */}
-      {chatTrialLimitReached && (
-        <div style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 9999,
-          background: 'rgba(0,0,0,0.88)',
-          backdropFilter: 'blur(6px)',
-          WebkitBackdropFilter: 'blur(6px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '24px',
-        }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #0c0f14 0%, hsl(235,25%,10%) 50%, hsl(250,20%,12%) 100%)',
-            border: '1.5px solid rgba(130,100,255,0.35)',
-            borderRadius: '1.5rem',
-            padding: '40px 32px',
-            maxWidth: '420px',
-            width: '100%',
-            textAlign: 'center',
-            boxShadow: '0 0 0 1px rgba(255,255,255,0.05), 0 24px 80px rgba(0,0,0,0.9), 0 0 60px rgba(130,100,255,0.15)',
-          }}>
-            <div style={{ fontSize: '3.5rem', marginBottom: '16px', lineHeight: 1 }}>🚀</div>
-            <h2 style={{
-              margin: '0 0 12px',
-              fontSize: '1.5rem',
-              fontWeight: 800,
-              color: '#f2f2f2',
-              letterSpacing: '-0.02em',
-            }}>
-              {language === 'ar' ? 'انتهت رسائلك المجانية' : 'Free Messages Used Up'}
-            </h2>
-            <p style={{
-              margin: '0 0 28px',
-              fontSize: '1rem',
-              color: 'rgba(242,242,242,0.7)',
-              lineHeight: 1.6,
-            }}>
-              {language === 'ar'
-                ? 'استخدمت ١٥ رسالة مجانية (Chat، Study، بحث الويب، ويوتيوب مجتمعة). اشترك للحصول على وصول غير محدود!'
-                : "You've used all 15 free messages — Chat, Study, Web Search & YouTube combined. Subscribe for unlimited access!"}
-            </p>
-            <a
-              href="https://apps.apple.com/us/app/wakti-ai/id6755150700"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'block',
-                background: 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(260,80%,65%) 50%, hsl(280,70%,65%) 100%)',
-                color: '#fff',
-                fontWeight: 800,
-                fontSize: '1.1rem',
-                borderRadius: '1rem',
-                padding: '16px 24px',
-                textDecoration: 'none',
-                marginBottom: '14px',
-                boxShadow: '0 4px 24px hsla(260,80%,65%,0.45)',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              {language === 'ar' ? '⚡ اشترك الآن' : '⚡ Subscribe Now'}
-            </a>
-            <button
-              onClick={() => window.history.back()}
-              style={{
-                display: 'block',
-                width: '100%',
-                background: 'transparent',
-                border: '1.5px solid rgba(242,242,242,0.18)',
-                borderRadius: '1rem',
-                color: 'rgba(242,242,242,0.7)',
-                fontSize: '0.95rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                padding: '13px 24px',
-                transition: 'border-color 0.2s, color 0.2s',
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(242,242,242,0.45)'; (e.currentTarget as HTMLButtonElement).style.color = '#f2f2f2'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(242,242,242,0.18)'; (e.currentTarget as HTMLButtonElement).style.color = 'rgba(242,242,242,0.7)'; }}
-            >
-              {language === 'ar' ? '← رجوع' : 'Go back →'}
-            </button>
-          </div>
-        </div>
-      )}
+      {chatTrialLimitReached ? <TrialGateOverlay featureKey="ai_chat" limit={15} featureLabel={{ en: 'WAKTI AI Chat', ar: 'دردشة وقتي AI' }} /> : null}
       <HelpfulMemoryOnboardingPopup
         open={showMemoryOnboarding}
         onQuickSetup={handleMemoryOnboardingQuickSetup}

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/providers/ThemeProvider';
+import { safeCopyToClipboard } from '@/utils/clipboardUtils';
+import { readSavedSmartTexts, writeSavedSmartTexts, type SavedSmartTextItem } from '@/utils/smartTextUtils';
 import { Loader2, Presentation, Download, Trash2, LayoutDashboard, Eye, FileText, Copy, Check, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import ShareButton from '@/components/ui/ShareButton';
@@ -40,7 +42,7 @@ export default function SavedItemsTab() {
   const [presentations, setPresentations] = useState<SavedPresentation[]>([]);
   const [diagrams, setDiagrams] = useState<SavedDiagram[]>([]);
   const [a4Documents, setA4Documents] = useState<A4HistoryBatch[]>([]);
-  const [savedTexts, setSavedTexts] = useState<SavedText[]>([]);
+  const [savedTexts, setSavedTexts] = useState<SavedSmartTextItem[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   
   const [isLoading, setIsLoading] = useState(false);
@@ -61,17 +63,15 @@ export default function SavedItemsTab() {
 
   const loadSavedTexts = () => {
     try {
-      const raw = localStorage.getItem(SAVED_TEXTS_KEY);
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) setSavedTexts(arr);
-      }
+      const items = readSavedSmartTexts(SAVED_TEXTS_KEY);
+      setSavedTexts(items);
+      writeSavedSmartTexts(SAVED_TEXTS_KEY, items);
     } catch { }
   };
 
   const handleCopyText = async (item: SavedText) => {
     try {
-      await navigator.clipboard.writeText(item.text);
+      await safeCopyToClipboard(item.text);
       setCopiedId(item.id);
       setTimeout(() => setCopiedId(null), 1500);
     } catch { toast.error(language === 'ar' ? 'فشل النسخ' : 'Copy failed'); }
@@ -79,10 +79,9 @@ export default function SavedItemsTab() {
 
   const deleteText = (id: string) => {
     try {
-      const raw = localStorage.getItem(SAVED_TEXTS_KEY);
-      const existing: SavedText[] = raw ? JSON.parse(raw) : [];
+      const existing = readSavedSmartTexts(SAVED_TEXTS_KEY);
       const next = existing.filter(t => t.id !== id);
-      localStorage.setItem(SAVED_TEXTS_KEY, JSON.stringify(next));
+      writeSavedSmartTexts(SAVED_TEXTS_KEY, next);
       setSavedTexts(next);
       toast.success(language === 'ar' ? 'تم الحذف' : 'Deleted');
     } catch { }
@@ -248,11 +247,10 @@ export default function SavedItemsTab() {
 
   return (
     <div className="w-full space-y-4">
-      <div className="overflow-x-auto pb-1 -mx-1 px-1">
-        <div className="flex bg-muted/50 p-1 rounded-lg w-max min-w-full">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-muted/50 p-1 rounded-lg">
           <button
             onClick={() => setActiveTab('text')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all min-w-0 min-h-[56px] text-center leading-tight ${
               activeTab === 'text' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -261,7 +259,7 @@ export default function SavedItemsTab() {
           </button>
           <button
             onClick={() => setActiveTab('presentations')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all min-w-0 min-h-[56px] text-center leading-tight ${
               activeTab === 'presentations' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -270,7 +268,7 @@ export default function SavedItemsTab() {
           </button>
           <button
             onClick={() => setActiveTab('diagrams')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all min-w-0 min-h-[56px] text-center leading-tight ${
               activeTab === 'diagrams' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -279,14 +277,13 @@ export default function SavedItemsTab() {
           </button>
           <button
             onClick={() => setActiveTab('a4')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all whitespace-nowrap ${
+            className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-3 py-2 rounded-md text-xs sm:text-sm font-medium transition-all min-w-0 min-h-[56px] text-center leading-tight ${
               activeTab === 'a4' ? 'bg-white dark:bg-slate-800 shadow-sm text-primary' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <ImageIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
             {language === 'ar' ? 'مستندات A4' : 'A4 Documents'}
           </button>
-        </div>
       </div>
 
       {isLoading ? (

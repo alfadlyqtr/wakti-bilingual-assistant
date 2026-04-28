@@ -17,7 +17,20 @@ type EventMap = {
   'wakti:clear-insights': void;
   'badge-updated': void;
   'refreshTimeline': void;
-  'wakti-trial-limit-reached': { feature: string };
+  'wakti-trial-limit-reached': {
+    feature: string;
+    reason?: 'feature_locked' | 'limit_reached' | 'trial_expired';
+    code?: 'TRIAL_LIMIT_REACHED' | 'TRIAL_FEATURE_LOCKED' | 'TRIAL_EXPIRED';
+    consumed?: number;
+    limit?: number;
+    remaining?: number;
+  };
+  'wakti-trial-quota-finished': {
+    feature: string;
+    consumed?: number;
+    limit?: number;
+    remaining?: number;
+  };
 
   // ─── Registered for type-safety, still emitted via window.dispatchEvent ─
   // Safe to migrate incrementally — the listeners already accept these shapes.

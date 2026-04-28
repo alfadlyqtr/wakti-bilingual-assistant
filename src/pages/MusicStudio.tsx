@@ -4205,6 +4205,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       };
 
       if (status === 'completed' && tracks?.length) {
+        if (songsRemaining <= 1) {
+          emitEvent('wakti-trial-quota-finished', { feature: 'music', consumed: 1, limit: 1, remaining: 0 });
+        }
         setSubmitting(false);
         setGeneratingTask(null);
         setGeneratedTracks(tracks);
@@ -4245,6 +4248,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const handleCompleted = (tracks: Array<{ id: string; audioUrl: string; coverUrl: string | null; duration: number | null; title: string | null; variantIndex: number }>) => {
       if (settled) return;
       settled = true;
+      if (songsRemaining <= 1) {
+        emitEvent('wakti-trial-quota-finished', { feature: 'music', consumed: 1, limit: 1, remaining: 0 });
+      }
       setGeneratingTask(null);
       setSubmitting(false);
       setGeneratedTracks(tracks);
