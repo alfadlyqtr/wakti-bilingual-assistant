@@ -3559,6 +3559,213 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return 'D minor tonal center';
   }
 
+  // ============================================================================
+  // ── WAKTI RECIPE V1 — Sentence Engine ───────────────────────────────────────
+  // Replaces the legacy CSV-style "styleString" with a 4-sentence natural-language
+  // production brief, in Suno's preferred voice. Family-aware vocabulary, all
+  // content driven by the user's chips. Keeps our negative tags + dialect lock.
+  // ============================================================================
+  const WAKTI_RECIPE_V1 = true;
+
+  type KhalijiFamily = 'pop' | 'heritage' | 'urban' | 'party';
+
+  const POP_CHIPS = new Set<string>([
+    'GCC Pop','GCC Romantic','GCC Elegant','GCC R&B Pop','Luxury GCC Pop',
+    'GCC Radio Pop','GCC Dance Pop','GCC Electro Pop','GCC Synth Pop',
+    'English GCC Pop','Modern Khaleeji Fusion','Cinematic GCC',
+    'GCC Anthem','National Event GCC',
+    'Khaleeji Pop','Khaleeji Romantic','Khaleeji Elegant','Khaleeji R&B Pop',
+    'Luxury Khaleeji Pop','Khaleeji Radio Pop','Khaleeji Dance Pop',
+    'Khaleeji Electro Pop','Khaleeji Synth Pop','English Khaleeji Pop',
+    'Khaleeji Cinematic','Khaleeji Anthem','Khaleeji National Event',
+    'بوب خليجي','خليجي عصري','خليجي رومانسي','خليجي أنيق','خليجي إذاعي',
+    'خليجي دانس','خليجي إلكتروني','خليجي سينث بوب','فيوجن خليجي',
+    'إنجليزي بطابع خليجي','خليجي آر أند بي','خليجي فاخر','خليجي سينمائي',
+    'خليجي جماهيري','مناسبات وطنية خليجية',
+  ]);
+  const HERITAGE_CHIPS = new Set<string>([
+    'GCC Traditional','Sheilat','Samri','Jalsa','Liwa','GCC Shaabi','Zar','Ardah','GCC Wedding',
+    'Khaleeji Traditional','Khaleeji Shaabi','Khaleeji Wedding',
+    'خليجي تراثي','شيلات','سامري','جلسة','ليوان','شعبي خليجي','خليجي أعراس',
+  ]);
+  const URBAN_CHIPS = new Set<string>([
+    'GCC Rap','Khaleeji Rap','Khaleeji Trap','خليجي راب',
+  ]);
+  const PARTY_CHIPS = new Set<string>([
+    'GCC Party','Khaleeji Party','خليجي حفلات',
+  ]);
+
+  function getKhalijiFamily(chip: string | null): KhalijiFamily {
+    if (!chip) return 'pop';
+    if (URBAN_CHIPS.has(chip)) return 'urban';
+    if (PARTY_CHIPS.has(chip)) return 'party';
+    if (HERITAGE_CHIPS.has(chip)) return 'heritage';
+    return 'pop';
+  }
+
+  function normalizeChipForDisplay(chip: string): string {
+    return chip
+      .replace(/\bGCC\b/g, 'Khaleeji')
+      .replace(/\bgulf\b/gi, 'Khaleeji')
+      .replace(/\bkhaliji\b/gi, 'Khaleeji');
+  }
+
+  // Family vocabulary table — drives the wording of the 4-sentence brief
+  // and the section enrichers. Same chip → same words (deterministic).
+  const FAMILY_VOCAB: Record<KhalijiFamily, {
+    s1Prefix: string;
+    arrangementAdj: string;
+    vocalDelivery: string;
+    vocalOrnament: string;
+    productionChar: string;
+    excludeTraditional: boolean;
+    chorusLift: string;
+    verseAdj: string;
+    introScene: (insts: string[]) => string;
+    outroFade: (insts: string[]) => string;
+  }> = {
+    pop: {
+      s1Prefix: 'Modern',
+      arrangementAdj: 'polished, radio-ready',
+      vocalDelivery: 'vocal-forward in the mix with clean hook delivery',
+      vocalOrnament: 'controlled quarter-tone ornaments on sustained notes',
+      productionChar: 'Clean, premium mix with modern compression and subtle reverb',
+      excludeTraditional: true,
+      chorusLift: 'confident',
+      verseAdj: 'sparse, melodic',
+      introScene: (insts) => insts.slice(0, 2).join(' and ') || 'soft pads',
+      outroFade: (insts) => insts[0] || 'pads',
+    },
+    heritage: {
+      s1Prefix: 'Authentic',
+      arrangementAdj: 'traditional Khaleeji heritage',
+      vocalDelivery: 'emotive jalsa delivery, close-mic intimacy',
+      vocalOrnament: 'expressive mawwal ornaments and quarter-tone microtones',
+      productionChar: 'Intimate, natural acoustic mix with minimal processing',
+      excludeTraditional: false,
+      chorusLift: 'soulful',
+      verseAdj: 'intimate, expressive',
+      introScene: (insts) => insts.slice(0, 2).join(' and ') || 'oud entrance',
+      outroFade: (insts) => insts[0] || 'oud',
+    },
+    urban: {
+      s1Prefix: 'Modern Khaleeji',
+      arrangementAdj: 'raw, modern urban',
+      vocalDelivery: 'rhythmic flow with melodic flourishes',
+      vocalOrnament: 'occasional quarter-tone vocal lifts',
+      productionChar: 'Tight low-end, punchy drums, subtle auto-tune',
+      excludeTraditional: true,
+      chorusLift: 'hard-hitting',
+      verseAdj: 'rhythmic, punchy',
+      introScene: (insts) => insts.slice(0, 2).join(' and ') || '808 bass and trap drums',
+      outroFade: (insts) => insts[0] || '808 bass',
+    },
+    party: {
+      s1Prefix: 'Celebratory',
+      arrangementAdj: 'full-energy, danceable Khaleeji',
+      vocalDelivery: 'energetic, chant-ready hook delivery',
+      vocalOrnament: 'bold quarter-tone vocal lifts',
+      productionChar: 'Wide dynamic mix with prominent percussion',
+      excludeTraditional: false,
+      chorusLift: 'celebratory',
+      verseAdj: 'rhythmic, energetic',
+      introScene: (insts) => insts.slice(0, 2).join(' and ') || 'percussion entrance',
+      outroFade: (insts) => insts[0] || 'percussion',
+    },
+  };
+
+  // Build the 4-sentence production brief from user picks.
+  // Replaces the comma-separated tag dump with natural language Suno V5.5 prefers.
+  function buildKhalijiProductionBrief(opts: {
+    styleChipLabel: string;
+    family: KhalijiFamily;
+    instruments: string[];
+    primaryRhythm: string | null;
+    supportingRhythms: string[];
+    moods: string[];
+    tempo: string;
+    key: string;
+  }): string {
+    const v = FAMILY_VOCAB[opts.family];
+    const label = normalizeChipForDisplay(opts.styleChipLabel);
+    const s1 = `${v.s1Prefix} ${label} production.`;
+
+    const instList = opts.instruments.length > 0
+      ? opts.instruments.join(', ')
+      : 'core Khaleeji instrumentation';
+    const rhythmClause = opts.primaryRhythm
+      ? ` with a ${opts.primaryRhythm} driving the groove`
+      : '';
+    const supRhythmClause = opts.supportingRhythms.length > 0
+      ? ` underneath a light ${opts.supportingRhythms.join(' and ')}`
+      : '';
+    const s2 = `A ${v.arrangementAdj} arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
+
+    // S3 — vocal sentence with explicit native-pronunciation anchor (helps Suno
+    // lock the dialect; targets "slightly bad Khaleeji pronunciation" feedback).
+    const s3 = `Vocals are delivered in authentic Kuwaiti-Qatari Khaleeji dialect with native Khaleeji pronunciation and colloquial phrasing, ${v.vocalDelivery}, featuring ${v.vocalOrnament}.`;
+
+    const moodPart = opts.moods.length > 0 ? `The mood is ${opts.moods.join(', ')}.` : '';
+    // Split "{N} BPM {feel}" into two natural clauses; drop redundant "tonal center".
+    const bpmMatch = opts.tempo.match(/^(\d+\s*BPM)\s*(.*)$/i);
+    const cleanKey = opts.key.replace(/\s*tonal center\s*$/i, '').trim();
+    const tempoPart = bpmMatch && bpmMatch[2]
+      ? `Tempo sits around ${bpmMatch[1].trim()} with a ${bpmMatch[2].trim()} feel, in ${cleanKey}.`
+      : `Tempo sits around ${opts.tempo} in ${cleanKey}.`;
+    const productionPart = `${v.productionChar}.`;
+    // Belt-and-suspenders with negative tags: explicitly exclude traditional
+    // instrumentation when the user picked a modern family with no traditional
+    // instruments selected.
+    const hasTraditional = opts.instruments.some((i) => /oud|qanun|darbuka|riq|mirwas|hand\s*clap/i.test(i));
+    const exclusion = v.excludeTraditional && !hasTraditional
+      ? ' No traditional Khaleeji instrumentation — this is a modern production.'
+      : '';
+    const s4 = [moodPart, tempoPart, productionPart].filter(Boolean).join(' ') + exclusion;
+
+    return [s1, s2, s3, s4].filter(Boolean).join(' ');
+  }
+
+  // Vocal character cue — ONE line at the very top of the prompt.
+  // Family + gender aware. Replaces the old "[Khaleeji male vocal, …]".
+  function buildVocalCharacterCue(family: KhalijiFamily, vocalType: 'male' | 'female' | 'none'): string | null {
+    if (vocalType === 'none') return null;
+    const cap = vocalType === 'male' ? 'male' : 'female';
+    switch (family) {
+      case 'pop':
+        return `[Smooth polished ${cap} vocal, warm Khaleeji timbre, clean ${vocalType === 'male' ? 'hook' : 'melodic'} delivery]`;
+      case 'heritage':
+        return `[Warm ${cap} Khaleeji voice, traditional jalsa delivery with mawwal ornaments]`;
+      case 'urban':
+        return `[Confident ${cap} vocal, rhythmic Khaleeji flow with melodic flourishes]`;
+      case 'party':
+        return `[Energetic ${cap} Khaleeji vocal, celebratory hook delivery]`;
+    }
+  }
+
+  // Section tag enricher — upgrades [Chorus] → [Chorus — full arrangement, confident lift]
+  // for known structural tags. Custom user tags ([Hook Drop], [Final Whisper]) are left alone.
+  function enrichSectionTag(rawTag: string, family: KhalijiFamily, instruments: string[]): string {
+    const inner = rawTag.replace(/^\[|\]$/g, '').trim();
+    // Already enriched (contains em-dash or colon)
+    if (/[—:]/.test(inner)) return rawTag;
+    const lower = inner.toLowerCase();
+    const v = FAMILY_VOCAB[family];
+
+    if (/^intro$/i.test(lower)) return `[Intro — ${v.introScene(instruments)}, soft pulse]`;
+    if (/^outro$/i.test(lower)) return `[Outro — fade on ${v.outroFade(instruments)}]`;
+    if (/^pre[-\s]?chorus$/i.test(lower)) return `[Pre-Chorus — build, layer pads]`;
+    if (/^final\s*chorus$/i.test(lower)) return `[Final Chorus — full arrangement, ${v.chorusLift} climax]`;
+    if (/^chorus$/i.test(lower)) return `[Chorus — full arrangement, ${v.chorusLift} lift]`;
+    if (/^bridge$/i.test(lower)) return `[Bridge — breakdown, intimate]`;
+    if (/^mini\s*verse$/i.test(lower)) return `[Mini Verse — vocal-forward, ${v.verseAdj}]`;
+    if (/^mini\s*chorus$/i.test(lower)) return `[Mini Chorus — compact ${v.chorusLift} payoff]`;
+    if (/^verse\s*\d*$/i.test(lower)) return `[${inner} — vocal-forward, ${v.verseAdj}]`;
+    if (/^instrumental\s*solo$/i.test(lower)) return `[Instrumental Solo — ${v.outroFade(instruments)} lead]`;
+
+    // Custom/unknown tag — respect user creativity, leave alone
+    return rawTag;
+  }
+
   function buildKhalijiControlBlock() {
     const primaryStyle = effectiveIncludeTags[0] ?? null;
     const rawStyleAnchor = primaryStyle ? (STYLE_ANCHORS[primaryStyle] ?? primaryStyle) : null;
@@ -3601,7 +3808,36 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       .filter((part): part is string => Boolean(part))
       .map((part) => part.trim())
       .filter((part, index, parts) => parts.indexOf(part) === index);
-    const styleString = styleParts.join(', ').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
+    const legacyStyleString = styleParts.join(', ').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
+
+    // ── WAKTI RECIPE V1 — when enabled and a Khaleeji chip is selected, swap
+    // the comma-separated tag dump for a natural-language production brief.
+    const family: KhalijiFamily = getKhalijiFamily(primaryStyle);
+    const useRecipe = WAKTI_RECIPE_V1 && (isGccStyle || isGccStyleSelected) && Boolean(primaryStyle);
+    const briefString = useRecipe
+      ? buildKhalijiProductionBrief({
+          styleChipLabel: primaryStyle as string,
+          family,
+          instruments: instrumentLayer,
+          primaryRhythm,
+          supportingRhythms,
+          moods: selectedMoods,
+          tempo: tempoTag,
+          key: keyTag,
+        })
+      : null;
+    // Append free-text + dialect lock as proper capitalized sentences so the brief
+    // doesn't end in a lowercase fragment. Dialect lock becomes "Strict ... lock."
+    const dialectSentence = dialectLock
+      ? `${dialectLock.charAt(0).toUpperCase()}${dialectLock.slice(1)} lock.`
+      : null;
+    const freeTextSentence = freeText
+      ? (/[.!?]$/.test(freeText.trim()) ? freeText.trim() : `${freeText.trim()}.`)
+      : null;
+    const briefStyleString = briefString
+      ? [briefString, freeTextSentence, dialectSentence].filter(Boolean).join(' ')
+      : null;
+    const styleString = briefStyleString ?? legacyStyleString;
     const controlBlock = [
       'KHALIJI CONTROL BLOCK',
       primaryStyle ? `Primary style chip: ${normalizeKhalijiPromptToken(primaryStyle)}` : null,
@@ -3624,6 +3860,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       tempoTag,
       keyTag,
       normalizedSeconds: structurePlan.normalizedSeconds,
+      family,
+      usingRecipeV1: useRecipe,
     };
   }
 
@@ -3997,6 +4235,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     targetSeconds: number = 30,
     vocalType: 'male' | 'female' | 'none' = 'none',
     primaryStyleAnchor: string = '',
+    family: KhalijiFamily = 'pop',
   ): string {
     if (isInstrumental) {
       return '[Intro]\n[Instrumental Build]\n[Drop]\n[Outro]';
@@ -4005,10 +4244,39 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const text = rawLyrics.trim();
     if (!text) return text;
 
-    // If the user already wrote structural tags, respect their work
-    if (/[\[(]\s*\w/.test(text)) return text;
+    const useRecipe = WAKTI_RECIPE_V1 && isGccStyle;
 
-    // Split on double line breaks to detect natural stanzas
+    // ── Vocal character cue (top of prompt) ──
+    // Recipe v1: family + gender aware ("[Smooth polished female vocal, …]").
+    // Legacy:   short Khaleeji cue based on heritage/pop heuristic.
+    const recipeCue: string | null = useRecipe ? buildVocalCharacterCue(family, vocalType) : null;
+    const isHeritage = /mawwal/i.test(primaryStyleAnchor);
+    const flavor = isHeritage ? 'warm jalsa delivery' : 'clean hook delivery';
+    const genderWord = vocalType === 'female' ? 'female' : vocalType === 'male' ? 'male' : '';
+    const legacyCue: string | null = isGccStyle && !useRecipe
+      ? (genderWord ? `[Khaleeji ${genderWord} vocal, ${flavor}]` : `[Khaleeji vocal, ${flavor}]`)
+      : null;
+    const vocalCue = recipeCue ?? legacyCue;
+
+    // ── Path A: User already wrote structural brackets ──
+    // Don't bail. Enrich known structural tags in place (Recipe v1 only),
+    // and inject the vocal cue at the top if not already present.
+    if (/[\[(]\s*\w/.test(text)) {
+      let enriched = text;
+      if (useRecipe) {
+        enriched = enriched.replace(/\[([^\]\n]+)\]/g, (full) => enrichSectionTag(full, family, selectedInstruments));
+      }
+      if (vocalCue) {
+        const firstLine = enriched.split('\n').find((l) => l.trim().length > 0) ?? '';
+        const alreadyHasCue = /\[[^\]]*vocal[^\]]*\]/i.test(firstLine) || /\[[^\]]*voice[^\]]*\]/i.test(firstLine);
+        if (!alreadyHasCue) {
+          enriched = `${vocalCue}\n\n${enriched}`;
+        }
+      }
+      return enriched;
+    }
+
+    // ── Path B: Unstructured lyrics — auto-build structure from duration plan ──
     const stanzas = text
       .split(/\n{2,}/)
       .map((stanza) => stanza
@@ -4021,32 +4289,31 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const structurePlan = getKhalijiStructurePlan(targetSeconds);
     const arrangedStanzas = stanzas.slice(0, structurePlan.stanzaLimit);
 
-    // ── Dynamic solo: let Suno pick the lead instrument from the style field context ──
-    const soloTag: string | null = structurePlan.allowAutoSolo && arrangedStanzas.length >= structurePlan.stanzaLimit && selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant') ? '[Instrumental Solo]' : null;
-
-    // ── Single Khaleeji vocal cue above [Intro] — Suno-format, emitted once only ──
-    //    Heritage vs Pop flavor is driven by the chip's LOCK anchor (mawwal = heritage).
-    const isHeritage = /mawwal/i.test(primaryStyleAnchor);
-    const flavor = isHeritage ? 'warm jalsa delivery' : 'clean hook delivery';
-    const genderWord = vocalType === 'female' ? 'female' : vocalType === 'male' ? 'male' : '';
-    const khaleejiCue: string | null = isGccStyle
-      ? (genderWord
-          ? `[Khaleeji ${genderWord} vocal, ${flavor}]`
-          : `[Khaleeji vocal, ${flavor}]`)
+    const soloTag: string | null = structurePlan.allowAutoSolo && arrangedStanzas.length >= structurePlan.stanzaLimit && selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant')
+      ? (useRecipe ? enrichSectionTag('[Instrumental Solo]', family, selectedInstruments) : '[Instrumental Solo]')
       : null;
 
     const labels = structurePlan.labels;
     const structured: string[] = [];
-    if (khaleejiCue) structured.push(khaleejiCue);
-    structured.push('[Intro]');
+    if (vocalCue) structured.push(vocalCue);
+
+    const introTag = useRecipe ? enrichSectionTag('[Intro]', family, selectedInstruments) : '[Intro]';
+    structured.push(introTag);
 
     arrangedStanzas.forEach((stanza, i) => {
-      const baseLabel = `[${labels[i] ?? `Verse ${i + 1}`}]`;
+      const baseLabelText = labels[i] ?? `Verse ${i + 1}`;
+      const baseLabel = useRecipe
+        ? enrichSectionTag(`[${baseLabelText}]`, family, selectedInstruments)
+        : `[${baseLabelText}]`;
       structured.push(`${baseLabel}\n${stanza}`);
     });
 
     if (soloTag) structured.push(soloTag);
-    if (!structured.some((s) => s.startsWith('[Outro]'))) structured.push('[Outro]');
+    const hasOutro = structured.some((s) => /^\[Outro\b/.test(s));
+    if (!hasOutro) {
+      const outroTag = useRecipe ? enrichSectionTag('[Outro]', family, selectedInstruments) : '[Outro]';
+      structured.push(outroTag);
+    }
 
     return structured.join('\n\n');
   }
@@ -4110,6 +4377,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         durationTarget,
         cueVocal,
         primaryStyleForCue,
+        khalijiControlBlock.family,
       );
 
       // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
@@ -4393,8 +4661,19 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (hasGccTag && regionalTokens.length === 0) {
         regionalTokens.push(...tokenizeNeg(GCC_DEFAULT_NEGATIVES));
       }
+      // ── Auto anti-instrument shield for modern Khaleeji families ──
+      // When the user picks a pop/urban Khaleeji chip and did NOT select any
+      // traditional instruments, auto-inject hard negative tags to block
+      // oud/qanun/darbuka/riq/mirwas/hand-claps bleed. Placed FIRST in the
+      // merge order so these tokens survive the 200-char cap.
+      const modernFamily = getKhalijiFamily(effectiveIncludeTags[0] ?? null);
+      const userPickedTraditionalInstrument = instrumentTags.some((t) => /oud|qanun|darbuka|riq|mirwas|hand\s*clap/i.test(t));
+      const traditionalAntiTokens: string[] = [];
+      if (hasGccTag && (modernFamily === 'pop' || modernFamily === 'urban') && !userPickedTraditionalInstrument) {
+        traditionalAntiTokens.push('oud', 'qanun', 'darbuka', 'riq', 'mirwas', 'hand claps');
+      }
       const finalNegativeTags = fitNegativeTags(
-        orderedDedupeNeg([...gccPronunciationTokens, ...regionalTokens])
+        orderedDedupeNeg([...traditionalAntiTokens, ...gccPronunciationTokens, ...regionalTokens])
       );
 
       // ── Final style string (resolved with GCC fallback) ──
@@ -5483,6 +5762,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         durationTarget,
                         cueVocal,
                         primaryStyleForCue,
+                        cb.family,
                       );
                       const preview = {
                         title: title.trim(),
@@ -5496,6 +5776,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         musicalKeyHint: cb.keyTag,
                         controlBlock: cb.controlBlock,
                         structurePlan: cb.structurePlan,
+                        recipeVersion: cb.usingRecipeV1 ? 'wakti-recipe-v1' : 'legacy',
+                        family: cb.family,
                       };
                       setPayloadPreview(JSON.stringify(preview, null, 2));
                       setShowPayloadPreview(true);

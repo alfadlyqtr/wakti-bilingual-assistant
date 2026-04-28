@@ -1597,6 +1597,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               const hasLogo = taggedTypes.includes('logo');
               const exactPersonAssets = taggedAssets.filter((item) => item.types.includes('person') && (item.asset.personMode || 'exact') === 'exact');
               const hasExactPerson = exactPersonAssets.length > 0;
+              const referencePersonAssets = taggedAssets.filter((item) => item.types.includes('person') && item.asset.personMode === 'reference');
+              const hasReferencePerson = referencePersonAssets.length > 0;
+              const hasTransparentLogo = taggedAssets.some((item) => item.types.includes('logo') && (item.asset.logoMode || 'transparent') === 'transparent');
 
               const toBool = (value: boolean) => value ? 'true' : 'false';
               const toQuoted = (value: string) => `"${value.replace(/"/g, '\\"')}"`;
@@ -1651,7 +1654,16 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                       `    person_mode: reference`,
                       `    reference_style: ${(item.asset.referenceStyle || 'realistic')}`,
                       `    preserve_identity_direction: true`,
+                      `    preserve_source_anchor_strength: high`,
+                      `    preserve_face_direction: true`,
+                      `    preserve_hair_and_styling_direction: true`,
+                      `    preserve_outfit_direction: true`,
+                      `    preserve_accessories_direction: true`,
+                      `    preserve_pose_direction: true`,
+                      `    preserve_silhouette_direction: true`,
                       `    exact_match_required: false`,
+                      `    character_must_be_derived_from_source: true`,
+                      `    do_not_recast_as_different_person: true`,
                       `    stylize_into_character: ${toBool((item.asset.referenceStyle || 'realistic') === 'character')}`,
                     ];
                   }
@@ -1683,6 +1695,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                     `    preserve_design: true`,
                     `    remove_plain_surrounding_background_only_if_needed: ${toBool(logoMode === 'transparent')}`,
                     `    preserve_original_background_treatment: ${toBool(logoMode === 'as-is')}`,
+                    `    placement_mode: flat_overlay`,
+                    `    keep_fully_visible: true`,
+                    `    keep_flat_2d: true`,
+                    `    treat_as_brand_mark_not_scene_object: true`,
                     `    redraw: false`,
                     `    distort: false`,
                     `    crop: false`,
@@ -1785,7 +1801,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 `- task: Create one premium advertising poster using the uploaded assets and selected settings.`,
                 `- must_follow_tagged_roles: true`,
                 `- must_preserve_exact_person_identity: ${toBool(hasExactPerson)}`,
+                `- must_preserve_reference_person_anchor: ${toBool(hasReferencePerson)}`,
+                `- must_preserve_reference_person_silhouette: ${toBool(hasReferencePerson)}`,
+                `- must_preserve_reference_person_styling: ${toBool(hasReferencePerson)}`,
+                `- must_preserve_reference_pose_direction: ${toBool(hasReferencePerson)}`,
                 `- must_preserve_logo_fidelity: ${toBool(hasLogo)}`,
+                `- must_keep_logo_flat_and_fully_visible: ${toBool(hasTransparentLogo)}`,
                 `- must_preserve_screenshot_fidelity: ${toBool(hasScreenshot)}`,
                 `- must_preserve_background_identity: ${toBool(hasBackground)}`,
                 `- allow_invented_text: false`,
@@ -1794,12 +1815,17 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 `- hard_constraints_override_style: true`,
                 `- priority_order:`,
                 `  1. exact_person_identity`,
-                `  2. logo_fidelity`,
-                `  3. screenshot_fidelity`,
-                `  4. background_identity`,
-                `  5. composition_clarity`,
-                `  6. campaign_message`,
-                `  7. style_polish`,
+                `  2. reference_person_anchor`,
+                `  3. reference_person_silhouette`,
+                `  4. reference_person_styling`,
+                `  5. reference_pose_direction`,
+                `  6. logo_fidelity`,
+                `  7. logo_flat_visibility`,
+                `  8. screenshot_fidelity`,
+                `  9. background_identity`,
+                `  10. composition_clarity`,
+                `  11. campaign_message`,
+                `  12. style_polish`,
               ]);
 
               const outputTarget = buildSection('OUTPUT_TARGET', [
@@ -1842,7 +1868,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 ...(visualState.creativeSoul.style === 'custom' && customStyle ? [`    style_custom_text: ${toQuoted(customStyle)}`] : []),
                 ...(visualState.creativeSoul.style !== 'custom' && visualState.creativeSoul.styleVariant ? [`    style_detail: ${styleVariantLabels[visualState.creativeSoul.style]?.[visualState.creativeSoul.styleVariant] || visualState.creativeSoul.styleVariant}`] : []),
                 `    style_can_affect: [lighting, color, typography_mood, graphic_energy]`,
-                `    style_cannot_override: [exact_person_identity, logo_fidelity, screenshot_fidelity, background_identity]`,
+                `    style_cannot_override: [exact_person_identity, reference_person_anchor, reference_person_silhouette, reference_person_styling, reference_pose_direction, logo_fidelity, logo_flat_visibility, screenshot_fidelity, background_identity]`,
               ];
 
               const textLines = [
@@ -1929,7 +1955,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 hard_constraints: {
                   must_follow_tagged_roles: true,
                   must_preserve_exact_person_identity: hasExactPerson,
+                  must_preserve_reference_person_anchor: hasReferencePerson,
+                  must_preserve_reference_person_silhouette: hasReferencePerson,
+                  must_preserve_reference_person_styling: hasReferencePerson,
+                  must_preserve_reference_pose_direction: hasReferencePerson,
                   must_preserve_logo_fidelity: hasLogo,
+                  must_keep_logo_flat_and_fully_visible: hasTransparentLogo,
                   must_preserve_screenshot_fidelity: hasScreenshot,
                   must_preserve_background_identity: hasBackground,
                   allow_invented_text: false,
@@ -1938,7 +1969,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   hard_constraints_override_style: true,
                   priority_order: [
                     'exact_person_identity',
+                    'reference_person_anchor',
+                    'reference_person_silhouette',
+                    'reference_person_styling',
+                    'reference_pose_direction',
                     'logo_fidelity',
+                    'logo_flat_visibility',
                     'screenshot_fidelity',
                     'background_identity',
                     'composition_clarity',

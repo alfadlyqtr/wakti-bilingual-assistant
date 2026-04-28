@@ -97,7 +97,12 @@ type VisualAdsSpec = {
   hard_constraints?: {
     must_follow_tagged_roles?: boolean | null;
     must_preserve_exact_person_identity?: boolean | null;
+    must_preserve_reference_person_anchor?: boolean | null;
+    must_preserve_reference_person_silhouette?: boolean | null;
+    must_preserve_reference_person_styling?: boolean | null;
+    must_preserve_reference_pose_direction?: boolean | null;
     must_preserve_logo_fidelity?: boolean | null;
+    must_keep_logo_flat_and_fully_visible?: boolean | null;
     must_preserve_screenshot_fidelity?: boolean | null;
     must_preserve_background_identity?: boolean | null;
     allow_invented_text?: boolean | null;
@@ -310,7 +315,12 @@ function normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
     hard_constraints: hardConstraints ? {
       must_follow_tagged_roles: asBoolean(hardConstraints.must_follow_tagged_roles),
       must_preserve_exact_person_identity: asBoolean(hardConstraints.must_preserve_exact_person_identity),
+      must_preserve_reference_person_anchor: asBoolean(hardConstraints.must_preserve_reference_person_anchor),
+      must_preserve_reference_person_silhouette: asBoolean(hardConstraints.must_preserve_reference_person_silhouette),
+      must_preserve_reference_person_styling: asBoolean(hardConstraints.must_preserve_reference_person_styling),
+      must_preserve_reference_pose_direction: asBoolean(hardConstraints.must_preserve_reference_pose_direction),
       must_preserve_logo_fidelity: asBoolean(hardConstraints.must_preserve_logo_fidelity),
+      must_keep_logo_flat_and_fully_visible: asBoolean(hardConstraints.must_keep_logo_flat_and_fully_visible),
       must_preserve_screenshot_fidelity: asBoolean(hardConstraints.must_preserve_screenshot_fidelity),
       must_preserve_background_identity: asBoolean(hardConstraints.must_preserve_background_identity),
       allow_invented_text: asBoolean(hardConstraints.allow_invented_text),
@@ -336,8 +346,15 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   const hasScreenshot = assets.some((asset) => (asset.role || "").toLowerCase() === "screenshot");
   const hasBackground = assets.some((asset) => (asset.role || "").toLowerCase() === "background");
   const hasTransparentLogo = assets.some((asset) => (asset.role || "").toLowerCase() === "logo" && (asset.logo_mode || "").toLowerCase() === "transparent");
+  const hasAnyLogo = assets.some((asset) => (asset.role || "").toLowerCase() === "logo");
   const hasExactPerson = assets.some((asset) => (asset.role || "").toLowerCase() === "person" && (asset.person_mode || "exact").toLowerCase() !== "reference");
+  const hasReferencePerson = assets.some((asset) => (asset.role || "").toLowerCase() === "person" && (asset.person_mode || "exact").toLowerCase() === "reference");
   const hasNewPosePerson = assets.some((asset) => (asset.role || "").toLowerCase() === "person" && (asset.person_mode || "exact").toLowerCase() !== "reference" && (asset.pose_mode || "same-pose").toLowerCase() === "adapted-pose");
+  const mustPreserveReferencePersonAnchor = spec.hard_constraints?.must_preserve_reference_person_anchor === true || hasReferencePerson;
+  const mustPreserveReferencePersonSilhouette = spec.hard_constraints?.must_preserve_reference_person_silhouette === true || hasReferencePerson;
+  const mustPreserveReferencePersonStyling = spec.hard_constraints?.must_preserve_reference_person_styling === true || hasReferencePerson;
+  const mustPreserveReferencePoseDirection = spec.hard_constraints?.must_preserve_reference_pose_direction === true || hasReferencePerson;
+  const mustKeepLogoFlatAndFullyVisible = spec.hard_constraints?.must_keep_logo_flat_and_fully_visible === true || hasTransparentLogo;
 
   const lines: string[] = [
     `Create a high-end ${ratio} premium advertising poster with a unified, cinematic composition.`,
@@ -382,9 +399,12 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
 
     if (role === "logo") {
       if ((asset.logo_mode || "").toLowerCase() === "transparent") {
-        lines.push(`Integrate the logo (${sourceKey}) as a clean transparent flat logo, preserving its exact shape and original colors, with no background, no box, no card, no drop shadow, and no halo around it.`);
+        lines.push(`Integrate the logo (${sourceKey}) as a clean transparent flat logo overlay, preserving its exact shape and original colors.`);
+        lines.push(`Keep the logo fully visible, uncropped, flat, and 2D with no background, no box, no card, no badge, no drop shadow, and no halo around it.`);
+        lines.push(`Treat the logo as a protected brand mark, not as a decorative object, scenic prop, sticker, sculpture, or 3D design element.`);
       } else {
         lines.push(`Integrate the logo (${sourceKey}) naturally into the composition, preferably in a clean top or bottom placement, keeping it exactly as provided with no redesign, no recolor, and no distortion.`);
+        lines.push(`Keep the logo fully visible and uncropped. Do not transform it into an icon tile, prop, badge, product object, or scenic element.`);
       }
       continue;
     }
@@ -393,9 +413,12 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
       const personMode = (asset.person_mode || "exact").toLowerCase();
       if (personMode === "reference") {
         if ((asset.reference_style || "realistic").toLowerCase() === "character") {
-          lines.push(`Use the person in ${sourceKey} as a reference and turn them into a styled character that still resembles them.`);
+          lines.push(`Use the person in ${sourceKey} as the source anchor for a styled character.`);
+          lines.push(`The final character must be clearly derived from that uploaded person: preserve the face direction, hair direction, outfit language, accessories, silhouette, and pose direction from ${sourceKey}.`);
+          lines.push(`Do not replace ${sourceKey} with a random new woman or generic different person. Stylize the uploaded person into a character; do not recast them.`);
         } else {
           lines.push(`Use the person in ${sourceKey} as the identity reference for a realistic human subject in the final composition.`);
+          lines.push(`Preserve the source anchor from ${sourceKey}, including face direction, hair direction, outfit language, accessories, silhouette, and pose direction. Do not drift into a different-looking person.`);
         }
       } else {
         const pose = (asset.pose_mode || "same-pose").toLowerCase();
@@ -471,6 +494,7 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   lines.push("Do NOT invent names, headlines, taglines, or brand copy.");
   lines.push("Do NOT invent testimonials, ratings, reviews, or social proof copy.");
   if (hasScreenshot) lines.push("Do NOT modify the screenshot UI.");
+  if (hasAnyLogo) lines.push("Do NOT crop, cut off, restyle, reinterpret, or transform any uploaded logo into an object, badge, sticker, prop, sculpture, or scenic element.");
   if (hasTransparentLogo) {
     lines.push("Do NOT place the logo inside a background box, card, frame, or shape — it must stay transparent and flat.");
     lines.push("Do NOT add shadows, glow, halo, or 3D effects behind the logo.");
@@ -481,7 +505,12 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     lines.push("Do NOT keep or import the original background from non-background uploads into the final scene unless that upload was explicitly tagged as Background.");
   }
   if (hasExactPerson) lines.push("Do NOT replace the real person with a different face, body, or identity.");
+  if (mustPreserveReferencePersonAnchor) lines.push("For any person tagged as reference, keep the uploaded person as the clear source anchor. Do NOT replace them with a generic new person.");
+  if (mustPreserveReferencePersonSilhouette) lines.push("For any person tagged as reference, preserve the source silhouette and body-language direction.");
+  if (mustPreserveReferencePersonStyling) lines.push("For any person tagged as reference, preserve the source outfit language, accessories, and hair/styling direction.");
+  if (mustPreserveReferencePoseDirection) lines.push("For any person tagged as reference, preserve the source pose direction and framing intent even when stylizing.");
   if (hasNewPosePerson) lines.push("For any person tagged as New pose, you must create a clearly new pose while preserving the exact same real person. Do NOT keep the original pose if the brief asks for a new one.");
+  if (mustKeepLogoFlatAndFullyVisible) lines.push("Any transparent logo must remain a flat 2D overlay, fully visible and uncropped.");
   if (featureChips.length > 0) lines.push("Use the approved key points exactly as written without renaming, paraphrasing, or substituting them.");
   if (hasExactPerson && hasScreenshot) lines.push("Keep the face clearly visible. The device mockup must not block the face.");
   lines.push("Keep everything sharp, high-resolution, realistic, and production-ready.");
@@ -574,7 +603,12 @@ function buildVisualAdsStructuredAppendix(spec: VisualAdsSpec): string {
   addSection("HARD_CONSTRAINTS_SUMMARY", [
     spec.hard_constraints?.must_follow_tagged_roles != null ? `- must_follow_tagged_roles: ${spec.hard_constraints.must_follow_tagged_roles}` : null,
     spec.hard_constraints?.must_preserve_exact_person_identity != null ? `- must_preserve_exact_person_identity: ${spec.hard_constraints.must_preserve_exact_person_identity}` : null,
+    spec.hard_constraints?.must_preserve_reference_person_anchor != null ? `- must_preserve_reference_person_anchor: ${spec.hard_constraints.must_preserve_reference_person_anchor}` : null,
+    spec.hard_constraints?.must_preserve_reference_person_silhouette != null ? `- must_preserve_reference_person_silhouette: ${spec.hard_constraints.must_preserve_reference_person_silhouette}` : null,
+    spec.hard_constraints?.must_preserve_reference_person_styling != null ? `- must_preserve_reference_person_styling: ${spec.hard_constraints.must_preserve_reference_person_styling}` : null,
+    spec.hard_constraints?.must_preserve_reference_pose_direction != null ? `- must_preserve_reference_pose_direction: ${spec.hard_constraints.must_preserve_reference_pose_direction}` : null,
     spec.hard_constraints?.must_preserve_logo_fidelity != null ? `- must_preserve_logo_fidelity: ${spec.hard_constraints.must_preserve_logo_fidelity}` : null,
+    spec.hard_constraints?.must_keep_logo_flat_and_fully_visible != null ? `- must_keep_logo_flat_and_fully_visible: ${spec.hard_constraints.must_keep_logo_flat_and_fully_visible}` : null,
     spec.hard_constraints?.must_preserve_screenshot_fidelity != null ? `- must_preserve_screenshot_fidelity: ${spec.hard_constraints.must_preserve_screenshot_fidelity}` : null,
     spec.hard_constraints?.must_preserve_background_identity != null ? `- must_preserve_background_identity: ${spec.hard_constraints.must_preserve_background_identity}` : null,
     spec.hard_constraints?.allow_invented_text != null ? `- allow_invented_text: ${spec.hard_constraints.allow_invented_text}` : null,
@@ -587,6 +621,29 @@ function buildVisualAdsStructuredAppendix(spec: VisualAdsSpec): string {
   return sections.join("\n\n").trim();
 }
 
+function buildVisualAdsPriorityReinforcement(spec: VisualAdsSpec): string {
+  const lines: string[] = [];
+  const hard = spec.hard_constraints;
+
+  if (hard?.must_preserve_exact_person_identity) {
+    lines.push("- exact_person_identity: Any person tagged as exact must remain the exact same real person with no face swap, no beautification drift, and no replacement identity.");
+  }
+  if (hard?.must_preserve_reference_person_anchor || hard?.must_preserve_reference_person_silhouette || hard?.must_preserve_reference_person_styling || hard?.must_preserve_reference_pose_direction) {
+    lines.push("- reference_person_anchor: Any person tagged as reference must stay clearly anchored to the uploaded source. Preserve the source face direction, silhouette, styling, accessories, and pose direction. Do not replace them with a generic different person.");
+  }
+  if (hard?.must_preserve_logo_fidelity || hard?.must_keep_logo_flat_and_fully_visible) {
+    lines.push("- logo_fidelity: Any uploaded logo must remain a flat protected brand mark, fully visible, uncropped, and not transformed into an object, prop, badge, sticker, sculpture, or scenic design element.");
+  }
+  if (hard?.must_preserve_screenshot_fidelity) {
+    lines.push("- screenshot_fidelity: Any uploaded screenshot must remain unchanged, readable, and free from UI redesign or distortion.");
+  }
+  if (hard?.must_preserve_background_identity) {
+    lines.push("- background_identity: Any uploaded background must remain the real base scene and must not be swapped for a different environment.");
+  }
+
+  return lines.join("\n").trim();
+}
+
 function compileVisualAdsPrompt(spec: VisualAdsSpec, frontendCompiledPrompt: string): string {
   const authoritativePrompt = (frontendCompiledPrompt || spec.legacy_prompt || "").trim();
   if (!authoritativePrompt) {
@@ -594,6 +651,7 @@ function compileVisualAdsPrompt(spec: VisualAdsSpec, frontendCompiledPrompt: str
   }
 
   const appendix = buildVisualAdsStructuredAppendix(spec);
+  const reinforcement = buildVisualAdsPriorityReinforcement(spec);
   const finalLines = [
     "Create one premium advertising poster using the uploaded assets and approved settings.",
     "The FRONTEND_COMPILED_BRIEF below is authoritative.",
@@ -603,6 +661,15 @@ function compileVisualAdsPrompt(spec: VisualAdsSpec, frontendCompiledPrompt: str
     "FRONTEND_COMPILED_BRIEF",
     authoritativePrompt,
   ];
+
+  if (reinforcement) {
+    finalLines.push(
+      "",
+      "BACKEND_PRIORITY_REINFORCEMENT",
+      "These lines restate the highest-priority structured constraints. They are mandatory unless the frontend compiled brief says otherwise.",
+      reinforcement,
+    );
+  }
 
   if (appendix) {
     finalLines.push("", appendix);

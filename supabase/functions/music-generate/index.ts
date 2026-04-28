@@ -202,22 +202,40 @@ function fitCommaSeparatedTokens(tokens: string[], maxLength: number): string {
   return out;
 }
 
-// Parse "locked instruments: a, b, c" out of the style string so we can compute an
-// anti-instrument negative list without requiring a new body field.
+// Parse instrument list from the style string so we can compute an anti-instrument
+// negative list without requiring a new body field. Supports two formats:
+//   1) Legacy CSV: "locked instruments: a, b, c, ..."
+//   2) Wakti Recipe v1 natural-language brief: "...built around a, b, c with a {rhythm}..."
 function extractLockedInstruments(style: string): string[] {
-  const match = style.match(/locked instruments:\s*(.+?)(?=,\s*(?:mood arc|structure arc|tempo|key|authentic|strict)|$)/i);
-  if (!match) return [];
-  return match[1].split(",").map((s) => s.trim()).filter(Boolean);
+  // Legacy CSV format
+  const legacy = style.match(/locked instruments:\s*(.+?)(?=,\s*(?:mood arc|structure arc|tempo|key|authentic|strict)|$)/i);
+  if (legacy) return legacy[1].split(",").map((s) => s.trim()).filter(Boolean);
+
+  // Recipe v1 brief: "built around piano, acoustic guitar, bass guitar, ... with a khaleeji shuffle..."
+  const recipe = style.match(/built around\s+(.+?)\s+with\s+(?:a|the|an)\s/i);
+  if (recipe) return recipe[1].split(",").map((s) => s.trim()).filter(Boolean);
+
+  return [];
 }
 
 // Smart anti-instrument negatives within the 200-char budget. When the user narrows the
 // instrument set, exclude the default Khaleeji instruments they did NOT pick so Suno's
 // training bias does not sneak oud / darbuka / claps into a pop-only arrangement.
+//
+// Wakti Recipe v1 also emits an explicit sentinel sentence in the style brief —
+// "No traditional Khaleeji instrumentation — this is a modern production." — when the
+// user picks a modern Khaleeji family with no traditional instruments. We treat that
+// sentinel as a hard signal to inject ALL traditional anti-tokens, regardless of what
+// the instrument extractor returned.
 function buildGccNegativeTags(style: string = ""): string {
   const tokens = [...GCC_NEGATIVE_TOKENS];
   const userInstruments = extractLockedInstruments(style).map((i) => i.toLowerCase());
+  const explicitlyExcludesTraditional = /no traditional khaleeji instrumentation/i.test(style);
 
-  if (userInstruments.length > 0) {
+  if (explicitlyExcludesTraditional) {
+    // Hard signal from Wakti Recipe v1 brief — modern production, block all traditional.
+    for (const inst of DEFAULT_KHALEEJI_INSTRUMENTS) tokens.push(inst);
+  } else if (userInstruments.length > 0) {
     for (const inst of DEFAULT_KHALEEJI_INSTRUMENTS) {
       const alreadyPicked = userInstruments.some((u) => u.includes(inst));
       if (!alreadyPicked) tokens.push(inst);
