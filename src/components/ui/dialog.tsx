@@ -30,6 +30,7 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 interface DialogContentProps extends Omit<React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>, 'title'> {
   hideCloseButton?: boolean;
   suppressHydrationWarning?: boolean;
+  overlayClassName?: string;
   /**
    * Required for accessibility. Can be hidden with VisuallyHidden if needed.
    */
@@ -48,6 +49,7 @@ const DialogContent = React.forwardRef<
   children, 
   hideCloseButton = false, 
   suppressHydrationWarning = true,
+  overlayClassName,
   title,
   description,
   ...props 
@@ -70,7 +72,7 @@ const DialogContent = React.forwardRef<
 
   return (
     <DialogPortal>
-      <DialogOverlay />
+      <DialogOverlay className={overlayClassName} />
       <DialogPrimitive.Content
         ref={ref}
         className={cn(

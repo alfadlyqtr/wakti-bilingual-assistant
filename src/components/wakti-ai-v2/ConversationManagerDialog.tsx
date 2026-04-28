@@ -111,7 +111,8 @@ export function ConversationManagerDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-md rounded-3xl border-[rgba(233,206,176,0.9)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99)_0%,rgba(252,254,253,0.99)_48%,rgba(248,244,236,0.98)_100%)] p-5 shadow-[0_20px_44px_rgba(6,5,65,0.14)]"
+        overlayClassName="z-[12020]"
+        className="z-[12030] max-w-md rounded-3xl border-[rgba(233,206,176,0.9)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99)_0%,rgba(252,254,253,0.99)_48%,rgba(248,244,236,0.98)_100%)] p-5 shadow-[0_20px_44px_rgba(6,5,65,0.14)]"
         title={copy.title}
         description={copy.body}
       >

@@ -2249,8 +2249,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               )}
             </div>
             {language === 'ar' && quality === 'quick' && (
-              <div className="text-[10px] font-medium text-muted-foreground/80">
-                ضعيف للنصوص
+              <div className="text-xs font-semibold text-orange-500 dark:text-orange-400">
+                ضعيف للنص بالصور
               </div>
             )}
           </div>

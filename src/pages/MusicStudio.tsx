@@ -57,6 +57,8 @@ import {
   Repeat,
   SkipForward,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Film,
   Download,
@@ -873,9 +875,42 @@ export default function MusicStudio() {
   const [editorEverVisited, setEditorEverVisited] = useState(() => {
     try { return sessionStorage.getItem(PL_BG_KEY) === '1'; } catch { return false; }
   });
+  const topTabsRef = useRef<HTMLDivElement | null>(null);
+  const [canScrollTabsLeft, setCanScrollTabsLeft] = useState(false);
+  const [canScrollTabsRight, setCanScrollTabsRight] = useState(false);
   const { user: authUser } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    const node = topTabsRef.current;
+    if (!node) return;
+
+    const updateScrollState = () => {
+      const maxScrollLeft = Math.max(0, node.scrollWidth - node.clientWidth);
+      setCanScrollTabsLeft(node.scrollLeft > 8);
+      setCanScrollTabsRight(node.scrollLeft < maxScrollLeft - 8);
+    };
+
+    updateScrollState();
+    node.addEventListener('scroll', updateScrollState, { passive: true });
+    window.addEventListener('resize', updateScrollState);
+
+    return () => {
+      node.removeEventListener('scroll', updateScrollState);
+      window.removeEventListener('resize', updateScrollState);
+    };
+  }, []);
+
+  const scrollTopTabsBy = (direction: 'left' | 'right') => {
+    const node = topTabsRef.current;
+    if (!node) return;
+    const amount = Math.max(120, Math.floor(node.clientWidth * 0.55));
+    node.scrollBy({
+      left: direction === 'left' ? -amount : amount,
+      behavior: 'smooth',
+    });
+  };
 
   useEffect(() => {
     const state = (location.state || {}) as any;
@@ -1008,26 +1043,55 @@ export default function MusicStudio() {
     <div className="w-full max-w-6xl mx-auto p-3 md:p-6 pb-20 md:pb-6 space-y-4">
       <TrialGateOverlay featureKey={musicTrialKey} limit={musicTrialLimit} featureLabel={{ en: 'Music', ar: 'الموسيقى' }} />
       {/* ─── Pressable Pill Tabs ─── */}
-      <div className="flex gap-2.5 p-2 rounded-2xl bg-black/20 dark:bg-black/30 backdrop-blur-xl border border-white/10 dark:border-white/[0.08] shadow-inner overflow-x-auto scrollbar-hide">
-        {[
-          { key: 'music' as const, icon: <Music className="h-3.5 w-3.5" />, labelEn: 'Music', labelAr: 'الموسيقى', activeGrad: 'from-sky-500 to-blue-600', activeShadow: 'shadow-[0_4px_14px_hsla(210,100%,65%,0.45)]' },
-          { key: 'video' as const, icon: <Video className="h-3.5 w-3.5" />, labelEn: 'Video', labelAr: 'الفيديو', activeGrad: 'from-orange-500 to-rose-500', activeShadow: 'shadow-[0_4px_14px_hsla(25,95%,60%,0.45)]' },
-          { key: 'image' as const, icon: <ImageIcon className="h-3.5 w-3.5" />, labelEn: 'Image', labelAr: 'الصورة', activeGrad: 'from-emerald-500 to-teal-500', activeShadow: 'shadow-[0_4px_14px_hsla(160,80%,55%,0.45)]' },
-          { key: 'qrcode' as const, icon: <QrCode className="h-3.5 w-3.5" />, labelEn: 'QR Code', labelAr: 'كود QR', activeGrad: 'from-violet-500 to-purple-600', activeShadow: 'shadow-[0_4px_14px_hsla(280,70%,65%,0.45)]' },
-        ].map((tab) => (
+      <div className="relative">
+        {canScrollTabsLeft && (
           <button
-            key={tab.key}
-            onClick={() => setMainTab(tab.key)}
-            className={`flex items-center justify-center gap-1.5 px-4 md:px-6 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all duration-200 active:scale-[0.93] whitespace-nowrap flex-shrink-0 flex-1 ${
-              mainTab === tab.key
-                ? `bg-gradient-to-r ${tab.activeGrad} text-white ${tab.activeShadow} scale-[1.03]`
-                : 'bg-white/[0.07] dark:bg-white/[0.05] text-foreground/70 hover:bg-white/[0.13] dark:hover:bg-white/[0.1] hover:text-foreground border border-white/10 dark:border-white/[0.07]'
-            }`}
+            type="button"
+            onClick={() => scrollTopTabsBy('left')}
+            className="absolute left-1 top-1/2 z-10 -translate-y-1/2 h-8 w-8 rounded-full bg-[#0c0f14]/85 text-white border border-white/10 shadow-[0_4px_18px_hsla(0,0%,0%,0.45)] backdrop-blur-md flex items-center justify-center active:scale-95 transition-all"
+            aria-label={isArabic ? 'تمرير لليسار' : 'Scroll left'}
           >
-            {tab.icon}
-            {isArabic ? tab.labelAr : tab.labelEn}
+            <ChevronLeft className="h-4 w-4" />
           </button>
-        ))}
+        )}
+        {canScrollTabsRight && (
+          <button
+            type="button"
+            onClick={() => scrollTopTabsBy('right')}
+            className="absolute right-1 top-1/2 z-10 -translate-y-1/2 h-8 w-8 rounded-full bg-[#0c0f14]/85 text-white border border-white/10 shadow-[0_4px_18px_hsla(0,0%,0%,0.45)] backdrop-blur-md flex items-center justify-center active:scale-95 transition-all"
+            aria-label={isArabic ? 'تمرير لليمين' : 'Scroll right'}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        )}
+
+        <div className="pointer-events-none absolute inset-y-0 left-0 z-[1] w-8 rounded-l-2xl bg-gradient-to-r from-[#0c0f14]/70 via-[#0c0f14]/35 to-transparent" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 z-[1] w-8 rounded-r-2xl bg-gradient-to-l from-[#0c0f14]/70 via-[#0c0f14]/35 to-transparent" />
+
+        <div
+          ref={topTabsRef}
+          className="flex gap-2.5 p-2 rounded-2xl bg-black/20 dark:bg-black/30 backdrop-blur-xl border border-white/10 dark:border-white/[0.08] shadow-inner overflow-x-auto scrollbar-hide scroll-smooth"
+        >
+          {[
+            { key: 'music' as const, icon: <Music className="h-3.5 w-3.5" />, labelEn: 'Music', labelAr: 'الموسيقى', activeGrad: 'from-sky-500 to-blue-600', activeShadow: 'shadow-[0_4px_14px_hsla(210,100%,65%,0.45)]' },
+            { key: 'video' as const, icon: <Video className="h-3.5 w-3.5" />, labelEn: 'Video', labelAr: 'الفيديو', activeGrad: 'from-orange-500 to-rose-500', activeShadow: 'shadow-[0_4px_14px_hsla(25,95%,60%,0.45)]' },
+            { key: 'image' as const, icon: <ImageIcon className="h-3.5 w-3.5" />, labelEn: 'Image', labelAr: 'الصورة', activeGrad: 'from-emerald-500 to-teal-500', activeShadow: 'shadow-[0_4px_14px_hsla(160,80%,55%,0.45)]' },
+            { key: 'qrcode' as const, icon: <QrCode className="h-3.5 w-3.5" />, labelEn: 'QR Code', labelAr: 'كود QR', activeGrad: 'from-violet-500 to-purple-600', activeShadow: 'shadow-[0_4px_14px_hsla(280,70%,65%,0.45)]' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setMainTab(tab.key)}
+              className={`flex items-center justify-center gap-1.5 px-4 md:px-6 py-2.5 rounded-xl font-semibold text-xs md:text-sm transition-all duration-200 active:scale-[0.93] whitespace-nowrap flex-shrink-0 min-w-max ${
+                mainTab === tab.key
+                  ? `bg-gradient-to-r ${tab.activeGrad} text-white ${tab.activeShadow} scale-[1.03]`
+                  : 'bg-white/[0.07] dark:bg-white/[0.05] text-foreground/70 hover:bg-white/[0.13] dark:hover:bg-white/[0.1] hover:text-foreground border border-white/10 dark:border-white/[0.07]'
+              }`}
+            >
+              {tab.icon}
+              {isArabic ? tab.labelAr : tab.labelEn}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ─── Studio Landing Hub ─── */}
