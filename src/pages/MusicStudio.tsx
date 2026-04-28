@@ -3688,7 +3688,14 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }): string {
     const v = FAMILY_VOCAB[opts.family];
     const label = normalizeChipForDisplay(opts.styleChipLabel);
-    const s1 = `${v.s1Prefix} ${label} production.`;
+    // Dedupe prefix if chip label already starts with it (e.g. "Modern Khaleeji
+    // Fusion" under pop family would otherwise yield "Modern Modern Khaleeji Fusion").
+    const prefixWord = v.s1Prefix.trim();
+    const labelStartsWithPrefix = prefixWord.length > 0 &&
+      label.toLowerCase().startsWith(prefixWord.toLowerCase());
+    const s1 = labelStartsWithPrefix
+      ? `${label} production.`
+      : `${v.s1Prefix} ${label} production.`;
 
     const instList = opts.instruments.length > 0
       ? opts.instruments.join(', ')
@@ -3701,9 +3708,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       : '';
     const s2 = `A ${v.arrangementAdj} arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
 
-    // S3 — vocal sentence with explicit native-pronunciation anchor (helps Suno
-    // lock the dialect; targets "slightly bad Khaleeji pronunciation" feedback).
-    const s3 = `Vocals are delivered in authentic Kuwaiti-Qatari Khaleeji dialect with native Khaleeji pronunciation and colloquial phrasing, ${v.vocalDelivery}, featuring ${v.vocalOrnament}.`;
+    // S3 — vocal sentence packed with dialect-rich keywords Suno responds to.
+    // "pure Saudi-Kuwaiti-Qatari Khaleeji dialect" + "authentic desert-coastal
+    // Khaleeji timbre" + "native Gulf pronunciation" + "colloquial Khaleeji
+    // phrasing" recover the identity-anchor keyword density that was lost when
+    // we moved from the legacy CSV style to the natural-language brief.
+    const s3 = `Vocals are delivered in pure Saudi-Kuwaiti-Qatari Khaleeji dialect with authentic desert-coastal Khaleeji timbre, native Gulf pronunciation, and colloquial Khaleeji phrasing, ${v.vocalDelivery}, featuring ${v.vocalOrnament}.`;
 
     const moodPart = opts.moods.length > 0 ? `The mood is ${opts.moods.join(', ')}.` : '';
     // Split "{N} BPM {feel}" into two natural clauses; drop redundant "tonal center".
