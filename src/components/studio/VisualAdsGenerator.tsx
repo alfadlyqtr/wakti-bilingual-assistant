@@ -121,15 +121,22 @@ function StepContent({ step, activeStep, children }: { step: number; activeStep:
 }
 
 // What the ad is about — pick one chip
-export const adTopicChips = [
-  { id: 'new-launch',    label: '🚀 New Launch',          prompt: 'exciting new product launch' },
-  { id: 'limited-offer', label: '⏰ Limited Offer',        prompt: 'limited-time offer, urgency' },
-  { id: 'app-download',  label: '📱 App Download',         prompt: 'app download promotion' },
-  { id: 'save-time',     label: '⚡ Save Time',            prompt: 'time-saving benefit' },
-  { id: 'premium',       label: '✨ Premium Quality',      prompt: 'premium quality and prestige' },
-  { id: 'social-proof',  label: '⭐ Customer Love',        prompt: 'social proof and customer trust' },
-  { id: 'features',      label: '🎯 Show Features',        prompt: 'product feature showcase' },
-  { id: 'sale',          label: '🛍️ Sale / Discount',      prompt: 'sale or discount offer' },
+type PosterAdsChip = {
+  id: string;
+  labelEn: string;
+  labelAr: string;
+  prompt?: string;
+};
+
+export const adTopicChips: PosterAdsChip[] = [
+  { id: 'new-launch', labelEn: '🚀 New Launch', labelAr: '🚀 إطلاق جديد', prompt: 'exciting new product launch' },
+  { id: 'limited-offer', labelEn: '⏰ Limited Offer', labelAr: '⏰ عرض محدود', prompt: 'limited-time offer, urgency' },
+  { id: 'app-download', labelEn: '📱 App Download', labelAr: '📱 تحميل التطبيق', prompt: 'app download promotion' },
+  { id: 'save-time', labelEn: '⚡ Save Time', labelAr: '⚡ توفير الوقت', prompt: 'time-saving benefit' },
+  { id: 'premium', labelEn: '✨ Premium Quality', labelAr: '✨ جودة فاخرة', prompt: 'premium quality and prestige' },
+  { id: 'social-proof', labelEn: '⭐ Customer Love', labelAr: '⭐ حب العملاء', prompt: 'social proof and customer trust' },
+  { id: 'features', labelEn: '🎯 Show Features', labelAr: '🎯 إبراز المزايا', prompt: 'product feature showcase' },
+  { id: 'sale', labelEn: '🛍️ Sale / Discount', labelAr: '🛍️ تخفيض / خصم', prompt: 'sale or discount offer' },
 ];
 
 export const mainMessageVariantMap: Record<string, Array<{ id: string; labelEn: string; labelAr: string; prompt: string }>> = {
@@ -176,27 +183,36 @@ export const mainMessageVariantMap: Record<string, Array<{ id: string; labelEn: 
 };
 
 // CTA chips
-export const ctaChips = [
-  { id: 'download-now',   label: 'Download now' },
-  { id: 'get-started',    label: 'Get started' },
-  { id: 'shop-now',       label: 'Shop now' },
-  { id: 'learn-more',     label: 'Learn more' },
-  { id: 'book-now',       label: 'Book now' },
-  { id: 'start-free',     label: 'Start free' },
-  { id: 'try-today',      label: 'Try it today' },
-  { id: 'join-now',       label: 'Join now' },
-  { id: 'subscribe',      label: 'Subscribe' },
+export const ctaChips: PosterAdsChip[] = [
+  { id: 'download-now', labelEn: 'Download now', labelAr: 'حمّل الآن' },
+  { id: 'get-started', labelEn: 'Get started', labelAr: 'ابدأ الآن' },
+  { id: 'shop-now', labelEn: 'Shop now', labelAr: 'تسوّق الآن' },
+  { id: 'learn-more', labelEn: 'Learn more', labelAr: 'اعرف المزيد' },
+  { id: 'book-now', labelEn: 'Book now', labelAr: 'احجز الآن' },
+  { id: 'start-free', labelEn: 'Start free', labelAr: 'ابدأ مجاناً' },
+  { id: 'try-today', labelEn: 'Try it today', labelAr: 'جرّبه اليوم' },
+  { id: 'join-now', labelEn: 'Join now', labelAr: 'انضم الآن' },
+  { id: 'subscribe', labelEn: 'Subscribe', labelAr: 'اشترك' },
 ];
 
 // Ad look & feel
-export const adStyleChips = [
-  { id: 'premium-dark',      label: '🌙 Sleek & Dark',       prompt: 'premium dark theme, elegant, high-contrast' },
-  { id: 'bright-clean',      label: '☀️ Bright & Clean',     prompt: 'bright clean design, light background, fresh' },
-  { id: 'bold-modern',       label: '⚡ Bold & Punchy',       prompt: 'bold modern design, high energy, strong typography' },
-  { id: 'lifestyle',         label: '📸 Real & Human',        prompt: 'lifestyle photography feel, authentic and relatable' },
-  { id: 'luxury-minimal',    label: '🤍 Luxury Minimal',      prompt: 'luxury minimalist, spacious, refined, premium' },
-  { id: 'ugc',               label: '🎥 Natural / UGC',       prompt: 'organic UGC style, native social feed look' },
+export const adStyleChips: PosterAdsChip[] = [
+  { id: 'premium-dark', labelEn: '🌙 Sleek & Dark', labelAr: '🌙 داكن وأنيق', prompt: 'premium dark theme, elegant, high-contrast' },
+  { id: 'bright-clean', labelEn: '☀️ Bright & Clean', labelAr: '☀️ مشرق ونظيف', prompt: 'bright clean design, light background, fresh' },
+  { id: 'bold-modern', labelEn: '⚡ Bold & Punchy', labelAr: '⚡ جريء وحاد', prompt: 'bold modern design, high energy, strong typography' },
+  { id: 'lifestyle', labelEn: '📸 Real & Human', labelAr: '📸 واقعي وإنساني', prompt: 'lifestyle photography feel, authentic and relatable' },
+  { id: 'luxury-minimal', labelEn: '🤍 Luxury Minimal', labelAr: '🤍 فاخر وبسيط', prompt: 'luxury minimalist, spacious, refined, premium' },
+  { id: 'ugc', labelEn: '🎥 Natural / UGC', labelAr: '🎥 طبيعي / محتوى مستخدمين', prompt: 'organic UGC style, native social feed look' },
 ];
+
+const getLocalizedChipLabel = (chip?: PosterAdsChip | null, language?: 'ar' | 'en') => {
+  if (!chip) return '';
+  return language === 'ar' ? chip.labelAr : chip.labelEn;
+};
+
+const getTopicChipById = (id?: string) => adTopicChips.find((chip) => chip.id === id) || null;
+const getCtaChipById = (id?: string) => ctaChips.find((chip) => chip.id === id) || null;
+const getStyleChipById = (id?: string) => adStyleChips.find((chip) => chip.id === id) || null;
 
 export const styleVariantMap: Record<string, Array<{ id: string; labelEn: string; labelAr: string; prompt: string }>> = {
   'premium-dark': [
@@ -415,18 +431,18 @@ export default function VisualAdsGenerator({
         prompt: customValue,
       };
     }
-    const selectedTopic = adTopicChips.find((chip) => chip.id === state.creativeSoul.mainMessage);
+    const selectedTopic = getTopicChipById(state.creativeSoul.mainMessage);
     return {
-      label: selectedTopic?.label || '',
+      label: getLocalizedChipLabel(selectedTopic, language),
       prompt: selectedTopic?.prompt || '',
     };
-  }, [state.creativeSoul.mainMessage, state.creativeSoul.customMainMessage, normalizeWordLimitedValue]);
+  }, [language, state.creativeSoul.mainMessage, state.creativeSoul.customMainMessage, normalizeWordLimitedValue]);
   const getSelectedCtaLabel = useCallback(() => {
     if (state.creativeSoul.cta === 'custom') {
       return normalizeWordLimitedValue(state.creativeSoul.customCta || '');
     }
-    return ctaChips.find((chip) => chip.id === state.creativeSoul.cta)?.label || '';
-  }, [state.creativeSoul.cta, state.creativeSoul.customCta, normalizeWordLimitedValue]);
+    return getLocalizedChipLabel(getCtaChipById(state.creativeSoul.cta), language);
+  }, [language, state.creativeSoul.cta, state.creativeSoul.customCta, normalizeWordLimitedValue]);
   const getSelectedTopicVariantMeta = useCallback(() => {
     if (!state.creativeSoul.mainMessage || state.creativeSoul.mainMessage === 'custom') {
       return { label: '', prompt: '' };
@@ -445,12 +461,12 @@ export default function VisualAdsGenerator({
         prompt: customValue,
       };
     }
-    const selectedStyle = adStyleChips.find((chip) => chip.id === state.creativeSoul.style);
+    const selectedStyle = getStyleChipById(state.creativeSoul.style);
     return {
-      label: selectedStyle?.label || '',
+      label: getLocalizedChipLabel(selectedStyle, language),
       prompt: selectedStyle?.prompt || '',
     };
-  }, [state.creativeSoul.style, state.creativeSoul.customStyle, normalizeWordLimitedValue]);
+  }, [language, state.creativeSoul.style, state.creativeSoul.customStyle, normalizeWordLimitedValue]);
   const getSelectedStyleVariantMeta = useCallback(() => {
     if (!state.creativeSoul.style || state.creativeSoul.style === 'custom') {
       return { label: '', prompt: '' };
@@ -1468,14 +1484,14 @@ export default function VisualAdsGenerator({
             {(() => {
               const selectedTopic = state.creativeSoul.mainMessage === 'custom'
                 ? getCustomSelectionLabel(state.creativeSoul.customMainMessage)
-                : adTopicChips.find(c => c.id === state.creativeSoul.mainMessage)?.label;
+                : getLocalizedChipLabel(getTopicChipById(state.creativeSoul.mainMessage), language);
               const selectedTopicVariant = selectedTopicVariantMeta.label;
               const selectedCta = state.creativeSoul.cta === 'custom'
                 ? getCustomSelectionLabel(state.creativeSoul.customCta)
-                : ctaChips.find(c => c.id === state.creativeSoul.cta)?.label;
+                : getLocalizedChipLabel(getCtaChipById(state.creativeSoul.cta), language);
               const selectedStyle = state.creativeSoul.style === 'custom'
                 ? getCustomSelectionLabel(state.creativeSoul.customStyle)
-                : adStyleChips.find(s => s.id === state.creativeSoul.style)?.label;
+                : getLocalizedChipLabel(getStyleChipById(state.creativeSoul.style), language);
               const selectedStyleVariant = selectedStyleVariantMeta.label;
               const selectedFeatureSummary = state.creativeSoul.featureChips.length > 0
                 ? (language === 'ar' ? `${state.creativeSoul.featureChips.length} نقاط` : `${state.creativeSoul.featureChips.length} points`)
@@ -1546,7 +1562,7 @@ export default function VisualAdsGenerator({
                                     : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                                 }`}
                               >
-                                {chip.label}
+                                {getLocalizedChipLabel(chip, language)}
                               </button>
                             ))}
                             <button
@@ -1672,7 +1688,7 @@ export default function VisualAdsGenerator({
                                     : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                                 }`}
                               >
-                                {chip.label}
+                                {getLocalizedChipLabel(chip, language)}
                               </button>
                             ))}
                             <button
@@ -1723,7 +1739,7 @@ export default function VisualAdsGenerator({
                                     : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
                                 }`}
                               >
-                                {style.label}
+                                {getLocalizedChipLabel(style, language)}
                               </button>
                             ))}
                             <button

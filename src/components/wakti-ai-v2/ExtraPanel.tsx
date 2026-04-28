@@ -18,7 +18,7 @@ interface ExtraPanelProps {
   onClose: () => void;
   onNewConversation: () => Promise<boolean> | boolean;
   onUpdateConversationMeta: (id: string, updates: ConversationMetaUpdate) => Promise<void>;
-  onClearChat: () => void;
+  onClearChat: () => Promise<boolean> | boolean;
   sessionMessages: any[];
   isLoading: boolean;
 }
@@ -56,7 +56,6 @@ export function ExtraPanel({
     is_active: conv.is_active,
     conversation_id: conv.conversation_id,
     is_saved: conv.is_saved,
-    tags: conv.tags,
     is_custom_title: conv.is_custom_title,
   }));
 

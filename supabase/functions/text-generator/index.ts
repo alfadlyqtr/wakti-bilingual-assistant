@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateGemini } from "../_shared/gemini.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialToken, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -178,6 +178,12 @@ async function streamClaudeResponse(args: {
   metadata: Record<string, unknown>;
   webSearchSources?: Array<{ title: string; url: string }>;
   postProcess?: (text: string) => string;
+  trialContext?: {
+    // deno-lint-ignore no-explicit-any
+    supabaseAdmin: any;
+    userId: string;
+    trialKey: 'compose' | 'reply';
+  };
 }) {
   const {
     req,
@@ -193,6 +199,7 @@ async function streamClaudeResponse(args: {
     metadata,
     webSearchSources,
     postProcess,
+    trialContext,
   } = args;
 
   const startedAt = Date.now();
@@ -274,6 +281,13 @@ async function streamClaudeResponse(args: {
           metadata,
         });
 
+        const trialPayload = trialContext
+          ? buildTrialSuccessPayload(
+              trialContext.trialKey,
+              await checkAndConsumeTrialToken(trialContext.supabaseAdmin, trialContext.userId, trialContext.trialKey, 2),
+            )
+          : null;
+
         controller.enqueue(encoder.encode(toSseEvent({
           type: "complete",
           generatedText: fullText,
@@ -283,6 +297,7 @@ async function streamClaudeResponse(args: {
           temperatureUsed: temperature,
           contentType: contentType || null,
           webSearchSources: webSearchSources || [],
+          trial: trialPayload,
         })));
         controller.close();
       } catch (error) {
@@ -342,6 +357,13 @@ serve(async (req) => {
 
     const { prompt, mode, language, languageVariant, messageAnalysis, modelPreference: _modelPreference, temperature: _temperature, contentType, length, replyLength, wordCount, replyWordCount, tone, register, emojis, captionPlatform, image, extractTarget, webSearch, webSearchUrl, fetchUrlOnly } = requestBody;
 
+    let trialContext: {
+      // deno-lint-ignore no-explicit-any
+      supabaseAdmin: any;
+      userId: string;
+      trialKey: 'compose' | 'reply';
+    } | null = null;
+
     // ── Trial Token Check: compose/reply (skip for extract/fetch_url modes) ──
     if (mode === 'compose' || mode === 'reply') {
       const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
@@ -353,13 +375,19 @@ serve(async (req) => {
         const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
         if (user) {
           const trialKey = mode === 'reply' ? 'reply' : 'compose';
-          const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, trialKey, 2);
+          const trial = await checkTrialAccess(supabaseAdmin, user.id, trialKey, 2);
           if (!trial.allowed) {
             return new Response(
-              JSON.stringify({ success: false, error: 'TRIAL_LIMIT_REACHED', feature: trialKey }),
+              JSON.stringify({ success: false, ...buildTrialErrorPayload(trialKey, trial) }),
               { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
           }
+
+          trialContext = {
+            supabaseAdmin,
+            userId: user.id,
+            trialKey,
+          };
         }
       }
     }
@@ -874,6 +902,7 @@ ${finalPrompt}`;
             },
             webSearchSources: [{ title: normalizedWebSearchUrl, url: normalizedWebSearchUrl }],
             postProcess: applyWordCount,
+            trialContext: trialContext ?? undefined,
           });
         } else {
           console.warn("🎯 Text Generator: URL fetch returned empty content");
@@ -971,6 +1000,7 @@ ${finalPrompt}`;
               },
               webSearchSources: sources,
               postProcess: applyWordCount,
+              trialContext: trialContext ?? undefined,
             });
           } else {
             console.warn("🎯 Text Generator: Tavily returned empty results");
@@ -1004,6 +1034,7 @@ ${finalPrompt}`;
             webSearchUsed: false,
           },
           postProcess: applyWordCount,
+          trialContext: trialContext ?? undefined,
         });
       } catch (e) {
         console.warn("🎯 Text Generator: Claude threw error:", e);
@@ -1039,6 +1070,13 @@ ${finalPrompt}`;
           if (content) {
             generatedText = applyWordCount(sanitizeEmDashes(content));
 
+            const trialPayload = trialContext
+              ? buildTrialSuccessPayload(
+                  trialContext.trialKey,
+                  await checkAndConsumeTrialToken(trialContext.supabaseAdmin, trialContext.userId, trialContext.trialKey, 2),
+                )
+              : null;
+
             await logAIFromRequest(req, {
               functionName: "text-generator",
               provider: "openai",
@@ -1061,7 +1099,8 @@ ${finalPrompt}`;
                 language,
                 modelUsed: 'gpt-4.1-mini',
                 temperatureUsed: genParams.temperature,
-                contentType: contentType || null
+                contentType: contentType || null,
+                trial: trialPayload,
               }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );
@@ -1092,6 +1131,13 @@ ${finalPrompt}`;
         if (content) {
           generatedText = applyWordCount(sanitizeEmDashes(content));
 
+          const trialPayload = trialContext
+            ? buildTrialSuccessPayload(
+                trialContext.trialKey,
+                await checkAndConsumeTrialToken(trialContext.supabaseAdmin, trialContext.userId, trialContext.trialKey, 2),
+              )
+            : null;
+
           await logAIFromRequest(req, {
             functionName: "text-generator",
             provider: "gemini",
@@ -1114,7 +1160,8 @@ ${finalPrompt}`;
               language,
               modelUsed: 'gemini-2.5-flash-lite',
               temperatureUsed: genParams.temperature,
-              contentType: contentType || null
+              contentType: contentType || null,
+              trial: trialPayload,
             }),
             { headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
@@ -1152,6 +1199,12 @@ ${finalPrompt}`;
           const content = result.choices?.[0]?.message?.content || "";
           if (content) {
             generatedText = applyWordCount(sanitizeEmDashes(content));
+            const trialPayload = trialContext
+              ? buildTrialSuccessPayload(
+                  trialContext.trialKey,
+                  await checkAndConsumeTrialToken(trialContext.supabaseAdmin, trialContext.userId, trialContext.trialKey, 2),
+                )
+              : null;
             return new Response(
               JSON.stringify({
                 success: true,
@@ -1160,7 +1213,8 @@ ${finalPrompt}`;
                 language,
                 modelUsed: 'deepseek-chat',
                 temperatureUsed: genParams.temperature,
-                contentType: contentType || null
+                contentType: contentType || null,
+                trial: trialPayload,
               }),
               { headers: { ...corsHeaders, "Content-Type": "application/json" } }
             );

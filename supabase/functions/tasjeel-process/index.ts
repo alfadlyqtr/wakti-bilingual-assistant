@@ -3,7 +3,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 // Orchestrator edge function for Tasjeel.
 // Replaces the multi-step client-side coordination:
@@ -72,10 +72,10 @@ serve(async (req) => {
     const { data: { user } } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (user) {
       userId = user.id;
-      const trial = await checkAndConsumeTrialToken(supabase, user.id, "tasjeel", 1);
+      const trial = await checkTrialAccess(supabase, user.id, "tasjeel", 1);
       if (!trial.allowed) {
         return new Response(
-          JSON.stringify({ error: "TRIAL_LIMIT_REACHED", feature: "tasjeel" }),
+          JSON.stringify(buildTrialErrorPayload("tasjeel", trial)),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }

@@ -19,7 +19,7 @@ interface ChatDrawersProps {
   onTextGenerated: (text: string, mode: 'compose' | 'reply', isTextGenerated?: boolean) => void;
   onNewConversation: () => Promise<boolean> | boolean;
   onUpdateConversationMeta: (id: string, updates: ConversationMetaUpdate) => Promise<void>;
-  onClearChat: () => void;
+  onClearChat: () => Promise<boolean> | boolean;
   sessionMessages: any[];
   isLoading: boolean;
 }

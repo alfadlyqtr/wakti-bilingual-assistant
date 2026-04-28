@@ -194,7 +194,6 @@ const WaktiAIV2 = () => {
       is_active: c.is_active,
       conversation_id: c.conversation_id,
       is_saved: c.is_saved === true,
-      tags: Array.isArray(c.tags) ? c.tags : [],
       is_custom_title: c.is_custom_title === true,
     }))
   ), []);
@@ -450,7 +449,7 @@ const WaktiAIV2 = () => {
 
     // Deactivate current in DB
     if (currentConversationId) {
-      SavedConversationsService.deactivateConversation(currentConversationId).catch(() => {});
+      await SavedConversationsService.deactivateConversation(currentConversationId).catch(() => {});
     }
     const newId = `frontend-conv-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
     setSessionMessages([]);

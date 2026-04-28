@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.0";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 const allowedOrigins = [
   'https://wakti.qa',
@@ -51,61 +52,21 @@ type IpGeoLite = {
 
 const ipGeoCache = new Map<string, { at: number; geo: IpGeoLite | null }>();
 
-// === TRIAL TOKEN CHECK (inlined from _shared/trial-tracker.ts) ===
-async function checkAndConsumeTrialToken(
+function checkAiChatTrialAccess(
   // deno-lint-ignore no-explicit-any
   supabaseClient: any,
   userId: string,
-  featureKey: string,
-  maxLimit: number
-): Promise<{ allowed: boolean; consumed: number; limit: number; isVip?: boolean }> {
-  const { data: profile, error: fetchError } = await supabaseClient
-    .from('profiles')
-    .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
-    .eq('id', userId)
-    .single();
+) {
+  return checkTrialAccess(supabaseClient, userId, 'ai_chat', 15);
+}
 
-  if (fetchError || !profile) {
-    console.error('[trial-tracker] Failed to fetch profile:', fetchError);
-    return { allowed: false, consumed: 0, limit: maxLimit };
-  }
-
-  const isPaid = profile.is_subscribed === true;
-  const isGifted = profile.admin_gifted === true;
-  const pm = profile.payment_method;
-  const isActiveGift =
-    pm != null && typeof pm === 'string' && pm.trim().length > 0 && pm !== 'manual' &&
-    profile.next_billing_date != null &&
-    new Date(profile.next_billing_date as string) > new Date();
-  // Token limits ONLY apply to users on the 24-hour trial (free_access_start_at is set)
-  const isOn24hTrial = profile.free_access_start_at != null;
-
-  if (isPaid || isActiveGift || isGifted || !isOn24hTrial) {
-    return { allowed: true, consumed: 0, limit: maxLimit, isVip: true };
-  }
-
+function consumeAiChatTrialSuccess(
   // deno-lint-ignore no-explicit-any
-  const usage: Record<string, number> = (profile.trial_usage as any) ?? {};
-  const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
-
-  if (current >= maxLimit) {
-    return { allowed: false, consumed: current, limit: maxLimit };
-  }
-
-  const newValue = current + 1;
-  const updatedUsage = { ...usage, [featureKey]: newValue };
-
-  const { error: updateError } = await supabaseClient
-    .from('profiles')
-    .update({ trial_usage: updatedUsage })
-    .eq('id', userId);
-
-  if (updateError) {
-    console.error('[trial-tracker] Failed to increment usage:', updateError);
-    return { allowed: false, consumed: current, limit: maxLimit };
-  }
-
-  return { allowed: true, consumed: newValue, limit: maxLimit };
+  supabaseClient: any,
+  userId: string,
+  onceKey: string,
+) {
+  return checkAndConsumeTrialTokenOnce(supabaseClient, userId, 'ai_chat', 15, onceKey);
 }
 
 function extractClientIp(req: Request): string {
@@ -3090,9 +3051,9 @@ serve(async (req) => {
         // Trial gate: ai_chat — 15 messages for free users
         if (userId) {
           const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-          const trial = await checkAndConsumeTrialToken(supabaseAdmin, userId, 'ai_chat', 15);
+          const trial = await checkAiChatTrialAccess(supabaseAdmin, userId);
           if (!trial.allowed) {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'ai_chat', trialLimitReached: true })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...buildTrialErrorPayload('ai_chat', trial), trialLimitReached: true })}\n\n`));
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();
             return;
@@ -3112,6 +3073,13 @@ serve(async (req) => {
           : null;
 
         const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const emitAiChatTrialFinished = async (onceKey: string) => {
+          if (!userId) return;
+          const trial = await consumeAiChatTrialSuccess(supabaseAdmin, userId, onceKey);
+          const trialPayload = buildTrialSuccessPayload('ai_chat', trial);
+          if (!trialPayload) return;
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { trialQuotaFinished: trialPayload } })}\n\n`));
+        };
         // Parallel fetch: settings + memory items together. We always fetch memory
         // speculatively when we have a userId; if settings disable it, we just drop
         // the result. This trades a tiny extra query on the (rare) disabled case for
@@ -3269,6 +3237,7 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
 
           // Emit the response text
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: promoText, content: promoText })}\n\n`));
+          await emitAiChatTrialFinished(promoText);
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
           return;
@@ -3792,6 +3761,7 @@ If you are running out of space, keep this order and drop the rest:
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
             }
 
+            await emitAiChatTrialFinished(fullResponseText || message);
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();
             return; // Exit early - search handled completely by Gemini
@@ -3904,6 +3874,7 @@ If you are running out of space, keep this order and drop the rest:
               // Intercept + schedule any reminder JSON embedded in the response
               await interceptAndScheduleReminder(fullResponseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset);
 
+              await emitAiChatTrialFinished(fullResponseText || message);
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
               return;
@@ -4376,6 +4347,8 @@ If you are running out of space, keep this order and drop the rest:
           durationMs: Date.now() - startTime,
           costCredits: cost
         });
+
+        await emitAiChatTrialFinished(responseText || requestMessage);
 
         controller.close();
       } catch (error) {

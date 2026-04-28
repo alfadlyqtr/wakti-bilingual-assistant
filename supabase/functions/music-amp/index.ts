@@ -85,12 +85,12 @@ A. LOCKED DURATION CONTRACT
 ═══════════════════════════════════════════════
 You will receive a duration structure contract. Obey it exactly.
 
-  0:30 → exactly 2 stanza blocks, 4–6 lines total. Compressed full-song feel. Block 1 sets up the verse feeling. Block 2 lands the chorus payoff.
-  1:00 → exactly 3 stanza blocks, 8–12 lines total. Verse lift → chorus payoff → second verse lift.
-  1:30 → exactly 4 stanza blocks, 12–16 lines total. Verse lift → chorus payoff → second verse → chorus return.
-  2:00 → exactly 5 stanza blocks, 16–22 lines total. Verse lift → chorus payoff → second verse → bridge-like emotional turn → chorus return.
-  2:30 → exactly 5 stanza blocks, 20–26 lines total. Same 5-block plan as 2:00, with richer lyrical development and more breathing room.
-  3:20 → exactly 5 stanza blocks, 24–32 lines total. Same 5-block plan as 2:00/2:30, but fullest version.
+  0:30 → exactly 2 stanza blocks, 4–6 lines total. Mini Verse → Mini Chorus.
+  1:00 → exactly 3 stanza blocks, 8–12 lines total. Verse 1 → Pre-Chorus → Chorus.
+  1:30 → exactly 4 stanza blocks, 12–16 lines total. Verse 1 → Pre-Chorus → Chorus → Verse 2.
+  2:00 → exactly 5 stanza blocks, 16–22 lines total. Verse 1 → Pre-Chorus → Chorus → Verse 2 → Final Chorus.
+  2:30 → exactly 6 stanza blocks, 20–26 lines total. Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus.
+  3:20 → exactly 6 stanza blocks, 24–32 lines total. Same 6-block plan as 2:30, but fullest version.
 
 Stanza blocks must be separated by one blank line.
 Do NOT output labels like [Verse], [Chorus], [Bridge], or [Outro].
@@ -132,26 +132,26 @@ Adjust the meter based on the rhythm context:
 Within a stanza block, keep the meter coherent. Avoid sudden long/short jumps.
 
 ═══════════════════════════════════════════════
-E. GCC / KHALEEJI AUTHENTICITY (when style is Gulf/Arabic)
+E. KHALEEJI AUTHENTICITY (when style is Gulf/Arabic)
 ═══════════════════════════════════════════════
-1. Use strict GCC / Khaleeji Arabic only — Saudi, Kuwaiti, Emirati, Qatari, Bahraini, or Omani flavor.
+1. Use strict Khaleeji Arabic only — Saudi, Kuwaiti, Emirati, Qatari, Bahraini, or Omani flavor.
 2. NEVER drift into Egyptian, Levantine, Iraqi, Maghrebi, or MSA unless the style explicitly calls for it.
 3. Use authentic Khaleeji vocabulary when it fits naturally: وياك, يبعد, ليش, شلون, عيوني, يا روحي, يا حبيبي, ما قصرت.
 4. Gulf imagery is welcome when it fits: desert, sea, majlis, falconry, pearl diving, longing, pride, devotion.
 5. Sheilat / Samri / Ardah need masculine collective force. Jalsa / romantic tracks need warmth and tenderness.
-6. The lyrics must FEEL GCC — not just contain Arabic words.
+6. The lyrics must FEEL Khaleeji — not just contain Arabic words.
 
 ═══════════════════════════════════════════════
 F. BILINGUAL / LANGUAGE RULES
 ═══════════════════════════════════════════════
 1. Arabic input → Arabic output. English input → English output. Mixed input → mixed output.
 2. Preserve the user's bilingual pattern. Never collapse mixed lyrics into one language.
-3. Arabic parts of Khaleeji tracks must stay GCC in tone and phrasing.
+3. Arabic parts of Khaleeji tracks must stay Khaleeji in tone and phrasing.
 
 ═══════════════════════════════════════════════
 G. HARAKAT / PHONETICS
 ═══════════════════════════════════════════════
-Keep Arabic naturally singable, but do NOT add explicit harakat or full diacritics in IDEA or EXPAND output. GCC Enhance handles pronunciation marking later.
+Keep Arabic naturally singable, but do NOT add explicit harakat or full diacritics in IDEA or EXPAND output. Khaliji Enhance handles pronunciation marking later.
 
 ═══════════════════════════════════════════════
 H. OUTPUT FORMAT — MANDATORY
@@ -369,6 +369,10 @@ interface LyricsBlueprint {
   moodTags: string[];
   vocalType: string;
   title: string;
+  controlBlock?: string;
+  structurePlan?: string;
+  tempoHint?: string;
+  musicalKeyHint?: string;
 }
 
 function normalizeAmpDuration(secs: number): number {
@@ -387,12 +391,12 @@ function buildDurationLabel(secs: number): string {
 }
 
 function buildFerrariClock(secs: number): string {
-  if (secs <= 30)  return "STRUCTURE CONTRACT: 0:30 → exactly 2 stanza blocks, 4–6 lines total. Compressed full-song feel. Block 1 = verse lift. Block 2 = chorus payoff.";
-  if (secs <= 60)  return "STRUCTURE CONTRACT: 1:00 → exactly 3 stanza blocks, 8–12 lines total. Block flow: verse lift → chorus payoff → second verse lift.";
-  if (secs <= 90)  return "STRUCTURE CONTRACT: 1:30 → exactly 4 stanza blocks, 12–16 lines total. Block flow: verse lift → chorus payoff → second verse → chorus return.";
-  if (secs <= 120) return "STRUCTURE CONTRACT: 2:00 → exactly 5 stanza blocks, 16–22 lines total. Block flow: verse lift → chorus payoff → second verse → bridge-like emotional turn → chorus return.";
-  if (secs <= 150) return "STRUCTURE CONTRACT: 2:30 → exactly 5 stanza blocks, 20–26 lines total. Same 5-block flow as 2:00, with richer lyrical development and more breathing room.";
-  return "STRUCTURE CONTRACT: 3:20 → exactly 5 stanza blocks, 24–32 lines total. Same 5-block flow as 2:00/2:30, but fullest version.";
+  if (secs <= 30)  return "STRUCTURE CONTRACT: 0:30 → exactly 2 stanza blocks, 4–6 lines total. Block flow: Mini Verse → Mini Chorus.";
+  if (secs <= 60)  return "STRUCTURE CONTRACT: 1:00 → exactly 3 stanza blocks, 8–12 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus.";
+  if (secs <= 90)  return "STRUCTURE CONTRACT: 1:30 → exactly 4 stanza blocks, 12–16 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2.";
+  if (secs <= 120) return "STRUCTURE CONTRACT: 2:00 → exactly 5 stanza blocks, 16–22 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2 → Final Chorus.";
+  if (secs <= 150) return "STRUCTURE CONTRACT: 2:30 → exactly 6 stanza blocks, 20–26 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus.";
+  return "STRUCTURE CONTRACT: 3:20 → exactly 6 stanza blocks, 24–32 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus.";
 }
 
 function buildMeterMapping(rhythm: string): string {
@@ -418,7 +422,7 @@ async function ampMusicLyricsWithOpenAI(
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
 
-  const { text, ampMode, durationSeconds, style, styleTags, rhythm, rhythmTags, instruments, instrumentTags, mood, moodTags, vocalType, title } = blueprint;
+  const { text, ampMode, durationSeconds, style, styleTags, rhythm, rhythmTags, instruments, instrumentTags, mood, moodTags, vocalType, title, controlBlock, structurePlan, tempoHint, musicalKeyHint } = blueprint;
   const normalizedDuration = normalizeAmpDuration(durationSeconds);
 
   const modeInstruction = ampMode === "idea"
@@ -436,7 +440,11 @@ async function ampMusicLyricsWithOpenAI(
     mood       ? `Mood: ${mood}`         : null,
     buildTagLine("Mood tags", moodTags),
     vocalType  ? `Vocal type: ${vocalType}` : null,
+    structurePlan ? `Structure plan: ${structurePlan}` : null,
+    tempoHint ? `Tempo hint: ${tempoHint}` : null,
+    musicalKeyHint ? `Key hint: ${musicalKeyHint}` : null,
     `Duration: ${buildDurationLabel(normalizedDuration)} (${normalizedDuration}s requested bucket from ${durationSeconds}s)`,
+    controlBlock ? `Control block:\n${controlBlock}` : null,
   ].filter(Boolean).join("\n");
 
   const userMessage = [
@@ -585,6 +593,10 @@ serve(async (req) => {
     const moodTags    = Array.isArray(body?.moodTags) ? body.moodTags.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0) : [];
     const vocalType   = typeof body?.vocalType   === "string" ? body.vocalType   : "auto";
     const titleField  = typeof body?.title       === "string" ? body.title       : "";
+    const controlBlock = typeof body?.controlBlock === "string" ? body.controlBlock.trim() : "";
+    const structurePlan = typeof body?.structurePlan === "string" ? body.structurePlan.trim() : "";
+    const tempoHint = typeof body?.tempoHint === "string" ? body.tempoHint.trim() : "";
+    const musicalKeyHint = typeof body?.musicalKeyHint === "string" ? body.musicalKeyHint.trim() : "";
     const durationSeconds = typeof body?.duration === "number" ? body.duration : 30;
     const normalizedDuration = normalizeAmpDuration(durationSeconds);
 
@@ -616,6 +628,10 @@ serve(async (req) => {
         moodTags,
         vocalType,
         title: titleField,
+        controlBlock,
+        structurePlan,
+        tempoHint,
+        musicalKeyHint,
       });
 
       await logAI({
@@ -640,6 +656,10 @@ serve(async (req) => {
           mood,
           moodTags,
           vocalType,
+          controlBlock,
+          structurePlan,
+          tempoHint,
+          musicalKeyHint,
           language: hasArabic(text) ? "ar" : "en",
         },
       });
@@ -662,7 +682,7 @@ serve(async (req) => {
       if (!text || text.trim().length === 0) {
         return new Response(
           JSON.stringify({
-            error: "Missing 'text' for GCC Enhance",
+            error: "Missing 'text' for Khaliji Enhance",
             code: "BAD_REQUEST_MISSING_TEXT",
           }),
           {
@@ -683,6 +703,10 @@ serve(async (req) => {
       if (mood)        gccContextParts.push(`Mood: ${mood}`);
       if (moodTags.length > 0) gccContextParts.push(`Mood tags: ${moodTags.join(", ")}`);
       if (vocalType)   gccContextParts.push(`Vocal type: ${vocalType}`);
+      if (structurePlan) gccContextParts.push(`Structure plan: ${structurePlan}`);
+      if (tempoHint) gccContextParts.push(`Tempo hint: ${tempoHint}`);
+      if (musicalKeyHint) gccContextParts.push(`Key hint: ${musicalKeyHint}`);
+      if (controlBlock) gccContextParts.push(`Control block: ${controlBlock}`);
       gccContextParts.push(`Duration target: ${buildDurationLabel(normalizedDuration)} (${normalizedDuration}s)`);
       gccContextParts.push(buildFerrariClock(normalizedDuration));
       const gccContext = gccContextParts.length > 0
@@ -713,6 +737,10 @@ serve(async (req) => {
           mood,
           moodTags,
           vocalType,
+          controlBlock,
+          structurePlan,
+          tempoHint,
+          musicalKeyHint,
           language: hasArabic(text) ? "ar" : "en",
         },
       });

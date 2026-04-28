@@ -1,6 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
  const getRecordingTypeGuide = (recordingType: string | undefined, isArabic: boolean): string => {
    switch (recordingType) {
@@ -46,6 +48,28 @@ serve(async (req) => {
   }
 
   try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const authHeader = req.headers.get('Authorization');
+    const supabaseAdmin = authHeader && supabaseUrl && supabaseServiceKey
+      ? createClient(supabaseUrl, supabaseServiceKey)
+      : null;
+    const authToken = authHeader?.replace('Bearer ', '') ?? '';
+    const { data: authData } = supabaseAdmin && authToken
+      ? await supabaseAdmin.auth.getUser(authToken)
+      : { data: { user: null } };
+    const user = authData?.user ?? null;
+
+    if (user && supabaseAdmin) {
+      const trial = await checkTrialAccess(supabaseAdmin, user.id, 'tasjeel', 1);
+      if (!trial.allowed) {
+        return new Response(
+          JSON.stringify(buildTrialErrorPayload('tasjeel', trial)),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     const { transcript, language, recordId, model, recordingType } = await req.json();
     console.log('Request payload:', { 
       hasTranscript: !!transcript, 
@@ -153,8 +177,18 @@ Preserve original languages for proper names and quoted terms. If content mixes 
       status: "success"
     });
 
+    let trialPayload = null;
+    if (user && supabaseAdmin) {
+      const consumeTrial = await checkAndConsumeTrialTokenOnce(supabaseAdmin, user.id, 'tasjeel', 1, recordId || summary);
+      if (consumeTrial.allowed) {
+        trialPayload = buildTrialSuccessPayload('tasjeel', consumeTrial);
+      } else {
+        console.warn('[summarize-text] Trial consume skipped after success:', consumeTrial.reason);
+      }
+    }
+
     return new Response(
-      JSON.stringify({ summary, recordId }),
+      JSON.stringify({ summary, recordId, trial: trialPayload }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {

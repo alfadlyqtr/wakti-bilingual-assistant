@@ -1,8 +1,7 @@
-
 import React, { useMemo, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { Bookmark, BookmarkCheck, MessageSquare, Pencil, Plus, Trash2, X } from 'lucide-react';
+import { MessageSquare, Plus, Trash2, X, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -35,7 +34,6 @@ export function ConversationSidebar({
 }: ConversationSidebarProps) {
   const { language } = useTheme();
   const [managingConversation, setManagingConversation] = useState<ConversationMetadata | null>(null);
-  const [togglingSaveId, setTogglingSaveId] = useState<string | null>(null);
   const savedCount = useMemo(() => conversations.filter((conversation) => conversation.is_saved === true).length, [conversations]);
 
   const formatDate = (date: Date) => {
@@ -57,16 +55,6 @@ export function ConversationSidebar({
     const result = await onNewConversation();
     if (result !== false) {
       onClose();
-    }
-  };
-
-  const handleToggleSaved = async (conversation: ConversationMetadata) => {
-    setTogglingSaveId(conversation.id);
-    try {
-      await onUpdateConversationMeta(conversation.id, { is_saved: conversation.is_saved !== true });
-      onRefreshConversations();
-    } finally {
-      setTogglingSaveId(null);
     }
   };
 
@@ -161,15 +149,6 @@ export function ConversationSidebar({
                         {conversation.messageCount} {language === 'ar' ? 'رسالة' : 'messages'}
                       </span>
                     </div>
-                    {Array.isArray(conversation.tags) && conversation.tags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {conversation.tags.slice(0, 3).map((tag) => (
-                          <Badge key={`${conversation.id}-${tag}`} className="border-[rgba(6,5,65,0.08)] bg-[rgba(6,5,65,0.05)] text-[10px] text-[hsl(243_84%_14%)]">
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex items-center gap-1">
@@ -179,22 +158,11 @@ export function ConversationSidebar({
                       className="h-8 w-8 rounded-full border border-[rgba(6,5,65,0.08)] bg-white"
                       onClick={(event) => {
                         event.stopPropagation();
-                        handleToggleSaved(conversation);
-                      }}
-                      disabled={togglingSaveId === conversation.id}
-                    >
-                      {conversation.is_saved ? <BookmarkCheck className="h-4 w-4 text-emerald-600" /> : <Bookmark className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-full border border-[rgba(6,5,65,0.08)] bg-white"
-                      onClick={(event) => {
-                        event.stopPropagation();
                         setManagingConversation(conversation);
                       }}
+                      title={language === 'ar' ? 'إدارة المحادثة' : 'Manage chat'}
                     >
-                      <Pencil className="h-4 w-4" />
+                      <SlidersHorizontal className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="ghost"

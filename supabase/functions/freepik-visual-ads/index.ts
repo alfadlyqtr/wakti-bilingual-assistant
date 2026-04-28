@@ -54,24 +54,57 @@ type VisualAdsSpecAsset = {
 type VisualAdsSpec = {
   language?: string | null;
   aspect_ratio?: string | null;
+  objective?: string | null;
+  legacy_prompt?: string | null;
   assets?: VisualAdsSpecAsset[];
   campaign?: {
+    main_message_id?: string | null;
     main_message_prompt?: string | null;
     main_message_custom_text?: string | null;
+    main_message_detail_id?: string | null;
     main_message_detail_prompt?: string | null;
     feature_chips?: string[] | null;
+    require_exact_feature_chips?: boolean | null;
+    cta_id?: string | null;
     cta_text?: string | null;
+    cta_prompt?: string | null;
   } | null;
   style?: {
+    primary_style_id?: string | null;
     primary_style_prompt?: string | null;
     primary_style_custom_text?: string | null;
+    style_detail_id?: string | null;
     style_detail_prompt?: string | null;
   } | null;
   composition?: {
+    layout_type?: string | null;
     primary_subjects?: string[] | null;
     secondary_subjects?: string[] | null;
     background_source?: string | null;
     logo_source?: string | null;
+    face_must_remain_visible?: boolean | null;
+    device_must_not_block_face?: boolean | null;
+    must_feel_unified?: boolean | null;
+  } | null;
+  text_policy?: {
+    allowed_text?: string[] | null;
+    allowed_feature_labels?: string[] | null;
+    allow_generated_headline?: boolean | null;
+    allow_generated_tagline?: boolean | null;
+    allow_generated_social_proof_copy?: boolean | null;
+    allow_generated_testimonials?: boolean | null;
+  } | null;
+  hard_constraints?: {
+    must_follow_tagged_roles?: boolean | null;
+    must_preserve_exact_person_identity?: boolean | null;
+    must_preserve_logo_fidelity?: boolean | null;
+    must_preserve_screenshot_fidelity?: boolean | null;
+    must_preserve_background_identity?: boolean | null;
+    allow_invented_text?: boolean | null;
+    allow_invented_names?: boolean | null;
+    allow_invented_testimonials?: boolean | null;
+    hard_constraints_override_style?: boolean | null;
+    priority_order?: string[] | null;
   } | null;
 };
 
@@ -157,6 +190,10 @@ function asStringArray(value: unknown, maxLength = 120): string[] {
   return result;
 }
 
+function asBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
 function startCase(value: string): string {
   return value
     .replace(/[_-]+/g, " ")
@@ -211,10 +248,14 @@ function normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
   const campaign = asRecord(record.campaign);
   const style = asRecord(record.style);
   const composition = asRecord(record.composition);
+  const textPolicy = asRecord(record.text_policy);
+  const hardConstraints = asRecord(record.hard_constraints);
 
   return {
     language: asString(record.language, 12) || "en",
     aspect_ratio: asString(record.aspect_ratio, 10) || "1:1",
+    objective: asString(record.objective, 120) || null,
+    legacy_prompt: asString(record.legacy_prompt, 20000) || null,
     assets: assetsRaw
       .map((item) => asRecord(item))
       .filter((item): item is Record<string, unknown> => Boolean(item))
@@ -230,27 +271,58 @@ function normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
         screenshot_device: asString(asset.screenshot_device, 60) || null,
       })),
     campaign: campaign ? {
+      main_message_id: asString(campaign.main_message_id, 80) || null,
       main_message_prompt: asString(campaign.main_message_prompt, 280) || null,
       main_message_custom_text: asString(campaign.main_message_custom_text, 120) || null,
+      main_message_detail_id: asString(campaign.main_message_detail_id, 80) || null,
       main_message_detail_prompt: asString(campaign.main_message_detail_prompt, 320) || null,
       feature_chips: asStringArray(campaign.feature_chips, 80),
+      require_exact_feature_chips: asBoolean(campaign.require_exact_feature_chips),
+      cta_id: asString(campaign.cta_id, 80) || null,
       cta_text: asString(campaign.cta_text, 120) || null,
+      cta_prompt: asString(campaign.cta_prompt, 120) || null,
     } : null,
     style: style ? {
+      primary_style_id: asString(style.primary_style_id, 80) || null,
       primary_style_prompt: asString(style.primary_style_prompt, 260) || null,
       primary_style_custom_text: asString(style.primary_style_custom_text, 120) || null,
+      style_detail_id: asString(style.style_detail_id, 80) || null,
       style_detail_prompt: asString(style.style_detail_prompt, 260) || null,
     } : null,
     composition: composition ? {
+      layout_type: asString(composition.layout_type, 80) || null,
       primary_subjects: asStringArray(composition.primary_subjects, 60),
       secondary_subjects: asStringArray(composition.secondary_subjects, 60),
       background_source: asString(composition.background_source, 60) || null,
       logo_source: asString(composition.logo_source, 60) || null,
+      face_must_remain_visible: asBoolean(composition.face_must_remain_visible),
+      device_must_not_block_face: asBoolean(composition.device_must_not_block_face),
+      must_feel_unified: asBoolean(composition.must_feel_unified),
+    } : null,
+    text_policy: textPolicy ? {
+      allowed_text: asStringArray(textPolicy.allowed_text, 120),
+      allowed_feature_labels: asStringArray(textPolicy.allowed_feature_labels, 120),
+      allow_generated_headline: asBoolean(textPolicy.allow_generated_headline),
+      allow_generated_tagline: asBoolean(textPolicy.allow_generated_tagline),
+      allow_generated_social_proof_copy: asBoolean(textPolicy.allow_generated_social_proof_copy),
+      allow_generated_testimonials: asBoolean(textPolicy.allow_generated_testimonials),
+    } : null,
+    hard_constraints: hardConstraints ? {
+      must_follow_tagged_roles: asBoolean(hardConstraints.must_follow_tagged_roles),
+      must_preserve_exact_person_identity: asBoolean(hardConstraints.must_preserve_exact_person_identity),
+      must_preserve_logo_fidelity: asBoolean(hardConstraints.must_preserve_logo_fidelity),
+      must_preserve_screenshot_fidelity: asBoolean(hardConstraints.must_preserve_screenshot_fidelity),
+      must_preserve_background_identity: asBoolean(hardConstraints.must_preserve_background_identity),
+      allow_invented_text: asBoolean(hardConstraints.allow_invented_text),
+      allow_invented_names: asBoolean(hardConstraints.allow_invented_names),
+      allow_invented_testimonials: asBoolean(hardConstraints.allow_invented_testimonials),
+      hard_constraints_override_style: asBoolean(hardConstraints.hard_constraints_override_style),
+      priority_order: asStringArray(hardConstraints.priority_order, 80),
     } : null,
   };
 }
 
-function compileVisualAdsPrompt(spec: VisualAdsSpec, legacyPrompt: string): string {
+function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: string): string {
   const assets = spec.assets || [];
   if (!assets.length && legacyPrompt.trim()) return legacyPrompt.trim();
 
@@ -422,6 +494,129 @@ function compileVisualAdsPrompt(spec: VisualAdsSpec, legacyPrompt: string): stri
   lines.push("Ultra clean, premium, production-ready quality");
 
   return lines.join("\n").trim();
+}
+
+function buildVisualAdsStructuredAppendix(spec: VisualAdsSpec): string {
+  const sections: string[] = [];
+  const assets = spec.assets || [];
+  const allowedText = (spec.text_policy?.allowed_text || []).filter(Boolean);
+  const allowedFeatureLabels = (spec.text_policy?.allowed_feature_labels || []).filter(Boolean);
+
+  const addSection = (title: string, lines: Array<string | null | undefined>) => {
+    const validLines = lines.filter((line): line is string => Boolean(line && line.trim()));
+    if (!validLines.length) return;
+    sections.push([title, ...validLines].join("\n"));
+  };
+
+  addSection("STRUCTURED_INPUT_APPENDIX", [
+    "- purpose: Supporting structured summary of the approved Poster Ads inputs.",
+    "- precedence: If anything here appears to conflict with the frontend compiled brief, the frontend compiled brief wins.",
+    spec.objective ? `- objective: ${spec.objective}` : null,
+    spec.language ? `- language: ${spec.language}` : null,
+    spec.aspect_ratio ? `- aspect_ratio: ${spec.aspect_ratio}` : null,
+  ]);
+
+  addSection("SOURCE_REFERENCE_MAP", assets.map((asset, index) => {
+    const sourceKey = getSourceKey(asset, index);
+    const details = [
+      `role=${getRoleLabel(asset)}`,
+      `purpose=${getRolePurpose(spec, asset, sourceKey)}`,
+      asset.person_mode ? `person_mode=${asset.person_mode}` : null,
+      asset.pose_mode ? `pose_mode=${asset.pose_mode}` : null,
+      asset.reference_style ? `reference_style=${asset.reference_style}` : null,
+      asset.logo_mode ? `logo_mode=${asset.logo_mode}` : null,
+      asset.screenshot_device ? `screenshot_device=${asset.screenshot_device}` : null,
+    ].filter(Boolean).join("; ");
+    return `- ${sourceKey}: ${details}`;
+  }));
+
+  addSection("CAMPAIGN_SUMMARY", [
+    spec.campaign?.main_message_id ? `- main_message_id: ${spec.campaign.main_message_id}` : null,
+    spec.campaign?.main_message_prompt ? `- main_message_prompt: ${spec.campaign.main_message_prompt}` : null,
+    spec.campaign?.main_message_custom_text ? `- main_message_custom_text: ${spec.campaign.main_message_custom_text}` : null,
+    spec.campaign?.main_message_detail_id ? `- main_message_detail_id: ${spec.campaign.main_message_detail_id}` : null,
+    spec.campaign?.main_message_detail_prompt ? `- main_message_detail_prompt: ${spec.campaign.main_message_detail_prompt}` : null,
+    spec.campaign?.feature_chips?.length ? `- feature_chips: ${spec.campaign.feature_chips.join(", ")}` : null,
+    spec.campaign?.require_exact_feature_chips != null ? `- require_exact_feature_chips: ${spec.campaign.require_exact_feature_chips}` : null,
+    spec.campaign?.cta_id ? `- cta_id: ${spec.campaign.cta_id}` : null,
+    spec.campaign?.cta_text ? `- cta_text: ${spec.campaign.cta_text}` : null,
+    spec.campaign?.cta_prompt ? `- cta_prompt: ${spec.campaign.cta_prompt}` : null,
+  ]);
+
+  addSection("STYLE_SUMMARY", [
+    spec.style?.primary_style_id ? `- primary_style_id: ${spec.style.primary_style_id}` : null,
+    spec.style?.primary_style_prompt ? `- primary_style_prompt: ${spec.style.primary_style_prompt}` : null,
+    spec.style?.primary_style_custom_text ? `- primary_style_custom_text: ${spec.style.primary_style_custom_text}` : null,
+    spec.style?.style_detail_id ? `- style_detail_id: ${spec.style.style_detail_id}` : null,
+    spec.style?.style_detail_prompt ? `- style_detail_prompt: ${spec.style.style_detail_prompt}` : null,
+  ]);
+
+  addSection("COMPOSITION_SUMMARY", [
+    spec.composition?.layout_type ? `- layout_type: ${spec.composition.layout_type}` : null,
+    spec.composition?.primary_subjects?.length ? `- primary_subjects: ${spec.composition.primary_subjects.join(", ")}` : null,
+    spec.composition?.secondary_subjects?.length ? `- secondary_subjects: ${spec.composition.secondary_subjects.join(", ")}` : null,
+    spec.composition?.background_source ? `- background_source: ${spec.composition.background_source}` : null,
+    spec.composition?.logo_source ? `- logo_source: ${spec.composition.logo_source}` : null,
+    spec.composition?.face_must_remain_visible != null ? `- face_must_remain_visible: ${spec.composition.face_must_remain_visible}` : null,
+    spec.composition?.device_must_not_block_face != null ? `- device_must_not_block_face: ${spec.composition.device_must_not_block_face}` : null,
+    spec.composition?.must_feel_unified != null ? `- must_feel_unified: ${spec.composition.must_feel_unified}` : null,
+  ]);
+
+  addSection("TEXT_POLICY_SUMMARY", [
+    allowedText.length ? `- allowed_text: ${allowedText.join(", ")}` : null,
+    allowedFeatureLabels.length ? `- allowed_feature_labels: ${allowedFeatureLabels.join(", ")}` : null,
+    spec.text_policy?.allow_generated_headline != null ? `- allow_generated_headline: ${spec.text_policy.allow_generated_headline}` : null,
+    spec.text_policy?.allow_generated_tagline != null ? `- allow_generated_tagline: ${spec.text_policy.allow_generated_tagline}` : null,
+    spec.text_policy?.allow_generated_social_proof_copy != null ? `- allow_generated_social_proof_copy: ${spec.text_policy.allow_generated_social_proof_copy}` : null,
+    spec.text_policy?.allow_generated_testimonials != null ? `- allow_generated_testimonials: ${spec.text_policy.allow_generated_testimonials}` : null,
+  ]);
+
+  addSection("HARD_CONSTRAINTS_SUMMARY", [
+    spec.hard_constraints?.must_follow_tagged_roles != null ? `- must_follow_tagged_roles: ${spec.hard_constraints.must_follow_tagged_roles}` : null,
+    spec.hard_constraints?.must_preserve_exact_person_identity != null ? `- must_preserve_exact_person_identity: ${spec.hard_constraints.must_preserve_exact_person_identity}` : null,
+    spec.hard_constraints?.must_preserve_logo_fidelity != null ? `- must_preserve_logo_fidelity: ${spec.hard_constraints.must_preserve_logo_fidelity}` : null,
+    spec.hard_constraints?.must_preserve_screenshot_fidelity != null ? `- must_preserve_screenshot_fidelity: ${spec.hard_constraints.must_preserve_screenshot_fidelity}` : null,
+    spec.hard_constraints?.must_preserve_background_identity != null ? `- must_preserve_background_identity: ${spec.hard_constraints.must_preserve_background_identity}` : null,
+    spec.hard_constraints?.allow_invented_text != null ? `- allow_invented_text: ${spec.hard_constraints.allow_invented_text}` : null,
+    spec.hard_constraints?.allow_invented_names != null ? `- allow_invented_names: ${spec.hard_constraints.allow_invented_names}` : null,
+    spec.hard_constraints?.allow_invented_testimonials != null ? `- allow_invented_testimonials: ${spec.hard_constraints.allow_invented_testimonials}` : null,
+    spec.hard_constraints?.hard_constraints_override_style != null ? `- hard_constraints_override_style: ${spec.hard_constraints.hard_constraints_override_style}` : null,
+    spec.hard_constraints?.priority_order?.length ? `- priority_order: ${spec.hard_constraints.priority_order.join(" > ")}` : null,
+  ]);
+
+  return sections.join("\n\n").trim();
+}
+
+function compileVisualAdsPrompt(spec: VisualAdsSpec, frontendCompiledPrompt: string): string {
+  const authoritativePrompt = (frontendCompiledPrompt || spec.legacy_prompt || "").trim();
+  if (!authoritativePrompt) {
+    return compileVisualAdsFallbackPrompt(spec, frontendCompiledPrompt);
+  }
+
+  const appendix = buildVisualAdsStructuredAppendix(spec);
+  const finalLines = [
+    "Create one premium advertising poster using the uploaded assets and approved settings.",
+    "The FRONTEND_COMPILED_BRIEF below is authoritative.",
+    "Do not remove, weaken, reinterpret, or override any rule from the frontend compiled brief.",
+    "Use any structured appendix only as supporting context. If anything conflicts, the frontend compiled brief wins.",
+    "",
+    "FRONTEND_COMPILED_BRIEF",
+    authoritativePrompt,
+  ];
+
+  if (appendix) {
+    finalLines.push("", appendix);
+  }
+
+  finalLines.push(
+    "",
+    "FINAL_OUTPUT_REQUIREMENTS",
+    "- output_count: 1",
+    "- output_type: premium advertising poster",
+    `- aspect_ratio: ${spec.aspect_ratio || "1:1"}`,
+  );
+
+  return finalLines.join("\n").trim();
 }
 
 function sanitizeImageUrl(url: string): string {
@@ -753,8 +948,10 @@ serve(async (req) => {
     }
 
     const spec = normalizeVisualAdsSpec(body?.visual_ads_spec);
-    const legacyPrompt = typeof body?.prompt === "string" ? sanitizeUserInput(body.prompt, 7000) : "";
-    const finalPrompt = compileVisualAdsPrompt(spec, legacyPrompt);
+    const frontendCompiledPrompt = typeof body?.frontend_compiled_prompt === "string"
+      ? sanitizeUserInput(body.frontend_compiled_prompt, 20000)
+      : (typeof body?.prompt === "string" ? sanitizeUserInput(body.prompt, 20000) : "");
+    const finalPrompt = compileVisualAdsPrompt(spec, frontendCompiledPrompt);
     const aspectRatio = ["1:1", "16:9", "9:16"].includes(body?.aspect_ratio || "") ? body.aspect_ratio : (spec.aspect_ratio || "1:1");
     const callbackUrl = `${supabaseUrl}/functions/v1/webhook-visual-ads`;
 

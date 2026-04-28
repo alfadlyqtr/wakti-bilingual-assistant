@@ -7,7 +7,6 @@ export interface ConversationMetadata {
   is_active?: boolean;
   conversation_id?: string | null;
   is_saved?: boolean;
-  tags?: string[];
   is_custom_title?: boolean;
 }
 

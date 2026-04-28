@@ -1,27 +1,24 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { Bookmark, Tag, Trash2 } from 'lucide-react';
+import { Bookmark, Trash2 } from 'lucide-react';
 import { normalizeConversationTitle } from '@/services/SavedConversationsService';
 
 interface ManagedConversation {
   id: string;
   title: string;
   is_saved?: boolean;
-  tags?: string[];
 }
 
 interface ConversationManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   conversation: ManagedConversation | null;
-  onSave: (id: string, updates: { title: string; tags: string[]; is_saved: boolean }) => Promise<void>;
+  onSave: (id: string, updates: { title: string; is_saved: boolean }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }
 
@@ -34,7 +31,6 @@ export function ConversationManagerDialog({
 }: ConversationManagerDialogProps) {
   const { language } = useTheme();
   const [title, setTitle] = useState('');
-  const [tagsInput, setTagsInput] = useState('');
   const [isSaved, setIsSaved] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -42,35 +38,21 @@ export function ConversationManagerDialog({
   useEffect(() => {
     if (!conversation) {
       setTitle('');
-      setTagsInput('');
       setIsSaved(false);
       return;
     }
 
     setTitle(normalizeConversationTitle(conversation.title || '', 'Conversation'));
-    setTagsInput(Array.isArray(conversation.tags) ? conversation.tags.join(', ') : '');
     setIsSaved(conversation.is_saved === true);
   }, [conversation]);
-
-  const parsedTags = useMemo(() => Array.from(new Set(
-    tagsInput
-      .split(/[\n,]/)
-      .map((tag) => tag.trim())
-      .filter(Boolean)
-      .slice(0, 6)
-  )), [tagsInput]);
 
   const copy = {
     title: language === 'ar' ? 'إدارة المحادثة' : 'Manage conversation',
     body: language === 'ar'
-      ? 'عدّل اسم المحادثة، أضف وسوماً، واحمِها من الحذف التلقائي.'
-      : 'Rename the chat, add tags, and protect it from auto-removal.',
+      ? 'عدّل اسم المحادثة واحمِها من الحذف التلقائي.'
+      : 'Rename the chat and protect it from auto-removal.',
     name: language === 'ar' ? 'اسم المحادثة' : 'Chat name',
     nameHint: language === 'ar' ? 'كلمتان كحد أقصى' : '2 words maximum',
-    tags: language === 'ar' ? 'الوسوم' : 'Tags',
-    tagsHint: language === 'ar'
-      ? 'افصل الوسوم بفاصلة مثل: PC, Gaming, Build'
-      : 'Separate tags with commas like: PC, Gaming, Build',
     protect: language === 'ar' ? 'حفظ وحماية هذه المحادثة' : 'Save and protect this chat',
     protectHint: language === 'ar'
       ? 'المحادثات المحفوظة لا تُستبدل تلقائياً عندما تمتلئ القائمة.'
@@ -88,7 +70,6 @@ export function ConversationManagerDialog({
     try {
       await onSave(conversation.id, {
         title: normalizedTitle,
-        tags: parsedTags,
         is_saved: isSaved,
       });
       onOpenChange(false);
@@ -132,32 +113,6 @@ export function ConversationManagerDialog({
               className="border-[rgba(6,5,65,0.1)] bg-white text-[hsl(243_84%_14%)]"
             />
             <p className="text-xs text-[hsl(243_20%_34%)]">{copy.nameHint}</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="conversation-tags" className="flex items-center gap-2 text-[hsl(243_84%_14%)]">
-              <Tag className="h-4 w-4" />
-              {copy.tags}
-            </Label>
-            <Textarea
-              id="conversation-tags"
-              value={tagsInput}
-              onChange={(event) => setTagsInput(event.target.value)}
-              placeholder={copy.tagsHint}
-              className="min-h-[92px] border-[rgba(6,5,65,0.1)] bg-white text-[hsl(243_84%_14%)]"
-            />
-            {parsedTags.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {parsedTags.map((tag) => (
-                  <Badge
-                    key={tag}
-                    className="border-[rgba(6,5,65,0.08)] bg-[rgba(6,5,65,0.05)] text-[hsl(243_84%_14%)]"
-                  >
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="rounded-2xl border border-[rgba(233,206,176,0.95)] bg-white/90 p-3 shadow-[0_8px_20px_rgba(6,5,65,0.05)]">

@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -132,8 +133,18 @@ serve(async (req) => {
     );
     const totalRows = (dbRows ?? []).length;
 
+    const getMusicTrialPayload = async () => {
+      const consumeTrial = await checkAndConsumeTrialTokenOnce(supabaseService, user.id, 'music', 1, taskId);
+      if (!consumeTrial.allowed) {
+        console.warn('[music-status] Trial consume skipped after success:', consumeTrial.reason);
+        return null;
+      }
+      return buildTrialSuccessPayload('music', consumeTrial);
+    };
+
     // Return completed from DB if we have 2+ variants done
     if (completedRows.length >= 2 && totalRows >= 2) {
+      const trial = await getMusicTrialPayload();
       return new Response(JSON.stringify({
         status: "completed",
         tracks: completedRows.map((r: any) => ({
@@ -144,6 +155,7 @@ serve(async (req) => {
           title: r.title,
           variantIndex: r.variant_index ?? 0,
         })),
+        trial,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -268,7 +280,8 @@ serve(async (req) => {
         });
       }
 
-      return new Response(JSON.stringify({ status: "completed", tracks: savedTracks }), {
+      const trial = await getMusicTrialPayload();
+      return new Response(JSON.stringify({ status: "completed", tracks: savedTracks, trial }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
 

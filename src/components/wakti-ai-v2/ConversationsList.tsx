@@ -1,10 +1,9 @@
-
 import React, { useMemo, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Bookmark, BookmarkCheck, MessageSquare, Pencil, Plus, RefreshCw, Trash, Eraser, Zap } from 'lucide-react';
+import { MessageSquare, Plus, RefreshCw, Trash2, Eraser, Zap, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ConversationMetaUpdate, MAX_CONVERSATIONS } from '@/services/SavedConversationsService';
 import { ConversationManagerDialog } from './ConversationManagerDialog';
@@ -31,7 +30,6 @@ interface Conversation {
   is_active?: boolean;
   conversation_id?: string | null;
   is_saved?: boolean;
-  tags?: string[];
   is_custom_title?: boolean;
 }
 
@@ -44,7 +42,7 @@ interface ConversationsListProps {
   onClose?: () => void;
   onNewConversation?: () => Promise<boolean> | boolean;
   onUpdateConversationMeta: (id: string, updates: ConversationMetaUpdate) => Promise<void>;
-  onClearChat: () => void;
+  onClearChat: () => Promise<boolean> | boolean;
   sessionMessages: any[];
   isLoading?: boolean;
 }
@@ -62,10 +60,9 @@ export function ConversationsList({
   sessionMessages,
   isLoading
 }: ConversationsListProps) {
-  const { language, toggleLanguage } = useTheme();
+  const { language } = useTheme();
   const [isClearing, setIsClearing] = useState(false);
   const [managingConversation, setManagingConversation] = useState<Conversation | null>(null);
-  const [isTogglingSaveId, setIsTogglingSaveId] = useState<string | null>(null);
 
   // Limit to 10 — active first, then by recency
   const limitedConversations = conversations.slice(0, MAX_CONVERSATIONS);
@@ -93,22 +90,13 @@ export function ConversationsList({
   };
 
   const handleClearChat = async () => {
-    const result = await onNewConversation?.();
+    const result = await onClearChat();
     if (result !== false) {
       onClose?.();
     }
   };
 
-  const handleToggleSaved = async (conversation: Conversation) => {
-    setIsTogglingSaveId(conversation.id);
-    try {
-      await onUpdateConversationMeta(conversation.id, { is_saved: conversation.is_saved !== true });
-    } finally {
-      setIsTogglingSaveId(null);
-    }
-  };
-
-  const handleSaveConversationMeta = async (id: string, updates: { title: string; tags: string[]; is_saved: boolean }) => {
+  const handleSaveConversationMeta = async (id: string, updates: { title: string; is_saved: boolean }) => {
     await onUpdateConversationMeta(id, updates);
   };
 
@@ -147,26 +135,18 @@ export function ConversationsList({
               {language === 'ar' ? 'المحادثات' : 'Conversations'}
             </h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs text-muted-foreground bg-primary/10 px-2 py-1 rounded-full font-medium">
               {limitedConversations.length}/{MAX_CONVERSATIONS}
             </span>
-            <span className="text-xs text-[hsl(243_84%_14%)] bg-[rgba(6,5,65,0.06)] px-2 py-1 rounded-full font-medium">
+            <span className="text-xs border border-[rgba(16,185,129,0.18)] bg-[rgba(16,185,129,0.10)] px-2 py-1 rounded-full font-medium text-[hsl(160_80%_28%)]">
               {language === 'ar' ? `${savedCount} محفوظة` : `${savedCount} saved`}
             </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={toggleLanguage}
-              className="h-7 px-2 text-xs"
-            >
-              {language === 'ar' ? 'En' : 'ع'}
-            </Button>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="default"
             size="sm"
@@ -182,20 +162,56 @@ export function ConversationsList({
             size="sm"
             onClick={() => { onRefresh(); }}
             className="h-8 px-3 text-xs"
+            title={language === 'ar' ? 'تحديث القائمة' : 'Refresh list'}
           >
             <RefreshCw className="h-3 w-3" />
           </Button>
 
+        </div>
+
+        {(sessionMessages.length > 0 || limitedConversations.length > 0) && (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
           {sessionMessages.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleClearChat}
-              className="h-8 px-3 text-xs text-orange-600 hover:text-orange-700"
-              title={language === 'ar' ? 'مسح الدردشة الحالية' : 'Clear current chat'}
-            >
-              <Eraser className="h-3 w-3" />
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3 text-xs font-medium text-orange-600 hover:text-orange-700"
+                  title={language === 'ar' ? 'مسح الدردشة الحالية' : 'Clear current chat'}
+                >
+                  <Eraser className="mr-1 h-3 w-3" />
+                  {language === 'ar' ? 'مسح الحالية' : 'Clear Current'}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent
+                overlayClassName="z-[12020]"
+                className="z-[12030] max-w-md rounded-3xl border-[rgba(233,206,176,0.9)] bg-[linear-gradient(180deg,rgba(12,15,20,0.98)_0%,rgba(18,22,32,0.98)_100%)] p-5 text-white shadow-[0_20px_44px_rgba(0,0,0,0.45)]"
+              >
+                <AlertDialogHeader>
+                  <AlertDialogTitle>
+                    {language === 'ar' ? 'مسح الدردشة الحالية' : 'Clear Current Chat'}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription>
+                    {language === 'ar'
+                      ? 'سيؤدي هذا إلى مسح الدردشة الحالية وبدء محادثة جديدة فارغة. هل تريد المتابعة؟'
+                      : 'This will clear the current chat and start a fresh empty one. Do you want to continue?'
+                    }
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="gap-3">
+                  <AlertDialogCancel className="mt-0 border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.04)] text-white hover:bg-[rgba(255,255,255,0.08)] hover:text-white">
+                    {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleClearChat}
+                    className="bg-orange-600 text-white hover:bg-orange-700"
+                  >
+                    {language === 'ar' ? 'مسح الحالية' : 'Clear Current'}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
 
           {limitedConversations.length > 0 && (
@@ -204,17 +220,21 @@ export function ConversationsList({
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-8 px-3 text-xs text-destructive hover:text-destructive"
+                  className="h-8 px-3 text-xs font-medium text-destructive hover:text-destructive"
                   disabled={isClearing}
                   title={language === 'ar' ? 'حذف جميع المحادثات' : 'Delete all conversations'}
                 >
-                  <Trash className="h-3 w-3" />
+                  <Trash2 className="mr-1 h-3 w-3" />
+                  {language === 'ar' ? 'حذف الجميع' : 'Delete All'}
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent
+                overlayClassName="z-[12020]"
+                className="z-[12030] max-w-md rounded-3xl border-[rgba(233,206,176,0.9)] bg-[linear-gradient(180deg,rgba(12,15,20,0.98)_0%,rgba(18,22,32,0.98)_100%)] p-5 text-white shadow-[0_20px_44px_rgba(0,0,0,0.45)]"
+              >
                 <AlertDialogHeader>
                   <AlertDialogTitle>
-                    {language === 'ar' ? 'حذف جميع المحادثات' : 'Clear All Conversations'}
+                    {language === 'ar' ? 'حذف جميع المحادثات' : 'Delete All Conversations'}
                   </AlertDialogTitle>
                   <AlertDialogDescription>
                     {language === 'ar'
@@ -223,21 +243,22 @@ export function ConversationsList({
                     }
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>
+                <AlertDialogFooter className="gap-3">
+                  <AlertDialogCancel className="mt-0 border-[rgba(255,255,255,0.12)] bg-[rgba(255,255,255,0.04)] text-white hover:bg-[rgba(255,255,255,0.08)] hover:text-white">
                     {language === 'ar' ? 'إلغاء' : 'Cancel'}
                   </AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleClearAll}
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   >
-                    {language === 'ar' ? 'حذف الكل' : 'Clear All'}
+                    {language === 'ar' ? 'حذف الجميع' : 'Delete All'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
           )}
-        </div>
+          </div>
+        )}
 
         {/* Info card */}
         <div className="mt-3 text-xs text-muted-foreground bg-muted/50 p-3 rounded-md border">
@@ -249,8 +270,8 @@ export function ConversationsList({
           </div>
           <p className="leading-relaxed">
             {language === 'ar'
-              ? '• كل محادثاتك تُحفظ تلقائياً. المحادثات المحفوظة يدوياً لا تُستبدل تلقائياً، ويمكنك إعادة تسميتها وإضافة وسوم لها.'
-              : '• Every chat auto-saves. Chats you save manually are protected from auto-replacement, and you can rename them and add tags.'
+              ? '• كل محادثاتك تُحفظ تلقائياً. المحادثات المحفوظة يدوياً لا تُستبدل تلقائياً، ويمكنك إعادة تسميتها وحمايتها.'
+              : '• Every chat auto-saves. Chats you save manually are protected from auto-replacement, and you can rename and protect them.'
             }
           </p>
         </div>
@@ -300,44 +321,20 @@ export function ConversationsList({
                       <span>•</span>
                       <span>{conversation.message_count ?? 0} {language === 'ar' ? 'رسالة' : 'msgs'}</span>
                     </div>
-                    {Array.isArray(conversation.tags) && conversation.tags.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {conversation.tags.slice(0, 4).map((tag) => (
-                          <Badge
-                            key={`${conversation.id}-${tag}`}
-                            className="border-[rgba(6,5,65,0.08)] bg-[rgba(6,5,65,0.05)] text-[10px] text-[hsl(243_84%_14%)]"
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <Button
                       variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-full border border-[rgba(6,5,65,0.08)] bg-white text-[hsl(243_84%_14%)] shadow-[0_4px_10px_rgba(6,5,65,0.05)] hover:bg-[rgba(6,5,65,0.03)]"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleToggleSaved(conversation);
-                      }}
-                      disabled={isTogglingSaveId === conversation.id}
-                      title={conversation.is_saved ? (language === 'ar' ? 'إلغاء حفظ المحادثة' : 'Unsave chat') : (language === 'ar' ? 'حفظ المحادثة' : 'Save chat')}
-                    >
-                      {conversation.is_saved ? <BookmarkCheck className="h-4 w-4 text-emerald-600" /> : <Bookmark className="h-4 w-4" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 rounded-full border border-[rgba(6,5,65,0.08)] bg-white text-[hsl(243_84%_14%)] shadow-[0_4px_10px_rgba(6,5,65,0.05)] hover:bg-[rgba(6,5,65,0.03)]"
+                      size="sm"
+                      className="h-8 rounded-full border border-[rgba(6,5,65,0.08)] bg-white px-3 text-xs font-medium text-[hsl(243_84%_14%)] shadow-[0_4px_10px_rgba(6,5,65,0.05)] hover:bg-[rgba(6,5,65,0.03)]"
                       onClick={(event) => {
                         event.stopPropagation();
                         setManagingConversation(conversation);
                       }}
                       title={language === 'ar' ? 'إدارة المحادثة' : 'Manage chat'}
                     >
-                      <Pencil className="h-4 w-4" />
+                      <SlidersHorizontal className="h-4 w-4" />
+                      <span className="ml-1">{language === 'ar' ? 'إدارة' : 'Manage'}</span>
                     </Button>
                   </div>
                 </div>

@@ -58,7 +58,6 @@ export interface AIConversation {
   is_active?: boolean;
   conversation_id?: string | null;
   is_saved?: boolean;
-  tags?: string[];
   is_custom_title?: boolean;
   message_count?: number;
 }
@@ -1753,7 +1752,14 @@ class WaktiAIV2ServiceClass {
 
                   // Trial limit reached — dispatch global event and stop cleanly
                   if (errMsg === 'TRIAL_LIMIT_REACHED' || parsed.trialLimitReached) {
-                    emitEvent('wakti-trial-limit-reached', { feature: parsed.feature || 'ai_chat' });
+                    emitEvent('wakti-trial-limit-reached', {
+                      feature: parsed.feature || 'ai_chat',
+                      reason: parsed.reason,
+                      code: parsed.code,
+                      consumed: parsed.consumed,
+                      limit: parsed.limit,
+                      remaining: parsed.remaining,
+                    });
                     if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
                     return;
                   }
@@ -1798,6 +1804,15 @@ class WaktiAIV2ServiceClass {
                 }
 
                 if (parsed.metadata && typeof parsed.metadata === 'object') {
+                  const trialQuotaFinished = (parsed.metadata as { trialQuotaFinished?: { feature?: string; consumed?: number; limit?: number; remaining?: number } }).trialQuotaFinished;
+                  if (trialQuotaFinished) {
+                    emitEvent('wakti-trial-quota-finished', {
+                      feature: trialQuotaFinished.feature || 'ai_chat',
+                      consumed: trialQuotaFinished.consumed,
+                      limit: trialQuotaFinished.limit,
+                      remaining: trialQuotaFinished.remaining,
+                    });
+                  }
                   metadata = { ...metadata, ...parsed.metadata };
                 }
                 if (parsed.done === true) {

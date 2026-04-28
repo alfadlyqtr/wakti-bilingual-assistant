@@ -42,6 +42,7 @@ interface TrialProfileShape {
 }
 
 const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000;
+const TRIAL_CONSUMPTION_LEDGER_KEY = '__consumed_once';
 
 function normalizeUsage(profile: TrialProfileShape): Record<string, number> {
   const rawUsage = profile.trial_usage;
@@ -50,9 +51,55 @@ function normalizeUsage(profile: TrialProfileShape): Record<string, number> {
   }
 
   return Object.entries(rawUsage).reduce<Record<string, number>>((acc, [key, value]) => {
+    if (key === TRIAL_CONSUMPTION_LEDGER_KEY) {
+      return acc;
+    }
+
     acc[key] = typeof value === 'number' ? value : 0;
     return acc;
   }, {});
+}
+
+function getConsumptionLedger(profile: TrialProfileShape): Record<string, boolean> {
+  const rawUsage = profile.trial_usage;
+  if (!rawUsage || typeof rawUsage !== 'object') {
+    return {};
+  }
+
+  const ledger = (rawUsage as Record<string, unknown>)[TRIAL_CONSUMPTION_LEDGER_KEY];
+  if (!ledger || typeof ledger !== 'object') {
+    return {};
+  }
+
+  return Object.entries(ledger as Record<string, unknown>).reduce<Record<string, boolean>>((acc, [key, value]) => {
+    if (value === true) {
+      acc[key] = true;
+    }
+    return acc;
+  }, {});
+}
+
+function buildUpdatedTrialUsage(
+  profile: TrialProfileShape,
+  featureKey: TrialFeatureKey,
+  newValue: number,
+  onceKey?: string,
+): Record<string, unknown> {
+  const rawUsage = profile.trial_usage && typeof profile.trial_usage === 'object'
+    ? { ...profile.trial_usage }
+    : {};
+
+  rawUsage[featureKey] = newValue;
+
+  if (onceKey) {
+    const currentLedger = getConsumptionLedger(profile);
+    rawUsage[TRIAL_CONSUMPTION_LEDGER_KEY] = {
+      ...currentLedger,
+      [onceKey]: true,
+    };
+  }
+
+  return rawUsage;
 }
 
 function buildBlockedResult(
@@ -236,7 +283,7 @@ export async function checkAndConsumeTrialToken(
   const usage = normalizeUsage(profile);
   const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
   const newValue = current + 1;
-  const updatedUsage = { ...usage, [featureKey]: newValue };
+  const updatedUsage = buildUpdatedTrialUsage(profile, featureKey, newValue);
 
   const { error: updateError } = await supabaseClient
     .from('profiles')
@@ -245,6 +292,69 @@ export async function checkAndConsumeTrialToken(
 
   if (updateError) {
     console.error('[trial-tracker] Failed to increment usage:', updateError);
+    return buildBlockedResult(profile, featureKey, maxLimit, 'profile_unavailable');
+  }
+
+  return {
+    allowed: true,
+    consumed: newValue,
+    limit: maxLimit,
+    remaining: Math.max(0, maxLimit - newValue),
+    justExhausted: newValue >= maxLimit,
+    trialActive: true,
+  };
+}
+
+export async function checkAndConsumeTrialTokenOnce(
+  // deno-lint-ignore no-explicit-any
+  supabaseClient: any,
+  userId: string,
+  featureKey: TrialFeatureKey,
+  maxLimit: number,
+  onceKey: string,
+): Promise<TrialCheckResult> {
+  const normalizedOnceKey = onceKey.trim();
+  if (!normalizedOnceKey) {
+    return checkAndConsumeTrialToken(supabaseClient, userId, featureKey, maxLimit);
+  }
+
+  const profile = await fetchTrialProfile(supabaseClient, userId);
+
+  if (!profile) {
+    return buildBlockedResult(null, featureKey, maxLimit, 'profile_unavailable');
+  }
+
+  const usage = normalizeUsage(profile);
+  const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
+  const ledgerKey = `${featureKey}:${normalizedOnceKey}`;
+  const ledger = getConsumptionLedger(profile);
+
+  if (ledger[ledgerKey] === true) {
+    return {
+      allowed: true,
+      consumed: current,
+      limit: maxLimit,
+      remaining: Math.max(0, maxLimit - current),
+      justExhausted: current >= maxLimit,
+      trialActive: profile.free_access_start_at != null,
+    };
+  }
+
+  const access = resolveTrialAccess(profile, featureKey, maxLimit);
+  if (!access.allowed || access.isVip) {
+    return access;
+  }
+
+  const newValue = current + 1;
+  const updatedUsage = buildUpdatedTrialUsage(profile, featureKey, newValue, ledgerKey);
+
+  const { error: updateError } = await supabaseClient
+    .from('profiles')
+    .update({ trial_usage: updatedUsage })
+    .eq('id', userId);
+
+  if (updateError) {
+    console.error('[trial-tracker] Failed to increment usage once:', updateError);
     return buildBlockedResult(profile, featureKey, maxLimit, 'profile_unavailable');
   }
 

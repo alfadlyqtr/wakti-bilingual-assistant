@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce, checkTrialAccess } from "../_shared/trial-tracker.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
 
 const corsHeaders = {
@@ -148,6 +148,12 @@ Deno.serve(async (req) => {
             status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
+        const trialPayload = userId
+          ? buildTrialSuccessPayload(
+              "i2i",
+              await checkAndConsumeTrialTokenOnce(supabase, userId, "i2i", 2, taskId),
+            )
+          : null;
         // Return KIE URLs directly — frontend saves the selected image when user picks one
         await logAIFromRequest(req, {
           functionName: "wakti-grok-image2image",
@@ -157,7 +163,7 @@ Deno.serve(async (req) => {
           durationMs: Date.now() - startTime,
         });
         return new Response(
-          JSON.stringify({ success: true, status: "done", urls: imageUrls, count: imageUrls.length }),
+          JSON.stringify({ success: true, status: "done", urls: imageUrls, count: imageUrls.length, trial: trialPayload }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -189,9 +195,9 @@ Deno.serve(async (req) => {
     }
 
     if (userId) {
-      const trial = await checkAndConsumeTrialToken(supabase, userId, "i2i", 2);
+      const trial = await checkTrialAccess(supabase, userId, "i2i", 2);
       if (!trial.allowed) {
-        return new Response(JSON.stringify({ success: false, error: "TRIAL_LIMIT_REACHED", feature: "i2i" }), {
+        return new Response(JSON.stringify({ success: false, ...buildTrialErrorPayload("i2i", trial) }), {
           status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }

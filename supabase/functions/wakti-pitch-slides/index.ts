@@ -2,7 +2,7 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -157,10 +157,10 @@ Deno.serve(async (req) => {
       );
       const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
       if (user) {
-        const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, 'ppt', 2);
+        const trial = await checkTrialAccess(supabaseAdmin, user.id, 'ppt', 2);
         if (!trial.allowed) {
           return new Response(
-            JSON.stringify({ success: false, error: 'TRIAL_LIMIT_REACHED', feature: 'ppt' }),
+            JSON.stringify({ success: false, ...buildTrialErrorPayload('ppt', trial) }),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
@@ -265,8 +265,25 @@ Deno.serve(async (req) => {
       metadata: { slideCount: slides.length, imageCount }
     });
 
+    let trialPayload = null;
+    if (authHeader) {
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
+      if (user) {
+        const consumeTrial = await checkAndConsumeTrialTokenOnce(supabaseAdmin, user.id, 'ppt', 2, slides.map((slide) => slide.id).join(','));
+        if (consumeTrial.allowed) {
+          trialPayload = buildTrialSuccessPayload('ppt', consumeTrial);
+        } else {
+          console.warn('[wakti-pitch-slides] Trial consume skipped after success:', consumeTrial.reason);
+        }
+      }
+    }
+
     return new Response(
-      JSON.stringify({ success: true, slides: slides }),
+      JSON.stringify({ success: true, slides: slides, trial: trialPayload }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {

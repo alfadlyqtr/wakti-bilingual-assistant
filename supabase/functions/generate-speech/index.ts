@@ -1,7 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,26 +12,6 @@ serve(async (req) => {
   }
 
   try {
-    // ── Trial Token Check ──
-    const authHeader = req.headers.get('Authorization');
-    if (authHeader) {
-      const supabaseAdmin = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-      );
-      const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
-      if (user) {
-        const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, 'tts', 1);
-        if (!trial.allowed) {
-          return new Response(
-            JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'tts' }),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
-    }
-    // ── End Trial Token Check ──
-
     const { summary, voice, recordId } = await req.json();
 
     if (!summary) {
@@ -47,7 +25,7 @@ serve(async (req) => {
     const isArabicChar = (c: string) => /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(c);
     const arabicRatio = (() => {
       const chars = summary.split('');
-      const ar = chars.reduce((acc, ch) => acc + (isArabicChar(ch) ? 1 : 0), 0);
+      const ar = chars.reduce((acc: number, ch: string) => acc + (isArabicChar(ch) ? 1 : 0), 0);
       return chars.length ? ar / chars.length : 0;
     })();
 

@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -158,10 +158,10 @@ serve(async (req) => {
 
     // ── Trial Token Check: diagrams ──
     if (userId && userId.trim().length > 0) {
-      const trial = await checkAndConsumeTrialToken(supabase, userId, 'diagrams', 2);
+      const trial = await checkTrialAccess(supabase, userId, 'diagrams', 2);
       if (!trial.allowed) {
         return new Response(
-          JSON.stringify({ success: false, error: 'TRIAL_LIMIT_REACHED', feature: 'diagrams' }),
+          JSON.stringify({ success: false, ...buildTrialErrorPayload('diagrams', trial) }),
           { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -328,11 +328,28 @@ serve(async (req) => {
       metadata: { diagramCount: generatedDiagrams.length }
     });
 
+    let trialPayload = null;
+    if (userId && userId.trim().length > 0) {
+      const consumeTrial = await checkAndConsumeTrialTokenOnce(
+        supabase,
+        userId,
+        'diagrams',
+        2,
+        `${ownerId}:${generatedDiagrams.map((diagram) => diagram.id).join(',')}`
+      );
+      if (consumeTrial.allowed) {
+        trialPayload = buildTrialSuccessPayload('diagrams', consumeTrial);
+      } else {
+        console.warn('[wakti-diagrams-v1] Trial consume skipped after success:', consumeTrial.reason);
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         count: generatedDiagrams.length,
         diagrams: generatedDiagrams,
+        trial: trialPayload,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

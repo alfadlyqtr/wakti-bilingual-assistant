@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -181,6 +182,10 @@ serve(async (req) => {
       const placeholderRow = existingRows[0];
       const userId = placeholderRow.user_id;
       const timestamp = Date.now();
+      const consumeTrial = await checkAndConsumeTrialTokenOnce(supabaseService, userId, 'music', 1, taskId);
+      if (!consumeTrial.allowed) {
+        console.warn('[music-callback] Trial consume skipped after success:', consumeTrial.reason);
+      }
 
       // Process each variation
       for (let i = 0; i < normalizedTracks.length; i++) {

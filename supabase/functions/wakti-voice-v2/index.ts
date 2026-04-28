@@ -3,7 +3,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,10 +38,10 @@ serve(async (req) => {
       );
       const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
       if (user) {
-        const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, 'tasjeel', 1);
+        const trial = await checkTrialAccess(supabaseAdmin, user.id, 'tasjeel', 1);
         if (!trial.allowed) {
           return new Response(
-            JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'tasjeel' }),
+            JSON.stringify(buildTrialErrorPayload('tasjeel', trial)),
             { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }

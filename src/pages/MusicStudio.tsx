@@ -67,6 +67,7 @@ import {
   Star,
   Search,
   Radio,
+  SlidersHorizontal,
   RotateCcw,
   RotateCw,
   Youtube,
@@ -1480,20 +1481,20 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     }
     return [
       {
-        title: 'GCC — Core',
-        items: ['GCC Pop','GCC Romantic','GCC Elegant','GCC Party','GCC Wedding','GCC Rap']
+        title: 'Khaleeji — Core',
+        items: ['Khaleeji Pop','Khaleeji Romantic','Khaleeji Elegant','Khaleeji Party','Khaleeji Wedding','Khaleeji Rap']
       },
       {
-        title: 'GCC — Radio & Crossover',
-        items: ['GCC Radio Pop','GCC Dance Pop','GCC Electro Pop','GCC Synth Pop','Modern Khaleeji Fusion','English GCC Pop']
+        title: 'Khaleeji — Radio & Crossover',
+        items: ['Khaleeji Radio Pop','Khaleeji Dance Pop','Khaleeji Electro Pop','Khaleeji Synth Pop','Modern Khaleeji Fusion','English Khaleeji Pop']
       },
       {
-        title: 'GCC — Rich',
-        items: ['GCC R&B Pop','Luxury GCC Pop','Cinematic GCC','GCC Anthem']
+        title: 'Khaleeji — Rich',
+        items: ['Khaleeji R&B Pop','Luxury Khaleeji Pop','Khaleeji Cinematic','Khaleeji Anthem']
       },
       {
-        title: 'GCC — Heritage',
-        items: ['GCC Traditional','Sheilat','Samri','Ardah','Jalsa','Liwa','GCC Shaabi','Zar','Khaleeji Trap']
+        title: 'Khaleeji — Heritage',
+        items: ['Khaleeji Traditional','Sheilat','Samri','Ardah','Jalsa','Liwa','Khaleeji Shaabi','Zar','Khaleeji Trap']
       },
       {
         title: 'Other Arabic',
@@ -1583,6 +1584,51 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [instrumentTags, setInstrumentTags] = useState<string[]>([]);
   const [rhythmTags, setRhythmTags] = useState<string[]>([]);
   const [moodTags, setMoodTags] = useState<string[]>([]);
+  const KHALIJI_STYLE_ALIASES = useMemo<Record<string, string>>(() => ({
+    'Khaliji Pop': 'GCC Pop',
+    'Khaliji Rap': 'GCC Rap',
+    'Khaliji Romantic': 'GCC Romantic',
+    'Khaliji Elegant': 'GCC Elegant',
+    'Khaliji Party': 'GCC Party',
+    'Khaliji Wedding': 'GCC Wedding',
+    'Khaliji Radio Pop': 'GCC Radio Pop',
+    'Khaliji Dance Pop': 'GCC Dance Pop',
+    'Khaliji Electro Pop': 'GCC Electro Pop',
+    'Khaliji Synth Pop': 'GCC Synth Pop',
+    'Modern Khaliji Fusion': 'Modern Khaleeji Fusion',
+    'English Khaliji Pop': 'English GCC Pop',
+    'Khaliji R&B Pop': 'GCC R&B Pop',
+    'Luxury Khaliji Pop': 'Luxury GCC Pop',
+    'Khaliji Cinematic': 'Cinematic GCC',
+    'Khaliji Anthem': 'GCC Anthem',
+    'Khaliji National Event': 'National Event GCC',
+    'Khaliji Traditional': 'GCC Traditional',
+    'Khaliji Shaabi': 'GCC Shaabi',
+    'Khaliji Trap': 'Khaleeji Trap',
+    'Khaleeji Pop': 'GCC Pop',
+    'Khaleeji Rap': 'GCC Rap',
+    'Khaleeji Romantic': 'GCC Romantic',
+    'Khaleeji Elegant': 'GCC Elegant',
+    'Khaleeji Party': 'GCC Party',
+    'Khaleeji Wedding': 'GCC Wedding',
+    'Khaleeji Radio Pop': 'GCC Radio Pop',
+    'Khaleeji Dance Pop': 'GCC Dance Pop',
+    'Khaleeji Electro Pop': 'GCC Electro Pop',
+    'Khaleeji Synth Pop': 'GCC Synth Pop',
+    'English Khaleeji Pop': 'English GCC Pop',
+    'Khaleeji R&B Pop': 'GCC R&B Pop',
+    'Luxury Khaleeji Pop': 'Luxury GCC Pop',
+    'Khaleeji Cinematic': 'Cinematic GCC',
+    'Khaleeji Anthem': 'GCC Anthem',
+    'Khaleeji National Event': 'National Event GCC',
+    'Khaleeji Traditional': 'GCC Traditional',
+    'Khaleeji Shaabi': 'GCC Shaabi',
+    'Khaleeji Trap': 'Khaleeji Trap',
+  }), []);
+  const effectiveIncludeTags = useMemo(
+    () => [...new Set(includeTags.map((tag) => KHALIJI_STYLE_ALIASES[tag] ?? tag))],
+    [includeTags, KHALIJI_STYLE_ALIASES],
+  );
   const [showIncludePicker, setShowIncludePicker] = useState(false);
   const [showInstrumentPicker, setShowInstrumentPicker] = useState(false);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
@@ -1628,8 +1674,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   ]), []);
 
   const isGccStyleSelected = useMemo(
-    () => includeTags.some((tag) => GCC_STYLE_SET.has(tag)),
-    [includeTags, GCC_STYLE_SET]
+    () => effectiveIncludeTags.some((tag) => GCC_STYLE_SET.has(tag)),
+    [effectiveIncludeTags, GCC_STYLE_SET]
   );
 
   const [songsUsed, setSongsUsed] = useState(0);
@@ -1645,6 +1691,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [weirdnessConstraint, setWeirdnessConstraint] = useState<number>(0.5);
   const [audioWeight, setAudioWeight] = useState<number>(0.65);
   const [showAdvancedSliders, setShowAdvancedSliders] = useState<boolean>(false);
+  const [showPayloadPreview, setShowPayloadPreview] = useState<boolean>(false);
+  const [payloadPreview, setPayloadPreview] = useState<string>('');
+  const [tempoOverride, setTempoOverride] = useState<string>('');
+  const [keyOverride, setKeyOverride] = useState<string>('');
+
+  const tempoOverrideOptions = [
+    { value: '', en: 'Auto tempo', ar: 'سرعة تلقائية' },
+    { value: '82 BPM refined Khaleeji ballad', en: '82 BPM · Refined ballad', ar: '٨٢ BPM · بالاد راقي' },
+    { value: '84 BPM warm Khaleeji sway', en: '84 BPM · Warm sway', ar: '٨٤ BPM · تموّج دافئ' },
+    { value: '100 BPM focused Khaleeji groove', en: '100 BPM · Focused groove', ar: '١٠٠ BPM · جروف مركز' },
+    { value: '104 BPM modern Khaleeji groove', en: '104 BPM · Modern groove', ar: '١٠٤ BPM · جروف عصري' },
+    { value: '116 BPM celebratory Khaleeji swing', en: '116 BPM · Celebratory swing', ar: '١١٦ BPM · سواينغ احتفالي' },
+    { value: '120 BPM driving Khaleeji march pulse', en: '120 BPM · March pulse', ar: '١٢٠ BPM · نبض مسير' },
+    { value: '138 BPM tight Khaleeji trap pocket', en: '138 BPM · Trap pocket', ar: '١٣٨ BPM · جيب تراب' },
+  ];
+  const keyOverrideOptions = [
+    { value: '', en: 'Auto key', ar: 'مفتاح تلقائي' },
+    { value: 'C minor tonal center', en: 'C minor', ar: 'سي مينور' },
+    { value: 'D minor tonal center', en: 'D minor', ar: 'ري مينور' },
+    { value: 'E minor tonal center', en: 'E minor', ar: 'مي مينور' },
+    { value: 'F major tonal center', en: 'F major', ar: 'فا ماجور' },
+    { value: 'A minor tonal center', en: 'A minor', ar: 'لا مينور' },
+  ];
 
   // Rhythm / Beat groups
   const RHYTHM_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
@@ -1655,8 +1724,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       ];
     }
     return [
-      { title: 'Gulf Rhythms', items: ['Gulf Groove','Khaleeji Shuffle','Adani','Samri Rhythm','Wedding Beat','Clap-Driven Groove','Leiwah Rhythm','Maqsoum'] },
-      { title: 'Universal', items: ['6/8 Fusion','Afro-Gulf Groove','Pop 4/4','Ballad Slow Groove','Marching Anthem','Club Beat','Waltz 3/4','Trap Beat','Drill Beat'] },
+      { title: 'Khaleeji Rhythms', items: ['Khaleeji Groove','Khaleeji Shuffle','Adani','Samri Rhythm','Wedding Beat','Clap-Driven Groove','Leiwah Rhythm','Maqsoum'] },
+      { title: 'Universal', items: ['6/8 Fusion','Afro-Khaleeji Groove','Pop 4/4','Ballad Slow Groove','Marching Anthem','Club Beat','Waltz 3/4','Trap Beat','Drill Beat'] },
     ];
   }, [language]);
 
@@ -1987,7 +2056,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'تراب بيت': ['808 bass', 'hi-hat', 'snare'],
     'Ballad Slow Groove': ['soft piano', 'strings', 'cello'],
     'بالاد هادئ': ['soft piano', 'strings', 'cello'],
-    'Gulf Groove': ['mirwas', 'darbuka', 'riq'],
+    'Khaleeji Groove': ['mirwas', 'darbuka', 'riq'],
     'إيقاع خليجي': ['mirwas', 'darbuka', 'riq'],
     'Khaleeji Shuffle': ['mirwas', 'tabla', 'riq'],
     'خليجي متمايل': ['mirwas', 'tabla', 'riq'],
@@ -2033,16 +2102,16 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const GCC_SAFE_RECOMMENDED_RHYTHMS = useMemo(() => (
     language === 'ar'
       ? ['إيقاع خليجي', 'خليجي متمايل', 'عدني', 'سامري', 'إيقاع أعراس', 'إيقاع تصفيق']
-      : ['Gulf Groove', 'Khaleeji Shuffle', 'Adani', 'Samri Rhythm', 'Wedding Beat', 'Clap-Driven Groove']
+      : ['Khaleeji Groove', 'Khaleeji Shuffle', 'Adani', 'Samri Rhythm', 'Wedding Beat', 'Clap-Driven Groove']
   ), [language]);
 
   // Get recommended instruments for current style + rhythm + mood
   const recommendedInstruments = useMemo(() => {
-    const isAnasheedSelected = includeTags.some((tag) => tag === 'Anasheed' || tag === 'أناشيد');
+    const isAnasheedSelected = effectiveIncludeTags.some((tag) => tag === 'Anasheed' || tag === 'أناشيد');
     if (isAnasheedSelected) return ['Vocal Harmony'];
 
     const recommended: string[] = [];
-    for (const style of includeTags) {
+    for (const style of effectiveIncludeTags) {
       const mapped = STYLE_INSTRUMENT_MAPPING[style];
       if (mapped) recommended.push(...mapped);
     }
@@ -2063,7 +2132,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (!merged.includes(fallback)) merged.push(fallback);
     }
     return merged;
-  }, [includeTags, rhythmTags, moodTags, STYLE_INSTRUMENT_MAPPING, isGccStyleSelected, GCC_UNSAFE_RECOMMENDED_INSTRUMENTS, GCC_SAFE_RECOMMENDED_INSTRUMENTS]);
+  }, [effectiveIncludeTags, rhythmTags, moodTags, STYLE_INSTRUMENT_MAPPING, isGccStyleSelected, GCC_UNSAFE_RECOMMENDED_INSTRUMENTS, GCC_SAFE_RECOMMENDED_INSTRUMENTS]);
 
   // Style → recommended rhythms (top 2)
   const STYLE_RHYTHM_MAPPING: Record<string, string[]> = {
@@ -2112,33 +2181,33 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'ريغي': ['بالاد هادئ', 'بوب ٤/٤'],
     'أفروبيتس': ['أفرو خليجي', 'بوب ٤/٤'],
     // ── English style names → English rhythm names ──
-    'GCC Pop': ['Trap Beat', 'Gulf Groove'],
+    'GCC Pop': ['Trap Beat', 'Khaleeji Groove'],
     'GCC Rap': ['Trap Beat', 'Drill Beat'],
-    'Khaleeji Pop': ['Trap Beat', 'Gulf Groove'],
+    'Khaleeji Pop': ['Trap Beat', 'Khaleeji Groove'],
     'GCC Romantic': ['Adani', 'Ballad Slow Groove'],
     'GCC Elegant': ['Adani', 'Khaleeji Shuffle'],
-    'GCC Party': ['Gulf Groove', 'Clap-Driven Groove'],
+    'GCC Party': ['Khaleeji Groove', 'Clap-Driven Groove'],
     'GCC Wedding': ['Wedding Beat', 'Clap-Driven Groove'],
-    'GCC Radio Pop': ['Gulf Groove', 'Khaleeji Shuffle'],
-    'GCC Dance Pop': ['Gulf Groove', 'Clap-Driven Groove'],
-    'GCC Electro Pop': ['Gulf Groove', 'Club Beat'],
-    'GCC Synth Pop': ['Khaleeji Shuffle', 'Gulf Groove'],
-    'Modern Khaleeji Fusion': ['Gulf Groove', 'Khaleeji Shuffle'],
-    'English GCC Pop': ['Gulf Groove', 'Clap-Driven Groove'],
-    'GCC R&B Pop': ['Gulf Groove', 'Adani'],
+    'GCC Radio Pop': ['Khaleeji Groove', 'Khaleeji Shuffle'],
+    'GCC Dance Pop': ['Khaleeji Groove', 'Clap-Driven Groove'],
+    'GCC Electro Pop': ['Khaleeji Groove', 'Club Beat'],
+    'GCC Synth Pop': ['Khaleeji Shuffle', 'Khaleeji Groove'],
+    'Modern Khaleeji Fusion': ['Khaleeji Groove', 'Khaleeji Shuffle'],
+    'English GCC Pop': ['Khaleeji Groove', 'Clap-Driven Groove'],
+    'GCC R&B Pop': ['Khaleeji Groove', 'Adani'],
     'Luxury GCC Pop': ['Adani', 'Ballad Slow Groove'],
     'Cinematic GCC': ['Marching Anthem', '6/8 Fusion'],
     'GCC Anthem': ['Marching Anthem', 'Clap-Driven Groove'],
     'National Event GCC': ['Marching Anthem', 'Clap-Driven Groove'],
-    'GCC Traditional': ['Adani', 'Gulf Groove'],
+    'GCC Traditional': ['Adani', 'Khaleeji Groove'],
     'Sheilat': ['Samri Rhythm', 'Clap-Driven Groove'],
     'Samri': ['Samri Rhythm', 'Wedding Beat'],
-    'Jalsa': ['Adani', 'Gulf Groove'],
+    'Jalsa': ['Adani', 'Khaleeji Groove'],
     'Liwa': ['Leiwah Rhythm', '6/8 Fusion'],
-    'GCC Shaabi': ['Adani', 'Gulf Groove'],
-    'Zar': ['6/8 Fusion', 'Afro-Gulf Groove'],
+    'GCC Shaabi': ['Adani', 'Khaleeji Groove'],
+    'Zar': ['6/8 Fusion', 'Afro-Khaleeji Groove'],
     'Ardah': ['Marching Anthem', 'Clap-Driven Groove'],
-    'Khaleeji Trap': ['Trap Beat', 'Gulf Groove'],
+    'Khaleeji Trap': ['Trap Beat', 'Khaleeji Groove'],
     'Egyptian': ['Maqsoum', 'Ballad Slow Groove'],
     'Egyptian Shaabi': ['Maqsoum', 'Club Beat'],
     'Iraqi Style': ['Maqsoum', 'Ballad Slow Groove'],
@@ -2192,8 +2261,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     'Cloud Rap': ['Trap Beat', 'Ballad Slow Groove'],
     'Crunk': ['Club Beat', 'Trap Beat'],
     // ── Urban / World ──
-    'Afrobeats': ['Afro-Gulf Groove', 'Pop 4/4'],
-    'Afrobeat': ['Afro-Gulf Groove', '6/8 Fusion'],
+    'Afrobeats': ['Afro-Khaleeji Groove', 'Pop 4/4'],
+    'Afrobeat': ['Afro-Khaleeji Groove', '6/8 Fusion'],
     'Reggaeton': ['Club Beat', 'Pop 4/4'],
     'Latin': ['6/8 Fusion', 'Pop 4/4'],
     'Salsa': ['6/8 Fusion', 'Pop 4/4'],
@@ -2620,7 +2689,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   };
 
   const recommendedRhythms = useMemo(() => {
-    for (const style of includeTags) {
+    for (const style of effectiveIncludeTags) {
       const mapped = STYLE_RHYTHM_MAPPING[style];
       if (mapped) {
         if (!isGccStyleSelected) return mapped.slice(0, 2);
@@ -2634,18 +2703,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       }
     }
     return [];
-  }, [includeTags, isGccStyleSelected, GCC_UNSAFE_RECOMMENDED_RHYTHMS, GCC_SAFE_RECOMMENDED_RHYTHMS]);
+  }, [effectiveIncludeTags, isGccStyleSelected, GCC_UNSAFE_RECOMMENDED_RHYTHMS, GCC_SAFE_RECOMMENDED_RHYTHMS]);
 
   // Rhythm → mood nudge: when a rhythm is selected, these moods get priority-boosted
   const RHYTHM_MOOD_BOOST: Record<string, string[]> = {
-    'Gulf Groove':         ['groovy', 'energetic', 'confident'],
+    'Khaleeji Groove':         ['groovy', 'energetic', 'confident'],
     'Khaleeji Shuffle':   ['groovy', 'playful', 'energetic'],
     'Adani':              ['nostalgic', 'emotional', 'intimate'],
     'Samri Rhythm':       ['proud', 'bold', 'energetic'],
     'Wedding Beat':       ['celebratory', 'happy', 'wedding'],
     'Clap-Driven Groove': ['energetic', 'proud', 'bold'],
     '6/8 Fusion':         ['energetic', 'festive', 'celebratory'],
-    'Afro-Gulf Groove':   ['energetic', 'groovy', 'bold'],
+    'Afro-Khaleeji Groove':   ['energetic', 'groovy', 'bold'],
     'Pop 4/4':            ['happy', 'energetic', 'uplifting'],
     'Ballad Slow Groove': ['romantic', 'emotional', 'nostalgic'],
     'Marching Anthem':    ['proud', 'epic', 'powerful'],
@@ -2678,7 +2747,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const recommendedMoods = useMemo(() => {
     // Get base moods from style
     let baseMoods: string[] = [];
-    for (const style of includeTags) {
+    for (const style of effectiveIncludeTags) {
       const mapped = STYLE_MOOD_MAPPING[style];
       if (mapped) { baseMoods = mapped; break; }
     }
@@ -2694,7 +2763,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return merged.slice(0, 3);
     }
     return baseMoods.slice(0, 3);
-  }, [includeTags, rhythmTags, RHYTHM_MOOD_BOOST]);
+  }, [effectiveIncludeTags, rhythmTags, RHYTHM_MOOD_BOOST]);
  
   // Mode/Mood presets
   const MODE_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
@@ -2822,7 +2891,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return;
     }
     if (ampMode === 'gcc_enhance' && !lyricsText.trim()) {
-      toast.error(isAr ? 'اكتب كلمات أولاً للتحسين الخليجي' : 'Write lyrics first for GCC Enhance');
+      toast.error(isAr ? 'اكتب كلمات أولاً للتحسين الخليجي' : 'Write lyrics first for Khaleeji Enhance');
       return;
     }
     if (hasBannedInput()) {
@@ -2832,7 +2901,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     
     setAmping(true);
     try {
-      const kieStyle = buildKieStyleString();
+      const khalijiControlBlock = buildKhalijiControlBlock();
+      const kieStyle = khalijiControlBlock.styleString;
       const { data, error } = await supabase.functions.invoke('music-amp', {
         body: {
           text: userInput,
@@ -2840,7 +2910,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           ampMode: ampMode,
           duration: duration,
           style: kieStyle || includeTags.join(', '),
-          styleTags: includeTags,
+          styleTags: effectiveIncludeTags,
           rhythm: rhythmTags[0] || '',
           rhythmTags: rhythmTags,
           instruments: instrumentTags.join(', '),
@@ -2849,6 +2919,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           moodTags: moodTags,
           vocalType: vocalType,
           title: title.trim(),
+          controlBlock: khalijiControlBlock.controlBlock,
+          structurePlan: khalijiControlBlock.structurePlan,
+          tempoHint: khalijiControlBlock.tempoTag,
+          musicalKeyHint: khalijiControlBlock.keyTag,
         }
       });
       if (error) throw error;
@@ -2865,7 +2939,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         setLyricsText(expandedLyrics);
         setLyricsDisplayMode(false);
       }
-      toast.success(isAr ? (ampMode === 'idea' ? 'تم إنشاء الكلمات' : ampMode === 'gcc_enhance' ? 'تم التحسين الخليجي' : 'تم توسيع الكلمات') : (ampMode === 'idea' ? 'Lyrics generated' : ampMode === 'gcc_enhance' ? 'GCC enhanced' : 'Lyrics expanded'));
+      toast.success(isAr ? (ampMode === 'idea' ? 'تم إنشاء الكلمات' : ampMode === 'gcc_enhance' ? 'تم التحسين الخليجي' : 'تم توسيع الكلمات') : (ampMode === 'idea' ? 'Lyrics generated' : ampMode === 'gcc_enhance' ? 'Khaleeji enhanced' : 'Lyrics expanded'));
     } catch (e: any) {
       toast.error((isAr ? 'فشل: ' : 'Failed: ') + (e?.message || String(e)));
     } finally {
@@ -3373,11 +3447,184 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
   function buildKieNegativeTags(): string {
     const negSet = new Set<string>();
-    for (const tag of includeTags) {
+    for (const tag of effectiveIncludeTags) {
       const neg = GCC_PRONUNCIATION_NEGATIVES[tag];
       if (neg) neg.split(',').map((n) => n.trim()).forEach((n) => negSet.add(n));
     }
     return [...negSet].join(', ').slice(0, 200);
+  }
+
+  function normalizeKhalijiPromptToken(value: string): string {
+    // Brand rule: Khaleeji ONLY. Rewrite Khaliji and Gulf to Khaleeji everywhere the user sees.
+    return (value || '')
+      .replace(/\bKhaliji\b/g, 'Khaleeji')
+      .replace(/\bkhaliji\b/g, 'Khaleeji')
+      .replace(/\bGulf\b/g, 'Khaleeji')
+      .replace(/\bgulf\b/g, 'Khaleeji');
+  }
+
+  function getKhalijiStructurePlan(targetSeconds: number) {
+    const normalizedSeconds =
+      targetSeconds <= 30 ? 30 :
+      targetSeconds <= 60 ? 60 :
+      targetSeconds <= 90 ? 90 :
+      targetSeconds <= 120 ? 120 :
+      targetSeconds <= 150 ? 150 : 200;
+
+    if (normalizedSeconds === 30) {
+      return {
+        normalizedSeconds,
+        labels: ['Mini Verse', 'Mini Chorus'],
+        stanzaLimit: 2,
+        allowAutoSolo: false,
+        shortRoadmap: 'mini intro, mini verse lift, compact chorus payoff, button outro',
+        longRoadmap: 'Intro → Mini Verse → Mini Chorus → Outro',
+      };
+    }
+
+    if (normalizedSeconds === 60) {
+      return {
+        normalizedSeconds,
+        labels: ['Verse 1', 'Pre-Chorus', 'Chorus'],
+        stanzaLimit: 3,
+        allowAutoSolo: false,
+        shortRoadmap: 'intro, verse lift, pre-chorus rise, chorus payoff, outro',
+        longRoadmap: 'Intro → Verse 1 → Pre-Chorus → Chorus → Outro',
+      };
+    }
+
+    if (normalizedSeconds === 90) {
+      return {
+        normalizedSeconds,
+        labels: ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2'],
+        stanzaLimit: 4,
+        allowAutoSolo: false,
+        shortRoadmap: 'intro, verse 1, pre-chorus, chorus, verse 2, outro',
+        longRoadmap: 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Outro',
+      };
+    }
+
+    if (normalizedSeconds === 120) {
+      return {
+        normalizedSeconds,
+        labels: ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Final Chorus'],
+        stanzaLimit: 5,
+        allowAutoSolo: false,
+        shortRoadmap: 'intro, verse 1, pre-chorus, chorus, verse 2, final chorus, outro',
+        longRoadmap: 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Final Chorus → Outro',
+      };
+    }
+
+    return {
+      normalizedSeconds,
+      labels: ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Bridge', 'Final Chorus'],
+      stanzaLimit: 6,
+      allowAutoSolo: true,
+      shortRoadmap: 'intro, verse 1, pre-chorus, chorus, verse 2, bridge, final chorus, outro',
+      longRoadmap: 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus → Outro',
+    };
+  }
+
+  function buildAutoTempoTag(style: string | null, rhythm: string | null, moods: string[], targetSeconds: number): string {
+    const signal = [style ?? '', rhythm ?? '', moods.join(', '), String(targetSeconds)].join(' ').toLowerCase();
+    if (signal.includes('trap') || signal.includes('drill') || signal.includes('تراب') || signal.includes('دريل')) {
+      return '138 BPM tight Khaleeji trap pocket';
+    }
+    if (signal.includes('samri') || signal.includes('ardah') || signal.includes('march') || signal.includes('جماهيري')) {
+      return '120 BPM driving Khaleeji march pulse';
+    }
+    if (signal.includes('wedding') || signal.includes('party') || signal.includes('حفلة') || signal.includes('أعراس') || signal.includes('clap')) {
+      return '116 BPM celebratory Khaleeji swing';
+    }
+    if (signal.includes('luxury') || signal.includes('orchestral') || signal.includes('r&b') || signal.includes('elegant') || signal.includes('فاخر') || signal.includes('أنيق')) {
+      return '82 BPM refined Khaleeji ballad';
+    }
+    if (signal.includes('adani') || signal.includes('ballad') || signal.includes('romantic') || signal.includes('رومانسي') || signal.includes('هادئ') || signal.includes('جلسة')) {
+      return '84 BPM warm Khaleeji sway';
+    }
+    return targetSeconds <= 60 ? '100 BPM focused Khaleeji groove' : '104 BPM modern Khaleeji groove';
+  }
+
+  function buildAutoKeyTag(style: string | null, rhythm: string | null, moods: string[]): string {
+    const signal = [style ?? '', rhythm ?? '', moods.join(', ')].join(' ').toLowerCase();
+    if (signal.includes('trap') || signal.includes('rap') || signal.includes('dark') || signal.includes('مظلم')) {
+      return 'C minor tonal center';
+    }
+    if (signal.includes('cinematic') || signal.includes('anthem') || signal.includes('epic') || signal.includes('فخور') || signal.includes('ملحمي')) {
+      return 'E minor tonal center';
+    }
+    if (signal.includes('party') || signal.includes('celebratory') || signal.includes('happy') || signal.includes('سعيد') || signal.includes('احتفالي')) {
+      return 'F major tonal center';
+    }
+    return 'D minor tonal center';
+  }
+
+  function buildKhalijiControlBlock() {
+    const primaryStyle = effectiveIncludeTags[0] ?? null;
+    const rawStyleAnchor = primaryStyle ? (STYLE_ANCHORS[primaryStyle] ?? primaryStyle) : null;
+    const styleAnchor = rawStyleAnchor ? normalizeKhalijiPromptToken(rawStyleAnchor) : null;
+    const isGccStyle = primaryStyle ? GCC_KEYS.has(primaryStyle) : false;
+    const gccAnchor = primaryStyle ? GCC_STYLE_ANCHORS[primaryStyle] : null;
+    const selectedInstruments = instrumentTags.map((tag) => normalizeKhalijiPromptToken(tag));
+    const instrumentLayer = selectedInstruments.length > 0
+      ? selectedInstruments
+      : isGccStyle && gccAnchor
+        ? [gccAnchor.instrument, ...(gccAnchor.production ? [gccAnchor.production] : [])]
+            .slice(0, 3)
+            .map((tag) => normalizeKhalijiPromptToken(tag))
+        : [];
+    const selectedRhythms = rhythmTags.map((tag) => normalizeKhalijiPromptToken(RHYTHM_LABELS[tag] ?? tag));
+    const primaryRhythm = selectedRhythms[0] ?? (gccAnchor ? normalizeKhalijiPromptToken(RHYTHM_LABELS[gccAnchor.rhythm] ?? gccAnchor.rhythm) : null);
+    const supportingRhythms = primaryRhythm && selectedRhythms[0] === primaryRhythm ? selectedRhythms.slice(1) : selectedRhythms;
+    const selectedMoods = moodTags.map((tag) => normalizeKhalijiPromptToken(tag));
+    const structurePlan = getKhalijiStructurePlan(duration);
+    const freeText = styleText.trim() ? normalizeKhalijiPromptToken(styleText.trim()) : null;
+    const tempoTag = tempoOverride.trim() ? normalizeKhalijiPromptToken(tempoOverride.trim()) : buildAutoTempoTag(primaryStyle, primaryRhythm, selectedMoods, structurePlan.normalizedSeconds);
+    const keyTag = keyOverride.trim() || buildAutoKeyTag(primaryStyle, primaryRhythm, selectedMoods);
+    // Dedup: LOCK strings already carry "pure Khaleeji dialect" and negative tags already carry
+    // "no MSA / no Egyptian / no Levantine". Keep only the country anchor here.
+    const dialectLock = isGccStyle || isGccStyleSelected
+      ? 'strict Saudi-Kuwaiti-Qatari dialect'
+      : null;
+    const styleParts = [
+      styleAnchor,
+      primaryRhythm,
+      supportingRhythms.length > 0 ? `supporting rhythms: ${supportingRhythms.join(', ')}` : null,
+      instrumentLayer.length > 0 ? `locked instruments: ${instrumentLayer.join(', ')}` : null,
+      selectedMoods.length > 0 ? `mood arc: ${selectedMoods.join(', ')}` : null,
+      `structure arc: ${structurePlan.shortRoadmap}`,
+      `tempo: ${tempoTag}`,
+      `key: ${keyTag}`,
+      freeText,
+      dialectLock,
+    ]
+      .filter((part): part is string => Boolean(part))
+      .map((part) => part.trim())
+      .filter((part, index, parts) => parts.indexOf(part) === index);
+    const styleString = styleParts.join(', ').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
+    const controlBlock = [
+      'KHALIJI CONTROL BLOCK',
+      primaryStyle ? `Primary style chip: ${normalizeKhalijiPromptToken(primaryStyle)}` : null,
+      styleAnchor ? `Identity anchor: ${styleAnchor}` : null,
+      primaryRhythm ? `Primary rhythm: ${primaryRhythm}` : null,
+      supportingRhythms.length > 0 ? `Supporting rhythms: ${supportingRhythms.join(', ')}` : null,
+      instrumentLayer.length > 0 ? `Locked instruments: ${instrumentLayer.join(', ')}` : null,
+      selectedMoods.length > 0 ? `Mood arc: ${selectedMoods.join(', ')}` : null,
+      `Structure: ${structurePlan.longRoadmap}`,
+      `Tempo: ${tempoTag}`,
+      `Key: ${keyTag}`,
+      freeText ? `Creative brief: ${freeText}` : null,
+      dialectLock ? `Dialect lock: ${dialectLock}` : null,
+    ].filter(Boolean).join('\n');
+
+    return {
+      styleString,
+      controlBlock,
+      structurePlan: structurePlan.longRoadmap,
+      tempoTag,
+      keyTag,
+      normalizedSeconds: structurePlan.normalizedSeconds,
+    };
   }
 
   function buildKieStyleString(): string {
@@ -3391,250 +3638,250 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // The short 5-tag variant was a regression that weakened Gulf vocal identity;
     // reverting to the original tag stack that consistently produced authentic
     // Khaleeji pronunciation before the change.
-    const LOCK = (style: string) =>
-      `kuwaiti qatari, pure kuwaiti qatari dialect, authentic desert-coastal resonance, seasoned gulf vocalist timbre, ${style}, colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic gulf vocal, strict khaleeji dialect, authentic khaleeji quarter-tone scale`;
+    const controlBlock = buildKhalijiControlBlock();
+    return controlBlock.styleString;
+  }
 
-    // ── Single map: GCC identity anchors + non-GCC pass-through ──
-    const STYLE_ANCHORS: Record<string, string> = {
-      'GCC Pop':               LOCK('khaleeji pop'),
-      'Khaleeji Pop':          LOCK('khaleeji pop'),
-      'GCC Rap':               LOCK('khaleeji rap'),
-      'GCC Party':             LOCK('khaleeji pop, festive party energy'),
-      'GCC Wedding':           LOCK('khaleeji wedding chant, celebratory folk-pop'),
-      'GCC Romantic':          LOCK('khaleeji romantic ballad'),
-      'GCC Elegant':           LOCK('elegant khaleeji, refined classy delivery'),
-      'GCC Radio Pop':         LOCK('radio-ready khaleeji pop'),
-      'GCC Dance Pop':         LOCK('dance khaleeji pop'),
-      'GCC Electro Pop':       LOCK('electro khaleeji pop'),
-      'GCC Synth Pop':         LOCK('synth-driven khaleeji pop'),
-      'Modern Khaleeji Fusion': LOCK('modern khaleeji fusion'),
-      'English GCC Pop':       LOCK('english lyrics, khaleeji pop crossover'),
-      'GCC R&B Pop':           LOCK('khaleeji r&b pop'),
-      'Luxury GCC Pop':        LOCK('luxury khaleeji pop, premium orchestral'),
-      'Cinematic GCC':         LOCK('cinematic khaleeji, dramatic atmosphere'),
-      'GCC Anthem':            LOCK('khaleeji anthem, proud crowd energy'),
-      'National Event GCC':    LOCK('khaleeji national event anthem, ceremonial crowd energy'),
-      'GCC Traditional':       LOCK('khaleeji traditional, authentic folk'),
-      'Sheilat':               LOCK('khaleeji sheilat, strong male group vocal'),
-      'Samri':                 LOCK('samri folk, heritage'),
-      'Jalsa':                 LOCK('khaleeji jalsa, soft acoustic session'),
-      'Liwa':                  LOCK('liwa coastal, afro-gulf polyrhythmic'),
-      'GCC Shaabi':            LOCK('khaleeji shaabi, colloquial festive delivery'),
-      'Zar':                   LOCK('zar ritual folk, trancey khaleeji-adjacent chant'),
-      'Ardah':                 LOCK('ardah chant, ceremonial warrior chorus'),
-      'Khaleeji Trap':         LOCK('khaleeji trap, modern urban gulf delivery'),
-      'بوب خليجي':             LOCK('khaleeji pop'),
-      'خليجي راب':             LOCK('khaleeji rap'),
-      'خليجي عصري':            LOCK('modern khaleeji pop'),
-      'خليجي حفلات':           LOCK('khaleeji pop, festive party energy'),
-      'خليجي أعراس':           LOCK('khaleeji wedding chant, celebratory folk-pop'),
-      'خليجي رومانسي':         LOCK('khaleeji romantic ballad'),
-      'خليجي أنيق':            LOCK('elegant khaleeji, refined classy delivery'),
-      'خليجي إذاعي':           LOCK('radio-ready khaleeji pop'),
-      'خليجي دانس':            LOCK('dance khaleeji pop'),
-      'خليجي إلكتروني':        LOCK('electro khaleeji pop'),
-      'خليجي سينث بوب':        LOCK('synth-driven khaleeji pop'),
-      'فيوجن خليجي':           LOCK('modern khaleeji fusion'),
-      'إنجليزي بطابع خليجي':   LOCK('english lyrics, khaleeji pop crossover'),
-      'خليجي آر أند بي':       LOCK('khaleeji r&b pop'),
-      'خليجي فاخر':            LOCK('luxury khaleeji pop, premium orchestral'),
-      'خليجي سينمائي':         LOCK('cinematic khaleeji, dramatic atmosphere'),
-      'خليجي جماهيري':         LOCK('khaleeji anthem, proud crowd energy'),
-      'مناسبات وطنية خليجية':  LOCK('khaleeji national event anthem, ceremonial crowd energy'),
-      'خليجي تراثي':           LOCK('khaleeji traditional, authentic folk'),
-      'شيلات':                 LOCK('khaleeji sheilat, strong male group vocal'),
-      'سامري':                 LOCK('samri folk, heritage'),
-      'جلسة':                  LOCK('khaleeji jalsa, soft acoustic session'),
-      'ليوان':                 LOCK('liwa coastal, afro-gulf polyrhythmic'),
-      // ── Other Arabic — regional Ferrari anchors (parallel branch, GCC untouched) ──
-      'Egyptian':              'egyptian pop, cairo studio sound, authentic egyptian dialect, melodic cairo vocal delivery, modern al-jeel production',
-      'Egyptian Shaabi':       'egyptian mahraganat street music, electro-shaabi rhythm, fast electronic beats 140 BPM, autotuned cairo male vocals, street vibes, baladi beats',
-      'Iraqi Style':           'iraqi pop, baghdadi maqam soul, authentic baghdadi dialect, iraqi choubi rhythm, emotional iraqi phrasing, soulful iraqi resonance',
-      'Lebanese Style':        'lebanese pop, beirut studio sound, authentic lebanese dialect, lebanese dabke energy, refined levantine phrasing, beirut street vibe',
-      'Moroccan Style':        'maghrebi chaabi, authentic darija dialect, north african vocal resonance, gnawa fusion, maghrebi percussion, bendir, raï vocals',
-      'Arabic Pop':            'modern pan-arabic pop, mainstream arab vocal, contemporary arabic fusion, polished production, studio mastered',
-      'Levant Pop':            'levantine pop, shami folk fusion, shami dialect phrasing, syrian lebanese jordanian vocal identity, modern dabke pop',
-      'Anasheed':              'pure a cappella human vocals, multi-layered vocal harmony, islamic nasheed, spiritual reverberant atmosphere, zero instruments, vocal-only production, [Audio Engine: Ultra-HD 96kHz], [Frequency Response: 20Hz-22kHz]',
-      // ── Arabic UI labels ──
-      'مصري':                  'بوب مصري، صوت قاهري أصيل، إنتاج الجيل الحديث، أداء وجداني قاهري',
-      'شعبي مصري':             'مهرجانات مصرية، موسيقى إلكترو شعبي، بيت سريع، صوت ذكوري قاهري بالتون، أجواء شارعية',
-      'عراقي':                 'بوب عراقي، روح مقام بغدادي، لهجة بغدادية أصيلة، إيقاع الجوبي، تعبيرية عراقية',
-      'لبناني':                'بوب لبناني، صوت بيروت، لهجة لبنانية أصيلة، روح الدبكة اللبنانية، صياغة شامية راقية',
-      'مغربي':                 'شعبي مغربي، لهجة دارجة أصيلة، رنين صوتي شمال أفريقي، دمج الكناوة، إيقاع بنديري',
-      'بوب عربي':              'بوب عربي حديث، صوت عربي سائد، دمج عربي معاصر، إنتاج راقٍ',
-      'شامي':                  'بوب شامي، فيوجن شعبي شامي، نطق لهجة شامية، هوية صوتية سورية لبنانية أردنية، دبكة حديثة',
-      'أناشيد':                'pure a cappella human vocals, multi-layered vocal harmony, islamic nasheed, spiritual reverberant atmosphere, zero instruments, vocal-only production, [Audio Engine: Ultra-HD 96kHz], [Frequency Response: 20Hz-22kHz]',
-      // ── Global Pop — Ferrari Billboard anchors ──
-      'pop':         'modern commercial pop, chart-topping production, high-fidelity studio master, vocal-forward, radio-ready, wide stereo image, [Audio Engine: Ultra-HD 96kHz]',
-      'Dance Pop':   'high-energy dance pop, club-ready production, heavy sidechain compression, driving rhythmic pulse, vocal-forward, [Audio Engine: Ultra-HD 96kHz]',
-      'Teen Pop':    'youthful teen pop, catchy infectious hooks, bright glossy production, polished commercial vocal, high-energy arrangement',
-      'Power Pop':   'driving power pop, melodic hooks, crunchy rhythmic guitars, high-energy drums, soaring vocal production, stadium sound',
-      'Pop Rock':    'modern pop-rock fusion, stadium energy, electric guitars and acoustic textures, radio-ready vocal, polished studio master',
-      'Indie Pop':   'shimmering indie pop, clean aesthetic, boutique production, soulful expressive vocal, layered guitars, wide soundstage',
-      'Bubblegum Pop': 'ultra-bright bubblegum pop, sugary hooks, high-pitched energy, glossy digital production, infectious commercial vibe',
-      'K-Pop':       'high-octane k-pop, intricate multi-layered vocals, experimental glossy production, futuristic sound, high-fidelity master',
-      'J-Pop':       'vibrant j-pop, anime-inspired energy, complex melodic chord progressions, high-speed rhythmic drive, bright vocal mix',
-      'Latin Pop':   'vibrant latin pop, rhythmic infectious energy, modern production, soulful crossover vocal, polished percussive layers',
-      '80s pop':     'retro 80s pop, analog synthesizers, gated reverb drums, neon atmosphere, period-authentic commercial production',
-      '90s pop':     'classic 90s pop, retro drum machines, smooth soulful textures, nostalgic commercial vocal, polished 90s studio master',
-      'Synthpop':    'neon synthpop, lush analog pads, cinematic electronic production, retro-future vocal textures, atmospheric depth',
-      'Electropop':  'glossy electropop, digital precision, pulsing synths, modern vocal processing, high energy, crisp electronic production',
-      // ── R&B / Soul / Funk — Ferrari Groove anchors ──
-      'R&B':               'contemporary silky r&b, soulful vocal runs, velvet production, deep groove, lush harmonies, [Audio Engine: Ultra-HD 96kHz]',
-      'soul':              'vintage soul resonance, soulful gospel-influenced vocals, warm analog production, rhythmic pocket, high fidelity',
-      'Neo-Soul':          'smooth neo-soul, jazz-influenced harmonies, laid-back rhythmic pocket, expressive vocal texture, organic production',
-      'Contemporary R&B':  'modern melodic r&b, polished commercial production, wide stereo image, vocal-forward, intricate vocal layers',
-      'Motown':            'classic motown sound, vintage 60s soul, rhythmic brass section, authentic analog warmth, retro vocal production',
-      'New Jack Swing':    'swinging urban dance-pop, 90s r&b rhythm, orchestral hits, high-energy groove, polished commercial production',
-      'Quiet Storm':       'sensual smooth r&b, late-night atmospheric production, soft soulful vocals, intimate mix, high fidelity',
-      'Blue-eyed Soul':    'melodic blue-eyed soul, pop-soul crossover, expressive vocal clarity, polished studio master, soulful resonance',
-      'Funk':              'syncopated slap bass, infectious rhythmic groove, tight brass sections, high energy funk, driving percussion',
-      'disco':             '70s dancefloor disco, four-on-the-floor kick, shimmering string sections, groovy rhythmic bass, high energy',
-      // ── Hip-Hop / Rap — Ferrari Street anchors ──
-      'hip hop':             'modern gritty hip-hop, crisp urban drums, rhythmic precision, street-level production, crystal clear vocal, [Audio Engine: Ultra-HD 96kHz]',
-      'rap':                 'aggressive rap delivery, rhythmic flow, hard-hitting drum machine, punchy low-end, urban street energy',
-      'Trap':                'hard-hitting trap, sliding 808s, intricate hi-hat rolls, dark cinematic atmosphere, polished urban vocals',
-      'Drill':               'heavy sliding drill bass, aggressive syncopated drums, dark atmospheric pads, street-level energy, sharp vocal delivery',
-      'Boom Bap':            'classic boom bap, dusty drum breaks, vinyl crackle texture, jazzy melodic samples, rhythmic head-nodding groove',
-      'Conscious Hip Hop':   'thoughtful conscious hip-hop, soulful boom bap production, clear articulate vocals, jazz-infused melodic layers',
-      'Gangsta Rap':         'raw gangsta rap, menacing street atmosphere, heavy low-end, aggressive delivery, cinematic urban soundscape',
-      'East Coast Hip Hop':  'classic east coast boom bap, gritty sample-based production, lyrical focus, hard drums, new york street vibe',
-      'West Coast Hip Hop':  'laid-back west coast g-funk, melodic synthesizer whines, deep funky bassline, smooth delivery, california sunshine vibe',
-      'Southern Hip Hop':    'southern bounce, rapid hi-hats, heavy bass, soulful horn stabs, energetic club atmosphere',
-      'Alternative Hip Hop': 'experimental alternative hip-hop, eclectic production, genre-bending sounds, unique vocal texture, creative rhythmic layering',
-      'Cloud Rap':           'ethereal cloud rap, hazy atmospheric pads, dreamy reverb-soaked vocals, slow tempo, spaced-out production',
-      'Crunk':               'high-energy crunk, distorted club beats, aggressive shouted vocals, heavy rhythmic energy, intense party vibe',
-      // ── Urban / World — Ferrari Authentic anchors ──
-      'Afrobeats':  'lagos afro-pop, infectious rhythmic bounce, syncopated afro-percussion, vibrant melodic vocal, global fusion, [Audio Engine: Ultra-HD 96kHz]',
-      'Afrobeat':   'lagos afro-pop, infectious rhythmic bounce, syncopated afro-percussion, vibrant melodic vocal, global fusion, [Audio Engine: Ultra-HD 96kHz]',
-      'Reggaeton':  'san juan reggaeton, iconic dembow rhythm, heavy low-end, street-party energy, melodic urban vocal, polished studio master',
-      'Latin':      'vibrant latin rhythms, explosive brass sections, high-energy percussion, passionate vocal delivery, authentic rhythmic groove',
-      'Latin Rock':  'vibrant latin rhythms, explosive brass sections, high-energy percussion, passionate vocal delivery, authentic rhythmic groove',
-      'Salsa':      'classic salsa dura, driving montuno piano, tight brass section, infectious polyrhythmic percussion, energetic tropical vocal',
-      'Bachata':    'romantic dominican bachata, signature guitar plucking, syncopated bongo rhythm, soulful melodic vocal, intimate production',
-      'Merengue':   'uptempo merengue, fast-paced accordion and tambora, driving rhythmic energy, festive tropical vocal, high-energy groove',
-      'Tango':      'dramatic argentinian tango, melancholic bandoneon, sharp rhythmic staccato, passionate soulful vocal, cinematic atmosphere',
-      'Samba':      'vibrant rio samba, driving batucada percussion, high-energy carnival atmosphere, melodic brazilian vocal, rhythmic celebration',
-      'Cumbia':     'authentic rhythmic cumbia, traditional guiro and percussion, swaying melodic groove, folk-influenced vocal, tropical atmosphere',
-      'Bossa Nova': 'sophisticated bossa nova, breezy acoustic guitar, soft intimate vocal delivery, jazz-influenced harmonies, relaxed elegant production',
-      'Bollywood':  'mumbai cinematic, intricate orchestral layers, soaring playback vocals, grand bollywood production, high fidelity studio master',
-      'Bhangra':    'punjabi bhangra energy, driving dhol drums, vibrant tumbi melodies, high-speed rhythmic dance, infectious punjabi vocal',
-      // ── Rock — Ferrari Stadium & Studio anchors ──
-      'rock':              'modern rock anthem, electric guitar driven, driving organic drums, powerful vocal energy, studio mastered, [Audio Engine: Ultra-HD 96kHz]',
-      'Classic Rock':      '70s classic rock, vintage tube-amp guitars, raw energetic drums, soulful rock vocal, analog warmth, rhythmic pocket',
-      'rock and roll':     'classic 50s rock and roll, upbeat boogie-woogie rhythm, clean electric guitar, vintage production, high energy, slapback echo',
-      'soft rock':         'mellow soft rock, melodic acoustic and electric guitars, smooth vocal production, clear rhythmic pocket, high fidelity',
-      'Hard Rock':         'powerful hard rock, high-gain overdriven guitars, heavy hitting drums, aggressive vocal delivery, stadium sound',
-      'alternative rock':  'modern alternative rock, moody guitar textures, expressive vocals, dynamic arrangement, independent spirit, wide soundstage',
-      'indie rock':        'authentic indie rock, clean jangle guitars, raw vocal intimacy, boutique production, live room feel, wide stereo image',
-      'Progressive Rock':  'intricate progressive rock, complex rhythmic signatures, symphonic layers, virtuosic musicianship, epic cinematic soundscape',
-      'Psychedelic Rock':  'trippy psychedelic rock, fuzzy distorted guitars, swirling organ, reverb-soaked vocals, experimental atmosphere, liquid lighting vibe',
-      'Garage Rock':       'raw garage rock, lo-fi grit, overdriven guitars, punchy live drums, unpolished authentic spirit, high energy',
-      'Glam Rock':         'theatrical glam rock, catchy hooks, stomping rhythm, flashy guitar solos, anthemic vocal energy, shimmering production',
-      'grunge':            '90s grunge, distorted muddy guitars, dynamic loud-quiet shifts, raw emotional vocals, angst-driven energy, seattle sound',
-      'Britpop':           'melodic britpop, catchy guitar hooks, bright vocal production, classic UK rock energy, stadium-ready master',
-      'Shoegaze':          'ethereal shoegaze, massive wall of sound, distorted shimmering guitars, buried melodic vocals, hazy atmospheric wash',
-      'Post-Rock':         'cinematic post-rock, crescendo-driven, atmospheric guitar textures, grand scale, minimal vocals, epic build-up',
-      'Math Rock':         'technical math rock, complex tapping guitars, irregular time signatures, clean intricate production, rhythmic precision',
-      'Surf Rock':         'classic surf rock, reverb-drenched tremolo guitars, upbeat driving rhythm, vintage coastal energy, beach party vibe',
-      'Dream Pop':         'lush dream pop, ethereal vocal textures, shimmering synthesizers, hazy nostalgic production, wide soundstage, airy mix',
-      // ── Metal — Ferrari Aggression anchors ──
-      'heavy metal':       'classic heavy metal, high-gain tube saturation, galloping rhythmic drive, powerful melodic vocals, soaring guitar solos',
-      'thrash metal':      'fast aggressive thrash metal, chugging palm-muted guitars, rapid double-kick drumming, shredded solos, high intensity',
-      'Death Metal':       'brutal death metal, low-tuned guttural vocals, blast beat percussion, technical guitar proficiency, dark crushing atmosphere',
-      'Black Metal':       'atmospheric black metal, raw lo-fi production, tremolo picking, shrieked vocals, cold cinematic soundscape, blast beats',
-      'Power Metal':       'epic power metal, symphonic orchestrations, high-pitched operatic vocals, heroic anthemic melodies, fast-paced double-kick',
-      'Doom Metal':        'heavy slow-tempo doom, massive downtuned fuzzy guitars, melancholic atmosphere, thick dragging rhythm, crushing weight',
-      'Gothic Metal':      'dark gothic metal, melancholic female and male vocal contrast, symphonic keyboards, dramatic minor-key melodies',
-      'Symphonic Metal':   'operatic symphonic metal, full orchestral layers, cinematic choir, soaring vocals, epic production, wide stereo image',
-      'Progressive Metal': 'technical progressive metal, complex time signatures, virtuosic musicianship, shifting dynamics, intricate melodic layers',
-      'Speed Metal':       'high-speed metal, rapid rhythmic precision, soaring vocals, shredding lead guitars, intense driving energy',
-      // ── Punk — Ferrari Raw Energy anchors ──
-      'punk rock':      'raw energetic punk rock, fast three-chord progression, gritty vocal delivery, unpolished garage aesthetics, high-speed drums',
-      'Pop Punk':       'upbeat melodic pop-punk, catchy vocal hooks, bright distorted guitars, energetic fast-paced drums, polished youthful production',
-      'Hardcore Punk':  'aggressive hardcore punk, fast chaotic energy, shouted vocals, brief intense songs, heavy breakdowns, raw power',
-      'Ska Punk':       'energetic ska-punk, upbeat horn sections, off-beat guitar skanking, driving walking bassline, high-energy dance vibe',
-      'Emo':            'emotional melodic punk, expressive heartfelt vocals, dynamic quiet-loud transitions, melancholic guitar melodies',
-      'Screamo':        'intense screamo, aggressive screamed vocals, technical chaotic instrumentation, emotional catharsis, rapid tempo shifts',
-      'New Wave':       '80s new wave, retro synthesizers, punchy electronic drums, melodic basslines, quirky vocal production, polished neon vibe',
-      // ── Roots / Americana — Ferrari Acoustic anchors ──
-      'country':              'nashville country sound, twangy electric guitar, steady rhythmic pocket, heartfelt storytelling vocal, polished production',
-      'Country Pop':          'modern nashville pop, glossy commercial production, catchy melodic hooks, radio-ready country vocal, high fidelity',
-      'Outlaw Country':       'raw gritty country, rebellious spirit, acoustic guitar driven, weathered vocal timbre, honky tonk vibe, authentic',
-      'Country Rock':         'southern rock influence, driving electric guitars, organic drums, anthemic country vocal, wide soundstage',
-      'Alternative Country':  'independent roots rock, moody atmospheric textures, expressive songwriting, authentic production, raw energy',
-      'Honky Tonk':           'classic honky tonk, barroom piano, crying steel guitar, shuffling rhythm, traditional country vocal, vintage vibe',
-      'Western Swing':        'upbeat country swing, jazz-influenced arrangements, lively fiddle and steel guitar, danceable rhythm, festive',
-      'Americana':            'authentic american roots, multi-instrumental acoustic layers, soulful storytelling, warm analog production, high fidelity',
-      'Contemporary Country': 'modern commercial country, polished billboard production, strong vocal presence, crossover appeal, radio master',
-      'bluegrass':            'fast-paced bluegrass, virtuosic banjo and mandolin, high lonesome vocal harmony, acoustic rhythmic drive, technical',
-      'folk':                 'intimate acoustic folk, fingerstyle guitar, raw storytelling vocal, pure organic production, close-mic intimacy',
-      'Indie Folk':           'atmospheric indie folk, layered acoustic textures, ethereal vocal harmonies, boutique studio production, wide soundstage',
-      'Folk Rock':            'acoustic-electric fusion, driving rhythmic pulse, melodic storytelling, 60s and 70s inspired production, organic feel',
-      'Folk Pop':             'catchy melodic folk, bright acoustic guitars, youthful vocal production, radio-friendly roots energy, polished',
-      'Folk Punk':            'aggressive acoustic punk, high energy rhythmic drive, shouted melodic vocals, raw unpolished production, fast tempo',
-      'Protest Folk':         'classic acoustic protest song, lyrical focus, simple guitar arrangement, authentic vocal conviction, raw and honest',
-      // ── Jazz — Ferrari Club & Studio anchors ──
-      'jazz':        'classic jazz, swinging upright bass, brushed kit, expressive piano voicings, intimate club atmosphere, warm analog master',
-      'Bebop':       'fast bebop, rapid-fire harmonic improvisation, virtuoso horn solos, complex chord changes, swinging rhythmic drive',
-      'swing':       'classic big band swing, punchy brass ensemble, walking bass, driving snare backbeat, energetic dancehall groove',
-      'smooth jazz': 'lush smooth jazz, silky saxophone melody, warm electric piano, gentle groove, polished contemporary studio master',
-      'Cool Jazz':   'relaxed cool jazz, modal spacious voicings, muted trumpet, brushed kit, west coast intimate atmosphere',
-      'Jazz Fusion': 'electric jazz fusion, funky rhythmic interplay, complex harmonics, rhodes electric piano, studio-grade master',
-      'Latin Jazz':  'vibrant latin jazz, clave-driven percussion, piano montuno, expressive horn solos, afro-cuban rhythmic energy',
-      'Jazz Funk':   'groovy jazz funk, slap bass, funky rhythm guitar, punchy brass punches, expressive keys, danceable pocket groove',
-      'Hard Bop':    'bluesy hard bop, gospel-influenced phrasing, driving rhythm section, expressive horn work, east coast jazz energy',
-      'Acid Jazz':   'eclectic acid jazz, funky hip-hop influenced drums, rhodes piano, jazz harmonics, loose swinging groove',
-      'Free Jazz':   'experimental free jazz, atonal improvisation, expressive dissonance, free rhythmic exploration, avant-garde energy',
-      'Big Band':    'cinematic big band, full brass and reed section, swinging rhythm, powerful orchestral jazz energy, wide soundstage',
-      // ── Blues — Ferrari Roots anchors ──
-      'blues':          'classic blues, expressive guitar bends, soulful vocal phrasing, walking bass, authentic twelve-bar groove',
-      'delta blues':    'raw delta blues, resonator slide guitar, lonely vocal delivery, sparse rhythmic stomp, authentic mississippi roots',
-      'Chicago Blues':  'electric chicago blues, biting electric guitar, harmonica wail, tight rhythm section, urban blues energy',
-      'Electric Blues': 'modern electric blues, overdriven guitar tone, expressive soulful vocal, driving rhythm section, polished studio master',
-      'Blues Rock':     'powerful blues rock, heavy distorted guitar, screaming vocal, thunderous drum kit, electrifying energy',
-      'Texas Blues':    'texas blues, stinging guitar tone, confident expressive vibrato, driving shuffle rhythm, soulful vocal delivery',
-      'Memphis Blues':  'memphis blues, soulful horn section, expressive guitar, warm analog production, deep groove pocket rhythm',
-      'Jump Blues':     'energetic jump blues, punchy brass riffs, walking bass, swinging backbeat, joyful expressive vocal delivery',
-      'Boogie-Woogie':  'rollicking boogie-woogie, rolling piano bass patterns, upbeat syncopated rhythm, joyful high-energy delivery',
-      'Country Blues':  'acoustic country blues, fingerpicked guitar, storytelling vocal, raw minimal production, authentic southern roots',
-      // ── Reggae — Ferrari Island anchors ──
-      'reggae':        'classic jamaican reggae, offbeat skank guitar, deep sub-bass groove, roots rhythmic production, soulful vocal delivery',
-      'Roots Reggae':  'spiritual roots reggae, conscious bass-heavy groove, righteous vocal message, warm analog production, jamaican authenticity',
-      'Dancehall':     'modern dancehall, digital riddim drum pattern, energetic deejay vocal, bass-forward club production, high energy',
-      'ska':           'classic jamaican ska, choppy offbeat guitar, punchy brass section, upbeat walking bass, vintage 60s island energy',
-      'dub':           'cavernous dub, deep echo and reverb processing, stripped bass and drum emphasis, psychedelic space production',
-      'Reggae Fusion': 'modern reggae fusion, blended electric guitar, contemporary crossover production, melodic vocal hooks, polished master',
-      'Lovers Rock':   'smooth lovers rock, romantic melodic vocal, gentle syncopated reggae groove, warm intimate studio production',
-      'Ragga':         'digital ragga, computerized dancehall riddim, rapid-fire deejay vocal, electronic bass production, high energy',
-      // ── Classical / Orchestral — Ferrari Concert Hall anchors ──
-      'classical':              'refined classical, precise orchestral arrangement, full dynamic range, authentic period instrumentation, concert hall acoustic',
-      'Baroque':                'ornate baroque, harpsichord continuo, intricate counterpoint, period string ensemble, precise articulation, academic fidelity',
-      'Romantic':               'lush romantic orchestral, sweeping string melodies, grand dynamic range, deep emotional depth, full symphonic production',
-      'Contemporary Classical': 'modern contemporary classical, extended techniques, complex harmonic language, studio-mastered orchestral production',
-      'Symphony':               'grand symphony, full orchestral forces, dramatic dynamic contrasts, concert hall ambience, epic cinematic production',
-      'Opera':                  'powerful opera, soaring operatic vocals, full orchestral accompaniment, dramatic theatrical production, wide dynamic range',
-      'Chamber Music':          'intimate chamber music, refined small ensemble, precise interplay, transparent acoustic resonance, high fidelity',
-      'Choral':                 'majestic choral, layered vocal harmony, resonant reverb, emotional dynamic range, concert hall atmosphere',
-      'Gregorian Chant':        'sacred gregorian chant, unison plainchant vocal, natural reverberant acoustic, meditative spiritual atmosphere',
-      // ── World (misc) — Ferrari Geographic anchors ──
-      'Flamenco':  'passionate flamenco, expressive nylon guitar rasgueado, percussive footwork, soulful cante vocal, raw andalusian spirit',
-      'Fado':      'melancholic portuguese fado, intimate portuguese guitar, saudade vocal expression, intimate club atmosphere, warm analog production',
-      'Celtic':    'vibrant celtic, driving fiddle and tin whistle, rhythmic bodhran, melodic folk vocal, authentic irish and scottish spirit',
-      'gospel':    'powerful gospel, call-and-response choir, hammond organ, soulful preacher vocal, uplifting spiritual energy, high fidelity',
-      'Ragtime':   'classic ragtime, syncopated upright piano, bouncy rhythmic patterns, vintage 1900s production, joyful high energy',
-      'Zydeco':    'lively louisiana zydeco, accordion-driven melody, rubboard percussion, driving rhythm, infectious creole dance energy',
-      'Cajun':     'authentic cajun, acoustic fiddle, two-step rhythm, heartfelt french-louisiana vocal, warm bayou atmosphere',
-      'Industrial': 'harsh industrial, distorted mechanized rhythms, aggressive noise textures, dark dystopian atmosphere, abrasive production',
-      // ── Electronic / Dance — Ferrari Digital anchors ──
-      'Lo-Fi':         'nostalgic lo-fi hip-hop, vinyl crackle, mellow boom bap beat, warm tape saturation, chill atmospheric production',
-      'House':         'classic house, four-on-the-floor kick, warm soulful vocal chops, deep bass groove, club-ready production, [Audio Engine: Ultra-HD 96kHz]',
-      'Deep House':    'deep house, warm sub-bass, soulful vocal pads, minimal groove, late-night atmospheric production',
-      'Tech House':    'driving tech house, punchy kick, hypnotic percussion loops, minimal bassline, peak-time club energy',
-      'Trance':        'euphoric trance, soaring synth melodies, powerful build-ups and drops, driving 138 BPM, stadium energy',
-      'Techno':        'raw techno, industrial kick drum, hypnotic repetitive groove, dark atmospheric pads, berlin club energy',
-      'Dubstep':       'heavy dubstep, massive wobble bass, half-time rhythm, energetic build and drop, powerful sound design',
-      'Drum & Bass':   'fast drum and bass, rapid amen break, deep rolling bassline, energetic 170 BPM, electronic production',
+  // ── Heritage / Jalsa / Mawwal lock — keeps the original melismatic ornament anchor.
+  //    Use for jalsa, sheilat, samri, ardah, liwa, traditional, shaabi, zar, romantic, cinematic, anthemic.
+  //    Dedup: one Khaleeji timbre anchor, one dialect anchor, one quarter-tone anchor. "mawwal" is the
+  //    signal the edge function uses to route to heritage persona family.
+  const LOCK_HERITAGE = (style: string) =>
+    `kuwaiti qatari, pure Khaleeji dialect, authentic desert-coastal resonance, seasoned Khaleeji vocalist timbre, ${style}, colloquial phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic Khaleeji quarter-tone scale`;
+
+  // ── Pop / Dance / Electro / Trap lock — clean hooks, no mawwal, tight pop articulation.
+  //    Use for radio pop, dance pop, electro pop, synth pop, fusion, english crossover, r&b pop, party, elegant, rap, trap, luxury pop.
+  //    Dedup: same anchor structure as heritage, minus mawwal.
+  const LOCK_POP = (style: string) =>
+    `kuwaiti qatari, pure Khaleeji dialect, authentic desert-coastal resonance, modern Khaleeji vocal timbre, ${style}, colloquial phrasing, vocal-forward, clean hook delivery, tight pop articulation, controlled melisma, polished radio-ready mix, authentic Khaleeji quarter-tone scale`;
+
+  // ── Backward-compat alias — defaults to heritage for any caller still using LOCK directly.
+  const LOCK = LOCK_HERITAGE;
+
+  const STYLE_ANCHORS: Record<string, string> = {
+    'GCC Pop':               LOCK_POP('khaleeji pop'),
+    'Khaleeji Pop':          LOCK_POP('khaleeji pop'),
+    'GCC Rap':               LOCK_POP('khaleeji rap'),
+    'GCC Party':             LOCK_POP('khaleeji pop, festive party energy'),
+    'GCC Wedding':           LOCK_HERITAGE('khaleeji wedding chant, celebratory folk-pop'),
+    'GCC Romantic':          LOCK_HERITAGE('khaleeji romantic ballad'),
+    'GCC Elegant':           LOCK_POP('elegant khaleeji pop, refined classy delivery'),
+    'GCC Radio Pop':         LOCK_POP('radio-ready khaleeji pop'),
+    'GCC Dance Pop':         LOCK_POP('dance khaleeji pop'),
+    'GCC Electro Pop':       LOCK_POP('electro khaleeji pop'),
+    'GCC Synth Pop':         LOCK_POP('synth-driven khaleeji pop'),
+    'Modern Khaleeji Fusion': LOCK_POP('modern khaleeji fusion'),
+    'English GCC Pop':       LOCK_POP('english lyrics, khaleeji pop crossover'),
+    'GCC R&B Pop':           LOCK_POP('khaleeji r&b pop'),
+    'Luxury GCC Pop':        LOCK_POP('luxury khaleeji pop, premium orchestral, polished pop delivery'),
+    'Cinematic GCC':         LOCK_HERITAGE('cinematic khaleeji, dramatic atmosphere'),
+    'GCC Anthem':            LOCK_HERITAGE('khaleeji anthem, proud crowd energy'),
+    'National Event GCC':    LOCK_HERITAGE('khaleeji national event anthem, ceremonial crowd energy'),
+    'GCC Traditional':       LOCK_HERITAGE('khaleeji traditional, authentic folk'),
+    'Sheilat':               LOCK_HERITAGE('khaleeji sheilat, strong male group vocal'),
+    'Samri':                 LOCK_HERITAGE('samri folk, heritage'),
+    'Jalsa':                 LOCK_HERITAGE('khaleeji jalsa, soft acoustic session'),
+    'Liwa':                  LOCK_HERITAGE('liwa coastal, afro-gulf polyrhythmic'),
+    'GCC Shaabi':            LOCK_HERITAGE('khaleeji shaabi, colloquial festive delivery'),
+    'Zar':                   LOCK_HERITAGE('zar ritual folk, trancey khaleeji-adjacent chant'),
+    'Ardah':                 LOCK_HERITAGE('ardah chant, ceremonial warrior chorus'),
+    'Khaleeji Trap':         LOCK_POP('khaleeji trap, modern urban gulf delivery'),
+    'بوب خليجي':             LOCK_POP('khaleeji pop'),
+    'خليجي راب':             LOCK_POP('khaleeji rap'),
+    'خليجي عصري':            LOCK_POP('modern khaleeji pop'),
+    'خليجي حفلات':           LOCK_POP('khaleeji pop, festive party energy'),
+    'خليجي أعراس':           LOCK_HERITAGE('khaleeji wedding chant, celebratory folk-pop'),
+    'خليجي رومانسي':         LOCK_HERITAGE('khaleeji romantic ballad'),
+    'خليجي أنيق':            LOCK_POP('elegant khaleeji pop, refined classy delivery'),
+    'خليجي إذاعي':           LOCK_POP('radio-ready khaleeji pop'),
+    'خليجي دانس':            LOCK_POP('dance khaleeji pop'),
+    'خليجي إلكتروني':        LOCK_POP('electro khaleeji pop'),
+    'خليجي سينث بوب':        LOCK_POP('synth-driven khaleeji pop'),
+    'فيوجن خليجي':           LOCK_POP('modern khaleeji fusion'),
+    'إنجليزي بطابع خليجي':   LOCK_POP('english lyrics, khaleeji pop crossover'),
+    'خليجي آر أند بي':       LOCK_POP('khaleeji r&b pop'),
+    'خليجي فاخر':            LOCK_POP('luxury khaleeji pop, premium orchestral, polished pop delivery'),
+    'خليجي سينمائي':         LOCK_HERITAGE('cinematic khaleeji, dramatic atmosphere'),
+    'خليجي جماهيري':         LOCK_HERITAGE('khaleeji anthem, proud crowd energy'),
+    'مناسبات وطنية خليجية':  LOCK_HERITAGE('khaleeji national event anthem, ceremonial crowd energy'),
+    'خليجي تراثي':           LOCK_HERITAGE('khaleeji traditional, authentic folk'),
+    'شيلات':                 LOCK_HERITAGE('khaleeji sheilat, strong male group vocal'),
+    'سامري':                 LOCK_HERITAGE('samri folk, heritage'),
+    'جلسة':                  LOCK_HERITAGE('khaleeji jalsa, soft acoustic session'),
+    'ليوان':                 LOCK_HERITAGE('liwa coastal, afro-gulf polyrhythmic'),
+    'Egyptian':              'egyptian pop, cairo studio sound, authentic egyptian dialect, melodic cairo vocal delivery, modern al-jeel production',
+    'Egyptian Shaabi':       'egyptian mahraganat street music, electro-shaabi rhythm, fast electronic beats 140 BPM, autotuned cairo male vocals, street vibes, baladi beats',
+    'Iraqi Style':           'iraqi pop, baghdadi maqam soul, authentic baghdadi dialect, iraqi choubi rhythm, emotional iraqi phrasing, soulful iraqi resonance',
+    'Lebanese Style':        'lebanese pop, beirut studio sound, authentic lebanese dialect, lebanese dabke energy, refined levantine phrasing, beirut street vibe',
+    'Moroccan Style':        'maghrebi chaabi, authentic darija dialect, north african vocal resonance, gnawa fusion, maghrebi percussion, bendir, raï vocals',
+    'Arabic Pop':            'modern pan-arabic pop, mainstream arab vocal, contemporary arabic fusion, polished production, studio mastered',
+    'Levant Pop':            'levantine pop, shami folk fusion, shami dialect phrasing, syrian lebanese jordanian vocal identity, modern dabke pop',
+    'Anasheed':              'pure a cappella human vocals, multi-layered vocal harmony, islamic nasheed, spiritual reverberant atmosphere, zero instruments, vocal-only production, [Audio Engine: Ultra-HD 96kHz], [Frequency Response: 20Hz-22kHz]',
+    'مصري':                  'بوب مصري، صوت قاهري أصيل، إنتاج الجيل الحديث، أداء وجداني قاهري',
+    'شعبي مصري':             'مهرجانات مصرية، موسيقى إلكترو شعبي، بيت سريع، صوت ذكوري قاهري بالتون، أجواء شارعية',
+    'عراقي':                 'بوب عراقي، روح مقام بغدادي، لهجة بغدادية أصيلة، إيقاع الجوبي، تعبيرية عراقية',
+    'لبناني':                'بوب لبناني، صوت بيروت، لهجة لبنانية أصيلة، روح الدبكة اللبنانية، صياغة شامية راقية',
+    'مغربي':                 'شعبي مغربي، لهجة دارجة أصيلة، رنين صوتي شمال أفريقي، دمج الكناوة، إيقاع بنديري',
+    'بوب عربي':              'بوب عربي حديث، صوت عربي سائد، دمج عربي معاصر، إنتاج راقٍ',
+    'شامي':                  'بوب شامي، فيوجن شعبي شامي، نطق لهجة شامية، هوية صوتية سورية لبنانية أردنية، دبكة حديثة',
+    'أناشيد':                'pure a cappella human vocals, multi-layered vocal harmony, islamic nasheed, spiritual reverberant atmosphere, zero instruments, vocal-only production, [Audio Engine: Ultra-HD 96kHz], [Frequency Response: 20Hz-22kHz]',
+    'pop':         'modern commercial pop, chart-topping production, high-fidelity studio master, vocal-forward, radio-ready, wide stereo image, [Audio Engine: Ultra-HD 96kHz]',
+    'Dance Pop':   'high-energy dance pop, club-ready production, heavy sidechain compression, driving rhythmic pulse, vocal-forward, [Audio Engine: Ultra-HD 96kHz]',
+    'Teen Pop':    'youthful teen pop, catchy infectious hooks, bright glossy production, polished commercial vocal, high-energy arrangement',
+    'Power Pop':   'driving power pop, melodic hooks, crunchy rhythmic guitars, high-energy drums, soaring vocal production, stadium sound',
+    'Pop Rock':    'modern pop-rock fusion, stadium energy, electric guitars and acoustic textures, radio-ready vocal, polished studio master',
+    'Indie Pop':   'shimmering indie pop, clean aesthetic, boutique production, soulful expressive vocal, layered guitars, wide soundstage',
+    'Bubblegum Pop': 'ultra-bright bubblegum pop, sugary hooks, high-pitched energy, glossy digital production, infectious commercial vibe',
+    'K-Pop':       'high-octane k-pop, intricate multi-layered vocals, experimental glossy production, futuristic sound, high-fidelity master',
+    'J-Pop':       'vibrant j-pop, anime-inspired energy, complex melodic chord progressions, high-speed rhythmic drive, bright vocal mix',
+    'Latin Pop':   'vibrant latin pop, rhythmic infectious energy, modern production, soulful crossover vocal, polished percussive layers',
+    '80s pop':     'retro 80s pop, analog synthesizers, gated reverb drums, neon atmosphere, period-authentic commercial production',
+    '90s pop':     'classic 90s pop, retro drum machines, smooth soulful textures, nostalgic commercial vocal, polished 90s studio master',
+    'Synthpop':    'neon synthpop, lush analog pads, cinematic electronic production, retro-future vocal textures, atmospheric depth',
+    'Electropop':  'glossy electropop, digital precision, pulsing synths, modern vocal processing, high energy, crisp electronic production',
+    'R&B':               'contemporary silky r&b, soulful vocal runs, velvet production, deep groove, lush harmonies, [Audio Engine: Ultra-HD 96kHz]',
+    'soul':              'vintage soul resonance, soulful gospel-influenced vocals, warm analog production, rhythmic pocket, high fidelity',
+    'Neo-Soul':          'smooth neo-soul, jazz-influenced harmonies, laid-back rhythmic pocket, expressive vocal texture, organic production',
+    'Contemporary R&B':  'modern melodic r&b, polished commercial production, wide stereo image, vocal-forward, intricate vocal layers',
+    'Motown':            'classic motown sound, vintage 60s soul, rhythmic brass section, authentic analog warmth, retro vocal production',
+    'New Jack Swing':    'swinging urban dance-pop, 90s r&b rhythm, orchestral hits, high-energy groove, polished commercial production',
+    'Quiet Storm':       'sensual smooth r&b, late-night atmospheric production, soft soulful vocals, intimate mix, high fidelity',
+    'Blue-eyed Soul':    'melodic blue-eyed soul, pop-soul crossover, expressive vocal clarity, polished studio master, soulful resonance',
+    'Funk':              'syncopated slap bass, infectious rhythmic groove, tight brass sections, high energy funk, driving percussion',
+    'disco':             '70s dancefloor disco, four-on-the-floor kick, shimmering string sections, groovy rhythmic bass, high energy',
+    'hip hop':             'modern gritty hip-hop, crisp urban drums, rhythmic precision, street-level production, crystal clear vocal, [Audio Engine: Ultra-HD 96kHz]',
+    'rap':                 'aggressive rap delivery, rhythmic flow, hard-hitting drum machine, punchy low-end, urban street energy',
+    'Trap':                'hard-hitting trap, sliding 808s, intricate hi-hat rolls, dark cinematic atmosphere, polished urban vocals',
+    'Drill':               'heavy sliding drill bass, aggressive syncopated drums, dark atmospheric pads, street-level energy, sharp vocal delivery',
+    'Boom Bap':            'classic boom bap, dusty drum breaks, vinyl crackle texture, jazzy melodic samples, rhythmic head-nodding groove',
+    'Conscious Hip Hop':   'thoughtful conscious hip-hop, soulful boom bap production, clear articulate vocals, jazz-infused melodic layers',
+    'Gangsta Rap':         'raw gangsta rap, menacing street atmosphere, heavy low-end, aggressive delivery, cinematic urban soundscape',
+    'East Coast Hip Hop':  'classic east coast boom bap, gritty sample-based production, lyrical focus, hard drums, new york street vibe',
+    'West Coast Hip Hop':  'laid-back west coast g-funk, melodic synthesizer whines, deep funky bassline, smooth delivery, california sunshine vibe',
+    'Southern Hip Hop':    'southern bounce, rapid hi-hats, heavy bass, soulful horn stabs, energetic club atmosphere',
+    'Alternative Hip Hop': 'experimental alternative hip-hop, eclectic production, genre-bending sounds, unique vocal texture, creative rhythmic layering',
+    'Cloud Rap':           'ethereal cloud rap, hazy atmospheric pads, dreamy reverb-soaked vocals, slow tempo, spaced-out production',
+    'Crunk':               'high-energy crunk, distorted club beats, aggressive shouted vocals, heavy rhythmic energy, intense party vibe',
+    'Afrobeats':  'lagos afro-pop, infectious rhythmic bounce, syncopated afro-percussion, vibrant melodic vocal, global fusion, [Audio Engine: Ultra-HD 96kHz]',
+    'Afrobeat':   'lagos afro-pop, infectious rhythmic bounce, syncopated afro-percussion, vibrant melodic vocal, global fusion, [Audio Engine: Ultra-HD 96kHz]',
+    'Reggaeton':  'san juan reggaeton, iconic dembow rhythm, heavy low-end, street-party energy, melodic urban vocal, polished studio master',
+    'Latin':      'vibrant latin rhythms, explosive brass sections, high-energy percussion, passionate vocal delivery, authentic rhythmic groove',
+    'Latin Rock':  'vibrant latin rhythms, explosive brass sections, high-energy percussion, passionate vocal delivery, authentic rhythmic groove',
+    'Salsa':      'classic salsa dura, driving montuno piano, tight brass section, infectious polyrhythmic percussion, energetic tropical vocal',
+    'Bachata':    'romantic dominican bachata, signature guitar plucking, syncopated bongo rhythm, soulful melodic vocal, intimate production',
+    'Merengue':   'uptempo merengue, fast-paced accordion and tambora, driving rhythmic energy, festive tropical vocal, high-energy groove',
+    'Tango':      'dramatic argentinian tango, melancholic bandoneon, sharp rhythmic staccato, passionate soulful vocal, cinematic atmosphere',
+    'Samba':      'vibrant rio samba, driving batucada percussion, high-energy carnival atmosphere, melodic brazilian vocal, rhythmic celebration',
+    'Cumbia':     'authentic rhythmic cumbia, traditional guiro and percussion, swaying melodic groove, folk-influenced vocal, tropical atmosphere',
+    'Bossa Nova': 'sophisticated bossa nova, breezy acoustic guitar, soft intimate vocal delivery, jazz-influenced harmonies, relaxed elegant production',
+    'Bollywood':  'mumbai cinematic, intricate orchestral layers, soaring playback vocals, grand bollywood production, high fidelity studio master',
+    'Bhangra':    'punjabi bhangra energy, driving dhol drums, vibrant tumbi melodies, high-speed rhythmic dance, infectious punjabi vocal',
+    'rock':              'modern rock anthem, electric guitar driven, driving organic drums, powerful vocal energy, studio mastered, [Audio Engine: Ultra-HD 96kHz]',
+    'Classic Rock':      '70s classic rock, vintage tube-amp guitars, raw energetic drums, soulful rock vocal, analog warmth, rhythmic pocket',
+    'rock and roll':     'classic 50s rock and roll, upbeat boogie-woogie rhythm, clean electric guitar, vintage production, high energy, slapback echo',
+    'soft rock':         'mellow soft rock, melodic acoustic and electric guitars, smooth vocal production, clear rhythmic pocket, high fidelity',
+    'Hard Rock':         'powerful hard rock, high-gain overdriven guitars, heavy hitting drums, aggressive vocal delivery, stadium sound',
+    'alternative rock':  'modern alternative rock, moody guitar textures, expressive vocals, dynamic arrangement, independent spirit, wide soundstage',
+    'indie rock':        'authentic indie rock, clean jangle guitars, raw vocal intimacy, boutique production, live room feel, wide stereo image',
+    'Progressive Rock':  'intricate progressive rock, complex rhythmic signatures, symphonic layers, virtuosic musicianship, epic cinematic soundscape',
+    'Psychedelic Rock':  'trippy psychedelic rock, fuzzy distorted guitars, swirling organ, reverb-soaked vocals, experimental atmosphere, liquid lighting vibe',
+    'Garage Rock':       'raw garage rock, lo-fi grit, overdriven guitars, punchy live drums, unpolished authentic spirit, high energy',
+    'Glam Rock':         'theatrical glam rock, catchy hooks, stomping rhythm, flashy guitar solos, anthemic vocal energy, shimmering production',
+    'grunge':            '90s grunge, distorted muddy guitars, dynamic loud-quiet shifts, raw emotional vocals, angst-driven energy, seattle sound',
+    'Britpop':           'melodic britpop, catchy guitar hooks, bright vocal production, classic UK rock energy, stadium-ready master',
+    'Shoegaze':          'ethereal shoegaze, massive wall of sound, distorted shimmering guitars, buried melodic vocals, hazy atmospheric wash',
+    'Post-Rock':         'cinematic post-rock, crescendo-driven, atmospheric guitar textures, grand scale, minimal vocals, epic build-up',
+    'Math Rock':         'technical math rock, complex tapping guitars, irregular time signatures, clean intricate production, rhythmic precision',
+    'Surf Rock':         'classic surf rock, reverb-drenched tremolo guitars, upbeat driving rhythm, vintage coastal energy, beach party vibe',
+    'Dream Pop':         'lush dream pop, ethereal vocal textures, shimmering synthesizers, hazy nostalgic production, wide soundstage, airy mix',
+    'heavy metal':       'classic heavy metal, high-gain tube saturation, galloping rhythmic drive, powerful melodic vocals, soaring guitar solos',
+    'thrash metal':      'fast aggressive thrash metal, chugging palm-muted guitars, rapid double-kick drumming, shredded solos, high intensity',
+    'Death Metal':       'brutal death metal, low-tuned guttural vocals, blast beat percussion, technical guitar proficiency, dark crushing atmosphere',
+    'Black Metal':       'atmospheric black metal, raw lo-fi production, tremolo picking, shrieked vocals, cold cinematic soundscape, blast beats',
+    'Power Metal':       'epic power metal, symphonic orchestrations, high-pitched operatic vocals, heroic anthemic melodies, fast-paced double-kick',
+    'Doom Metal':        'heavy slow-tempo doom, massive downtuned fuzzy guitars, melancholic atmosphere, thick dragging rhythm, crushing weight',
+    'Gothic Metal':      'dark gothic metal, melancholic female and male vocal contrast, symphonic keyboards, dramatic minor-key melodies',
+    'Symphonic Metal':   'operatic symphonic metal, full orchestral layers, cinematic choir, soaring vocals, epic production, wide stereo image',
+    'Progressive Metal': 'technical progressive metal, complex time signatures, virtuosic musicianship, shifting dynamics, intricate melodic layers',
+    'Speed Metal':       'high-speed metal, rapid rhythmic precision, soaring vocals, shredding lead guitars, intense driving energy',
+    'punk rock':      'raw energetic punk rock, fast three-chord progression, gritty vocal delivery, unpolished garage aesthetics, high-speed drums',
+    'Pop Punk':       'upbeat melodic pop-punk, catchy vocal hooks, bright distorted guitars, energetic fast-paced drums, polished youthful production',
+    'Hardcore Punk':  'aggressive hardcore punk, fast chaotic energy, shouted vocals, brief intense songs, heavy breakdowns, raw power',
+    'Ska Punk':       'energetic ska-punk, upbeat horn sections, off-beat guitar skanking, driving walking bassline, high-energy dance vibe',
+    'Emo':            'emotional melodic punk, expressive heartfelt vocals, dynamic quiet-loud transitions, melancholic guitar melodies',
+    'Screamo':        'intense screamo, aggressive screamed vocals, technical chaotic instrumentation, emotional catharsis, rapid tempo shifts',
+    'New Wave':       '80s new wave, retro synthesizers, punchy electronic drums, melodic basslines, quirky vocal production, polished neon vibe',
+    'country':              'nashville country sound, twangy electric guitar, steady rhythmic pocket, heartfelt storytelling vocal, polished production',
+    'Country Pop':          'modern nashville pop, glossy commercial production, catchy melodic hooks, radio-ready country vocal, high fidelity',
+    'Outlaw Country':       'raw gritty country, rebellious spirit, acoustic guitar driven, weathered vocal timbre, honky tonk vibe, authentic',
+    'Country Rock':         'southern rock influence, driving electric guitars, organic drums, anthemic country vocal, wide soundstage',
+    'Alternative Country':  'independent roots rock, moody atmospheric textures, expressive songwriting, authentic production, raw energy',
+    'Honky Tonk':           'classic honky tonk, barroom piano, crying steel guitar, shuffling rhythm, traditional country vocal, vintage vibe',
+    'Western Swing':        'upbeat country swing, jazz-influenced arrangements, lively fiddle and steel guitar, danceable rhythm, festive',
+    'Americana':            'authentic american roots, multi-instrumental acoustic layers, soulful storytelling, warm analog production, high fidelity',
+    'Contemporary Country': 'modern commercial country, polished billboard production, strong vocal presence, crossover appeal, radio master',
+    'bluegrass':            'fast-paced bluegrass, virtuosic banjo and mandolin, high lonesome vocal harmony, acoustic rhythmic drive, technical',
+    'folk':                 'intimate acoustic folk, fingerstyle guitar, raw storytelling vocal, pure organic production, close-mic intimacy',
+    'Indie Folk':           'atmospheric indie folk, layered acoustic textures, ethereal vocal harmonies, boutique studio production, wide soundstage',
+    'Folk Rock':            'acoustic-electric fusion, driving rhythmic pulse, melodic storytelling, 60s and 70s inspired production, organic feel',
+    'Folk Pop':             'catchy melodic folk, bright acoustic guitars, youthful vocal production, radio-friendly roots energy, polished',
+    'Folk Punk':            'aggressive acoustic punk, high energy rhythmic drive, shouted melodic vocals, raw unpolished production, fast tempo',
+    'Protest Folk':         'classic acoustic protest song, lyrical focus, simple guitar arrangement, authentic vocal conviction, raw and honest',
+    'jazz':        'classic jazz, swinging upright bass, brushed kit, expressive piano voicings, intimate club atmosphere, warm analog master',
+    'Bebop':       'fast bebop, rapid-fire harmonic improvisation, virtuoso horn solos, complex chord changes, swinging rhythmic drive',
+    'swing':       'classic big band swing, punchy brass ensemble, walking bass, driving snare backbeat, energetic dancehall groove',
+    'smooth jazz': 'lush smooth jazz, silky saxophone melody, warm electric piano, gentle groove, polished contemporary studio master',
+    'Cool Jazz':   'relaxed cool jazz, modal spacious voicings, muted trumpet, brushed kit, west coast intimate atmosphere',
+    'Jazz Fusion': 'electric jazz fusion, funky rhythmic interplay, complex harmonics, rhodes electric piano, studio-grade master',
+    'Latin Jazz':  'vibrant latin jazz, clave-driven percussion, piano montuno, expressive horn solos, afro-cuban rhythmic energy',
+    'Jazz Funk':   'groovy jazz funk, slap bass, funky rhythm guitar, punchy brass punches, expressive keys, danceable pocket groove',
+    'Hard Bop':    'bluesy hard bop, gospel-influenced phrasing, driving rhythm section, expressive horn work, east coast jazz energy',
+    'Acid Jazz':   'eclectic acid jazz, funky hip-hop influenced drums, rhodes piano, jazz harmonics, loose swinging groove',
+    'Free Jazz':   'experimental free jazz, atonal improvisation, expressive dissonance, free rhythmic exploration, avant-garde energy',
+    'Big Band':    'cinematic big band, full brass and reed section, swinging rhythm, powerful orchestral jazz energy, wide soundstage',
+    'blues':          'classic blues, expressive guitar bends, soulful vocal phrasing, walking bass, authentic twelve-bar groove',
+    'delta blues':    'raw delta blues, resonator slide guitar, lonely vocal delivery, sparse rhythmic stomp, authentic mississippi roots',
+    'Chicago Blues':  'electric chicago blues, biting electric guitar, harmonica wail, tight rhythm section, urban blues energy',
+    'Electric Blues': 'modern electric blues, overdriven guitar tone, expressive soulful vocal, driving rhythm section, polished studio master',
+    'Blues Rock':     'powerful blues rock, heavy distorted guitar, screaming vocal, thunderous drum kit, electrifying energy',
+    'Texas Blues':    'texas blues, stinging guitar tone, confident expressive vibrato, driving shuffle rhythm, soulful vocal delivery',
+    'Memphis Blues':  'memphis blues, soulful horn section, expressive guitar, warm analog production, deep groove pocket rhythm',
+    'Jump Blues':     'energetic jump blues, punchy brass riffs, walking bass, swinging backbeat, joyful expressive vocal delivery',
+    'Boogie-Woogie':  'rollicking boogie-woogie, rolling piano bass patterns, upbeat syncopated rhythm, joyful high-energy delivery',
+    'Country Blues':  'acoustic country blues, fingerpicked guitar, storytelling vocal, raw minimal production, authentic southern roots',
+    'reggae':        'classic jamaican reggae, offbeat skank guitar, deep sub-bass groove, roots rhythmic production, soulful vocal delivery',
+    'Roots Reggae':  'spiritual roots reggae, conscious bass-heavy groove, righteous vocal message, warm analog production, jamaican authenticity',
+    'Dancehall':     'modern dancehall, digital riddim drum pattern, energetic deejay vocal, bass-forward club production, high energy',
+    'ska':           'classic jamaican ska, choppy offbeat guitar, punchy brass section, upbeat walking bass, vintage 60s island energy',
+    'dub':           'cavernous dub, deep echo and reverb processing, stripped bass and drum emphasis, psychedelic space production',
+    'Reggae Fusion': 'modern reggae fusion, blended electric guitar, contemporary crossover production, melodic vocal hooks, polished master',
+    'Lovers Rock':   'smooth lovers rock, romantic melodic vocal, gentle syncopated reggae groove, warm intimate studio production',
+    'Ragga':         'digital ragga, computerized dancehall riddim, rapid-fire deejay vocal, electronic bass production, high energy',
+    'classical':              'refined classical, precise orchestral arrangement, full dynamic range, authentic period instrumentation, concert hall acoustic',
+    'Baroque':                'ornate baroque, harpsichord continuo, intricate counterpoint, period string ensemble, precise articulation, academic fidelity',
+    'Romantic':               'lush romantic orchestral, sweeping string melodies, grand dynamic range, deep emotional depth, full symphonic production',
+    'Contemporary Classical': 'modern contemporary classical, extended techniques, complex harmonic language, studio-mastered orchestral production',
+    'Symphony':               'grand symphony, full orchestral forces, dramatic dynamic contrasts, concert hall ambience, epic cinematic production',
+    'Opera':                  'powerful opera, soaring operatic vocals, full orchestral accompaniment, dramatic theatrical production, wide dynamic range',
+    'Chamber Music':          'intimate chamber music, refined small ensemble, precise interplay, transparent acoustic resonance, high fidelity',
+    'Choral':                 'majestic choral, layered vocal harmony, resonant reverb, emotional dynamic range, concert hall atmosphere',
+    'Gregorian Chant':        'sacred gregorian chant, unison plainchant vocal, natural reverberant acoustic, meditative spiritual atmosphere',
+    'Flamenco':  'passionate flamenco, expressive nylon guitar rasgueado, percussive footwork, soulful cante vocal, raw andalusian spirit',
+    'Fado':      'melancholic portuguese fado, intimate portuguese guitar, saudade vocal expression, intimate club atmosphere, warm analog production',
+    'Celtic':    'vibrant celtic, driving fiddle and tin whistle, rhythmic bodhran, melodic folk vocal, authentic irish and scottish spirit',
+    'gospel':    'powerful gospel, call-and-response choir, hammond organ, soulful preacher vocal, uplifting spiritual energy, high fidelity',
+    'Ragtime':   'classic ragtime, syncopated upright piano, bouncy rhythmic patterns, vintage 1900s production, joyful high energy',
+    'Zydeco':    'lively louisiana zydeco, accordion-driven melody, rubboard percussion, driving rhythm, infectious creole dance energy',
+    'Cajun':     'authentic cajun, acoustic fiddle, two-step rhythm, heartfelt french-louisiana vocal, warm bayou atmosphere',
+    'Industrial': 'harsh industrial, distorted mechanized rhythms, aggressive noise textures, dark dystopian atmosphere, abrasive production',
+    'Lo-Fi':         'nostalgic lo-fi hip-hop, vinyl crackle, mellow boom bap beat, warm tape saturation, chill atmospheric production',
+    'House':         'classic house, four-on-the-floor kick, warm soulful vocal chops, deep bass groove, club-ready production, [Audio Engine: Ultra-HD 96kHz]',
+    'Deep House':    'deep house, warm sub-bass, soulful vocal pads, minimal groove, late-night atmospheric production',
+    'Tech House':    'driving tech house, punchy kick, hypnotic percussion loops, minimal bassline, peak-time club energy',
+    'Trance':        'euphoric trance, soaring synth melodies, powerful build-ups and drops, driving 138 BPM, stadium energy',
+    'Techno':        'raw techno, industrial kick drum, hypnotic repetitive groove, dark atmospheric pads, berlin club energy',
+    'Dubstep':       'heavy dubstep, massive wobble bass, half-time rhythm, energetic build and drop, powerful sound design',
+    'Drum & Bass':   'fast drum and bass, rapid amen break, deep rolling bassline, energetic 170 BPM, electronic production',
       'EDM':           'anthemic EDM, massive build-up, euphoric synth drop, stadium-ready production, [Audio Engine: Ultra-HD 96kHz]',
       'Electro':       'classic electro, robotic drum machine, futuristic synth bass, vocoder vocal, tight mechanical groove',
       'Hardcore':      'intense hardcore, distorted kick, aggressive synth stabs, frenetic 180+ BPM, maximum energy production',
@@ -3701,14 +3948,14 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     ));
     // ── Rhythm chip → compact label ──
     const RHYTHM_LABELS: Record<string, string> = {
-      'Gulf Groove': 'khaleeji groove',
+      'Khaleeji Groove': 'khaleeji groove',
       'Khaleeji Shuffle': 'khaleeji shuffle',
       'Adani': 'adani rhythm',
       'Samri Rhythm': 'samri rhythm',
       'Wedding Beat': 'wedding beat',
       'Clap-Driven Groove': 'clap groove',
       '6/8 Fusion': '6/8 fusion',
-      'Afro-Gulf Groove': 'afro-gulf groove',
+      'Afro-Khaleeji Groove': 'afro-khaleeji groove',
       'Pop 4/4': 'pop 4/4',
       'Ballad Slow Groove': 'slow ballad',
       'Marching Anthem': 'marching anthem',
@@ -3739,64 +3986,17 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'None': 'no beat, free-tempo vocal flow',
     };
 
-    // ── Resolve Layer 1 anchor ──
-    const primaryStyle = includeTags[0] ?? null;
-    const styleAnchor = primaryStyle ? (STYLE_ANCHORS[primaryStyle] ?? primaryStyle) : null;
-    const isGccStyle = primaryStyle ? GCC_KEYS.has(primaryStyle) : false;
-
-    // ── Layer 2: User instruments (all selected — no cap) ──
-    const gccAnchor = primaryStyle ? GCC_STYLE_ANCHORS[primaryStyle] : null;
-    let instrumentLayer: string[];
-    if (instrumentTags.length > 0) {
-      instrumentLayer = instrumentTags;
-    } else if (isGccStyle && gccAnchor) {
-      instrumentLayer = [gccAnchor.instrument, ...(gccAnchor.production ? [gccAnchor.production] : [])].slice(0, 3);
-    } else {
-      instrumentLayer = [];
-    }
-
-    // ── Layer 3: ONE rhythm ──
-    const rhythmSource = rhythmTags[0] ?? (gccAnchor ? gccAnchor.rhythm : null);
-    const rhythmLabel = rhythmSource
-      ? (RHYTHM_LABELS[rhythmSource] ?? rhythmSource)
-      : null;
-
-    // ── Layer 4: ONE mood ──
-    const moodLabel = moodTags[0] ?? null;
-
-    // ── Layer 5: User freeform text ──
-    const freeText = styleText.trim() || null;
-
-    // ── Identity Sandwich: Anchor → Instruments → Rhythm → Mood → FreeText → Tail Anchor ──
-    // Suno V5/V4.5+ weights repeated tokens harder, so for GCC styles we bookend the style
-    // string with a second dialect imperative at the tail. This stops user freetext, rhythm,
-    // and mood words from diluting the Khaleeji identity signal.
-    const parts: string[] = [];
-    if (styleAnchor) parts.push(styleAnchor);                          // 1. Head identity anchor
-    if (instrumentLayer.length > 0) parts.push(instrumentLayer.join(', ')); // 2. User instruments
-    if (rhythmLabel) parts.push(rhythmLabel);                          // 3. Rhythm
-    if (moodLabel) parts.push(moodLabel);                              // 4. Mood
-    if (freeText) parts.push(freeText);                                // 5. User text
-    if (isGccStyle || isGccStyleSelected) {                            // 6. Tail dialect reinforcement (GCC only)
-      parts.push('authentic Khaleeji Gulf vocal pronunciation, strict Saudi-Kuwaiti-Qatari dialect, no MSA, no Egyptian, no Levantine');
-    }
-
-    // ── Clean-up pass: trim each fragment, drop single-char empties, collapse duplicate commas ──
-    const raw = parts
-      .flatMap((p) => p.split(','))
-      .map((s) => s.trim())
-      .filter((s) => s.length > 1)
-      .join(', ');
-    return raw.replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
-  }
-
   // ── Metatag Injector: wraps raw lyrics in Suno V5 structural brackets ──
+  //    Suno format: ONE short vocal cue above [Intro] (not per stanza). Matches working
+  //    community examples like [Deep raspy voice] / [male vocals] — emitted once only.
   function formatLyricsWithStructure(
     rawLyrics: string,
     isInstrumental: boolean,
     selectedInstruments: string[],
     isGccStyle: boolean = false,
     targetSeconds: number = 30,
+    vocalType: 'male' | 'female' | 'none' = 'none',
+    primaryStyleAnchor: string = '',
   ): string {
     if (isInstrumental) {
       return '[Intro]\n[Instrumental Build]\n[Drop]\n[Outro]';
@@ -3818,58 +4018,31 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         .join('\n')
         .trim())
       .filter(Boolean);
-    const normalizedTargetSeconds =
-      targetSeconds <= 30 ? 30 :
-      targetSeconds <= 60 ? 60 :
-      targetSeconds <= 90 ? 90 :
-      targetSeconds <= 120 ? 120 :
-      targetSeconds <= 150 ? 150 : 200;
-    const durationPlan = normalizedTargetSeconds === 30
-      ? { labels: ['Verse 1', 'Chorus'], stanzaLimit: 2, allowAutoSolo: false }
-      : normalizedTargetSeconds === 60
-        ? { labels: ['Verse 1', 'Chorus', 'Verse 2'], stanzaLimit: 3, allowAutoSolo: false }
-        : normalizedTargetSeconds === 90
-          ? { labels: ['Verse 1', 'Chorus', 'Verse 2', 'Chorus'], stanzaLimit: 4, allowAutoSolo: false }
-          : normalizedTargetSeconds === 120
-            ? { labels: ['Verse 1', 'Chorus', 'Verse 2', 'Bridge', 'Chorus'], stanzaLimit: 5, allowAutoSolo: false }
-            : { labels: ['Verse 1', 'Chorus', 'Verse 2', 'Bridge', 'Chorus'], stanzaLimit: 5, allowAutoSolo: true };
-    const arrangedStanzas = stanzas.slice(0, durationPlan.stanzaLimit);
+    const structurePlan = getKhalijiStructurePlan(targetSeconds);
+    const arrangedStanzas = stanzas.slice(0, structurePlan.stanzaLimit);
 
     // ── Dynamic solo: let Suno pick the lead instrument from the style field context ──
-    const soloTag: string | null = durationPlan.allowAutoSolo && arrangedStanzas.length >= durationPlan.stanzaLimit && selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant') ? '[Instrumental Solo]' : null;
+    const soloTag: string | null = structurePlan.allowAutoSolo && arrangedStanzas.length >= structurePlan.stanzaLimit && selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant') ? '[Instrumental Solo]' : null;
 
-    // ── GCC-only: per-stanza language detection so Suno locks the Gulf persona
-    //    for Arabic blocks and switches cleanly on English blocks. ──
-    const detectStanzaLang = (stanza: string): 'ar' | 'en' | 'mixed-ar' | 'mixed-en' => {
-      const arChars = (stanza.match(/[\u0600-\u06FF]/g) || []).length;
-      const latinChars = (stanza.match(/[A-Za-z]/g) || []).length;
-      const total = arChars + latinChars;
-      if (total === 0) return 'en';
-      const arRatio = arChars / total;
-      if (arRatio >= 0.7) return 'ar';
-      if (arRatio <= 0.3) return 'en';
-      return arRatio > 0.5 ? 'mixed-ar' : 'mixed-en';
-    };
+    // ── Single Khaleeji vocal cue above [Intro] — Suno-format, emitted once only ──
+    //    Heritage vs Pop flavor is driven by the chip's LOCK anchor (mawwal = heritage).
+    const isHeritage = /mawwal/i.test(primaryStyleAnchor);
+    const flavor = isHeritage ? 'warm jalsa delivery' : 'clean hook delivery';
+    const genderWord = vocalType === 'female' ? 'female' : vocalType === 'male' ? 'male' : '';
+    const khaleejiCue: string | null = isGccStyle
+      ? (genderWord
+          ? `[Khaleeji ${genderWord} vocal, ${flavor}]`
+          : `[Khaleeji vocal, ${flavor}]`)
+      : null;
 
-    // ── Vocal directive per stanza (bracketed — Suno V5/V4.5+ parses [ ] as structural) ──
-    const gccVocalDirective = (lang: ReturnType<typeof detectStanzaLang>): string => {
-      if (!isGccStyle) return '';
-      switch (lang) {
-        case 'ar':       return '[Vocal: Khaleeji Arabic — Gulf dialect, Saudi-Kuwaiti-Qatari, NOT MSA, NOT Egyptian]';
-        case 'en':       return '[Vocal: English]';
-        case 'mixed-ar': return '[Vocal: Khaleeji Arabic on Arabic lines, neutral English on English lines, no accent reset between lines]';
-        case 'mixed-en': return '[Vocal: English lead, Khaleeji Arabic on Arabic lines, no accent reset between lines]';
-      }
-    };
-
-    const labels = durationPlan.labels;
-    const structured: string[] = ['[Intro]'];
+    const labels = structurePlan.labels;
+    const structured: string[] = [];
+    if (khaleejiCue) structured.push(khaleejiCue);
+    structured.push('[Intro]');
 
     arrangedStanzas.forEach((stanza, i) => {
       const baseLabel = `[${labels[i] ?? `Verse ${i + 1}`}]`;
-      const lang = detectStanzaLang(stanza);
-      const vocalDir = gccVocalDirective(lang);
-      structured.push(vocalDir ? `${baseLabel}\n${vocalDir}\n${stanza}` : `${baseLabel}\n${stanza}`);
+      structured.push(`${baseLabel}\n${stanza}`);
     });
 
     if (soloTag) structured.push(soloTag);
@@ -3922,11 +4095,22 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const instrumental = vocalType === 'none';
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
-      const kieStyle = buildKieStyleString();
+      const khalijiControlBlock = buildKhalijiControlBlock();
+      const kieStyle = khalijiControlBlock.styleString;
       const durationTarget = Math.min(200, duration);
 
       const rawLyrics = lyricsText.trim() || styleText.trim();
-      const structuredPrompt = formatLyricsWithStructure(rawLyrics, instrumental, instrumentTags, isGccStyleSelected, durationTarget);
+      const primaryStyleForCue = effectiveIncludeTags[0] ? (STYLE_ANCHORS[effectiveIncludeTags[0]] ?? '') : '';
+      const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
+      const structuredPrompt = formatLyricsWithStructure(
+        rawLyrics,
+        instrumental,
+        instrumentTags,
+        isGccStyleSelected,
+        durationTarget,
+        cueVocal,
+        primaryStyleForCue,
+      );
 
       // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
       const REGIONAL_NEGATIVE: Record<string, string> = {
@@ -4135,29 +4319,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         'Synthpop':      'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
         'Electropop':    'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
       };
-      const isAnasheedStyle = includeTags.some((tag) => tag === 'Anasheed' || tag === 'أناشيد');
+      const isAnasheedStyle = effectiveIncludeTags.some((tag) => tag === 'Anasheed' || tag === 'أناشيد');
       const POP_KEYS = new Set(['pop','Dance Pop','Teen Pop','Power Pop','Pop Rock','Indie Pop','Bubblegum Pop','K-Pop','J-Pop','Latin Pop','80s pop','90s pop','Synthpop','Electropop']);
-      const isPopStyle = includeTags.some((tag) => POP_KEYS.has(tag));
+      const isPopStyle = effectiveIncludeTags.some((tag) => POP_KEYS.has(tag));
       const URBAN_KEYS = new Set(['R&B','soul','Neo-Soul','Contemporary R&B','Motown','New Jack Swing','Quiet Storm','Blue-eyed Soul','Funk','disco','hip hop','rap','Trap','Drill','Boom Bap','Conscious Hip Hop','Gangsta Rap','East Coast Hip Hop','West Coast Hip Hop','Southern Hip Hop','Alternative Hip Hop','Cloud Rap','Crunk','Afrobeats','Afrobeat','Reggaeton','Latin','Latin Rock','Salsa','Bachata','Merengue','Tango','Samba','Cumbia','Bossa Nova','Bollywood','Bhangra']);
-      const isUrbanStyle = includeTags.some((tag) => URBAN_KEYS.has(tag));
+      const isUrbanStyle = effectiveIncludeTags.some((tag) => URBAN_KEYS.has(tag));
       const ROCK_KEYS = new Set(['rock','Classic Rock','rock and roll','soft rock','Hard Rock','alternative rock','indie rock','Progressive Rock','Psychedelic Rock','Garage Rock','Glam Rock','grunge','Britpop','Shoegaze','Post-Rock','Math Rock','Surf Rock','Dream Pop']);
-      const isRockStyle = includeTags.some((tag) => ROCK_KEYS.has(tag));
+      const isRockStyle = effectiveIncludeTags.some((tag) => ROCK_KEYS.has(tag));
       const METAL_KEYS = new Set(['heavy metal','thrash metal','Death Metal','Black Metal','Power Metal','Doom Metal','Gothic Metal','Symphonic Metal','Progressive Metal','Speed Metal']);
-      const isMetalStyle = includeTags.some((tag) => METAL_KEYS.has(tag));
+      const isMetalStyle = effectiveIncludeTags.some((tag) => METAL_KEYS.has(tag));
       const PUNK_KEYS = new Set(['punk rock','Pop Punk','Hardcore Punk','Ska Punk','Emo','Screamo','New Wave']);
-      const isPunkStyle = includeTags.some((tag) => PUNK_KEYS.has(tag));
+      const isPunkStyle = effectiveIncludeTags.some((tag) => PUNK_KEYS.has(tag));
       const ROOTS_KEYS = new Set(['country','Country Pop','Outlaw Country','Country Rock','Alternative Country','Honky Tonk','Western Swing','Americana','Contemporary Country','bluegrass','folk','Indie Folk','Folk Rock','Folk Pop','Folk Punk','Protest Folk']);
-      const isRootsStyle = includeTags.some((tag) => ROOTS_KEYS.has(tag));
+      const isRootsStyle = effectiveIncludeTags.some((tag) => ROOTS_KEYS.has(tag));
       const JAZZ_BLUES_KEYS = new Set(['jazz','Bebop','swing','smooth jazz','Cool Jazz','Jazz Fusion','Latin Jazz','Jazz Funk','Hard Bop','Acid Jazz','Free Jazz','Big Band','blues','delta blues','Chicago Blues','Electric Blues','Blues Rock','Texas Blues','Memphis Blues','Jump Blues','Boogie-Woogie','Country Blues']);
-      const isJazzBluesStyle = includeTags.some((tag) => JAZZ_BLUES_KEYS.has(tag));
+      const isJazzBluesStyle = effectiveIncludeTags.some((tag) => JAZZ_BLUES_KEYS.has(tag));
       const REGGAE_KEYS = new Set(['reggae','Roots Reggae','Dancehall','ska','dub','Reggae Fusion','Lovers Rock','Ragga']);
-      const isReggaeStyle = includeTags.some((tag) => REGGAE_KEYS.has(tag));
+      const isReggaeStyle = effectiveIncludeTags.some((tag) => REGGAE_KEYS.has(tag));
       const CLASSICAL_KEYS = new Set(['classical','Baroque','Romantic','Contemporary Classical','Symphony','Opera','Chamber Music','Choral','Gregorian Chant']);
-      const isClassicalStyle = includeTags.some((tag) => CLASSICAL_KEYS.has(tag));
+      const isClassicalStyle = effectiveIncludeTags.some((tag) => CLASSICAL_KEYS.has(tag));
       const WORLD_MISC_KEYS = new Set(['Flamenco','Fado','Celtic','gospel','Ragtime','Zydeco','Cajun','Industrial']);
-      const isWorldMiscStyle = includeTags.some((tag) => WORLD_MISC_KEYS.has(tag));
+      const isWorldMiscStyle = effectiveIncludeTags.some((tag) => WORLD_MISC_KEYS.has(tag));
       const ELECTRONIC_KEYS = new Set(['Lo-Fi','House','Deep House','Tech House','Trance','Techno','Dubstep','Drum & Bass','EDM','Electro','Hardcore','IDM','ambient','synthwave','chillwave','Vaporwave','Glitch','Witch House','Grime','UK Garage','2-Step','Electro Swing','Chiptune']);
-      const isElectronicStyle = includeTags.some((tag) => ELECTRONIC_KEYS.has(tag));
+      const isElectronicStyle = effectiveIncludeTags.some((tag) => ELECTRONIC_KEYS.has(tag));
       // ── Multi-tag negative shield merger ──
       // Combines GCC pronunciation negatives (highest priority — dialect lock) with
       // per-style regional shields for EVERY selected tag (not just the first). Falls back
@@ -4199,7 +4383,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const gccPronunciationTokens: string[] = [];
       const regionalTokens: string[] = [];
       let hasGccTag = false;
-      for (const tag of includeTags) {
+      for (const tag of effectiveIncludeTags) {
         if (GCC_STYLE_SET.has(tag)) hasGccTag = true;
         const pron = GCC_PRONUNCIATION_NEGATIVES[tag];
         if (pron) gccPronunciationTokens.push(...tokenizeNeg(pron));
@@ -4228,6 +4412,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
         style: resolvedStyle,
+        styleTags: effectiveIncludeTags,
         customMode: true,
         instrumental,
         // Model: always V5_5 (best musicality + best vocal quality). Tested V4_5PLUS
@@ -4243,6 +4428,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         weirdnessConstraint: isAnasheedStyle ? 0.15 : isClassicalStyle ? 0.20 : isReggaeStyle ? 0.35 : isPopStyle ? 0.45 : isMetalStyle ? 0.40 : isRootsStyle ? 0.40 : isWorldMiscStyle ? 0.40 : isElectronicStyle ? 0.40 : isUrbanStyle ? 0.45 : isRockStyle ? 0.45 : isPunkStyle ? 0.50 : isJazzBluesStyle ? 0.50 : 0.30,
         audioWeight: 0.8,
         negativeTags: finalNegativeTags,
+        controlBlock: khalijiControlBlock.controlBlock,
+        structurePlan: khalijiControlBlock.structurePlan,
+        tempoHint: khalijiControlBlock.tempoTag,
+        musicalKeyHint: khalijiControlBlock.keyTag,
       };
 
       if (!instrumental) invokeBody.prompt = structuredPrompt;
@@ -5172,7 +5361,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {isAr ? 'تحسين خليجي' : 'GCC Enhance'}
+                    {isAr ? 'تحسين خليجي' : 'Khaleeji Enhance'}
                   </button>
                 )}
               </div>
@@ -5207,7 +5396,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 <div className="rounded-xl border border-emerald-300/50 dark:border-emerald-400/20 bg-emerald-50/60 dark:bg-emerald-500/5 px-3 py-2 space-y-1">
                   <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                     <span>✦</span>
-                    <span>{isAr ? 'بعد التحسين الخليجي' : 'GCC Enhanced'}</span>
+                    <span>{isAr ? 'بعد التحسين الخليجي' : 'Khaliji Enhanced'}</span>
                   </div>
                   <div
                     dir={/[\u0600-\u06FF]/.test(lyricsText) ? 'rtl' : 'ltr'}
@@ -5251,6 +5440,107 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               {isAr ? 'اقرأ الكلمات جيدًا قبل الإنشاء، الذكاء الاصطناعي ليس إنسانًا 😉' : 'Please read the lyrics carefully before generating, AI is not human 😉'}
             </p>
 
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={() => setShowAdvancedSliders((prev) => !prev)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all active:scale-95 ${
+                  showAdvancedSliders
+                    ? 'bg-sky-50 dark:bg-sky-500/15 border-sky-300 dark:border-sky-400/40 text-sky-700 dark:text-sky-200'
+                    : 'bg-[#fcfefd] dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#060541] dark:text-white/80 hover:bg-[#f7f8fc] dark:hover:bg-white/[0.08]'
+                }`}
+              >
+                <SlidersHorizontal className="h-3.5 w-3.5" />
+                {isAr ? 'خيارات متقدمة' : 'Advanced'}
+              </button>
+              <div className="flex items-center gap-2">
+                {(tempoOverride || keyOverride) && (
+                  <button
+                    type="button"
+                    onClick={() => { setTempoOverride(''); setKeyOverride(''); }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] text-[#606062] dark:text-white/60 hover:bg-[#f7f8fc] dark:hover:bg-white/[0.08] active:scale-95 transition-all"
+                  >
+                    {isAr ? 'إعادة تلقائي' : 'Reset to auto'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      const cb = buildKhalijiControlBlock();
+                      const instrumental = vocalType === 'none';
+                      const vocalGender: 'm' | 'f' | undefined =
+                        vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
+                      const durationTarget = Math.min(200, duration);
+                      const rawLyrics = lyricsText.trim() || styleText.trim();
+                      const primaryStyleForCue = effectiveIncludeTags[0] ? (STYLE_ANCHORS[effectiveIncludeTags[0]] ?? '') : '';
+                      const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
+                      const structuredPrompt = formatLyricsWithStructure(
+                        rawLyrics,
+                        instrumental,
+                        instrumentTags,
+                        isGccStyleSelected,
+                        durationTarget,
+                        cueVocal,
+                        primaryStyleForCue,
+                      );
+                      const preview = {
+                        title: title.trim(),
+                        customMode: true,
+                        instrumental,
+                        vocalGender: vocalGender ?? null,
+                        duration_seconds: durationTarget,
+                        style: cb.styleString,
+                        prompt: instrumental ? null : structuredPrompt,
+                        tempoHint: cb.tempoTag,
+                        musicalKeyHint: cb.keyTag,
+                        controlBlock: cb.controlBlock,
+                        structurePlan: cb.structurePlan,
+                      };
+                      setPayloadPreview(JSON.stringify(preview, null, 2));
+                      setShowPayloadPreview(true);
+                    } catch (e) {
+                      toast.error((e as Error).message || 'Preview failed');
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] text-[#060541] dark:text-white/80 hover:bg-[#f7f8fc] dark:hover:bg-white/[0.08] active:scale-95 transition-all"
+                  title={isAr ? 'معاينة الحمولة المرسلة' : 'Preview the exact payload sent to KIE'}
+                >
+                  <Info className="h-3.5 w-3.5" />
+                  {isAr ? 'معاينة الحمولة' : 'Preview payload'}
+                </button>
+              </div>
+            </div>
+
+            {showAdvancedSliders && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <select
+                  value={tempoOverride}
+                  onChange={(e) => setTempoOverride(e.target.value || '')}
+                  title={isAr ? 'السرعة' : 'Tempo'}
+                  className="px-3 py-2 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
+                >
+                  {tempoOverrideOptions.map((option) => (
+                    <option key={option.value || 'auto'} value={option.value}>
+                      {isAr ? option.ar : option.en}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={keyOverride}
+                  onChange={(e) => setKeyOverride(e.target.value || '')}
+                  title={isAr ? 'المفتاح' : 'Key'}
+                  className="px-3 py-2 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
+                >
+                  {keyOverrideOptions.map((option) => (
+                    <option key={option.value || 'auto'} value={option.value}>
+                      {isAr ? option.ar : option.en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex items-center gap-3 pt-1">
               <select
                 value={duration}
@@ -5289,6 +5579,47 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               </button>
             </div>
           </div>
+
+        {showPayloadPreview && createPortal(
+          <div
+            className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => setShowPayloadPreview(false)}
+          >
+            <div
+              className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-[#0c0f14] shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-[#d9dde7] dark:border-white/10">
+                <div className="text-sm font-bold text-[#060541] dark:text-white">
+                  {isAr ? 'معاينة الحمولة المرسلة' : 'Payload preview'}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(payloadPreview);
+                      toast.success(isAr ? 'تم النسخ' : 'Copied');
+                    }}
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] text-[#060541] dark:text-white/80 hover:bg-[#f7f8fc] dark:hover:bg-white/[0.08]"
+                  >
+                    {isAr ? 'نسخ' : 'Copy'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowPayloadPreview(false)}
+                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] text-[#606062] dark:text-white/60 hover:bg-[#f7f8fc] dark:hover:bg-white/[0.08]"
+                  >
+                    {isAr ? 'إغلاق' : 'Close'}
+                  </button>
+                </div>
+              </div>
+              <pre className="flex-1 overflow-auto p-4 text-[11px] leading-relaxed text-[#060541] dark:text-white/80 whitespace-pre-wrap break-words font-mono">
+{payloadPreview}
+              </pre>
+            </div>
+          </div>,
+          document.body,
+        )}
 
         {lastError && (
           <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-400/20 text-red-300 text-xs">

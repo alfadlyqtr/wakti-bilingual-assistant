@@ -25,10 +25,14 @@ const AlertDialogOverlay = React.forwardRef<
 ))
 AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 
+interface AlertDialogContentProps extends React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content> {
+  overlayClassName?: string
+}
+
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+  AlertDialogContentProps
+>(({ className, children, overlayClassName, ...props }, ref) => {
   // Extract title and description from children
   const title = React.Children.toArray(children).find(
     (child) => React.isValidElement(child) && child.type === AlertDialogHeader
@@ -39,7 +43,7 @@ const AlertDialogContent = React.forwardRef<
   
   return (
     <AlertDialogPortal>
-      <AlertDialogOverlay />
+      <AlertDialogOverlay className={overlayClassName} />
       <AlertDialogPrimitive.Content
         ref={ref}
         className={cn(

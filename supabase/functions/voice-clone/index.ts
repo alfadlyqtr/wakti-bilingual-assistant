@@ -4,29 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.4';
 import { ElevenLabsClient } from "https://esm.sh/@elevenlabs/elevenlabs-js@2.4.1";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-
-// === TRIAL TOKEN CHECK (inlined) ===
-// deno-lint-ignore no-explicit-any
-async function checkAndConsumeTrialToken(supabaseClient: any, userId: string, featureKey: string, maxLimit: number): Promise<{ allowed: boolean; isVip?: boolean }> {
-  const { data: profile, error } = await supabaseClient
-    .from('profiles')
-    .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
-    .eq('id', userId)
-    .single();
-  if (error || !profile) return { allowed: false };
-  if (profile.is_subscribed === true) return { allowed: true, isVip: true };
-  if (profile.admin_gifted === true) return { allowed: true, isVip: true };
-  const pm = profile.payment_method;
-  if (pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date()) return { allowed: true, isVip: true };
-  if (profile.free_access_start_at == null) return { allowed: true, isVip: false };
-  // deno-lint-ignore no-explicit-any
-  const usage: Record<string, number> = (profile.trial_usage as any) ?? {};
-  const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
-  if (current >= maxLimit) return { allowed: false };
-  const { error: updateError } = await supabaseClient.from('profiles').update({ trial_usage: { ...usage, [featureKey]: current + 1 } }).eq('id', userId);
-  if (updateError) return { allowed: false };
-  return { allowed: true };
-}
+import { buildTrialErrorPayload, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -91,9 +69,9 @@ serve(async (req) => {
 
     // Trial gate: voice_clone — limit 0 for free users (POST/clone only, not DELETE)
     if (req.method === 'POST') {
-      const trial = await checkAndConsumeTrialToken(supabaseService, user.id, 'voice_clone', 0);
+      const trial = await checkTrialAccess(supabaseService, user.id, 'voice_clone', 0);
       if (!trial.allowed) {
-        return new Response(JSON.stringify({ success: false, error: 'TRIAL_LIMIT_REACHED', feature: 'voice_clone' }), {
+        return new Response(JSON.stringify({ success: false, ...buildTrialErrorPayload('voice_clone', trial) }), {
           status: 403,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         });

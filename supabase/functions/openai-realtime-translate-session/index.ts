@@ -1,28 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-// === TRIAL TOKEN CHECK (inlined) ===
-// deno-lint-ignore no-explicit-any
-async function checkAndConsumeTrialToken(supabaseClient: any, userId: string, featureKey: string, maxLimit: number): Promise<{ allowed: boolean; isVip?: boolean }> {
-  const { data: profile, error } = await supabaseClient
-    .from('profiles')
-    .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
-    .eq('id', userId)
-    .single();
-  if (error || !profile) return { allowed: false };
-  if (profile.is_subscribed === true) return { allowed: true, isVip: true };
-  if (profile.admin_gifted === true) return { allowed: true, isVip: true };
-  const pm = profile.payment_method;
-  if (pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date()) return { allowed: true, isVip: true };
-  if (profile.free_access_start_at == null) return { allowed: true, isVip: false };
-  // deno-lint-ignore no-explicit-any
-  const usage: Record<string, number> = (profile.trial_usage as any) ?? {};
-  const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
-  if (current >= maxLimit) return { allowed: false };
-  const { error: updateError } = await supabaseClient.from('profiles').update({ trial_usage: { ...usage, [featureKey]: current + 1 } }).eq('id', userId);
-  if (updateError) return { allowed: false };
-  return { allowed: true };
-}
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce, checkTrialAccess } from "../_shared/trial-tracker.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
@@ -63,9 +41,9 @@ serve(async (req: Request) => {
     }
 
     // Trial gate: interpreter — limit 5 for free users
-    const trial = await checkAndConsumeTrialToken(supabase, user.id, 'interpreter', 5);
+    const trial = await checkTrialAccess(supabase, user.id, 'interpreter', 5);
     if (!trial.allowed) {
-      return new Response(JSON.stringify({ error: 'TRIAL_LIMIT_REACHED', feature: 'interpreter' }), {
+      return new Response(JSON.stringify(buildTrialErrorPayload('interpreter', trial)), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -100,11 +78,19 @@ serve(async (req: Request) => {
     }
 
     const sdpAnswer = await openaiResponse.text();
+    const consumeTrial = await checkAndConsumeTrialTokenOnce(supabase, user.id, 'interpreter', 5, sdpAnswer);
+    const trialPayload = consumeTrial.allowed
+      ? buildTrialSuccessPayload('interpreter', consumeTrial)
+      : null;
+    if (!consumeTrial.allowed) {
+      console.warn('[openai-realtime-translate-session] Trial consume skipped after success:', consumeTrial.reason);
+    }
 
     return new Response(JSON.stringify({
       success: true,
       sdp_answer: sdpAnswer,
       model: MODEL,
+      trial: trialPayload,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

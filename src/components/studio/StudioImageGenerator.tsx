@@ -342,6 +342,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     taskId: string,
     extraBody: Record<string, unknown> = {},
     token: string,
+    fallbackFeature?: string,
   ): Promise<string[]> => {
     const deadline = Date.now() + 3 * 60 * 1000; // 3 minute frontend timeout
     while (Date.now() < deadline) {
@@ -353,6 +354,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       });
       const pollJson = await pollResp.json().catch(() => ({} as any));
       if (Array.isArray(pollJson?.urls) && pollJson.urls.length > 0) {
+        if (fallbackFeature) {
+          emitTrialFinished(pollJson, fallbackFeature);
+        }
         return pollJson.urls as string[];
       }
       if (!pollResp.ok || pollJson?.status === 'error') {
@@ -388,7 +392,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const taskId: string = submitJson?.taskId;
     if (!taskId) throw new Error('No taskId returned from KIE submit');
     // Step 2: poll from frontend
-    return pollKieTask('wakti-grok-text2image', taskId, { user_id: user?.id }, token);
+    return pollKieTask('wakti-grok-text2image', taskId, { user_id: user?.id }, token, 't2i');
   };
 
   // ─── Generate: Quick (Grok) Image2Image ───
@@ -418,7 +422,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const taskId: string = submitJson?.taskId;
     if (!taskId) throw new Error('No taskId returned from KIE i2i submit');
     // Step 2: poll from frontend
-    return pollKieTask('wakti-grok-image2image', taskId, { user_id: user?.id }, token);
+    return pollKieTask('wakti-grok-image2image', taskId, { user_id: user?.id }, token, 'i2i');
   };
 
   // ─── Generate: Text2Image ───
@@ -1361,7 +1365,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               return;
             }
 
-            const compressImage = async (dataUri: string, preserveAlpha = false): Promise<string> => {
+            const transformImage = async (
+              dataUri: string,
+              options: { maxSize: number; preserveAlpha?: boolean; quality?: number; output?: 'png' | 'jpeg' }
+            ): Promise<string> => {
               if (!dataUri.startsWith('data:image/')) return dataUri;
               return new Promise((resolve) => {
                 const img = new Image();
@@ -1369,7 +1376,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   const canvas = document.createElement('canvas');
                   let width = img.width;
                   let height = img.height;
-                  const MAX_SIZE = 1200;
+                  const MAX_SIZE = options.maxSize;
                   if (width > height && width > MAX_SIZE) {
                     height *= MAX_SIZE / width;
                     width = MAX_SIZE;
@@ -1384,7 +1391,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   if (!ctx) return resolve(dataUri);
 
                   ctx.drawImage(img, 0, 0, width, height);
-                  resolve(preserveAlpha ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.8));
+                  const preserveAlpha = Boolean(options.preserveAlpha);
+                  const output = options.output || (preserveAlpha ? 'png' : 'jpeg');
+                  resolve(output === 'png' ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', options.quality ?? 0.8));
                 };
                 img.onerror = () => resolve(dataUri);
                 img.src = dataUri;
@@ -1491,9 +1500,24 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               const originalImage = asset.image as string;
               if (asset.type === 'logo' && asset.logoMode === 'transparent') {
                 const isolated = await isolateTransparentLogo(originalImage);
-                return compressImage(isolated, true);
+                return transformImage(isolated, { maxSize: 1600, preserveAlpha: true, output: 'png' });
               }
-              return compressImage(originalImage, false);
+              if (asset.type === 'logo' && asset.logoMode === 'as-is') {
+                return transformImage(originalImage, { maxSize: 2200, quality: 0.97 });
+              }
+              if (asset.type === 'screenshot') {
+                return transformImage(originalImage, { maxSize: 2200, preserveAlpha: true, output: 'png' });
+              }
+              if (asset.type === 'background') {
+                return transformImage(originalImage, { maxSize: 2400, quality: 0.94 });
+              }
+              if (asset.type === 'person') {
+                return transformImage(originalImage, { maxSize: 2000, quality: 0.94 });
+              }
+              if (asset.type === 'product') {
+                return transformImage(originalImage, { maxSize: 1800, quality: 0.9 });
+              }
+              return transformImage(originalImage, { maxSize: 1200, quality: 0.8 });
             };
 
             const preUploadImageToStorage = async (dataUri: string): Promise<string> => {
@@ -1755,6 +1779,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                     'subscribe': 'Subscribe',
                   }[visualState.creativeSoul.cta] || ''
                 ].filter(Boolean) : []);
+              const campaignObjective = normalizeShortValue(visualState.campaignDNA.objective);
 
               const roleAndRules = buildSection('ROLE_AND_RULES', [
                 `- task: Create one premium advertising poster using the uploaded assets and selected settings.`,
@@ -1791,6 +1816,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
               const campaignLines = [
                 `- campaign:`,
+                ...(campaignObjective ? [`    objective: ${toQuoted(campaignObjective)}`] : []),
                 `    main_message: ${visualState.creativeSoul.mainMessage === 'custom' ? 'custom' : (topicLabels[visualState.creativeSoul.mainMessage] || 'none')}`,
                 ...(visualState.creativeSoul.mainMessage === 'custom' && customTopic ? [`    main_message_custom_text: ${toQuoted(customTopic)}`] : []),
                 ...(visualState.creativeSoul.mainMessage !== 'custom' && visualState.creativeSoul.mainMessageVariant ? [`    main_message_detail: ${topicVariantLabels[visualState.creativeSoul.mainMessage]?.[visualState.creativeSoul.mainMessageVariant] || visualState.creativeSoul.mainMessageVariant}`] : []),
@@ -1869,7 +1895,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   require_exact_feature_chips: canUseFeatureChips && featureChips.length > 0,
                   cta_id: visualState.creativeSoul.cta || null,
                   cta_text: allowedText[0] || null,
-                  cta_prompt: selectedCtaChip?.label || null,
+                  cta_prompt: selectedCtaChip
+                    ? (language === 'ar' ? selectedCtaChip.labelAr : selectedCtaChip.labelEn)
+                    : null,
                 },
                 style: {
                   primary_style_id: visualState.creativeSoul.style || null,
@@ -1943,6 +1971,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   images: validImages,
                   input_urls: visualAdsRemoteUrls,
                   uploaded_images: visualAdsDataUris,
+                  frontend_compiled_prompt: finalPromptForKie,
                   prompt: finalPromptForKie,
                   visual_ads_spec: visualAdsSpec,
                   aspect_ratio: visualState.campaignDNA.platform,
