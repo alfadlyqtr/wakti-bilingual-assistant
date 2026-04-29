@@ -4,6 +4,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Copy, Loader2, Trophy } from 'lucide-react';
+import { OpponentLeftDialog } from './OpponentLeftDialog';
 import {
   TicTacToeMultiplayerService,
   TttGameRow,
@@ -32,6 +33,8 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rematching, setRematching] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const [opponentLeftOpen, setOpponentLeftOpen] = useState(false);
 
   // Initial load + realtime subscribe
   useEffect(() => {
@@ -65,6 +68,18 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch }: Props) {
       clearInterval(poll);
     };
   }, [code]);
+
+  useEffect(() => {
+    if (!game || !user?.id || leaving) return;
+    if (
+      game.status === 'abandoned'
+      && game.result_reason === 'player_left'
+      && !!game.abandoned_by_user_id
+      && game.abandoned_by_user_id !== user.id
+    ) {
+      setOpponentLeftOpen(true);
+    }
+  }, [game, user?.id, leaving]);
 
   const mySymbol: TttSymbol | null = useMemo(() => {
     if (!game || !user?.id) return null;
@@ -113,6 +128,17 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch }: Props) {
     }
   }
 
+  async function handleLeaveGame() {
+    setLeaving(true);
+    try {
+      await TicTacToeMultiplayerService.leaveGame(code);
+      onLeave();
+    } catch (e: any) {
+      setLeaving(false);
+      toast.error(e?.message || (isAr ? 'تعذر مغادرة اللعبة' : 'Could not leave the game'));
+    }
+  }
+
   function copyCode() {
     navigator.clipboard.writeText(code).catch(() => {});
     toast.success(isAr ? 'تم نسخ الرمز' : 'Code copied');
@@ -135,6 +161,7 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch }: Props) {
   }
 
   const isFinished = ['host_won', 'guest_won', 'draw', 'abandoned'].includes(game.status);
+  const showRematch = isFinished && game.result_reason !== 'player_left';
   const iWon =
     (game.status === 'host_won' && user?.id === game.host_user_id) ||
     (game.status === 'guest_won' && user?.id === game.guest_user_id);
@@ -154,6 +181,16 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch }: Props) {
 
   return (
     <div className="space-y-4 select-none">
+      <OpponentLeftDialog
+        open={opponentLeftOpen}
+        language={language}
+        gameName="Tic-Tac-Toe"
+        onAcknowledge={() => {
+          setOpponentLeftOpen(false);
+          onLeave();
+        }}
+      />
+
       <div className="flex items-center justify-between gap-2 px-1">
         <div className="text-sm font-medium">
           <span className="text-slate-500">{isAr ? 'الرمز' : 'Code'}: </span>
@@ -204,12 +241,12 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch }: Props) {
       </div>
 
       <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
-        {isFinished && (
+        {showRematch && (
           <Button onClick={handleRematch} disabled={rematching} className="flex-1 min-h-[44px]">
             {rematching ? <Loader2 className="h-4 w-4 animate-spin" /> : (isAr ? 'إعادة المباراة' : 'Rematch')}
           </Button>
         )}
-        <Button variant="outline" onClick={onLeave} className="flex-1 min-h-[44px]">
+        <Button variant="outline" onClick={handleLeaveGame} className="flex-1 min-h-[44px]">
           {isAr ? 'مغادرة' : 'Leave'}
         </Button>
       </div>

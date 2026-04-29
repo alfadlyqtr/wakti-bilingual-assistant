@@ -3476,65 +3476,37 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       .replace(/\bgulf\b/g, 'Khaleeji');
   }
 
-  function getKhalijiStructurePlan(targetSeconds: number) {
+  function getKhalijiStructurePlan(targetSeconds: number, desiredSections?: number, includeSolo: boolean = false) {
     const normalizedSeconds =
       targetSeconds <= 30 ? 30 :
       targetSeconds <= 60 ? 60 :
       targetSeconds <= 90 ? 90 :
       targetSeconds <= 120 ? 120 :
       targetSeconds <= 150 ? 150 : 200;
-
-    if (normalizedSeconds === 30) {
-      return {
-        normalizedSeconds,
-        labels: ['Mini Verse', 'Mini Chorus'],
-        stanzaLimit: 2,
-        allowAutoSolo: false,
-        shortRoadmap: 'mini intro, mini verse lift, compact chorus payoff, button outro',
-        longRoadmap: 'Intro → Mini Verse → Mini Chorus → Outro',
-      };
-    }
-
-    if (normalizedSeconds === 60) {
-      return {
-        normalizedSeconds,
-        labels: ['Verse 1', 'Pre-Chorus', 'Chorus'],
-        stanzaLimit: 3,
-        allowAutoSolo: false,
-        shortRoadmap: 'intro, verse lift, pre-chorus rise, chorus payoff, outro',
-        longRoadmap: 'Intro → Verse 1 → Pre-Chorus → Chorus → Outro',
-      };
-    }
-
-    if (normalizedSeconds === 90) {
-      return {
-        normalizedSeconds,
-        labels: ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2'],
-        stanzaLimit: 4,
-        allowAutoSolo: false,
-        shortRoadmap: 'intro, verse 1, pre-chorus, chorus, verse 2, outro',
-        longRoadmap: 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Outro',
-      };
-    }
-
-    if (normalizedSeconds === 120) {
-      return {
-        normalizedSeconds,
-        labels: ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Final Chorus'],
-        stanzaLimit: 5,
-        allowAutoSolo: false,
-        shortRoadmap: 'intro, verse 1, pre-chorus, chorus, verse 2, final chorus, outro',
-        longRoadmap: 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Final Chorus → Outro',
-      };
-    }
-
+    const stanzaLimit =
+      normalizedSeconds === 30 ? 2 :
+      normalizedSeconds === 60 ? 3 :
+      normalizedSeconds === 90 ? 4 :
+      normalizedSeconds === 120 ? 5 :
+      normalizedSeconds === 150 ? 6 : 7;
+    const sectionCount = Math.max(1, Math.min(desiredSections ?? stanzaLimit, stanzaLimit));
+    const labels =
+      sectionCount === 1 ? ['Verse 1'] :
+      sectionCount === 2 ? (normalizedSeconds === 30 ? ['Mini Verse', 'Mini Chorus'] : ['Verse 1', 'Chorus']) :
+      sectionCount === 3 ? ['Verse 1', 'Pre-Chorus', 'Chorus'] :
+      sectionCount === 4 ? ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2'] :
+      sectionCount === 5 ? ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Final Chorus'] :
+      sectionCount === 6 ? ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Bridge', 'Final Chorus'] :
+      ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Bridge', 'Verse 3', 'Final Chorus'];
+    const tailLabels = includeSolo && normalizedSeconds >= 150 ? ['Instrumental Solo'] : [];
     return {
       normalizedSeconds,
-      labels: ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Bridge', 'Final Chorus'],
-      stanzaLimit: 6,
-      allowAutoSolo: true,
-      shortRoadmap: 'intro, verse 1, pre-chorus, chorus, verse 2, bridge, final chorus, outro',
-      longRoadmap: 'Intro → Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus → Outro',
+      labels,
+      tailLabels,
+      stanzaLimit,
+      allowAutoSolo: false,
+      shortRoadmap: `intro, ${[...labels, ...tailLabels].map((label) => label.toLowerCase()).join(', ')}, outro`,
+      longRoadmap: `Intro → ${[...labels, ...tailLabels].join(' → ')} → Outro`,
     };
   }
 
@@ -3542,18 +3514,106 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   // separated by one or more blank lines. Bracket-only blocks (e.g. "[Intro]")
   // and pure dashes/decoration are ignored. Mirrors the same splitter that
   // formatLyricsWithStructure uses so the count matches what Suno would receive.
+  function splitLyricStanzas(text: string): string[] {
+    if (!text || !text.trim()) return [];
+    return text
+      .split(/\n{2,}/)
+      .map((stanza) => stanza
+        .split('\n')
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0 && !/^[\-‐‑‒–—―⸺⸻_~•·]+$/.test(line))
+        .join('\n')
+        .trim())
+      .filter(Boolean);
+  }
+
   function countLyricStanzas(text: string): number {
-    if (!text || !text.trim()) return 0;
-    const blocks = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
-    let count = 0;
-    for (const block of blocks) {
-      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
-      const hasContent = lines.some((l) =>
-        !/^\[[^\]]+\]$/.test(l) && !/^[\-‐‑‒–—―⸺⸻_~•·]+$/.test(l)
-      );
-      if (hasContent) count++;
+    return splitLyricStanzas(text).length;
+  }
+
+  function hasStructuredLyricLabels(text: string): boolean {
+    return /\[[a-zA-Z]/.test(normalizeUserParens(text));
+  }
+
+  function scoreLyricBlockMerge(left: string, right: string): number {
+    const leftLines = left.split('\n').map((line) => line.trim()).filter(Boolean);
+    const rightLines = right.split('\n').map((line) => line.trim()).filter(Boolean);
+    const leftText = leftLines.join(' ');
+    const rightText = rightLines.join(' ');
+    const leftChars = leftText.replace(/\s+/g, '').length;
+    const rightChars = rightText.replace(/\s+/g, '').length;
+    const leftShort = leftLines.length <= 2 || leftChars <= 72;
+    const rightShort = rightLines.length <= 2 || rightChars <= 72;
+    const leftMicro = leftLines.length <= 1 || leftChars <= 38;
+    const rightMicro = rightLines.length <= 1 || rightChars <= 38;
+    const leftArabic = /[\u0600-\u06FF]/.test(leftText);
+    const rightArabic = /[\u0600-\u06FF]/.test(rightText);
+    const leftHangul = /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/.test(leftText);
+    const rightHangul = /[\u1100-\u11FF\u3130-\u318F\uAC00-\uD7AF]/.test(rightText);
+    const rightStartsSoft = /^[a-z(]/.test(rightLines[0] ?? '');
+    const leftTrailingCarry = /(?:…|\.\.\.|[,،:;])\s*$/.test(leftLines[leftLines.length - 1] ?? '');
+    let score = 0;
+    if (leftMicro || rightMicro) score += 4;
+    if (leftShort && rightShort) score += 3;
+    const totalLines = leftLines.length + rightLines.length;
+    if (totalLines <= 4) score += 2;
+    else if (totalLines <= 6) score += 1;
+    if (leftTrailingCarry || rightStartsSoft) score += 2;
+    if (leftArabic !== rightArabic) score += 1;
+    if (leftHangul !== rightHangul) score += 1;
+    if (leftChars + rightChars > 180) score -= 1;
+    if (leftLines.length >= 4 && rightLines.length >= 4) score -= 3;
+    if (leftChars >= 120 && rightChars >= 120) score -= 2;
+    return score;
+  }
+
+  function mergeLyricStanzas(blocks: string[], minScore: number, maxSections?: number): string[] {
+    const merged = [...blocks];
+    while (merged.length > 1 && (maxSections === undefined || merged.length > maxSections)) {
+      let bestIndex = -1;
+      let bestScore = Number.NEGATIVE_INFINITY;
+      for (let i = 0; i < merged.length - 1; i += 1) {
+        const score = scoreLyricBlockMerge(merged[i], merged[i + 1]);
+        if (score > bestScore) {
+          bestScore = score;
+          bestIndex = i;
+        }
+      }
+      if (bestIndex < 0 || bestScore < minScore) break;
+      merged.splice(bestIndex, 2, `${merged[bestIndex]}\n${merged[bestIndex + 1]}`);
     }
-    return count;
+    return merged;
+  }
+
+  function hasPlayableInstrumentSelection(instruments: string[]): boolean {
+    return instruments.some((inst) => {
+      const lower = inst.trim().toLowerCase();
+      return lower.length > 0 && lower !== 'vocal harmony' && lower !== 'group chant';
+    });
+  }
+
+  function shouldAddInstrumentalSolo(targetSeconds: number, sectionCount: number, instruments: string[]): boolean {
+    const normalizedSeconds = targetSeconds <= 30 ? 30 : targetSeconds <= 60 ? 60 : targetSeconds <= 90 ? 90 : targetSeconds <= 120 ? 120 : targetSeconds <= 150 ? 150 : 200;
+    if (normalizedSeconds < 150) return false;
+    if (sectionCount < 6) return false;
+    return hasPlayableInstrumentSelection(instruments);
+  }
+
+  function buildSmartLyricStructure(text: string, targetSeconds: number, instruments: string[] = []) {
+    const rawBlocks = splitLyricStanzas(text);
+    const naturalBlocks = mergeLyricStanzas(rawBlocks, 6);
+    const targetPlan = getKhalijiStructurePlan(targetSeconds);
+    const stanzas = naturalBlocks.length > targetPlan.stanzaLimit
+      ? mergeLyricStanzas(naturalBlocks, Number.NEGATIVE_INFINITY, targetPlan.stanzaLimit)
+      : naturalBlocks;
+    const includeSolo = shouldAddInstrumentalSolo(targetSeconds, stanzas.length, instruments);
+    return {
+      rawBlocks,
+      naturalBlocks,
+      stanzas,
+      includeSolo,
+      structurePlan: getKhalijiStructurePlan(targetSeconds, stanzas.length, includeSolo),
+    };
   }
 
   // Map a stanza count to the minimum duration tier that can fit it without
@@ -3565,7 +3625,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     if (n <= 3) return 60;
     if (n <= 4) return 90;
     if (n <= 5) return 120;
-    return 150;
+    if (n <= 6) return 150;
+    if (n <= 7) return 200;
+    return 201;
   }
 
   function buildAutoTempoTag(style: string | null, rhythm: string | null, moods: string[], targetSeconds: number): string {
@@ -4179,7 +4241,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return rawTag;
   }
 
-  function buildKhalijiControlBlock() {
+  function buildKhalijiControlBlock(durationSeconds: number = duration, structuredSectionCount?: number, includeSolo: boolean = false) {
     const primaryStyle = effectiveIncludeTags[0] ?? null;
     const rawStyleAnchor = primaryStyle ? (STYLE_ANCHORS[primaryStyle] ?? primaryStyle) : null;
     const styleAnchor = rawStyleAnchor ? normalizeKhalijiPromptToken(rawStyleAnchor) : null;
@@ -4197,7 +4259,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const primaryRhythm = selectedRhythms[0] ?? (gccAnchor ? normalizeKhalijiPromptToken(RHYTHM_LABELS[gccAnchor.rhythm] ?? gccAnchor.rhythm) : null);
     const supportingRhythms = primaryRhythm && selectedRhythms[0] === primaryRhythm ? selectedRhythms.slice(1) : selectedRhythms;
     const selectedMoods = moodTags.map((tag) => normalizeKhalijiPromptToken(tag));
-    const structurePlan = getKhalijiStructurePlan(duration);
+    const structurePlan = getKhalijiStructurePlan(durationSeconds, structuredSectionCount, includeSolo);
     const freeText = styleText.trim() ? normalizeKhalijiPromptToken(styleText.trim()) : null;
     const tempoTag = tempoOverride.trim() ? normalizeKhalijiPromptToken(tempoOverride.trim()) : buildAutoTempoTag(primaryStyle, primaryRhythm, selectedMoods, structurePlan.normalizedSeconds);
     const keyTag = keyOverride.trim() || buildAutoKeyTag(primaryStyle, primaryRhythm, selectedMoods);
@@ -4819,21 +4881,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     }
 
     // Otherwise auto-build full structure from duration plan.
-    const stanzas = text
-      .split(/\n{2,}/)
-      .map((stanza) => stanza
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !/^[\-‐‑‒–—―⸺⸻_~•·]+$/.test(line))
-        .join('\n')
-        .trim())
-      .filter(Boolean);
-    const structurePlan = getKhalijiStructurePlan(targetSeconds);
-    const arrangedStanzas = stanzas.slice(0, structurePlan.stanzaLimit);
-
-    const soloTag: string | null = structurePlan.allowAutoSolo && arrangedStanzas.length >= structurePlan.stanzaLimit && selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant')
-      ? (useRecipe ? enrichSectionTag('[Instrumental Solo]', genreFamily, selectedInstruments) : '[Instrumental Solo]')
-      : null;
+    const smartStructure = buildSmartLyricStructure(text, targetSeconds, selectedInstruments);
+    const structurePlan = smartStructure.structurePlan;
+    const arrangedStanzas = smartStructure.stanzas;
 
     const labels = structurePlan.labels;
     const structured: string[] = [];
@@ -4850,7 +4900,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       structured.push(`${baseLabel}\n${stanza}`);
     });
 
-    if (soloTag) structured.push(soloTag);
+    structurePlan.tailLabels.forEach((tailLabel) => {
+      const baseTailLabel = useRecipe
+        ? enrichSectionTag(`[${tailLabel}]`, genreFamily, selectedInstruments)
+        : `[${tailLabel}]`;
+      structured.push(baseTailLabel);
+    });
+
     const hasOutro = structured.some((s) => /^\[Outro\b/.test(s));
     if (!hasOutro) {
       const outroTag = useRecipe ? enrichSectionTag('[Outro]', genreFamily, selectedInstruments) : '[Outro]';
@@ -4887,25 +4943,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // Returns the duration to use locally for this generation (state update
     // is async, so we can't rely on `duration` after setDuration).
     let effectiveDuration = duration;
-    if (vocalType !== 'none' && lyricsText.trim()) {
-      const stanzaCount = countLyricStanzas(lyricsText);
-      const requiredDuration = minDurationForStanzas(stanzaCount);
+    const normalizedLyrics = lyricsText.trim() ? normalizeUserParens(lyricsText.trim()) : '';
+    const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(normalizedLyrics) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
+    if (shouldSmartStructureLyrics) {
+      const smartCapacity = buildSmartLyricStructure(normalizedLyrics, 200, instrumentTags);
+      const sectionCount = smartCapacity.stanzas.length;
+      const requiredDuration = minDurationForStanzas(sectionCount);
       if (requiredDuration > duration) {
-        if (autoLabelLyrics) {
-          effectiveDuration = requiredDuration;
-          setDuration(requiredDuration);
-          toast.success(isAr
-            ? `تم تمديد المدة تلقائيًا إلى ${requiredDuration} ثانية لتناسب ${stanzaCount} مقاطع.`
-            : `Auto-extended duration to ${requiredDuration}s to fit your ${stanzaCount} sections.`);
-        } else {
-          const currentCap = minDurationForStanzas(stanzaCount) === duration
-            ? stanzaCount
-            : (duration <= 30 ? 2 : duration <= 60 ? 3 : duration <= 90 ? 4 : duration <= 120 ? 5 : 6);
-          toast.error(isAr
-            ? `كلماتك تحتوي على ${stanzaCount} مقاطع لكن ${duration} ثانية تسع ${currentCap} فقط. زِد المدة إلى ${requiredDuration} ثانية، أو فعّل التسمية التلقائية، أو قلّص الكلمات.`
-            : `Your lyrics have ${stanzaCount} sections but ${duration}s only fits ${currentCap}. Increase duration to ${requiredDuration}s, enable auto-label, or trim lyrics.`);
-          return;
-        }
+        effectiveDuration = requiredDuration;
+        setDuration(requiredDuration);
+        toast.success(isAr
+          ? `تمت إعادة هيكلة الكلمات تلقائيًا ورفع المدة إلى ${requiredDuration} ثانية لتناسب ${sectionCount} أقسام.`
+          : `Smart-structured your lyrics and extended duration to ${requiredDuration}s to fit ${sectionCount} sections.`);
       }
     }
 
@@ -4935,11 +4984,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const instrumental = vocalType === 'none';
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
-      const khalijiControlBlock = buildKhalijiControlBlock();
-      const kieStyle = khalijiControlBlock.styleString;
-      const durationTarget = Math.min(200, effectiveDuration);
-
       const rawLyrics = lyricsText.trim() || styleText.trim();
+      const durationTarget = Math.min(200, effectiveDuration);
+      const smartSectionPlan = shouldSmartStructureLyrics
+        ? buildSmartLyricStructure(rawLyrics, durationTarget, instrumentTags)
+        : null;
+      const khalijiControlBlock = buildKhalijiControlBlock(durationTarget, smartSectionPlan?.stanzas.length, smartSectionPlan?.includeSolo ?? false);
+      const kieStyle = khalijiControlBlock.styleString;
       const primaryStyleForCue = effectiveIncludeTags[0] ? (STYLE_ANCHORS[effectiveIncludeTags[0]] ?? '') : '';
       const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
       const genreFamily = getGenreFamily(effectiveIncludeTags, isGccStyleSelected, khalijiControlBlock.family);
@@ -6347,21 +6398,26 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   type="button"
                   onClick={() => {
                     try {
-                      const cb = buildKhalijiControlBlock();
                       const instrumental = vocalType === 'none';
                       const vocalGender: 'm' | 'f' | undefined =
                         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
                       // Mirror handleGenerate's capacity check: when autoLabelLyrics is ON
                       // and the user's lyrics exceed capacity, preview the auto-bumped duration
                       // so what's shown matches what will actually be generated.
+                      const rawLyrics = lyricsText.trim() || styleText.trim();
+                      const normalizedLyrics = lyricsText.trim() ? normalizeUserParens(lyricsText.trim()) : '';
+                      const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(normalizedLyrics) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
                       let previewEffectiveDuration = duration;
-                      if (vocalType !== 'none' && lyricsText.trim() && autoLabelLyrics) {
-                        const stanzaCount = countLyricStanzas(lyricsText);
-                        const requiredDuration = minDurationForStanzas(stanzaCount);
+                      if (shouldSmartStructureLyrics) {
+                        const smartCapacity = buildSmartLyricStructure(normalizedLyrics, 200, instrumentTags);
+                        const requiredDuration = minDurationForStanzas(smartCapacity.stanzas.length);
                         if (requiredDuration > duration) previewEffectiveDuration = requiredDuration;
                       }
                       const durationTarget = Math.min(200, previewEffectiveDuration);
-                      const rawLyrics = lyricsText.trim() || styleText.trim();
+                      const smartSectionPlan = shouldSmartStructureLyrics
+                        ? buildSmartLyricStructure(rawLyrics, durationTarget, instrumentTags)
+                        : null;
+                      const cb = buildKhalijiControlBlock(durationTarget, smartSectionPlan?.stanzas.length, smartSectionPlan?.includeSolo ?? false);
                       const primaryStyleForCue = effectiveIncludeTags[0] ? (STYLE_ANCHORS[effectiveIncludeTags[0]] ?? '') : '';
                       const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
                       const previewGenreFamily = getGenreFamily(effectiveIncludeTags, isGccStyleSelected, cb.family);

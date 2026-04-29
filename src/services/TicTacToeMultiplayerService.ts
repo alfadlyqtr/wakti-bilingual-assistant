@@ -20,6 +20,8 @@ export interface TttGameRow {
   status: 'waiting' | 'playing' | 'host_won' | 'guest_won' | 'draw' | 'abandoned';
   winner_user_id: string | null;
   winning_line: number[] | null;
+  result_reason: string | null;
+  abandoned_by_user_id: string | null;
   last_move_at: string | null;
   created_at: string;
   updated_at: string;
@@ -77,6 +79,12 @@ export const TicTacToeMultiplayerService = {
     const { data, error } = await db.rpc('tictactoe_rematch', { p_code: code });
     if (error) throw error;
     return data as string;
+  },
+
+  async leaveGame(code: string): Promise<TttGameRow> {
+    const { data, error } = await db.rpc('tictactoe_leave_game', { p_code: code });
+    if (error) throw error;
+    return data as TttGameRow;
   },
 
   /**
