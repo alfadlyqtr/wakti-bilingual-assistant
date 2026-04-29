@@ -24,6 +24,7 @@ export interface TttGameRow {
   created_at: string;
   updated_at: string;
   ended_at: string | null;
+  rematch_code: string | null;
 }
 
 export const TicTacToeMultiplayerService = {

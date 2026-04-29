@@ -13,6 +13,7 @@ import {
 interface Props {
   code: string;
   onLeave: () => void;
+  onRematch: (newCode: string) => void;
 }
 
 /**
@@ -21,7 +22,7 @@ interface Props {
  * - Sends moves via INSERT into tictactoe_moves.
  * - Server-side triggers validate moves and apply board state.
  */
-export function TicTacToeMultiplayerGame({ code, onLeave }: Props) {
+export function TicTacToeMultiplayerGame({ code, onLeave, onRematch }: Props) {
   const { language } = useTheme();
   const { user } = useAuth();
   const isAr = language === 'ar';
@@ -44,6 +45,10 @@ export function TicTacToeMultiplayerGame({ code, onLeave }: Props) {
 
     const unsubscribe = TicTacToeMultiplayerService.subscribeToGame(code, (row) => {
       setGame(row);
+      // If either player kicks off a rematch, switch the whole component to the new code.
+      if (row.rematch_code) {
+        onRematch(row.rematch_code);
+      }
     });
 
     // Light polling fallback every 2s in case realtime drops a beat (matches Letters pattern)
@@ -97,14 +102,10 @@ export function TicTacToeMultiplayerGame({ code, onLeave }: Props) {
     setRematching(true);
     try {
       const newCode = await TicTacToeMultiplayerService.rematch(code);
-      // Hand the new code back via onLeave + open path: parent decides routing.
-      // Simplest: replace the current code prop by leaving and re-entering via clipboard.
-      await navigator.clipboard.writeText(newCode).catch(() => {});
-      toast.success(
-        isAr ? `لعبة جديدة: ${newCode} (تم النسخ)` : `New game: ${newCode} (copied)`,
-      );
-      // Small UX: bounce the user back to the lobby with the code already shared
-      onLeave();
+      // The DB also stamps rematch_code on the old row, so the realtime handler
+      // above will fire onRematch for both players. Calling it directly here too
+      // makes the host transition snappier (no realtime round-trip wait).
+      onRematch(newCode);
     } catch (e: any) {
       toast.error(e?.message || (isAr ? 'تعذر بدء لعبة جديدة' : 'Rematch failed'));
     } finally {

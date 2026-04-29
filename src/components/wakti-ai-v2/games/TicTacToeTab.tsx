@@ -73,6 +73,7 @@ export function TicTacToeTab({ onBack }: { onBack: () => void }) {
     <TicTacToeMultiplayerGame
       code={screen.code}
       onLeave={() => setScreen({ kind: 'lobby' })}
+      onRematch={(newCode) => setScreen({ kind: 'play', code: newCode })}
     />
   );
 }
