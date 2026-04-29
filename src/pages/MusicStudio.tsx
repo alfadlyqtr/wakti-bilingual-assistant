@@ -1386,6 +1386,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [title, setTitle] = useState('');
   const [styleText, setStyleText] = useState('');
   const [lyricsText, setLyricsText] = useState('');
+  const [autoLabelLyrics, setAutoLabelLyrics] = useState(true); // ON by default; power users can disable
   const [variations, setVariations] = useState(1);
   const [duration, setDuration] = useState(30); // seconds
   
@@ -3610,6 +3611,288 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       .replace(/\bkhaliji\b/gi, 'Khaleeji');
   }
 
+  // ============================================================================
+  // UNIVERSAL GENRE VOCAB — used by section enrichment for ALL track families.
+  // Two field types:
+  //   • Function fields (introScene, outroFade): ALWAYS lead with the user's
+  //     actual instrument picks. Genre-typical instruments only appear as a
+  //     fallback when the user picked zero instruments.
+  //   • Pure descriptor fields (chorusLift, verseAdj, bridgeChar, preChorusChar,
+  //     vocalCueAdj, vocalCueDelivery): genre-mood adjectives only. NEVER name
+  //     instruments — that's the user's domain.
+  // ============================================================================
+  type GenreFamily =
+    | 'khaleeji-pop' | 'khaleeji-heritage' | 'khaleeji-urban' | 'khaleeji-party'
+    | 'pop' | 'rock' | 'urban' | 'electronic' | 'roots' | 'jazz-blues'
+    | 'classical' | 'reggae' | 'metal' | 'punk' | 'world' | 'anasheed'
+    | 'generic';
+
+  type SectionVocab = {
+    introScene: (insts: string[]) => string;
+    outroFade: (insts: string[]) => string;
+    chorusLift: string;
+    verseAdj: string;
+    bridgeChar: string;
+    preChorusChar: string;
+    vocalCueAdj: string;
+    vocalCueDelivery: string;
+  };
+
+  function describeUserInstruments(insts: string[], max: number = 2): string | null {
+    if (!insts || insts.length === 0) return null;
+    const taken = insts.slice(0, max);
+    if (taken.length === 1) return taken[0];
+    if (taken.length === 2) return `${taken[0]} and ${taken[1]}`;
+    return `${taken.slice(0, -1).join(', ')}, and ${taken[taken.length - 1]}`;
+  }
+
+  const GENRE_VOCAB: Record<GenreFamily, SectionVocab> = {
+    'khaleeji-pop': {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, atmospheric and warm Khaleeji entrance`
+        : `atmospheric Khaleeji pad, warm pop entrance`,
+      outroFade: (insts) => `slow reverb fade on ${insts[0] || 'warm pad'}, refined Khaleeji finish`,
+      chorusLift: 'soaring, confident, anthemic',
+      verseAdj: 'sparse, intimate, melodic',
+      bridgeChar: 'stripped breakdown with close-mic vocals',
+      preChorusChar: 'rising tension with layered harmonies',
+      vocalCueAdj: 'Polished',
+      vocalCueDelivery: 'warm Khaleeji timbre with clean hook delivery',
+    },
+    'khaleeji-heritage': {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, intimate jalsa entrance`
+        : `oud and mirwas entrance, traditional jalsa atmosphere`,
+      outroFade: (insts) => `natural acoustic fade on ${insts[0] || 'oud'}, mawwal tail`,
+      chorusLift: 'soulful, melismatic, expressive',
+      verseAdj: 'intimate, emotive, conversational',
+      bridgeChar: 'sparse mawwal interlude with quarter-tone ornaments',
+      preChorusChar: 'building emotion with rising melisma',
+      vocalCueAdj: 'Warm',
+      vocalCueDelivery: 'traditional jalsa delivery with mawwal ornaments',
+    },
+    'khaleeji-urban': {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, modern Khaleeji urban entrance`
+        : `808 sub and trap drums, modern Khaleeji urban atmosphere`,
+      outroFade: (insts) => `rolling hi-hat outro on ${insts[0] || '808 bass'}`,
+      chorusLift: 'hard-hitting, punchy, hook-locked',
+      verseAdj: 'tight rhythmic flow with melodic ad-libs',
+      bridgeChar: 'half-time beat switch with sparse texture',
+      preChorusChar: 'stacked vocal chops with rising hi-hat roll',
+      vocalCueAdj: 'Confident',
+      vocalCueDelivery: 'Khaleeji urban flow with melodic flourishes',
+    },
+    'khaleeji-party': {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, celebratory Khaleeji entrance`
+        : `percussion ensemble entrance, festive Khaleeji atmosphere`,
+      outroFade: (insts) => `crowd-energy fade on ${insts[0] || 'percussion'}, celebratory tail`,
+      chorusLift: 'celebratory, communal, anthem-ready',
+      verseAdj: 'rhythmic, energetic, chant-friendly',
+      bridgeChar: 'percussion-driven breakdown with handclaps',
+      preChorusChar: 'building call-and-response with rising percussion',
+      vocalCueAdj: 'Energetic',
+      vocalCueDelivery: 'celebratory Khaleeji hook delivery',
+    },
+    pop: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, atmospheric and shimmering entrance`
+        : `atmospheric synth pad, shimmering pop entrance`,
+      outroFade: (insts) => `lingering reverb fade on ${insts[0] || 'pad'} with vocal tail`,
+      chorusLift: 'soaring, anthemic, hook-driven',
+      verseAdj: 'sparse, intimate, melodic',
+      bridgeChar: 'stripped breakdown with close-mic vocals',
+      preChorusChar: 'rising tension with layered harmonies and drum build',
+      vocalCueAdj: 'Polished',
+      vocalCueDelivery: 'clean hook delivery with subtle breathy warmth',
+    },
+    rock: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, driving and gritty entrance`
+        : `driving electric guitar riff with punchy kick, raw rock entrance`,
+      outroFade: (insts) => `sustained feedback fade on ${insts[0] || 'guitar'} with crash cymbal swell`,
+      chorusLift: 'explosive, full-band, climactic',
+      verseAdj: 'dynamic, gritty, driving',
+      bridgeChar: 'half-time breakdown with clean guitar texture',
+      preChorusChar: 'building drum roll with rising riff tension',
+      vocalCueAdj: 'Gritty',
+      vocalCueDelivery: 'full-throated rock delivery with raw edge',
+    },
+    urban: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, knocking and rhythmic entrance`
+        : `knocking 808 sub with crisp trap hi-hats, urban entrance`,
+      outroFade: (insts) => `rolling hi-hat outro with ${insts[0] || '808'} decay`,
+      chorusLift: 'hard-hitting, punchy, hook-locked',
+      verseAdj: 'tight rhythmic flow with melodic ad-libs',
+      bridgeChar: 'half-time beat switch with sparse texture',
+      preChorusChar: 'stacked vocal chops with rising hi-hat roll',
+      vocalCueAdj: 'Confident',
+      vocalCueDelivery: 'hip-hop flow with melodic hooks and rhythmic ad-libs',
+    },
+    electronic: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, filtered and rising entrance`
+        : `filtered synth arpeggio with rising tension, electronic entrance`,
+      outroFade: (insts) => `reverb-drenched fade on ${insts[0] || 'synth'} with atmospheric tail`,
+      chorusLift: 'euphoric, full-drop, climactic',
+      verseAdj: 'groove-locked, pulsing, hypnotic',
+      bridgeChar: 'filter sweep breakdown with atmospheric pads',
+      preChorusChar: 'white-noise riser with building kick drum',
+      vocalCueAdj: 'Processed',
+      vocalCueDelivery: 'ethereal hook delivery with atmospheric texture',
+    },
+    roots: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, warm and natural entrance`
+        : `fingerpicked acoustic guitar with brushed snare, warm folk entrance`,
+      outroFade: (insts) => `natural strum fade on ${insts[0] || 'acoustic guitar'} with harmonica swell`,
+      chorusLift: 'harmonized, warm, uplifting',
+      verseAdj: 'warm, storytelling, conversational',
+      bridgeChar: 'intimate breakdown with solo instrument',
+      preChorusChar: 'vocal stack build with rising strum intensity',
+      vocalCueAdj: 'Warm',
+      vocalCueDelivery: 'natural storytelling delivery with conversational tone',
+    },
+    'jazz-blues': {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, smoky and swinging entrance`
+        : `walking double bass with brushed drums and piano, smoky jazz entrance`,
+      outroFade: (insts) => `relaxed fade on ${insts[0] || 'piano'} with bass hold`,
+      chorusLift: 'bluesy, soulful, swinging',
+      verseAdj: 'conversational, smoky, expressive',
+      bridgeChar: 'walking bass breakdown with sparse piano',
+      preChorusChar: 'building horn section with rising swing',
+      vocalCueAdj: 'Smoky',
+      vocalCueDelivery: 'expressive blues phrasing with soulful ornaments',
+    },
+    classical: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, sweeping and refined entrance`
+        : `sweeping strings entrance with woodwind accents, refined classical opening`,
+      outroFade: (insts) => `dynamic fade on ${insts[0] || 'strings'} with distant counter-melody`,
+      chorusLift: 'majestic, crescendoing, full-orchestra',
+      verseAdj: 'flowing, lyrical, emotive',
+      bridgeChar: 'quiet interlude with solo instrument',
+      preChorusChar: 'dynamic swell with timpani roll and rising strings',
+      vocalCueAdj: 'Refined',
+      vocalCueDelivery: 'operatic phrasing with controlled vibrato',
+    },
+    reggae: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, laid-back and grooving entrance`
+        : `offbeat skank guitar with deep dub bass, laid-back reggae entrance`,
+      outroFade: (insts) => `dub fade on ${insts[0] || 'bass'} with drum echo`,
+      chorusLift: 'uplifting, celebratory, communal',
+      verseAdj: 'laid-back, rhythmic, conscious',
+      bridgeChar: 'dub breakdown with melodica echo',
+      preChorusChar: 'building groove with horn stabs',
+      vocalCueAdj: 'Laid-back',
+      vocalCueDelivery: 'warm reggae phrasing with conscious flow',
+    },
+    metal: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, downtuned and aggressive entrance`
+        : `downtuned distorted riff with double-kick drums, aggressive metal entrance`,
+      outroFade: (insts) => `sustained feedback on ${insts[0] || 'guitar'} with cymbal swell`,
+      chorusLift: 'thunderous, earth-shaking, anthemic',
+      verseAdj: 'tight, aggressive, punchy',
+      bridgeChar: 'slow half-time breakdown with clean guitar',
+      preChorusChar: 'building blast beat with rising guitar tension',
+      vocalCueAdj: 'Powerful',
+      vocalCueDelivery: 'aggressive metal delivery with melodic restraint',
+    },
+    punk: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, fast and urgent entrance`
+        : `four-on-the-floor drums with power-chord assault, urgent punk entrance`,
+      outroFade: (insts) => `abrupt cutoff on ${insts[0] || 'drums'} with feedback`,
+      chorusLift: 'shout-along, raw, anthemic',
+      verseAdj: 'fast, urgent, aggressive',
+      bridgeChar: 'stripped shouted breakdown',
+      preChorusChar: 'rising urgency with gang vocals build',
+      vocalCueAdj: 'Raw shouty',
+      vocalCueDelivery: 'snarling punk delivery with urgent edge',
+    },
+    world: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, polyrhythmic and vibrant entrance`
+        : `polyrhythmic percussion ensemble with traditional lead, vibrant world entrance`,
+      outroFade: (insts) => `natural fade on ${insts[0] || 'percussion'} with vocal ad-libs`,
+      chorusLift: 'vibrant, celebratory, communal',
+      verseAdj: 'rhythmic, vibrant, expressive',
+      bridgeChar: 'rhythmic breakdown with hand percussion',
+      preChorusChar: 'call-and-response build with rising percussion',
+      vocalCueAdj: 'Vibrant',
+      vocalCueDelivery: 'expressive world-music phrasing with regional ornaments',
+    },
+    anasheed: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, reverent and unison entrance`
+        : `unison choir entrance with reverent tone, devotional opening`,
+      outroFade: (insts) => `reverent fade on ${insts[0] || 'choir'} with reverb tail`,
+      chorusLift: 'swelling unison call, devotional',
+      verseAdj: 'melismatic, reverent, flowing',
+      bridgeChar: 'a-cappella interlude with harmonized whisper',
+      preChorusChar: 'building harmonization with rising unison',
+      vocalCueAdj: 'Reverent',
+      vocalCueDelivery: 'melismatic anasheed phrasing with devotional warmth',
+    },
+    generic: {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, atmospheric and warm entrance`
+        : `atmospheric pad, soft instrumental entrance`,
+      outroFade: (insts) => `natural fade on ${insts[0] || 'instrument'} with reverb tail`,
+      chorusLift: 'confident, uplifting, hook-driven',
+      verseAdj: 'melodic, expressive, engaging',
+      bridgeChar: 'intimate breakdown with sparse texture',
+      preChorusChar: 'building tension with layered harmonies',
+      vocalCueAdj: 'Expressive',
+      vocalCueDelivery: 'clear melodic delivery with natural warmth',
+    },
+  };
+
+  // Detector — picks the GenreFamily for the user's primary chip.
+  // Khaleeji chips route to subfamilies (khaleeji-pop / heritage / urban / party).
+  // All other chips classified by tag sets (mirrors handleGenerate's styleWeight logic).
+  function getGenreFamily(
+    effectiveIncludeTags: string[],
+    isGccStyleSelected: boolean,
+    khalijiSubfamily: KhalijiFamily,
+  ): GenreFamily {
+    if (isGccStyleSelected) {
+      return `khaleeji-${khalijiSubfamily}` as GenreFamily;
+    }
+    const tags = effectiveIncludeTags;
+    const has = (set: Set<string>) => tags.some((t) => set.has(t));
+
+    if (tags.some((t) => t === 'Anasheed' || t === 'أناشيد')) return 'anasheed';
+    const CLASSICAL_KEYS = new Set(['classical','baroque','romantic','impressionist','minimalist','contemporary classical','opera','chamber music','symphony','concerto','sonata']);
+    if (has(CLASSICAL_KEYS)) return 'classical';
+    const REGGAE_KEYS = new Set(['reggae','dancehall','dub','ska','rocksteady','reggaeton']);
+    if (has(REGGAE_KEYS)) return 'reggae';
+    const METAL_KEYS = new Set(['heavy metal','thrash metal','Death Metal','Black Metal','Power Metal','Doom Metal','Gothic Metal','Symphonic Metal','Progressive Metal','Speed Metal']);
+    if (has(METAL_KEYS)) return 'metal';
+    const PUNK_KEYS = new Set(['punk rock','Pop Punk','Hardcore Punk','Ska Punk','Emo','Screamo','New Wave']);
+    if (has(PUNK_KEYS)) return 'punk';
+    const JAZZ_BLUES_KEYS = new Set(['jazz','Smooth Jazz','Bebop','Swing','Big Band','Fusion','Cool Jazz','Free Jazz','Latin Jazz','Acid Jazz','blues','Delta Blues','Chicago Blues','Electric Blues','Country Blues']);
+    if (has(JAZZ_BLUES_KEYS)) return 'jazz-blues';
+    const ELECTRONIC_KEYS = new Set(['Lo-Fi','House','Deep House','Tech House','Trance','Techno','Dubstep','Drum & Bass','EDM','Electro','Hardcore','IDM','ambient','synthwave','chillwave','Vaporwave','Glitch','Witch House','Grime','UK Garage','2-Step','Electro Swing','Chiptune']);
+    if (has(ELECTRONIC_KEYS)) return 'electronic';
+    const URBAN_KEYS = new Set(['R&B','soul','Neo-Soul','Contemporary R&B','Motown','New Jack Swing','Quiet Storm','Blue-eyed Soul','Funk','disco','hip hop','rap','Trap','Drill','Boom Bap','Conscious Hip Hop','Gangsta Rap','East Coast Hip Hop','West Coast Hip Hop','Southern Hip Hop','Alternative Hip Hop','Cloud Rap','Crunk','Afrobeats','Afrobeat','Reggaeton','Latin','Latin Rock','Salsa','Bachata','Merengue','Tango','Samba','Cumbia','Bossa Nova','Bollywood','Bhangra']);
+    if (has(URBAN_KEYS)) return 'urban';
+    const ROCK_KEYS = new Set(['rock','Classic Rock','rock and roll','soft rock','Hard Rock','alternative rock','indie rock','Progressive Rock','Psychedelic Rock','Garage Rock','Glam Rock','grunge','Britpop','Shoegaze','Post-Rock','Math Rock','Surf Rock','Dream Pop']);
+    if (has(ROCK_KEYS)) return 'rock';
+    const ROOTS_KEYS = new Set(['country','Country Pop','Outlaw Country','Country Rock','Alternative Country','Honky Tonk','Western Swing','Americana','Contemporary Country','bluegrass','folk','Indie Folk','Folk Rock','Folk Pop','Folk Punk','Protest Folk']);
+    if (has(ROOTS_KEYS)) return 'roots';
+    const WORLD_MISC_KEYS = new Set(['Flamenco','Fado','Celtic','gospel','Ragtime','Zydeco','Cajun','Industrial']);
+    if (has(WORLD_MISC_KEYS)) return 'world';
+    const POP_KEYS = new Set(['pop','Dance Pop','Teen Pop','Power Pop','Pop Rock','Indie Pop','Bubblegum Pop','K-Pop','J-Pop','Latin Pop','80s pop','90s pop','Synthpop','Electropop']);
+    if (has(POP_KEYS)) return 'pop';
+    return 'generic';
+  }
+
   // Family vocabulary table — drives the wording of the 4-sentence brief
   // and the section enrichers. Same chip → same words (deterministic).
   const FAMILY_VOCAB: Record<KhalijiFamily, {
@@ -3736,41 +4019,34 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   // Vocal character cue — ONE line at the very top of the prompt.
-  // Family + gender aware. Replaces the old "[Khaleeji male vocal, …]".
-  function buildVocalCharacterCue(family: KhalijiFamily, vocalType: 'male' | 'female' | 'none'): string | null {
+  // Universal: uses GENRE_VOCAB for all 17 families (Khaleeji subfamilies + global genres).
+  function buildVocalCharacterCue(genreFamily: GenreFamily, vocalType: 'male' | 'female' | 'none'): string | null {
     if (vocalType === 'none') return null;
     const cap = vocalType === 'male' ? 'male' : 'female';
-    switch (family) {
-      case 'pop':
-        return `[Smooth polished ${cap} vocal, warm Khaleeji timbre, clean ${vocalType === 'male' ? 'hook' : 'melodic'} delivery]`;
-      case 'heritage':
-        return `[Warm ${cap} Khaleeji voice, traditional jalsa delivery with mawwal ornaments]`;
-      case 'urban':
-        return `[Confident ${cap} vocal, rhythmic Khaleeji flow with melodic flourishes]`;
-      case 'party':
-        return `[Energetic ${cap} Khaleeji vocal, celebratory hook delivery]`;
-    }
+    const v = GENRE_VOCAB[genreFamily];
+    return `[${v.vocalCueAdj} ${cap} vocal, ${v.vocalCueDelivery}]`;
   }
 
   // Section tag enricher — upgrades [Chorus] → [Chorus — full arrangement, confident lift]
   // for known structural tags. Custom user tags ([Hook Drop], [Final Whisper]) are left alone.
-  function enrichSectionTag(rawTag: string, family: KhalijiFamily, instruments: string[]): string {
+  // Universal: works for all 17 genre families. User instruments always flow into intro/outro tags.
+  function enrichSectionTag(rawTag: string, genreFamily: GenreFamily, instruments: string[]): string {
     const inner = rawTag.replace(/^\[|\]$/g, '').trim();
-    // Already enriched (contains em-dash or colon)
+    // Already enriched (contains em-dash or colon) — user customization respected
     if (/[—:]/.test(inner)) return rawTag;
     const lower = inner.toLowerCase();
-    const v = FAMILY_VOCAB[family];
+    const v = GENRE_VOCAB[genreFamily];
 
-    if (/^intro$/i.test(lower)) return `[Intro — ${v.introScene(instruments)}, soft pulse]`;
-    if (/^outro$/i.test(lower)) return `[Outro — fade on ${v.outroFade(instruments)}]`;
-    if (/^pre[-\s]?chorus$/i.test(lower)) return `[Pre-Chorus — build, layer pads]`;
+    if (/^intro$/i.test(lower)) return `[Intro — ${v.introScene(instruments)}]`;
+    if (/^outro$/i.test(lower)) return `[Outro — ${v.outroFade(instruments)}]`;
+    if (/^pre[-\s]?chorus$/i.test(lower)) return `[Pre-Chorus — ${v.preChorusChar}]`;
     if (/^final\s*chorus$/i.test(lower)) return `[Final Chorus — full arrangement, ${v.chorusLift} climax]`;
     if (/^chorus$/i.test(lower)) return `[Chorus — full arrangement, ${v.chorusLift} lift]`;
-    if (/^bridge$/i.test(lower)) return `[Bridge — breakdown, intimate]`;
+    if (/^bridge$/i.test(lower)) return `[Bridge — ${v.bridgeChar}]`;
     if (/^mini\s*verse$/i.test(lower)) return `[Mini Verse — vocal-forward, ${v.verseAdj}]`;
     if (/^mini\s*chorus$/i.test(lower)) return `[Mini Chorus — compact ${v.chorusLift} payoff]`;
     if (/^verse\s*\d*$/i.test(lower)) return `[${inner} — vocal-forward, ${v.verseAdj}]`;
-    if (/^instrumental\s*solo$/i.test(lower)) return `[Instrumental Solo — ${v.outroFade(instruments)} lead]`;
+    if (/^instrumental\s*solo$/i.test(lower)) return `[Instrumental Solo — ${v.introScene(instruments)} lead]`;
 
     // Custom/unknown tag — respect user creativity, leave alone
     return rawTag;
@@ -4234,9 +4510,80 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'None': 'no beat, free-tempo vocal flow',
     };
 
+  // Normalize user-typed (Bridge), (Outro), (Final Whisper) → [Bridge], [Outro], [Final Whisper].
+  // Suno responds far more reliably to brackets. Only matches single-line section labels (2-40 chars
+  // on their own line) so parenthetical phrases mid-lyric like "(she said softly)" are untouched.
+  function normalizeUserParens(text: string): string {
+    return text.replace(/^[ \t]*\(([^)\n]{2,40})\)[ \t]*$/gm, '[$1]');
+  }
+
+  // Walk lyrics block-by-block. Stanzas already preceded by a [Tag] keep their tag (and we enrich it).
+  // Stanzas without a tag get auto-prepended with a smart positional label that's also enriched.
+  // Heuristic:
+  //   • 1st unlabeled stanza → [Verse 1]
+  //   • 2nd unlabeled stanza → [Chorus] (only if no [Chorus] exists yet AND we already have a verse)
+  //   • 3rd+ unlabeled stanzas → [Verse N] (incrementing)
+  // All auto-added and existing standard labels are passed through enrichSectionTag for genre-aware
+  // descriptors. Unknown tags ([Hook Drop], [Final Whisper], etc.) are preserved untouched.
+  function autoFillUnlabeledStanzas(
+    text: string,
+    genreFamily: GenreFamily,
+    instruments: string[],
+  ): string {
+    const blocks = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+    if (blocks.length === 0) return text;
+
+    // First pass: collect tags already present so we don't duplicate.
+    const usedTags = new Set<string>();
+    for (const block of blocks) {
+      const m = block.match(/^\[([^\]\n—:]+)/);
+      if (m) usedTags.add(m[1].trim().toLowerCase());
+    }
+
+    // Second pass: enrich existing tags, label unlabeled stanzas.
+    const out: string[] = [];
+    let verseCount = 0;
+
+    for (const block of blocks) {
+      if (/^\[[^\]\n]+\]/.test(block)) {
+        // Block already starts with a [Tag] — enrich the leading tag only.
+        const enriched = block.replace(/^\[([^\]\n]+)\]/, (full) =>
+          enrichSectionTag(full, genreFamily, instruments)
+        );
+        out.push(enriched);
+        continue;
+      }
+
+      // Unlabeled stanza — pick a smart positional label.
+      let label: string;
+      if (verseCount === 0 && !usedTags.has('verse 1')) {
+        label = 'Verse 1';
+        verseCount = 1;
+        usedTags.add('verse 1');
+      } else if (!usedTags.has('chorus') && verseCount >= 1) {
+        label = 'Chorus';
+        usedTags.add('chorus');
+      } else {
+        verseCount++;
+        label = `Verse ${verseCount}`;
+        usedTags.add(label.toLowerCase());
+      }
+
+      const enrichedTag = enrichSectionTag(`[${label}]`, genreFamily, instruments);
+      out.push(`${enrichedTag}\n${block}`);
+    }
+
+    return out.join('\n\n');
+  }
+
   // ── Metatag Injector: wraps raw lyrics in Suno V5 structural brackets ──
-  //    Suno format: ONE short vocal cue above [Intro] (not per stanza). Matches working
-  //    community examples like [Deep raspy voice] / [male vocals] — emitted once only.
+  // Universal pipeline:
+  //   STAGE 1: Instrumental fast-path
+  //   STAGE 2: Normalize user parens → brackets
+  //   STAGE 3: Build genre-aware vocal cue
+  //   STAGE 4: PATH A (user labeled some) — enrich + auto-fill gaps
+  //            PATH B (zero labels) — auto-build full structure from duration plan
+  //   STAGE 5: Inject vocal cue at top if missing
   function formatLyricsWithStructure(
     rawLyrics: string,
     isInstrumental: boolean,
@@ -4246,36 +4593,39 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     vocalType: 'male' | 'female' | 'none' = 'none',
     primaryStyleAnchor: string = '',
     family: KhalijiFamily = 'pop',
+    genreFamily: GenreFamily = 'generic',
+    autoLabelLyrics: boolean = true,
   ): string {
+    // STAGE 1: Instrumental fast-path
     if (isInstrumental) {
       return '[Intro]\n[Instrumental Build]\n[Drop]\n[Outro]';
     }
 
-    const text = rawLyrics.trim();
+    let text = rawLyrics.trim();
     if (!text) return text;
 
-    const useRecipe = WAKTI_RECIPE_V1 && isGccStyle;
+    // STAGE 2: Normalize user parens → brackets so they're treated as proper Suno tags.
+    text = normalizeUserParens(text);
 
-    // ── Vocal character cue (top of prompt) ──
-    // Recipe v1: family + gender aware ("[Smooth polished female vocal, …]").
-    // Legacy:   short Khaleeji cue based on heritage/pop heuristic.
-    const recipeCue: string | null = useRecipe ? buildVocalCharacterCue(family, vocalType) : null;
-    const isHeritage = /mawwal/i.test(primaryStyleAnchor);
-    const flavor = isHeritage ? 'warm jalsa delivery' : 'clean hook delivery';
-    const genderWord = vocalType === 'female' ? 'female' : vocalType === 'male' ? 'male' : '';
-    const legacyCue: string | null = isGccStyle && !useRecipe
-      ? (genderWord ? `[Khaleeji ${genderWord} vocal, ${flavor}]` : `[Khaleeji vocal, ${flavor}]`)
-      : null;
-    const vocalCue = recipeCue ?? legacyCue;
+    // Universal enrichment gate — fires for EVERY genre family.
+    const useRecipe = WAKTI_RECIPE_V1;
+    void primaryStyleAnchor; void family; // legacy params kept for backward compat / future use
 
-    // ── Path A: User already wrote structural brackets ──
-    // Don't bail. Enrich known structural tags in place (Recipe v1 only),
-    // and inject the vocal cue at the top if not already present.
-    if (/[\[(]\s*\w/.test(text)) {
+    // STAGE 3: Genre-aware vocal cue (works for all 17 families).
+    const vocalCue: string | null = useRecipe ? buildVocalCharacterCue(genreFamily, vocalType) : null;
+
+    // STAGE 4 — PATH A: User labeled at least some sections (after paren normalization).
+    const hasAnyBracket = /\[[a-zA-Z]/.test(text);
+    if (hasAnyBracket) {
       let enriched = text;
       if (useRecipe) {
-        enriched = enriched.replace(/\[([^\]\n]+)\]/g, (full) => enrichSectionTag(full, family, selectedInstruments));
+        enriched = autoLabelLyrics
+          // Full pipeline: walk blocks, enrich existing tags AND auto-label unlabeled stanzas.
+          ? autoFillUnlabeledStanzas(enriched, genreFamily, selectedInstruments)
+          // Power-user opt-out: only enrich existing tags, NEVER add new labels.
+          : enriched.replace(/\[([^\]\n]+)\]/g, (full) => enrichSectionTag(full, genreFamily, selectedInstruments));
       }
+      // Inject vocal cue at top if not already there.
       if (vocalCue) {
         const firstLine = enriched.split('\n').find((l) => l.trim().length > 0) ?? '';
         const alreadyHasCue = /\[[^\]]*vocal[^\]]*\]/i.test(firstLine) || /\[[^\]]*voice[^\]]*\]/i.test(firstLine);
@@ -4286,7 +4636,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return enriched;
     }
 
-    // ── Path B: Unstructured lyrics — auto-build structure from duration plan ──
+    // STAGE 4 — PATH B: Zero labels.
+    // If autoLabel disabled, return text as-is with just the vocal cue prepended (power-user mode).
+    if (!autoLabelLyrics) {
+      return vocalCue ? `${vocalCue}\n\n${text}` : text;
+    }
+
+    // Otherwise auto-build full structure from duration plan.
     const stanzas = text
       .split(/\n{2,}/)
       .map((stanza) => stanza
@@ -4300,20 +4656,20 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const arrangedStanzas = stanzas.slice(0, structurePlan.stanzaLimit);
 
     const soloTag: string | null = structurePlan.allowAutoSolo && arrangedStanzas.length >= structurePlan.stanzaLimit && selectedInstruments.length > 0 && !selectedInstruments.every((inst) => inst === 'Vocal Harmony' || inst === 'group chant')
-      ? (useRecipe ? enrichSectionTag('[Instrumental Solo]', family, selectedInstruments) : '[Instrumental Solo]')
+      ? (useRecipe ? enrichSectionTag('[Instrumental Solo]', genreFamily, selectedInstruments) : '[Instrumental Solo]')
       : null;
 
     const labels = structurePlan.labels;
     const structured: string[] = [];
     if (vocalCue) structured.push(vocalCue);
 
-    const introTag = useRecipe ? enrichSectionTag('[Intro]', family, selectedInstruments) : '[Intro]';
+    const introTag = useRecipe ? enrichSectionTag('[Intro]', genreFamily, selectedInstruments) : '[Intro]';
     structured.push(introTag);
 
     arrangedStanzas.forEach((stanza, i) => {
       const baseLabelText = labels[i] ?? `Verse ${i + 1}`;
       const baseLabel = useRecipe
-        ? enrichSectionTag(`[${baseLabelText}]`, family, selectedInstruments)
+        ? enrichSectionTag(`[${baseLabelText}]`, genreFamily, selectedInstruments)
         : `[${baseLabelText}]`;
       structured.push(`${baseLabel}\n${stanza}`);
     });
@@ -4321,7 +4677,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     if (soloTag) structured.push(soloTag);
     const hasOutro = structured.some((s) => /^\[Outro\b/.test(s));
     if (!hasOutro) {
-      const outroTag = useRecipe ? enrichSectionTag('[Outro]', family, selectedInstruments) : '[Outro]';
+      const outroTag = useRecipe ? enrichSectionTag('[Outro]', genreFamily, selectedInstruments) : '[Outro]';
       structured.push(outroTag);
     }
 
@@ -4379,6 +4735,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const rawLyrics = lyricsText.trim() || styleText.trim();
       const primaryStyleForCue = effectiveIncludeTags[0] ? (STYLE_ANCHORS[effectiveIncludeTags[0]] ?? '') : '';
       const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
+      const genreFamily = getGenreFamily(effectiveIncludeTags, isGccStyleSelected, khalijiControlBlock.family);
       const structuredPrompt = formatLyricsWithStructure(
         rawLyrics,
         instrumental,
@@ -4388,6 +4745,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         cueVocal,
         primaryStyleForCue,
         khalijiControlBlock.family,
+        genreFamily,
+        autoLabelLyrics,
       );
 
       // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
@@ -5725,6 +6084,29 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               <span>{Array.from(lyricsText).length}/{lyricsCap}</span>
             </div>
 
+            {/* Auto-label toggle — power users can disable to keep their lyrics 100% as-is */}
+            <label className="flex items-start gap-2 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] px-3 py-2 cursor-pointer hover:bg-[#f7f8fc] dark:hover:bg-white/[0.08] transition-colors">
+              <input
+                type="checkbox"
+                checked={autoLabelLyrics}
+                onChange={(e) => setAutoLabelLyrics(e.target.checked)}
+                className="mt-0.5 h-4 w-4 accent-purple-500 cursor-pointer"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-semibold text-[#060541] dark:text-white/90">
+                  {isAr ? 'تنظيم تلقائي للأقسام' : 'Auto-label sections'}
+                  <span className="ms-1 text-[10px] font-normal text-[#858384] dark:text-white/50">
+                    {isAr ? '(موصى به)' : '(recommended)'}
+                  </span>
+                </div>
+                <div className="text-[10px] leading-snug text-[#606062] dark:text-white/60 mt-0.5">
+                  {isAr
+                    ? 'يضيف رؤوس [Verse 1] و[Chorus] والمزيد بحسب النوع. أوقفه للتحكم الكامل بالأقسام بنفسك.'
+                    : 'Adds [Verse 1], [Chorus] and genre-aware section headers. Turn off for full manual control.'}
+                </div>
+              </div>
+            </label>
+
             <p className="text-[11px] font-semibold text-[#606062] dark:text-white/60 text-center">
               {isAr ? 'اقرأ الكلمات جيدًا قبل الإنشاء، الذكاء الاصطناعي ليس إنسانًا 😉' : 'Please read the lyrics carefully before generating, AI is not human 😉'}
             </p>
@@ -5764,6 +6146,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                       const rawLyrics = lyricsText.trim() || styleText.trim();
                       const primaryStyleForCue = effectiveIncludeTags[0] ? (STYLE_ANCHORS[effectiveIncludeTags[0]] ?? '') : '';
                       const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
+                      const previewGenreFamily = getGenreFamily(effectiveIncludeTags, isGccStyleSelected, cb.family);
                       const structuredPrompt = formatLyricsWithStructure(
                         rawLyrics,
                         instrumental,
@@ -5773,6 +6156,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         cueVocal,
                         primaryStyleForCue,
                         cb.family,
+                        previewGenreFamily,
+                        autoLabelLyrics,
                       );
                       const preview = {
                         title: title.trim(),
