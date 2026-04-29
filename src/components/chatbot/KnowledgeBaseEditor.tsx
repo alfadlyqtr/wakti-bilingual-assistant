@@ -112,7 +112,7 @@ const DEFAULT_SECTIONS = (isRTL: boolean): KBSection[] => [
 interface Props {
   value: string;
   onChange: (val: string) => void;
-  onSave: () => void;
+  onSave: (val: string) => void;
   saving: boolean;
   isRTL: boolean;
 }
@@ -122,6 +122,12 @@ export default function KnowledgeBaseEditor({ value, onChange, onSave, saving, i
   const [mode, setMode] = useState<'structured' | 'raw'>('structured');
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (mode === 'structured') {
+      setSections(parseKB(value, DEFAULT_SECTIONS(isRTL)));
+    }
+  }, [value, isRTL, mode]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -162,11 +168,18 @@ export default function KnowledgeBaseEditor({ value, onChange, onSave, saving, i
     }
   };
 
-  useEffect(() => {
-    if (mode === 'structured') {
-      onChange(serializeKB(sections));
+  const handleStructuredMode = () => {
+    setSections(parseKB(value, DEFAULT_SECTIONS(isRTL)));
+    setMode('structured');
+  };
+
+  const handleSave = () => {
+    const nextValue = mode === 'structured' ? serializeKB(sections) : value;
+    if (nextValue !== value) {
+      onChange(nextValue);
     }
-  }, [sections, mode]);
+    onSave(nextValue);
+  };
 
   const toggleSection = (id: string) => {
     setSections(prev => prev.map(s => s.id === id ? { ...s, expanded: !s.expanded } : s));
@@ -208,7 +221,7 @@ export default function KnowledgeBaseEditor({ value, onChange, onSave, saving, i
         </div>
         <div className="flex gap-1 p-0.5 bg-muted/50 rounded-lg">
           <button
-            onClick={() => setMode('structured')}
+            onClick={handleStructuredMode}
             className={cn(
               "px-2.5 py-1 rounded-md text-xs font-semibold transition-colors",
               mode === 'structured' ? "bg-white dark:bg-[#060541] text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
@@ -345,7 +358,7 @@ export default function KnowledgeBaseEditor({ value, onChange, onSave, saving, i
       <Button
         size="sm"
         className="gap-1.5 text-xs rounded-lg bg-[#060541] hover:bg-[#060541]/90 text-white dark:bg-white dark:text-[#060541] self-start"
-        onClick={onSave}
+        onClick={handleSave}
         disabled={saving}
       >
         {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}

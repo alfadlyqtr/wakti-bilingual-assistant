@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTheme } from '@/providers/ThemeProvider';
 import { ChessGame } from '@/components/wakti-ai-v2/games/ChessGame';
-import { TicTacToeGame } from '@/components/wakti-ai-v2/games/TicTacToeGame';
+import { TicTacToeTab } from '@/components/wakti-ai-v2/games/TicTacToeTab';
 import { SolitaireGame } from '@/components/wakti-ai-v2/games/SolitaireGame';
 import { Gamepad2, Castle, Grid3x3, Spade, Languages } from 'lucide-react';
 
@@ -47,7 +47,7 @@ export default function Games() {
           <ChessGame onBack={() => { /* no-op on page */ }} />
         </TabsContent>
         <TabsContent value="tictactoe" className="mt-4">
-          <TicTacToeGame onBack={() => { /* no-op on page */ }} />
+          <TicTacToeTab onBack={() => { /* no-op on page */ }} />
         </TabsContent>
         <TabsContent value="solitaire" className="mt-4">
           <SolitaireGame onBack={() => { /* no-op on page */ }} />

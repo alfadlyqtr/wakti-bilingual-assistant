@@ -2844,12 +2844,13 @@ export default function WaktiAssistant() {
     if (!activeBot) return null;
     const accentColor = activeBot.primary_color || '#060541';
 
-    const saveKnowledgeBase = async () => {
+    const saveKnowledgeBase = async (nextKnowledgeBase: string) => {
       setSavingKB(true);
       try {
-        await ChatbotService.updateBot(activeBot.id, { knowledge_base: knowledgeBase });
-        setActiveBot(prev => prev ? { ...prev, knowledge_base: knowledgeBase } : null);
-        setBots(prev => prev.map(b => b.id === activeBot.id ? { ...b, knowledge_base: knowledgeBase } : b));
+        const updatedBot = await ChatbotService.updateBot(activeBot.id, { knowledge_base: nextKnowledgeBase });
+        setKnowledgeBase(updatedBot.knowledge_base || '');
+        setActiveBot(updatedBot);
+        setBots(prev => prev.map(b => b.id === updatedBot.id ? updatedBot : b));
         toast.success(isRTL ? 'تم الحفظ!' : 'Knowledge base saved!');
       } catch { toast.error(isRTL ? 'فشل الحفظ' : 'Failed to save'); }
       finally { setSavingKB(false); }

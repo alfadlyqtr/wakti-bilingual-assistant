@@ -1679,6 +1679,15 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     [effectiveIncludeTags, GCC_STYLE_SET]
   );
 
+  // Khaleeji selection signal — true when ANY user-selected style chip OR
+  // rhythm chip literally contains "Khaleeji"/"خليجي". Used by the Khaleeji
+  // Enhance AMP gate so the button shows in Khaleeji-fusion combos too
+  // (e.g. Alternative Hip Hop + Khaleeji Groove rhythm).
+  const khaleejiSelected = useMemo(() => {
+    const re = /khaleeji|خليجي/i;
+    return effectiveIncludeTags.some((t) => re.test(t)) || rhythmTags.some((t) => re.test(t));
+  }, [effectiveIncludeTags, rhythmTags]);
+
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsLimit, setSongsLimit] = useState(30);
   const [songsRemaining, setSongsRemaining] = useState(30);
@@ -2949,10 +2958,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   useEffect(() => {
-    if (!isGccStyleSelected && ampMode === 'gcc_enhance') {
+    // Auto-reset only when neither a GCC style chip NOR a Khaleeji-named
+    // style/rhythm chip is selected. Allows fusion combos (e.g. Alt Hip Hop
+    // primary + Khaleeji Groove rhythm) to keep gcc_enhance active.
+    if (!isGccStyleSelected && !khaleejiSelected && ampMode === 'gcc_enhance') {
       setAmpMode('expand');
     }
-  }, [isGccStyleSelected, ampMode]);
+  }, [isGccStyleSelected, khaleejiSelected, ampMode]);
 
   // Caps: style max 350, lyrics gets remaining up to overall 800 (title excluded from cap)
   const limit = 2350;
@@ -3526,6 +3538,36 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     };
   }
 
+  // Count stanzas that contain real lyric content. A "stanza" is a block
+  // separated by one or more blank lines. Bracket-only blocks (e.g. "[Intro]")
+  // and pure dashes/decoration are ignored. Mirrors the same splitter that
+  // formatLyricsWithStructure uses so the count matches what Suno would receive.
+  function countLyricStanzas(text: string): number {
+    if (!text || !text.trim()) return 0;
+    const blocks = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
+    let count = 0;
+    for (const block of blocks) {
+      const lines = block.split('\n').map((l) => l.trim()).filter(Boolean);
+      const hasContent = lines.some((l) =>
+        !/^\[[^\]]+\]$/.test(l) && !/^[\-‐‑‒–—―⸺⸻_~•·]+$/.test(l)
+      );
+      if (hasContent) count++;
+    }
+    return count;
+  }
+
+  // Map a stanza count to the minimum duration tier that can fit it without
+  // truncation. Mirrors the stanzaLimit ladder in getKhalijiStructurePlan
+  // (30→2, 60→3, 90→4, 120→5, 150+→6). Returned values are valid duration
+  // dropdown options [30, 60, 90, 120, 150, 200].
+  function minDurationForStanzas(n: number): number {
+    if (n <= 2) return 30;
+    if (n <= 3) return 60;
+    if (n <= 4) return 90;
+    if (n <= 5) return 120;
+    return 150;
+  }
+
   function buildAutoTempoTag(style: string | null, rhythm: string | null, moods: string[], targetSeconds: number): string {
     const signal = [style ?? '', rhythm ?? '', moods.join(', '), String(targetSeconds)].join(' ').toLowerCase();
     if (signal.includes('trap') || signal.includes('drill') || signal.includes('تراب') || signal.includes('دريل')) {
@@ -3893,6 +3935,15 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return 'generic';
   }
 
+  // Khaleeji Trigger — fires when ANY user-selected style chip OR rhythm chip literally
+  // contains the word "Khaleeji" / "خليجي" (case-insensitive). Pure literal-word match —
+  // no inference from instruments, moods, or genre routing. Used to surgically inject
+  // Khaleeji vocal anchoring + reorder style string when primary genre is non-Khaleeji.
+  function hasKhaleejiTrigger(styleTags: string[], rhythmTagsArg: string[]): boolean {
+    const re = /khaleeji|خليجي/i;
+    return styleTags.some((t) => re.test(t)) || rhythmTagsArg.some((t) => re.test(t));
+  }
+
   // Family vocabulary table — drives the wording of the 4-sentence brief
   // and the section enrichers. Same chip → same words (deterministic).
   const FAMILY_VOCAB: Record<KhalijiFamily, {
@@ -4018,12 +4069,88 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return [s1, s2, s3, s4].filter(Boolean).join(' ');
   }
 
+  // Khaleeji Fusion Brief — fires when user pairs a NON-Khaleeji primary chip
+  // with a Khaleeji-named rhythm or style chip (e.g. Alternative Hip Hop +
+  // khaleeji groove). Mirrors the production-brief pattern Suno responds to in
+  // the working community examples (e.g. "Modern Khaleeji Fusion, Heavy Khaleeji
+  // Drums, Melismatic Male Vocals…"). Leads with Khaleeji identity in sentence 1
+  // so Suno locks Gulf vocal DNA before reading the genre context.
+  function buildKhalijiFusionBrief(opts: {
+    styleChipLabel: string;
+    genreFamily: GenreFamily;
+    instruments: string[];
+    primaryRhythm: string | null;
+    supportingRhythms: string[];
+    moods: string[];
+    tempo: string;
+    key: string;
+  }): string {
+    const v = GENRE_VOCAB[opts.genreFamily];
+    const label = normalizeChipForDisplay(opts.styleChipLabel);
+
+    // S1 — Identity FIRST. Suno reads this before anything else, so Gulf
+    // identity is locked before the genre context bleeds in.
+    const s1 = `Modern Khaleeji Fusion of ${label}.`;
+
+    // S2 — Arrangement built around user instruments + rhythms.
+    const instList = opts.instruments.length > 0
+      ? opts.instruments.join(', ')
+      : 'core fusion instrumentation';
+    const rhythmClause = opts.primaryRhythm
+      ? ` with a ${opts.primaryRhythm} driving the groove`
+      : '';
+    const supRhythmClause = opts.supportingRhythms.length > 0
+      ? ` underneath ${opts.supportingRhythms.join(' and ')}`
+      : '';
+    const arrangementAdj = v.vocalCueAdj.toLowerCase();
+    const s2 = `A ${arrangementAdj}, fusion-forward arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
+
+    // S3 — Khaleeji vocal identity sentence — the heart of the fusion brief.
+    // Packed with the same identity DNA as buildKhalijiProductionBrief so Suno
+    // gets full Gulf pronunciation, timbre, and phrasing keywords even when the
+    // primary chip is a non-Arab genre.
+    const s3 = `Vocals are delivered in pure Kuwaiti-Qatari Khaleeji dialect with authentic desert-coastal Khaleeji timbre, native Gulf pronunciation, and colloquial Khaleeji phrasing, fused with ${v.vocalCueDelivery}, featuring expressive quarter-tone Khaleeji ornaments.`;
+
+    // S4 — Mood + tempo + key.
+    const moodPart = opts.moods.length > 0 ? `The mood is ${opts.moods.join(', ')}.` : '';
+    const bpmMatch = opts.tempo.match(/^(\d+\s*BPM)\s*(.*)$/i);
+    const cleanKey = opts.key.replace(/\s*tonal center\s*$/i, '').trim();
+    const tempoPart = bpmMatch && bpmMatch[2]
+      ? `Tempo sits around ${bpmMatch[1].trim()} with a ${bpmMatch[2].trim()} feel, in ${cleanKey}.`
+      : `Tempo sits around ${opts.tempo} in ${cleanKey}.`;
+
+    // S5 — Final dominance lock. Reinforces that vocal stays Khaleeji while
+    // production stays in the user's chosen genre. Prevents Suno from drifting
+    // back to the genre's default vocal style mid-track.
+    const s5 = `Khaleeji vocal identity dominates the entire performance while ${label.toLowerCase()} drives the production aesthetic.`;
+
+    return [s1, s2, s3, moodPart, tempoPart, s5].filter(Boolean).join(' ');
+  }
+
   // Vocal character cue — ONE line at the very top of the prompt.
   // Universal: uses GENRE_VOCAB for all 17 families (Khaleeji subfamilies + global genres).
-  function buildVocalCharacterCue(genreFamily: GenreFamily, vocalType: 'male' | 'female' | 'none'): string | null {
+  // forceKhaleejiAnchor: when TRUE and the genre family is NOT already Khaleeji-routed,
+  // surgically inject "Khaleeji" after the gender word AND "Khaleeji pronunciation and "
+  // inside the delivery descriptor (after first " with "). Used for Khaleeji-fusion tracks
+  // where the primary chip is non-Khaleeji but the user added a Khaleeji-named rhythm.
+  function buildVocalCharacterCue(
+    genreFamily: GenreFamily,
+    vocalType: 'male' | 'female' | 'none',
+    forceKhaleejiAnchor: boolean = false,
+  ): string | null {
     if (vocalType === 'none') return null;
     const cap = vocalType === 'male' ? 'male' : 'female';
     const v = GENRE_VOCAB[genreFamily];
+
+    const alreadyKhaleeji = genreFamily.startsWith('khaleeji-');
+    if (forceKhaleejiAnchor && !alreadyKhaleeji) {
+      const capWithKhaleeji = `${cap} Khaleeji`;
+      const delivery = v.vocalCueDelivery.includes(' with ')
+        ? v.vocalCueDelivery.replace(' with ', ' with Kuwaiti-Qatari pronunciation and ')
+        : `Kuwaiti-Qatari pronunciation, ${v.vocalCueDelivery}`;
+      return `[${v.vocalCueAdj} ${capWithKhaleeji} vocal, ${delivery}]`;
+    }
+
     return `[${v.vocalCueAdj} ${cap} vocal, ${v.vocalCueDelivery}]`;
   }
 
@@ -4074,12 +4201,16 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const freeText = styleText.trim() ? normalizeKhalijiPromptToken(styleText.trim()) : null;
     const tempoTag = tempoOverride.trim() ? normalizeKhalijiPromptToken(tempoOverride.trim()) : buildAutoTempoTag(primaryStyle, primaryRhythm, selectedMoods, structurePlan.normalizedSeconds);
     const keyTag = keyOverride.trim() || buildAutoKeyTag(primaryStyle, primaryRhythm, selectedMoods);
+    // Khaleeji Trigger — fires when ANY user-selected style/rhythm chip contains
+    // "Khaleeji" / "خليجي". Computed up here so dialectLock can attach for the
+    // fusion path too (non-Khaleeji primary + Khaleeji rhythm).
+    const khaleejiTriggered = hasKhaleejiTrigger(effectiveIncludeTags, rhythmTags);
     // Dedup: LOCK strings already carry "pure Khaleeji dialect" and negative tags already carry
     // "no MSA / no Egyptian / no Levantine". Keep only the country anchor here.
-    const dialectLock = isGccStyle || isGccStyleSelected
-      ? 'strict Saudi-Kuwaiti-Qatari dialect'
+    const dialectLock = (isGccStyle || isGccStyleSelected || khaleejiTriggered)
+      ? 'strict Kuwaiti-Qatari dialect'
       : null;
-    const styleParts = [
+    const styleParts: string[] = [
       styleAnchor,
       primaryRhythm,
       supportingRhythms.length > 0 ? `supporting rhythms: ${supportingRhythms.join(', ')}` : null,
@@ -4094,12 +4225,36 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       .filter((part): part is string => Boolean(part))
       .map((part) => part.trim())
       .filter((part, index, parts) => parts.indexOf(part) === index);
+
+    // Khaleeji Trigger reorder: if khaleejiTriggered (computed above), move the
+    // first Khaleeji-named token to position 0 so Suno parses it first. This
+    // fixes the "Egyptian default" issue when primary chip is non-Khaleeji
+    // (e.g. Alt Hip Hop) but user added Khaleeji Groove rhythm.
+    if (khaleejiTriggered) {
+      const khaleejiIdx = styleParts.findIndex((p) => /khaleeji|خليجي/i.test(p));
+      if (khaleejiIdx > 0) {
+        const [khaleejiToken] = styleParts.splice(khaleejiIdx, 1);
+        styleParts.unshift(khaleejiToken);
+      }
+    }
     const legacyStyleString = styleParts.join(', ').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
 
     // ── WAKTI RECIPE V1 — when enabled and a Khaleeji chip is selected, swap
     // the comma-separated tag dump for a natural-language production brief.
     const family: KhalijiFamily = getKhalijiFamily(primaryStyle);
     const useRecipe = WAKTI_RECIPE_V1 && (isGccStyle || isGccStyleSelected) && Boolean(primaryStyle);
+
+    // ── KHALEEJI FUSION GATE — fires when WAKTI_RECIPE_V1 is on AND the primary
+    // chip is NOT a Khaleeji chip BUT the user added a Khaleeji-named rhythm or
+    // style chip (so hasKhaleejiTrigger is true). Uses a separate fusion brief
+    // that leads with "Modern Khaleeji Fusion of [genre]" so Suno locks Gulf
+    // vocal identity FIRST, before reading the genre context. The pure-Khaleeji
+    // path (useRecipe) is intentionally checked first and remains untouched.
+    const useFusionRecipe = WAKTI_RECIPE_V1 && !useRecipe && khaleejiTriggered && Boolean(primaryStyle);
+    const fusionGenreFamily: GenreFamily | null = useFusionRecipe
+      ? getGenreFamily(effectiveIncludeTags, isGccStyleSelected, family)
+      : null;
+
     const briefString = useRecipe
       ? buildKhalijiProductionBrief({
           styleChipLabel: primaryStyle as string,
@@ -4111,7 +4266,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           tempo: tempoTag,
           key: keyTag,
         })
-      : null;
+      : useFusionRecipe && fusionGenreFamily
+        ? buildKhalijiFusionBrief({
+            styleChipLabel: primaryStyle as string,
+            genreFamily: fusionGenreFamily,
+            instruments: instrumentLayer,
+            primaryRhythm,
+            supportingRhythms,
+            moods: selectedMoods,
+            tempo: tempoTag,
+            key: keyTag,
+          })
+        : null;
     // Append free-text + dialect lock as proper capitalized sentences so the brief
     // doesn't end in a lowercase fragment. Dialect lock becomes "Strict ... lock."
     const dialectSentence = dialectLock
@@ -4139,6 +4305,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       dialectLock ? `Dialect lock: ${dialectLock}` : null,
     ].filter(Boolean).join('\n');
 
+    const recipeMode: 'pure-khaleeji' | 'khaleeji-fusion' | 'legacy' = useRecipe
+      ? 'pure-khaleeji'
+      : useFusionRecipe
+        ? 'khaleeji-fusion'
+        : 'legacy';
+
     return {
       styleString,
       controlBlock,
@@ -4147,7 +4319,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       keyTag,
       normalizedSeconds: structurePlan.normalizedSeconds,
       family,
-      usingRecipeV1: useRecipe,
+      usingRecipeV1: useRecipe || useFusionRecipe,
+      recipeMode,
     };
   }
 
@@ -4595,6 +4768,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     family: KhalijiFamily = 'pop',
     genreFamily: GenreFamily = 'generic',
     autoLabelLyrics: boolean = true,
+    forceKhaleejiAnchor: boolean = false,
   ): string {
     // STAGE 1: Instrumental fast-path
     if (isInstrumental) {
@@ -4612,7 +4786,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     void primaryStyleAnchor; void family; // legacy params kept for backward compat / future use
 
     // STAGE 3: Genre-aware vocal cue (works for all 17 families).
-    const vocalCue: string | null = useRecipe ? buildVocalCharacterCue(genreFamily, vocalType) : null;
+    // forceKhaleejiAnchor — surgical Khaleeji injection for non-Khaleeji primary chips
+    // when user added a Khaleeji-named rhythm/style.
+    const vocalCue: string | null = useRecipe ? buildVocalCharacterCue(genreFamily, vocalType, forceKhaleejiAnchor) : null;
 
     // STAGE 4 — PATH A: User labeled at least some sections (after paren normalization).
     const hasAnyBracket = /\[[a-zA-Z]/.test(text);
@@ -4702,6 +4878,37 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       setLyricsOpen(true);
       return;
     }
+
+    // ── Capacity check (vocal tracks only) ──
+    // Compare user's stanza count vs the duration's stanza capacity. Two paths:
+    //  • autoLabelLyrics ON  → silently bump duration to fit, notify user.
+    //  • autoLabelLyrics OFF → block generation, toast asks user to extend
+    //    duration, enable auto-label, or trim lyrics.
+    // Returns the duration to use locally for this generation (state update
+    // is async, so we can't rely on `duration` after setDuration).
+    let effectiveDuration = duration;
+    if (vocalType !== 'none' && lyricsText.trim()) {
+      const stanzaCount = countLyricStanzas(lyricsText);
+      const requiredDuration = minDurationForStanzas(stanzaCount);
+      if (requiredDuration > duration) {
+        if (autoLabelLyrics) {
+          effectiveDuration = requiredDuration;
+          setDuration(requiredDuration);
+          toast.success(isAr
+            ? `تم تمديد المدة تلقائيًا إلى ${requiredDuration} ثانية لتناسب ${stanzaCount} مقاطع.`
+            : `Auto-extended duration to ${requiredDuration}s to fit your ${stanzaCount} sections.`);
+        } else {
+          const currentCap = minDurationForStanzas(stanzaCount) === duration
+            ? stanzaCount
+            : (duration <= 30 ? 2 : duration <= 60 ? 3 : duration <= 90 ? 4 : duration <= 120 ? 5 : 6);
+          toast.error(isAr
+            ? `كلماتك تحتوي على ${stanzaCount} مقاطع لكن ${duration} ثانية تسع ${currentCap} فقط. زِد المدة إلى ${requiredDuration} ثانية، أو فعّل التسمية التلقائية، أو قلّص الكلمات.`
+            : `Your lyrics have ${stanzaCount} sections but ${duration}s only fits ${currentCap}. Increase duration to ${requiredDuration}s, enable auto-label, or trim lyrics.`);
+          return;
+        }
+      }
+    }
+
     setSubmitting(true);
     setGeneratedTracks([]);
     setLastError(null);
@@ -4730,12 +4937,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
       const khalijiControlBlock = buildKhalijiControlBlock();
       const kieStyle = khalijiControlBlock.styleString;
-      const durationTarget = Math.min(200, duration);
+      const durationTarget = Math.min(200, effectiveDuration);
 
       const rawLyrics = lyricsText.trim() || styleText.trim();
       const primaryStyleForCue = effectiveIncludeTags[0] ? (STYLE_ANCHORS[effectiveIncludeTags[0]] ?? '') : '';
       const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
       const genreFamily = getGenreFamily(effectiveIncludeTags, isGccStyleSelected, khalijiControlBlock.family);
+      const khaleejiTriggerActive = hasKhaleejiTrigger(effectiveIncludeTags, rhythmTags);
       const structuredPrompt = formatLyricsWithStructure(
         rawLyrics,
         instrumental,
@@ -4747,6 +4955,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         khalijiControlBlock.family,
         genreFamily,
         autoLabelLyrics,
+        khaleejiTriggerActive,
       );
 
       // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
@@ -5999,7 +6208,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 >
                   {isAr ? 'توسيع' : 'Expand'}
                 </button>
-                {isGccStyleSelected && (
+                {(isGccStyleSelected || khaleejiSelected) && (
                   <button
                     type="button"
                     onClick={() => setAmpMode('gcc_enhance')}
@@ -6142,11 +6351,21 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                       const instrumental = vocalType === 'none';
                       const vocalGender: 'm' | 'f' | undefined =
                         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
-                      const durationTarget = Math.min(200, duration);
+                      // Mirror handleGenerate's capacity check: when autoLabelLyrics is ON
+                      // and the user's lyrics exceed capacity, preview the auto-bumped duration
+                      // so what's shown matches what will actually be generated.
+                      let previewEffectiveDuration = duration;
+                      if (vocalType !== 'none' && lyricsText.trim() && autoLabelLyrics) {
+                        const stanzaCount = countLyricStanzas(lyricsText);
+                        const requiredDuration = minDurationForStanzas(stanzaCount);
+                        if (requiredDuration > duration) previewEffectiveDuration = requiredDuration;
+                      }
+                      const durationTarget = Math.min(200, previewEffectiveDuration);
                       const rawLyrics = lyricsText.trim() || styleText.trim();
                       const primaryStyleForCue = effectiveIncludeTags[0] ? (STYLE_ANCHORS[effectiveIncludeTags[0]] ?? '') : '';
                       const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
                       const previewGenreFamily = getGenreFamily(effectiveIncludeTags, isGccStyleSelected, cb.family);
+                      const previewKhaleejiTrigger = hasKhaleejiTrigger(effectiveIncludeTags, rhythmTags);
                       const structuredPrompt = formatLyricsWithStructure(
                         rawLyrics,
                         instrumental,
@@ -6158,6 +6377,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         cb.family,
                         previewGenreFamily,
                         autoLabelLyrics,
+                        previewKhaleejiTrigger,
                       );
                       const preview = {
                         title: title.trim(),
@@ -6171,7 +6391,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         musicalKeyHint: cb.keyTag,
                         controlBlock: cb.controlBlock,
                         structurePlan: cb.structurePlan,
-                        recipeVersion: cb.usingRecipeV1 ? 'wakti-recipe-v1' : 'legacy',
+                        recipeVersion: cb.recipeMode === 'pure-khaleeji'
+                          ? 'wakti-recipe-v1'
+                          : cb.recipeMode === 'khaleeji-fusion'
+                            ? 'wakti-recipe-v1-fusion'
+                            : 'legacy',
                         family: cb.family,
                       };
                       setPayloadPreview(JSON.stringify(preview, null, 2));

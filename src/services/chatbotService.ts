@@ -325,12 +325,15 @@ export const ChatbotService = {
     return data as ChatbotBot;
   },
 
-  async updateBot(botId: string, updates: Partial<ChatbotBot>): Promise<void> {
-    const { error } = await (supabase
+  async updateBot(botId: string, updates: Partial<ChatbotBot>): Promise<ChatbotBot> {
+    const { data, error } = await (supabase
       .from('chatbot_bots' as any)
       .update(updates)
-      .eq('id', botId) as any);
+      .eq('id', botId)
+      .select('*')
+      .single() as any);
     if (error) throw error;
+    return data as ChatbotBot;
   },
 
   async deleteBot(botId: string): Promise<void> {
