@@ -125,7 +125,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     },
     {
       name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
-      path: '/tasjeel', 
+      path: '/tools/voice-studio?tab=tasjeel', 
       icon: 'audio-lines',
       colorClass: 'text-cyan-500',
     },

@@ -45,7 +45,7 @@ export function TabletSidebar() {
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
     { icon: Aperture, label: "music", path: "/music" },
     { icon: Gamepad2, label: "games", path: "/games" },
-    { icon: Mic, label: "tasjeel", path: "/tasjeel" },
+    { icon: Mic, label: "tasjeel", path: "/tools/voice-studio?tab=tasjeel" },
     { icon: FolderOpen, label: "my_warranty", path: "/my-warranty" },
   ];
 

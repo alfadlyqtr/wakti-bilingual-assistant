@@ -3799,9 +3799,33 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const rawBlocks = splitLyricStanzas(text);
     const naturalBlocks = mergeLyricStanzas(rawBlocks, 6);
     const targetPlan = getKhalijiStructurePlan(targetSeconds);
-    const stanzas = naturalBlocks.length > targetPlan.stanzaLimit
+    let stanzas = naturalBlocks.length > targetPlan.stanzaLimit
       ? mergeLyricStanzas(naturalBlocks, Number.NEGATIVE_INFINITY, targetPlan.stanzaLimit)
       : naturalBlocks;
+
+    // Auto-split: if we ended up with fewer stanzas than the plan needs (e.g. user
+    // pasted all lyrics as one unbroken block), split the biggest block evenly on
+    // line boundaries until we reach stanzaLimit or can't split further.
+    if (stanzas.length < targetPlan.stanzaLimit && stanzas.length > 0) {
+      let working = [...stanzas];
+      while (working.length < targetPlan.stanzaLimit) {
+        // Find the block with the most lines — best candidate to split.
+        let splitIdx = 0;
+        let maxLines = 0;
+        for (let i = 0; i < working.length; i++) {
+          const lineCount = working[i].split('\n').filter((l) => l.trim()).length;
+          if (lineCount > maxLines) { maxLines = lineCount; splitIdx = i; }
+        }
+        if (maxLines < 2) break; // Can't split a single line — stop.
+        const lines = working[splitIdx].split('\n').filter((l) => l.trim());
+        const mid = Math.ceil(lines.length / 2);
+        const partA = lines.slice(0, mid).join('\n');
+        const partB = lines.slice(mid).join('\n');
+        working.splice(splitIdx, 1, partA, partB);
+      }
+      stanzas = working;
+    }
+
     const includeSolo = shouldAddInstrumentalSolo(targetSeconds, stanzas.length, instruments);
     return {
       rawBlocks,
@@ -5250,15 +5274,15 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const lyricPlanningText = parsedLyrics?.lyricText?.trim() ?? normalizedLyrics;
     const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(lyricPlanningText) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
     if (shouldSmartStructureLyrics) {
-      const smartCapacity = buildSmartLyricStructure(lyricPlanningText, MAX_DURATION_SECONDS, instrumentTags);
-      const sectionCount = smartCapacity.stanzas.length;
-      const requiredDuration = minDurationForStanzas(sectionCount);
+      // Count only real blank-line-separated stanzas (no auto-split here — just raw count).
+      const rawStanzaCount = splitLyricStanzas(lyricPlanningText).length;
+      const requiredDuration = minDurationForStanzas(rawStanzaCount);
       if (requiredDuration > duration) {
         effectiveDuration = requiredDuration;
         setDuration(requiredDuration);
         toast.success(isAr
-          ? `تمت إعادة هيكلة الكلمات تلقائيًا ورفع المدة إلى ${requiredDuration} ثانية لتناسب ${sectionCount} أقسام.`
-          : `Smart-structured your lyrics and extended duration to ${requiredDuration}s to fit ${sectionCount} sections.`);
+          ? `تمت إعادة هيكلة الكلمات تلقائيًا ورفع المدة إلى ${requiredDuration} ثانية لتناسب ${rawStanzaCount} أقسام.`
+          : `Smart-structured your lyrics and extended duration to ${requiredDuration}s to fit ${rawStanzaCount} sections.`);
       }
     }
 
@@ -6714,8 +6738,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                       const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(lyricPlanningText) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
                       let previewEffectiveDuration = duration;
                       if (shouldSmartStructureLyrics) {
-                        const smartCapacity = buildSmartLyricStructure(lyricPlanningText, MAX_DURATION_SECONDS, instrumentTags);
-                        const requiredDuration = minDurationForStanzas(smartCapacity.stanzas.length);
+                        const rawStanzaCount = splitLyricStanzas(lyricPlanningText).length;
+                        const requiredDuration = minDurationForStanzas(rawStanzaCount);
                         if (requiredDuration > duration) previewEffectiveDuration = requiredDuration;
                       }
                       const durationTarget = Math.min(MAX_DURATION_SECONDS, previewEffectiveDuration);

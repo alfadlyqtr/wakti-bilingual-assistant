@@ -92,7 +92,7 @@ export function NavWidget({ language: propLanguage }: NavWidgetProps) {
     },
     {
       name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
-      path: '/tasjeel',
+      path: '/tools/voice-studio?tab=tasjeel',
       icon: AudioLines,
       colorClass: 'text-cyan-500',
       glowColor: '#06b6d4',

@@ -6,6 +6,112 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
+const ELEVENLABS_MODEL = 'eleven_multilingual_v2';
+const ELEVENLABS_VOICE_SETTINGS = {
+  stability: 1.0,
+  similarity_boost: 1.0,
+  style: 0.5,
+  use_speaker_boost: true,
+};
+const ELEVENLABS_VOICE_MAP: Record<string, string> = {
+  ar_male: 'G1QUjBCuRBbLbAmYlTgl',
+  en_male: 'ZB6Q1KAIKj9o7p9iJEWQ',
+  ar_female: 'u0TsaWvt0v8migutHM3M',
+  en_female: 'gh8WokH7VR2QkmMmwWHS',
+};
+
+const isArabicText = (text: string) => {
+  const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g;
+  const matches = text.match(arabicPattern) || [];
+  return text.length > 0 && matches.length / text.length > 0.3;
+};
+
+const resolveElevenLabsVoiceId = (text: string, voice: string | undefined) => {
+  const lang = isArabicText(text) ? 'ar' : 'en';
+  const gender = voice === 'female' ? 'female' : voice === 'male' ? 'male' : lang === 'ar' ? 'female' : 'male';
+  return ELEVENLABS_VOICE_MAP[`${lang}_${gender}`] || ELEVENLABS_VOICE_MAP.en_male;
+};
+
+const resolveOpenAIVoice = (text: string, voice: string | undefined) => {
+  if (voice === 'male') return 'onyx';
+  if (voice === 'female') return 'nova';
+  return isArabicText(text) ? 'nova' : 'onyx';
+};
+
+const arrayBufferToBase64 = (arrayBuffer: ArrayBuffer) => {
+  const bytes = new Uint8Array(arrayBuffer);
+  const chunkSize = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(chunk) as unknown as number[]);
+  }
+  return btoa(binary);
+};
+
+const generateWithElevenLabs = async (summary: string, voice: string | undefined) => {
+  if (!ELEVENLABS_API_KEY) {
+    throw new Error('ElevenLabs API key not configured');
+  }
+
+  const voiceId = resolveElevenLabsVoiceId(summary, voice);
+  const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    method: 'POST',
+    headers: {
+      'Accept': 'audio/mpeg',
+      'Content-Type': 'application/json',
+      'xi-api-key': ELEVENLABS_API_KEY,
+    },
+    body: JSON.stringify({
+      text: summary,
+      model_id: ELEVENLABS_MODEL,
+      voice_settings: ELEVENLABS_VOICE_SETTINGS,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`ElevenLabs TTS error ${response.status}: ${errorText.slice(0, 500)}`);
+  }
+
+  return {
+    audioBuffer: await response.arrayBuffer(),
+    provider: 'elevenlabs',
+    model: 'elevenlabs-tts',
+    resolvedVoice: voiceId,
+  };
+};
+
+const generateWithOpenAI = async (summary: string, voice: string | undefined, openAIKey: string) => {
+  const voiceOption = resolveOpenAIVoice(summary, voice);
+  const response = await fetch('https://api.openai.com/v1/audio/speech', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openAIKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'tts-1',
+      input: summary,
+      voice: voiceOption,
+      response_format: 'mp3',
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI TTS error ${response.status}: ${errorText.slice(0, 500)}`);
+  }
+
+  return {
+    audioBuffer: await response.arrayBuffer(),
+    provider: 'openai',
+    model: 'tts-1',
+    resolvedVoice: voiceOption,
+  };
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -21,97 +127,67 @@ serve(async (req) => {
       );
     }
 
-    // Auto-detect predominant language for basic code-switching groundwork
-    const isArabicChar = (c: string) => /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/.test(c);
-    const arabicRatio = (() => {
-      const chars = summary.split('');
-      const ar = chars.reduce((acc: number, ch: string) => acc + (isArabicChar(ch) ? 1 : 0), 0);
-      return chars.length ? ar / chars.length : 0;
-    })();
-
-    // Voice selection policy:
-    // - If caller explicitly passes 'male' or 'female', honor it (backward compatible)
-    // - If caller passes 'auto' or omits voice, pick by predominant language
-    //   Note: This does not do per-sentence routing; it's a safe initial improvement with no API/UI change
-    let voiceOption: string;
-    if (voice === 'male') {
-      voiceOption = 'onyx';
-    } else if (voice === 'female') {
-      voiceOption = 'nova';
-    } else {
-      // auto
-      voiceOption = arabicRatio >= 0.40 ? 'nova' : 'onyx';
-    }
-
-    console.log(`Generating speech for text length: ${summary.length}, voice: ${voiceOption}, recordId: ${recordId || 'none'}`);
+    console.log(`Generating speech for text length: ${summary.length}, requested voice: ${voice || 'auto'}, recordId: ${recordId || 'none'}`);
 
     const openAIKey = Deno.env.get('OPENAI_API_KEY');
-    if (!openAIKey) {
+    if (!ELEVENLABS_API_KEY && !openAIKey) {
       return new Response(
-        JSON.stringify({ error: 'OpenAI API key not configured' }),
+        JSON.stringify({ error: 'No TTS provider configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Generate speech using OpenAI TTS
     const startTime = Date.now();
-    const response = await fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'tts-1',
-        input: summary,
-        voice: voiceOption,
-        response_format: 'mp3',
-      }),
-    });
+    let provider = 'elevenlabs';
+    let model = 'elevenlabs-tts';
+    let resolvedVoice = resolveElevenLabsVoiceId(summary, voice);
+    let fallbackReason: string | null = null;
+    let arrayBuffer: ArrayBuffer;
 
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('OpenAI TTS error:', error);
-      return new Response(
-        JSON.stringify({ error: error.error?.message || 'Failed to generate speech' }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    try {
+      const elevenLabsResult = await generateWithElevenLabs(summary, voice);
+      arrayBuffer = elevenLabsResult.audioBuffer;
+      provider = elevenLabsResult.provider;
+      model = elevenLabsResult.model;
+      resolvedVoice = elevenLabsResult.resolvedVoice;
+    } catch (elevenLabsError) {
+      fallbackReason = (elevenLabsError as Error).message;
+      console.warn('ElevenLabs TTS failed, falling back to OpenAI:', fallbackReason);
+
+      if (!openAIKey) {
+        throw new Error(`ElevenLabs failed and OpenAI fallback is unavailable: ${fallbackReason}`);
+      }
+
+      const openAIResult = await generateWithOpenAI(summary, voice, openAIKey);
+      arrayBuffer = openAIResult.audioBuffer;
+      provider = openAIResult.provider;
+      model = openAIResult.model;
+      resolvedVoice = openAIResult.resolvedVoice;
     }
 
-    // Convert audio buffer to base64 without spread (avoid call stack overflow)
-    const arrayBuffer = await response.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer);
-    const chunkSize = 0x8000; // 32KB chunks
-    let binary = '';
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.subarray(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, Array.from(chunk) as unknown as number[]);
-    }
-    const base64Audio = btoa(binary);
+    const base64Audio = arrayBufferToBase64(arrayBuffer);
 
-    // Log successful AI usage
     await logAIFromRequest(req, {
       functionName: "generate-speech",
-      provider: "openai",
-      model: "tts-1",
+      provider,
+      model,
       inputText: summary,
       durationMs: Date.now() - startTime,
       status: "success",
-      metadata: { voice: voiceOption, textLength: summary.length }
+      metadata: { voice: resolvedVoice, textLength: summary.length, fallbackReason }
     });
 
     return new Response(
-      JSON.stringify({ audioContent: base64Audio, voice: voiceOption }),
+      JSON.stringify({ audioContent: base64Audio, voice: resolvedVoice, provider }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error in generate-speech function:', error && (error as Error).message);
     
-    // Log failed AI usage
     await logAIFromRequest(req, {
       functionName: "generate-speech",
-      provider: "openai",
-      model: "tts-1",
+      provider: "elevenlabs",
+      model: "elevenlabs-tts",
       status: "error",
       errorMessage: (error as Error).message
     });

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Tasjeel from '@/components/tasjeel/Tasjeel';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { PenLine, Loader2, Copy } from 'lucide-react';
 import { VoiceCloneScreen1 } from '@/components/wakti-ai-v2/VoiceCloneScreen1';
@@ -18,6 +19,7 @@ const TAB_MAP: Record<string, number> = {
   'voice-translator': 3,
   'text-translator': 5,
   'live-translator': 6,
+  'tasjeel': 7,
 };
 
 export default function VoiceStudio() {
@@ -163,6 +165,8 @@ export default function VoiceStudio() {
             onBack={() => setCurrentScreen(0)}
           />
         );
+      case 7:
+        return <Tasjeel />;
       default:
         return null;
     }
@@ -177,62 +181,34 @@ export default function VoiceStudio() {
             {language === 'ar' ? 'صوت' : 'Voice'}
           </h1>
         </div>
-
+  
         {/* Top tabs under title */}
         <div className="mb-3">
-          <div className="grid grid-cols-4 gap-1.5 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
-            <button
-              type="button"
-              onClick={() => setCurrentScreen(4)}
-              role="tab"
-              aria-selected={currentScreen === 4}
-              className={`h-11 rounded-xl border text-xs font-medium transition-all
-                ${currentScreen === 4
-                  ? 'bg-gradient-secondary text-secondary-foreground shadow-lg border-secondary ring-1 ring-secondary/60'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'نص → كلام' : 'TTS'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentScreen(2)}
-              role="tab"
-              aria-selected={currentScreen === 1 || currentScreen === 2}
-              className={`h-11 rounded-xl border text-xs font-medium transition-all
-                ${currentScreen === 1 || currentScreen === 2
-                  ? 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'استنساخ' : 'Clone'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentScreen(3)}
-              role="tab"
-              aria-selected={currentScreen === 3}
-              className={`h-11 rounded-xl border text-xs font-medium transition-all
-                ${currentScreen === 3
-                  ? 'bg-muted/90 text-foreground shadow-lg border-muted-foreground/20 ring-1 ring-muted-foreground/20'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'ترجمة' : 'Translate'}
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentScreen(6)}
-              role="tab"
-              aria-selected={currentScreen === 6}
-              className={`h-11 rounded-xl border text-xs font-medium transition-all
-                ${currentScreen === 6
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg border-cyan-500 ring-1 ring-cyan-500/60'
-                  : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white'}
-              `}
-            >
-              {language === 'ar' ? 'مترجم فوري 🎙️' : 'Interpreter 🎙️'}
-            </button>
+          <div
+            role="tablist"
+            aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}
+            className="grid grid-cols-5 gap-1.5 rounded-[1.35rem] border border-border/70 bg-[#f8fafc] dark:bg-white/5 p-1.5 shadow-[0_2px_12px_rgba(15,23,42,0.06)]"
+          >
+            {[
+              { screen: 4, labelAr: 'نص/كلام', labelEn: 'TTS', active: currentScreen === 4, style: currentScreen === 4 ? 'border-[#e9ceb0] bg-[#f7e2bb] text-[#060541] shadow-[0_4px_14px_rgba(233,206,176,0.45)] dark:border-white/10 dark:bg-white/12 dark:text-white' : '' },
+              { screen: 2, labelAr: 'استنساخ', labelEn: 'Clone', active: currentScreen === 1 || currentScreen === 2, style: currentScreen === 1 || currentScreen === 2 ? 'border-[#d8ccff] bg-[#ebe3ff] text-[#060541] shadow-[0_4px_14px_rgba(168,85,247,0.22)] dark:border-white/10 dark:bg-white/12 dark:text-white' : '' },
+              { screen: 3, labelAr: 'ترجمة', labelEn: 'Translate', active: currentScreen === 3, style: currentScreen === 3 ? 'border-[#d9d7ef] bg-[#eceaf7] text-[#060541] shadow-[0_4px_14px_rgba(99,102,241,0.14)] dark:border-white/10 dark:bg-white/12 dark:text-white' : '' },
+              { screen: 6, labelAr: 'مترجم', labelEn: 'Live', active: currentScreen === 6, style: currentScreen === 6 ? 'border-[#b9ecff] bg-[#d8f5ff] text-[#060541] shadow-[0_4px_14px_rgba(34,211,238,0.22)] dark:border-white/10 dark:bg-white/12 dark:text-white' : '' },
+              { screen: 7, labelAr: 'تسجيل', labelEn: 'Tasjeel', active: currentScreen === 7, style: currentScreen === 7 ? 'border-[#d9c7ff] bg-[#eee6ff] text-[#060541] shadow-[0_4px_14px_rgba(168,85,247,0.24)] dark:border-white/10 dark:bg-white/12 dark:text-white' : '' },
+            ].map(({ screen, labelAr, labelEn, active, style }) => (
+              <button
+                key={screen}
+                type="button"
+                onClick={() => setCurrentScreen(screen)}
+                role="tab"
+                aria-selected={active}
+                className={`h-10 rounded-xl border text-xs font-semibold transition-all duration-200
+                  ${active ? style : 'border-border/70 bg-white text-[#060541] shadow-[0_1px_4px_rgba(15,23,42,0.08)] hover:border-border hover:bg-white/95 dark:border-white/10 dark:bg-white/6 dark:text-white'}
+                `}
+              >
+                {language === 'ar' ? labelAr : labelEn}
+              </button>
+            ))}
           </div>
         </div>
 

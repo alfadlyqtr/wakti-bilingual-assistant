@@ -1,5 +1,5 @@
 import React, { lazy, Suspense } from "react";
-import { Routes, Route, useLocation } from "react-router-dom";
+import { Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { AppShellSkeleton } from "@/components/ui/AppShellSkeleton";
 import { AppLayout } from "@/components/AppLayout";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
@@ -40,7 +40,6 @@ const Maw3dCreate = lazy(() => import("@/pages/Maw3dCreate"));
 const Maw3dManage = lazy(() => import("@/pages/Maw3dManage"));
 const Maw3dView = lazy(() => import("@/pages/Maw3dView"));
 const Maw3dEdit = lazy(() => import("@/pages/Maw3dEdit"));
-const Tasjeel = lazy(() => import("@/pages/Tasjeel"));
 const SharedTask = lazy(() => import("@/pages/SharedTask"));
 const ContactUs = lazy(() => import("@/pages/ContactUs"));
 const Help = lazy(() => import("@/pages/Help"));
@@ -199,7 +198,7 @@ export default function ConsumerRouter() {
           <Route path="/maw3d/create" element={<Maw3dCreate />} />
           <Route path="/maw3d/manage/:id" element={<Maw3dManage />} />
           <Route path="/maw3d/edit/:id" element={<Maw3dEdit />} />
-          <Route path="/tasjeel" element={<Tasjeel />} />
+          <Route path="/tasjeel" element={<Navigate to="/tools/voice-studio?tab=tasjeel" replace />} />
           <Route path="/voice-tts" element={<VoiceTTS />} />
           <Route path="/tools/text" element={<TextGenerator />} />
           <Route path="/tools/text/translation/:id" element={<TextTranslationView />} />

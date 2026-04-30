@@ -23,6 +23,21 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") ?? "";
+const ELEVENLABS_MODEL = "eleven_multilingual_v2";
+const ELEVENLABS_VOICE_SETTINGS = {
+  stability: 1.0,
+  similarity_boost: 1.0,
+  style: 0.5,
+  use_speaker_boost: true,
+};
+const ELEVENLABS_VOICE_MAP: Record<string, string> = {
+  ar_male: "G1QUjBCuRBbLbAmYlTgl",
+  en_male: "ZB6Q1KAIKj9o7p9iJEWQ",
+  ar_female: "u0TsaWvt0v8migutHM3M",
+  en_female: "gh8WokH7VR2QkmMmwWHS",
+};
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function extractStoragePath(url: string, bucket: string): string {
@@ -42,6 +57,80 @@ async function updateStatus(
     .from("tasjeel_records")
     .update({ processing_status: status, updated_at: new Date().toISOString(), ...extra })
     .eq("id", recordId);
+}
+
+function isArabicText(text: string): boolean {
+  const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g;
+  const matches = text.match(arabicPattern) || [];
+  return text.length > 0 && matches.length / text.length > 0.3;
+}
+
+function resolveElevenLabsVoiceId(summary: string, language: string, voice: string): string {
+  const lang = language === "ar" || language === "en"
+    ? language
+    : isArabicText(summary) ? "ar" : "en";
+  const gender = voice === "female" ? "female" : voice === "male" ? "male" : lang === "ar" ? "female" : "male";
+  return ELEVENLABS_VOICE_MAP[`${lang}_${gender}`] || ELEVENLABS_VOICE_MAP.en_male;
+}
+
+function resolveOpenAIVoice(summary: string, voice: string): string {
+  if (voice === "female") return "nova";
+  if (voice === "male") return "onyx";
+  return isArabicText(summary) ? "nova" : "onyx";
+}
+
+async function generateSpeechWithElevenLabs(summary: string, language: string, voice: string) {
+  if (!ELEVENLABS_API_KEY) {
+    throw new Error("ElevenLabs API key not configured");
+  }
+
+  const voiceId = resolveElevenLabsVoiceId(summary, language, voice);
+  const ttsResp = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
+    method: "POST",
+    headers: {
+      "Accept": "audio/mpeg",
+      "Content-Type": "application/json",
+      "xi-api-key": ELEVENLABS_API_KEY,
+    },
+    body: JSON.stringify({
+      text: summary,
+      model_id: ELEVENLABS_MODEL,
+      voice_settings: ELEVENLABS_VOICE_SETTINGS,
+    }),
+  });
+
+  if (!ttsResp.ok) {
+    const msg = await ttsResp.text();
+    throw new Error(`ElevenLabs TTS error ${ttsResp.status}: ${msg.slice(0, 500)}`);
+  }
+
+  return {
+    audioBuffer: await ttsResp.arrayBuffer(),
+    provider: "elevenlabs",
+    model: "elevenlabs-tts",
+    resolvedVoice: voiceId,
+  };
+}
+
+async function generateSpeechWithOpenAI(summary: string, voice: string, openaiApiKey: string) {
+  const voiceOption = resolveOpenAIVoice(summary, voice);
+  const ttsResp = await fetch("https://api.openai.com/v1/audio/speech", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "tts-1", input: summary, voice: voiceOption, response_format: "mp3" }),
+  });
+
+  if (!ttsResp.ok) {
+    const msg = await ttsResp.text();
+    throw new Error(`OpenAI TTS error ${ttsResp.status}: ${msg.slice(0, 500)}`);
+  }
+
+  return {
+    audioBuffer: await ttsResp.arrayBuffer(),
+    provider: "openai",
+    model: "tts-1",
+    resolvedVoice: voiceOption,
+  };
 }
 
 // ── main ──────────────────────────────────────────────────────────────────────
@@ -221,27 +310,29 @@ serve(async (req) => {
   // ── Step 3: Speech generation ────────────────────────────────────────────
   let summaryAudioPath: string | null = null;
   try {
-    // Determine voice
-    const isArabicChar = (c: string) => /[\u0600-\u06FF]/.test(c);
-    const arabicRatio = summary.split("").reduce((a, c) => a + (isArabicChar(c) ? 1 : 0), 0) / (summary.length || 1);
-    let voiceOption = "onyx";
-    if (voice === "female") voiceOption = "nova";
-    else if (voice === "male") voiceOption = "onyx";
-    else voiceOption = arabicRatio >= 0.4 ? "nova" : "onyx";
-
     const t0 = Date.now();
-    const ttsResp = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${openaiApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "tts-1", input: summary, voice: voiceOption, response_format: "mp3" }),
-    });
+    let provider = "elevenlabs";
+    let model = "elevenlabs-tts";
+    let resolvedVoice = resolveElevenLabsVoiceId(summary, language, voice);
+    let fallbackReason: string | null = null;
+    let audioBuffer: ArrayBuffer;
 
-    if (!ttsResp.ok) {
-      const msg = await ttsResp.text();
-      throw new Error(`OpenAI TTS error ${ttsResp.status}: ${msg}`);
+    try {
+      const elevenLabsResult = await generateSpeechWithElevenLabs(summary, language, voice);
+      audioBuffer = elevenLabsResult.audioBuffer;
+      provider = elevenLabsResult.provider;
+      model = elevenLabsResult.model;
+      resolvedVoice = elevenLabsResult.resolvedVoice;
+    } catch (elevenLabsError) {
+      fallbackReason = (elevenLabsError as Error).message;
+      console.warn("ElevenLabs TTS failed in tasjeel-process, falling back to OpenAI:", fallbackReason);
+      const openAIResult = await generateSpeechWithOpenAI(summary, voice, openaiApiKey);
+      audioBuffer = openAIResult.audioBuffer;
+      provider = openAIResult.provider;
+      model = openAIResult.model;
+      resolvedVoice = openAIResult.resolvedVoice;
     }
 
-    const audioBuffer = await ttsResp.arrayBuffer();
     const audioBlob = new Blob([audioBuffer], { type: "audio/mpeg" });
 
     // Upload summary audio to storage under the user's folder
@@ -258,12 +349,12 @@ serve(async (req) => {
 
     await logAIFromRequest(req, {
       functionName: "tasjeel-process/speech",
-      provider: "openai",
-      model: "tts-1",
+      provider,
+      model,
       inputText: summary,
       durationMs: Date.now() - t0,
       status: "success",
-      metadata: { voice: voiceOption },
+      metadata: { voice: resolvedVoice, fallbackReason },
     });
   } catch (err) {
     const msg = (err as Error).message;

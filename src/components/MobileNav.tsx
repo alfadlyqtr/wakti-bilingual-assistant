@@ -86,7 +86,7 @@ export function MobileNav({
     },
     {
       name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
-      path: '/tasjeel', 
+      path: '/tools/voice-studio?tab=tasjeel', 
       icon: 'mic',
       colorClass: 'text-cyan-500',
     }

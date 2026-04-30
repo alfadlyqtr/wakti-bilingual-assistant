@@ -432,6 +432,20 @@ serve(async (req) => {
     const taskId = kieData.data.taskId as string;
     console.log("[music-generate] KIE.ai taskId received", taskId);
 
+    // ── Log this generation for quota tracking (independent of saved tracks) ──
+    // Inserting here means quota is consumed the moment KIE accepts the job.
+    // Deleting saved tracks later has zero effect on this count.
+    try {
+      const { error: logError } = await supabaseService
+        .from("user_music_generation_log")
+        .insert({ user_id: user.id, task_id: taskId });
+      if (logError) console.error("[music-generate] Generation log insert failed (non-fatal):", logError.message);
+      else console.log("[music-generate] Generation log recorded for taskId", taskId);
+    } catch (logErr) {
+      console.error("[music-generate] Generation log exception (non-fatal):", (logErr as Error).message);
+    }
+    // ── End quota log ──
+
     // Audit payload stored inside meta JSONB (no separate column needed)
     const requestPayload: Record<string, unknown> = {
       customMode, instrumental, model,

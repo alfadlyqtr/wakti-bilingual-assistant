@@ -56,7 +56,7 @@ export function DesktopSidebar() {
     { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
     { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
     { icon: HeartPulse, label: "vitality", path: "/fitness" },
-    { icon: AudioLines as unknown as IconComponent, label: "tasjeel", path: "/tasjeel" },
+    { icon: AudioLines as unknown as IconComponent, label: "tasjeel", path: "/tools/voice-studio?tab=tasjeel" },
     { icon: FolderOpen as unknown as IconComponent, label: "my_warranty", path: "/my-warranty" },
     { icon: Aperture as unknown as IconComponent, label: "music", path: "/music" },
     { icon: Code2 as unknown as IconComponent, label: "projects", path: "/projects" },

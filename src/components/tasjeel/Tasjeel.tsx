@@ -45,7 +45,7 @@ const MAX_RECORDING_TIME = 2700; // 45 minutes
 const WARNING_TIME_1 = 300; // 5 minutes left (40 minute mark)
 const WARNING_TIME_2 = 60; // 1 minute left (44 minute mark)
 
-type TasjeelRecordingType = "auto" | "meeting" | "business_meeting" | "lecture" | "islamic_lecture" | "study_session" | "classroom";
+type TasjeelRecordingType = "auto" | "meeting" | "business_meeting" | "lecture" | "islamic_lecture" | "study_session" | "classroom" | "brainstorming";
 
 // Translations
 const translations = {
@@ -121,6 +121,7 @@ const translations = {
     recordingTypeIslamicLecture: "Islamic lecture",
     recordingTypeStudySession: "Study session",
     recordingTypeClassroom: "Classroom",
+    recordingTypeBrainstorming: "Brainstorming",
   },
   ar: {
     pageTitle: "تسجيل",
@@ -194,6 +195,7 @@ const translations = {
     recordingTypeIslamicLecture: "محاضرة إسلامية",
     recordingTypeStudySession: "جلسة دراسة",
     recordingTypeClassroom: "حصة دراسية",
+    recordingTypeBrainstorming: "عصف ذهني",
   }
 };
 
@@ -1101,29 +1103,26 @@ const Tasjeel: React.FC = () => {
   return (
     <PageContainer title={translationTexts.pageTitle} showBackButton={true} showHeader={false}>
       <TrialGateOverlay featureKey="tasjeel" limit={1} featureLabel={{ en: 'Tasjeel', ar: 'تسجيل' }} />
-      <div className="container py-4 space-y-6">
-        {/* Page title area above tabs, matching sidebar */}
-        <PageTitle title={translationTexts.pageTitle} Icon={Mic} colorClass="text-cyan-500" />
+      <div className="w-full py-2 space-y-4">
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as "record" | "saved" | "quick")}>
-          <TabsList className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full mb-6 rounded-2xl border bg-muted/40 p-1 shadow-sm">
-            <TabsTrigger value="record" className="group flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center transition-all duration-200 hover:-translate-y-[1px] hover:shadow-md hover:bg-card/70 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/15 data-[state=active]:to-violet-500/15 data-[state=active]:backdrop-blur-sm data-[state=active]:border-cyan-500/60 data-[state=active]:text-foreground data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-cyan-500/40 after:h-0 after:opacity-0 data-[state=active]:after:bg-transparent">
+          <TabsList className="grid grid-cols-3 gap-1 w-full mb-4 rounded-2xl border bg-muted/30 p-1">
+            <TabsTrigger value="record" className="flex items-center justify-center gap-1.5 text-xs font-medium transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-white/10 data-[state=active]:text-cyan-600 data-[state=active]:shadow-none after:hidden">
               <Mic className="h-4 w-4 text-cyan-600" />
               {translationTexts.newRecording}
             </TabsTrigger>
-            <TabsTrigger value="quick" className="group flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center transition-all duration-200 hover:-translate-y-[1px] hover:shadow-md hover:bg-card/70 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/15 data-[state=active]:to-violet-500/15 data-[state=active]:backdrop-blur-sm data-[state=active]:border-cyan-500/60 data-[state=active]:text-foreground data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-cyan-500/40 after:h-0 after:opacity-0 data-[state=active]:after:bg-transparent">
+            <TabsTrigger value="quick" className="flex items-center justify-center gap-1.5 text-xs font-medium transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-white/10 data-[state=active]:text-cyan-600 data-[state=active]:shadow-none after:hidden">
               <Zap className="h-4 w-4 text-cyan-600" />
               {translationTexts.quickSummary}
             </TabsTrigger>
-            <TabsTrigger value="saved" className="group flex items-center gap-2 flex-wrap min-w-0 max-w-full whitespace-normal break-words text-center transition-all duration-200 hover:-translate-y-[1px] hover:shadow-md hover:bg-card/70 data-[state=active]:bg-gradient-to-r data-[state=active]:from-cyan-500/15 data-[state=active]:to-violet-500/15 data-[state=active]:backdrop-blur-sm data-[state=active]:border-cyan-500/60 data-[state=active]:text-foreground data-[state=active]:shadow-md data-[state=active]:ring-1 data-[state=active]:ring-cyan-500/40 after:h-0 after:opacity-0 data-[state=active]:after:bg-transparent">
+            <TabsTrigger value="saved" className="flex items-center justify-center gap-1.5 text-xs font-medium transition-all data-[state=active]:bg-white dark:data-[state=active]:bg-white/10 data-[state=active]:text-cyan-600 data-[state=active]:shadow-none after:hidden">
               <Save className="h-4 w-4 text-cyan-600" />
               {translationTexts.savedRecordings}
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="record" className="space-y-6">
+          <TabsContent value="record" className="space-y-3">
             {/* Recording section */}
-            <Card>
-              <CardContent className="pt-6">
+            <div className="rounded-xl border border-border/60 bg-card p-4">
                 <h2 className="text-lg font-semibold mb-4">{translationTexts.recordLabel}</h2>
                 
                 {recordingStatus === "recording" ? (
@@ -1193,7 +1192,7 @@ const Tasjeel: React.FC = () => {
 
                     {/* Transcription language preference and note */}
                     <div className="p-3 rounded-md border bg-muted/30">
-                      <div className="flex items-center justify-between gap-3 mb-2">
+                      <div className="flex flex-col gap-2 mb-2">
                         <div className="text-sm font-medium">
                           {language === 'en' ? 'Transcription language' : 'لغة النسخ'}
                         </div>
@@ -1202,6 +1201,7 @@ const Tasjeel: React.FC = () => {
                             type="button"
                             variant={transcriptionLanguage === 'auto' ? 'default' : 'outline'}
                             size="sm"
+                            className="flex-1"
                             onClick={() => { setTranscriptionLanguage('auto'); setUserTouchedLanguage(true); }}
                           >
                             {language === 'en' ? 'Auto' : 'تلقائي'}
@@ -1210,6 +1210,7 @@ const Tasjeel: React.FC = () => {
                             type="button"
                             variant={transcriptionLanguage === 'ar' ? 'default' : 'outline'}
                             size="sm"
+                            className="flex-1"
                             onClick={() => { setTranscriptionLanguage('ar'); setUserTouchedLanguage(true); }}
                           >
                             {language === 'en' ? 'Arabic' : 'العربية'}
@@ -1218,6 +1219,7 @@ const Tasjeel: React.FC = () => {
                             type="button"
                             variant={transcriptionLanguage === 'en' ? 'default' : 'outline'}
                             size="sm"
+                            className="flex-1"
                             onClick={() => { setTranscriptionLanguage('en'); setUserTouchedLanguage(true); }}
                           >
                             {language === 'en' ? 'English' : 'الإنجليزية'}
@@ -1243,19 +1245,18 @@ const Tasjeel: React.FC = () => {
                             <SelectItem value="islamic_lecture">{translationTexts.recordingTypeIslamicLecture}</SelectItem>
                             <SelectItem value="study_session">{translationTexts.recordingTypeStudySession}</SelectItem>
                             <SelectItem value="classroom">{translationTexts.recordingTypeClassroom}</SelectItem>
+                            <SelectItem value="brainstorming">{translationTexts.recordingTypeBrainstorming}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
                     </div>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </div>
             
             {/* Transcription section */}
             {transcript && (
-              <Card>
-                <CardContent className="pt-6">
+              <div className="rounded-xl border border-border/60 bg-card p-4">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">{translationTexts.transcriptionLabel}</h2>
                     <div className="flex gap-2">
@@ -1358,14 +1359,12 @@ const Tasjeel: React.FC = () => {
                       </>
                     )}
                   </Button>
-                </CardContent>
-              </Card>
+              </div>
             )}
             
             {/* Summary section */}
             {summary && (
-              <Card>
-                <CardContent className="pt-6">
+              <div className="rounded-xl border border-border/60 bg-card p-4">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-semibold">{translationTexts.summaryLabel}</h2>
                     <div className="flex gap-2">
@@ -1443,14 +1442,12 @@ const Tasjeel: React.FC = () => {
                       )}
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
+              </div>
             )}
             
             {/* Save Record button - only show when we have audio generated */}
             {summaryAudioBlob && (
-              <Card>
-                <CardContent className="pt-6">
+              <div className="rounded-xl border border-border/60 bg-card p-4">
                   <div className="space-y-4">
                     <div>
                       <h3 className="text-lg font-semibold">{translationTexts.saveRecordingDesc}</h3>
@@ -1477,14 +1474,12 @@ const Tasjeel: React.FC = () => {
                       )}
                     </Button>
                   </div>
-                </CardContent>
-              </Card>
+              </div>
             )}
           </TabsContent>
           
-          <TabsContent value="quick" className="space-y-6">
-            <Card>
-              <CardContent className="pt-6">
+          <TabsContent value="quick" className="space-y-3">
+            <div className="rounded-xl border border-border/60 bg-card p-4">
                 <h2 className="text-lg font-semibold mb-2">{translationTexts.quickSummary}</h2>
                 <p className="text-sm text-muted-foreground mb-4">{translationTexts.quickSummaryDesc}</p>
                 
@@ -1568,8 +1563,7 @@ const Tasjeel: React.FC = () => {
                     </Button>
                   </div>
                 )}
-              </CardContent>
-            </Card>
+            </div>
           </TabsContent>
           
           <TabsContent value="saved">
