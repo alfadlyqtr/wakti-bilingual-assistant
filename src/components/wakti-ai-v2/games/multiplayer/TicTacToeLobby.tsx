@@ -5,11 +5,11 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, Grid3x3, UserPlus, Send } from 'lucide-react';
-import { GameInvitePickerDialog } from '@/components/games/GameInvitePickerDialog';
 import { TicTacToeMultiplayerService, TttSymbol } from '@/services/TicTacToeMultiplayerService';
 
 interface Props {
   onEnterGame: (code: string) => void;
+  onEnterGameWithInvite: (code: string) => void;
   onCancel: () => void;
 }
 
@@ -17,7 +17,7 @@ interface Props {
  * Lobby for multiplayer Tic-Tac-Toe.
  * Two paths: create a game (get a code) or join an existing one (enter code).
  */
-export function TicTacToeLobby({ onEnterGame, onCancel }: Props) {
+export function TicTacToeLobby({ onEnterGame, onEnterGameWithInvite, onCancel }: Props) {
   const { language } = useTheme();
   const { user } = useAuth();
   const isAr = language === 'ar';
@@ -32,8 +32,6 @@ export function TicTacToeLobby({ onEnterGame, onCancel }: Props) {
   const [name, setName] = useState<string>(defaultName);
   const [symbol, setSymbol] = useState<TttSymbol>('X');
   const [code, setCode] = useState<string>('');
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function handleCreate() {
@@ -57,15 +55,10 @@ export function TicTacToeLobby({ onEnterGame, onCancel }: Props) {
       toast.error(isAr ? 'يرجى تسجيل الدخول' : 'Please sign in');
       return;
     }
-    if (inviteCode) {
-      setShowInvitePicker(true);
-      return;
-    }
     setBusy(true);
     try {
       const newCode = await TicTacToeMultiplayerService.createGame(name.trim() || defaultName, symbol);
-      setInviteCode(newCode);
-      setShowInvitePicker(true);
+      onEnterGameWithInvite(newCode);
     } catch (e: any) {
       toast.error(e?.message || (isAr ? 'تعذر تجهيز الدعوة' : 'Could not prepare invite'));
     } finally {
@@ -155,17 +148,6 @@ export function TicTacToeLobby({ onEnterGame, onCancel }: Props) {
             </div>
           </div>
         </div>
-        <GameInvitePickerDialog
-          isOpen={showInvitePicker}
-          gameType="tictactoe"
-          gameCode={inviteCode}
-          onClose={() => setShowInvitePicker(false)}
-          onSent={() => {
-            if (inviteCode) {
-              onEnterGame(inviteCode);
-            }
-          }}
-        />
       </>
     );
   }
@@ -247,17 +229,6 @@ export function TicTacToeLobby({ onEnterGame, onCancel }: Props) {
             </div>
           </div>
         </div>
-        <GameInvitePickerDialog
-          isOpen={showInvitePicker}
-          gameType="tictactoe"
-          gameCode={inviteCode}
-          onClose={() => setShowInvitePicker(false)}
-          onSent={() => {
-            if (inviteCode) {
-              onEnterGame(inviteCode);
-            }
-          }}
-        />
       </>
     );
   }

@@ -3933,7 +3933,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     vocalCueDelivery: string;
   };
 
-  function describeUserInstruments(insts: string[], max: number = 2): string | null {
+  function describeUserInstruments(insts: string[], max: number = 5): string | null {
     if (!insts || insts.length === 0) return null;
     const taken = insts.slice(0, max);
     if (taken.length === 1) return taken[0];
@@ -4319,7 +4319,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       : '';
     const s2 = `A ${v.arrangementAdj} arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
     const paletteSentence = opts.instruments.length > 0
-      ? `Use ${instList} as the core featured instrument palette while letting ${label} shape the production details and supporting textures.`
+      ? `Featured instruments: ${instList}. ${label} shapes the groove feel, energy, and playing style.`
       : '';
 
     // S3 — vocal sentence packed with dialect-rich keywords Suno responds to.
@@ -4385,7 +4385,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const arrangementAdj = v.vocalCueAdj.toLowerCase();
     const s2 = `A ${arrangementAdj}, fusion-forward arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
     const paletteSentence = opts.instruments.length > 0
-      ? `Use ${instList} as the core featured instrument palette while letting ${label} shape the production details and supporting textures.`
+      ? `Featured instruments: ${instList}. ${label} shapes the groove feel, energy, and playing style.`
       : '';
 
     // S3 — Khaleeji vocal identity sentence — the heart of the fusion brief.
@@ -6826,6 +6826,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                     title={isAr ? 'قوة الأسلوب' : 'Style Strength'}
                     className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-[#d9dde7] dark:bg-white/10 accent-sky-500"
                   />
+                  <p className="text-[9px] text-[#858384] dark:text-white/40 leading-tight">
+                    {isAr ? 'أعلى = التزام أقوى بالأسلوب المختار' : 'Higher = AI sticks closer to your chosen style'}
+                  </p>
                 </div>
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center justify-between">
@@ -6847,7 +6850,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                     className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-[#d9dde7] dark:bg-white/10 accent-sky-500"
                   />
                   <p className="text-[9px] text-[#858384] dark:text-white/40 leading-tight">
-                    {isAr ? 'قيمة أعلى = نتائج أكثر تجريبية وغير متوقعة' : 'Higher = more experimental & unpredictable'}
+                    {isAr ? 'أعلى = نتائج أكثر تجريبية وإبداعية' : 'Higher = more experimental & creative surprises'}
                   </p>
                 </div>
               </div>

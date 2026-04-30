@@ -25,6 +25,15 @@ export default function Games() {
   const [ticTacToeInviteLaunchToken, setTicTacToeInviteLaunchToken] = useState<string | null>(null);
   const [chessExitHandler, setChessExitHandler] = useState<(() => Promise<void>) | null>(null);
   const [ticTacToeExitHandler, setTicTacToeExitHandler] = useState<(() => Promise<void>) | null>(null);
+
+  const registerChessExitHandler = React.useCallback(
+    (handler: (() => Promise<void>) | null) => setChessExitHandler(() => handler),
+    [],
+  );
+  const registerTicTacToeExitHandler = React.useCallback(
+    (handler: (() => Promise<void>) | null) => setTicTacToeExitHandler(() => handler),
+    [],
+  );
   const [isNavigatingBack, setIsNavigatingBack] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -175,7 +184,7 @@ export default function Games() {
               inviteCode={chessInviteCode}
               inviteLaunchToken={chessInviteLaunchToken}
               onInviteCodeConsumed={() => setChessInviteCode(null)}
-              onRegisterGameExitHandler={setChessExitHandler}
+              onRegisterGameExitHandler={registerChessExitHandler}
             />
           )}
           {screen === 'tictactoe' && (
@@ -184,7 +193,7 @@ export default function Games() {
               inviteCode={ticTacToeInviteCode}
               inviteLaunchToken={ticTacToeInviteLaunchToken}
               onInviteCodeConsumed={() => setTicTacToeInviteCode(null)}
-              onRegisterGameExitHandler={setTicTacToeExitHandler}
+              onRegisterGameExitHandler={registerTicTacToeExitHandler}
             />
           )}
           {screen === 'solitaire' && <SolitaireGame onBack={() => setScreen('home')} />}

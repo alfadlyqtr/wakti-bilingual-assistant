@@ -38,6 +38,10 @@ export function ChessMultiplayerGame({ code, onLeave, onRematch, score, onGameRe
   const [validMoves, setValidMoves] = useState<string[]>([]);
   const resolvedGameRef = useRef<string | null>(null);
   const shouldNotifyLeaveRef = useRef(false);
+  const onLeaveRef = useRef(onLeave);
+  onLeaveRef.current = onLeave;
+  const onRematchRef = useRef(onRematch);
+  onRematchRef.current = onRematch;
 
   useEffect(() => {
     let cancelled = false;
@@ -73,7 +77,7 @@ export function ChessMultiplayerGame({ code, onLeave, onRematch, score, onGameRe
     const unsubscribe = ChessMultiplayerService.subscribeToGame(code, (row) => {
       setGame(row);
       if (row.rematch_code && row.rematch_code !== code) {
-        onRematch(row.rematch_code);
+        onRematchRef.current(row.rematch_code);
       }
     });
 
@@ -87,7 +91,7 @@ export function ChessMultiplayerGame({ code, onLeave, onRematch, score, onGameRe
         if (!cancelled && g) {
           setGame(g);
           if (g.rematch_code && g.rematch_code !== code) {
-            onRematch(g.rematch_code);
+            onRematchRef.current(g.rematch_code);
           }
         }
       } catch {}
@@ -99,7 +103,7 @@ export function ChessMultiplayerGame({ code, onLeave, onRematch, score, onGameRe
       unsubscribeMessages();
       clearInterval(poll);
     };
-  }, [code, onRematch]);
+  }, [code]);
 
   useEffect(() => {
     if (!game || !user?.id || leaving) return;
@@ -138,12 +142,12 @@ export function ChessMultiplayerGame({ code, onLeave, onRematch, score, onGameRe
     onRegisterLeaveHandler(async () => {
       const currentGame = game;
       if (!currentGame || leaving) {
-        onLeave();
+        onLeaveRef.current();
         return;
       }
 
       if (['host_won', 'guest_won', 'draw', 'abandoned'].includes(currentGame.status)) {
-        onLeave();
+        onLeaveRef.current();
         return;
       }
 
@@ -152,7 +156,7 @@ export function ChessMultiplayerGame({ code, onLeave, onRematch, score, onGameRe
 
       try {
         await ChessMultiplayerService.leaveGame(code);
-        onLeave();
+        onLeaveRef.current();
       } catch (e: any) {
         setLeaving(false);
         toast.error(e?.message || (isAr ? 'تعذر مغادرة اللعبة' : 'Could not leave the game'));
@@ -163,7 +167,7 @@ export function ChessMultiplayerGame({ code, onLeave, onRematch, score, onGameRe
     return () => {
       onRegisterLeaveHandler(null);
     };
-  }, [code, game, isAr, leaving, onLeave, onRegisterLeaveHandler]);
+  }, [code, game, isAr, leaving, onRegisterLeaveHandler]);
 
   useEffect(() => {
     if (!game || !user?.id) return;

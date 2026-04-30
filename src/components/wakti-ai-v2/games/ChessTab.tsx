@@ -4,6 +4,7 @@ import { Bot, Users, Castle } from 'lucide-react';
 import { ChessGame } from './ChessGame';
 import { ChessLobby } from './multiplayer/ChessLobby';
 import { ChessMultiplayerGame } from './multiplayer/ChessMultiplayerGame';
+import { GameInvitePickerDialog } from '@/components/games/GameInvitePickerDialog';
 
 type Screen =
   | { kind: 'modePicker' }
@@ -25,6 +26,7 @@ export function ChessTab({ inviteCode = null, inviteLaunchToken = null, onInvite
   const [score, setScore] = useState({ me: 0, other: 0 });
   const scoredGamesRef = useRef<Set<string>>(new Set());
   const consumedInviteTokenRef = useRef<string | null>(null);
+  const [invitePickerCode, setInvitePickerCode] = useState<string | null>(null);
 
   const resetMultiplayerSession = () => {
     setScore({ me: 0, other: 0 });
@@ -122,14 +124,28 @@ export function ChessTab({ inviteCode = null, inviteLaunchToken = null, onInvite
 
   if (screen.kind === 'lobby') {
     return (
-      <ChessLobby
-        onEnterGame={(code) => setScreen({ kind: 'play', code })}
-        onCancel={() => setScreen({ kind: 'modePicker' })}
-      />
+      <>
+        <ChessLobby
+          onEnterGame={(code) => setScreen({ kind: 'play', code })}
+          onEnterGameWithInvite={(code) => {
+            setScreen({ kind: 'play', code });
+            setInvitePickerCode(code);
+          }}
+          onCancel={() => setScreen({ kind: 'modePicker' })}
+        />
+        <GameInvitePickerDialog
+          isOpen={!!invitePickerCode}
+          gameType="chess"
+          gameCode={invitePickerCode}
+          onClose={() => setInvitePickerCode(null)}
+          onSent={() => setInvitePickerCode(null)}
+        />
+      </>
     );
   }
 
   return (
+    <>
     <ChessMultiplayerGame
       code={screen.code}
       score={score}
@@ -141,5 +157,13 @@ export function ChessTab({ inviteCode = null, inviteLaunchToken = null, onInvite
       }}
       onRematch={(newCode) => setScreen({ kind: 'play', code: newCode })}
     />
+    <GameInvitePickerDialog
+      isOpen={!!invitePickerCode}
+      gameType="chess"
+      gameCode={invitePickerCode}
+      onClose={() => setInvitePickerCode(null)}
+      onSent={() => setInvitePickerCode(null)}
+    />
+    </>
   );
 }

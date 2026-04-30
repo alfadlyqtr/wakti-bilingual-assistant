@@ -45,6 +45,10 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch, score, onGa
   const [sendingMessageValue, setSendingMessageValue] = useState<PresetGameMessageKey | null>(null);
   const resolvedGameRef = useRef<string | null>(null);
   const shouldNotifyLeaveRef = useRef(false);
+  const onLeaveRef = useRef(onLeave);
+  onLeaveRef.current = onLeave;
+  const onRematchRef = useRef(onRematch);
+  onRematchRef.current = onRematch;
 
   // Initial load + realtime subscribe
   useEffect(() => {
@@ -66,7 +70,7 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch, score, onGa
       setGame(row);
       // If either player kicks off a rematch, switch the whole component to the new code.
       if (row.rematch_code) {
-        onRematch(row.rematch_code);
+        onRematchRef.current(row.rematch_code);
       }
     });
 
@@ -88,7 +92,7 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch, score, onGa
       unsubscribeMessages();
       clearInterval(poll);
     };
-  }, [code, onRematch]);
+  }, [code]);
 
   useEffect(() => {
     if (!game || !user?.id || leaving) return;
@@ -127,12 +131,13 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch, score, onGa
     onRegisterLeaveHandler(async () => {
       const currentGame = game;
       if (!currentGame || leaving) {
-        onLeave();
+        // Game not loaded yet or already leaving — just navigate out
+        onLeaveRef.current();
         return;
       }
 
       if (['host_won', 'guest_won', 'draw', 'abandoned'].includes(currentGame.status)) {
-        onLeave();
+        onLeaveRef.current();
         return;
       }
 
@@ -141,7 +146,7 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch, score, onGa
 
       try {
         await TicTacToeMultiplayerService.leaveGame(code);
-        onLeave();
+        onLeaveRef.current();
       } catch (e: any) {
         setLeaving(false);
         toast.error(e?.message || (isAr ? 'تعذر مغادرة اللعبة' : 'Could not leave the game'));
@@ -152,7 +157,7 @@ export function TicTacToeMultiplayerGame({ code, onLeave, onRematch, score, onGa
     return () => {
       onRegisterLeaveHandler(null);
     };
-  }, [code, game, isAr, leaving, onLeave, onRegisterLeaveHandler]);
+  }, [code, game, isAr, leaving, onRegisterLeaveHandler]);
 
   useEffect(() => {
     if (!game || !user?.id) return;

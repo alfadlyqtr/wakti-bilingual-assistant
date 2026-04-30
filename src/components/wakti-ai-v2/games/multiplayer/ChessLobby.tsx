@@ -5,15 +5,15 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { Loader2, Crown, UserPlus, Send } from 'lucide-react';
-import { GameInvitePickerDialog } from '@/components/games/GameInvitePickerDialog';
 import { ChessMultiplayerService, ChessSide } from '@/services/ChessMultiplayerService';
 
 interface Props {
   onEnterGame: (code: string) => void;
+  onEnterGameWithInvite: (code: string) => void;
   onCancel: () => void;
 }
 
-export function ChessLobby({ onEnterGame, onCancel }: Props) {
+export function ChessLobby({ onEnterGame, onEnterGameWithInvite, onCancel }: Props) {
   const { language } = useTheme();
   const { user } = useAuth();
   const isAr = language === 'ar';
@@ -28,8 +28,6 @@ export function ChessLobby({ onEnterGame, onCancel }: Props) {
   const [name, setName] = useState(defaultName);
   const [color, setColor] = useState<ChessSide>('white');
   const [code, setCode] = useState('');
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
-  const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function handleCreate() {
@@ -53,15 +51,10 @@ export function ChessLobby({ onEnterGame, onCancel }: Props) {
       toast.error(isAr ? 'يرجى تسجيل الدخول' : 'Please sign in');
       return;
     }
-    if (inviteCode) {
-      setShowInvitePicker(true);
-      return;
-    }
     setBusy(true);
     try {
       const newCode = await ChessMultiplayerService.createGame(name.trim() || defaultName, color);
-      setInviteCode(newCode);
-      setShowInvitePicker(true);
+      onEnterGameWithInvite(newCode);
     } catch (e: any) {
       toast.error(e?.message || (isAr ? 'تعذر تجهيز الدعوة' : 'Could not prepare invite'));
     } finally {
@@ -151,17 +144,6 @@ export function ChessLobby({ onEnterGame, onCancel }: Props) {
             </div>
           </div>
         </div>
-        <GameInvitePickerDialog
-          isOpen={showInvitePicker}
-          gameType="chess"
-          gameCode={inviteCode}
-          onClose={() => setShowInvitePicker(false)}
-          onSent={() => {
-            if (inviteCode) {
-              onEnterGame(inviteCode);
-            }
-          }}
-        />
       </>
     );
   }
@@ -243,17 +225,6 @@ export function ChessLobby({ onEnterGame, onCancel }: Props) {
             </div>
           </div>
         </div>
-        <GameInvitePickerDialog
-          isOpen={showInvitePicker}
-          gameType="chess"
-          gameCode={inviteCode}
-          onClose={() => setShowInvitePicker(false)}
-          onSent={() => {
-            if (inviteCode) {
-              onEnterGame(inviteCode);
-            }
-          }}
-        />
       </>
     );
   }

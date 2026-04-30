@@ -4,6 +4,7 @@ import { Bot, Users, Grid3x3 } from 'lucide-react';
 import { TicTacToeGame } from './TicTacToeGame';
 import { TicTacToeLobby } from './multiplayer/TicTacToeLobby';
 import { TicTacToeMultiplayerGame } from './multiplayer/TicTacToeMultiplayerGame';
+import { GameInvitePickerDialog } from '@/components/games/GameInvitePickerDialog';
 
 type Screen =
   | { kind: 'modePicker' }
@@ -25,6 +26,7 @@ export function TicTacToeTab({ inviteCode = null, inviteLaunchToken = null, onIn
   const [score, setScore] = useState({ me: 0, other: 0 });
   const scoredGamesRef = useRef<Set<string>>(new Set());
   const consumedInviteTokenRef = useRef<string | null>(null);
+  const [invitePickerCode, setInvitePickerCode] = useState<string | null>(null);
 
   const resetMultiplayerSession = () => {
     setScore({ me: 0, other: 0 });
@@ -122,15 +124,29 @@ export function TicTacToeTab({ inviteCode = null, inviteLaunchToken = null, onIn
 
   if (screen.kind === 'lobby') {
     return (
-      <TicTacToeLobby
-        onEnterGame={(code) => setScreen({ kind: 'play', code })}
-        onCancel={() => setScreen({ kind: 'modePicker' })}
-      />
+      <>
+        <TicTacToeLobby
+          onEnterGame={(code) => setScreen({ kind: 'play', code })}
+          onEnterGameWithInvite={(code) => {
+            setScreen({ kind: 'play', code });
+            setInvitePickerCode(code);
+          }}
+          onCancel={() => setScreen({ kind: 'modePicker' })}
+        />
+        <GameInvitePickerDialog
+          isOpen={!!invitePickerCode}
+          gameType="tictactoe"
+          gameCode={invitePickerCode}
+          onClose={() => setInvitePickerCode(null)}
+          onSent={() => setInvitePickerCode(null)}
+        />
+      </>
     );
   }
 
   // screen.kind === 'play'
   return (
+    <>
     <TicTacToeMultiplayerGame
       code={screen.code}
       score={score}
@@ -142,5 +158,13 @@ export function TicTacToeTab({ inviteCode = null, inviteLaunchToken = null, onIn
       }}
       onRematch={(newCode) => setScreen({ kind: 'play', code: newCode })}
     />
+    <GameInvitePickerDialog
+      isOpen={!!invitePickerCode}
+      gameType="tictactoe"
+      gameCode={invitePickerCode}
+      onClose={() => setInvitePickerCode(null)}
+      onSent={() => setInvitePickerCode(null)}
+    />
+    </>
   );
 }
