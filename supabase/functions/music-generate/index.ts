@@ -327,8 +327,10 @@ serve(async (req) => {
     const isGccEffective = GCC_STYLE_MARKERS.test(style);
     const effectivePrompt = !instrumental && isGccEffective ? applyGccPromptShaping(prompt, style, vocalGender) : prompt;
     const effectiveNegativeTags = isGccEffective ? buildGccNegativeTags(style) : negativeTags;
-    const effectiveWeirdnessConstraint = isGccEffective ? 0.55 : weirdnessConstraint;
-    const effectiveAudioWeight = isGccEffective ? 0.65 : audioWeight;
+    // Frontend now sends the correct value (user override or genre-based recommended).
+    // Only fall back to old GCC defaults when no value was sent (backwards compat).
+    const effectiveWeirdnessConstraint = weirdnessConstraint !== undefined ? weirdnessConstraint : (isGccEffective ? 0.55 : undefined);
+    const effectiveAudioWeight = audioWeight !== undefined ? audioWeight : (isGccEffective ? 0.65 : undefined);
 
     if (title.length > 80) {
       throw new Error("Title exceeds 80 characters");

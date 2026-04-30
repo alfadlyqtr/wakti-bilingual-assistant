@@ -1,10 +1,25 @@
 // @ts-nocheck
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 
 const db = supabase as any;
 
 export type ChessSide = 'white' | 'black';
 export type ChessStatus = 'waiting' | 'playing' | 'host_won' | 'guest_won' | 'draw' | 'abandoned';
+export type ChessMessageKey = 'good_luck' | 'nice_move' | 'your_turn' | 'good_game' | 'gotta_go' | 'custom';
+
+export interface ChessMessageRow {
+  id: string;
+  game_code: string;
+  user_id: string;
+  message_key: ChessMessageKey;
+  custom_text: string | null;
+  created_at: string;
+}
+
+export interface ChessSendMessageInput {
+  messageKey: ChessMessageKey;
+  customText?: string | null;
+}
 
 export interface ChessGameRow {
   code: string;
@@ -91,6 +106,46 @@ export const ChessMultiplayerService = {
     return data as ChessGameRow;
   },
 
+  notifyLeaveOnExit(code: string, accessToken?: string | null): void {
+    if (!accessToken) return;
+    fetch(`${SUPABASE_URL}/rest/v1/rpc/chess_leave_game`, {
+      method: 'POST',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ p_code: code }),
+    }).catch(() => {});
+  },
+
+  async fetchMessages(code: string): Promise<ChessMessageRow[]> {
+    const { data, error } = await db
+      .from('chess_messages')
+      .select('*')
+      .eq('game_code', code)
+      .order('created_at', { ascending: false })
+      .limit(8);
+    if (error) throw error;
+    return ((data as ChessMessageRow[]) || []).reverse();
+  },
+
+  async sendMessage(code: string, userId: string, input: ChessSendMessageInput): Promise<ChessMessageRow> {
+    const { data, error } = await db
+      .from('chess_messages')
+      .insert({
+        game_code: code,
+        user_id: userId,
+        message_key: input.messageKey,
+        custom_text: input.customText ?? null,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data as ChessMessageRow;
+  },
+
   subscribeToGame(code: string, onChange: (row: ChessGameRow) => void): () => void {
     const channel = db
       .channel(`chess:game:${code}`)
@@ -99,6 +154,23 @@ export const ChessMultiplayerService = {
         { event: '*', schema: 'public', table: 'chess_games', filter: `code=eq.${code}` },
         (payload: any) => {
           if (payload.new) onChange(payload.new as ChessGameRow);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try { db.removeChannel(channel); } catch {}
+    };
+  },
+
+  subscribeToMessages(code: string, onMessage: (row: ChessMessageRow) => void): () => void {
+    const channel = db
+      .channel(`chess:messages:${code}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'chess_messages', filter: `game_code=eq.${code}` },
+        (payload: any) => {
+          if (payload.new) onMessage(payload.new as ChessMessageRow);
         }
       )
       .subscribe();

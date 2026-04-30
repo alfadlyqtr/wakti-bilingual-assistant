@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import { ImageShareNotificationProvider } from "@/components/notifications/ImageShareNotificationProvider";
 import { MusicShareNotificationProvider } from "@/components/notifications/MusicShareNotificationProvider";
+import { GameInviteNotificationProvider } from "@/components/notifications/GameInviteNotificationProvider";
 import { MessageNotificationProvider } from "@/components/notifications/MessageNotificationProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { DebugContextProvider } from "@/hooks/useDebugContext";
@@ -165,11 +166,13 @@ export default function ConsumerRouter() {
           <GiftNotificationProvider>
             <ImageShareNotificationProvider>
               <MusicShareNotificationProvider>
-                <MessageNotificationProvider>
-                  <ErrorBoundary>
-                    <AppLayout />
-                  </ErrorBoundary>
-                </MessageNotificationProvider>
+                <GameInviteNotificationProvider>
+                  <MessageNotificationProvider>
+                    <ErrorBoundary>
+                      <AppLayout />
+                    </ErrorBoundary>
+                  </MessageNotificationProvider>
+                </GameInviteNotificationProvider>
               </MusicShareNotificationProvider>
             </ImageShareNotificationProvider>
           </GiftNotificationProvider>

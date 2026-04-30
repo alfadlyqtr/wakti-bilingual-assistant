@@ -19,13 +19,13 @@ export function OpponentLeftDialog({ open, language, gameName, onAcknowledge }: 
         hideCloseButton
         title={isAr ? 'غادر اللاعب الآخر اللعبة' : 'The other player left the game'}
         description={isAr ? 'انتهت اللعبة لأن اللاعب الآخر غادر.' : 'The game ended because the other player left.'}
-        className="w-[calc(100%-24px)] max-w-[420px] overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#0c0f14] via-[#161824] to-[#0c0f14] p-0 text-white shadow-[0_8px_40px_rgba(0,0,0,0.55),0_0_30px_rgba(124,58,237,0.25)]"
+        className="w-[calc(100%-24px)] max-w-[420px] overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-[#0c0f14] via-[#161824] to-[#0c0f14] p-0 text-white shadow-[0_8px_40px_rgba(0,0,0,0.55),0_0_30px_rgba(37,99,235,0.22)]"
         overlayClassName="fixed inset-0 z-[1000] bg-black/75 backdrop-blur-sm"
       >
         <div className="relative p-6 sm:p-7">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.22),transparent_45%),radial-gradient(circle_at_bottom_right,rgba(59,130,246,0.18),transparent_40%)]" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.22),transparent_45%),radial-gradient(circle_at_bottom_right,rgba(34,211,238,0.18),transparent_40%)]" />
           <div className="relative flex flex-col items-center text-center gap-4" dir={isAr ? 'rtl' : 'ltr'}>
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500/25 via-indigo-500/20 to-blue-500/25 ring-1 ring-white/10 shadow-[0_0_25px_rgba(124,58,237,0.35)]">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/25 via-sky-500/20 to-cyan-500/25 ring-1 ring-white/10 shadow-[0_0_25px_rgba(37,99,235,0.35)]">
               <DoorOpen className="h-8 w-8 text-white" />
             </div>
 
@@ -50,7 +50,7 @@ export function OpponentLeftDialog({ open, language, gameName, onAcknowledge }: 
 
             <Button
               onClick={onAcknowledge}
-              className="w-full min-h-[48px] rounded-2xl bg-gradient-to-r from-purple-600 via-violet-600 to-blue-700 text-white shadow-[0_8px_24px_rgba(124,58,237,0.35)] hover:opacity-95"
+              className="w-full min-h-[48px] rounded-2xl bg-gradient-to-r from-blue-600 via-sky-500 to-cyan-500 text-white shadow-[0_8px_24px_rgba(37,99,235,0.35)] hover:opacity-95"
             >
               {isAr ? 'حسناً' : 'Got it'}
             </Button>

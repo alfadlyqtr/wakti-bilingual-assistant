@@ -104,6 +104,24 @@ const normalizeAudioUrl = (url: string) => {
   return cleanUrl;
 };
 
+const extractLyricsOnlyText = (prompt: string | null | undefined) => {
+  const text = (prompt || '').replace(/\r\n/g, '\n').trim();
+  if (!text) return '';
+
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => {
+      if (/^\[[^\]\n]+\]$/.test(line)) return false;
+      if (/^(KHALIJI CONTROL BLOCK|Primary style chip:|Identity anchor:|Primary rhythm:|Supporting rhythms:|Locked instruments:|Mood arc:|Structure:|Tempo:|Key:|Creative brief:|Dialect lock:)/i.test(line)) return false;
+      if (line.length > 140 && /[,:;]/.test(line)) return false;
+      return true;
+    })
+    .join('\n')
+    .trim();
+};
+
 const saveAudioBlob = async (blob: Blob, filename: string) => {
   const file = new File([blob], filename, { type: blob.type || 'audio/mpeg' });
   if (navigator.share && navigator.canShare) {
@@ -1688,6 +1706,16 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return effectiveIncludeTags.some((t) => re.test(t)) || rhythmTags.some((t) => re.test(t));
   }, [effectiveIncludeTags, rhythmTags]);
 
+  // Recommended slider defaults — recomputed whenever the user's style selection changes.
+  // Populates Style Strength / Creative Freedom sliders in Advanced. When user hasn't
+  // overridden a slider, these values are sent to KIE as-is.
+  const recommendedStyleParams = useMemo(() => {
+    const approxFamily = getGenreFamily(effectiveIncludeTags, isGccStyleSelected, 'pop');
+    const GCC_MARKERS = /\b(khaleeji|kuwaiti|qatari|saudi|emirati|bahraini|omani|gulf|sheilat|samri|ardah|liwa|jalsa|mawwal)\b/i;
+    const isGccLike = isGccStyleSelected || effectiveIncludeTags.some((t) => GCC_MARKERS.test(t));
+    return getRecommendedStyleParams(approxFamily, isGccLike);
+  }, [effectiveIncludeTags, isGccStyleSelected]);
+
   const [songsUsed, setSongsUsed] = useState(0);
   const [songsLimit, setSongsLimit] = useState(30);
   const [songsRemaining, setSongsRemaining] = useState(30);
@@ -1697,8 +1725,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [savingTrackIds, setSavingTrackIds] = useState<string[]>([]);
   const [customMode, setCustomMode] = useState<boolean>(true);
   const [negativeTags, setNegativeTags] = useState<string>('');
-  const [styleWeight, setStyleWeight] = useState<number>(0.65);
-  const [weirdnessConstraint, setWeirdnessConstraint] = useState<number>(0.5);
+  const [styleWeightOverride, setStyleWeightOverride] = useState<number | null>(null);
+  const [weirdnessOverride, setWeirdnessOverride] = useState<number | null>(null);
   const [audioWeight, setAudioWeight] = useState<number>(0.65);
   const [showAdvancedSliders, setShowAdvancedSliders] = useState<boolean>(false);
   const [showPayloadPreview, setShowPayloadPreview] = useState<boolean>(false);
@@ -2998,27 +3026,158 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return parts.join('. ');
   }
 
+  type StructureSectionLabel =
+    | 'Mini Verse'
+    | 'Mini Chorus'
+    | 'Verse 1'
+    | 'Pre-Chorus'
+    | 'Chorus'
+    | 'Verse 2'
+    | 'Bridge'
+    | 'Instrumental Lift'
+    | 'Final Chorus'
+    | 'Instrumental Solo'
+    | 'Hook Reprise'
+    | 'Verse 3';
+
+  type RoadmapLabel = StructureSectionLabel | 'Intro' | 'Outro';
+
+  type StructureStep = {
+    label: StructureSectionLabel;
+    takesLyrics: boolean;
+  };
+
+  type DurationVariant = {
+    minStanzas: number;
+    steps: StructureStep[];
+  };
+
+  type DurationPreset = {
+    seconds: number;
+    display: string;
+    stanzaLimit: number;
+    variants: DurationVariant[];
+  };
+
+  const lyricStep = (label: StructureSectionLabel): StructureStep => ({ label, takesLyrics: true });
+  const supportStep = (label: StructureSectionLabel): StructureStep => ({ label, takesLyrics: false });
+
+  const DURATION_PRESETS: DurationPreset[] = [
+    {
+      seconds: 30,
+      display: '0:30',
+      stanzaLimit: 2,
+      variants: [
+        { minStanzas: 2, steps: [lyricStep('Mini Verse'), lyricStep('Mini Chorus')] },
+        { minStanzas: 1, steps: [lyricStep('Mini Verse'), supportStep('Instrumental Lift'), supportStep('Mini Chorus')] },
+      ],
+    },
+    {
+      seconds: 60,
+      display: '1:00',
+      stanzaLimit: 3,
+      variants: [
+        { minStanzas: 3, steps: [lyricStep('Verse 1'), lyricStep('Bridge'), supportStep('Instrumental Lift'), lyricStep('Chorus')] },
+        { minStanzas: 2, steps: [lyricStep('Verse 1'), supportStep('Instrumental Lift'), lyricStep('Chorus')] },
+        { minStanzas: 1, steps: [lyricStep('Verse 1'), supportStep('Instrumental Lift'), supportStep('Chorus')] },
+      ],
+    },
+    {
+      seconds: 90,
+      display: '1:30',
+      stanzaLimit: 4,
+      variants: [
+        { minStanzas: 4, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), supportStep('Instrumental Lift'), lyricStep('Verse 2')] },
+        { minStanzas: 3, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), supportStep('Instrumental Lift')] },
+        { minStanzas: 2, steps: [lyricStep('Verse 1'), supportStep('Bridge'), lyricStep('Chorus')] },
+        { minStanzas: 1, steps: [lyricStep('Verse 1'), supportStep('Instrumental Lift'), supportStep('Bridge'), supportStep('Chorus')] },
+      ],
+    },
+    {
+      seconds: 120,
+      display: '2:00',
+      stanzaLimit: 5,
+      variants: [
+        { minStanzas: 5, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), supportStep('Instrumental Lift'), lyricStep('Verse 2'), lyricStep('Final Chorus')] },
+        { minStanzas: 4, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), supportStep('Bridge'), lyricStep('Final Chorus')] },
+        { minStanzas: 3, steps: [lyricStep('Verse 1'), lyricStep('Chorus'), supportStep('Instrumental Solo'), supportStep('Bridge'), lyricStep('Final Chorus')] },
+        { minStanzas: 1, steps: [lyricStep('Verse 1'), supportStep('Instrumental Lift'), supportStep('Bridge'), supportStep('Final Chorus')] },
+      ],
+    },
+    {
+      seconds: 150,
+      display: '2:30',
+      stanzaLimit: 6,
+      variants: [
+        { minStanzas: 6, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), lyricStep('Verse 2'), supportStep('Instrumental Solo'), lyricStep('Bridge'), lyricStep('Final Chorus')] },
+        { minStanzas: 5, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), supportStep('Instrumental Solo'), lyricStep('Bridge'), lyricStep('Final Chorus')] },
+        { minStanzas: 4, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), supportStep('Instrumental Solo'), supportStep('Bridge'), lyricStep('Final Chorus')] },
+        { minStanzas: 1, steps: [lyricStep('Verse 1'), supportStep('Instrumental Solo'), supportStep('Bridge'), supportStep('Final Chorus')] },
+      ],
+    },
+    {
+      seconds: 180,
+      display: '3:00',
+      stanzaLimit: 6,
+      variants: [
+        { minStanzas: 6, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), lyricStep('Verse 2'), supportStep('Instrumental Solo'), lyricStep('Bridge'), lyricStep('Final Chorus')] },
+        { minStanzas: 5, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), supportStep('Instrumental Solo'), lyricStep('Bridge'), supportStep('Hook Reprise'), lyricStep('Final Chorus')] },
+        { minStanzas: 4, steps: [lyricStep('Verse 1'), lyricStep('Chorus'), supportStep('Instrumental Solo'), lyricStep('Bridge'), supportStep('Hook Reprise'), lyricStep('Final Chorus')] },
+        { minStanzas: 1, steps: [lyricStep('Verse 1'), supportStep('Instrumental Solo'), supportStep('Bridge'), supportStep('Hook Reprise'), supportStep('Final Chorus')] },
+      ],
+    },
+    {
+      seconds: 210,
+      display: '3:30',
+      stanzaLimit: 7,
+      variants: [
+        { minStanzas: 7, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), lyricStep('Verse 2'), supportStep('Instrumental Solo'), lyricStep('Bridge'), lyricStep('Verse 3'), lyricStep('Final Chorus')] },
+        { minStanzas: 6, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), lyricStep('Verse 2'), supportStep('Instrumental Solo'), lyricStep('Bridge'), supportStep('Hook Reprise'), lyricStep('Final Chorus')] },
+        { minStanzas: 5, steps: [lyricStep('Verse 1'), lyricStep('Pre-Chorus'), lyricStep('Chorus'), supportStep('Instrumental Solo'), lyricStep('Bridge'), supportStep('Hook Reprise'), lyricStep('Final Chorus')] },
+        { minStanzas: 1, steps: [lyricStep('Verse 1'), supportStep('Instrumental Solo'), supportStep('Bridge'), supportStep('Hook Reprise'), supportStep('Final Chorus')] },
+      ],
+    },
+  ];
+
+  const DURATION_VALUES = DURATION_PRESETS.map((preset) => preset.seconds);
+  const MAX_DURATION_SECONDS = DURATION_PRESETS[DURATION_PRESETS.length - 1]?.seconds ?? 210;
+  const STRUCTURE_LABELS_AR: Record<RoadmapLabel, string> = {
+    Intro: 'مقدمة',
+    Outro: 'خاتمة',
+    'Mini Verse': 'مقطع مصغّر',
+    'Mini Chorus': 'لازمة مصغّرة',
+    'Verse 1': 'المقطع الأول',
+    'Pre-Chorus': 'ما قبل اللازمة',
+    Chorus: 'اللازمة',
+    'Verse 2': 'المقطع الثاني',
+    Bridge: 'جسر',
+    'Instrumental Lift': 'رفعة موسيقية',
+    'Final Chorus': 'اللازمة النهائية',
+    'Instrumental Solo': 'سولو موسيقي',
+    'Hook Reprise': 'عودة الهوك',
+    'Verse 3': 'المقطع الثالث',
+  };
+
+  function getDurationPreset(targetSeconds: number): DurationPreset {
+    return DURATION_PRESETS.find((preset) => targetSeconds <= preset.seconds) ?? DURATION_PRESETS[DURATION_PRESETS.length - 1];
+  }
+
+  function getDurationVariant(preset: DurationPreset, stanzaCount: number): DurationVariant {
+    return preset.variants.find((variant) => stanzaCount >= variant.minStanzas) ?? preset.variants[preset.variants.length - 1];
+  }
+
+  function buildArrangementRoadmap(labels: RoadmapLabel[], wantsAr: boolean) {
+    if (wantsAr) {
+      return `خريطة التوزيع: ${labels.map((label) => STRUCTURE_LABELS_AR[label]).join(' → ')}.`;
+    }
+    return `Arrangement: ${labels.join(' → ')}.`;
+  }
+
   // Arrangement mapping per duration (producer-style roadmap)
   function getArrangementBrief(sec: number, wantsAr: boolean) {
-    const s = Math.min(120, Math.max(10, sec || 30));
-    if (s <= 30) {
-      return wantsAr
-        ? 'خريطة التوزيع: 0–4 ثانية مقدمة مُفلترة → 4–12 ثانية مقطع أول (آلات أقل) → 12–18 ثانية ما قبل اللازمة (تصاعد/رايزر) → 18–28 ثانية اللازمة (كامل الطقم وصوت أعرض) → 28–30 ثانية نهاية قصيرة واضحة.'
-        : 'Arrangement: 0–4s filtered intro → 4–12s verse (minimal instruments) → 12–18s pre-chorus (build/riser) → 18–28s chorus (full kit, wider stereo) → 28–30s button ending.';
-    }
-    if (s <= 60) {
-      return wantsAr
-        ? 'خريطة التوزيع: مقدمة قصيرة → مقطع أول → ما قبل اللازمة → اللازمة 1 → مقطع/انتقال → اللازمة 2 → خاتمة.'
-        : 'Arrangement: short intro → verse → pre-chorus → chorus 1 → interlude/transition → chorus 2 → outro.';
-    }
-    if (s <= 90) {
-      return wantsAr
-        ? 'خريطة التوزيع: مقدمة → مقطع → ما قبل اللازمة → اللازمة → جسر قصير → اللازمة (أعرض) → خاتمة.'
-        : 'Arrangement: intro → verse → pre-chorus → chorus → short bridge → bigger chorus → outro.';
-    }
-    return wantsAr
-      ? 'خريطة التوزيع: مقدمة → مقطع → ما قبل اللازمة → اللازمة → جسر → اللازمة النهائية (أعرض وأعلى طاقة) → خاتمة.'
-      : 'Arrangement: intro → verse → pre-chorus → chorus → bridge → final chorus (wider/louder) → outro.';
+    const preset = getDurationPreset(sec || 30);
+    const roadmap: RoadmapLabel[] = ['Intro', ...preset.variants[0].steps.map((step) => step.label), 'Outro'];
+    return buildArrangementRoadmap(roadmap, wantsAr);
   }
 
   // Post-process helpers to reduce repetition in lyrics
@@ -3477,36 +3636,36 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function getKhalijiStructurePlan(targetSeconds: number, desiredSections?: number, includeSolo: boolean = false) {
-    const normalizedSeconds =
-      targetSeconds <= 30 ? 30 :
-      targetSeconds <= 60 ? 60 :
-      targetSeconds <= 90 ? 90 :
-      targetSeconds <= 120 ? 120 :
-      targetSeconds <= 150 ? 150 : 200;
-    const stanzaLimit =
-      normalizedSeconds === 30 ? 2 :
-      normalizedSeconds === 60 ? 3 :
-      normalizedSeconds === 90 ? 4 :
-      normalizedSeconds === 120 ? 5 :
-      normalizedSeconds === 150 ? 6 : 7;
+    const preset = getDurationPreset(targetSeconds);
+    const stanzaLimit = preset.stanzaLimit;
     const sectionCount = Math.max(1, Math.min(desiredSections ?? stanzaLimit, stanzaLimit));
-    const labels =
-      sectionCount === 1 ? ['Verse 1'] :
-      sectionCount === 2 ? (normalizedSeconds === 30 ? ['Mini Verse', 'Mini Chorus'] : ['Verse 1', 'Chorus']) :
-      sectionCount === 3 ? ['Verse 1', 'Pre-Chorus', 'Chorus'] :
-      sectionCount === 4 ? ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2'] :
-      sectionCount === 5 ? ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Final Chorus'] :
-      sectionCount === 6 ? ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Bridge', 'Final Chorus'] :
-      ['Verse 1', 'Pre-Chorus', 'Chorus', 'Verse 2', 'Bridge', 'Verse 3', 'Final Chorus'];
-    const tailLabels = includeSolo && normalizedSeconds >= 150 ? ['Instrumental Solo'] : [];
+    const variant = getDurationVariant(preset, sectionCount);
+    let lyricCursor = 0;
+    const sections = variant.steps.map((step) => {
+      const resolvedLabel = step.label === 'Instrumental Solo' && !includeSolo ? 'Instrumental Lift' : step.label;
+      const stanzaIndex = step.takesLyrics && lyricCursor < sectionCount ? lyricCursor : null;
+      if (stanzaIndex !== null) lyricCursor += 1;
+      return {
+        label: resolvedLabel,
+        stanzaIndex,
+      };
+    });
+    const orderedLabels = sections.map((section) => section.label);
+    const labels = sections
+      .filter((section) => section.stanzaIndex !== null)
+      .map((section) => section.label);
+    const tailLabels = sections
+      .filter((section) => section.stanzaIndex === null)
+      .map((section) => section.label);
     return {
-      normalizedSeconds,
+      normalizedSeconds: preset.seconds,
+      sections,
       labels,
       tailLabels,
       stanzaLimit,
       allowAutoSolo: false,
-      shortRoadmap: `intro, ${[...labels, ...tailLabels].map((label) => label.toLowerCase()).join(', ')}, outro`,
-      longRoadmap: `Intro → ${[...labels, ...tailLabels].join(' → ')} → Outro`,
+      shortRoadmap: `intro, ${orderedLabels.map((label) => label.toLowerCase()).join(', ')}, outro`,
+      longRoadmap: `Intro → ${orderedLabels.join(' → ')} → Outro`,
     };
   }
 
@@ -3531,8 +3690,47 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return splitLyricStanzas(text).length;
   }
 
+  type ParsedUserTagPlacement = {
+    label: string;
+    lyricIndex: number;
+  };
+
+  function parseUserLyricStructure(text: string) {
+    const normalizedText = normalizeUserParens(text);
+    const blocks = normalizedText.split(/\n{2,}/).map((block) => block.trim()).filter(Boolean);
+    const lyricBlocks: string[] = [];
+    const standaloneTags: ParsedUserTagPlacement[] = [];
+    let hasTaggedLyricBlocks = false;
+
+    for (const block of blocks) {
+      const tagMatch = block.match(/^\[([^\]\n]+)\]([\s\S]*)$/);
+      if (!tagMatch) {
+        lyricBlocks.push(block);
+        continue;
+      }
+
+      const label = tagMatch[1].trim();
+      const body = tagMatch[2].trim();
+      if (body) {
+        hasTaggedLyricBlocks = true;
+        lyricBlocks.push(block);
+        continue;
+      }
+
+      standaloneTags.push({ label, lyricIndex: lyricBlocks.length });
+    }
+
+    return {
+      normalizedText,
+      lyricBlocks,
+      lyricText: lyricBlocks.join('\n\n').trim(),
+      standaloneTags,
+      hasTaggedLyricBlocks,
+    };
+  }
+
   function hasStructuredLyricLabels(text: string): boolean {
-    return /\[[a-zA-Z]/.test(normalizeUserParens(text));
+    return parseUserLyricStructure(text).hasTaggedLyricBlocks;
   }
 
   function scoreLyricBlockMerge(left: string, right: string): number {
@@ -3593,10 +3791,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   }
 
   function shouldAddInstrumentalSolo(targetSeconds: number, sectionCount: number, instruments: string[]): boolean {
-    const normalizedSeconds = targetSeconds <= 30 ? 30 : targetSeconds <= 60 ? 60 : targetSeconds <= 90 ? 90 : targetSeconds <= 120 ? 120 : targetSeconds <= 150 ? 150 : 200;
-    if (normalizedSeconds < 150) return false;
-    if (sectionCount < 6) return false;
-    return hasPlayableInstrumentSelection(instruments);
+    if (!hasPlayableInstrumentSelection(instruments)) return false;
+    return getKhalijiStructurePlan(targetSeconds, sectionCount, true).sections.some((section) => section.label === 'Instrumental Solo');
   }
 
   function buildSmartLyricStructure(text: string, targetSeconds: number, instruments: string[] = []) {
@@ -3621,13 +3817,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   // (30→2, 60→3, 90→4, 120→5, 150+→6). Returned values are valid duration
   // dropdown options [30, 60, 90, 120, 150, 200].
   function minDurationForStanzas(n: number): number {
-    if (n <= 2) return 30;
-    if (n <= 3) return 60;
-    if (n <= 4) return 90;
-    if (n <= 5) return 120;
-    if (n <= 6) return 150;
-    if (n <= 7) return 200;
-    return 201;
+    const stanzaCount = Math.max(1, n);
+    return DURATION_PRESETS.find((preset) => stanzaCount <= preset.stanzaLimit)?.seconds ?? MAX_DURATION_SECONDS;
   }
 
   function buildAutoTempoTag(style: string | null, rhythm: string | null, moods: string[], targetSeconds: number): string {
@@ -3957,9 +4148,33 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     },
   };
 
+  // Recommended styleWeight + weirdnessConstraint defaults per genre family.
+  // Used by sliders (display) and handleGenerate (fallback when no user override).
+  function getRecommendedStyleParams(genreFamily: GenreFamily, isGccEffective: boolean): { styleWeight: number; weirdnessConstraint: number } {
+    if ((genreFamily as string).startsWith('khaleeji-')) return { styleWeight: 0.95, weirdnessConstraint: 0.30 };
+    switch (genreFamily) {
+      case 'anasheed': return { styleWeight: 0.95, weirdnessConstraint: 0.15 };
+      case 'classical': return { styleWeight: 0.90, weirdnessConstraint: 0.20 };
+      case 'reggae': return { styleWeight: 0.80, weirdnessConstraint: 0.35 };
+      case 'pop': return { styleWeight: 0.75, weirdnessConstraint: 0.45 };
+      case 'metal': return { styleWeight: 0.75, weirdnessConstraint: 0.40 };
+      case 'roots': return { styleWeight: 0.75, weirdnessConstraint: 0.40 };
+      case 'world': return { styleWeight: 0.75, weirdnessConstraint: 0.40 };
+      case 'electronic': return { styleWeight: 0.75, weirdnessConstraint: 0.40 };
+      case 'urban': return { styleWeight: 0.70, weirdnessConstraint: 0.45 };
+      case 'rock': return { styleWeight: 0.70, weirdnessConstraint: 0.45 };
+      case 'punk': return { styleWeight: 0.70, weirdnessConstraint: 0.50 };
+      case 'jazz-blues': return { styleWeight: 0.70, weirdnessConstraint: 0.50 };
+      default:
+        return isGccEffective
+          ? { styleWeight: 0.95, weirdnessConstraint: 0.30 }
+          : { styleWeight: 0.85, weirdnessConstraint: 0.30 };
+    }
+  }
+
   // Detector — picks the GenreFamily for the user's primary chip.
   // Khaleeji chips route to subfamilies (khaleeji-pop / heritage / urban / party).
-  // All other chips classified by tag sets (mirrors handleGenerate's styleWeight logic).
+  // All other chips classified by tag sets.
   function getGenreFamily(
     effectiveIncludeTags: string[],
     isGccStyleSelected: boolean,
@@ -4103,6 +4318,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       ? ` underneath a light ${opts.supportingRhythms.join(' and ')}`
       : '';
     const s2 = `A ${v.arrangementAdj} arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
+    const paletteSentence = opts.instruments.length > 0
+      ? `Use ${instList} as the core featured instrument palette while letting ${label} shape the production details and supporting textures.`
+      : '';
 
     // S3 — vocal sentence packed with dialect-rich keywords Suno responds to.
     // "pure Saudi-Kuwaiti-Qatari Khaleeji dialect" + "authentic desert-coastal
@@ -4128,7 +4346,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       : '';
     const s4 = [moodPart, tempoPart, productionPart].filter(Boolean).join(' ') + exclusion;
 
-    return [s1, s2, s3, s4].filter(Boolean).join(' ');
+    return [s1, s2, paletteSentence, s3, s4].filter(Boolean).join(' ');
   }
 
   // Khaleeji Fusion Brief — fires when user pairs a NON-Khaleeji primary chip
@@ -4166,6 +4384,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       : '';
     const arrangementAdj = v.vocalCueAdj.toLowerCase();
     const s2 = `A ${arrangementAdj}, fusion-forward arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
+    const paletteSentence = opts.instruments.length > 0
+      ? `Use ${instList} as the core featured instrument palette while letting ${label} shape the production details and supporting textures.`
+      : '';
 
     // S3 — Khaleeji vocal identity sentence — the heart of the fusion brief.
     // Packed with the same identity DNA as buildKhalijiProductionBrief so Suno
@@ -4186,7 +4407,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // back to the genre's default vocal style mid-track.
     const s5 = `Khaleeji vocal identity dominates the entire performance while ${label.toLowerCase()} drives the production aesthetic.`;
 
-    return [s1, s2, s3, moodPart, tempoPart, s5].filter(Boolean).join(' ');
+    return [s1, s2, paletteSentence, s3, moodPart, tempoPart, s5].filter(Boolean).join(' ');
   }
 
   // Vocal character cue — ONE line at the very top of the prompt.
@@ -4234,11 +4455,56 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     if (/^bridge$/i.test(lower)) return `[Bridge — ${v.bridgeChar}]`;
     if (/^mini\s*verse$/i.test(lower)) return `[Mini Verse — vocal-forward, ${v.verseAdj}]`;
     if (/^mini\s*chorus$/i.test(lower)) return `[Mini Chorus — compact ${v.chorusLift} payoff]`;
+    if (/^instrumental\s*lift$/i.test(lower)) return `[Instrumental Lift — ${v.introScene(instruments)} swell]`;
     if (/^verse\s*\d*$/i.test(lower)) return `[${inner} — vocal-forward, ${v.verseAdj}]`;
     if (/^instrumental\s*solo$/i.test(lower)) return `[Instrumental Solo — ${v.introScene(instruments)} lead]`;
+    if (/^hook\s*reprise$/i.test(lower)) return `[Hook Reprise — return of the main ${v.chorusLift} hook]`;
 
     // Custom/unknown tag — respect user creativity, leave alone
     return rawTag;
+  }
+
+  function buildSupportSectionCue(label: RoadmapLabel, genreFamily: GenreFamily, instruments: string[]): string | null {
+    const lower = label.toLowerCase();
+    const v = GENRE_VOCAB[genreFamily];
+
+    if (/^bridge$/i.test(lower)) return `[Instrumental bridge — no lead lyric, ${v.bridgeChar}, transition into the next section]`;
+    if (/^instrumental\s*lift$/i.test(lower)) return `[Instrumental lift — no lead lyric, quick ${v.chorusLift} swell, push the arrangement forward]`;
+    if (/^instrumental\s*solo$/i.test(lower)) return `[Instrumental solo — no lead lyric, featured ${v.introScene(instruments)} lead takes the spotlight]`;
+    if (/^hook\s*reprise$/i.test(lower)) return `[Hook reprise — no new verse lyric, bring back the main hook with short ad-libs or wordless lift]`;
+    if (/^mini\s*chorus$/i.test(lower)) return `[Mini chorus payoff — no new verse lyric, compact hook hit with chant-like or wordless energy]`;
+    if (/^chorus$/i.test(lower)) return `[Chorus payoff — no new verse lyric, hook-forward lift with chant-like or wordless energy if needed]`;
+    if (/^final\s*chorus$/i.test(lower)) return `[Final chorus payoff — no new verse lyric, layered hook return, strong ending energy]`;
+    if (/^outro$/i.test(lower)) return `[Outro ending — no lead lyric, short branded finish, final hit, smooth fade]`;
+
+    return null;
+  }
+
+  function resolveRoadmapLabel(rawLabel: string): RoadmapLabel | null {
+    const normalized = rawLabel.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (normalized === 'intro') return 'Intro';
+    if (normalized === 'outro') return 'Outro';
+    if (normalized === 'mini verse') return 'Mini Verse';
+    if (normalized === 'mini chorus') return 'Mini Chorus';
+    if (normalized === 'verse 1') return 'Verse 1';
+    if (normalized === 'pre-chorus' || normalized === 'pre chorus') return 'Pre-Chorus';
+    if (normalized === 'chorus') return 'Chorus';
+    if (normalized === 'verse 2') return 'Verse 2';
+    if (normalized === 'bridge') return 'Bridge';
+    if (normalized === 'instrumental lift') return 'Instrumental Lift';
+    if (normalized === 'final chorus') return 'Final Chorus';
+    if (normalized === 'instrumental solo') return 'Instrumental Solo';
+    if (normalized === 'hook reprise') return 'Hook Reprise';
+    if (normalized === 'verse 3') return 'Verse 3';
+    return null;
+  }
+
+  function renderStandaloneUserTag(label: string, genreFamily: GenreFamily, instruments: string[], useRecipe: boolean): string {
+    const tag = `[${label}]`;
+    const renderedTag = useRecipe ? enrichSectionTag(tag, genreFamily, instruments) : tag;
+    const resolvedLabel = resolveRoadmapLabel(label);
+    const cue = resolvedLabel ? buildSupportSectionCue(resolvedLabel, genreFamily, instruments) : null;
+    return cue ? `${renderedTag}\n${cue}` : renderedTag;
   }
 
   function buildKhalijiControlBlock(durationSeconds: number = duration, structuredSectionCount?: number, includeSolo: boolean = false) {
@@ -4842,6 +5108,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
     // STAGE 2: Normalize user parens → brackets so they're treated as proper Suno tags.
     text = normalizeUserParens(text);
+    const parsedInput = parseUserLyricStructure(text);
 
     // Universal enrichment gate — fires for EVERY genre family.
     const useRecipe = WAKTI_RECIPE_V1;
@@ -4853,8 +5120,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const vocalCue: string | null = useRecipe ? buildVocalCharacterCue(genreFamily, vocalType, forceKhaleejiAnchor) : null;
 
     // STAGE 4 — PATH A: User labeled at least some sections (after paren normalization).
-    const hasAnyBracket = /\[[a-zA-Z]/.test(text);
-    if (hasAnyBracket) {
+    if (parsedInput.hasTaggedLyricBlocks) {
       let enriched = text;
       if (useRecipe) {
         enriched = autoLabelLyrics
@@ -4880,37 +5146,73 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       return vocalCue ? `${vocalCue}\n\n${text}` : text;
     }
 
+    if (!parsedInput.lyricText) {
+      let enriched = text;
+      if (useRecipe) {
+        enriched = enriched.replace(/\[([^\]\n]+)\]/g, (full) => enrichSectionTag(full, genreFamily, selectedInstruments));
+      }
+      if (vocalCue) {
+        const firstLine = enriched.split('\n').find((l) => l.trim().length > 0) ?? '';
+        const alreadyHasCue = /\[[^\]]*vocal[^\]]*\]/i.test(firstLine) || /\[[^\]]*voice[^\]]*\]/i.test(firstLine);
+        if (!alreadyHasCue) {
+          enriched = `${vocalCue}\n\n${enriched}`;
+        }
+      }
+      return enriched;
+    }
+
     // Otherwise auto-build full structure from duration plan.
-    const smartStructure = buildSmartLyricStructure(text, targetSeconds, selectedInstruments);
+    const smartStructure = buildSmartLyricStructure(parsedInput.lyricText, targetSeconds, selectedInstruments);
     const structurePlan = smartStructure.structurePlan;
     const arrangedStanzas = smartStructure.stanzas;
-
-    const labels = structurePlan.labels;
     const structured: string[] = [];
     if (vocalCue) structured.push(vocalCue);
 
-    const introTag = useRecipe ? enrichSectionTag('[Intro]', genreFamily, selectedInstruments) : '[Intro]';
+    const leadingIntroTag = parsedInput.standaloneTags.find((tag) => tag.lyricIndex === 0 && resolveRoadmapLabel(tag.label) === 'Intro');
+    const introTag = leadingIntroTag
+      ? renderStandaloneUserTag(leadingIntroTag.label, genreFamily, selectedInstruments, useRecipe)
+      : useRecipe ? enrichSectionTag('[Intro]', genreFamily, selectedInstruments) : '[Intro]';
     structured.push(introTag);
 
-    arrangedStanzas.forEach((stanza, i) => {
-      const baseLabelText = labels[i] ?? `Verse ${i + 1}`;
+    const standaloneTags = parsedInput.standaloneTags.filter((tag) => tag !== leadingIntroTag);
+    const tagsBeforeStanza = new Map<number, string[]>();
+    const tailTags: string[] = [];
+
+    standaloneTags.forEach((tag) => {
+      const rendered = renderStandaloneUserTag(tag.label, genreFamily, selectedInstruments, useRecipe);
+      if (tag.lyricIndex < arrangedStanzas.length) {
+        const bucket = tagsBeforeStanza.get(tag.lyricIndex) ?? [];
+        bucket.push(rendered);
+        tagsBeforeStanza.set(tag.lyricIndex, bucket);
+        return;
+      }
+      tailTags.push(rendered);
+    });
+
+    structurePlan.sections.forEach((section, i) => {
+      if (section.stanzaIndex !== null) {
+        const pendingTags = tagsBeforeStanza.get(section.stanzaIndex) ?? [];
+        if (pendingTags.length > 0) {
+          structured.push(...pendingTags);
+          tagsBeforeStanza.delete(section.stanzaIndex);
+        }
+      }
+      const stanza = section.stanzaIndex !== null ? arrangedStanzas[section.stanzaIndex] : null;
+      const baseLabelText = section.label ?? `Verse ${i + 1}`;
       const baseLabel = useRecipe
         ? enrichSectionTag(`[${baseLabelText}]`, genreFamily, selectedInstruments)
         : `[${baseLabelText}]`;
-      structured.push(`${baseLabel}\n${stanza}`);
+      const supportCue = stanza ? null : buildSupportSectionCue(section.label, genreFamily, selectedInstruments);
+      structured.push(stanza ? `${baseLabel}\n${stanza}` : supportCue ? `${baseLabel}\n${supportCue}` : baseLabel);
     });
 
-    structurePlan.tailLabels.forEach((tailLabel) => {
-      const baseTailLabel = useRecipe
-        ? enrichSectionTag(`[${tailLabel}]`, genreFamily, selectedInstruments)
-        : `[${tailLabel}]`;
-      structured.push(baseTailLabel);
-    });
+    structured.push(...tailTags);
 
     const hasOutro = structured.some((s) => /^\[Outro\b/.test(s));
     if (!hasOutro) {
       const outroTag = useRecipe ? enrichSectionTag('[Outro]', genreFamily, selectedInstruments) : '[Outro]';
-      structured.push(outroTag);
+      const outroCue = buildSupportSectionCue('Outro', genreFamily, selectedInstruments);
+      structured.push(outroCue ? `${outroTag}\n${outroCue}` : outroTag);
     }
 
     return structured.join('\n\n');
@@ -4943,10 +5245,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // Returns the duration to use locally for this generation (state update
     // is async, so we can't rely on `duration` after setDuration).
     let effectiveDuration = duration;
-    const normalizedLyrics = lyricsText.trim() ? normalizeUserParens(lyricsText.trim()) : '';
-    const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(normalizedLyrics) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
+    const parsedLyrics = lyricsText.trim() ? parseUserLyricStructure(lyricsText.trim()) : null;
+    const normalizedLyrics = parsedLyrics?.normalizedText ?? '';
+    const lyricPlanningText = parsedLyrics?.lyricText?.trim() ?? normalizedLyrics;
+    const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(lyricPlanningText) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
     if (shouldSmartStructureLyrics) {
-      const smartCapacity = buildSmartLyricStructure(normalizedLyrics, 200, instrumentTags);
+      const smartCapacity = buildSmartLyricStructure(lyricPlanningText, MAX_DURATION_SECONDS, instrumentTags);
       const sectionCount = smartCapacity.stanzas.length;
       const requiredDuration = minDurationForStanzas(sectionCount);
       if (requiredDuration > duration) {
@@ -4985,9 +5289,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
       const rawLyrics = lyricsText.trim() || styleText.trim();
-      const durationTarget = Math.min(200, effectiveDuration);
+      const durationTarget = Math.min(MAX_DURATION_SECONDS, effectiveDuration);
       const smartSectionPlan = shouldSmartStructureLyrics
-        ? buildSmartLyricStructure(rawLyrics, durationTarget, instrumentTags)
+        ? buildSmartLyricStructure(lyricPlanningText, durationTarget, instrumentTags)
         : null;
       const khalijiControlBlock = buildKhalijiControlBlock(durationTarget, smartSectionPlan?.stanzas.length, smartSectionPlan?.includeSolo ?? false);
       const kieStyle = khalijiControlBlock.styleString;
@@ -5316,6 +5620,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       // due to a label drift between STYLE_GROUPS / GCC_STYLE_SET / STYLE_ANCHORS.
       const GCC_STYLE_MARKERS = /\b(khaleeji|kuwaiti|qatari|saudi|emirati|bahraini|omani|gulf|sheilat|samri|ardah|liwa|jalsa|mawwal)\b/i;
       const isGccEffective = isGccStyleSelected || GCC_STYLE_MARKERS.test(resolvedStyle);
+      const recommendedParams = getRecommendedStyleParams(genreFamily, isGccEffective);
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
@@ -5325,15 +5630,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         instrumental,
         // Model: always V5_5 (best musicality + best vocal quality). Tested V4_5PLUS
         // for GCC dialect obedience and it produced non-Gulf (Egyptian/Levantine) output,
-        // so reverted. GCC identity is now enforced through styleWeight 0.95, tail dialect
-        // anchor in the style string, and a prioritized negativeTags shield instead.
+        // so reverted. GCC identity is enforced through styleWeight + tail dialect
+        // anchor in the style string, and a prioritised negativeTags shield.
         model: 'V5_5',
         duration_seconds: durationTarget,
-        // GCC lifted to 0.95 (identity-locked tier, matching Anasheed). Treats Khaleeji
-        // dialect as non-negotiable identity so user freetext / instruments / rhythm cannot
-        // dilute the vocal signal.
-        styleWeight: isAnasheedStyle ? 0.95 : isClassicalStyle ? 0.90 : isReggaeStyle ? 0.80 : isPopStyle ? 0.75 : isMetalStyle ? 0.75 : isRootsStyle ? 0.75 : isWorldMiscStyle ? 0.75 : isElectronicStyle ? 0.75 : isUrbanStyle ? 0.70 : isRockStyle ? 0.70 : isPunkStyle ? 0.70 : isJazzBluesStyle ? 0.70 : isGccEffective ? 0.95 : 0.85,
-        weirdnessConstraint: isAnasheedStyle ? 0.15 : isClassicalStyle ? 0.20 : isReggaeStyle ? 0.35 : isPopStyle ? 0.45 : isMetalStyle ? 0.40 : isRootsStyle ? 0.40 : isWorldMiscStyle ? 0.40 : isElectronicStyle ? 0.40 : isUrbanStyle ? 0.45 : isRockStyle ? 0.45 : isPunkStyle ? 0.50 : isJazzBluesStyle ? 0.50 : 0.30,
+        // User slider overrides take precedence; otherwise genre-based recommended defaults.
+        styleWeight: styleWeightOverride ?? recommendedParams.styleWeight,
+        weirdnessConstraint: weirdnessOverride ?? recommendedParams.weirdnessConstraint,
         audioWeight: 0.8,
         negativeTags: finalNegativeTags,
         controlBlock: khalijiControlBlock.controlBlock,
@@ -6385,10 +6688,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 {isAr ? 'خيارات متقدمة' : 'Advanced'}
               </button>
               <div className="flex items-center gap-2">
-                {(tempoOverride || keyOverride) && (
+                {(tempoOverride || keyOverride || styleWeightOverride !== null || weirdnessOverride !== null) && (
                   <button
                     type="button"
-                    onClick={() => { setTempoOverride(''); setKeyOverride(''); }}
+                    onClick={() => { setTempoOverride(''); setKeyOverride(''); setStyleWeightOverride(null); setWeirdnessOverride(null); }}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] text-[#606062] dark:text-white/60 hover:bg-[#f7f8fc] dark:hover:bg-white/[0.08] active:scale-95 transition-all"
                   >
                     {isAr ? 'إعادة تلقائي' : 'Reset to auto'}
@@ -6405,17 +6708,19 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                       // and the user's lyrics exceed capacity, preview the auto-bumped duration
                       // so what's shown matches what will actually be generated.
                       const rawLyrics = lyricsText.trim() || styleText.trim();
-                      const normalizedLyrics = lyricsText.trim() ? normalizeUserParens(lyricsText.trim()) : '';
-                      const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(normalizedLyrics) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
+                      const parsedLyrics = lyricsText.trim() ? parseUserLyricStructure(lyricsText.trim()) : null;
+                      const normalizedLyrics = parsedLyrics?.normalizedText ?? '';
+                      const lyricPlanningText = parsedLyrics?.lyricText?.trim() ?? normalizedLyrics;
+                      const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(lyricPlanningText) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
                       let previewEffectiveDuration = duration;
                       if (shouldSmartStructureLyrics) {
-                        const smartCapacity = buildSmartLyricStructure(normalizedLyrics, 200, instrumentTags);
+                        const smartCapacity = buildSmartLyricStructure(lyricPlanningText, MAX_DURATION_SECONDS, instrumentTags);
                         const requiredDuration = minDurationForStanzas(smartCapacity.stanzas.length);
                         if (requiredDuration > duration) previewEffectiveDuration = requiredDuration;
                       }
-                      const durationTarget = Math.min(200, previewEffectiveDuration);
+                      const durationTarget = Math.min(MAX_DURATION_SECONDS, previewEffectiveDuration);
                       const smartSectionPlan = shouldSmartStructureLyrics
-                        ? buildSmartLyricStructure(rawLyrics, durationTarget, instrumentTags)
+                        ? buildSmartLyricStructure(lyricPlanningText, durationTarget, instrumentTags)
                         : null;
                       const cb = buildKhalijiControlBlock(durationTarget, smartSectionPlan?.stanzas.length, smartSectionPlan?.includeSolo ?? false);
                       const primaryStyleForCue = effectiveIncludeTags[0] ? (STYLE_ANCHORS[effectiveIncludeTags[0]] ?? '') : '';
@@ -6435,12 +6740,17 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         autoLabelLyrics,
                         previewKhaleejiTrigger,
                       );
+                      const previewGccMarkers = /\b(khaleeji|kuwaiti|qatari|saudi|emirati|bahraini|omani|gulf|sheilat|samri|ardah|liwa|jalsa|mawwal)\b/i;
+                      const previewIsGccLike = isGccStyleSelected || effectiveIncludeTags.some((t) => previewGccMarkers.test(t));
+                      const previewRecommended = getRecommendedStyleParams(previewGenreFamily, previewIsGccLike);
                       const preview = {
                         title: title.trim(),
                         customMode: true,
                         instrumental,
                         vocalGender: vocalGender ?? null,
                         duration_seconds: durationTarget,
+                        styleWeight: styleWeightOverride ?? previewRecommended.styleWeight,
+                        weirdnessConstraint: weirdnessOverride ?? previewRecommended.weirdnessConstraint,
                         style: cb.styleString,
                         prompt: instrumental ? null : structuredPrompt,
                         tempoHint: cb.tempoTag,
@@ -6469,7 +6779,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               </div>
             </div>
 
-            {showAdvancedSliders && (
+            {showAdvancedSliders && (<>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <select
                   value={tempoOverride}
@@ -6496,24 +6806,66 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                   ))}
                 </select>
               </div>
-            )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-[#606062] dark:text-white/60">
+                      {isAr ? 'قوة الأسلوب' : 'Style Strength'}
+                    </label>
+                    <span className="text-[10px] font-mono text-[#858384] dark:text-white/40">
+                      {(styleWeightOverride ?? recommendedStyleParams.styleWeight).toFixed(2)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={styleWeightOverride ?? recommendedStyleParams.styleWeight}
+                    onChange={(e) => setStyleWeightOverride(parseFloat(e.target.value))}
+                    title={isAr ? 'قوة الأسلوب' : 'Style Strength'}
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-[#d9dde7] dark:bg-white/10 accent-sky-500"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-semibold text-[#606062] dark:text-white/60">
+                      {isAr ? 'حرية الإبداع' : 'Creative Freedom'}
+                    </label>
+                    <span className="text-[10px] font-mono text-[#858384] dark:text-white/40">
+                      {(weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint).toFixed(2)}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={weirdnessOverride ?? recommendedStyleParams.weirdnessConstraint}
+                    onChange={(e) => setWeirdnessOverride(parseFloat(e.target.value))}
+                    title={isAr ? 'حرية الإبداع' : 'Creative Freedom'}
+                    className="w-full h-1.5 rounded-full appearance-none cursor-pointer bg-[#d9dde7] dark:bg-white/10 accent-sky-500"
+                  />
+                  <p className="text-[9px] text-[#858384] dark:text-white/40 leading-tight">
+                    {isAr ? 'قيمة أعلى = نتائج أكثر تجريبية وغير متوقعة' : 'Higher = more experimental & unpredictable'}
+                  </p>
+                </div>
+              </div>
+            </>)}
 
             <div className="flex items-center gap-3 pt-1">
               <select
                 value={duration}
                 onChange={(e) => {
                   const nextDuration = parseInt(e.target.value || '30', 10);
-                  setDuration([30, 60, 90, 120, 150, 200].includes(nextDuration) ? nextDuration : 30);
+                  setDuration(DURATION_VALUES.includes(nextDuration) ? nextDuration : 30);
                 }}
                 title={isAr ? 'المدة' : 'Duration'}
                 className="flex-shrink-0 px-3 py-2 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-white/[0.04] shadow-[0_4px_12px_rgba(6,5,65,0.04)] dark:shadow-none text-foreground text-sm focus:border-sky-400/50 focus:outline-none"
               >
-                <option value={30}>0:30</option>
-                <option value={60}>1:00</option>
-                <option value={90}>1:30</option>
-                <option value={120}>2:00</option>
-                <option value={150}>2:30</option>
-                <option value={200}>3:20</option>
+                {DURATION_PRESETS.map((preset) => (
+                  <option key={preset.seconds} value={preset.seconds}>{preset.display}</option>
+                ))}
               </select>
               <button
                 type="button"
@@ -7686,6 +8038,33 @@ function EditorTab() {
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
   const [trackYouTubeTarget, setTrackYouTubeTarget] = useState<SavedTrack | null>(null);
 
+  const copyLyricsText = async (text: string) => {
+    const cleanText = text.trim();
+    if (!cleanText) {
+      toast.error(isAr ? 'لا توجد كلمات لنسخها' : 'No lyrics to copy');
+      return;
+    }
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(cleanText);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = cleanText;
+        textarea.setAttribute('readonly', 'true');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      toast.success(isAr ? 'تم نسخ الكلمات' : 'Lyrics copied');
+    } catch {
+      toast.error(isAr ? 'تعذر نسخ الكلمات' : 'Could not copy lyrics');
+    }
+  };
+
   // ── Rename track
   const [renamingTrackId, setRenamingTrackId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
@@ -8386,7 +8765,7 @@ function EditorTab() {
                   ? `${Math.floor(durationSec / 60)}:${String(Math.round(durationSec % 60)).padStart(2, '0')}`
                   : null;
                 const trackTitle = t.title || (t.prompt ? t.prompt.slice(0, 40) : (isAr ? 'مقطع موسيقي' : 'Music Track'));
-                const trackLyrics = (t.prompt || '').trim();
+                const trackLyrics = extractLyricsOnlyText(t.prompt);
                 const hasLyrics = trackLyrics.length > 0;
                 const isLyricsExpanded = expandedLyricsTrackId === t.id;
                 const lyricLines = trackLyrics.split('\n').map((line) => line.trim()).filter(Boolean);
@@ -8634,6 +9013,19 @@ function EditorTab() {
                                 }}
                                 tabIndex={0}
                               >
+                                <div className="relative z-20 mb-2 flex justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      void copyLyricsText(trackLyrics);
+                                    }}
+                                    className="inline-flex items-center gap-1.5 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-white/80 dark:bg-white/[0.06] px-3 py-1.5 text-[11px] font-semibold text-[#060541] dark:text-white/80 hover:bg-white dark:hover:bg-white/[0.1] active:scale-95 transition-all"
+                                  >
+                                    <Copy className="h-3.5 w-3.5" />
+                                    <span>{isAr ? 'نسخ الكلمات' : 'Copy lyrics'}</span>
+                                  </button>
+                                </div>
                                 <div className="pointer-events-none absolute inset-x-4 top-3 h-5 bg-gradient-to-b from-[#eef4ff] via-[#eef4ff]/75 to-transparent dark:from-[#171b22] dark:via-[#171b22]/70 dark:to-transparent z-10 rounded-t-xl" />
                                 <div className="pointer-events-none absolute inset-x-4 bottom-3 h-5 bg-gradient-to-t from-[#eef4ff] via-[#eef4ff]/75 to-transparent dark:from-[#171b22] dark:via-[#171b22]/70 dark:to-transparent z-10 rounded-b-xl" />
                                 <div className="relative z-0 max-h-[6.6rem] overflow-hidden px-2 py-1">

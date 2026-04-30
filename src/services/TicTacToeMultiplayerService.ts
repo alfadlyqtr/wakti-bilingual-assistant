@@ -1,12 +1,27 @@
 // @ts-nocheck
 // Tic-Tac-Toe Multiplayer service.
 // Tables/RPCs are not yet in the generated supabase types; we use a loose `any` client.
-import { supabase } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 
 const db = supabase as any;
 
 export type TttSymbol = 'X' | 'O';
 export type TttCell = TttSymbol | null;
+export type TttMessageKey = 'good_luck' | 'nice_move' | 'your_turn' | 'good_game' | 'gotta_go' | 'custom';
+
+export interface TttMessageRow {
+  id: string;
+  game_code: string;
+  user_id: string;
+  message_key: TttMessageKey;
+  custom_text: string | null;
+  created_at: string;
+}
+
+export interface TttSendMessageInput {
+  messageKey: TttMessageKey;
+  customText?: string | null;
+}
 
 export interface TttGameRow {
   code: string;
@@ -87,6 +102,46 @@ export const TicTacToeMultiplayerService = {
     return data as TttGameRow;
   },
 
+  notifyLeaveOnExit(code: string, accessToken?: string | null): void {
+    if (!accessToken) return;
+    fetch(`${SUPABASE_URL}/rest/v1/rpc/tictactoe_leave_game`, {
+      method: 'POST',
+      keepalive: true,
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ p_code: code }),
+    }).catch(() => {});
+  },
+
+  async fetchMessages(code: string): Promise<TttMessageRow[]> {
+    const { data, error } = await db
+      .from('tictactoe_messages')
+      .select('*')
+      .eq('game_code', code)
+      .order('created_at', { ascending: false })
+      .limit(8);
+    if (error) throw error;
+    return ((data as TttMessageRow[]) || []).reverse();
+  },
+
+  async sendMessage(code: string, userId: string, input: TttSendMessageInput): Promise<TttMessageRow> {
+    const { data, error } = await db
+      .from('tictactoe_messages')
+      .insert({
+        game_code: code,
+        user_id: userId,
+        message_key: input.messageKey,
+        custom_text: input.customText ?? null,
+      })
+      .select('*')
+      .single();
+    if (error) throw error;
+    return data as TttMessageRow;
+  },
+
   /**
    * Subscribe to realtime UPDATE/INSERT events on a single game row.
    * Returns an unsubscribe function.
@@ -99,6 +154,22 @@ export const TicTacToeMultiplayerService = {
         { event: '*', schema: 'public', table: 'tictactoe_games', filter: `code=eq.${code}` },
         (payload: any) => {
           if (payload.new) onChange(payload.new as TttGameRow);
+        }
+      )
+      .subscribe();
+    return () => {
+      try { db.removeChannel(channel); } catch {}
+    };
+  },
+
+  subscribeToMessages(code: string, onMessage: (row: TttMessageRow) => void): () => void {
+    const channel = db
+      .channel(`ttt:messages:${code}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'tictactoe_messages', filter: `game_code=eq.${code}` },
+        (payload: any) => {
+          if (payload.new) onMessage(payload.new as TttMessageRow);
         }
       )
       .subscribe();
