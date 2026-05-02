@@ -173,12 +173,27 @@ export default function MyWishlists() {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [selectedFriendListId, setSelectedFriendListId] = useState<string | null>(null);
   const [sharedListId, setSharedListId] = useState<string | null>(null);
+  const [contactFilterId, setContactFilterId] = useState<string | null>(null);
 
   // Check for list query parameter and auto-open that list
   useEffect(() => {
-    const sharedId = searchParams.get("shared");
+    const sharedId = searchParams.get("sharedView") || searchParams.get("shared");
     if (sharedId) {
-      navigate(`/wishlist/${sharedId}`, { replace: true });
+      setSharedListId(sharedId);
+      setSelectedListId(null);
+      setSelectedFriendListId(null);
+      setContactFilterId(null);
+      setView("shared-list-detail");
+      return;
+    }
+
+    const contactId = searchParams.get("contact");
+    if (contactId) {
+      setSharedListId(null);
+      setSelectedListId(null);
+      setSelectedFriendListId(null);
+      setContactFilterId(contactId);
+      setView("friends");
       return;
     }
 
@@ -186,9 +201,18 @@ export default function MyWishlists() {
     if (listId) {
       setSharedListId(null);
       setSelectedListId(listId);
+      setSelectedFriendListId(null);
+      setContactFilterId(null);
       setView("list-detail");
+      return;
     }
-  }, [navigate, searchParams]);
+
+    setSharedListId(null);
+    setSelectedListId(null);
+    setSelectedFriendListId(null);
+    setContactFilterId(null);
+    setView("my");
+  }, [searchParams]);
 
   // Dialogs
   const [showNewListDialog, setShowNewListDialog] = useState(false);
@@ -759,6 +783,18 @@ export default function MyWishlists() {
 
   const selectedList = myLists.find((l) => l.id === selectedListId);
   const selectedFriendList = friendLists.find((l) => l.id === selectedFriendListId) as FriendWishlist | undefined;
+  const visibleFriendLists = contactFilterId
+    ? friendLists.filter((list) => list.user_id === contactFilterId)
+    : friendLists;
+
+  useEffect(() => {
+    if (!contactFilterId || view !== "friends" || selectedFriendListId || visibleFriendLists.length !== 1) {
+      return;
+    }
+
+    setSelectedFriendListId(visibleFriendLists[0].id);
+    setView("friend-list-detail");
+  }, [contactFilterId, selectedFriendListId, view, visibleFriendLists]);
 
   // ── RENDER: Top nav tabs ────────────────────────────────────────────────────
   const renderTopTabs = () => (
@@ -767,6 +803,9 @@ export default function MyWishlists() {
         onClick={() => {
           setView("my");
           setSelectedListId(null);
+          setSelectedFriendListId(null);
+          setSharedListId(null);
+          setContactFilterId(null);
         }}
         className={cn(
           "flex-1 min-h-11 px-3 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]",
@@ -779,7 +818,7 @@ export default function MyWishlists() {
         {isAr ? "قوائمي" : "My Lists"}
       </button>
       <button
-        onClick={() => { setView("friends"); setSelectedFriendListId(null); }}
+        onClick={() => { setView("friends"); setSelectedListId(null); setSelectedFriendListId(null); setSharedListId(null); }}
         className={cn(
           "flex-1 min-h-11 px-3 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]",
           view === "friends" || view === "friend-list-detail"
@@ -950,17 +989,17 @@ export default function MyWishlists() {
         <div className="flex justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      ) : friendLists.length === 0 ? (
+      ) : visibleFriendLists.length === 0 ? (
         <div className="text-center py-16 space-y-3">
           <div className="text-5xl">👥</div>
-          <p className="text-lg font-semibold">{isAr ? "لا توجد قوائم من الأصدقاء" : "No friend wishlists yet"}</p>
+          <p className="text-lg font-semibold">{contactFilterId ? (isAr ? "لا توجد قوائم لهذا الصديق" : "This contact has no visible wishlists") : (isAr ? "لا توجد قوائم من الأصدقاء" : "No friend wishlists yet")}</p>
           <p className="text-sm text-muted-foreground">
-            {isAr ? "سيظهر هنا قوائم أصدقائك عندما يشاركونها" : "Your friends' lists will appear here once they share them"}
+            {contactFilterId ? (isAr ? "إذا كانت القائمة عامة أو لجهات الاتصال فستظهر هنا." : "If their wishlist is public or contacts-visible, it will appear here.") : (isAr ? "سيظهر هنا قوائم أصدقائك عندما يشاركونها" : "Your friends' lists will appear here once they share them")}
           </p>
         </div>
       ) : (
         <div className="space-y-3">
-          {friendLists.map((list) => {
+          {visibleFriendLists.map((list) => {
             const fl = list as FriendWishlist;
             return (
               <Card

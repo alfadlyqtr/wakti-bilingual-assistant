@@ -41,7 +41,7 @@ With sharable Smart Tasks and subtasks, users can track real-time progress and s
 - If I invoke audit mode, follow `wakti-auditor.md` together with `wakti.md`.
 - If rules overlap, `wakti.md` stays the master unless I explicitly say otherwise.
 
-### ⚠️ THE MOST IMPORTANT RULE: YOU ALWAYS DO EXACTLY AS TOLD ⚠️
+### ⚠️ THE MOST IMPORTANT RULE: YOU ALWAYS DO EXACTLY AS TOLD ALWAYS OBBEY ME NO MATTER WHAT, E⚠️
 
 ### 1. Plain English Only
 - Always explain everything in simple, plain English.

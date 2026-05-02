@@ -37,6 +37,11 @@ import VisualAdsGenerator, {
 } from '@/components/studio/VisualAdsGenerator';
 
 type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw' | 'visual-ads';
+type ScreenshotDeviceType = NonNullable<VisualAdsState['assets']>[number]['screenshotDevice'];
+type FrozenVisualAdsScreenshotLayer = {
+  imageUrl: string;
+  device: ScreenshotDeviceType;
+};
 
 const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
 const MAX_STUDIO_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -102,6 +107,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [savedImageId, setSavedImageId] = useState<string | null>(null);
   const [savedSourceUrl, setSavedSourceUrl] = useState<string | null>(null);
   const [savedBucketUrl, setSavedBucketUrl] = useState<string | null>(null);
+  const frozenVisualAdsScreenshotRef = useRef<FrozenVisualAdsScreenshotLayer | null>(null);
   const [selectedSavedImageId, setSelectedSavedImageId] = useState<string | null>(null);
   const [savingGeneratedId, setSavingGeneratedId] = useState<string | null>(null);
   const bgCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
@@ -535,6 +541,281 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     return { url: sanitizeImageUrl(json.url as string), storagePath: json.storagePath as string };
   }, [quality, submode]);
 
+  const storeGeneratedImageAsset = useCallback(async (imageUrl: string): Promise<{ url: string; storagePath: string }> => {
+    if (!user?.id) throw new Error('Authentication required');
+
+    try {
+      const res = await fetch(imageUrl);
+      if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
+      const blob = await res.blob();
+      const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+      const randomId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const fileName = `${user.id}/${submode}-${Date.now()}-${randomId}.${ext}`;
+      const { error: uploadErr } = await supabase.storage
+        .from('generated-images')
+        .upload(fileName, blob, { contentType: blob.type, upsert: false });
+      if (uploadErr) throw uploadErr;
+
+      const { data: urlData } = supabase.storage
+        .from('generated-images')
+        .getPublicUrl(fileName);
+      const bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
+      if (!bucketUrl) throw new Error('Failed to get public URL');
+      return { url: bucketUrl, storagePath: fileName };
+    } catch {
+      return importExternalImageToStorage(imageUrl);
+    }
+  }, [user?.id, submode, importExternalImageToStorage]);
+
+  const composeFrozenVisualAdsResult = useCallback(async (
+    posterUrl: string,
+    screenshotUrl: string,
+    device: ScreenshotDeviceType,
+  ): Promise<string> => {
+    const drawRoundedRect = (
+      ctx: CanvasRenderingContext2D,
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+      radius: number,
+    ) => {
+      const cappedRadius = Math.max(0, Math.min(radius, width / 2, height / 2));
+      ctx.beginPath();
+      ctx.moveTo(x + cappedRadius, y);
+      ctx.lineTo(x + width - cappedRadius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + cappedRadius);
+      ctx.lineTo(x + width, y + height - cappedRadius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - cappedRadius, y + height);
+      ctx.lineTo(x + cappedRadius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - cappedRadius);
+      ctx.lineTo(x, y + cappedRadius);
+      ctx.quadraticCurveTo(x, y, x + cappedRadius, y);
+      ctx.closePath();
+    };
+
+    const loadBitmap = async (src: string): Promise<ImageBitmap> => {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error(`Image fetch failed: ${res.status}`);
+      const blob = await res.blob();
+      return await createImageBitmap(blob);
+    };
+
+    const [posterBitmap, screenshotBitmap] = await Promise.all([
+      loadBitmap(posterUrl),
+      loadBitmap(screenshotUrl),
+    ]);
+
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = posterBitmap.width;
+      canvas.height = posterBitmap.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) throw new Error('Failed to create composition canvas');
+
+      ctx.drawImage(posterBitmap, 0, 0, canvas.width, canvas.height);
+
+      const normalizedDevice = device || 'iphone';
+      const isTallPoster = canvas.height / canvas.width > 1.1;
+      const isPhoneDevice = normalizedDevice === 'iphone' || normalizedDevice === 'samsung';
+      const widthRatio = normalizedDevice === 'laptop'
+        ? 0.62
+        : normalizedDevice === 'tablet'
+          ? (isTallPoster ? 0.48 : 0.54)
+          : normalizedDevice === 'monitor-tv'
+            ? 0.68
+            : normalizedDevice === 'billboard'
+              ? 0.72
+              : (isTallPoster ? 0.38 : canvas.width > canvas.height ? 0.32 : 0.36);
+      const heightRatio = normalizedDevice === 'laptop'
+        ? 0.44
+        : normalizedDevice === 'tablet'
+          ? 0.5
+          : normalizedDevice === 'monitor-tv'
+            ? 0.42
+            : normalizedDevice === 'billboard'
+              ? 0.38
+              : 0.7;
+      const border = Math.max(8, Math.round(Math.min(canvas.width, canvas.height) * (isPhoneDevice ? 0.014 : 0.01)));
+      const outerAspect = (screenshotBitmap.width + border * 2) / (screenshotBitmap.height + border * 2);
+      let outerWidth = canvas.width * widthRatio;
+      let outerHeight = outerWidth / outerAspect;
+      if (outerHeight > canvas.height * heightRatio) {
+        outerHeight = canvas.height * heightRatio;
+        outerWidth = outerHeight * outerAspect;
+      }
+
+      const centerX = isPhoneDevice ? (isTallPoster ? canvas.width * 0.66 : canvas.width * 0.58) : canvas.width * 0.5;
+      const centerY = isTallPoster ? canvas.height * 0.54 : canvas.height * 0.52;
+      const marginX = canvas.width * 0.06;
+      const marginY = canvas.height * 0.08;
+      const outerX = Math.min(Math.max(centerX - outerWidth / 2, marginX), canvas.width - outerWidth - marginX);
+      const outerY = Math.min(Math.max(centerY - outerHeight / 2, marginY), canvas.height - outerHeight - marginY);
+      const innerX = outerX + border;
+      const innerY = outerY + border;
+      const innerWidth = outerWidth - border * 2;
+      const innerHeight = outerHeight - border * 2;
+      const outerRadius = Math.max(16, Math.round(Math.min(outerWidth, outerHeight) * (isPhoneDevice ? 0.08 : normalizedDevice === 'tablet' ? 0.05 : 0.035)));
+      const innerRadius = Math.max(12, outerRadius - Math.round(border * 0.65));
+
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.34)';
+      ctx.shadowBlur = Math.max(18, Math.round(Math.min(canvas.width, canvas.height) * 0.03));
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = Math.max(10, Math.round(Math.min(canvas.width, canvas.height) * 0.012));
+      drawRoundedRect(ctx, outerX, outerY, outerWidth, outerHeight, outerRadius);
+      ctx.fillStyle = 'rgba(12, 15, 20, 0.92)';
+      ctx.fill();
+      ctx.restore();
+
+      drawRoundedRect(ctx, outerX, outerY, outerWidth, outerHeight, outerRadius);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+      ctx.lineWidth = Math.max(2, Math.round(border * 0.2));
+      ctx.stroke();
+
+      ctx.save();
+      drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
+      ctx.clip();
+      ctx.fillStyle = '#0c0f14';
+      ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
+      ctx.drawImage(screenshotBitmap, innerX, innerY, innerWidth, innerHeight);
+      ctx.restore();
+
+      return canvas.toDataURL('image/png');
+    } finally {
+      posterBitmap.close();
+      screenshotBitmap.close();
+    }
+  }, []);
+
+  const upsertFrozenVisualAdsResult = useCallback(async (
+    taskId: string,
+    resultIndex: number,
+    imageUrl: string,
+  ): Promise<{ imageId: string | null; url: string }> => {
+    if (!user?.id) return { imageId: null, url: imageUrl };
+
+    const stored = await storeGeneratedImageAsset(imageUrl);
+    let existingRow: { id: string; meta: Record<string, unknown> } | null = null;
+
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const { data, error } = await (supabase as any)
+        .from('user_generated_images')
+        .select('id, meta')
+        .eq('user_id', user.id)
+        .contains('meta', { visual_ads_task_id: taskId, visual_ads_result_index: resultIndex })
+        .maybeSingle();
+      if (error) throw error;
+      if (data?.id) {
+        const existingMeta = data.meta && typeof data.meta === 'object' && !Array.isArray(data.meta)
+          ? data.meta as Record<string, unknown>
+          : {};
+        existingRow = { id: data.id, meta: existingMeta };
+        break;
+      }
+      if (attempt < 9) {
+        await new Promise((resolve) => setTimeout(resolve, 750));
+      }
+    }
+
+    const nextMeta = {
+      ...(existingRow?.meta || {}),
+      storage_path: stored.storagePath,
+      visual_ads_task_id: taskId,
+      visual_ads_result_index: resultIndex,
+      frozen_screenshot_layer: true,
+    };
+
+    if (existingRow?.id) {
+      const { error: updateErr } = await (supabase as any)
+        .from('user_generated_images')
+        .update({
+          image_url: stored.url,
+          meta: nextMeta,
+        })
+        .eq('id', existingRow.id)
+        .eq('user_id', user.id);
+      if (updateErr) throw updateErr;
+      return { imageId: existingRow.id, url: stored.url };
+    }
+
+    const { data: insertedRow, error: insertErr } = await (supabase as any)
+      .from('user_generated_images')
+      .insert({
+        user_id: user.id,
+        image_url: stored.url,
+        prompt: prompt || null,
+        submode: 'visual-ads',
+        quality: null,
+        meta: nextMeta,
+      })
+      .select('id')
+      .single();
+    if (insertErr) throw insertErr;
+
+    return { imageId: insertedRow?.id || null, url: stored.url };
+  }, [user?.id, prompt, storeGeneratedImageAsset]);
+
+  const syncVisualAdsJobResultUrls = useCallback(async (taskId: string, urls: string[]) => {
+    if (!user?.id || !urls.length) return;
+    try {
+      const supabaseJobs: any = supabase;
+      await supabaseJobs
+        .from('visual_ads_jobs')
+        .update({ result_urls: urls })
+        .eq('task_id', taskId)
+        .eq('user_id', user.id);
+    } catch (error) {
+      console.error('Failed to sync composited visual ad URLs:', error);
+    }
+  }, [user?.id]);
+
+  const finalizeVisualAdsResult = useCallback(async (
+    rawUrls: string[],
+    taskId?: string | null,
+    assumePersisted = false,
+  ) => {
+    let finalUrls = rawUrls;
+    let finalSavedImageId: string | null = null;
+    let didPersistFrozenLayer = false;
+    const frozenLayer = frozenVisualAdsScreenshotRef.current;
+
+    if (taskId && frozenLayer?.imageUrl) {
+      try {
+        const compositedUrls: string[] = [];
+        for (const [resultIndex, rawUrl] of rawUrls.entries()) {
+          const composited = await composeFrozenVisualAdsResult(rawUrl, frozenLayer.imageUrl, frozenLayer.device);
+          const stored = await upsertFrozenVisualAdsResult(taskId, resultIndex, composited);
+          compositedUrls.push(stored.url);
+          if (resultIndex === 0) {
+            finalSavedImageId = stored.imageId;
+          }
+        }
+        if (compositedUrls.length) {
+          finalUrls = compositedUrls;
+          didPersistFrozenLayer = true;
+          await syncVisualAdsJobResultUrls(taskId, compositedUrls);
+        }
+      } catch (error) {
+        console.error('Frozen screenshot composition failed:', error);
+      }
+    }
+
+    const finalUrl = finalUrls[0];
+    if (!finalUrl) throw new Error('Generation completed but no image URL returned');
+
+    stopProgress();
+    setResultImageUrl(finalUrl);
+    setResultUrls(finalUrls);
+    setIsSaved(didPersistFrozenLayer || assumePersisted);
+    setSavedImageId(didPersistFrozenLayer ? finalSavedImageId : null);
+    setSavedBucketUrl(didPersistFrozenLayer || assumePersisted ? finalUrl : null);
+    setSavedSourceUrl(finalUrl);
+    return finalUrl;
+  }, [composeFrozenVisualAdsResult, stopProgress, syncVisualAdsJobResultUrls, upsertFrozenVisualAdsResult]);
+
   const persistGeneratedImage = useCallback(async (
     imageUrl: string,
     options?: {
@@ -569,31 +850,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       let storagePath = '';
       let resolvedImageId = savedImageId;
 
-      if (!bucketUrl) {
-        try {
-          const res = await fetch(imageUrl);
-          if (!res.ok) throw new Error(`Fetch failed: ${res.status}`);
-          const blob = await res.blob();
-          const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
-          const fileName = `${user.id}/${submode}-${Date.now()}.${ext}`;
-          const { error: uploadErr } = await supabase.storage
-            .from('generated-images')
-            .upload(fileName, blob, { contentType: blob.type, upsert: false });
-          if (uploadErr) throw uploadErr;
-
-          const { data: urlData } = supabase.storage
-            .from('generated-images')
-            .getPublicUrl(fileName);
-          bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
-          if (!bucketUrl) throw new Error('Failed to get public URL');
-          storagePath = fileName;
-          setSavedBucketUrl(bucketUrl);
-        } catch {
-          const imported = await importExternalImageToStorage(imageUrl);
-          bucketUrl = imported.url;
-          storagePath = imported.storagePath;
-          setSavedBucketUrl(bucketUrl);
-        }
+      if (!bucketUrl || savedSourceUrl !== imageUrl) {
+        const stored = await storeGeneratedImageAsset(imageUrl);
+        bucketUrl = stored.url;
+        storagePath = stored.storagePath;
+        setSavedBucketUrl(bucketUrl);
       } else {
         const parts = bucketUrl.split('/generated-images/');
         if (parts[1]) storagePath = decodeURIComponent(parts[1]);
@@ -649,7 +910,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     } finally {
       setIsSaving(false);
     }
-  }, [user?.id, isSaved, savedImageId, savedBucketUrl, savedSourceUrl, submode, prompt, quality, language, onSaveSuccess, importExternalImageToStorage]);
+  }, [user?.id, isSaved, savedImageId, savedBucketUrl, savedSourceUrl, submode, prompt, quality, language, onSaveSuccess, storeGeneratedImageAsset]);
 
   const selectQuickResult = useCallback((index: number) => {
     const nextUrl = resultUrls[index];
@@ -1761,6 +2022,13 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               const screenshotAsset = taggedAssets.find((item) => item.asset.type === 'screenshot');
               const productAsset = taggedAssets.find((item) => item.asset.type === 'product');
 
+              frozenVisualAdsScreenshotRef.current = screenshotAsset?.asset.image
+                ? {
+                    imageUrl: String(screenshotAsset.asset.image),
+                    device: screenshotAsset.asset.screenshotDevice || 'iphone',
+                  }
+                : null;
+
               if (hasPerson && hasScreenshot && hasBackground) {
                 layoutType = 'lifestyle_app_ad';
               } else if (hasPerson && hasProduct && hasBackground) {
@@ -2043,16 +2311,20 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
                   const handleRow = (row: { status: string; result_urls?: string[]; error_msg?: string }) => {
                     if (row.status === 'COMPLETED') {
-                      const finalUrl = row.result_urls?.[0];
+                      const generatedUrls = Array.isArray(row.result_urls)
+                        ? row.result_urls.filter((url): url is string => typeof url === 'string' && url.length > 0)
+                        : [];
+                      const finalUrl = generatedUrls[0];
                       if (finalUrl) {
                         settle(() => {
-                          stopProgress();
-                          setResultImageUrl(finalUrl);
-                          setResultUrls(row.result_urls || [finalUrl]);
-                          setIsSaved(true);
-                          setSavedBucketUrl(finalUrl);
-                          setSavedSourceUrl(finalUrl);
-                          resolve();
+                          void (async () => {
+                            try {
+                              await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], taskId, true);
+                              resolve();
+                            } catch (error) {
+                              reject(error instanceof Error ? error : new Error('Ad generation failed'));
+                            }
+                          })();
                         });
                       } else {
                         settle(() => reject(new Error('Generation completed but no image URL returned')));
@@ -2105,13 +2377,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                         const finalUrl = generatedUrls[0] || (typeof statusData.video?.url === 'string' ? statusData.video.url : null);
                         if (finalUrl) {
                           settle(() => {
-                            stopProgress();
-                            setResultImageUrl(finalUrl);
-                            setResultUrls(generatedUrls.length ? generatedUrls : [finalUrl]);
-                            setIsSaved(false);
-                            setSavedBucketUrl(null);
-                            setSavedSourceUrl(null);
-                            resolve();
+                            void (async () => {
+                              try {
+                                await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], taskId, false);
+                                resolve();
+                              } catch (error) {
+                                reject(error instanceof Error ? error : new Error('Ad generation failed'));
+                              }
+                            })();
                           });
                         }
                       } else if (statusData?.status === 'FAILED') {

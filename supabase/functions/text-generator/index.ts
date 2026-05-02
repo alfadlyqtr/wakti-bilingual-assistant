@@ -1566,69 +1566,38 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
       if (v.includes('msa')) {
         constraints.push('🌍 المتغير اللغوي = العربية الفصحى MSA (صارم):\n  - اكتب بالعربية الفصحى الحديثة فقط. لا تستخدم أي لهجة محلية.\n  - استخدم قواعد النحو والصرف الصحيحة (إعراب، تنوين عند الحاجة).\n  - تجنب أي كلمات عامية مثل: مو، هالشي، شلون، وش، ليش.\n  - استخدم بدلاً منها: ليس، هذا الأمر، كيف، ماذا، لماذا.\n  - الأسلوب يجب أن يكون كأنك تكتب في صحيفة رسمية أو كتاب أكاديمي.');
       } else if (v.includes('gulf')) {
-        constraints.push(`🌍 LANGUAGE VARIANT = GCC GULF ARABIC (ABSOLUTE STRICT - ZERO TOLERANCE):
+        constraints.push(`🌍 LANGUAGE VARIANT = GCC GULF ARABIC (NATURAL, CONTEXT-AWARE):
 
-⚠️ THIS IS THE MOST IMPORTANT RULE. EVERY SINGLE WORD MUST BE GCC GULF ARABIC.
-Write ONLY in authentic GCC Gulf Arabic dialect (Qatar, Saudi Arabia, UAE, Kuwait, Bahrain, Oman).
-This is NOT "Arabic with some Gulf words". This is FULL Gulf dialect from the first word to the last.
+Write in natural GCC Gulf Arabic that feels real and situation-appropriate across Qatar, Saudi Arabia, UAE, Kuwait, Bahrain, and Oman.
+The goal is authenticity, not performance. Do NOT force dialect markers into every sentence.
 
-✅ MANDATORY GCC VOCABULARY (use these, not their MSA equivalents):
-  • "مب" or "مو" instead of "ليس" or "لا"
-  • "وش" or "شنو" instead of "ماذا"
-  • "ليش" instead of "لماذا"
-  • "شلون" or "شلونك" instead of "كيف" or "كيف حالك"
-  • "ترى" for emphasis (e.g. "ترى أنا ما قصدت")
-  • "يا الغالي" or "يا غالي" for addressing someone
-  • "عيل" instead of "إذن"
-  • "هالـ" instead of "هذا/هذه" (e.g. "هالشي" not "هذا الشيء")
-  • "أبي" or "أبغى" instead of "أريد" or "أود"
-  • "إنت/إنتي" instead of "أنت/أنتِ"
-  • "حيل" or "مرة" or "واجد" instead of "جداً" or "كثيراً"
-  • "يالله" for encouragement
-  • "ما عليه" instead of "لا بأس"
-  • "إي" or "إيه" instead of "نعم"
-  • "تمام" or "أوكي" for agreement
-  • "يعطيك العافية" for thanking
-  • "خلاص" instead of "انتهى" or "كفى"
-  • "زين" or "طيب" instead of "حسناً" or "جيد"
-  • "كذا" instead of "هكذا"
-  • "عشان" or "علشان" instead of "لأن" or "من أجل"
-  • "بعد" for "also/too" (e.g. "أنا بعد")
-  • "يمكن" or "بلكي" instead of "ربما" or "لعل"
-  • "شفت" instead of "رأيت"
-  • "سويت" instead of "فعلت" or "عملت"
-  • "ودي" instead of "أتمنى"
-  • "توه/توها" instead of "للتو" or "حالاً"
+✅ CORE RULES:
+  • Match the user's wording closely when they already pasted a nearly finished draft.
+  • If the user gave a full message, preserve its structure, meaning, and greeting unless they explicitly ask for a stronger rewrite.
+  • Do NOT turn an outgoing greeting into a reply greeting. Example: if the draft starts with "سلام عليكم", do NOT change it to "وعليكم السلام" unless the user asked for a reply.
+  • Use Gulf wording naturally where it fits. A light, polished Gulf voice is better than exaggerated slang.
 
-❌ ABSOLUTELY FORBIDDEN WORDS (these are NOT GCC - never use them):
-  • "هسه" or "هسة" (Iraqi)
-  • "شو" (Levantine - use "وش" or "شنو" instead)
-  • "كتير" or "كثير" in Levantine sense (use "واجد" or "حيل" or "مرة")
-  • "هلأ" or "هلق" (Levantine)
-  • "منيح" (Levantine - use "زين" or "تمام")
-  • "بدي" (Levantine - use "أبي" or "أبغى")
-  • "عم" as progressive marker (Levantine)
-  • "إزاي" or "ازاي" (Egyptian - use "شلون")
-  • "فين" (Egyptian - use "وين")
-  • "كده" or "كدا" (Egyptian - use "كذا")
-  • "أوي" (Egyptian - use "حيل" or "مرة")
-  • Any heavy MSA words like: أدرك، صديقيتنا، التزامي، أفضي، حينئذ، إذ، لكنّ
+✅ FOR PROFESSIONAL / FORMAL OUTPUT:
+  • Professional Gulf means polished, respectful, and natural, not playful or overly casual.
+  • Do NOT inject casual address words like "يا غالي", "حبيبي", "حبيبنا", or "شلونك" unless the user's own draft already uses them or the context is clearly personal.
+  • Do NOT add extra warmth, prayers, sympathy lines, or emotional padding unless the user already included them or asked for them.
+  • It is OK to be restrained. Clean, respectful Gulf wording is preferred over theatrical dialect.
 
-❌ FORBIDDEN MSA PATTERNS (do NOT use formal Arabic structures):
-  • Do NOT use إعراب or تنوين
-  • Do NOT use "لقد" or "قد" (use direct past tense)
-  • Do NOT use "إنّ" or "أنّ" formally
-  • Do NOT use "الذي/التي/اللذان" (use "اللي" instead)
-  • Do NOT use "يتوجب" or "ينبغي" (use "لازم" instead)
-  • Do NOT use "أرغب" or "أودّ" (use "أبي" or "أبغى")
+✅ GOOD GULF DIRECTION:
+  • Prefer natural GCC wording like: "هالشي", "عشان", "لو سمحت", "نبي", "أبغى/أبي" when they genuinely fit.
+  • Keep the sentence flow smooth and believable.
+  • If a highly colloquial word would make the sentence worse, choose the cleaner natural Gulf wording instead.
 
-🎯 STYLE RULE: Even if the tone is "formal" or "professional", you MUST still write in Gulf dialect.
-  - Formal Gulf = polished Gulf, NOT MSA. Example: "يعطيك العافية، حبيت أوضح لك إن..." NOT "أودّ أن أوضح لكم أنّ..."
-  - Professional Gulf = respectful Gulf. Example: "لو سمحت، نبي نتأكد من هالنقطة" NOT "نرجو التأكد من هذه النقطة"
+❌ AVOID:
+  • Forced slang in every line.
+  • Random filler like "ترى" or "يا غالي" when the context does not call for it.
+  • Non-GCC dialect words such as: "شو", "بدي", "هلأ", "إزاي", "فين", "كده", "أوي".
+  • Heavy formal MSA/legalese that sounds stiff and unlike real Gulf writing.
 
-🎯 IDENTITY: Write as if you are a native GCC person (Qatari/Saudi/Emirati/Kuwaiti) writing naturally.
-  - Casual = WhatsApp message to a friend
-  - Formal = professional email but still in Gulf dialect, not MSA`);
+🎯 STYLE TARGET:
+  • Casual = natural everyday Gulf.
+  • Professional = respectful Gulf, calm and clean.
+  • Formal = polished Gulf or very light neutral Arabic with Gulf flavor, but never fake or cartoonish.`);
       }
     }
   }

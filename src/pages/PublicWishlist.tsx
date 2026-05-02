@@ -7,6 +7,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { ChevronDown, ExternalLink, Gift, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -25,6 +29,14 @@ interface PublicWishlistItem {
   priority: number;
   is_received: boolean;
   ai_extracted: boolean;
+  claim?: {
+    id: string;
+    status: string;
+    claimant_name: string;
+    claimant_email?: string | null;
+    note?: string | null;
+    is_public: boolean;
+  } | null;
 }
 
 interface PublicWishlistData {
@@ -45,9 +57,10 @@ const priorityLabels = {
   5: { en: 'Must have!', ar: 'ضروري!' },
 } as const;
 
-function PublicWishlistItemCard({ item, isAr }: { item: PublicWishlistItem; isAr: boolean }) {
+function PublicWishlistItemCard({ item, isAr, allowClaims, onClaim }: { item: PublicWishlistItem; isAr: boolean; allowClaims: boolean; onClaim: (item: PublicWishlistItem) => void }) {
   const [expanded, setExpanded] = useState(false);
   const canExpand = item.title.length > 28 || Boolean(item.description && item.description.length > 90);
+  const isClaimed = Boolean(item.claim);
 
   return (
     <Card className={cn('border border-border/60 bg-card/80', item.is_received && 'opacity-70')}>
@@ -97,6 +110,33 @@ function PublicWishlistItemCard({ item, isAr }: { item: PublicWishlistItem; isAr
                 <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', expanded && 'rotate-180')} />
               </button>
             )}
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {item.is_received ? (
+                <Badge variant="secondary" className="text-xs">
+                  🎁 {isAr ? 'تم استلامه' : 'Received'}
+                </Badge>
+              ) : isClaimed ? (
+                <Badge className="text-xs bg-orange-500/20 text-orange-600 border-orange-400/30">
+                  🔒 {isAr ? `محجوز بواسطة ${item.claim?.claimant_name}` : `Claimed by ${item.claim?.claimant_name}`}
+                </Badge>
+              ) : allowClaims ? (
+                <Button
+                  size="sm"
+                  className="min-h-11 px-4 text-xs bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(180,85%,60%)] text-white"
+                  onClick={() => onClaim(item)}
+                >
+                  <Gift className="h-3.5 w-3.5 mr-1" />
+                  {isAr ? 'سأشتريه' : `I'll get this!`}
+                </Button>
+              ) : null}
+
+              {isClaimed && item.claim?.status === 'pending' && (
+                <span className="text-xs text-muted-foreground">
+                  {isAr ? 'في انتظار موافقة صاحب القائمة' : 'Waiting for the owner to approve'}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </CardContent>
@@ -111,42 +151,51 @@ export default function PublicWishlist() {
   const [wishlist, setWishlist] = useState<PublicWishlistData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [claimingItem, setClaimingItem] = useState<PublicWishlistItem | null>(null);
+  const [claimerName, setClaimerName] = useState('');
+  const [claimerEmail, setClaimerEmail] = useState('');
+  const [claimNote, setClaimNote] = useState('');
+  const [claimError, setClaimError] = useState<string | null>(null);
+  const [claimSuccess, setClaimSuccess] = useState<string | null>(null);
+  const [submittingClaim, setSubmittingClaim] = useState(false);
 
-  useEffect(() => {
-    const loadWishlist = async () => {
-      if (!id) {
-        setError(isAr ? 'رابط غير صالح' : 'Invalid link');
+  const fetchWishlist = async () => {
+    if (!id) {
+      setError(isAr ? 'رابط غير صالح' : 'Invalid link');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const base = SUPABASE_URL.replace(/\/$/, '');
+      const response = await fetch(`${base}/functions/v1/wishlist-share-public?id=${encodeURIComponent(id)}`, {
+        method: 'GET',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.wishlist) {
+        setError(payload?.error || (isAr ? 'هذه القائمة غير متاحة' : 'This wishlist is unavailable'));
         setLoading(false);
         return;
       }
 
-      try {
-        const base = SUPABASE_URL.replace(/\/$/, '');
-        const response = await fetch(`${base}/functions/v1/wishlist-share-public?id=${encodeURIComponent(id)}`, {
-          method: 'GET',
-          headers: {
-            apikey: SUPABASE_ANON_KEY,
-            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-          },
-        });
+      setWishlist(payload.wishlist as PublicWishlistData);
+      setError(null);
+      setLoading(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError((isAr ? 'فشل التحميل: ' : 'Failed to load: ') + message);
+      setLoading(false);
+    }
+  };
 
-        const payload = await response.json().catch(() => null);
-        if (!response.ok || !payload?.wishlist) {
-          setError(payload?.error || (isAr ? 'هذه القائمة غير متاحة' : 'This wishlist is unavailable'));
-          setLoading(false);
-          return;
-        }
-
-        setWishlist(payload.wishlist as PublicWishlistData);
-        setLoading(false);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError((isAr ? 'فشل التحميل: ' : 'Failed to load: ') + message);
-        setLoading(false);
-      }
-    };
-
-    loadWishlist();
+  useEffect(() => {
+    setLoading(true);
+    fetchWishlist();
   }, [id, isAr]);
 
   const eventLabel = useMemo(() => {
@@ -188,6 +237,69 @@ export default function PublicWishlist() {
 
   const ownerName = wishlist.owner.display_name || wishlist.owner.username;
 
+  const openClaimDialog = (item: PublicWishlistItem) => {
+    setClaimingItem(item);
+    setClaimError(null);
+    setClaimSuccess(null);
+    setClaimerName('');
+    setClaimerEmail('');
+    setClaimNote('');
+  };
+
+  const closeClaimDialog = (open: boolean) => {
+    if (!open) {
+      setClaimingItem(null);
+      setClaimError(null);
+      setClaimSuccess(null);
+      setSubmittingClaim(false);
+    }
+  };
+
+  const handlePublicClaim = async () => {
+    if (!claimingItem || !id) return;
+
+    setClaimError(null);
+    setClaimSuccess(null);
+    setSubmittingClaim(true);
+
+    try {
+      const base = SUPABASE_URL.replace(/\/$/, '');
+      const response = await fetch(`${base}/functions/v1/wishlist-share-public?id=${encodeURIComponent(id)}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({
+          itemId: claimingItem.id,
+          claimerName,
+          claimerEmail,
+          note: claimNote,
+        }),
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.wishlist) {
+        setClaimError(payload?.error || (isAr ? 'تعذر تنفيذ الحجز' : 'Could not submit claim'));
+        setSubmittingClaim(false);
+        return;
+      }
+
+      setWishlist(payload.wishlist as PublicWishlistData);
+      setClaimSuccess(payload?.message || (isAr ? 'تم إرسال الحجز بنجاح' : 'Claim submitted successfully'));
+      setSubmittingClaim(false);
+      setTimeout(() => {
+        setClaimingItem(null);
+        setClaimSuccess(null);
+      }, 1200);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setClaimError((isAr ? 'فشل الحجز: ' : 'Claim failed: ') + message);
+      setSubmittingClaim(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <InAppWaktiEscape language={isAr ? 'ar' : 'en'} containerClassName="max-w-3xl" />
@@ -227,6 +339,20 @@ export default function PublicWishlist() {
           )}
         </div>
 
+        {wishlist.allow_claims && (
+          <Card className="mb-4 border border-[hsl(210,100%,65%)]/20 bg-card/80 shadow-[0_2px_20px_hsla(0,0%,0%,0.5),0_1px_8px_hsla(240,20%,40%,0.4)]">
+            <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-foreground">{isAr ? 'يمكنك حجز أي عنصر مباشرة من هذه الصفحة العامة' : 'You can claim any item directly from this public page'}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{isAr ? 'اضغط على العنصر الذي تريده، ثم اكتب اسمك وأي ملاحظة تريدها.' : 'Tap the item you want, then enter your name and any note you want to share.'}</p>
+              </div>
+              <Badge variant="secondary" className="self-start bg-[hsl(210,100%,65%)]/15 text-[hsl(210,100%,75%)] border-[hsl(210,100%,65%)]/20 sm:self-center">
+                {isAr ? 'لا يلزم حساب' : 'No account needed'}
+              </Badge>
+            </CardContent>
+          </Card>
+        )}
+
         {wishlist.items.length === 0 ? (
           <Card className="border border-border/60 bg-card/70">
             <CardContent className="py-10 text-center text-muted-foreground">
@@ -236,11 +362,81 @@ export default function PublicWishlist() {
         ) : (
           <div className="space-y-3">
             {wishlist.items.map((item) => (
-              <PublicWishlistItemCard key={item.id} item={item} isAr={isAr} />
+              <PublicWishlistItemCard key={item.id} item={item} isAr={isAr} allowClaims={wishlist.allow_claims} onClaim={openClaimDialog} />
             ))}
           </div>
         )}
       </div>
+
+      <Dialog open={Boolean(claimingItem)} onOpenChange={closeClaimDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{isAr ? 'حجز عنصر من القائمة' : 'Claim wishlist item'}</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="rounded-xl border border-border/60 bg-muted/30 p-3">
+              <p className="text-sm font-semibold">{claimingItem?.title}</p>
+              {claimingItem?.description && (
+                <p className="mt-1 text-xs text-muted-foreground line-clamp-3">{claimingItem.description}</p>
+              )}
+            </div>
+
+            <div>
+              <Label htmlFor="public-claim-name">{isAr ? 'اسمك *' : 'Your name *'}</Label>
+              <Input
+                id="public-claim-name"
+                value={claimerName}
+                onChange={(e) => setClaimerName(e.target.value)}
+                placeholder={isAr ? 'اكتب اسمك' : 'Enter your name'}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="public-claim-email">{isAr ? 'البريد الإلكتروني (اختياري)' : 'Email (optional)'}</Label>
+              <Input
+                id="public-claim-email"
+                type="email"
+                value={claimerEmail}
+                onChange={(e) => setClaimerEmail(e.target.value)}
+                placeholder={isAr ? 'مثال: you@example.com' : 'e.g. you@example.com'}
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="public-claim-note">{isAr ? 'ملاحظة (اختياري)' : 'Note (optional)'}</Label>
+              <Textarea
+                id="public-claim-note"
+                value={claimNote}
+                onChange={(e) => setClaimNote(e.target.value)}
+                placeholder={isAr ? 'اكتب رسالة قصيرة لصاحب القائمة' : 'Add a short note for the wishlist owner'}
+                rows={3}
+                className="mt-1"
+              />
+            </div>
+
+            {claimError && <p className="text-sm text-red-500">{claimError}</p>}
+            {claimSuccess && <p className="text-sm text-green-500">{claimSuccess}</p>}
+
+            <Button
+              onClick={handlePublicClaim}
+              disabled={submittingClaim}
+              className="w-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(180,85%,60%)] text-white"
+            >
+              {submittingClaim ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {isAr ? 'جارٍ الحجز...' : 'Submitting claim...'}
+                </>
+              ) : (
+                isAr ? 'تأكيد الحجز' : 'Confirm claim'
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

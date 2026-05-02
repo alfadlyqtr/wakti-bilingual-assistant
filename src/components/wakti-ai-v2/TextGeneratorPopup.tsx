@@ -330,6 +330,20 @@ const emojisLabel = (k: EmojisKey, lang: 'en' | 'ar') => {
   return lang === 'ar' ? ar[k] : en[k];
 };
 
+const DRAFT_GREETING_REGEX = /^(?:\s*)(?:السلام عليكم|سلام عليكم|وعليكم السلام|مرحبا|هلا|هلا والله|مساء الخير|صباح الخير|hello\b|hi\b|dear\b)/i;
+const INSTRUCTIONAL_INPUT_REGEX = /(?:^|\s)(?:write|rewrite|generate|create|draft|compose|improve|polish|make|turn|summarize|respond|reply|اكتب|اكتبي|صغ|صيغ|أنشئ|انشئ|ولّد|ولد|أعد كتابة|اعد كتابة|حسّن|حسن|حوّل|حول|لخّص|لخص|رد|جاوب|سو|سوي|ابغى|أبغى|ابي|أبي)(?:\s|$)/i;
+
+function looksLikeUserDraft(value: string): boolean {
+  const text = (value || '').trim();
+  if (!text) return false;
+  if (INSTRUCTIONAL_INPUT_REGEX.test(text)) return false;
+
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  const sentenceMarkers = (text.match(/[.!?؟،:\n]/g) || []).length;
+
+  return DRAFT_GREETING_REGEX.test(text) || text.includes('\n') || (wordCount >= 12 && sentenceMarkers >= 1);
+}
+
 const REGENERATE_INTENT_KEYS: RegenerateIntentKey[] = [
   'shorter',
   'longer',
@@ -657,16 +671,47 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const buildPromptForTab = useCallback((tab: Tab): string => {
     if (tab === 'compose') {
       const humanBlock = tone === 'human' ? humanVoiceGuidelines(language) : '';
+      const normalizedTopic = topic.trim();
+      const composeLooksLikeDraft = looksLikeUserDraft(normalizedTopic);
+
+      if (composeLooksLikeDraft) {
+        const parts = [
+          language === 'ar'
+            ? 'المستخدم ألصق مسودة شبه جاهزة. المطلوب تحسين خفيف فقط، مع إبقاء النص قريبًا جدًا من الأصل.'
+            : 'The user pasted a near-finished draft. The task is light polishing only, while keeping the text extremely close to the original.',
+          language === 'ar'
+            ? 'حافظ على نفس المعنى، والأسماء، ونفس اتجاه الكلام، ونفس البنية العامة.'
+            : 'Keep the same meaning, names, direction of speech, and overall structure.',
+          language === 'ar'
+            ? 'لا تعِد الكتابة من الصفر، ولا تحوّله إلى رد، ولا تبدّل التحية إلى تحية مقابلة.'
+            : 'Do not rewrite from scratch, do not turn it into a reply, and do not flip a greeting into a response greeting.',
+          language === 'ar'
+            ? 'لا تضف عبارات جديدة مثل "وعليكم السلام" أو "يا غالي" أو دعاء أو مجاملات أو سطور عاطفية إضافية إلا إذا كانت موجودة أصلًا في النص أو طلبها المستخدم صراحة.'
+            : 'Do not add new phrases like "وعليكم السلام", "يا غالي", extra prayers, extra niceties, or extra emotional lines unless they already exist in the draft or the user explicitly asked for them.',
+          tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
+          length === 'word_count' && normalizedWordCount ? `Word count: ${normalizedWordCount}` : length !== 'auto' ? `Length: ${length}` : '',
+          contentType === 'captions' ? `Caption platform: ${captionPlatform}` : contentType !== 'auto' ? `Content type: ${contentType}` : '',
+          register !== 'auto' ? `Register: ${register}` : '',
+          languageVariant !== 'auto' ? `Language Variant: ${languageVariant}` : '',
+          emojis !== 'auto' ? `Emojis: ${emojis}` : '',
+          humanBlock,
+          '',
+          language === 'ar' ? 'النص الأصلي:' : 'Original draft:',
+          normalizedTopic,
+        ].filter(Boolean);
+        return parts.join('\n');
+      }
+
       const parts = [
         contentType === 'auto'
-          ? `Write about: ${topic}`
-          : `Write a ${ctLabel(contentType, language)} about: ${topic}`,
+          ? `Write about: ${normalizedTopic}`
+          : `Write a ${ctLabel(contentType, language)} about: ${normalizedTopic}`,
         tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
         length === 'word_count' && normalizedWordCount ? `Word count: ${normalizedWordCount}` : length !== 'auto' ? `Length: ${length}` : '',
         contentType === 'captions' ? `Caption platform: ${captionPlatform}` : '',
-        register ? `Register: ${register}` : '',
-        languageVariant ? `Language Variant: ${languageVariant}` : '',
-        emojis ? `Emojis: ${emojis}` : '',
+        register !== 'auto' ? `Register: ${register}` : '',
+        languageVariant !== 'auto' ? `Language Variant: ${languageVariant}` : '',
+        emojis !== 'auto' ? `Emojis: ${emojis}` : '',
         humanBlock,
       ].filter(Boolean);
       return parts.join('\n');
@@ -694,9 +739,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           keyPoints ? `Key points to include: ${keyPoints}` : '',
           replyLength === 'word_count' && normalizedReplyWordCount ? `Reply word count: ${normalizedReplyWordCount}` : replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
           tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
-          register ? `Register: ${register}` : '',
-          languageVariant ? `Language Variant: ${languageVariant}` : '',
-          emojis ? `Emojis: ${emojis}` : '',
+          register !== 'auto' ? `Register: ${register}` : '',
+          languageVariant !== 'auto' ? `Language Variant: ${languageVariant}` : '',
+          emojis !== 'auto' ? `Emojis: ${emojis}` : '',
           humanBlock,
         ].filter(Boolean);
         return parts.join('\n');
@@ -715,9 +760,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         replyLength === 'word_count' && normalizedReplyWordCount ? `Reply word count: ${normalizedReplyWordCount}` : replyLength !== 'auto' ? `Reply length: ${replyLength}` : '',
         contentType === 'captions' ? `Caption platform: ${captionPlatform}` : '',
         tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
-        register ? `Register: ${register}` : '',
-        languageVariant ? `Language Variant: ${languageVariant}` : '',
-        emojis ? `Emojis: ${emojis}` : '',
+        register !== 'auto' ? `Register: ${register}` : '',
+        languageVariant !== 'auto' ? `Language Variant: ${languageVariant}` : '',
+        emojis !== 'auto' ? `Emojis: ${emojis}` : '',
         humanBlock,
         'Original message (context):',
         originalMessage,

@@ -1,15 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Copy, Check, ScrollText, Send, Sparkles, BookText, X, Heart, SparklesIcon, Info } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Copy, Check, ScrollText, Send, Sparkles, BookText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
-  DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { useTheme } from "@/providers/ThemeProvider";
-import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/supabase/client";
 
 function cleanSummary(raw: string): string {
   if (!raw) return "";
@@ -59,11 +57,13 @@ interface SearchResponse {
   query: string;
   quran_results: EvidenceResult[];
   hadith_results: EvidenceResult[];
+  summary?: string;
   meta?: {
     found: boolean;
     quran_count: number;
     hadith_count: number;
     search_query?: string;
+    sufficient?: boolean;
   };
 }
 
@@ -98,6 +98,7 @@ const TAFSIR_EDITION = "en-tafisr-ibn-kathir";
 const TAFSIR_BASE = "https://cdn.jsdelivr.net/gh/spa5k/tafsir_api@main/tafsir";
 const TAFSIR_EDITION_AR = "ar-tafsir-muyassar";
 const TAFSIR_EDITION_AR_FALLBACK = "ar-tafsir-ibn-kathir";
+const DISCLAIMER_STORAGE_KEY = "wakti_deen_ask_popup_seen_v1";
 
 function CopyButton({ text, isDark, isAr }: { text: string; isDark: boolean; isAr: boolean }) {
   const [copied, setCopied] = useState(false);
@@ -261,15 +262,17 @@ function SourceGroup({
   icon,
   colorClass,
   isDark,
+  isAr,
   children,
 }: {
   title: string;
   icon: ReactNode;
   colorClass: string;
   isDark: boolean;
+  isAr: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
 
   return (
     <div className="flex flex-col gap-2">
@@ -290,7 +293,7 @@ function SourceGroup({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <span className={`text-[11px] ${isDark ? "text-[#858384]" : "text-[#606062]"}`}>
-              {open ? "Hide" : "Show"}
+              {open ? (isAr ? "إخفاء" : "Hide") : (isAr ? "إظهار" : "Show")}
             </span>
             {open
               ? <ChevronUp className={`w-4 h-4 ${colorClass}`} />
@@ -316,20 +319,16 @@ export default function DeenAsk() {
   const [searching, setSearching] = useState(false);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const turnCounter = useRef(0);
-  const [userName, setUserName] = useState("");
-  const [showPopup, setShowPopup] = useState(true);
+  const [showPopup, setShowPopup] = useState(false);
+  const [loadingLabel, setLoadingLabel] = useState("");
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      const userId = data?.session?.user?.id;
-      if (!userId) return;
-      supabase.from("profiles").select("display_name, username").eq("id", userId).maybeSingle()
-        .then(({ data: profile }) => {
-          setUserName(profile?.display_name || profile?.username || "");
-        });
-    });
     // Always show friendly popup on entry
-    setShowPopup(true);
+    try {
+      setShowPopup(window.localStorage.getItem(DISCLAIMER_STORAGE_KEY) !== "1");
+    } catch {
+      setShowPopup(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -357,47 +356,12 @@ export default function DeenAsk() {
     setTurns((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   };
 
-  const autoExplain = async (turnId: number, q: string, quranResults: SearchResponse["quran_results"], hadithResults: SearchResponse["hadith_results"], currentTurns: ChatTurn[], intentTopic?: string, intent?: IntentMeta, meta?: { sufficient?: boolean; [key: string]: unknown }) => {
-    updateTurn(turnId, { explaining: true });
-
-    const priorContext = currentTurns
-      .filter((t) => t.id !== turnId && t.explanation?.summary)
-      .slice(-2)
-      .map((t) => `Q: ${t.query}\nA: ${t.explanation!.summary.slice(0, 200)}`)
-      .join("\n\n");
-
+  const dismissPopup = () => {
+    setShowPopup(false);
     try {
-      const { data, error } = await supabase.functions.invoke("deen-explain", {
-        body: {
-          question: q,
-          language,
-          quran_results: quranResults,
-          hadith_results: hadithResults,
-          prior_context: priorContext || undefined,
-          intent_topic: intentTopic || undefined,
-          intent: intent || undefined,
-          meta: meta || undefined,
-          user_name: userName || undefined,
-        },
-      });
-      if (error) throw error;
-      updateTurn(turnId, {
-        explaining: false,
-        explanation: {
-          summary: cleanSummary(data?.summary ?? ""),
-          quran_summary: data?.quran_summary ?? "",
-          hadith_summary: data?.hadith_summary ?? "",
-        },
-      });
+      window.localStorage.setItem(DISCLAIMER_STORAGE_KEY, "1");
     } catch {
-      updateTurn(turnId, {
-        explaining: false,
-        explanation: {
-          summary: isAr ? "تعذر شرح النتائج الآن." : "Could not explain these results right now.",
-          quran_summary: "",
-          hadith_summary: "",
-        },
-      });
+      // no-op
     }
   };
 
@@ -411,13 +375,9 @@ export default function DeenAsk() {
     setQuestion("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setSearching(true);
-
-    let quranResults: SearchResponse["quran_results"] = [];
-    let hadithResults: SearchResponse["hadith_results"] = [];
-    let hasAnyResults = false;
+    setLoadingLabel(isAr ? "أبحث في المصادر الآن..." : "Searching the sources now...");
 
     try {
-      // Build conversation history for follow-up awareness (last 2 complete turns)
       const recentHistory = turns
         .filter((t) => t.explanation?.summary)
         .slice(-2)
@@ -437,51 +397,53 @@ export default function DeenAsk() {
           language,
           prior_topic: priorTopic || undefined,
           conversation_history: recentHistory.length > 0 ? recentHistory : undefined,
-          user_name: userName || undefined,
         },
       });
       if (error) throw error;
 
-      // If the search engine asks a clarifying question, surface it as the AI reply
       if (data?.clarify) {
         updateTurn(id, {
-          results: { query: q, quran_results: [], hadith_results: [], meta: data?.meta },
+          results: { query: q, quran_results: [], hadith_results: [], summary: data.clarify, meta: data?.meta },
           clarify: data.clarify,
           topic: data?.intent?.topic || "",
           explanation: { summary: data.clarify, quran_summary: "", hadith_summary: "" },
         });
-        setSearching(false);
         return;
       }
 
-      quranResults = Array.isArray(data?.quran_results) ? data.quran_results : [];
-      hadithResults = Array.isArray(data?.hadith_results) ? data.hadith_results : [];
-      hasAnyResults = quranResults.length > 0 || hadithResults.length > 0;
+      const quranResults = Array.isArray(data?.quran_results) ? data.quran_results : [];
+      const hadithResults = Array.isArray(data?.hadith_results) ? data.hadith_results : [];
+      const summary = cleanSummary(data?.summary ?? "");
       updateTurn(id, {
         results: {
           query: data?.query ?? q,
           quran_results: quranResults,
           hadith_results: hadithResults,
+          summary,
           meta: data?.meta,
         },
         topic: data?.intent?.normalized_topic || data?.intent?.topic || "",
         intent: data?.intent ?? undefined,
         meta: data?.meta ?? undefined,
+        explanation: {
+          summary: summary || (isAr ? "لم أجد جواباً واضحاً من المصادر المعروضة." : "I could not form a clear answer from the sources shown."),
+          quran_summary: "",
+          hadith_summary: "",
+        },
       });
     } catch {
       updateTurn(id, {
         results: { query: q, quran_results: [], hadith_results: [], meta: { found: false, quran_count: 0, hadith_count: 0 } },
+        explanation: {
+          summary: isAr ? "تعذر الوصول إلى مصادر القرآن والحديث الآن. حاول مرة أخرى بعد قليل." : "I could not reach the Quran and Hadith sources right now. Please try again in a moment.",
+          quran_summary: "",
+          hadith_summary: "",
+        },
       });
     } finally {
       setSearching(false);
+      setLoadingLabel("");
     }
-
-    setTurns((currentTurns) => {
-      const thisTurn = currentTurns.find((t) => t.id === id);
-      // Always attempt explanation — deen-explain handles zero-source case via intent awareness
-      autoExplain(id, q, quranResults, hadithResults, currentTurns, thisTurn?.topic, thisTurn?.intent, thisTurn?.meta);
-      return currentTurns;
-    });
   };
 
   const bg = isDark
@@ -588,7 +550,7 @@ export default function DeenAsk() {
           {/* Button */}
           <div className="px-5 pb-5">
             <button
-              onClick={() => setShowPopup(false)}
+              onClick={dismissPopup}
               className="w-full py-2.5 px-4 rounded-xl text-sm font-medium transition-all active:scale-[0.96]"
               style={{
                 background: isDark ? "#2a2d35" : "#f3f4f6",
@@ -656,6 +618,7 @@ export default function DeenAsk() {
                   <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "0ms" }} />
                   <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "150ms" }} />
                   <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "300ms" }} />
+                  <span className={`text-xs ${subtitleColor}`}>{loadingLabel || (isAr ? "جارٍ البحث..." : "Searching...")}</span>
                 </div>
               )}
 
@@ -669,6 +632,7 @@ export default function DeenAsk() {
                       icon={<BookOpen className={`w-3.5 h-3.5 ${isDark ? "text-sky-300" : "text-sky-600"}`} />}
                       colorClass={isDark ? "text-sky-300" : "text-sky-700"}
                       isDark={isDark}
+                      isAr={isAr}
                     >
                       <div className="flex flex-col gap-2">
                         {turn.results!.quran_results.map((item, index) => (
@@ -683,6 +647,7 @@ export default function DeenAsk() {
                       icon={<ScrollText className={`w-3.5 h-3.5 ${isDark ? "text-emerald-400" : "text-emerald-700"}`} />}
                       colorClass={isDark ? "text-emerald-400" : "text-emerald-700"}
                       isDark={isDark}
+                      isAr={isAr}
                     >
                       <div className="flex flex-col gap-2">
                         {turn.results!.hadith_results.map((item, index) => (
