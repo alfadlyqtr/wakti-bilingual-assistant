@@ -202,6 +202,27 @@ function fitCommaSeparatedTokens(tokens: string[], maxLength: number): string {
   return out;
 }
 
+function tokenizeCommaSeparatedTokens(value: string): string[] {
+  return value
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function dedupeCommaSeparatedTokens(tokens: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  for (const token of tokens) {
+    const key = token.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(token);
+  }
+
+  return out;
+}
+
 // Parse instrument list from the style string so we can compute an anti-instrument
 // negative list without requiring a new body field. Supports two formats:
 //   1) Legacy CSV: "locked instruments: a, b, c, ..."
@@ -227,8 +248,11 @@ function extractLockedInstruments(style: string): string[] {
 // user picks a modern Khaleeji family with no traditional instruments. We treat that
 // sentinel as a hard signal to inject ALL traditional anti-tokens, regardless of what
 // the instrument extractor returned.
-function buildGccNegativeTags(style: string = ""): string {
-  const tokens = [...GCC_NEGATIVE_TOKENS];
+function buildGccNegativeTags(style: string = "", preferredNegativeTags: string = ""): string {
+  const tokens = dedupeCommaSeparatedTokens([
+    ...tokenizeCommaSeparatedTokens(preferredNegativeTags),
+    ...GCC_NEGATIVE_TOKENS,
+  ]);
   const userInstruments = extractLockedInstruments(style).map((i) => i.toLowerCase());
   const explicitlyExcludesTraditional = /no traditional khaleeji instrumentation/i.test(style);
 
@@ -317,16 +341,28 @@ serve(async (req) => {
     const audioWeight = typeof body?.audioWeight === "number" ? body.audioWeight : undefined;
     const personaId = (body?.personaId || "").toString().trim();
     const personaModel = (body?.personaModel || "").toString().trim();
+    const khaleejiDialect = (body?.khaleejiDialect || "").toString().trim();
+    const khaleejiDialectLabel = (body?.khaleejiDialectLabel || "").toString().trim();
+    const khaleejiAccentAnchor = (body?.khaleejiAccentAnchor || "").toString().trim();
     const styleTags = Array.isArray(body?.styleTags) ? body.styleTags.filter((tag: unknown): tag is string => typeof tag === "string" && tag.trim().length > 0) : [];
     const controlBlock = (body?.controlBlock || "").toString().trim();
     const structurePlan = (body?.structurePlan || "").toString().trim();
     const tempoHint = (body?.tempoHint || "").toString().trim();
     const musicalKeyHint = (body?.musicalKeyHint || "").toString().trim();
-    const durationHint = typeof body?.duration_seconds === "number" ? body.duration_seconds : null;
+    const rawDurationSeconds =
+      typeof body?.duration_seconds === "number"
+        ? body.duration_seconds
+        : typeof body?.durationSeconds === "number"
+          ? body.durationSeconds
+          : typeof body?.duration === "number"
+            ? body.duration
+            : null;
+    const ALLOWED_DURATION_SECONDS = new Set([30, 60, 90, 120, 150, 180, 210]);
+    const durationHint = rawDurationSeconds !== null ? Math.round(rawDurationSeconds) : null;
     const { prompt: promptLimit, style: styleLimit } = getModelLimits(model);
     const isGccEffective = GCC_STYLE_MARKERS.test(style);
     const effectivePrompt = !instrumental && isGccEffective ? applyGccPromptShaping(prompt, style, vocalGender) : prompt;
-    const effectiveNegativeTags = isGccEffective ? buildGccNegativeTags(style) : negativeTags;
+    const effectiveNegativeTags = isGccEffective ? buildGccNegativeTags(style, negativeTags) : negativeTags;
     // Frontend now sends the correct value (user override or genre-based recommended).
     // Only fall back to old GCC defaults when no value was sent (backwards compat).
     const effectiveWeirdnessConstraint = weirdnessConstraint !== undefined ? weirdnessConstraint : (isGccEffective ? 0.55 : undefined);
@@ -334,6 +370,13 @@ serve(async (req) => {
 
     if (title.length > 80) {
       throw new Error("Title exceeds 80 characters");
+    }
+
+    if (durationHint === null || !ALLOWED_DURATION_SECONDS.has(durationHint)) {
+      return new Response(JSON.stringify({ error: "A valid duration is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     if (customMode) {
@@ -386,7 +429,7 @@ serve(async (req) => {
     if (customMode) {
       kiePayload.style = style;
       kiePayload.title = title;
-      if (durationHint) kiePayload.duration = Math.round(durationHint);
+      kiePayload.duration = durationHint;
       if (effectiveNegativeTags) kiePayload.negativeTags = effectiveNegativeTags;
       if (vocalGender && !instrumental) kiePayload.vocalGender = vocalGender;
       if (styleWeight !== undefined) kiePayload.styleWeight = styleWeight;
@@ -396,7 +439,7 @@ serve(async (req) => {
       if (personaModel) kiePayload.personaModel = personaModel;
     }
 
-    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, styleLen: style.length, promptLen: effectivePrompt.length });
+    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, duration: durationHint, styleLen: style.length, promptLen: effectivePrompt.length });
     console.log("[music-generate] KIE payload keys:", Object.keys(kiePayload));
 
     const kieResp = await fetch("https://api.kie.ai/api/v1/generate", {
@@ -462,6 +505,9 @@ serve(async (req) => {
       structurePlan: structurePlan || null,
       tempoHint: tempoHint || null,
       musicalKeyHint: musicalKeyHint || null,
+      khaleejiDialect: khaleejiDialect || null,
+      khaleejiDialectLabel: khaleejiDialectLabel || null,
+      khaleejiAccentAnchor: khaleejiAccentAnchor || null,
       duration_seconds: durationHint,
     };
 
@@ -496,6 +542,9 @@ serve(async (req) => {
             structurePlan: structurePlan || null,
             tempoHint: tempoHint || null,
             musicalKeyHint: musicalKeyHint || null,
+            khaleejiDialect: khaleejiDialect || null,
+            khaleejiDialectLabel: khaleejiDialectLabel || null,
+            khaleejiAccentAnchor: khaleejiAccentAnchor || null,
             request_payload: requestPayload,
           },
         })

@@ -1657,6 +1657,86 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [includeRect, setIncludeRect] = useState<{top:number,left:number,width:number} | null>(null);
   const [instrumentRect, setInstrumentRect] = useState<{top:number,left:number,width:number} | null>(null);
   const [moodRect, setMoodRect] = useState<{top:number,left:number,width:number} | null>(null);
+  type KhaleejiDialect = 'kuwaiti' | 'qatari' | 'saudi' | 'emirati' | 'bahraini' | 'omani';
+  const KHALEEJI_DIALECT_OPTIONS: KhaleejiDialect[] = ['kuwaiti', 'qatari', 'saudi', 'emirati', 'bahraini', 'omani'];
+  const KHALEEJI_DIALECT_CONTRACTS: Record<KhaleejiDialect, {
+    labelEn: string;
+    labelAr: string;
+    dialectLabel: string;
+    pronunciationLabel: string;
+    phrasingLabel: string;
+    timbreLabel: string;
+    accentAnchor: string;
+    negativeBlockEnglish: string;
+    negativeBlockArabic: string;
+  }> = {
+    kuwaiti: {
+      labelEn: 'Kuwaiti',
+      labelAr: 'كويتي',
+      dialectLabel: 'strict Kuwaiti Khaleeji dialect',
+      pronunciationLabel: 'native Kuwaiti Khaleeji pronunciation',
+      phrasingLabel: 'colloquial Kuwaiti Khaleeji phrasing',
+      timbreLabel: 'authentic Kuwaiti Khaleeji timbre',
+      accentAnchor: 'exact Kuwaiti Khaleeji accent only',
+      negativeBlockEnglish: 'qatari, saudi, emirati, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-kuwaiti, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
+      negativeBlockArabic: 'قطري, سعودي, إماراتي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير كويتي, غير خليجي, جودة منخفضة',
+    },
+    qatari: {
+      labelEn: 'Qatari',
+      labelAr: 'قطري',
+      dialectLabel: 'strict Qatari Khaleeji dialect',
+      pronunciationLabel: 'native Qatari Khaleeji pronunciation',
+      phrasingLabel: 'colloquial Qatari Khaleeji phrasing',
+      timbreLabel: 'authentic Qatari Khaleeji timbre',
+      accentAnchor: 'exact Qatari Khaleeji accent only',
+      negativeBlockEnglish: 'kuwaiti, saudi, emirati, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-qatari, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
+      negativeBlockArabic: 'كويتي, سعودي, إماراتي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير قطري, غير خليجي, جودة منخفضة',
+    },
+    saudi: {
+      labelEn: 'Saudi',
+      labelAr: 'سعودي',
+      dialectLabel: 'strict Saudi Khaleeji dialect',
+      pronunciationLabel: 'native Saudi Khaleeji pronunciation',
+      phrasingLabel: 'colloquial Saudi Khaleeji phrasing',
+      timbreLabel: 'authentic Saudi Khaleeji timbre',
+      accentAnchor: 'exact Saudi Khaleeji accent only',
+      negativeBlockEnglish: 'kuwaiti, qatari, emirati, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-saudi, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
+      negativeBlockArabic: 'كويتي, قطري, إماراتي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير سعودي, غير خليجي, جودة منخفضة',
+    },
+    emirati: {
+      labelEn: 'Emirati',
+      labelAr: 'إماراتي',
+      dialectLabel: 'strict Emirati Khaleeji dialect',
+      pronunciationLabel: 'native Emirati Khaleeji pronunciation',
+      phrasingLabel: 'colloquial Emirati Khaleeji phrasing',
+      timbreLabel: 'authentic Emirati Khaleeji timbre',
+      accentAnchor: 'exact Emirati Khaleeji accent only',
+      negativeBlockEnglish: 'kuwaiti, qatari, saudi, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-emirati, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
+      negativeBlockArabic: 'كويتي, قطري, سعودي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير إماراتي, غير خليجي, جودة منخفضة',
+    },
+    bahraini: {
+      labelEn: 'Bahraini',
+      labelAr: 'بحريني',
+      dialectLabel: 'strict Bahraini Khaleeji dialect',
+      pronunciationLabel: 'native Bahraini Khaleeji pronunciation',
+      phrasingLabel: 'colloquial Bahraini Khaleeji phrasing',
+      timbreLabel: 'authentic Bahraini Khaleeji timbre',
+      accentAnchor: 'exact Bahraini Khaleeji accent only',
+      negativeBlockEnglish: 'kuwaiti, qatari, saudi, emirati, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-bahraini, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
+      negativeBlockArabic: 'كويتي, قطري, سعودي, إماراتي, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير بحريني, غير خليجي, جودة منخفضة',
+    },
+    omani: {
+      labelEn: 'Omani',
+      labelAr: 'عماني',
+      dialectLabel: 'strict Omani Khaleeji dialect',
+      pronunciationLabel: 'native Omani Khaleeji pronunciation',
+      phrasingLabel: 'colloquial Omani Khaleeji phrasing',
+      timbreLabel: 'authentic Omani Khaleeji timbre',
+      accentAnchor: 'exact Omani Khaleeji accent only',
+      negativeBlockEnglish: 'kuwaiti, qatari, saudi, emirati, bahraini, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-omani, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
+      negativeBlockArabic: 'كويتي, قطري, سعودي, إماراتي, بحريني, مصري, شامي, مغربي, عراقي, فصحى, غير عماني, غير خليجي, جودة منخفضة',
+    },
+  };
   // Minimal mode only: styles include/exclude + prompt + duration
   const [submitting, setSubmitting] = useState(false);
   const [amping, setAmping] = useState(false);
@@ -1666,6 +1746,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [lyricsDisplayMode, setLyricsDisplayMode] = useState(false);
   const [gccOriginalLyrics, setGccOriginalLyrics] = useState('');
   const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
+  const [khaleejiDialect, setKhaleejiDialect] = useState<'kuwaiti'|'qatari'|'saudi'|'emirati'|'bahraini'|'omani'>('kuwaiti');
   const [vocalsOpen, setVocalsOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
@@ -1705,6 +1786,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const re = /khaleeji|خليجي/i;
     return effectiveIncludeTags.some((t) => re.test(t)) || rhythmTags.some((t) => re.test(t));
   }, [effectiveIncludeTags, rhythmTags]);
+  const khaleejiDialectActive = isGccStyleSelected || khaleejiSelected;
+  const selectedKhaleejiDialectContract = KHALEEJI_DIALECT_CONTRACTS[khaleejiDialect];
 
   // Recommended slider defaults — recomputed whenever the user's style selection changes.
   // Populates Style Strength / Creative Freedom sliders in Advanced. When user hasn't
@@ -1721,8 +1804,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [songsRemaining, setSongsRemaining] = useState(30);
   const [generatingTask, setGeneratingTask] = useState<{ taskId: string; recordId: string } | null>(null);
   const [generatedTracks, setGeneratedTracks] = useState<Array<{ id: string; audioUrl: string; coverUrl: string | null; duration: number | null; title: string | null; variantIndex: number }>>([]);
-  const [savedTrackIds, setSavedTrackIds] = useState<string[]>([]);
-  const [savingTrackIds, setSavingTrackIds] = useState<string[]>([]);
+
   const [customMode, setCustomMode] = useState<boolean>(true);
   const [negativeTags, setNegativeTags] = useState<string>('');
   const [styleWeightOverride, setStyleWeightOverride] = useState<number | null>(null);
@@ -2961,6 +3043,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           structurePlan: khalijiControlBlock.structurePlan,
           tempoHint: khalijiControlBlock.tempoTag,
           musicalKeyHint: khalijiControlBlock.keyTag,
+          khaleejiDialect: khalijiControlBlock.dialectKey,
+          khaleejiDialectLabel: khalijiControlBlock.dialectLabel,
+          khaleejiAccentAnchor: khalijiControlBlock.accentAnchor,
         }
       });
       if (error) throw error;
@@ -3023,6 +3108,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // Only enforce vocals in style line when explicitly Female/Male (not auto/none)
     if (vocalType === 'female') parts.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'صوت أنثوي' : 'Female voice'}`);
     if (vocalType === 'male') parts.push(`${language==='ar' ? 'الصوت' : 'Vocals'}: ${language==='ar' ? 'صوت ذكوري' : 'Male voice'}`);
+    if (khaleejiDialectActive && vocalType !== 'none') parts.push(`${language==='ar' ? 'اللهجة' : 'Dialect'}: ${language==='ar' ? selectedKhaleejiDialectContract.labelAr : selectedKhaleejiDialectContract.labelEn}`);
     return parts.join('. ');
   }
 
@@ -3471,46 +3557,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     setLyricsOpen(section === 'lyrics' ? !lyricsOpen : false);
   }
 
-  const handleSaveGeneratedTrack = async (trackId: string) => {
-    if (!user || savingTrackIds.includes(trackId)) return;
-    setSavingTrackIds((prev) => [...prev, trackId]);
-    try {
-      const track = generatedTracks.find((item) => item.id === trackId);
-      const existing = track ? trackId : null;
-      if (!existing) throw new Error(isAr ? 'لم يتم العثور على المقطع' : 'Track not found');
-
-      const { data: existingRow, error: existingRowError } = await (supabase as any)
-        .from('user_music_tracks')
-        .select('meta')
-        .eq('id', existing)
-        .eq('user_id', user.id)
-        .maybeSingle();
-
-      if (existingRowError) throw existingRowError;
-
-      const nextMeta = {
-        ...((existingRow?.meta as Record<string, unknown> | null) ?? {}),
-        status: 'completed',
-        saved: true,
-      };
-
-      const { error } = await (supabase as any)
-        .from('user_music_tracks')
-        .update({ meta: nextMeta })
-        .eq('id', existing)
-        .eq('user_id', user.id);
-
-      if (error) throw error;
-
-      setSavedTrackIds((prev) => prev.includes(trackId) ? prev : [...prev, trackId]);
-      toast.success(isAr ? 'تم الحفظ في المحفوظات' : 'Saved to your Saved tab');
-    } catch (e: any) {
-      toast.error((isAr ? 'فشل الحفظ: ' : 'Save failed: ') + (e?.message || String(e)));
-    } finally {
-      setSavingTrackIds((prev) => prev.filter((id) => id !== trackId));
-    }
-  };
-
   // No more mirroring chips into a single prompt; we compose at send-time
 
 
@@ -3519,8 +3565,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   // Pronunciation-defect shield. Dialect names (egyptian/levantine/etc.) tell Suno WHAT to
   // avoid by label; phonetic tokens (hard final qaf, rolled r, khutbah cadence, etc.) tell
   // Suno HOW the mouth should NOT sound. Both layers reinforce each other.
-  const GCC_DIALECT_BLOCK = 'egyptian, levantine, maghrebi, fusha, msa, north african, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, low quality, distorted, vocal hiss, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence, hijazi accent, andalusi accent';
-  const GCC_DIALECT_BLOCK_AR = 'مصري، شامي، مغربي، فصحى، شمال أفريقي، سوداني، غير خليجي، جودة منخفضة';
+  const GCC_DIALECT_BLOCK = selectedKhaleejiDialectContract.negativeBlockEnglish;
+  const GCC_DIALECT_BLOCK_AR = selectedKhaleejiDialectContract.negativeBlockArabic;
 
   const GCC_PRONUNCIATION_NEGATIVES: Record<string, string> = {
     'English GCC Pop': '', 'إنجليزي بطابع خليجي': '',
@@ -4347,11 +4393,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       : '';
 
     // S3 — vocal sentence packed with dialect-rich keywords Suno responds to.
-    // "pure Saudi-Kuwaiti-Qatari Khaleeji dialect" + "authentic desert-coastal
-    // Khaleeji timbre" + "native Gulf pronunciation" + "colloquial Khaleeji
-    // phrasing" recover the identity-anchor keyword density that was lost when
-    // we moved from the legacy CSV style to the natural-language brief.
-    const s3 = `Vocals are delivered in pure Saudi-Kuwaiti-Qatari Khaleeji dialect with authentic desert-coastal Khaleeji timbre, native Gulf pronunciation, and colloquial Khaleeji phrasing, ${v.vocalDelivery}, featuring ${v.vocalOrnament}.`;
+    const s3 = `Vocals are delivered in ${selectedKhaleejiDialectContract.dialectLabel} with ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, and ${selectedKhaleejiDialectContract.phrasingLabel}, ${v.vocalDelivery}, featuring ${v.vocalOrnament}.`;
 
     const moodPart = opts.moods.length > 0 ? `The mood is ${opts.moods.join(', ')}.` : '';
     // Split "{N} BPM {feel}" into two natural clauses; drop redundant "tonal center".
@@ -4416,7 +4458,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // Packed with the same identity DNA as buildKhalijiProductionBrief so Suno
     // gets full Gulf pronunciation, timbre, and phrasing keywords even when the
     // primary chip is a non-Arab genre.
-    const s3 = `Vocals are delivered in pure Kuwaiti-Qatari Khaleeji dialect with authentic desert-coastal Khaleeji timbre, native Gulf pronunciation, and colloquial Khaleeji phrasing, fused with ${v.vocalCueDelivery}, featuring expressive quarter-tone Khaleeji ornaments.`;
+    const s3 = `Vocals are delivered in ${selectedKhaleejiDialectContract.dialectLabel} with ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, and ${selectedKhaleejiDialectContract.phrasingLabel}, fused with ${v.vocalCueDelivery}, featuring expressive quarter-tone Khaleeji ornaments.`;
 
     // S4 — Mood + tempo + key.
     const moodPart = opts.moods.length > 0 ? `The mood is ${opts.moods.join(', ')}.` : '';
@@ -4450,12 +4492,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const v = GENRE_VOCAB[genreFamily];
 
     const alreadyKhaleeji = genreFamily.startsWith('khaleeji-');
-    if (forceKhaleejiAnchor && !alreadyKhaleeji) {
-      const capWithKhaleeji = `${cap} Khaleeji`;
-      const delivery = v.vocalCueDelivery.includes(' with ')
-        ? v.vocalCueDelivery.replace(' with ', ' with Kuwaiti-Qatari pronunciation and ')
-        : `Kuwaiti-Qatari pronunciation, ${v.vocalCueDelivery}`;
-      return `[${v.vocalCueAdj} ${capWithKhaleeji} vocal, ${delivery}]`;
+    if (alreadyKhaleeji || forceKhaleejiAnchor) {
+      const capWithKhaleeji = `${cap} ${selectedKhaleejiDialectContract.labelEn} Khaleeji`;
+      return `[${v.vocalCueAdj} ${capWithKhaleeji} vocal, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${v.vocalCueDelivery}]`;
     }
 
     return `[${v.vocalCueAdj} ${cap} vocal, ${v.vocalCueDelivery}]`;
@@ -4560,9 +4599,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // Dedup: LOCK strings already carry "pure Khaleeji dialect" and negative tags already carry
     // "no MSA / no Egyptian / no Levantine". Keep only the country anchor here.
     const dialectLock = (isGccStyle || isGccStyleSelected || khaleejiTriggered)
-      ? 'strict Kuwaiti-Qatari dialect'
+      ? selectedKhaleejiDialectContract.dialectLabel
       : null;
+    const accentAnchor = dialectLock ? selectedKhaleejiDialectContract.accentAnchor : null;
+    const pronunciationAnchor = dialectLock ? selectedKhaleejiDialectContract.pronunciationLabel : null;
+    const phrasingAnchor = dialectLock ? selectedKhaleejiDialectContract.phrasingLabel : null;
     const styleParts: string[] = [
+      accentAnchor,
       styleAnchor,
       primaryRhythm,
       supportingRhythms.length > 0 ? `supporting rhythms: ${supportingRhythms.join(', ')}` : null,
@@ -4572,6 +4615,8 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       `tempo: ${tempoTag}`,
       `key: ${keyTag}`,
       freeText,
+      pronunciationAnchor,
+      phrasingAnchor,
       dialectLock,
     ]
       .filter((part): part is string => Boolean(part))
@@ -4646,6 +4691,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       'KHALIJI CONTROL BLOCK',
       primaryStyle ? `Primary style chip: ${normalizeKhalijiPromptToken(primaryStyle)}` : null,
       styleAnchor ? `Identity anchor: ${styleAnchor}` : null,
+      accentAnchor ? `Accent anchor: ${accentAnchor}` : null,
+      dialectLock ? `Dialect target: ${dialectLock}` : null,
+      pronunciationAnchor ? `Pronunciation target: ${pronunciationAnchor}` : null,
+      phrasingAnchor ? `Phrasing target: ${phrasingAnchor}` : null,
       primaryRhythm ? `Primary rhythm: ${primaryRhythm}` : null,
       supportingRhythms.length > 0 ? `Supporting rhythms: ${supportingRhythms.join(', ')}` : null,
       instrumentLayer.length > 0 ? `Locked instruments: ${instrumentLayer.join(', ')}` : null,
@@ -4654,7 +4703,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       `Tempo: ${tempoTag}`,
       `Key: ${keyTag}`,
       freeText ? `Creative brief: ${freeText}` : null,
-      dialectLock ? `Dialect lock: ${dialectLock}` : null,
     ].filter(Boolean).join('\n');
 
     const recipeMode: 'pure-khaleeji' | 'khaleeji-fusion' | 'legacy' = useRecipe
@@ -4673,6 +4721,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       family,
       usingRecipeV1: useRecipe || useFusionRecipe,
       recipeMode,
+      dialectKey: dialectLock ? khaleejiDialect : null,
+      dialectLabel: dialectLock ? `${selectedKhaleejiDialectContract.labelEn} Khaleeji` : null,
+      accentAnchor,
     };
   }
 
@@ -4696,13 +4747,13 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   //    Dedup: one Khaleeji timbre anchor, one dialect anchor, one quarter-tone anchor. "mawwal" is the
   //    signal the edge function uses to route to heritage persona family.
   const LOCK_HERITAGE = (style: string) =>
-    `kuwaiti qatari, pure Khaleeji dialect, authentic desert-coastal resonance, seasoned Khaleeji vocalist timbre, ${style}, colloquial phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic Khaleeji quarter-tone scale`;
+    `authentic khaleeji heritage production, seasoned Khaleeji vocalist timbre, ${style}, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic Khaleeji quarter-tone scale`;
 
   // ── Pop / Dance / Electro / Trap lock — clean hooks, no mawwal, tight pop articulation.
   //    Use for radio pop, dance pop, electro pop, synth pop, fusion, english crossover, r&b pop, party, elegant, rap, trap, luxury pop.
   //    Dedup: same anchor structure as heritage, minus mawwal.
   const LOCK_POP = (style: string) =>
-    `kuwaiti qatari, pure Khaleeji dialect, authentic desert-coastal resonance, modern Khaleeji vocal timbre, ${style}, colloquial phrasing, vocal-forward, clean hook delivery, tight pop articulation, controlled melisma, polished radio-ready mix, authentic Khaleeji quarter-tone scale`;
+    `modern khaleeji vocal production, modern Khaleeji vocal timbre, ${style}, vocal-forward, clean hook delivery, tight pop articulation, controlled melisma, polished radio-ready mix, authentic Khaleeji quarter-tone scale`;
 
   // ── Backward-compat alias — defaults to heritage for any caller still using LOCK directly.
   const LOCK = LOCK_HERITAGE;
@@ -5260,7 +5311,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       setLyricsOpen(true);
       return;
     }
-
     // ── Capacity check (vocal tracks only) ──
     // Compare user's stanza count vs the duration's stanza capacity. Two paths:
     //  • autoLabelLyrics ON  → silently bump duration to fit, notify user.
@@ -5268,23 +5318,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     //    duration, enable auto-label, or trim lyrics.
     // Returns the duration to use locally for this generation (state update
     // is async, so we can't rely on `duration` after setDuration).
-    let effectiveDuration = duration;
     const parsedLyrics = lyricsText.trim() ? parseUserLyricStructure(lyricsText.trim()) : null;
     const normalizedLyrics = parsedLyrics?.normalizedText ?? '';
     const lyricPlanningText = parsedLyrics?.lyricText?.trim() ?? normalizedLyrics;
     const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(lyricPlanningText) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
-    if (shouldSmartStructureLyrics) {
-      // Count only real blank-line-separated stanzas (no auto-split here — just raw count).
-      const rawStanzaCount = splitLyricStanzas(lyricPlanningText).length;
-      const requiredDuration = minDurationForStanzas(rawStanzaCount);
-      if (requiredDuration > duration) {
-        effectiveDuration = requiredDuration;
-        setDuration(requiredDuration);
-        toast.success(isAr
-          ? `تمت إعادة هيكلة الكلمات تلقائيًا ورفع المدة إلى ${requiredDuration} ثانية لتناسب ${rawStanzaCount} أقسام.`
-          : `Smart-structured your lyrics and extended duration to ${requiredDuration}s to fit ${rawStanzaCount} sections.`);
-      }
-    }
 
     setSubmitting(true);
     setGeneratedTracks([]);
@@ -5313,7 +5350,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const vocalGender: 'm' | 'f' | undefined =
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
       const rawLyrics = lyricsText.trim() || styleText.trim();
-      const durationTarget = Math.min(MAX_DURATION_SECONDS, effectiveDuration);
+      const durationTarget = DURATION_VALUES.includes(duration) ? duration : 30;
       const smartSectionPlan = shouldSmartStructureLyrics
         ? buildSmartLyricStructure(lyricPlanningText, durationTarget, instrumentTags)
         : null;
@@ -5581,7 +5618,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       // discriminating GCC dialect tokens land in the first 200 chars; remaining tokens
       // are dropped at clean comma boundaries (never mid-token).
       const NEG_TAGS_MAX_CHARS = 200;
-      const GCC_DEFAULT_NEGATIVES = 'moroccan, darija, gnawa, chaabi, maghrebi rhythm, egyptian, levantine, fusha, msa, sudanese, non-gulf, non-khaleeji, mispronounced, autotune, noise, hiss, distorted, low quality, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence, hijazi accent, andalusi accent';
+      const GCC_DEFAULT_NEGATIVES = selectedKhaleejiDialectContract.negativeBlockEnglish;
       const tokenizeNeg = (s: string): string[] => s
         .split(',')
         .map((t) => t.trim())
@@ -5634,7 +5671,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       );
 
       // ── Final style string (resolved with GCC fallback) ──
-      const GCC_FALLBACK_STYLE = 'kuwaiti qatari, pure kuwaiti qatari dialect, authentic desert-coastal resonance, seasoned gulf vocalist timbre, khaleeji pop, colloquial gulf phrasing, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic gulf vocal, strict khaleeji dialect, authentic khaleeji quarter-tone scale';
+      const GCC_FALLBACK_STYLE = `${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.dialectLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${selectedKhaleejiDialectContract.phrasingLabel}, seasoned Khaleeji vocalist timbre, khaleeji pop, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic khaleeji quarter-tone scale`;
       const resolvedStyle = (kieStyle || GCC_FALLBACK_STYLE).slice(0, 1000);
       // ── Bulletproof GCC detection ──
       // 1) Chip-based: the canonical set (most precise).
@@ -5667,6 +5704,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         structurePlan: khalijiControlBlock.structurePlan,
         tempoHint: khalijiControlBlock.tempoTag,
         musicalKeyHint: khalijiControlBlock.keyTag,
+        khaleejiDialect: khalijiControlBlock.dialectKey,
+        khaleejiDialectLabel: khalijiControlBlock.dialectLabel,
+        khaleejiAccentAnchor: khalijiControlBlock.accentAnchor,
       };
 
       if (!instrumental) invokeBody.prompt = structuredPrompt;
@@ -5699,7 +5739,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         setSubmitting(false);
         setGeneratingTask(null);
         setGeneratedTracks(tracks);
-        setSavedTrackIds([]);
         setTitleOpen(false);
         setMusicStyleOpen(false);
         setVocalsOpen(false);
@@ -5742,7 +5781,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       setGeneratingTask(null);
       setSubmitting(false);
       setGeneratedTracks(tracks);
-      setSavedTrackIds([]);
       setTitleOpen(false);
       setMusicStyleOpen(false);
       setVocalsOpen(false);
@@ -6548,6 +6586,38 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               );
             })}
           </div>
+          {khaleejiDialectActive && vocalType !== 'none' && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-[#060541] dark:text-white/90">
+                  {isAr ? 'اللهجة الخليجية' : 'Khaleeji Dialect'}
+                </span>
+                <span className="text-[10px] text-[#606062] dark:text-white/60">
+                  {isAr ? 'قفل اللكنة' : 'Accent lock'}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {KHALEEJI_DIALECT_OPTIONS.map((dialect) => {
+                  const option = KHALEEJI_DIALECT_CONTRACTS[dialect];
+                  const isActive = khaleejiDialect === dialect;
+                  return (
+                    <button
+                      key={dialect}
+                      type="button"
+                      onClick={() => setKhaleejiDialect(dialect)}
+                      className={`min-h-[48px] px-3 py-2 rounded-2xl text-[11px] font-semibold leading-tight border transition-all active:scale-95 ${
+                        isActive
+                          ? 'bg-gradient-to-r from-[#060541] to-[hsl(260_70%_25%)] dark:from-sky-500/30 dark:to-purple-500/25 border-[#060541] dark:border-sky-400/40 text-white shadow-[0_8px_18px_rgba(6,5,65,0.18)] dark:shadow-[0_0_14px_hsla(210,100%,65%,0.25)]'
+                          : 'bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#374151] dark:text-white/85 hover:border-[#060541]/30 dark:hover:border-sky-400/30 hover:text-[#060541] dark:hover:text-white'
+                      }`}
+                    >
+                      {isAr ? option.labelAr : option.labelEn}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -6728,21 +6798,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                       const instrumental = vocalType === 'none';
                       const vocalGender: 'm' | 'f' | undefined =
                         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
-                      // Mirror handleGenerate's capacity check: when autoLabelLyrics is ON
-                      // and the user's lyrics exceed capacity, preview the auto-bumped duration
-                      // so what's shown matches what will actually be generated.
                       const rawLyrics = lyricsText.trim() || styleText.trim();
                       const parsedLyrics = lyricsText.trim() ? parseUserLyricStructure(lyricsText.trim()) : null;
                       const normalizedLyrics = parsedLyrics?.normalizedText ?? '';
                       const lyricPlanningText = parsedLyrics?.lyricText?.trim() ?? normalizedLyrics;
                       const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(lyricPlanningText) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
-                      let previewEffectiveDuration = duration;
-                      if (shouldSmartStructureLyrics) {
-                        const rawStanzaCount = splitLyricStanzas(lyricPlanningText).length;
-                        const requiredDuration = minDurationForStanzas(rawStanzaCount);
-                        if (requiredDuration > duration) previewEffectiveDuration = requiredDuration;
-                      }
-                      const durationTarget = Math.min(MAX_DURATION_SECONDS, previewEffectiveDuration);
+                      const durationTarget = DURATION_VALUES.includes(duration) ? duration : 30;
                       const smartSectionPlan = shouldSmartStructureLyrics
                         ? buildSmartLyricStructure(lyricPlanningText, durationTarget, instrumentTags)
                         : null;
@@ -6781,6 +6842,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                         musicalKeyHint: cb.keyTag,
                         controlBlock: cb.controlBlock,
                         structurePlan: cb.structurePlan,
+                        khaleejiDialect: cb.dialectKey,
+                        khaleejiDialectLabel: cb.dialectLabel,
+                        khaleejiAccentAnchor: cb.accentAnchor,
                         recipeVersion: cb.recipeMode === 'pure-khaleeji'
                           ? 'wakti-recipe-v1'
                           : cb.recipeMode === 'khaleeji-fusion'
@@ -7031,26 +7095,17 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
                 {/* Actions */}
                 <div className="relative px-4 pb-4 flex items-center gap-2 justify-end flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => handleSaveGeneratedTrack(track.id)}
-                    disabled={savedTrackIds.includes(track.id) || savingTrackIds.includes(track.id)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-400/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition-all disabled:opacity-60"
-                  >
-                    {savingTrackIds.includes(track.id)
-                      ? <Loader2 className="h-3 w-3 animate-spin" />
-                      : <Save className="h-3 w-3" />}
-                    {savedTrackIds.includes(track.id)
-                      ? (isAr ? 'تم الحفظ' : 'Saved')
-                      : (isAr ? 'حفظ' : 'Save')}
-                  </button>
+                  <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-400/20 bg-emerald-500/10 text-emerald-300">
+                    <CheckCircle2 className="h-3 w-3" />
+                    <span>{isAr ? 'تم الحفظ تلقائياً' : 'Auto-saved'}</span>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
 
           <p className="text-center text-xs text-muted-foreground/60">
-            {isAr ? 'اختر المقاطع التي تريد حفظها في تبويب المحفوظات.' : 'Choose which tracks you want to save to the Saved tab.'}
+            {isAr ? 'ستجد المقاطع التي تم إنشاؤها مباشرة في تبويب المحفوظات.' : 'Your generated tracks appear in the Saved tab automatically.'}
           </p>
         </div>
       )}
@@ -7059,7 +7114,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       {generatedTracks.length === 0 && !submitting && (
         <div className="text-center py-6">
           <p className="text-xs text-muted-foreground/50">
-            {isAr ? 'يمكنك حفظ المقاطع التي تعجبك في تبويب المحفوظات.' : 'You can save the tracks you like to the Saved tab.'}
+            {isAr ? 'سيتم حفظ المقاطع التي تنشئها تلقائياً في تبويب المحفوظات.' : 'Tracks you generate are saved to the Saved tab automatically.'}
           </p>
         </div>
       )}
@@ -7081,6 +7136,7 @@ type SavedTrack = {
   signed_url: string | null;
   storage_path: string | null;
   mime: string | null;
+  is_public?: boolean | null;
   share_code?: string | null;
   meta: Record<string, unknown> | null;
   play_url?: string | null;
@@ -8064,6 +8120,7 @@ function EditorTab() {
   const [shareTrackTarget, setShareTrackTarget] = useState<{ id: string; title: string; coverUrl: string | null } | null>(null);
   const [deleteTrackTarget, setDeleteTrackTarget] = useState<{ id: string; storagePath: string | null } | null>(null);
   const [trackYouTubeTarget, setTrackYouTubeTarget] = useState<SavedTrack | null>(null);
+  const [sharePreparingTrackId, setSharePreparingTrackId] = useState<string | null>(null);
 
   const copyLyricsText = async (text: string) => {
     const cleanText = text.trim();
@@ -8356,13 +8413,39 @@ function EditorTab() {
     }
   };
 
+  const ensureTrackPublicForShare = async (track: SavedTrack) => {
+    if (!user) return false;
+    if (track.is_public) return true;
+    if (sharePreparingTrackId === track.id) return false;
+
+    setSharePreparingTrackId(track.id);
+    try {
+      const { error } = await (supabase as any)
+        .from('user_music_tracks')
+        .update({ is_public: true })
+        .eq('id', track.id)
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      setTracks((prev) => prev.map((item) => item.id === track.id ? { ...item, is_public: true } : item));
+      toast.success(isAr ? 'تم تجهيز الرابط للمشاركة' : 'Share link is ready');
+      return true;
+    } catch (e: any) {
+      toast.error((isAr ? 'فشل تجهيز الرابط: ' : 'Could not prepare share link: ') + (e?.message || String(e)));
+      return false;
+    } finally {
+      setSharePreparingTrackId((current) => current === track.id ? null : current);
+    }
+  };
+
   const load = async () => {
     if (!user) { setTracks([]); return; }
     setLoading(true);
     try {
       const { data, error } = await (supabase as any)
         .from('user_music_tracks')
-        .select('id, created_at, task_id, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, source_audio_url, share_code')
+        .select('id, created_at, task_id, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, source_audio_url, share_code, is_public')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -9136,6 +9219,7 @@ function EditorTab() {
                             <RefreshCw className="h-3 w-3" />{isAr ? 'تنزيل' : 'Download'}
                           </button>
                           <ShareButton size="sm"
+                            beforeOpen={() => ensureTrackPublicForShare(t)}
                             shareUrl={typeof window !== 'undefined' ? `${window.location.origin}/music/share/${(t.title ? t.title.toLowerCase().replace(/[^a-z0-9\u0600-\u06ff]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 30) + '-' : '') + (t.share_code || t.id)}` : ''}
                             shareTitle={isAr ? 'استمع إلى موسيقى من وقتي 🎵' : 'Listen to my Wakti music 🎵'}
                             extraActions={[

@@ -77,6 +77,7 @@ const ChatbotPage = lazy(() => import("@/pages/ChatbotPage"));
 const InstagramConnectCallback = lazy(() => import("@/pages/InstagramConnectCallback"));
 const GoogleAuthCallback = lazy(() => import("@/pages/GoogleAuthCallback"));
 const MyWishlists = lazy(() => import("@/pages/MyWishlists"));
+const PublicWishlist = lazy(() => import("@/pages/PublicWishlist"));
 const ContactGallery = lazy(() => import("@/pages/ContactGallery"));
 const Deen = lazy(() => import("@/pages/Deen"));
 const DeenQuran = lazy(() => import("@/pages/DeenQuran"));
@@ -152,6 +153,7 @@ export default function ConsumerRouter() {
         <Route path="/card/:shareSlug" element={<BusinessCardShare />} />
         <Route path="/maw3d/:shortId" element={<Maw3dView />} />
         <Route path="/music/share/:id" element={<MusicShare />} />
+        <Route path="/wishlist/:id" element={<PublicWishlist />} />
         <Route path="/poster/:id" element={<PosterShare />} />
         <Route path="/image/:id" element={<ImageShare />} />
         <Route path="/video/:id" element={<VideoShare />} />

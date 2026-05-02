@@ -8,6 +8,23 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
+type SharedMusicTrackRow = {
+  id: string;
+  created_at: string;
+  title: string | null;
+  prompt: string | null;
+  include_styles: string[] | null;
+  requested_duration_seconds: number | null;
+  duration: number | null;
+  cover_url: string | null;
+  signed_url: string | null;
+  storage_path: string | null;
+  mime: string | null;
+  meta: Record<string, unknown> | null;
+  share_code: string;
+  is_public: boolean;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -34,7 +51,7 @@ serve(async (req) => {
       trackId = (url.searchParams.get("id") || "").trim();
       shareCode = (url.searchParams.get("share_code") || "").trim();
     } else {
-      const body = await req.json().catch(() => ({}));
+      const body = await req.json().catch(() => null) as { id?: string; share_code?: string } | null;
       trackId = (body?.id || "").toString().trim();
       shareCode = (body?.share_code || "").toString().trim();
     }
@@ -46,14 +63,14 @@ serve(async (req) => {
       });
     }
 
-    let data: any = null;
-    let error: any = null;
+    let data: SharedMusicTrackRow | null = null;
+    let error: unknown = null;
 
     if (trackId) {
       // Legacy: exact UUID lookup
       const result = await supabaseService
         .from("user_music_tracks")
-        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, share_code")
+        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, share_code, is_public")
         .eq("id", trackId)
         .maybeSingle();
       data = result.data;
@@ -62,7 +79,7 @@ serve(async (req) => {
       // Real short-link lookup by share_code
       const result = await supabaseService
         .from("user_music_tracks")
-        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, share_code")
+        .select("id, created_at, title, prompt, include_styles, requested_duration_seconds, duration, cover_url, signed_url, storage_path, mime, meta, share_code, is_public")
         .eq("share_code", shareCode)
         .maybeSingle();
       data = result.data;
@@ -77,6 +94,13 @@ serve(async (req) => {
     }
 
     if (!data) {
+      return new Response(JSON.stringify({ error: "Track not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!data.is_public) {
       return new Response(JSON.stringify({ error: "Track not found" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

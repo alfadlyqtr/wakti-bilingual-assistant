@@ -40,6 +40,7 @@ interface ShareButtonProps {
   size?: 'sm' | 'md' | 'lg';
   /** Custom class name */
   className?: string;
+  beforeOpen?: () => boolean | void | Promise<boolean | void>;
   /** Callback when share is successful */
   onShare?: (platform: string) => void;
   extraActions?: Array<{
@@ -58,6 +59,7 @@ const ShareButton: React.FC<ShareButtonProps> = ({
   shareDescription = '',
   size = 'md',
   className = '',
+  beforeOpen,
   onShare,
   extraActions = [],
 }) => {
@@ -238,7 +240,11 @@ const ShareButton: React.FC<ShareButtonProps> = ({
   }, [isExpanded]);
 
   // Handle click/press only (no hover)
-  const handleMainClick = () => {
+  const handleMainClick = async () => {
+    if (!isExpanded && beforeOpen) {
+      const result = await beforeOpen();
+      if (result === false) return;
+    }
     setIsExpanded(!isExpanded);
   };
 

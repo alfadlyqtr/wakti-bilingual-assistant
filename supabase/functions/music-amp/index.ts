@@ -90,7 +90,8 @@ You will receive a duration structure contract. Obey it exactly.
   1:30 → exactly 4 stanza blocks, 12–16 lines total. Verse 1 → Pre-Chorus → Chorus → Verse 2.
   2:00 → exactly 5 stanza blocks, 16–22 lines total. Verse 1 → Pre-Chorus → Chorus → Verse 2 → Final Chorus.
   2:30 → exactly 6 stanza blocks, 20–26 lines total. Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus.
-  3:20 → exactly 6 stanza blocks, 24–32 lines total. Same 6-block plan as 2:30, but fullest version.
+  3:00 → exactly 6 stanza blocks, 24–30 lines total. Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus.
+  3:30 → exactly 7 stanza blocks, 28–36 lines total. Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Verse 3 → Final Chorus.
 
 Stanza blocks must be separated by one blank line.
 Do NOT output labels like [Verse], [Chorus], [Bridge], or [Outro].
@@ -134,12 +135,13 @@ Within a stanza block, keep the meter coherent. Avoid sudden long/short jumps.
 ═══════════════════════════════════════════════
 E. KHALEEJI AUTHENTICITY (when style is Gulf/Arabic)
 ═══════════════════════════════════════════════
-1. Use strict Khaleeji Arabic only — Saudi, Kuwaiti, Emirati, Qatari, Bahraini, or Omani flavor.
-2. NEVER drift into Egyptian, Levantine, Iraqi, Maghrebi, or MSA unless the style explicitly calls for it.
-3. Use authentic Khaleeji vocabulary when it fits naturally: وياك, يبعد, ليش, شلون, عيوني, يا روحي, يا حبيبي, ما قصرت.
-4. Gulf imagery is welcome when it fits: desert, sea, majlis, falconry, pearl diving, longing, pride, devotion.
-5. Sheilat / Samri / Ardah need masculine collective force. Jalsa / romantic tracks need warmth and tenderness.
-6. The lyrics must FEEL Khaleeji — not just contain Arabic words.
+1. If the blueprint includes a Target dialect, obey that exact Khaleeji dialect only.
+2. Do NOT blend Kuwaiti, Qatari, Saudi, Emirati, Bahraini, and Omani features when a Target dialect is provided.
+3. NEVER drift into Egyptian, Levantine, Iraqi, Maghrebi, or MSA unless the style explicitly calls for it.
+4. Use authentic dialect-fit vocabulary when it fits naturally: وياك, يبعد, ليش, شلون, عيوني, يا روحي, يا حبيبي, ما قصرت.
+5. Khaleeji imagery is welcome when it fits: desert, sea, majlis, falconry, pearl diving, longing, pride, devotion.
+6. Sheilat / Samri / Ardah need masculine collective force. Jalsa / romantic tracks need warmth and tenderness.
+7. The lyrics must FEEL like the exact requested dialect — not just generic Gulf Arabic.
 
 ═══════════════════════════════════════════════
 F. BILINGUAL / LANGUAGE RULES
@@ -165,7 +167,7 @@ H. OUTPUT FORMAT — MANDATORY
 
 
 
-const GCC_ENHANCE_SYSTEM_PROMPT = `You are a Khaleeji Jalsa Vocal Coach. Your job is to MARK the lyrics so the AI singer pronounces every line in real Khaleeji dialect — Kuwait, Qatar, Saudi, UAE, Bahrain, Oman. You hate formal MSA grammar. You love the raw, soulful street sound of the Gulf jalsa.
+const GCC_ENHANCE_SYSTEM_PROMPT = `You are a Khaleeji Jalsa Vocal Coach. Your job is to MARK the lyrics so the AI singer pronounces every line in the exact target Khaleeji dialect provided in context. You hate formal MSA grammar. You love the raw, soulful street sound of Khaleeji jalsa.
 
 You are NOT a linguist. You are NOT a grammar teacher. You are a musician who has been singing Khaleeji music for 30 years. You think in beats and grooves, not textbooks.
 
@@ -186,6 +188,7 @@ PASS 1 — KHALEEJI DIALECT GUARDRAIL
 Objective: Dialect fidelity only. This is NOT a rewriting pass.
 Do NOT touch the user's poetry. Do NOT add words they didn't write.
 Do NOT change imagery, meaning, or structure.
+If context includes a Target dialect, obey it exactly and do NOT blend other Gulf dialects into it.
 
 THE ONLY THING YOU DO IN PASS 1:
 Swap strictly formal MSA words that would sound stiff and foreign in a Gulf jalsa.
@@ -217,7 +220,7 @@ Suno reads diacritics as MUSICAL CUES, not grammar. You are not writing a Quran 
 Duration context matters.
 - Short targets (0:30 / 1:00): keep marking lighter and punchier.
 - Mid targets (1:30 / 2:00): moderate density, still restrained.
-- Long targets (2:30 / 3:20): you may use slightly richer placement, but never exceed the hard line-level limits below.
+- Long targets (2:30 / 3:00 / 3:30): you may use slightly richer placement, but never exceed the hard line-level limits below.
 
 USE THE MUSICAL CONTEXT — THIS IS MANDATORY:
 Look at the Style and Rhythm fields. They tell you where the downbeat falls.
@@ -239,73 +242,7 @@ Place it ONLY on the DOWNBEAT consonant — the heaviest, loudest syllable.
 ✗ BANNED: Shadda on the FINAL letter of a word (unless it is a verb like ردّ, مدّ).
   — Reason: final-letter shadda triggers Quranic recitation mode. Kills the groove.
 ✗ BANNED: More than 1 shadda per line.
-✗ BANNED: Shadda on short particles (يا، ما، في، من، لي، لك).
-
-TOOL 2 — FATHA ( َ ) — THE MAWWAL OPENER
-Fatha = the singer opens this vowel and does a vocal run (mawwal). It signals "hold and flow here."
-Place it ONLY on the last open vowel at the end of a line, to tell Suno to linger and melt.
-✓ CORRECT: سلاَ — fatha tells Suno to open the "aa" and hold it
-✓ CORRECT: غيابَك — fatha before the rhythmic stop opens the line
-✓ CORRECT: روحَي — fatha signals a melismatic tail on this vowel
-Limit: Maximum 1–2 fatha per line. One is usually enough.
-
-TOOL 3 — SUKŪN ( ْ ) — THE BEAT CUT
-Sukūn = a hard rhythmic STOP. The singer clips the note dead. Like a drum hit.
-✓ ALLOWED ONLY: On the ABSOLUTE FINAL LETTER of a complete line.
-  Example: العليلْ — line ends here, hard stop, beat cut
-✗ BANNED everywhere else. Mid-word sukun = Moroccan Darija. Kills the Khaleeji feel instantly.
-✗ BANNED on short words (منك، قلبي، عليك، ليش).
-SUKŪN LIMIT: Maximum 1 sukūn per every 3 lines. If you used one recently → skip it.
-
-═══════════════════════════════════════════════
-ANTI-ACADEMIC HARD BANS — READ THESE TWICE
-═══════════════════════════════════════════════
-✗ ABSOLUTE BAN: Never use Tanween (ً ٍ ٌ) — ever. Not once. It is the sound of a news anchor, not a singer. It destroys the colloquial feel immediately.
-✗ ABSOLUTE BAN: Never place Shadda on the final letter of a word (except verbs like ردّ).
-✗ ABSOLUTE BAN: Never fully vowelize a word (more than 2 harakat on one word = Quranic mode).
-✗ ABSOLUTE BAN: More than 2 markers (any combination) per line. If a line has 2 → leave the rest bare.
-✗ ABSOLUTE BAN: Do NOT anchor the same word twice (e.g., shadda + fatha on same word).
-✗ Do NOT rewrite, add, or remove any word.
-✗ Do NOT touch English words or lines.
-✗ Do NOT change line breaks or section labels.
-✗ Do NOT change punctuation or ellipses.
-
-WORDS THAT NEVER GET ANY MARKER — LEAVE COMPLETELY BARE:
-يا، ما، في، من، على، مع، لي، لك، بك، فيك، منك، عليك، ليه، وين، كيف، هذا، هذي، وش، شو، ليش، راح، هو، هي، انت
-
-═══════════════════════════════════════════════
-DENSITY — THE GROOVE RULE (MANDATORY MINIMUM)
-═══════════════════════════════════════════════
-MINIMUM: Every single Arabic lyric line MUST receive at least ONE Pass-2 marker (shadda OR fatha OR line-end sukūn).
-  Short tracks (≤ 1:00): 1 marker per line.
-  Mid tracks (1:30 / 2:00): 1–2 markers per line.
-  Long tracks (2:30 / 3:20): up to 2 markers per line, never more than 2.
-Priority order when picking the marker: Shadda (downbeat) → Fatha (mawwal) → Sukūn (line-end beat cut).
-A line with zero Pass-2 markers is BANNED. A line with 3+ markers is also BANNED.
-Lines that are pure English are skipped (no marks).
-
-═══════════════════════════════════════════════
-FERRARI GOLD — WORKED EXAMPLE
-═══════════════════════════════════════════════
-Musical context: Style = GCC Jalsa / Khaleeji Pop, Rhythm = Khaleeji Shuffle
-
-INPUT:
-يا سالم اليوم ما نهلى
-بعدك ولّى العمر كله
-
-CORRECT OUTPUT (groove-locked, anti-academic):
-يا سالم اليوم ما نَهَلّي
-بعدك يُولّي العمر كلهْ
-
-نَهَلّي → fatha opens the first syllable, shadda on "l" = downbeat hammer — groove locked
-يُولّي  → damma anchors the opening, shadda on "l" = khaleeji soul marker
-كلهْ   → sukun on final letter = hard beat cut, line ends clean
-
-WRONG — THE PROFESSOR'S VERSION (BANNED):
-يَا سَالِمٌ اليَوْمُ مَا نَهَلَى
-بَعْدَكَ وَلَّى العُمْرُ كُلُّهُ
-→ This is full vowelization + tanween. This is a news broadcast, not a song.
-→ Suno will sing this like a Quran recitation. Never do this.
+✗ BANNED: Shadda on short particles (يا، ما، في، من، لي، لك، بك، فيك، منك، عليك، ليه، وين، كيف، هذا، هذي، وش، شو، ليش، راح، هو، هي، انت)
 
 ═══════════════════════════════════════════════
 PASS 3 — KHALEEJI VOWEL COLORING (LIGHT TOUCH)
@@ -373,6 +310,9 @@ interface LyricsBlueprint {
   structurePlan?: string;
   tempoHint?: string;
   musicalKeyHint?: string;
+  khaleejiDialect?: string;
+  khaleejiDialectLabel?: string;
+  khaleejiAccentAnchor?: string;
 }
 
 function normalizeAmpDuration(secs: number): number {
@@ -381,7 +321,8 @@ function normalizeAmpDuration(secs: number): number {
   if (secs <= 90) return 90;
   if (secs <= 120) return 120;
   if (secs <= 150) return 150;
-  return 200;
+  if (secs <= 180) return 180;
+  return 210;
 }
 
 function buildDurationLabel(secs: number): string {
@@ -396,7 +337,8 @@ function buildFerrariClock(secs: number): string {
   if (secs <= 90)  return "STRUCTURE CONTRACT: 1:30 → exactly 4 stanza blocks, 12–16 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2.";
   if (secs <= 120) return "STRUCTURE CONTRACT: 2:00 → exactly 5 stanza blocks, 16–22 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2 → Final Chorus.";
   if (secs <= 150) return "STRUCTURE CONTRACT: 2:30 → exactly 6 stanza blocks, 20–26 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus.";
-  return "STRUCTURE CONTRACT: 3:20 → exactly 6 stanza blocks, 24–32 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus.";
+  if (secs <= 180) return "STRUCTURE CONTRACT: 3:00 → exactly 6 stanza blocks, 24–30 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Final Chorus.";
+  return "STRUCTURE CONTRACT: 3:30 → exactly 7 stanza blocks, 28–36 lines total. Block flow: Verse 1 → Pre-Chorus → Chorus → Verse 2 → Bridge → Verse 3 → Final Chorus.";
 }
 
 function buildMeterMapping(rhythm: string): string {
@@ -416,14 +358,28 @@ function buildTagLine(label: string, values: string[]): string | null {
   return values.length > 0 ? `${label}: ${values.join(", ")}` : null;
 }
 
+function buildKhaleejiDialectInstruction(khaleejiDialectLabel?: string, khaleejiAccentAnchor?: string): string {
+  if (!khaleejiDialectLabel && !khaleejiAccentAnchor) return "";
+
+  const parts = [
+    khaleejiDialectLabel ? `TARGET DIALECT LOCK: ${khaleejiDialectLabel}.` : null,
+    khaleejiAccentAnchor ? `ACCENT ANCHOR: ${khaleejiAccentAnchor}.` : null,
+    "Obey this exact Khaleeji dialect only.",
+    "Do not blend it with any other Gulf dialect.",
+  ].filter(Boolean);
+
+  return parts.join(" ");
+}
+
 async function ampMusicLyricsWithOpenAI(
   blueprint: LyricsBlueprint
 ): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
 
-  const { text, ampMode, durationSeconds, style, styleTags, rhythm, rhythmTags, instruments, instrumentTags, mood, moodTags, vocalType, title, controlBlock, structurePlan, tempoHint, musicalKeyHint } = blueprint;
+  const { text, ampMode, durationSeconds, style, styleTags, rhythm, rhythmTags, instruments, instrumentTags, mood, moodTags, vocalType, title, controlBlock, structurePlan, tempoHint, musicalKeyHint, khaleejiDialect, khaleejiDialectLabel, khaleejiAccentAnchor } = blueprint;
   const normalizedDuration = normalizeAmpDuration(durationSeconds);
+  const dialectInstruction = buildKhaleejiDialectInstruction(khaleejiDialectLabel, khaleejiAccentAnchor);
 
   const modeInstruction = ampMode === "idea"
     ? "MODE: IDEA — Generate completely fresh lyrics from scratch using this blueprint. The user gave you a concept, not existing lyrics."
@@ -440,6 +396,9 @@ async function ampMusicLyricsWithOpenAI(
     mood       ? `Mood: ${mood}`         : null,
     buildTagLine("Mood tags", moodTags),
     vocalType  ? `Vocal type: ${vocalType}` : null,
+    khaleejiDialect ? `Target dialect key: ${khaleejiDialect}` : null,
+    khaleejiDialectLabel ? `Target dialect: ${khaleejiDialectLabel}` : null,
+    khaleejiAccentAnchor ? `Accent anchor: ${khaleejiAccentAnchor}` : null,
     structurePlan ? `Structure plan: ${structurePlan}` : null,
     tempoHint ? `Tempo hint: ${tempoHint}` : null,
     musicalKeyHint ? `Key hint: ${musicalKeyHint}` : null,
@@ -464,7 +423,7 @@ async function ampMusicLyricsWithOpenAI(
     temperature: 0.7,
     max_tokens: durationSeconds >= 90 ? 2000 : 1200,
     messages: [
-      { role: "system", content: MUSIC_LYRICS_SYSTEM_PROMPT },
+      { role: "system", content: [MUSIC_LYRICS_SYSTEM_PROMPT, dialectInstruction].filter(Boolean).join("\n\n") },
       { role: "user",   content: userMessage },
     ],
   };
@@ -497,15 +456,16 @@ async function ampMusicLyricsWithOpenAI(
   return content.trim();
 }
 
-async function ampGccEnhanceWithAnthropic(input: string): Promise<string> {
+async function ampGccEnhanceWithAnthropic(input: string, khaleejiDialectLabel?: string, khaleejiAccentAnchor?: string): Promise<string> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("CONFIG: Missing ANTHROPIC_API_KEY");
+  const dialectInstruction = buildKhaleejiDialectInstruction(khaleejiDialectLabel, khaleejiAccentAnchor);
 
   const payload = {
     model: "claude-haiku-4-5-20251001",
     temperature: 0.5,
     max_tokens: 2000,
-    system: GCC_ENHANCE_SYSTEM_PROMPT,
+    system: [GCC_ENHANCE_SYSTEM_PROMPT, dialectInstruction].filter(Boolean).join("\n\n"),
     messages: [
       {
         role: "user",
@@ -597,6 +557,9 @@ serve(async (req) => {
     const structurePlan = typeof body?.structurePlan === "string" ? body.structurePlan.trim() : "";
     const tempoHint = typeof body?.tempoHint === "string" ? body.tempoHint.trim() : "";
     const musicalKeyHint = typeof body?.musicalKeyHint === "string" ? body.musicalKeyHint.trim() : "";
+    const khaleejiDialect = typeof body?.khaleejiDialect === "string" ? body.khaleejiDialect.trim() : "";
+    const khaleejiDialectLabel = typeof body?.khaleejiDialectLabel === "string" ? body.khaleejiDialectLabel.trim() : "";
+    const khaleejiAccentAnchor = typeof body?.khaleejiAccentAnchor === "string" ? body.khaleejiAccentAnchor.trim() : "";
     const durationSeconds = typeof body?.duration === "number" ? body.duration : 30;
     const normalizedDuration = normalizeAmpDuration(durationSeconds);
 
@@ -632,6 +595,9 @@ serve(async (req) => {
         structurePlan,
         tempoHint,
         musicalKeyHint,
+        khaleejiDialect,
+        khaleejiDialectLabel,
+        khaleejiAccentAnchor,
       });
 
       await logAI({
@@ -660,6 +626,9 @@ serve(async (req) => {
           structurePlan,
           tempoHint,
           musicalKeyHint,
+          khaleejiDialect,
+          khaleejiDialectLabel,
+          khaleejiAccentAnchor,
           language: hasArabic(text) ? "ar" : "en",
         },
       });
@@ -703,6 +672,9 @@ serve(async (req) => {
       if (mood)        gccContextParts.push(`Mood: ${mood}`);
       if (moodTags.length > 0) gccContextParts.push(`Mood tags: ${moodTags.join(", ")}`);
       if (vocalType)   gccContextParts.push(`Vocal type: ${vocalType}`);
+      if (khaleejiDialect) gccContextParts.push(`Target dialect key: ${khaleejiDialect}`);
+      if (khaleejiDialectLabel) gccContextParts.push(`Target dialect: ${khaleejiDialectLabel}`);
+      if (khaleejiAccentAnchor) gccContextParts.push(`Accent anchor: ${khaleejiAccentAnchor}`);
       if (structurePlan) gccContextParts.push(`Structure plan: ${structurePlan}`);
       if (tempoHint) gccContextParts.push(`Tempo hint: ${tempoHint}`);
       if (musicalKeyHint) gccContextParts.push(`Key hint: ${musicalKeyHint}`);
@@ -714,7 +686,7 @@ serve(async (req) => {
         : "";
       const gccInput = gccContext + text;
 
-      const improved = await ampGccEnhanceWithAnthropic(gccInput);
+      const improved = await ampGccEnhanceWithAnthropic(gccInput, khaleejiDialectLabel, khaleejiAccentAnchor);
 
       await logAI({
         functionName: "prompt-amp",
@@ -741,6 +713,9 @@ serve(async (req) => {
           structurePlan,
           tempoHint,
           musicalKeyHint,
+          khaleejiDialect,
+          khaleejiDialectLabel,
+          khaleejiAccentAnchor,
           language: hasArabic(text) ? "ar" : "en",
         },
       });

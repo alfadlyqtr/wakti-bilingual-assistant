@@ -203,7 +203,7 @@ export default function VoiceStudio() {
                 role="tab"
                 aria-selected={active}
                 className={`h-10 rounded-xl border text-xs font-semibold transition-all duration-200
-                  ${active ? style : 'border-border/70 bg-white text-[#060541] shadow-[0_1px_4px_rgba(15,23,42,0.08)] hover:border-border hover:bg-white/95 dark:border-white/10 dark:bg-white/6 dark:text-white'}
+                  ${active ? style : 'border-border/70 bg-white text-[#060541] shadow-[0_1px_4px_rgba(15,23,42,0.08)] hover:border-border hover:bg-white/95 dark:border-white/10 dark:bg-white/10 dark:text-[#f2f2f2]'}
                 `}
               >
                 {language === 'ar' ? labelAr : labelEn}

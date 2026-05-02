@@ -94,6 +94,9 @@ verify_jwt = false
 [functions.voice-clone-test]
 verify_jwt = false
 
+[functions.wishlist-share-public]
+verify_jwt = false
+
 [functions.wakti-ai-v2-brain]
 verify_jwt = false
 

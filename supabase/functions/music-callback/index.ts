@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
+import { finalizeMusicTaskTracks } from "../_shared/music-finalize.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -62,43 +63,6 @@ function normalizeTrack(track: SunoTrack) {
     createTime: track.createTime,
     duration: track.duration,
   };
-}
-
-// deno-lint-ignore no-explicit-any
-async function downloadAndStore(
-  svc: any,
-  url: string,
-  storageBucket: string,
-  filePath: string,
-  contentType: string
-): Promise<string | null> {
-  try {
-    const resp = await fetch(url);
-    if (!resp.ok) {
-      console.error(`[music-callback] Failed to fetch ${url}: ${resp.status}`);
-      return null;
-    }
-    const buffer = await resp.arrayBuffer();
-    const blob = new Blob([buffer], { type: contentType });
-
-    const { error: uploadError } = await svc.storage
-      .from(storageBucket)
-      .upload(filePath, blob, { contentType, upsert: true });
-
-    if (uploadError) {
-      console.error(`[music-callback] Upload error for ${filePath}:`, uploadError);
-      return null;
-    }
-
-    const { data: urlData } = svc.storage
-      .from(storageBucket)
-      .getPublicUrl(filePath);
-
-    return urlData?.publicUrl ?? null;
-  } catch (e) {
-    console.error(`[music-callback] downloadAndStore error:`, e);
-    return null;
-  }
 }
 
 serve(async (req) => {
@@ -187,102 +151,14 @@ serve(async (req) => {
         console.warn('[music-callback] Trial consume skipped after success:', consumeTrial.reason);
       }
 
-      // Process each variation
-      for (let i = 0; i < normalizedTracks.length; i++) {
-        const track = normalizedTracks[i];
-        const isFirst = i === 0;
-
-        console.log(`[music-callback] Processing variant ${i} for taskId=${taskId}`);
-
-        // Download audio to our bucket
-        const audioFileName = `${userId}/${timestamp}_${taskId.slice(0, 8)}_v${i}.mp3`;
-        const publicAudioUrl = await downloadAndStore(
-          supabaseService,
-          track.audioUrl,
-          "music",
-          audioFileName,
-          "audio/mpeg"
-        );
-
-        // Download cover image to our bucket
-        let publicCoverUrl: string | null = null;
-        if (track.imageUrl) {
-          const coverFileName = `${userId}/${timestamp}_${taskId.slice(0, 8)}_v${i}.jpeg`;
-          publicCoverUrl = await downloadAndStore(
-            supabaseService,
-            track.imageUrl,
-            "music-covers",
-            coverFileName,
-            "image/jpeg"
-          );
-        }
-
-        if (isFirst) {
-          // Update the original placeholder row for the first variant
-          const { error: updateError } = await supabaseService
-            .from("user_music_tracks")
-            .update({
-              storage_path: audioFileName,
-              signed_url: publicAudioUrl,
-              cover_url: publicCoverUrl,
-              source_audio_url: track.audioUrl,
-              duration: track.duration ?? null,
-              title: track.title || placeholderRow.title || null,
-              variant_index: 0,
-              mime: "audio/mpeg",
-              meta: {
-                ...(placeholderRow.meta as Record<string, unknown> ?? {}),
-                status: "completed",
-                saved: true,
-                kie_track_id: track.id,
-                model_name: track.modelName,
-                tags: track.tags,
-              },
-            })
-            .eq("id", placeholderRow.id);
-
-          if (updateError) {
-            console.error(`[music-callback] Failed to update placeholder row:`, updateError);
-          } else {
-            console.log(`[music-callback] Updated placeholder row id=${placeholderRow.id}`);
-          }
-        } else {
-          // Insert a new row for additional variants
-          const { error: insertError } = await supabaseService
-            .from("user_music_tracks")
-            .insert({
-              user_id: userId,
-              task_id: taskId,
-              title: track.title || placeholderRow.title || null,
-              prompt: track.prompt || placeholderRow.prompt || null,
-              include_styles: placeholderRow.include_styles,
-              requested_duration_seconds: placeholderRow.requested_duration_seconds,
-              provider: "kie",
-              model: placeholderRow.model,
-              storage_path: audioFileName,
-              signed_url: publicAudioUrl,
-              cover_url: publicCoverUrl,
-              source_audio_url: track.audioUrl,
-              duration: track.duration ?? null,
-              variant_index: i,
-              mime: "audio/mpeg",
-              meta: {
-                ...(placeholderRow.meta as Record<string, unknown> ?? {}),
-                status: "completed",
-                saved: true,
-                kie_track_id: track.id,
-                model_name: track.modelName,
-                tags: track.tags,
-              },
-            });
-
-          if (insertError) {
-            console.error(`[music-callback] Failed to insert variant row ${i}:`, insertError);
-          } else {
-            console.log(`[music-callback] Inserted variant row ${i} for taskId=${taskId}`);
-          }
-        }
-      }
+      await finalizeMusicTaskTracks({
+        supabaseService,
+        placeholderRow,
+        taskId,
+        userId,
+        normalizedTracks,
+        timestamp,
+      });
 
     } else if (status === "FAILED" || status === "ERROR" || type === "failed") {
       const failureMessage = payload.errorMessage || payload.errorCode || parsed?.msg || "Generation failed";

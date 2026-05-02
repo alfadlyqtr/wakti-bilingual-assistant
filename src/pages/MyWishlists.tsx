@@ -34,11 +34,35 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Plus, Gift, Link2, ImageIcon, Sparkles, Trash2, Edit3, ChevronLeft,
-  Globe, Users, Lock, Star, Check, X, Heart, ExternalLink, Package,
-  ShoppingBag, ArrowLeft, ChevronRight, Loader2, GiftIcon, HandHeart
+  Plus,
+  Gift,
+  Link2,
+  ImageIcon,
+  Sparkles,
+  Trash2,
+  Edit3,
+  ChevronLeft,
+  Globe,
+  Users,
+  Lock,
+  Star,
+  Check,
+  X,
+  Heart,
+  ExternalLink,
+  Package,
+  ShoppingBag,
+  ArrowLeft,
+  ChevronRight,
+  ChevronDown,
+  Loader2,
+  GiftIcon,
+  HandHeart,
+  Share2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { safeCopyToClipboard } from "@/utils/clipboardUtils";
+import { getContacts } from "@/services/contactsService";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,20 +103,60 @@ interface FriendWishlist extends Wishlist {
   owner: { username: string; display_name: string; avatar_url?: string };
 }
 
+interface WishlistAIExtractResponse {
+  success: boolean;
+  title?: string;
+  description?: string;
+  image_url?: string | null;
+  error?: string;
+}
+
 // ─── Priority Labels ───────────────────────────────────────────────────────────
 const priorityConfig = {
-  1: { label: { en: "Nice to have", ar: "جميل لو وجد" }, color: "text-blue-500", stars: 1 },
-  2: { label: { en: "Would like", ar: "أريده" }, color: "text-green-500", stars: 2 },
-  3: { label: { en: "Really want", ar: "أريده فعلاً" }, color: "text-yellow-500", stars: 3 },
-  4: { label: { en: "Really need", ar: "أحتاجه" }, color: "text-orange-500", stars: 4 },
-  5: { label: { en: "Must have!", ar: "ضروري!" }, color: "text-red-500", stars: 5 },
+  1: {
+    label: { en: "Nice to have", ar: "جميل لو وجد" },
+    color: "text-blue-500",
+    stars: 1,
+  },
+  2: {
+    label: { en: "Would like", ar: "أريده" },
+    color: "text-green-500",
+    stars: 2,
+  },
+  3: {
+    label: { en: "Really want", ar: "أريده فعلاً" },
+    color: "text-yellow-500",
+    stars: 3,
+  },
+  4: {
+    label: { en: "Really need", ar: "أحتاجه" },
+    color: "text-orange-500",
+    stars: 4,
+  },
+  5: {
+    label: { en: "Must have!", ar: "ضروري!" },
+    color: "text-red-500",
+    stars: 5,
+  },
 };
 
 // ─── Privacy config ────────────────────────────────────────────────────────────
 const privacyConfig = {
-  public: { icon: Globe, label: { en: "Public", ar: "عام" }, color: "text-blue-500" },
-  contacts: { icon: Users, label: { en: "Contacts only", ar: "جهات الاتصال" }, color: "text-green-500" },
-  private: { icon: Lock, label: { en: "Private", ar: "خاص" }, color: "text-gray-500" },
+  public: {
+    icon: Globe,
+    label: { en: "Public", ar: "عام" },
+    color: "text-blue-500",
+  },
+  contacts: {
+    icon: Users,
+    label: { en: "Contacts only", ar: "جهات الاتصال" },
+    color: "text-green-500",
+  },
+  private: {
+    icon: Lock,
+    label: { en: "Private", ar: "خاص" },
+    color: "text-gray-500",
+  },
 };
 
 // ─── Main Component ────────────────────────────────────────────────────────────
@@ -104,19 +168,27 @@ export default function MyWishlists() {
   const isAr = language === "ar";
   const [searchParams] = useSearchParams();
 
-  // View state: "my" | "friends" | "list-detail" | "friend-list-detail"
-  const [view, setView] = useState<"my" | "friends" | "list-detail" | "friend-list-detail">("my");
+  // View state: "my" | "friends" | "list-detail" | "friend-list-detail" | "shared-list-detail"
+  const [view, setView] = useState<"my" | "friends" | "list-detail" | "friend-list-detail" | "shared-list-detail">("my");
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [selectedFriendListId, setSelectedFriendListId] = useState<string | null>(null);
+  const [sharedListId, setSharedListId] = useState<string | null>(null);
 
   // Check for list query parameter and auto-open that list
   useEffect(() => {
-    const listId = searchParams.get('list');
-    if (listId) {
-      setSelectedListId(listId);
-      setView('list-detail');
+    const sharedId = searchParams.get("shared");
+    if (sharedId) {
+      navigate(`/wishlist/${sharedId}`, { replace: true });
+      return;
     }
-  }, [searchParams]);
+
+    const listId = searchParams.get("list");
+    if (listId) {
+      setSharedListId(null);
+      setSelectedListId(listId);
+      setView("list-detail");
+    }
+  }, [navigate, searchParams]);
 
   // Dialogs
   const [showNewListDialog, setShowNewListDialog] = useState(false);
@@ -134,15 +206,86 @@ export default function MyWishlists() {
   const [isCreatingList, setIsCreatingList] = useState(false);
 
   // Add item form
-  const [itemMode, setItemMode] = useState<"manual" | "url" | "image">("manual");
+  const [itemMode, setItemMode] = useState<"manual" | "auto">("manual");
   const [itemTitle, setItemTitle] = useState("");
   const [itemDesc, setItemDesc] = useState("");
   const [itemUrl, setItemUrl] = useState("");
   const [itemImageUrl, setItemImageUrl] = useState("");
-  const [itemPrice, setItemPrice] = useState("");
+  const [itemImageFile, setItemImageFile] = useState<File | null>(null);
+  const [itemImagePreviewUrl, setItemImagePreviewUrl] = useState("");
   const [itemPriority, setItemPriority] = useState(2);
+  const [itemAIExtracted, setItemAIExtracted] = useState(false);
   const [isExtractingAI, setIsExtractingAI] = useState(false);
+  const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
+  const itemImageInputRef = React.useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    return () => {
+      if (itemImagePreviewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(itemImagePreviewUrl);
+      }
+    };
+  }, [itemImagePreviewUrl]);
+
+  const fileToBase64 = async (file: File) => {
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = typeof reader.result === "string" ? reader.result : "";
+        const base64 = result.includes(",") ? result.split(",")[1] : result;
+        if (!base64) {
+          reject(new Error("Failed to read image"));
+          return;
+        }
+        resolve(base64);
+      };
+      reader.onerror = () => reject(new Error("Failed to read image"));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const applyExtractedItemDetails = (payload: WishlistAIExtractResponse) => {
+    if (payload.title?.trim()) setItemTitle(payload.title.trim());
+    if (payload.description?.trim()) setItemDesc(payload.description.trim());
+    if (payload.image_url?.trim()) setItemImageUrl(payload.image_url.trim());
+  };
+
+  const buildWishlistShareUrl = (wishlistId: string) => {
+    return `${window.location.origin}/wishlist/${encodeURIComponent(wishlistId)}`;
+  };
+
+  const handleShareWishlist = async (list: Wishlist) => {
+    if (!list.allow_sharing || list.privacy !== "public") {
+      toast.error(isAr ? "اجعل القائمة عامة لتتمكن من مشاركتها" : "Make the wishlist public to share it");
+      return;
+    }
+
+    const shareUrl = buildWishlistShareUrl(list.id);
+
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: list.title,
+          text: isAr ? "هذه قائمتي للرغبات على Wakti" : "Here is my Wakti wishlist",
+          url: shareUrl,
+        });
+        return;
+      }
+    } catch (error) {
+      if ((error as DOMException)?.name === "AbortError") {
+        return;
+      }
+    }
+
+    const copied = await safeCopyToClipboard(shareUrl);
+    if (copied) {
+      toast.success(isAr ? "تم نسخ رابط القائمة" : "Wishlist link copied");
+      return;
+    }
+
+    toast.error(isAr ? "تعذر نسخ رابط القائمة" : "Couldn't copy wishlist link");
+  };
 
   // ── Fetch my wishlists ──────────────────────────────────────────────────────
   const { data: myLists = [], isLoading: loadingMyLists } = useQuery({
@@ -205,13 +348,9 @@ export default function MyWishlists() {
     queryKey: ["wishlists", "friends", user?.id],
     queryFn: async () => {
       if (!user?.id) return [];
-      // Get my contacts' IDs
-      const { data: contacts } = await supabase
-        .from("contacts")
-        .select("contact_id")
-        .eq("user_id", user.id);
+      const contacts = await getContacts();
       if (!contacts || contacts.length === 0) return [];
-      const contactIds = contacts.map((c) => c.contact_id);
+      const contactIds = contacts.map((contact) => contact.contact_id);
       // Get their non-private wishlists
       const { data: lists, error } = await supabase
         .from("wishlists")
@@ -256,6 +395,67 @@ export default function MyWishlists() {
     enabled: !!selectedFriendListId,
   });
 
+  const { data: sharedList, isLoading: loadingSharedList } = useQuery({
+    queryKey: ["wishlists", "shared", sharedListId, user?.id],
+    queryFn: async () => {
+      if (!sharedListId) return null;
+
+      const { data, error } = await supabase
+        .from("wishlists")
+        .select("*")
+        .eq("id", sharedListId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (!data) return null;
+
+      const row = data as Wishlist;
+      if (row.user_id !== user?.id && (!row.allow_sharing || row.privacy !== "public")) {
+        return null;
+      }
+
+      const { data: ownerProfile } = await supabase
+        .from("profiles")
+        .select("username, display_name, avatar_url")
+        .eq("id", row.user_id)
+        .maybeSingle();
+
+      return {
+        ...row,
+        owner: ownerProfile || { username: "unknown", display_name: "" },
+      } as FriendWishlist;
+    },
+    enabled: !!sharedListId,
+  });
+
+  const { data: sharedListItems = [], isLoading: loadingSharedItems } = useQuery({
+    queryKey: ["wishlist-items", "shared", sharedListId],
+    queryFn: async () => {
+      if (!sharedListId) return [];
+      const { data, error } = await supabase
+        .from("wishlist_items")
+        .select("*")
+        .eq("wishlist_id", sharedListId)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      const itemsWithClaims = await Promise.all(
+        (data || []).map(async (item) => {
+          const { data: claim } = await supabase
+            .from("wishlist_claims")
+            .select("id, status, claimer_id")
+            .eq("item_id", item.id)
+            .neq("status", "unclaimed")
+            .neq("status", "declined")
+            .maybeSingle();
+          return { ...item, claim: claim || null };
+        })
+      );
+      return itemsWithClaims as WishlistItem[];
+    },
+    enabled: !!sharedListId && !!sharedList,
+  });
+
   // ── Create Wishlist ─────────────────────────────────────────────────────────
   const createListMutation = useMutation({
     mutationFn: async () => {
@@ -275,8 +475,12 @@ export default function MyWishlists() {
       queryClient.invalidateQueries({ queryKey: ["wishlists", "mine"] });
       toast.success(isAr ? "تم إنشاء القائمة!" : "Wishlist created!");
       setShowNewListDialog(false);
-      setNewListTitle(""); setNewListDesc(""); setNewListDate("");
-      setNewListPrivacy("contacts"); setNewListAllowClaims(true); setNewListAutoApprove(false);
+      setNewListTitle("");
+      setNewListDesc("");
+      setNewListDate("");
+      setNewListPrivacy("contacts");
+      setNewListAllowClaims(true);
+      setNewListAutoApprove(false);
     },
     onError: () => toast.error(isAr ? "حدث خطأ" : "Something went wrong"),
   });
@@ -290,7 +494,8 @@ export default function MyWishlists() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["wishlists", "mine"] });
       toast.success(isAr ? "تم حذف القائمة" : "Wishlist deleted");
-      setView("my"); setSelectedListId(null);
+      setView("my");
+      setSelectedListId(null);
     },
   });
 
@@ -298,21 +503,43 @@ export default function MyWishlists() {
   const addItemMutation = useMutation({
     mutationFn: async () => {
       if (!selectedListId || !itemTitle.trim()) return;
+      let finalImageUrl: string | null = null;
+
+      if (itemMode === "manual" && itemImageFile) {
+        if (!user?.id) throw new Error("User not authenticated");
+        const fileExt = itemImageFile.name.split(".").pop()?.toLowerCase() || "jpg";
+        const filePath = `${user.id}/wishlist-items/${Date.now()}-${Math.random().toString(36).slice(2)}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(filePath, itemImageFile, {
+            contentType: itemImageFile.type || "image/jpeg",
+            upsert: false,
+          });
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicData } = supabase.storage.from("avatars").getPublicUrl(filePath);
+        finalImageUrl = publicData?.publicUrl || null;
+      }
+
+      if (itemMode === "auto") {
+        finalImageUrl = itemImageUrl.trim() || null;
+      }
+
       const { error } = await supabase.from("wishlist_items").insert({
         wishlist_id: selectedListId,
         user_id: user?.id,
         title: itemTitle.trim(),
         description: itemDesc.trim() || null,
-        image_url: itemImageUrl.trim() || null,
-        product_url: itemUrl.trim() || null,
-        price: itemPrice ? parseFloat(itemPrice) : null,
+        image_url: finalImageUrl,
+        product_url: itemMode === "auto" ? itemUrl.trim() || null : null,
         priority: itemPriority,
-        ai_extracted: isExtractingAI,
+        ai_extracted: itemAIExtracted,
       });
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wishlist-items", selectedListId] });
+      queryClient.invalidateQueries({ queryKey: ["wishlist-items"] });
       queryClient.invalidateQueries({ queryKey: ["wishlists", "mine"] });
       toast.success(isAr ? "تمت إضافة العنصر!" : "Item added!");
       setShowAddItemSheet(false);
@@ -328,7 +555,7 @@ export default function MyWishlists() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wishlist-items", selectedListId] });
+      queryClient.invalidateQueries({ queryKey: ["wishlist-items"] });
       queryClient.invalidateQueries({ queryKey: ["wishlists", "mine"] });
       toast.success(isAr ? "تم الحذف" : "Item removed");
     },
@@ -343,18 +570,18 @@ export default function MyWishlists() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wishlist-items", selectedListId] });
+      queryClient.invalidateQueries({ queryKey: ["wishlist-items"] });
       toast.success(isAr ? "تم تحديده كمُستلَم 🎁" : "Marked as received! 🎁");
     },
   });
 
   // ── Claim Item (as a friend) ────────────────────────────────────────────────
   const claimItemMutation = useMutation({
-    mutationFn: async ({ itemId, ownerId, autoApprove }: { itemId: string; ownerId: string; autoApprove: boolean }) => {
+    mutationFn: async ({ itemId, ownerId, autoApprove, wishlistId }: { itemId: string; ownerId: string; autoApprove: boolean; wishlistId: string }) => {
       const status = autoApprove ? "approved" : "pending";
       const { error } = await supabase.from("wishlist_claims").insert({
         item_id: itemId,
-        wishlist_id: selectedFriendListId,
+        wishlist_id: wishlistId,
         claimer_id: user?.id,
         owner_id: ownerId,
         status,
@@ -362,7 +589,7 @@ export default function MyWishlists() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wishlist-items", selectedFriendListId, "friend"] });
+      queryClient.invalidateQueries({ queryKey: ["wishlist-items"] });
       toast.success(isAr ? "تم الحجز! ✅" : "Item claimed! ✅");
     },
     onError: () => toast.error(isAr ? "لا يمكن حجز هذا العنصر" : "Cannot claim this item"),
@@ -377,7 +604,7 @@ export default function MyWishlists() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["wishlist-items", selectedFriendListId, "friend"] });
+      queryClient.invalidateQueries({ queryKey: ["wishlist-items"] });
       toast.success(isAr ? "تم إلغاء الحجز" : "Claim removed");
     },
   });
@@ -388,35 +615,100 @@ export default function MyWishlists() {
       toast.error(isAr ? "أدخل رابط المنتج" : "Enter a product URL");
       return;
     }
+    setItemAIExtracted(false);
     setIsExtractingAI(true);
     try {
-      const { data, error } = await supabase.functions.invoke("wakti-ai-v2-brain-stream", {
+      const { data, error } = await supabase.functions.invoke<WishlistAIExtractResponse>("wishlist-ai-extract", {
         body: {
-          messages: [{
-            role: "user",
-            content: `Extract product details from this URL: ${itemUrl}\n\nReturn ONLY a JSON object with keys: title, description, price (number only), image_url. No other text.`
-          }],
-          mode: "chat",
-          stream: false,
-        }
+          mode: "url",
+          url: itemUrl.trim(),
+          language: isAr ? "ar" : "en",
+        },
       });
       if (error) throw error;
-      const raw = typeof data === "string" ? data : (data?.content || data?.text || "");
-      const jsonMatch = raw.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const extracted = JSON.parse(jsonMatch[0]);
-        if (extracted.title) setItemTitle(extracted.title);
-        if (extracted.description) setItemDesc(extracted.description);
-        if (extracted.price) setItemPrice(String(extracted.price));
-        if (extracted.image_url) setItemImageUrl(extracted.image_url);
+      if (data?.success) {
+        applyExtractedItemDetails(data);
+        setItemAIExtracted(true);
         toast.success(isAr ? "تم استخراج التفاصيل ✨" : "Details extracted ✨");
       } else {
-        toast.error(isAr ? "لم أتمكن من قراءة الرابط" : "Couldn't read the URL");
+        setItemAIExtracted(false);
+        toast.error(data?.error || (isAr ? "لم أتمكن من قراءة الرابط" : "Couldn't read the URL"));
       }
     } catch {
+      setItemAIExtracted(false);
       toast.error(isAr ? "حدث خطأ في الاستخراج" : "Extraction failed");
     } finally {
       setIsExtractingAI(false);
+    }
+  };
+
+  const handleManualItemImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error(isAr ? "اختر صورة صحيحة" : "Please choose a valid image");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(isAr ? "حجم الصورة يجب أن يكون أقل من 5MB" : "Image must be smaller than 5MB");
+      return;
+    }
+
+    if (itemImagePreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(itemImagePreviewUrl);
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setItemImageFile(file);
+    setItemImagePreviewUrl(previewUrl);
+    setItemImageUrl("");
+    setItemAIExtracted(false);
+  };
+
+  const handleAnalyzeManualImage = async () => {
+    if (!itemImageFile) {
+      toast.error(isAr ? "ارفع صورة أولاً" : "Upload a photo first");
+      return;
+    }
+
+    setIsAnalyzingImage(true);
+    setItemAIExtracted(false);
+    try {
+      const imageBase64 = await fileToBase64(itemImageFile);
+      const { data, error } = await supabase.functions.invoke<WishlistAIExtractResponse>("wishlist-ai-extract", {
+        body: {
+          mode: "image",
+          imageBase64,
+          mimeType: itemImageFile.type || "image/jpeg",
+          language: isAr ? "ar" : "en",
+        },
+      });
+      if (error) throw error;
+      if (data?.success) {
+        applyExtractedItemDetails(data);
+        setItemAIExtracted(Boolean(data.title || data.description));
+        toast.success(isAr ? "تم اقتراح الاسم والوصف ✨" : "Name and description suggested ✨");
+      } else {
+        toast.error(data?.error || (isAr ? "تعذر تحليل الصورة" : "Couldn't analyze the image"));
+      }
+    } catch {
+      toast.error(isAr ? "تعذر تحليل الصورة" : "Couldn't analyze the image");
+    } finally {
+      setIsAnalyzingImage(false);
+    }
+  };
+
+  const clearManualItemImage = () => {
+    if (itemImagePreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(itemImagePreviewUrl);
+    }
+    setItemImageFile(null);
+    setItemImagePreviewUrl("");
+    setItemAIExtracted(false);
+    if (itemImageInputRef.current) {
+      itemImageInputRef.current.value = "";
     }
   };
 
@@ -425,13 +717,15 @@ export default function MyWishlists() {
     try {
       const { data, error } = await supabase.functions.invoke("wakti-ai-v2-brain-stream", {
         body: {
-          messages: [{
-            role: "user",
-            content: `Write a warm, short thank-you message (2-3 sentences) for receiving "${itemTitle}" from ${claimerName}. Be genuine and heartfelt. Return only the message text.`
-          }],
+          messages: [
+            {
+              role: "user",
+              content: `Write a warm, short thank-you message (2-3 sentences) for receiving "${itemTitle}" from ${claimerName}. Be genuine and heartfelt. Return only the message text.`,
+            },
+          ],
           mode: "chat",
           stream: false,
-        }
+        },
       });
       if (error) throw error;
       const msg = typeof data === "string" ? data : (data?.content || data?.text || "");
@@ -444,8 +738,23 @@ export default function MyWishlists() {
   };
 
   const resetItemForm = () => {
-    setItemTitle(""); setItemDesc(""); setItemUrl(""); setItemImageUrl("");
-    setItemPrice(""); setItemPriority(2); setItemMode("manual"); setIsExtractingAI(false);
+    if (itemImagePreviewUrl.startsWith("blob:")) {
+      URL.revokeObjectURL(itemImagePreviewUrl);
+    }
+    setItemTitle("");
+    setItemDesc("");
+    setItemUrl("");
+    setItemImageUrl("");
+    setItemImageFile(null);
+    setItemImagePreviewUrl("");
+    setItemAIExtracted(false);
+    setItemPriority(2);
+    setItemMode("manual");
+    setIsExtractingAI(false);
+    setIsAnalyzingImage(false);
+    if (itemImageInputRef.current) {
+      itemImageInputRef.current.value = "";
+    }
   };
 
   const selectedList = myLists.find((l) => l.id === selectedListId);
@@ -455,7 +764,10 @@ export default function MyWishlists() {
   const renderTopTabs = () => (
     <div className="flex gap-2 mb-6">
       <button
-        onClick={() => { setView("my"); setSelectedListId(null); }}
+        onClick={() => {
+          setView("my");
+          setSelectedListId(null);
+        }}
         className={cn(
           "flex-1 min-h-11 px-3 py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]",
           view === "my" || view === "list-detail"
@@ -589,10 +901,18 @@ export default function MyWishlists() {
         {/* Add Item Button */}
         <Button
           onClick={() => setShowAddItemSheet(true)}
-          className="w-full mb-4 bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] text-white"
+          className="w-full mb-2 bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] text-white"
         >
           <Plus className="h-4 w-4 mr-2" />
           {isAr ? "إضافة رغبة" : "Add a Wish"}
+        </Button>
+        <Button
+          variant="outline"
+          className="w-full mb-4"
+          onClick={() => handleShareWishlist(selectedList)}
+        >
+          <Share2 className="h-4 w-4 mr-2" />
+          {isAr ? "مشاركة القائمة" : "Share Wishlist"}
         </Button>
 
         {/* Items */}
@@ -725,10 +1045,103 @@ export default function MyWishlists() {
                     itemId: item.id,
                     ownerId: selectedFriendList.user_id,
                     autoApprove: selectedFriendList.auto_approve_claims,
+                    wishlistId: selectedFriendList.id,
                   })
                 }
                 onUnclaim={() => item.claim && unclaimMutation.mutate(item.claim.id)}
                 onGenerateThankYou={() => handleGenerateThankYou(fl.owner?.display_name || fl.owner?.username || "friend", item.title)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderSharedListDetail = () => {
+    if (loadingSharedList) {
+      return (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+
+    if (!sharedList) {
+      return (
+        <div className="space-y-4">
+          <Button variant="ghost" size="icon" onClick={() => { setSharedListId(null); setView("my"); navigate("/wishlists"); }}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <div className="text-center py-12 space-y-3">
+            <ShoppingBag className="h-12 w-12 mx-auto text-muted-foreground/40" />
+            <p className="text-lg font-semibold">{isAr ? "القائمة غير متاحة" : "Wishlist unavailable"}</p>
+            <p className="text-sm text-muted-foreground">{isAr ? "الرابط غير صالح أو أن هذه القائمة غير قابلة للمشاركة" : "This link is invalid or this wishlist is not shareable"}</p>
+          </div>
+        </div>
+      );
+    }
+
+    const sharedListIsOwner = sharedList.user_id === user?.id;
+    const ownerName = sharedList.owner?.display_name || sharedList.owner?.username || (isAr ? "صاحب القائمة" : "Wishlist owner");
+
+    return (
+      <div>
+        <div className="flex items-center gap-3 mb-4">
+          <Button variant="ghost" size="icon" onClick={() => { setSharedListId(null); setView("my"); navigate("/wishlists"); }}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <Avatar className="h-8 w-8">
+            {sharedList.owner?.avatar_url && <AvatarImage src={sharedList.owner.avatar_url} />}
+            <AvatarFallback>{(sharedList.owner?.username || "?").slice(0, 2).toUpperCase()}</AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <h2 className="font-bold text-base truncate">{sharedList.title}</h2>
+            <p className="text-xs text-muted-foreground">{sharedListIsOwner ? (isAr ? "هذه قائمتك المشتركة" : "This is your shared wishlist") : `@${sharedList.owner?.username || ownerName}`}</p>
+          </div>
+        </div>
+
+        {sharedListIsOwner && (
+          <Button
+            variant="outline"
+            className="w-full mb-4"
+            onClick={() => handleShareWishlist(sharedList)}
+          >
+            <Share2 className="h-4 w-4 mr-2" />
+            {isAr ? "مشاركة القائمة" : "Share Wishlist"}
+          </Button>
+        )}
+
+        {loadingSharedItems ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        ) : sharedListItems.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">{isAr ? "القائمة فارغة حتى الآن" : "List is empty for now"}</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {sharedListItems.map((item) => (
+              <WishlistItemCard
+                key={item.id}
+                item={item}
+                isOwner={sharedListIsOwner}
+                isAr={isAr}
+                allowClaims={sharedList.allow_claims}
+                currentUserId={user?.id}
+                onDelete={sharedListIsOwner ? () => deleteItemMutation.mutate(item.id) : undefined}
+                onMarkReceived={sharedListIsOwner ? () => markReceivedMutation.mutate(item.id) : undefined}
+                onClaim={() =>
+                  claimItemMutation.mutate({
+                    itemId: item.id,
+                    ownerId: sharedList.user_id,
+                    autoApprove: sharedList.auto_approve_claims,
+                    wishlistId: sharedList.id,
+                  })
+                }
+                onUnclaim={() => item.claim && unclaimMutation.mutate(item.claim.id)}
+                onGenerateThankYou={() => handleGenerateThankYou(ownerName, item.title)}
               />
             ))}
           </div>
@@ -758,11 +1171,13 @@ export default function MyWishlists() {
     const [showThankYou, setShowThankYou] = useState(false);
     const [thankYouMsg, setThankYouMsg] = useState("");
     const [generatingTY, setGeneratingTY] = useState(false);
+    const [isExpanded, setIsExpanded] = useState(false);
 
     const isMyClaim = item.claim?.claimer_id === currentUserId;
     const isClaimedByOther = item.claim && !isMyClaim && item.claim.status !== "unclaimed";
     const isClaimedByMe = isMyClaim && item.claim?.status !== "unclaimed";
     const pConfig = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig[2];
+    const canExpand = item.title.length > 28 || Boolean(item.description && item.description.length > 90);
 
     const handleGenerateTY = async () => {
       if (!onGenerateThankYou) return;
@@ -794,7 +1209,8 @@ export default function MyWishlists() {
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
                   <p className={cn(
-                    "font-semibold text-sm truncate",
+                    "font-semibold text-sm",
+                    isExpanded ? "whitespace-normal break-words" : "truncate",
                     item.is_received && "line-through text-muted-foreground"
                   )}>
                     {item.title}
@@ -803,7 +1219,10 @@ export default function MyWishlists() {
                     )}
                   </p>
                   {item.description && (
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{item.description}</p>
+                    <p className={cn(
+                      "text-xs text-muted-foreground mt-0.5",
+                      isExpanded ? "whitespace-pre-wrap break-words" : "truncate"
+                    )}>{item.description}</p>
                   )}
                   <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                     <span className={cn("text-xs font-medium", pConfig.color)}>
@@ -825,6 +1244,16 @@ export default function MyWishlists() {
                       </a>
                     )}
                   </div>
+                  {canExpand && (
+                    <button
+                      type="button"
+                      className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[hsl(210,100%,65%)]"
+                      onClick={() => setIsExpanded((prev) => !prev)}
+                    >
+                      <span>{isExpanded ? (isAr ? "إخفاء" : "Show less") : (isAr ? "عرض المزيد" : "Show more")}</span>
+                      <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-180")} />
+                    </button>
+                  )}
                 </div>
                 {/* Owner actions */}
                 {isOwner && (
@@ -957,6 +1386,7 @@ export default function MyWishlists() {
       {view === "friends" && renderFriendLists()}
       {view === "list-detail" && renderListDetail()}
       {view === "friend-list-detail" && renderFriendListDetail()}
+      {view === "shared-list-detail" && renderSharedListDetail()}
 
       {/* ── New Wishlist Dialog ───────────────────────────────────────────── */}
       <Dialog open={showNewListDialog} onOpenChange={setShowNewListDialog}>
@@ -1074,26 +1504,93 @@ export default function MyWishlists() {
           <div className="space-y-4 pb-6 pt-4">
             {/* Mode tabs */}
             <div className="flex gap-2">
-              {(["manual", "url", "image"] as const).map((mode) => (
+             {(["manual", "auto"] as const).map((mode) => (
                 <button
                   key={mode}
                   onClick={() => setItemMode(mode)}
                   className={cn(
                     "flex-1 py-2 rounded-lg text-xs font-semibold transition-all",
                     itemMode === mode
-                      ? "bg-primary text-primary-foreground"
+                      ? "bg-[hsl(210,100%,55%)] text-white"
                       : "bg-muted text-muted-foreground"
                   )}
                 >
                   {mode === "manual" && <><Edit3 className="h-3.5 w-3.5 inline mr-1" />{isAr ? "يدوي" : "Manual"}</>}
-                  {mode === "url" && <><Link2 className="h-3.5 w-3.5 inline mr-1" />{isAr ? "رابط" : "URL"}</>}
-                  {mode === "image" && <><ImageIcon className="h-3.5 w-3.5 inline mr-1" />{isAr ? "صورة" : "Image"}</>}
+                  {mode === "auto" && <><Sparkles className="h-3.5 w-3.5 inline mr-1" />{isAr ? "تلقائي" : "Auto"}</>}
                 </button>
               ))}
             </div>
 
-            {/* URL mode — AI extract */}
-            {itemMode === "url" && (
+            {itemMode === "manual" && (
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="wish-photo-upload">{isAr ? "صورة الرغبة" : "Wish photo"}</Label>
+                  <input
+                    id="wish-photo-upload"
+                    ref={itemImageInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleManualItemImageChange}
+                    className="hidden"
+                    aria-label={isAr ? "رفع صورة الرغبة" : "Upload wish photo"}
+                    title={isAr ? "رفع صورة الرغبة" : "Upload wish photo"}
+                  />
+                  {!itemImagePreviewUrl && (
+                    <button
+                      type="button"
+                      onClick={() => itemImageInputRef.current?.click()}
+                      className="mt-1 flex min-h-24 w-full flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-[hsl(210,100%,55%)]/40 bg-[hsl(210,100%,55%)]/5 px-4 py-5 text-center active:scale-[0.98] transition-transform"
+                    >
+                      <ImageIcon className="h-5 w-5 text-[hsl(210,100%,55%)]" />
+                      <span className="text-sm font-medium text-foreground">
+                        {isAr ? "ارفع صورة للرغبة" : "Upload a wish photo"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {isAr ? "JPG, PNG, WEBP حتى 5MB" : "JPG, PNG, WEBP up to 5MB"}
+                      </span>
+                    </button>
+                  )}
+                </div>
+
+                {itemImagePreviewUrl && (
+                  <div className="rounded-xl border border-border/60 p-3 space-y-3">
+                    <img
+                      src={itemImagePreviewUrl}
+                      alt={isAr ? "معاينة الصورة" : "Image preview"}
+                      className="h-40 w-full rounded-lg object-cover"
+                    />
+                    {isAnalyzingImage && (
+                      <div className="flex items-center gap-2 rounded-lg bg-[hsl(210,100%,55%)]/8 px-3 py-2 text-sm text-[hsl(210,100%,55%)]">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>{isAr ? "Wakti AI يحلل الصورة..." : "Wakti AI is analyzing the image..."}</span>
+                      </div>
+                    )}
+                    <Button
+                      type="button"
+                      className="w-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] text-white"
+                      onClick={handleAnalyzeManualImage}
+                      disabled={isAnalyzingImage || !itemImageFile}
+                    >
+                      {isAnalyzingImage ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                      {isAr ? "حلل الصورة بالذكاء الاصطناعي" : "Analyze photo with AI"}
+                    </Button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button type="button" variant="outline" className="w-full" onClick={() => itemImageInputRef.current?.click()}>
+                        <ImageIcon className="h-4 w-4 mr-2" />
+                        {isAr ? "تغيير الصورة" : "Change photo"}
+                      </Button>
+                      <Button type="button" variant="outline" className="w-full" onClick={clearManualItemImage}>
+                        <X className="h-4 w-4 mr-2" />
+                        {isAr ? "إزالة الصورة" : "Remove photo"}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Auto mode — AI extract */}
+            {itemMode === "auto" && (
               <div className="space-y-2">
                 <Label>{isAr ? "رابط المنتج" : "Product URL"}</Label>
                 <div className="flex gap-2">
@@ -1118,20 +1615,15 @@ export default function MyWishlists() {
                     {isAr ? "Wakti AI يستخرج التفاصيل..." : "Wakti AI is extracting details..."}
                   </p>
                 )}
-              </div>
-            )}
 
-            {/* Image URL for image mode */}
-            {itemMode === "image" && (
-              <div className="space-y-2">
-                <Label>{isAr ? "رابط الصورة" : "Image URL"}</Label>
-                <Input
-                  value={itemImageUrl}
-                  onChange={(e) => setItemImageUrl(e.target.value)}
-                  placeholder="https://..."
-                />
                 {itemImageUrl && (
-                  <img src={itemImageUrl} alt="preview" className="w-full h-32 object-contain rounded-lg border" onError={() => {}} />
+                  <div className="rounded-xl border border-border/60 p-3">
+                    <img
+                      src={itemImageUrl}
+                      alt={isAr ? "صورة مستخرجة" : "Extracted wish image"}
+                      className="h-40 w-full rounded-lg object-cover"
+                    />
+                  </div>
                 )}
               </div>
             )}
@@ -1158,19 +1650,8 @@ export default function MyWishlists() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>{isAr ? "السعر (اختياري)" : "Price (optional)"}</Label>
-                <Input
-                  type="number"
-                  value={itemPrice}
-                  onChange={(e) => setItemPrice(e.target.value)}
-                  placeholder="0.00"
-                  className="mt-1"
-                />
-              </div>
-              <div>
-                <Label>{isAr ? "الأولوية" : "Priority"}</Label>
+            <div>
+              <Label>{isAr ? "الأولوية" : "Priority"}</Label>
                 <Select value={String(itemPriority)} onValueChange={(v) => setItemPriority(Number(v))}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -1183,20 +1664,7 @@ export default function MyWishlists() {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
             </div>
-
-            {itemMode !== "image" && (
-              <div>
-                <Label>{isAr ? "صورة المنتج (رابط)" : "Product image (URL)"}</Label>
-                <Input
-                  value={itemImageUrl}
-                  onChange={(e) => setItemImageUrl(e.target.value)}
-                  placeholder="https://..."
-                  className="mt-1"
-                />
-              </div>
-            )}
 
             <Button
               className="w-full"
