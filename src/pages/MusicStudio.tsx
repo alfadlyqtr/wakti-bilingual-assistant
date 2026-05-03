@@ -4374,9 +4374,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const prefixWord = v.s1Prefix.trim();
     const labelStartsWithPrefix = prefixWord.length > 0 &&
       label.toLowerCase().startsWith(prefixWord.toLowerCase());
-    const s1 = labelStartsWithPrefix
-      ? `${label} production.`
-      : `${v.s1Prefix} ${label} production.`;
+    const productionLabel = labelStartsWithPrefix
+      ? label
+      : `${v.s1Prefix} ${label}`.trim();
+    const s1 = `Strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock. ${selectedKhaleejiDialectContract.accentAnchor.charAt(0).toUpperCase()}${selectedKhaleejiDialectContract.accentAnchor.slice(1)}. Khaleeji production led by authentic ${selectedKhaleejiDialectContract.labelEn} identity through ${productionLabel}.`;
 
     const instList = opts.instruments.length > 0
       ? opts.instruments.join(', ')
@@ -4389,11 +4390,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       : '';
     const s2 = `A ${v.arrangementAdj} arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
     const paletteSentence = opts.instruments.length > 0
-      ? `Featured instruments: ${instList}. ${label} shapes the groove feel, energy, and playing style.`
+      ? `Featured instruments: ${instList}. ${label} only shapes the groove feel, energy, and playing style around the Khaleeji vocal lead.`
       : '';
 
     // S3 — vocal sentence packed with dialect-rich keywords Suno responds to.
-    const s3 = `Vocals are delivered in ${selectedKhaleejiDialectContract.dialectLabel} with ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, and ${selectedKhaleejiDialectContract.phrasingLabel}, ${v.vocalDelivery}, featuring ${v.vocalOrnament}.`;
+    const s3 = `Vocals stay unmistakably Khaleeji with ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, and ${selectedKhaleejiDialectContract.phrasingLabel}, locked to authentic ${selectedKhaleejiDialectContract.labelEn} identity, ${v.vocalDelivery}, featuring ${v.vocalOrnament}.`;
 
     const moodPart = opts.moods.length > 0 ? `The mood is ${opts.moods.join(', ')}.` : '';
     // Split "{N} BPM {feel}" into two natural clauses; drop redundant "tonal center".
@@ -4436,7 +4437,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
     // S1 — Identity FIRST. Suno reads this before anything else, so Gulf
     // identity is locked before the genre context bleeds in.
-    const s1 = `Modern Khaleeji Fusion of ${label}.`;
+    const s1 = `Strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock. ${selectedKhaleejiDialectContract.accentAnchor.charAt(0).toUpperCase()}${selectedKhaleejiDialectContract.accentAnchor.slice(1)}. Khaleeji vocal identity comes first. ${label} is only the production shell.`;
 
     // S2 — Arrangement built around user instruments + rhythms.
     const instList = opts.instruments.length > 0
@@ -4451,14 +4452,14 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const arrangementAdj = v.vocalCueAdj.toLowerCase();
     const s2 = `A ${arrangementAdj}, fusion-forward arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
     const paletteSentence = opts.instruments.length > 0
-      ? `Featured instruments: ${instList}. ${label} shapes the groove feel, energy, and playing style.`
+      ? `Featured instruments: ${instList}. ${label} only shapes the production shell, groove feel, and energy under the Khaleeji vocal lead.`
       : '';
 
     // S3 — Khaleeji vocal identity sentence — the heart of the fusion brief.
     // Packed with the same identity DNA as buildKhalijiProductionBrief so Suno
     // gets full Gulf pronunciation, timbre, and phrasing keywords even when the
     // primary chip is a non-Arab genre.
-    const s3 = `Vocals are delivered in ${selectedKhaleejiDialectContract.dialectLabel} with ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, and ${selectedKhaleejiDialectContract.phrasingLabel}, fused with ${v.vocalCueDelivery}, featuring expressive quarter-tone Khaleeji ornaments.`;
+    const s3 = `Vocals stay unmistakably Khaleeji with ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, and ${selectedKhaleejiDialectContract.phrasingLabel}, locked to authentic ${selectedKhaleejiDialectContract.labelEn} identity, fused with ${v.vocalCueDelivery}, featuring expressive quarter-tone Khaleeji ornaments.`;
 
     // S4 — Mood + tempo + key.
     const moodPart = opts.moods.length > 0 ? `The mood is ${opts.moods.join(', ')}.` : '';
@@ -4471,7 +4472,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // S5 — Final dominance lock. Reinforces that vocal stays Khaleeji while
     // production stays in the user's chosen genre. Prevents Suno from drifting
     // back to the genre's default vocal style mid-track.
-    const s5 = `Khaleeji vocal identity dominates the entire performance while ${label.toLowerCase()} drives the production aesthetic.`;
+    const s5 = `Khaleeji is the main anchor. Authentic ${selectedKhaleejiDialectContract.labelEn} identity drives the vocal. ${label} only drives the production shell.`;
 
     return [s1, s2, paletteSentence, s3, moodPart, tempoPart, s5].filter(Boolean).join(' ');
   }
@@ -4493,8 +4494,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
 
     const alreadyKhaleeji = genreFamily.startsWith('khaleeji-');
     if (alreadyKhaleeji || forceKhaleejiAnchor) {
-      const capWithKhaleeji = `${cap} ${selectedKhaleejiDialectContract.labelEn} Khaleeji`;
-      return `[${v.vocalCueAdj} ${capWithKhaleeji} vocal, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${v.vocalCueDelivery}]`;
+      return `[Strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${selectedKhaleejiDialectContract.phrasingLabel}, ${v.vocalCueAdj} ${cap} Khaleeji vocal, ${v.vocalCueDelivery}]`;
     }
 
     return `[${v.vocalCueAdj} ${cap} vocal, ${v.vocalCueDelivery}]`;
@@ -4604,9 +4604,18 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     const accentAnchor = dialectLock ? selectedKhaleejiDialectContract.accentAnchor : null;
     const pronunciationAnchor = dialectLock ? selectedKhaleejiDialectContract.pronunciationLabel : null;
     const phrasingAnchor = dialectLock ? selectedKhaleejiDialectContract.phrasingLabel : null;
+    const isFusionShell = khaleejiTriggered && !(isGccStyle || isGccStyleSelected) && Boolean(primaryStyle);
+    const khaleejiPrimaryAnchor = dialectLock ? 'khaleeji main anchor' : null;
+    const dialectIdentityAnchor = dialectLock ? `authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji identity` : null;
+    const productionShellAnchor = isFusionShell && primaryStyle ? `${normalizeChipForDisplay(primaryStyle)} production shell only` : null;
     const styleParts: string[] = [
+      dialectLock,
       accentAnchor,
-      styleAnchor,
+      pronunciationAnchor,
+      phrasingAnchor,
+      khaleejiPrimaryAnchor,
+      dialectIdentityAnchor,
+      productionShellAnchor ?? styleAnchor,
       primaryRhythm,
       supportingRhythms.length > 0 ? `supporting rhythms: ${supportingRhythms.join(', ')}` : null,
       instrumentLayer.length > 0 ? `locked instruments: ${instrumentLayer.join(', ')}` : null,
@@ -4615,9 +4624,6 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       `tempo: ${tempoTag}`,
       `key: ${keyTag}`,
       freeText,
-      pronunciationAnchor,
-      phrasingAnchor,
-      dialectLock,
     ]
       .filter((part): part is string => Boolean(part))
       .map((part) => part.trim())
@@ -4677,24 +4683,23 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         : null;
     // Append free-text + dialect lock as proper capitalized sentences so the brief
     // doesn't end in a lowercase fragment. Dialect lock becomes "Strict ... lock."
-    const dialectSentence = dialectLock
-      ? `${dialectLock.charAt(0).toUpperCase()}${dialectLock.slice(1)} lock.`
-      : null;
     const freeTextSentence = freeText
       ? (/[.!?]$/.test(freeText.trim()) ? freeText.trim() : `${freeText.trim()}.`)
       : null;
     const briefStyleString = briefString
-      ? [briefString, freeTextSentence, dialectSentence].filter(Boolean).join(' ')
+      ? [briefString, freeTextSentence].filter(Boolean).join(' ')
       : null;
     const styleString = briefStyleString ?? legacyStyleString;
     const controlBlock = [
       'KHALIJI CONTROL BLOCK',
-      primaryStyle ? `Primary style chip: ${normalizeKhalijiPromptToken(primaryStyle)}` : null,
-      styleAnchor ? `Identity anchor: ${styleAnchor}` : null,
+      dialectLock ? `Dialect lock: ${dialectLock}` : null,
       accentAnchor ? `Accent anchor: ${accentAnchor}` : null,
-      dialectLock ? `Dialect target: ${dialectLock}` : null,
       pronunciationAnchor ? `Pronunciation target: ${pronunciationAnchor}` : null,
       phrasingAnchor ? `Phrasing target: ${phrasingAnchor}` : null,
+      dialectIdentityAnchor ? `Dialect identity: ${dialectIdentityAnchor}` : null,
+      productionShellAnchor ? `Production shell: ${productionShellAnchor}` : null,
+      primaryStyle ? `${productionShellAnchor ? 'Production shell chip' : 'Primary style chip'}: ${normalizeKhalijiPromptToken(primaryStyle)}` : null,
+      !productionShellAnchor && styleAnchor ? `Identity anchor: ${styleAnchor}` : null,
       primaryRhythm ? `Primary rhythm: ${primaryRhythm}` : null,
       supportingRhythms.length > 0 ? `Supporting rhythms: ${supportingRhythms.join(', ')}` : null,
       instrumentLayer.length > 0 ? `Locked instruments: ${instrumentLayer.join(', ')}` : null,
@@ -4722,7 +4727,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       usingRecipeV1: useRecipe || useFusionRecipe,
       recipeMode,
       dialectKey: dialectLock ? khaleejiDialect : null,
-      dialectLabel: dialectLock ? `${selectedKhaleejiDialectContract.labelEn} Khaleeji` : null,
+      dialectLabel: dialectLock ? `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock` : null,
       accentAnchor,
     };
   }
@@ -5093,6 +5098,48 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     return text.replace(/^[ \t]*\(([^)\n]{2,40})\)[ \t]*$/gm, '[$1]');
   }
 
+  function hasArabicScript(text: string): boolean {
+    return /[\u0600-\u06FF]/.test(text);
+  }
+
+  function hasLatinScript(text: string): boolean {
+    return /[A-Za-z]/.test(text);
+  }
+
+  function getBlockTextForLanguageCue(block: string): string {
+    return block.replace(/^\[[^\]\n]+\]\s*/m, '').trim();
+  }
+
+  function inferSectionLanguageCue(block: string, preferKhaleejiArabic: boolean): string | null {
+    const content = getBlockTextForLanguageCue(block);
+    const hasArabicText = hasArabicScript(content);
+    const hasLatinText = hasLatinScript(content);
+
+    if (hasArabicText && !hasLatinText) {
+      return preferKhaleejiArabic ? 'Khaleeji Arabic only' : 'Arabic only';
+    }
+
+    if (hasLatinText && !hasArabicText) {
+      return 'English only';
+    }
+
+    return null;
+  }
+
+  function addLanguageCueToSectionTag(tag: string, block: string, preferKhaleejiArabic: boolean): string {
+    if (!/^\[[^\]\n]+\]$/.test(tag.trim())) return tag;
+
+    const cue = inferSectionLanguageCue(block, preferKhaleejiArabic);
+    if (!cue) return tag;
+
+    const inner = tag.replace(/^\[|\]$/g, '').trim();
+    if (inner.toLowerCase().includes(cue.toLowerCase())) return tag;
+
+    return /[—:]/.test(inner)
+      ? `[${inner}, ${cue}]`
+      : `[${inner} — ${cue}]`;
+  }
+
   // Walk lyrics block-by-block. Stanzas already preceded by a [Tag] keep their tag (and we enrich it).
   // Stanzas without a tag get auto-prepended with a smart positional label that's also enriched.
   // Heuristic:
@@ -5105,6 +5152,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     text: string,
     genreFamily: GenreFamily,
     instruments: string[],
+    preferKhaleejiArabic: boolean = false,
   ): string {
     const blocks = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
     if (blocks.length === 0) return text;
@@ -5124,7 +5172,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (/^\[[^\]\n]+\]/.test(block)) {
         // Block already starts with a [Tag] — enrich the leading tag only.
         const enriched = block.replace(/^\[([^\]\n]+)\]/, (full) =>
-          enrichSectionTag(full, genreFamily, instruments)
+          addLanguageCueToSectionTag(enrichSectionTag(full, genreFamily, instruments), block, preferKhaleejiArabic)
         );
         out.push(enriched);
         continue;
@@ -5145,7 +5193,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
         usedTags.add(label.toLowerCase());
       }
 
-      const enrichedTag = enrichSectionTag(`[${label}]`, genreFamily, instruments);
+      const enrichedTag = addLanguageCueToSectionTag(enrichSectionTag(`[${label}]`, genreFamily, instruments), block, preferKhaleejiArabic);
       out.push(`${enrichedTag}\n${block}`);
     }
 
@@ -5193,6 +5241,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     // forceKhaleejiAnchor — surgical Khaleeji injection for non-Khaleeji primary chips
     // when user added a Khaleeji-named rhythm/style.
     const vocalCue: string | null = useRecipe ? buildVocalCharacterCue(genreFamily, vocalType, forceKhaleejiAnchor) : null;
+    const preferKhaleejiArabic = genreFamily.startsWith('khaleeji-') || forceKhaleejiAnchor || isGccStyle;
 
     // STAGE 4 — PATH A: User labeled at least some sections (after paren normalization).
     if (parsedInput.hasTaggedLyricBlocks) {
@@ -5200,7 +5249,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       if (useRecipe) {
         enriched = autoLabelLyrics
           // Full pipeline: walk blocks, enrich existing tags AND auto-label unlabeled stanzas.
-          ? autoFillUnlabeledStanzas(enriched, genreFamily, selectedInstruments)
+          ? autoFillUnlabeledStanzas(enriched, genreFamily, selectedInstruments, preferKhaleejiArabic)
           // Power-user opt-out: only enrich existing tags, NEVER add new labels.
           : enriched.replace(/\[([^\]\n]+)\]/g, (full) => enrichSectionTag(full, genreFamily, selectedInstruments));
       }
@@ -5274,9 +5323,12 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       }
       const stanza = section.stanzaIndex !== null ? arrangedStanzas[section.stanzaIndex] : null;
       const baseLabelText = section.label ?? `Verse ${i + 1}`;
-      const baseLabel = useRecipe
+      const rawBaseLabel = useRecipe
         ? enrichSectionTag(`[${baseLabelText}]`, genreFamily, selectedInstruments)
         : `[${baseLabelText}]`;
+      const baseLabel = stanza
+        ? addLanguageCueToSectionTag(rawBaseLabel, stanza, preferKhaleejiArabic)
+        : rawBaseLabel;
       const supportCue = stanza ? null : buildSupportSectionCue(section.label, genreFamily, selectedInstruments);
       structured.push(stanza ? `${baseLabel}\n${stanza}` : supportCue ? `${baseLabel}\n${supportCue}` : baseLabel);
     });
@@ -5645,6 +5697,9 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       const gccPronunciationTokens: string[] = [];
       const regionalTokens: string[] = [];
       let hasGccTag = false;
+      if (khalijiControlBlock.dialectKey) {
+        gccPronunciationTokens.push(...tokenizeNeg(selectedKhaleejiDialectContract.negativeBlockEnglish));
+      }
       for (const tag of effectiveIncludeTags) {
         if (GCC_STYLE_SET.has(tag)) hasGccTag = true;
         const pron = GCC_PRONUNCIATION_NEGATIVES[tag];
@@ -5671,7 +5726,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       );
 
       // ── Final style string (resolved with GCC fallback) ──
-      const GCC_FALLBACK_STYLE = `${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.dialectLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${selectedKhaleejiDialectContract.phrasingLabel}, seasoned Khaleeji vocalist timbre, khaleeji pop, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic khaleeji quarter-tone scale`;
+      const GCC_FALLBACK_STYLE = `${selectedKhaleejiDialectContract.dialectLabel}, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${selectedKhaleejiDialectContract.phrasingLabel}, authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji identity, khaleeji main anchor, seasoned Khaleeji vocalist timbre, khaleeji pop, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic khaleeji quarter-tone scale`;
       const resolvedStyle = (kieStyle || GCC_FALLBACK_STYLE).slice(0, 1000);
       // ── Bulletproof GCC detection ──
       // 1) Chip-based: the canonical set (most precise).

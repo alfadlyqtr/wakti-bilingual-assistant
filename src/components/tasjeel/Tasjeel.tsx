@@ -39,6 +39,8 @@ import { useNavigate } from "react-router-dom";
 import SavedRecordings from "./SavedRecordings";
 import { SummaryAudioUploadResult } from "./types";
 import TrialGateOverlay from "@/components/TrialGateOverlay";
+import { WaktiAgentEntryButton } from "@/components/wakti-agent/WaktiAgentEntryButton";
+import { buildWaktiAgentHref, stashWaktiAgentPayload } from "@/utils/waktiAgent";
 
 // Define maximum recording time (45 minutes in seconds)
 const MAX_RECORDING_TIME = 2700; // 45 minutes
@@ -1099,6 +1101,27 @@ const Tasjeel: React.FC = () => {
       setIsSaving(false);
     }
   };
+
+  const handleOpenAgent = () => {
+    const bestTranscript = transcript.trim() || quickTranscript.trim();
+    const bestSummary = summary.trim() || quickSummaryText.trim();
+    const hasVoiceContext = Boolean(bestTranscript || bestSummary);
+    const payloadId = hasVoiceContext
+      ? stashWaktiAgentPayload({
+          transcript: bestTranscript || undefined,
+          summary: bestSummary || undefined,
+        })
+      : undefined;
+
+    navigate(buildWaktiAgentHref({
+      intent: hasVoiceContext ? 'voice-to-tasks' : 'ask',
+      source: 'tasjeel',
+      context: hasVoiceContext
+        ? (language === 'ar' ? 'تم إرفاق نص حقيقي من تسجيل' : 'A real Tasjeel note is attached')
+        : (language === 'ar' ? 'من صفحة تسجيل' : 'From Tasjeel'),
+      payloadId,
+    }));
+  };
   
   return (
     <PageContainer title={translationTexts.pageTitle} showBackButton={true} showHeader={false}>
@@ -1119,6 +1142,16 @@ const Tasjeel: React.FC = () => {
               {translationTexts.savedRecordings}
             </TabsTrigger>
           </TabsList>
+
+          <div className="mb-4 flex justify-start">
+            <WaktiAgentEntryButton
+              label={language === 'ar'
+                ? ((transcript || quickTranscript || summary || quickSummaryText) ? 'حوّل هذا إلى مهام' : 'اسأل وكتي')
+                : ((transcript || quickTranscript || summary || quickSummaryText) ? 'Turn this into tasks' : 'Ask Wakti')}
+              onClick={handleOpenAgent}
+              subtle
+            />
+          </div>
           
           <TabsContent value="record" className="space-y-3">
             {/* Recording section */}

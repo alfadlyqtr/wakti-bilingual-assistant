@@ -1068,7 +1068,7 @@ export default function VisualAdsGenerator({
         <StepHeader
           step={1}
           title={language === 'ar' ? 'أصول العلامة' : 'Brand Assets'}
-          subtitle={language === 'ar' ? 'ارفع صورة واحدة على الأقل ثم اختر نوعها. يمكنك إضافة حتى 6 صور عند الحاجة.' : 'Upload at least one image, then tag it. You can add up to 6 images when needed.'}
+          subtitle={language === 'ar' ? 'ارفع الصور المهمة فقط ثم اختر نوع كل صورة. كثرة العناصر قد تجعل البوستر مزدحماً.' : 'Upload and tag only the images you really need. Too many assets can make the poster feel crowded.'}
           isActive={activeStep === 1}
           isCompleted={completedSteps.has(1)}
           isGenerating={isGenerating}

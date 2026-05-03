@@ -146,9 +146,10 @@ E. KHALEEJI AUTHENTICITY (when style is Gulf/Arabic)
 ═══════════════════════════════════════════════
 F. BILINGUAL / LANGUAGE RULES
 ═══════════════════════════════════════════════
-1. Arabic input → Arabic output. English input → English output. Mixed input → mixed output.
-2. Preserve the user's bilingual pattern. Never collapse mixed lyrics into one language.
-3. Arabic parts of Khaleeji tracks must stay Khaleeji in tone and phrasing.
+1. Arabic input → Arabic output. English input → English output. Mixed input → keep every language present in the song.
+2. For mixed-language songs, use one language per stanza block whenever possible. Do not bounce Arabic and English line-by-line inside the same stanza unless the user explicitly wrote it that way and it is essential.
+3. Never collapse mixed lyrics into one language, but you may reorganize them into separate sections so pronunciation stays clean.
+4. Arabic parts of Khaleeji tracks must stay Khaleeji in tone and phrasing, and Khaleeji Arabic sections should stay grouped together in their own stanza blocks.
 
 ═══════════════════════════════════════════════
 G. HARAKAT / PHONETICS

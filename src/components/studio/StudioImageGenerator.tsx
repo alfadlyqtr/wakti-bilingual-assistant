@@ -37,11 +37,6 @@ import VisualAdsGenerator, {
 } from '@/components/studio/VisualAdsGenerator';
 
 type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw' | 'visual-ads';
-type ScreenshotDeviceType = NonNullable<VisualAdsState['assets']>[number]['screenshotDevice'];
-type FrozenVisualAdsScreenshotLayer = {
-  imageUrl: string;
-  device: ScreenshotDeviceType;
-};
 
 const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
 const MAX_STUDIO_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -49,6 +44,26 @@ const MAX_STUDIO_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
 /** Strip stray spaces / %20 from a storage URL before persisting it. */
 const sanitizeImageUrl = (url: string): string =>
   url.replace(/%20/g, ' ').trim().replace(/^\s+/, '');
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && typeof error.message === 'string' && error.message.trim()) {
+    return error.message.trim();
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error.trim();
+  }
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>;
+    if (typeof record.error === 'string' && record.error.trim()) return record.error.trim();
+    if (typeof record.message === 'string' && record.message.trim()) return record.message.trim();
+    try {
+      const serialized = JSON.stringify(error);
+      if (serialized && serialized !== '{}') return serialized;
+    } catch {
+    }
+  }
+  return fallback;
+};
 
 interface StudioImageGeneratorProps {
   onSaveSuccess?: () => void;
@@ -107,7 +122,6 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [savedImageId, setSavedImageId] = useState<string | null>(null);
   const [savedSourceUrl, setSavedSourceUrl] = useState<string | null>(null);
   const [savedBucketUrl, setSavedBucketUrl] = useState<string | null>(null);
-  const frozenVisualAdsScreenshotRef = useRef<FrozenVisualAdsScreenshotLayer | null>(null);
   const [selectedSavedImageId, setSelectedSavedImageId] = useState<string | null>(null);
   const [savingGeneratedId, setSavingGeneratedId] = useState<string | null>(null);
   const bgCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
@@ -569,252 +583,25 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     }
   }, [user?.id, submode, importExternalImageToStorage]);
 
-  const composeFrozenVisualAdsResult = useCallback(async (
-    posterUrl: string,
-    screenshotUrl: string,
-    device: ScreenshotDeviceType,
-  ): Promise<string> => {
-    const drawRoundedRect = (
-      ctx: CanvasRenderingContext2D,
-      x: number,
-      y: number,
-      width: number,
-      height: number,
-      radius: number,
-    ) => {
-      const cappedRadius = Math.max(0, Math.min(radius, width / 2, height / 2));
-      ctx.beginPath();
-      ctx.moveTo(x + cappedRadius, y);
-      ctx.lineTo(x + width - cappedRadius, y);
-      ctx.quadraticCurveTo(x + width, y, x + width, y + cappedRadius);
-      ctx.lineTo(x + width, y + height - cappedRadius);
-      ctx.quadraticCurveTo(x + width, y + height, x + width - cappedRadius, y + height);
-      ctx.lineTo(x + cappedRadius, y + height);
-      ctx.quadraticCurveTo(x, y + height, x, y + height - cappedRadius);
-      ctx.lineTo(x, y + cappedRadius);
-      ctx.quadraticCurveTo(x, y, x + cappedRadius, y);
-      ctx.closePath();
-    };
-
-    const loadBitmap = async (src: string): Promise<ImageBitmap> => {
-      const res = await fetch(src);
-      if (!res.ok) throw new Error(`Image fetch failed: ${res.status}`);
-      const blob = await res.blob();
-      return await createImageBitmap(blob);
-    };
-
-    const [posterBitmap, screenshotBitmap] = await Promise.all([
-      loadBitmap(posterUrl),
-      loadBitmap(screenshotUrl),
-    ]);
-
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = posterBitmap.width;
-      canvas.height = posterBitmap.height;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) throw new Error('Failed to create composition canvas');
-
-      ctx.drawImage(posterBitmap, 0, 0, canvas.width, canvas.height);
-
-      const normalizedDevice = device || 'iphone';
-      const isTallPoster = canvas.height / canvas.width > 1.1;
-      const isPhoneDevice = normalizedDevice === 'iphone' || normalizedDevice === 'samsung';
-      const widthRatio = normalizedDevice === 'laptop'
-        ? 0.62
-        : normalizedDevice === 'tablet'
-          ? (isTallPoster ? 0.48 : 0.54)
-          : normalizedDevice === 'monitor-tv'
-            ? 0.68
-            : normalizedDevice === 'billboard'
-              ? 0.72
-              : (isTallPoster ? 0.38 : canvas.width > canvas.height ? 0.32 : 0.36);
-      const heightRatio = normalizedDevice === 'laptop'
-        ? 0.44
-        : normalizedDevice === 'tablet'
-          ? 0.5
-          : normalizedDevice === 'monitor-tv'
-            ? 0.42
-            : normalizedDevice === 'billboard'
-              ? 0.38
-              : 0.7;
-      const border = Math.max(8, Math.round(Math.min(canvas.width, canvas.height) * (isPhoneDevice ? 0.014 : 0.01)));
-      const outerAspect = (screenshotBitmap.width + border * 2) / (screenshotBitmap.height + border * 2);
-      let outerWidth = canvas.width * widthRatio;
-      let outerHeight = outerWidth / outerAspect;
-      if (outerHeight > canvas.height * heightRatio) {
-        outerHeight = canvas.height * heightRatio;
-        outerWidth = outerHeight * outerAspect;
-      }
-
-      const centerX = isPhoneDevice ? (isTallPoster ? canvas.width * 0.66 : canvas.width * 0.58) : canvas.width * 0.5;
-      const centerY = isTallPoster ? canvas.height * 0.54 : canvas.height * 0.52;
-      const marginX = canvas.width * 0.06;
-      const marginY = canvas.height * 0.08;
-      const outerX = Math.min(Math.max(centerX - outerWidth / 2, marginX), canvas.width - outerWidth - marginX);
-      const outerY = Math.min(Math.max(centerY - outerHeight / 2, marginY), canvas.height - outerHeight - marginY);
-      const innerX = outerX + border;
-      const innerY = outerY + border;
-      const innerWidth = outerWidth - border * 2;
-      const innerHeight = outerHeight - border * 2;
-      const outerRadius = Math.max(16, Math.round(Math.min(outerWidth, outerHeight) * (isPhoneDevice ? 0.08 : normalizedDevice === 'tablet' ? 0.05 : 0.035)));
-      const innerRadius = Math.max(12, outerRadius - Math.round(border * 0.65));
-
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.34)';
-      ctx.shadowBlur = Math.max(18, Math.round(Math.min(canvas.width, canvas.height) * 0.03));
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = Math.max(10, Math.round(Math.min(canvas.width, canvas.height) * 0.012));
-      drawRoundedRect(ctx, outerX, outerY, outerWidth, outerHeight, outerRadius);
-      ctx.fillStyle = 'rgba(12, 15, 20, 0.92)';
-      ctx.fill();
-      ctx.restore();
-
-      drawRoundedRect(ctx, outerX, outerY, outerWidth, outerHeight, outerRadius);
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
-      ctx.lineWidth = Math.max(2, Math.round(border * 0.2));
-      ctx.stroke();
-
-      ctx.save();
-      drawRoundedRect(ctx, innerX, innerY, innerWidth, innerHeight, innerRadius);
-      ctx.clip();
-      ctx.fillStyle = '#0c0f14';
-      ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
-      ctx.drawImage(screenshotBitmap, innerX, innerY, innerWidth, innerHeight);
-      ctx.restore();
-
-      return canvas.toDataURL('image/png');
-    } finally {
-      posterBitmap.close();
-      screenshotBitmap.close();
-    }
-  }, []);
-
-  const upsertFrozenVisualAdsResult = useCallback(async (
-    taskId: string,
-    resultIndex: number,
-    imageUrl: string,
-  ): Promise<{ imageId: string | null; url: string }> => {
-    if (!user?.id) return { imageId: null, url: imageUrl };
-
-    const stored = await storeGeneratedImageAsset(imageUrl);
-    let existingRow: { id: string; meta: Record<string, unknown> } | null = null;
-
-    for (let attempt = 0; attempt < 10; attempt += 1) {
-      const { data, error } = await (supabase as any)
-        .from('user_generated_images')
-        .select('id, meta')
-        .eq('user_id', user.id)
-        .contains('meta', { visual_ads_task_id: taskId, visual_ads_result_index: resultIndex })
-        .maybeSingle();
-      if (error) throw error;
-      if (data?.id) {
-        const existingMeta = data.meta && typeof data.meta === 'object' && !Array.isArray(data.meta)
-          ? data.meta as Record<string, unknown>
-          : {};
-        existingRow = { id: data.id, meta: existingMeta };
-        break;
-      }
-      if (attempt < 9) {
-        await new Promise((resolve) => setTimeout(resolve, 750));
-      }
-    }
-
-    const nextMeta = {
-      ...(existingRow?.meta || {}),
-      storage_path: stored.storagePath,
-      visual_ads_task_id: taskId,
-      visual_ads_result_index: resultIndex,
-      frozen_screenshot_layer: true,
-    };
-
-    if (existingRow?.id) {
-      const { error: updateErr } = await (supabase as any)
-        .from('user_generated_images')
-        .update({
-          image_url: stored.url,
-          meta: nextMeta,
-        })
-        .eq('id', existingRow.id)
-        .eq('user_id', user.id);
-      if (updateErr) throw updateErr;
-      return { imageId: existingRow.id, url: stored.url };
-    }
-
-    const { data: insertedRow, error: insertErr } = await (supabase as any)
-      .from('user_generated_images')
-      .insert({
-        user_id: user.id,
-        image_url: stored.url,
-        prompt: prompt || null,
-        submode: 'visual-ads',
-        quality: null,
-        meta: nextMeta,
-      })
-      .select('id')
-      .single();
-    if (insertErr) throw insertErr;
-
-    return { imageId: insertedRow?.id || null, url: stored.url };
-  }, [user?.id, prompt, storeGeneratedImageAsset]);
-
-  const syncVisualAdsJobResultUrls = useCallback(async (taskId: string, urls: string[]) => {
-    if (!user?.id || !urls.length) return;
-    try {
-      const supabaseJobs: any = supabase;
-      await supabaseJobs
-        .from('visual_ads_jobs')
-        .update({ result_urls: urls })
-        .eq('task_id', taskId)
-        .eq('user_id', user.id);
-    } catch (error) {
-      console.error('Failed to sync composited visual ad URLs:', error);
-    }
-  }, [user?.id]);
-
   const finalizeVisualAdsResult = useCallback(async (
     rawUrls: string[],
     taskId?: string | null,
     assumePersisted = false,
   ) => {
-    let finalUrls = rawUrls;
-    let finalSavedImageId: string | null = null;
-    let didPersistFrozenLayer = false;
-    const frozenLayer = frozenVisualAdsScreenshotRef.current;
-
-    if (taskId && frozenLayer?.imageUrl) {
-      try {
-        const compositedUrls: string[] = [];
-        for (const [resultIndex, rawUrl] of rawUrls.entries()) {
-          const composited = await composeFrozenVisualAdsResult(rawUrl, frozenLayer.imageUrl, frozenLayer.device);
-          const stored = await upsertFrozenVisualAdsResult(taskId, resultIndex, composited);
-          compositedUrls.push(stored.url);
-          if (resultIndex === 0) {
-            finalSavedImageId = stored.imageId;
-          }
-        }
-        if (compositedUrls.length) {
-          finalUrls = compositedUrls;
-          didPersistFrozenLayer = true;
-          await syncVisualAdsJobResultUrls(taskId, compositedUrls);
-        }
-      } catch (error) {
-        console.error('Frozen screenshot composition failed:', error);
-      }
-    }
-
+    void taskId;
+    const finalUrls = rawUrls;
     const finalUrl = finalUrls[0];
     if (!finalUrl) throw new Error('Generation completed but no image URL returned');
 
     stopProgress();
     setResultImageUrl(finalUrl);
     setResultUrls(finalUrls);
-    setIsSaved(didPersistFrozenLayer || assumePersisted);
-    setSavedImageId(didPersistFrozenLayer ? finalSavedImageId : null);
-    setSavedBucketUrl(didPersistFrozenLayer || assumePersisted ? finalUrl : null);
+    setIsSaved(assumePersisted);
+    setSavedImageId(null);
+    setSavedBucketUrl(assumePersisted ? finalUrl : null);
     setSavedSourceUrl(finalUrl);
     return finalUrl;
-  }, [composeFrozenVisualAdsResult, stopProgress, syncVisualAdsJobResultUrls, upsertFrozenVisualAdsResult]);
+  }, [stopProgress]);
 
   const persistGeneratedImage = useCallback(async (
     imageUrl: string,
@@ -1767,7 +1554,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 return transformImage(originalImage, { maxSize: 2200, quality: 0.97 });
               }
               if (asset.type === 'screenshot') {
-                return transformImage(originalImage, { maxSize: 2200, preserveAlpha: true, output: 'png' });
+                return originalImage;
               }
               if (asset.type === 'background') {
                 return transformImage(originalImage, { maxSize: 2400, quality: 0.94 });
@@ -1851,202 +1638,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
               const taggedAssets = sentAssets.filter((item) => item.types.length > 0);
               const taggedTypes = taggedAssets.flatMap((item) => item.types);
-              const hasPerson = taggedTypes.includes('person');
               const hasScreenshot = taggedTypes.includes('screenshot');
               const hasBackground = taggedTypes.includes('background');
-              const hasProduct = taggedTypes.includes('product');
               const hasLogo = taggedTypes.includes('logo');
-              const exactPersonAssets = taggedAssets.filter((item) => item.types.includes('person') && (item.asset.personMode || 'exact') === 'exact');
-              const hasExactPerson = exactPersonAssets.length > 0;
-              const referencePersonAssets = taggedAssets.filter((item) => item.types.includes('person') && item.asset.personMode === 'reference');
-              const hasReferencePerson = referencePersonAssets.length > 0;
+              const hasExactPerson = taggedAssets.some((item) => item.types.includes('person') && (item.asset.personMode || 'exact') === 'exact');
+              const hasReferencePerson = taggedAssets.some((item) => item.types.includes('person') && item.asset.personMode === 'reference');
               const hasTransparentLogo = taggedAssets.some((item) => item.types.includes('logo') && (item.asset.logoMode || 'transparent') === 'transparent');
-
-              const toBool = (value: boolean) => value ? 'true' : 'false';
-              const toQuoted = (value: string) => `"${value.replace(/"/g, '\\"')}"`;
-              const buildSection = (title: string, lines: string[]) => [title, ...lines].join('\n');
-
-              const imageSourceLines = taggedAssets.flatMap((item, index) => {
-                const sourceId = getSourceId(index);
-                const lines = [
-                  `- ${sourceId}:`,
-                  `    image_ref: Image ${index + 1}`,
-                  `    role: ${getAssetLabel(item.asset)}`,
-                ];
-                if (item.asset.type === 'person') {
-                  lines.push(`    person_mode: ${(item.asset.personMode || 'exact')}`);
-                  if ((item.asset.personMode || 'exact') === 'exact') {
-                    lines.push(`    pose_mode: ${(item.asset.exactPersonStyle || 'same-pose')}`);
-                  }
-                  if (item.asset.personMode === 'reference' && item.asset.referenceStyle) {
-                    lines.push(`    reference_style: ${item.asset.referenceStyle}`);
-                  }
-                }
-                if (item.asset.type === 'logo') {
-                  lines.push(`    logo_mode: ${(item.asset.logoMode || 'transparent')}`);
-                }
-                if (item.asset.type === 'screenshot') {
-                  lines.push(`    device: ${getScreenshotDevice(item.asset)}`);
-                }
-                return lines;
-              });
-
-              const assetDirectiveLines = taggedAssets.flatMap((item, index) => {
-                const sourceId = getSourceId(index);
-                const role = getAssetLabel(item.asset);
-                if (item.asset.type === 'background') {
-                  return [
-                    `- background:`,
-                    `    source: ${sourceId}`,
-                    `    preserve_core_identity: true`,
-                    `    use_as_real_background_foundation: true`,
-                    `    replace_environment: false`,
-                    `    allow_color_grading: true`,
-                    `    allow_depth_of_field: true`,
-                    `    allow_cinematic_styling: true`,
-                  ];
-                }
-                if (item.asset.type === 'person') {
-                  if (item.asset.personMode === 'reference') {
-                    return [
-                      `- person:`,
-                      `    source: ${sourceId}`,
-                      `    role: person`,
-                      `    person_mode: reference`,
-                      `    reference_style: ${(item.asset.referenceStyle || 'realistic')}`,
-                      `    preserve_identity_direction: true`,
-                      `    preserve_source_anchor_strength: high`,
-                      `    preserve_face_direction: true`,
-                      `    preserve_hair_and_styling_direction: true`,
-                      `    preserve_outfit_direction: true`,
-                      `    preserve_accessories_direction: true`,
-                      `    preserve_pose_direction: true`,
-                      `    preserve_silhouette_direction: true`,
-                      `    exact_match_required: false`,
-                      `    character_must_be_derived_from_source: true`,
-                      `    do_not_recast_as_different_person: true`,
-                      `    stylize_into_character: ${toBool((item.asset.referenceStyle || 'realistic') === 'character')}`,
-                    ];
-                  }
-                  return [
-                    `- person:`,
-                    `    source: ${sourceId}`,
-                    `    role: person`,
-                    `    person_mode: exact`,
-                    `    pose_mode: ${(item.asset.exactPersonStyle || 'same-pose')}`,
-                    `    preserve_core_identity: true`,
-                    `    exact_match_required: true`,
-                    `    allow_new_pose: ${toBool(item.asset.exactPersonStyle === 'adapted-pose')}`,
-                    `    keep_pose_close: ${toBool((item.asset.exactPersonStyle || 'same-pose') === 'same-pose')}`,
-                    `    face_visibility_required: true`,
-                    `    framing: ${item.asset.exactPersonStyle === 'upper-body' ? 'upper-body' : 'flexible'}`,
-                    `    beautify: false`,
-                    `    recast: false`,
-                    `    stylize_into_character: false`,
-                  ];
-                }
-                if (item.asset.type === 'logo') {
-                  const logoMode = item.asset.logoMode || 'transparent';
-                  return [
-                    `- logo:`,
-                    `    source: ${sourceId}`,
-                    `    role: logo`,
-                    `    logo_mode: ${logoMode}`,
-                    `    preserve_core_identity: true`,
-                    `    preserve_design: true`,
-                    `    remove_plain_surrounding_background_only_if_needed: ${toBool(logoMode === 'transparent')}`,
-                    `    preserve_original_background_treatment: ${toBool(logoMode === 'as-is')}`,
-                    `    placement_mode: flat_overlay`,
-                    `    keep_fully_visible: true`,
-                    `    keep_flat_2d: true`,
-                    `    treat_as_brand_mark_not_scene_object: true`,
-                    `    redraw: false`,
-                    `    distort: false`,
-                    `    crop: false`,
-                    `    restyle: false`,
-                    `    put_in_container: false`,
-                    `    put_in_badge: false`,
-                    `    put_in_app_icon_frame: false`,
-                  ];
-                }
-                if (item.asset.type === 'screenshot') {
-                  return [
-                    `- screenshot:`,
-                    `    source: ${sourceId}`,
-                    `    role: screenshot`,
-                    `    preserve_core_identity: true`,
-                    `    preserve_ui: true`,
-                    `    keep_readable: true`,
-                    `    device: ${getScreenshotDevice(item.asset)}`,
-                    `    use_inside_device_mockup: true`,
-                    `    reuse_names_from_ui_as_copy: false`,
-                    `    reuse_usernames_from_ui_as_copy: false`,
-                  ];
-                }
-                if (item.asset.type === 'product') {
-                  return [
-                    `- product:`,
-                    `    source: ${sourceId}`,
-                    `    role: product`,
-                    `    preserve_core_identity: true`,
-                    `    must_remain_recognizable: true`,
-                    `    use_as_hero: true`,
-                    `    premium_lighting: true`,
-                    `    redesign_product: false`,
-                  ];
-                }
-                if (item.asset.type === 'icon') {
-                  return [`- icon:`, `    source: ${sourceId}`, `    role: icon`, `    use_as_supporting_element: true`, `    overpower_main_subjects: false`];
-                }
-                if (item.asset.type === 'prop') {
-                  return [`- prop:`, `    source: ${sourceId}`, `    role: prop`, `    use_as_supporting_scene_element: true`, `    overpower_main_subjects: false`];
-                }
-                if (item.asset.type === 'mascot') {
-                  return [`- mascot:`, `    source: ${sourceId}`, `    role: mascot`, `    preserve_core_identity: true`, `    must_remain_recognizable: true`, `    use_as_brand_character: true`, `    redesign: false`];
-                }
-                if (item.asset.type === 'texture') {
-                  return [`- texture:`, `    source: ${sourceId}`, `    role: texture`, `    use_as_surface_or_background_texture: true`, `    overpower_main_subjects: false`, `    preserve_exact_layout: false`];
-                }
-                if (item.asset.type === 'illustration') {
-                  return [`- illustration:`, `    source: ${sourceId}`, `    role: illustration`, `    preserve_core_identity: true`, `    use_as_supporting_graphic_element: true`, `    overpower_main_subjects: false`];
-                }
-                return [`- ${role}:`, `    source: ${sourceId}`, `    role: ${role}`];
-              });
-
-              let layoutType = 'general_composite_ad';
-              const primarySubjects: string[] = [];
-              const secondarySubjects: string[] = [];
-              const backgroundAsset = taggedAssets.find((item) => item.asset.type === 'background');
-              const logoAsset = taggedAssets.find((item) => item.asset.type === 'logo');
-              const personAsset = taggedAssets.find((item) => item.asset.type === 'person');
-              const screenshotAsset = taggedAssets.find((item) => item.asset.type === 'screenshot');
-              const productAsset = taggedAssets.find((item) => item.asset.type === 'product');
-
-              frozenVisualAdsScreenshotRef.current = screenshotAsset?.asset.image
-                ? {
-                    imageUrl: String(screenshotAsset.asset.image),
-                    device: screenshotAsset.asset.screenshotDevice || 'iphone',
-                  }
-                : null;
-
-              if (hasPerson && hasScreenshot && hasBackground) {
-                layoutType = 'lifestyle_app_ad';
-              } else if (hasPerson && hasProduct && hasBackground) {
-                layoutType = 'lifestyle_product_ad';
-              } else if (hasPerson && hasBackground && !hasScreenshot && !hasProduct) {
-                layoutType = 'brand_lifestyle_moment';
-              } else if (hasPerson && hasScreenshot && !hasBackground) {
-                layoutType = 'app_ad_without_background';
-              } else if (!hasPerson && hasScreenshot && hasBackground && hasLogo) {
-                layoutType = 'pure_app_product_poster';
-              } else if (!hasPerson && hasProduct && hasBackground) {
-                layoutType = 'product_hero_shot';
-              }
-
-              if (personAsset) primarySubjects.push(getSourceId(taggedAssets.indexOf(personAsset)));
-              if (screenshotAsset) primarySubjects.push(getSourceId(taggedAssets.indexOf(screenshotAsset)));
-              if (!primarySubjects.length && productAsset) primarySubjects.push(getSourceId(taggedAssets.indexOf(productAsset)));
-              if (logoAsset) secondarySubjects.push(getSourceId(taggedAssets.indexOf(logoAsset)));
 
               const allowedText = visualState.creativeSoul.cta === 'custom'
                 ? (customCta ? [customCta] : [])
@@ -2063,202 +1660,171 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                     'subscribe': 'Subscribe',
                   }[visualState.creativeSoul.cta] || ''
                 ].filter(Boolean) : []);
-              const campaignObjective = normalizeShortValue(visualState.campaignDNA.objective);
-
-              const roleAndRules = buildSection('ROLE_AND_RULES', [
-                `- task: Create one premium advertising poster using the uploaded assets and selected settings.`,
-                `- must_follow_tagged_roles: true`,
-                `- must_preserve_exact_person_identity: ${toBool(hasExactPerson)}`,
-                `- must_preserve_reference_person_anchor: ${toBool(hasReferencePerson)}`,
-                `- must_preserve_reference_person_silhouette: ${toBool(hasReferencePerson)}`,
-                `- must_preserve_reference_person_styling: ${toBool(hasReferencePerson)}`,
-                `- must_preserve_reference_pose_direction: ${toBool(hasReferencePerson)}`,
-                `- must_preserve_logo_fidelity: ${toBool(hasLogo)}`,
-                `- must_keep_logo_flat_and_fully_visible: ${toBool(hasTransparentLogo)}`,
-                `- must_preserve_screenshot_fidelity: ${toBool(hasScreenshot)}`,
-                `- must_preserve_background_identity: ${toBool(hasBackground)}`,
-                `- allow_invented_text: false`,
-                `- allow_invented_names: false`,
-                `- allow_invented_testimonials: false`,
-                `- hard_constraints_override_style: true`,
-                `- priority_order:`,
-                `  1. exact_person_identity`,
-                `  2. reference_person_anchor`,
-                `  3. reference_person_silhouette`,
-                `  4. reference_person_styling`,
-                `  5. reference_pose_direction`,
-                `  6. logo_fidelity`,
-                `  7. logo_flat_visibility`,
-                `  8. screenshot_fidelity`,
-                `  9. background_identity`,
-                `  10. composition_clarity`,
-                `  11. campaign_message`,
-                `  12. style_polish`,
-              ]);
-
-              const outputTarget = buildSection('OUTPUT_TARGET', [
-                `- format: ${visualState.campaignDNA.platform || '1:1'}`,
-                `- output_count: 1`,
-                `- output_type: advertising_poster`,
-                `- composition_goal: one_unified_composition`,
-                `- collage_look_allowed: false`,
-                `- quality_level: premium`,
-              ]);
-
-              const imageSources = buildSection('IMAGE_SOURCES', imageSourceLines);
-              const assetDirectives = buildSection('ASSET_DIRECTIVES', assetDirectiveLines);
-
-              const campaignLines = [
-                `- campaign:`,
-                ...(campaignObjective ? [`    objective: ${toQuoted(campaignObjective)}`] : []),
-                `    main_message: ${visualState.creativeSoul.mainMessage === 'custom' ? 'custom' : (topicLabels[visualState.creativeSoul.mainMessage] || 'none')}`,
-                ...(visualState.creativeSoul.mainMessage === 'custom' && customTopic ? [`    main_message_custom_text: ${toQuoted(customTopic)}`] : []),
-                ...(visualState.creativeSoul.mainMessage !== 'custom' && visualState.creativeSoul.mainMessageVariant ? [`    main_message_detail: ${topicVariantLabels[visualState.creativeSoul.mainMessage]?.[visualState.creativeSoul.mainMessageVariant] || visualState.creativeSoul.mainMessageVariant}`] : []),
-                ...(canUseFeatureChips && featureChips.length ? [`    feature_points: [${featureChips.map(toQuoted).join(', ')}]`] : []),
-                ...(allowedText.length ? [`    cta_text: ${toQuoted(allowedText[0])}`] : []),
+              const promptLines: string[] = [];
+              const ratio = visualState.campaignDNA.platform || '1:1';
+              const exactPosterText = [
+                ...(canUseFeatureChips ? featureChips : []),
+                ...allowedText,
               ];
 
-              const compositionLines = [
-                `- composition:`,
-                `    layout_type: ${layoutType}`,
-                `    primary_subjects: ${primarySubjects.length ? `[${primarySubjects.join(', ')}]` : '[]'}`,
-                `    secondary_subjects: ${secondarySubjects.length ? `[${secondarySubjects.join(', ')}]` : '[]'}`,
-                `    background_source: ${backgroundAsset ? getSourceId(taggedAssets.indexOf(backgroundAsset)) : 'none'}`,
-                `    logo_source: ${logoAsset ? getSourceId(taggedAssets.indexOf(logoAsset)) : 'none'}`,
-                `    face_must_remain_visible: ${toBool(Boolean(personAsset))}`,
-                `    device_must_not_block_face: ${toBool(Boolean(personAsset && screenshotAsset))}`,
-                `    must_feel_unified: true`,
-              ];
+              promptLines.push(`Create one premium ${ratio} advertising poster using the ${taggedAssets.length} uploaded images in this exact order.`);
+              promptLines.push(`Use every uploaded image exactly as instructed below.`);
+              promptLines.push(``);
 
-              const styleLines = [
-                `- style:`,
-                `    primary_style: ${visualState.creativeSoul.style === 'custom' ? 'custom' : (styleLabels[visualState.creativeSoul.style] || 'none')}`,
-                ...(visualState.creativeSoul.style === 'custom' && customStyle ? [`    style_custom_text: ${toQuoted(customStyle)}`] : []),
-                ...(visualState.creativeSoul.style !== 'custom' && visualState.creativeSoul.styleVariant ? [`    style_detail: ${styleVariantLabels[visualState.creativeSoul.style]?.[visualState.creativeSoul.styleVariant] || visualState.creativeSoul.styleVariant}`] : []),
-                `    style_can_affect: [lighting, color, typography_mood, graphic_energy]`,
-                `    style_cannot_override: [exact_person_identity, reference_person_anchor, reference_person_silhouette, reference_person_styling, reference_pose_direction, logo_fidelity, logo_flat_visibility, screenshot_fidelity, background_identity]`,
-              ];
+              taggedAssets.forEach((item, index) => {
+                const num = index + 1;
+                const type = item.asset.type;
+                if (type === 'screenshot') {
+                  const device = getScreenshotDevice(item.asset);
+                  const deviceLabel = device === 'samsung' ? 'Samsung Galaxy phone' : device === 'laptop' ? 'laptop' : device === 'tablet' ? 'tablet' : device === 'monitor-tv' ? 'monitor' : device === 'billboard' ? 'billboard' : 'iPhone';
+                  promptLines.push(`Image ${num} is the app screenshot.`);
+                  promptLines.push(`Place this exact screenshot inside a realistic ${deviceLabel} mockup.`);
+                  promptLines.push(`Keep the screenshot UI 100% unchanged.`);
+                  promptLines.push(`Do not redesign it, simplify it, restyle it, crop important parts, translate it, or invent anything inside the screen.`);
+                  promptLines.push(``);
+                  return;
+                }
 
-              const textLines = [
-                `- text:`,
-                `    allowed_text: ${allowedText.length ? `[${allowedText.map(toQuoted).join(', ')}]` : '[]'}`,
-                `    allow_generated_headline: false`,
-                `    allow_generated_tagline: false`,
-                `    allow_generated_social_proof_copy: false`,
-                `    allow_generated_testimonials: false`,
-              ];
+                if (type === 'background') {
+                  promptLines.push(`Image ${num} is the background.`);
+                  promptLines.push(`Use this exact image as the actual base scene of the final poster.`);
+                  promptLines.push(`Build the ad on top of this scene.`);
+                  promptLines.push(`You may enhance lighting, polish, and depth, but keep the same environment, scene identity, and overall visual structure.`);
+                  promptLines.push(``);
+                  return;
+                }
 
-              const scenePlan = buildSection('SCENE_PLAN', [
-                ...campaignLines,
-                ...compositionLines,
-                ...styleLines,
-                ...textLines,
-              ]);
+                if (type === 'person') {
+                  const mode = item.asset.personMode || 'exact';
+                  if (mode === 'reference') {
+                    const style = item.asset.referenceStyle || 'realistic';
+                    if (style === 'character') {
+                      promptLines.push(`Image ${num} is the person reference for the ad character.`);
+                      promptLines.push(`Use this image as a reference to create a stylized character, while keeping the same face direction, facial structure, hair, outfit language, expression energy, and overall silhouette.`);
+                      promptLines.push(`The result should feel like a designed character inspired by the original person, not a direct or realistic reproduction.`);
+                    } else {
+                      promptLines.push(`Image ${num} is a person reference.`);
+                      promptLines.push(`Use this image as the reference for the final person.`);
+                      promptLines.push(`Keep the same face direction, facial structure, hair, outfit, expression energy, and overall silhouette.`);
+                      promptLines.push(`Do not replace them with a different person.`);
+                    }
+                  } else {
+                    const pose = item.asset.exactPersonStyle || 'same-pose';
+                    promptLines.push(`Image ${num} is the real person for this ad.`);
+                    promptLines.push(`Use this exact same person.`);
+                    if (pose === 'upper-body') {
+                      promptLines.push(`Keep the same face, skin tone, outfit, identity, and overall look, but frame them as an upper-body hero shot.`);
+                    } else if (pose === 'adapted-pose') {
+                      promptLines.push(`Keep the same face, skin tone, outfit, identity, and overall look. You may change only the pose.`);
+                    } else {
+                      promptLines.push(`Keep the same face, skin tone, outfit, identity, and overall look. Match the original pose and framing as closely as possible.`);
+                    }
+                    promptLines.push(`Do not replace or recast them.`);
+                  }
+                  promptLines.push(``);
+                  return;
+                }
 
-              const finalPromptForKie = [
-                roleAndRules,
-                outputTarget,
-                imageSources,
-                assetDirectives,
-                scenePlan,
-              ].join('\n\n');
-              const visualAdsSpec = {
-                language: language === 'ar' ? 'ar' : 'en',
-                aspect_ratio: visualState.campaignDNA.platform || '1:1',
-                objective: normalizeShortValue(visualState.campaignDNA.objective) || null,
-                assets: taggedAssets.map((item, index) => ({
-                  source_id: getSourceId(index),
-                  image_ref: `Image ${index + 1}`,
-                  role: getAssetLabel(item.asset),
-                  custom_role: item.asset.customType || null,
-                  person_mode: item.asset.type === 'person' ? (item.asset.personMode || 'exact') : null,
-                  pose_mode: item.asset.type === 'person' && (item.asset.personMode || 'exact') === 'exact' ? (item.asset.exactPersonStyle || 'same-pose') : null,
-                  reference_style: item.asset.type === 'person' && item.asset.personMode === 'reference' ? (item.asset.referenceStyle || 'realistic') : null,
-                  logo_mode: item.asset.type === 'logo' ? (item.asset.logoMode || 'transparent') : null,
-                  screenshot_device: item.asset.type === 'screenshot' ? getScreenshotDevice(item.asset) : null,
-                })),
-                campaign: {
-                  main_message_id: visualState.creativeSoul.mainMessage || null,
-                  main_message_prompt: visualState.creativeSoul.mainMessage === 'custom'
-                    ? customTopic || null
-                    : selectedTopicChip?.prompt || null,
-                  main_message_custom_text: visualState.creativeSoul.mainMessage === 'custom' ? customTopic || null : null,
-                  main_message_detail_id: visualState.creativeSoul.mainMessageVariant || null,
-                  main_message_detail_prompt: selectedTopicVariant?.prompt || null,
-                  feature_chips: canUseFeatureChips ? featureChips : [],
-                  require_exact_feature_chips: canUseFeatureChips && featureChips.length > 0,
-                  cta_id: visualState.creativeSoul.cta || null,
-                  cta_text: allowedText[0] || null,
-                  cta_prompt: selectedCtaChip
-                    ? (language === 'ar' ? selectedCtaChip.labelAr : selectedCtaChip.labelEn)
-                    : null,
-                },
-                style: {
-                  primary_style_id: visualState.creativeSoul.style || null,
-                  primary_style_prompt: visualState.creativeSoul.style === 'custom'
-                    ? customStyle || null
-                    : selectedStyleChip?.prompt || null,
-                  primary_style_custom_text: visualState.creativeSoul.style === 'custom' ? customStyle || null : null,
-                  style_detail_id: visualState.creativeSoul.styleVariant || null,
-                  style_detail_prompt: selectedStyleVariant?.prompt || null,
-                },
-                composition: {
-                  layout_type: layoutType,
-                  primary_subjects: primarySubjects,
-                  secondary_subjects: secondarySubjects,
-                  background_source: backgroundAsset ? getSourceId(taggedAssets.indexOf(backgroundAsset)) : null,
-                  logo_source: logoAsset ? getSourceId(taggedAssets.indexOf(logoAsset)) : null,
-                  face_must_remain_visible: Boolean(personAsset),
-                  device_must_not_block_face: Boolean(personAsset && screenshotAsset),
-                  must_feel_unified: true,
-                },
-                text_policy: {
-                  allowed_text: allowedText,
-                  allowed_feature_labels: canUseFeatureChips ? featureChips : [],
-                  allow_generated_headline: false,
-                  allow_generated_tagline: false,
-                  allow_generated_social_proof_copy: false,
-                  allow_generated_testimonials: false,
-                },
-                hard_constraints: {
-                  must_follow_tagged_roles: true,
-                  must_preserve_exact_person_identity: hasExactPerson,
-                  must_preserve_reference_person_anchor: hasReferencePerson,
-                  must_preserve_reference_person_silhouette: hasReferencePerson,
-                  must_preserve_reference_person_styling: hasReferencePerson,
-                  must_preserve_reference_pose_direction: hasReferencePerson,
-                  must_preserve_logo_fidelity: hasLogo,
-                  must_keep_logo_flat_and_fully_visible: hasTransparentLogo,
-                  must_preserve_screenshot_fidelity: hasScreenshot,
-                  must_preserve_background_identity: hasBackground,
-                  allow_invented_text: false,
-                  allow_invented_names: false,
-                  allow_invented_testimonials: false,
-                  hard_constraints_override_style: true,
-                  priority_order: [
-                    'exact_person_identity',
-                    'reference_person_anchor',
-                    'reference_person_silhouette',
-                    'reference_person_styling',
-                    'reference_pose_direction',
-                    'logo_fidelity',
-                    'logo_flat_visibility',
-                    'screenshot_fidelity',
-                    'background_identity',
-                    'composition_clarity',
-                    'campaign_message',
-                    'style_polish',
-                  ],
-                },
-                legacy_prompt: finalPromptForKie,
-              };
+                if (type === 'logo') {
+                  const logoMode = item.asset.logoMode || 'transparent';
+                  if (logoMode === 'transparent') {
+                    promptLines.push(`Image ${num} is a transparent logo.`);
+                    promptLines.push(`Place it as a clean flat overlay.`);
+                    promptLines.push(`Keep it fully visible, uncropped, and unchanged.`);
+                    promptLines.push(`Do not put it inside a box, badge, or card.`);
+                  } else {
+                    promptLines.push(`Image ${num} is the logo.`);
+                    promptLines.push(`Place it cleanly in the composition and keep it exactly as provided.`);
+                    promptLines.push(`Do not redesign, recolor, distort, or crop it.`);
+                  }
+                  promptLines.push(``);
+                  return;
+                }
+
+                if (type === 'product') {
+                  promptLines.push(`Image ${num} is the hero product.`);
+                  promptLines.push(`Feature it prominently with premium lighting and keep it unchanged.`);
+                  promptLines.push(``);
+                  return;
+                }
+
+                if (type === 'icon') {
+                  promptLines.push(`Image ${num} is a supporting icon.`);
+                  promptLines.push(`Use it as a small supporting graphic accent.`);
+                  promptLines.push(``);
+                  return;
+                }
+
+                if (type === 'prop') {
+                  promptLines.push(`Image ${num} is a supporting prop.`);
+                  promptLines.push(`Integrate it naturally without letting it overpower the main subjects.`);
+                  promptLines.push(``);
+                  return;
+                }
+
+                if (type === 'mascot') {
+                  promptLines.push(`Image ${num} is the brand mascot.`);
+                  promptLines.push(`Keep it recognizable and do not redesign it.`);
+                  promptLines.push(``);
+                  return;
+                }
+
+                if (type === 'texture') {
+                  promptLines.push(`Image ${num} is a texture or surface reference.`);
+                  promptLines.push(`Use it as a supporting texture without overpowering the main subjects.`);
+                  promptLines.push(``);
+                  return;
+                }
+
+                if (type === 'illustration') {
+                  promptLines.push(`Image ${num} is a supporting illustration.`);
+                  promptLines.push(`Use it as a supporting graphic element.`);
+                  promptLines.push(``);
+                  return;
+                }
+
+                promptLines.push(`Image ${num} is a supporting element.`);
+                promptLines.push(`Integrate it naturally into the final poster.`);
+                promptLines.push(``);
+              });
+
+              if (exactPosterText.length) {
+                promptLines.push(`Use only this exact text in the poster:`);
+                exactPosterText.forEach((textLine) => promptLines.push(textLine));
+                promptLines.push(`Do not add any other text, headline, tagline, review, app store badge, or extra copy.`);
+                promptLines.push(``);
+              }
+
+              const hasStyle = visualState.creativeSoul.style && visualState.creativeSoul.style !== 'none';
+              if (hasStyle) {
+                promptLines.push(`Visual style:`);
+                if (visualState.creativeSoul.style === 'custom' && customStyle) {
+                  promptLines.push(customStyle);
+                } else if (selectedStyleVariant?.prompt) {
+                  promptLines.push(selectedStyleVariant.prompt);
+                } else if (selectedStyleChip?.prompt) {
+                  promptLines.push(selectedStyleChip.prompt);
+                }
+                promptLines.push(`Style may affect only lighting, polish, color energy, and composition quality.`);
+                promptLines.push(`Style must not change the screenshot UI, the person, the background, or the logo.`);
+                promptLines.push(``);
+              }
+
+              promptLines.push(`Hard rules:`);
+              if (hasExactPerson) promptLines.push(`Do not change the person's face, skin tone, outfit, or identity.`);
+              if (hasReferencePerson) promptLines.push(`Do not replace the reference person.`);
+              if (hasScreenshot) promptLines.push(`Do not redesign the screenshot.`);
+              if (hasBackground) promptLines.push(`Do not replace the background.`);
+              if (hasLogo) promptLines.push(`Do not redesign the logo.`);
+              if (hasTransparentLogo) promptLines.push(`Do not place the transparent logo inside any box, badge, or card.`);
+              promptLines.push(`Do not invent extra text.`);
+              promptLines.push(`Output one final ${ratio} poster only.`);
+
+              const finalPromptForKie = promptLines.join('\n');
               const validImages = sentAssets.map((item) => item.preparedImage);
 
               const { data: { session } } = await supabase.auth.getSession();
               if (!session?.access_token) throw new Error('Not authenticated');
-
-              const visualAdsRemoteUrls = validImages.filter((image) => typeof image === 'string' && !image.startsWith('data:image/'));
-              const visualAdsDataUris = validImages.filter((image) => typeof image === 'string' && image.startsWith('data:image/'));
               const visualAdsFunctionUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/freepik-visual-ads`;
 
               const res = await fetch(visualAdsFunctionUrl, {
@@ -2268,23 +1834,15 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   'Authorization': `Bearer ${session.access_token}`,
                 },
                 body: JSON.stringify({
-                  mode: 'async',
-                  action: 'create',
-                  generation_type: 'visual_ads',
-                  generationMode: 'visual_ads',
                   images: validImages,
-                  input_urls: visualAdsRemoteUrls,
-                  uploaded_images: visualAdsDataUris,
-                  frontend_compiled_prompt: finalPromptForKie,
                   prompt: finalPromptForKie,
-                  visual_ads_spec: visualAdsSpec,
                   aspect_ratio: visualState.campaignDNA.platform,
                 }),
               });
 
               if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
-                throw new Error(errData.error || 'Failed to start Visual Ads generation');
+                throw new Error(getErrorMessage(errData, 'Failed to start Visual Ads generation'));
               }
 
               const taskData = await res.json();
@@ -2425,7 +1983,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               }
             } catch (err: any) {
               stopProgress();
-              const msg = err?.message || (language === 'ar' ? 'فشل إنشاء الإعلان' : 'Ad generation failed');
+              const msg = getErrorMessage(err, language === 'ar' ? 'فشل إنشاء الإعلان' : 'Ad generation failed');
               setResultError(msg);
               toast.error(msg);
             } finally {

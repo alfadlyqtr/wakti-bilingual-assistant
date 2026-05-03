@@ -439,7 +439,11 @@ serve(async (req) => {
       if (personaModel) kiePayload.personaModel = personaModel;
     }
 
-    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, duration: durationHint, styleLen: style.length, promptLen: effectivePrompt.length });
+    if (customMode && typeof kiePayload.duration !== "number") {
+      throw new Error("Duration was not attached to the outbound KIE payload");
+    }
+
+    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, duration: durationHint, payloadDuration: kiePayload.duration ?? null, styleLen: style.length, promptLen: effectivePrompt.length });
     console.log("[music-generate] KIE payload keys:", Object.keys(kiePayload));
 
     const kieResp = await fetch("https://api.kie.ai/api/v1/generate", {

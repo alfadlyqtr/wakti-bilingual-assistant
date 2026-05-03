@@ -247,7 +247,7 @@ function getDeviceMockupLabel(device: string | null | undefined): string {
   }
 }
 
-function normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
+function _normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
   const record = asRecord(raw) || {};
   const assetsRaw = Array.isArray(record.assets) ? record.assets : [];
   const campaign = asRecord(record.campaign);
@@ -644,46 +644,13 @@ function buildVisualAdsPriorityReinforcement(spec: VisualAdsSpec): string {
   return lines.join("\n").trim();
 }
 
-function compileVisualAdsPrompt(spec: VisualAdsSpec, frontendCompiledPrompt: string): string {
+function _compileVisualAdsPrompt(spec: VisualAdsSpec, frontendCompiledPrompt: string): string {
   const authoritativePrompt = (frontendCompiledPrompt || spec.legacy_prompt || "").trim();
   if (!authoritativePrompt) {
     return compileVisualAdsFallbackPrompt(spec, frontendCompiledPrompt);
   }
 
-  const appendix = buildVisualAdsStructuredAppendix(spec);
-  const reinforcement = buildVisualAdsPriorityReinforcement(spec);
-  const finalLines = [
-    "Create one premium advertising poster using the uploaded assets and approved settings.",
-    "The FRONTEND_COMPILED_BRIEF below is authoritative.",
-    "Do not remove, weaken, reinterpret, or override any rule from the frontend compiled brief.",
-    "Use any structured appendix only as supporting context. If anything conflicts, the frontend compiled brief wins.",
-    "",
-    "FRONTEND_COMPILED_BRIEF",
-    authoritativePrompt,
-  ];
-
-  if (reinforcement) {
-    finalLines.push(
-      "",
-      "BACKEND_PRIORITY_REINFORCEMENT",
-      "These lines restate the highest-priority structured constraints. They are mandatory unless the frontend compiled brief says otherwise.",
-      reinforcement,
-    );
-  }
-
-  if (appendix) {
-    finalLines.push("", appendix);
-  }
-
-  finalLines.push(
-    "",
-    "FINAL_OUTPUT_REQUIREMENTS",
-    "- output_count: 1",
-    "- output_type: premium advertising poster",
-    `- aspect_ratio: ${spec.aspect_ratio || "1:1"}`,
-  );
-
-  return finalLines.join("\n").trim();
+  return authoritativePrompt;
 }
 
 function sanitizeImageUrl(url: string): string {
@@ -780,32 +747,6 @@ async function persistVisualAdsCompletion(serviceClient: any, taskId: string, us
     .update(updatePayload)
     .eq("task_id", taskId)
     .eq("user_id", userId);
-
-  if (status !== "COMPLETED" || !resultUrls.length) return;
-
-  for (const [resultIndex, url] of resultUrls.entries()) {
-    const { data: existing } = await serviceClient
-      .from("user_generated_images")
-      .select("id")
-      .eq("user_id", userId)
-      .contains("meta", { visual_ads_task_id: taskId, visual_ads_result_index: resultIndex })
-      .maybeSingle();
-
-    if (existing) continue;
-
-    const storagePath = url.split("/generated-images/")[1];
-    await serviceClient.from("user_generated_images").insert({
-      user_id: userId,
-      image_url: url,
-      submode: "visual-ads",
-      quality: KIE_VISUAL_ADS_MODEL,
-      meta: {
-        storage_path: storagePath ? decodeURIComponent(storagePath) : null,
-        visual_ads_task_id: taskId,
-        visual_ads_result_index: resultIndex,
-      },
-    });
-  }
 }
 
 async function getTaskStatus(taskId: string, serviceClient?: any, userId?: string): Promise<TaskStatusData> {
@@ -867,7 +808,7 @@ async function getTaskStatus(taskId: string, serviceClient?: any, userId?: strin
   };
 }
 
-async function checkAndConsumeTrialToken(serviceClient: any, userId: string, featureKey: TrialFeatureKey, maxLimit: number): Promise<boolean> {
+async function _checkAndConsumeTrialToken(serviceClient: any, userId: string, featureKey: TrialFeatureKey, maxLimit: number): Promise<boolean> {
   const { data: profile, error: fetchError } = await serviceClient
     .from("profiles")
     .select("trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at")
@@ -918,9 +859,7 @@ serve(async (req) => {
     const authedClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const serviceClient = createClient(supabaseUrl, supabaseServiceKey);
-    const authedDb: any = authedClient;
-    const serviceDb: any = serviceClient;
+    const serviceDb: any = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: { user }, error: authError } = await authedClient.auth.getUser();
     if (authError || !user) {
@@ -930,7 +869,7 @@ serve(async (req) => {
       });
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const mode = typeof body?.mode === "string" ? body.mode : "async";
 
     if (mode === "status") {
@@ -947,49 +886,10 @@ serve(async (req) => {
       });
     }
 
-    const trialAllowed = await checkAndConsumeTrialToken(serviceDb, user.id, "i2v", 1);
-    if (!trialAllowed) {
-      return new Response(JSON.stringify({ error: "TRIAL_LIMIT_REACHED", feature: "i2v" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const { data: quotaCheck, error: quotaError } = await authedDb.rpc("can_generate_ai_video", {
-      p_user_id: user.id,
-    });
-    if (quotaError) {
-      return new Response(JSON.stringify({ error: "Failed to check quota" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const quota = quotaCheck?.[0] || quotaCheck;
-    if (!quota?.can_generate) {
-      return new Response(JSON.stringify({
-        error: "Monthly AI video limit reached",
-        quota: {
-          used: quota?.videos_generated || 0,
-          limit: quota?.videos_limit || 60,
-          extra: quota?.extra_videos || 0,
-        },
-      }), {
-        status: 429,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     const imageList = Array.isArray(body?.images)
       ? body.images.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
       : [];
-    const fallbackUrls = Array.isArray(body?.input_urls)
-      ? body.input_urls.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
-      : [];
-    const fallbackUploaded = Array.isArray(body?.uploaded_images)
-      ? body.uploaded_images.filter((value: unknown): value is string => typeof value === "string" && value.length > 0)
-      : [];
-    const rawImages = imageList.length ? imageList : [...fallbackUrls, ...fallbackUploaded];
+    const rawImages = imageList;
 
     if (!rawImages.length) {
       return new Response(JSON.stringify({ error: "Missing images for visual ads" }), {
@@ -1014,12 +914,16 @@ serve(async (req) => {
       }
     }
 
-    const spec = normalizeVisualAdsSpec(body?.visual_ads_spec);
-    const frontendCompiledPrompt = typeof body?.frontend_compiled_prompt === "string"
-      ? sanitizeUserInput(body.frontend_compiled_prompt, 20000)
-      : (typeof body?.prompt === "string" ? sanitizeUserInput(body.prompt, 20000) : "");
-    const finalPrompt = compileVisualAdsPrompt(spec, frontendCompiledPrompt);
-    const aspectRatio = ["1:1", "16:9", "9:16"].includes(body?.aspect_ratio || "") ? body.aspect_ratio : (spec.aspect_ratio || "1:1");
+    const finalPrompt = typeof body?.prompt === "string"
+      ? sanitizeUserInput(body.prompt, 20000)
+      : "";
+    if (!finalPrompt) {
+      return new Response(JSON.stringify({ error: "Missing prompt for visual ads" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const aspectRatio = ["1:1", "16:9", "9:16"].includes(body?.aspect_ratio || "") ? body.aspect_ratio : "1:1";
     const callbackUrl = `${supabaseUrl}/functions/v1/webhook-visual-ads`;
 
     const requestBody = {
@@ -1027,7 +931,6 @@ serve(async (req) => {
       input: {
         prompt: finalPrompt,
         input_urls: imageUrls,
-        image_urls: imageUrls,
         aspect_ratio: aspectRatio,
         resolution: "1K",
       },

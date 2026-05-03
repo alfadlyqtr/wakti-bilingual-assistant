@@ -63,6 +63,7 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 import { toast } from "sonner";
 import { getScopedStorageItem, migrateLegacyScopedStorage, removeScopedStorageItem, setActiveScopedUserId, setScopedStorageItem } from "@/utils/userScopedStorage";
+import { buildWaktiAgentHref } from "@/utils/waktiAgent";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
 const ALL_APPS = [
@@ -122,11 +123,11 @@ const LS_HSBG_KEY         = () => lsKey(_cachedUid(), LS_HSBG_BASE);
 const LS_BG_CHOICE_KEY    = () => lsKey(_cachedUid(), LS_BG_CHOICE_BASE);
 
 // Widget IDs used in the unified grid
-const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
+const WIDGET_IDS = ['showAgentWidget','showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
 type BgChoice = 'default' | 'wallpaper' | 'style';
-const DEFAULT_HS_WIDGETS = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
+const DEFAULT_HS_WIDGETS = { showNavWidget: false, showAgentWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
 
 // ── Strict Hardcoded Grid Layout using grid-template-areas ──
 // 3 big rows x 2 big cols = 24 cells.
@@ -1233,18 +1234,74 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   const maw3dAccent = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 2 ? '#22c55e' : '#f59e0b';
   const maw3dBg     = upcomingCount === 0 ? 'linear-gradient(135deg,#374151,#6b7280)' : upcomingCount <= 2 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#b45309,#f59e0b)';
   const labelColor  = isDark || hasBg ? '#ffffff' : '#060541';
+
   const now         = new Date();
   const dayNum      = now.getDate();
-  const dayShort    = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'short' });
   const dayLong     = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' });
   const monthShort  = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
-  
-  // Real WHOOP Data logic
+  const agentHref   = buildWaktiAgentHref({ intent: pendingTasks > 0 ? 'plan-day' : upcomingCount > 0 ? 'prepare-event' : 'ask', source: 'home' });
+  const agentTitle  = language === 'ar' ? 'وكيل وكتي' : 'Wakti Agent';
+  const todayKey    = now.toISOString().slice(0, 10);
+  const todayStart  = new Date(`${todayKey}T00:00:00`);
+  const safeReminders = Array.isArray(reminders) ? reminders : [];
+  const safeEvents = Array.isArray(maw3dEvents) ? maw3dEvents : [];
+  const reminderMoment = (item: any) => {
+    try {
+      if (!item?.due_date) return null;
+      return new Date(`${item.due_date}T${item.due_time || '23:59:59'}`);
+    } catch {
+      return null;
+    }
+  };
+  const upcomingEventsList = safeEvents
+    .filter((event: any) => {
+      try { return new Date(event.event_date) >= todayStart; } catch { return false; }
+    })
+    .sort((a: any, b: any) => `${a.event_date} ${a.start_time || '23:59:59'}`.localeCompare(`${b.event_date} ${b.start_time || '23:59:59'}`));
+  const nextEvent = upcomingEventsList[0];
+  const todayEventsCount = upcomingEventsList.filter((event: any) => event.event_date === todayKey).length;
+  const overdueReminders = safeReminders
+    .filter((item: any) => {
+      const when = reminderMoment(item);
+      return when ? when.getTime() < now.getTime() : false;
+    })
+    .sort((a: any, b: any) => {
+      const aTime = reminderMoment(a)?.getTime() ?? 0;
+      const bTime = reminderMoment(b)?.getTime() ?? 0;
+      return aTime - bTime;
+    });
+  const nextEventTime = nextEvent?.start_time ? nextEvent.start_time.slice(0, 5) : null;
+  const statusLine = overdueReminders.length > 0
+    ? (language === 'ar'
+        ? `${overdueReminders.length} ${overdueReminders.length === 1 ? 'تذكير متأخر' : 'تذكيرات متأخرة'}`
+        : `${overdueReminders.length} overdue reminder${overdueReminders.length === 1 ? '' : 's'}`)
+    : todayEventsCount > 0 && nextEvent
+      ? (language === 'ar'
+          ? `الموعد التالي اليوم: ${nextEvent.title}${nextEventTime ? ` • ${nextEventTime}` : ''}`
+          : `Next event today: ${nextEvent.title}${nextEventTime ? ` • ${nextEventTime}` : ''}`)
+      : pendingTasks > 0
+        ? (language === 'ar'
+            ? `${pendingTasks} ${pendingTasks === 1 ? 'مهمة تحتاج انتباهك' : 'مهام تحتاج انتباهك'}`
+            : `${pendingTasks} task${pendingTasks === 1 ? '' : 's'} need attention`)
+        : (language === 'ar' ? 'لا يوجد شيء عاجل الآن' : 'No urgent items right now');
+  const nextActionLine = overdueReminders.length > 0
+    ? (language === 'ar'
+        ? `راجع ${overdueReminders[0]?.title || 'التذكير المتأخر'}`
+        : `Review ${overdueReminders[0]?.title || 'the overdue reminder'}`)
+    : todayEventsCount > 0 && nextEvent
+      ? (language === 'ar'
+          ? `جهّز ${nextEvent.title}`
+          : `Prep ${nextEvent.title}`)
+      : pendingTasks > 0
+        ? (language === 'ar'
+            ? `رتّب ${pendingTasks} ${pendingTasks === 1 ? 'مهمة' : 'مهام'} اليوم`
+            : `Plan ${pendingTasks} ${pendingTasks === 1 ? 'task' : 'tasks'} today`)
+        : (language === 'ar' ? 'افتح الوكيل لطلب جديد' : 'Open the agent for anything new');
+
   const recovery = whoopData?.recovery ?? null;
   const strain   = whoopData?.strain ?? null;
   const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
-  
-  // Shared widget shell: full-bleed gradient background, rounded corners, glow
+
   const shell = (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => (
     <div
       onClick={editMode ? undefined : onClick}
@@ -1258,13 +1315,40 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
         border: hasBg ? '0.5px solid rgba(255,255,255,0.22)' : '0.5px solid rgba(180,190,200,0.12)',
       }}
     >
-      {/* Frosted tint layer when any wallpaper/bg is active — subtle dark for readability */}
       {hasBg && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.18)' }} />}
-      {/* Background layer — tinted accent, translucent */}
       <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? 0.3 : 0.06 }} />
-      {/* Frosted glass shimmer overlay */}
       <div className="absolute inset-0 pointer-events-none" style={{ background: hasBg ? 'linear-gradient(145deg, rgba(255,255,255,0.1) 0%, transparent 50%)' : 'linear-gradient(145deg, rgba(255,255,255,0.02) 0%, transparent 60%)' }} />
       <div className="relative z-10 w-full h-full">{children}</div>
+    </div>
+  );
+
+  if (wKey === 'showAgentWidget') return shell(
+    'linear-gradient(145deg,rgba(6,5,65,0.95) 0%,rgba(15,23,42,0.96) 45%,rgba(8,47,73,0.92) 100%)',
+    '#38bdf8',
+    () => navigate(agentHref),
+    <div className="flex h-full flex-col justify-between p-4">
+      <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-cyan-100">
+        <Sparkles className="w-3.5 h-3.5 text-cyan-200" strokeWidth={2.2} />
+        <span>{language === 'ar' ? 'وكيل وكتي' : 'WAKTI AGENT'}</span>
+      </div>
+
+      <div className="space-y-2">
+        <div className="space-y-1">
+          <p className="text-[17px] font-black leading-tight text-white">{agentTitle}</p>
+          <p className="text-[12px] font-semibold leading-snug text-white/88">{statusLine}</p>
+        </div>
+        <p className="max-w-[92%] text-[11px] font-medium leading-snug text-cyan-100/82">{nextActionLine}</p>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
+        <div className="min-w-0">
+          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-cyan-200/85">{language === 'ar' ? 'الإجراء التالي' : 'Next action'}</p>
+          <p className="mt-0.5 truncate text-[10px] font-semibold text-white/82">{nextActionLine}</p>
+        </div>
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[linear-gradient(135deg,rgba(233,206,176,0.96)_0%,rgba(245,223,197,0.98)_100%)] shadow-[0_8px_20px_rgba(233,206,176,0.22)]">
+          <span className="text-[13px] font-black text-[#060541]">↗</span>
+        </div>
+      </div>
     </div>
   );
 
@@ -1279,38 +1363,6 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   if (wKey === 'showMaw3dWidget') {
     return <Maw3dWidget shell={shell} navigate={navigate} language={language} events={maw3dEvents ?? []} attendingCounts={attendingCounts ?? {}} />;
   }
-
-  if (wKey === '__DEAD_showMaw3dWidget__') return shell(
-    maw3dAccent === '#22c55e'
-      ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)'
-      : maw3dAccent === '#f59e0b'
-      ? 'linear-gradient(145deg,rgba(120,53,15,0.7) 0%,rgba(146,64,14,0.7) 40%,rgba(180,83,9,0.7) 100%)'
-      : 'linear-gradient(145deg,rgba(30,27,75,0.7) 0%,rgba(49,46,129,0.7) 40%,rgba(67,56,202,0.7) 100%)',
-    maw3dAccent,
-    () => navigate('/maw3d'),
-    <div className="p-4 flex flex-col justify-between h-full">
-      <div className="flex items-start justify-between">
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
-          <Clock className="w-6 h-6 text-white" strokeWidth={2} />
-        </div>
-        <div className="text-right">
-          <span className="text-4xl font-black tabular-nums text-white leading-none">{upcomingCount === 0 ? '0' : upcomingCount}</span>
-          <p className="text-[9px] font-bold text-white/50 uppercase tracking-wider">{language === 'ar' ? 'مواعيد' : 'events'}</p>
-        </div>
-      </div>
-      {/* Mini event dots */}
-      <div>
-        <div className="flex gap-1 mb-2">
-          {Array.from({ length: Math.min(upcomingCount, 5) }).map((_, i) => (
-            <div key={i} className="w-2 h-2 rounded-full" style={{ background: maw3dAccent === '#6b7280' ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.7)' }} />
-          ))}
-          {upcomingCount === 0 && <div className="w-2 h-2 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }} />}
-        </div>
-        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'مواعيد' : 'Maw3d'}</p>
-        <p className="text-[11px] font-semibold mt-0.5" style={{ color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{upcomingCount === 0 ? (language === 'ar' ? 'لا مواعيد 📭' : 'All clear 📭') : upcomingCount <= 2 ? (language === 'ar' ? 'مجدولة ✓' : 'scheduled ✓') : (language === 'ar' ? 'مشغول 🔥' : 'busy 🔥')}</p>
-      </div>
-    </div>
-  );
 
   if (wKey === 'showNavWidget') return shell(
     'linear-gradient(145deg,rgba(12,74,110,0.7) 0%,rgba(7,89,133,0.7) 40%,rgba(2,132,199,0.7) 100%)',
@@ -1333,95 +1385,9 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     </div>
   );
 
-  if (wKey === 'showVitalityWidget') { return <VitalityWidget shell={shell} language={language} navigate={navigate} whoopData={whoopData} />; }
-
-  if (wKey === 'showWhoopWidget_REMOVED') {
-    const bgGradient = recovery 
-      ? (recovery >= 67 
-          ? 'linear-gradient(145deg,rgba(6,78,59,0.7) 0%,rgba(6,95,70,0.7) 40%,rgba(4,120,87,0.7) 100%)' 
-          : recovery >= 34 
-            ? 'linear-gradient(145deg,rgba(120,53,15,0.7) 0%,rgba(146,64,14,0.7) 40%,rgba(180,83,9,0.7) 100%)' 
-            : 'linear-gradient(145deg,rgba(127,29,29,0.7) 0%,rgba(153,27,27,0.7) 40%,rgba(185,28,28,0.7) 100%)')
-      : 'rgba(0,0,0,0.7)'; // Default dark background if no data
-
-    return shell(
-      bgGradient,
-      recColor,
-      () => navigate('/fitness'),
-      <div className="p-4 flex flex-col justify-between h-full">
-        <div className="flex items-start justify-between">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.2)', backdropFilter: 'blur(8px)' }}>
-            <Activity className="w-6 h-6 text-white" strokeWidth={2} />
-          </div>
-          <div className="text-right">
-            <span className="text-4xl font-black text-white leading-none tabular-nums" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.4)' }}>
-              {recovery !== null ? `${recovery}%` : '♥'}
-            </span>
-            {recovery !== null && (
-              <p className="text-[9px] font-bold text-white/50 uppercase tracking-wider">{language === 'ar' ? 'استشفاء' : 'Recovery'}</p>
-            )}
-          </div>
-        </div>
-        {/* Animated EKG-style bar or Strain data */}
-        <div>
-          {recovery !== null ? (
-            <div className="mb-1">
-              <div className="flex justify-between items-end mb-1">
-                <span className="text-[10px] text-white/70 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
-                <span className="text-[12px] text-white font-bold">{strain !== null ? strain : '--'}</span>
-              </div>
-              <div className="w-full h-1.5 bg-white/20 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-white/90 rounded-full" 
-                  style={{ width: `${Math.min(((strain || 0) / 21) * 100, 100)}%` }} 
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-end gap-0.5 mb-2 h-6">
-              {[3,5,2,7,4,8,3,6,2,5,3,4].map((h, i) => (
-                <div key={i} className="flex-1 rounded-sm" style={{ height: `${h * 10}%`, background: i === 7 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)' }} />
-              ))}
-            </div>
-          )}
-          <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>WHOOP</p>
-          <p className="text-[11px] font-semibold mt-0.5 text-white/80" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>
-            {recovery !== null 
-              ? (language === 'ar' ? 'تم التحديث' : 'Updated') 
-              : (language === 'ar' ? 'الحيوية والنشاط' : 'Vitality & fitness')}
-          </p>
-        </div>
-      </div>
-    );
+  if (wKey === 'showVitalityWidget') {
+    return <VitalityWidget shell={shell} language={language} navigate={navigate} whoopData={whoopData} />;
   }
-
-  if (wKey === 'showHealthKitWidget_REMOVED') return shell(
-    'linear-gradient(145deg,rgba(22,163,74,0.7) 0%,rgba(34,197,94,0.7) 40%,rgba(74,222,128,0.7) 100%)',
-    '#22c55e',
-    () => navigate('/fitness'),
-    <div className="p-4 flex flex-col justify-between h-full">
-      <div className="flex items-start justify-between">
-        <div className="w-11 h-11 rounded-2xl flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.25)', backdropFilter: 'blur(8px)' }}>
-          <Heart className="w-6 h-6 text-white" strokeWidth={2.5} fill="white" />
-        </div>
-        <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center backdrop-blur-md border border-white/10">
-          <Heart className="w-5 h-5 text-white" strokeWidth={3} />
-        </div>
-      </div>
-      <div>
-        <div className="flex gap-1.5 mb-2 items-end h-8">
-          {['S','M','T','W','T','F','S'].map((d, i) => (
-            <div key={i} className="flex-1 flex flex-col justify-end gap-1 group">
-               <div className="w-full bg-white/40 rounded-t-sm transition-all group-hover:bg-white/60" style={{ height: `${[40,60,30,80,50,90,45][i]}%` }}></div>
-               <span className="text-[7px] text-white/60 text-center font-bold">{d}</span>
-            </div>
-          ))}
-        </div>
-        <p className="text-[15px] font-black text-white leading-tight" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.5)' }}>{language === 'ar' ? 'صحتي' : 'HealthKit'}</p>
-        <p className="text-[11px] font-semibold mt-0.5 text-white/90" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.4)' }}>{language === 'ar' ? 'نشاط أبل' : 'Apple Health'}</p>
-      </div>
-    </div>
-  );
 
   if (wKey === 'showJournalWidget') {
     return <JournalWidget shell={shell} navigate={navigate} language={language} journalData={journalData} />;
@@ -1432,7 +1398,6 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
     '#6366f1',
     () => { if (onExpandQuote) onExpandQuote(); },
     <div className="p-2.5 flex flex-col h-full justify-between" key={`${quoteText}-${quoteAuthor}`}>
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.4)' }}>
@@ -1444,9 +1409,10 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
           {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-full" style={{ background: `rgba(99,102,241,${0.3 + i * 0.25})` }} />)}
         </div>
       </div>
-      {/* Quote body */}
       <div className="relative flex-1 flex flex-col justify-center">
-        <span className="absolute top-0 left-0 text-[40px] font-serif leading-none select-none" style={{ color: 'rgba(99,102,241,0.22)', lineHeight: 1 }}>"</span>
+        <span className="absolute top-0 left-0 text-[40px] font-serif leading-none select-none" style={{ color: 'rgba(99,102,241,0.22)', lineHeight: 1 }}>
+          "
+        </span>
         <p
           className="text-[12px] italic leading-snug text-white/90 line-clamp-3 px-3 pt-2"
           style={{ textShadow: '0 1px 6px rgba(0,0,0,0.6)' }}
@@ -1455,7 +1421,6 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
           {quoteText || '...'}
         </p>
       </div>
-      {/* Author pill */}
       <div className="flex justify-end">
         {quoteAuthor && (
           <div className="px-2 py-0.5 rounded-full" style={{ background: 'rgba(99,102,241,0.25)', border: '1px solid rgba(99,102,241,0.4)' }}>
@@ -1469,7 +1434,6 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   return null;
 }
 
-// ─── Sortable widget cell ────────────────────────────────────────────────────
 interface UnifiedWidgetCellProps {
   id: string; wKey: WidgetId; editMode: boolean; language: string; theme: string;
   hasBg: boolean; statCardBase: string; statLblColor: string;
@@ -1525,7 +1489,6 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
   );
 }
 
-// ─── Sortable app cell ──────────────────────────────────────────────────────
 interface UnifiedAppCellProps {
   id: string; app: typeof ALL_APPS[0]; editMode: boolean;
   language: string; isDark: boolean; glowEnabled: boolean;
@@ -1566,7 +1529,6 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
   );
 }
 
-// ─── Empty slot (sortable target in edit mode / active drag) ─────────────────
 function EmptySlotCell({ id, gridArea, isWidget, editMode }: { id: string; gridArea: string; isWidget: boolean; editMode: boolean }) {
   const { setNodeRef, isOver } = useSortable({ id, data: { type: 'unified' } });
   return (
@@ -1580,171 +1542,15 @@ function EmptySlotCell({ id, gridArea, isWidget, editMode }: { id: string; gridA
   );
 }
 
-// ─── Quote Overlay with per-character smoke reveal ────────────────────────────
-function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: {
-  quoteText: string; quoteAuthor: string; language: string;
-  onClose: () => void; exiting: boolean;
-}) {
-  const [visibleCount, setVisibleCount] = React.useState(0);
-  const [authorVisible, setAuthorVisible] = React.useState(false);
-  const chars = quoteText.split('');
-  const CHAR_DELAY = 22; // ms per character
-
-  React.useEffect(() => {
-    if (exiting) return;
-    setVisibleCount(0);
-    setAuthorVisible(false);
-    let i = 0;
-    const tick = () => {
-      i++;
-      setVisibleCount(i);
-      if (i < chars.length) {
-        setTimeout(tick, CHAR_DELAY);
-      } else {
-        setTimeout(() => setAuthorVisible(true), 320);
-      }
-    };
-    const startDelay = setTimeout(tick, 180);
-    return () => clearTimeout(startDelay);
-  }, [quoteText, exiting]);
-
+function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: { quoteText: string; quoteAuthor: string; language: string; onClose: () => void; exiting: boolean; }) {
   return (
-    <>
-      <style>{`
-        @keyframes qo-bg-in  { from { opacity:0 } to { opacity:1 } }
-        @keyframes qo-bg-out { from { opacity:1 } to { opacity:0 } }
-        @keyframes qo-char   {
-          0%   { opacity:0; filter:blur(18px) brightness(2.2); transform:scale(1.35) translateY(6px); }
-          45%  { opacity:1; filter:blur(3px)  brightness(1.4); transform:scale(1.06) translateY(-1px); }
-          100% { opacity:1; filter:blur(0)    brightness(1);   transform:scale(1)    translateY(0); }
-        }
-        @keyframes qo-author {
-          0%   { opacity:0; filter:blur(10px); transform:translateY(14px) scale(0.92); }
-          60%  { opacity:1; filter:blur(1px);  transform:translateY(-2px) scale(1.02); }
-          100% { opacity:1; filter:blur(0);    transform:translateY(0)    scale(1); }
-        }
-        @keyframes qo-out {
-          0%   { opacity:1; filter:blur(0); }
-          100% { opacity:0; filter:blur(22px); transform:scale(1.06); }
-        }
-        @keyframes qo-mark {
-          0%   { opacity:0; transform:scale(4) translateY(-20px); filter:blur(28px); }
-          65%  { opacity:0.09; transform:scale(1.04); filter:blur(0); }
-          100% { opacity:0.055; transform:scale(1) translateY(0); filter:blur(0); }
-        }
-      `}</style>
-
-      {/* Backdrop */}
-      <div
-        onClick={onClose}
-        style={{
-          position:'fixed', inset:0, zIndex:200,
-          background:'rgba(3,3,6,0.88)',
-          backdropFilter:'blur(40px) saturate(140%)',
-          WebkitBackdropFilter:'blur(40px) saturate(140%)',
-          animation:`${exiting ? 'qo-bg-out' : 'qo-bg-in'} 0.4s ease forwards`,
-        }}
-      />
-
-      {/* Ghost " watermark */}
-      <div style={{
-        position:'fixed', zIndex:201,
-        top:'50%', left:'50%',
-        transform:'translate(-40%, -60%)',
-        fontSize:220, lineHeight:0.75,
-        color:'rgba(255,255,255,0.055)',
-        fontFamily:'Georgia, serif',
-        userSelect:'none', pointerEvents:'none',
-        animation: exiting ? 'qo-out 0.35s ease forwards' : 'qo-mark 1s cubic-bezier(0.34,1.2,0.64,1) 0.08s both',
-      }}>"</div>
-
-      {/* Centered text container */}
-      <div
-        onClick={onClose}
-        style={{
-          position:'fixed', inset:0, zIndex:202,
-          display:'flex', flexDirection:'column',
-          alignItems:'center', justifyContent:'center',
-          padding:'0 2.25rem',
-          pointerEvents:'all',
-        }}
-      >
-        {/* Per-character smoke reveal */}
-        <p
-          dir={language === 'ar' ? 'rtl' : 'ltr'}
-          style={{
-            fontSize:'clamp(19px, 5.2vw, 27px)',
-            fontStyle:'italic',
-            fontWeight:300,
-            lineHeight:1.72,
-            textAlign:'center',
-            maxWidth:460,
-            margin:0,
-            wordBreak:'break-word',
-            animation: exiting ? 'qo-out 0.38s ease forwards' : undefined,
-          }}
-        >
-          {chars.map((ch, i) => (
-            <span
-              key={i}
-              style={{
-                display: 'inline',
-                whiteSpace: ch === ' ' ? 'pre' : undefined,
-                color: 'rgba(255,255,255,0.95)',
-                textShadow: '0 0 40px rgba(255,255,255,0.35), 0 2px 16px rgba(0,0,0,0.9)',
-                opacity: i < visibleCount ? 1 : 0,
-                animation: i < visibleCount
-                  ? `qo-char 0.55s cubic-bezier(0.22,1,0.36,1) both`
-                  : undefined,
-              }}
-            >
-              {ch}
-            </span>
-          ))}
-        </p>
-
-        {/* Author — appears after all chars */}
-        {quoteAuthor && authorVisible && (
-          <p style={{
-            marginTop:'2.2rem',
-            fontSize:12,
-            fontWeight:600,
-            color:'rgba(255,255,255,0.32)',
-            letterSpacing:'0.14em',
-            textTransform:'uppercase',
-            animation: exiting ? 'qo-out 0.25s ease forwards' : 'qo-author 0.7s cubic-bezier(0.34,1.3,0.64,1) both',
-          }}>
-            — {quoteAuthor}
-          </p>
-        )}
-
-        {/* Close button — below the quote */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onClose(); }}
-          aria-label={language === 'ar' ? 'إغلاق' : 'Close'}
-          style={{
-            marginTop: '2.8rem',
-            width: 38,
-            height: 38,
-            borderRadius: '50%',
-            border: '1.5px solid rgba(255,255,255,0.28)',
-            background: 'rgba(255,255,255,0.1)',
-            color: '#ffffff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 18,
-            cursor: 'pointer',
-            flexShrink: 0,
-            zIndex: 9999,
-            padding: 0,
-            animation: exiting ? 'qo-out 0.2s ease forwards' : 'qo-author 0.6s ease 0.8s both',
-          }}
-        >
-          ✕
-        </button>
+    <div className={`fixed inset-0 z-[200] flex items-center justify-center px-8 transition-opacity duration-300 ${exiting ? 'opacity-0' : 'opacity-100'}`} onClick={onClose}>
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-xl" />
+      <div className="relative max-w-md text-center" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <p className="text-[clamp(19px,5.2vw,27px)] italic font-light leading-[1.72] text-white/95">{quoteText}</p>
+        {quoteAuthor ? <p className="mt-4 text-sm text-white/60">— {quoteAuthor}</p> : null}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -1827,7 +1633,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     return savedBg && savedBg !== DEFAULT_BG_DARK && savedBg !== DEFAULT_BG_LIGHT ? 'wallpaper' : 'default';
   });
 
-  // Homescreen background style from Settings — cached in localStorage for instant restore
   const [hsBgActive, setHsBgActive] = useState<boolean>(() => {
     const savedChoice = localStorage.getItem(LS_BG_CHOICE_KEY()) as BgChoice | null;
     if (savedChoice === 'style') return true;
@@ -1851,7 +1656,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   });
   const [activeId,        setActiveId]        = useState<string | null>(null);
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
-  const [dockColor,        setDockColor]        = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)) || ''; } catch { return ''; } });
+  const [dockColor,       setDockColor]       = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)) || ''; } catch { return ''; } });
   const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
   const [bgGradPicker,    setBgGradPicker]    = useState(false);
   const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_left')) || ''; } catch { return ''; } });
@@ -1873,9 +1678,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
   }).length;
 
-  // Widget visibility for homescreen stats — cached in localStorage for instant restore
   const [hsWidgets, setHsWidgets] = useState(() => {
-    const defaults = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
+    const defaults = { showNavWidget: false, showAgentWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
     try {
       const cached = JSON.parse(localStorage.getItem(LS_WIDGETS_KEY()) || 'null');
       if (cached && typeof cached === 'object') return { ...defaults, ...cached };
@@ -1883,7 +1687,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     return defaults;
   });
 
-  // Unified grid: ordered list of "widget::KEY" and "app::ID" items
   const [unifiedGrid, setUnifiedGrid] = useState<string[]>(() => {
     try {
       const raw = JSON.parse(localStorage.getItem(LS_UNIFIED_KEY()) || 'null');
@@ -1897,19 +1700,16 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     else                   setGreeting(h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening");
   }, [language]);
 
-  // ── Write LS_ACTIVE_USER when user is known so scoped keys resolve correctly ──
   useEffect(() => {
     if (!user?.id) return;
     const prevUid = localStorage.getItem(LS_ACTIVE_USER);
     if (prevUid === user.id) return;
-    // Different user — clear ALL old cached keys so they don't bleed through
     if (prevUid) {
       [LS_ORDER_BASE,LS_DOCK_BASE,LS_QUOTE_BASE,LS_BG_BASE,LS_BG_POS_Y_BASE,LS_HEADER_COLOR_BASE,LS_UNIFIED_BASE,LS_WIDGETS_BASE,LS_HSBG_BASE,LS_BG_CHOICE_BASE]
         .forEach(base => localStorage.removeItem(lsKey(prevUid, base)));
     }
     setActiveScopedUserId(user.id);
     migrateLegacyScopedStorage('vitality_widget_tab', user.id, 'vitality_widget_tab');
-    // Reset state to defaults so the new user starts clean until Supabase loads
     setDockIds(sanitizeDock(DEFAULT_DOCK));
     setIconOrder(sanitizeOrder(DEFAULT_ORDER));
     setShowQuote(true);
@@ -1925,7 +1725,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   useEffect(() => { setQuote(getQuoteForDisplay()); }, []);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(iconOrder)); }, [iconOrder, user?.id]);
-  useEffect(() => { if (user?.id) localStorage.setItem(LS_DOCK_KEY(),  JSON.stringify(dockIds));  }, [dockIds, user?.id]);
+  useEffect(() => { if (user?.id) localStorage.setItem(LS_DOCK_KEY(), JSON.stringify(dockIds)); }, [dockIds, user?.id]);
 
   const clearSaveStateTimer = useCallback(() => {
     if (saveStateTimerRef.current !== null) {
@@ -1989,10 +1789,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     }
   }, [clearSaveStateTimer, reportSaveError, settleSaveState, user]);
 
-  // Load homescreenWidgets from Supabase and clamp to max 3
   const clampHsWidgets = (raw: Record<string, boolean>) => {
     const result = { ...raw, showNavWidget: false } as typeof hsWidgets;
-    const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
+    const VISIBLE: (keyof typeof hsWidgets)[] = ['showAgentWidget','showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
     let count = 0;
     for (const k of VISIBLE) {
       if (result[k]) { if (count < 3) count++; else result[k] = false; }
@@ -2004,12 +1803,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     if (!user?.id || !profile) return;
     const s = (profile.settings as any) || {};
     const hs = s?.homescreen || {};
-    const VALID_WIDGET_KEYS = new Set(['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
+    const VALID_WIDGET_KEYS = new Set(['showAgentWidget','showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
     const rawWidgets = hs?.homescreenWidgets || s?.homescreenWidgets;
     const strippedWidgets: Record<string, boolean> = {};
     if (rawWidgets) {
-      for (const k of Object.keys(rawWidgets)) {
-        if (VALID_WIDGET_KEYS.has(k)) strippedWidgets[k] = rawWidgets[k];
+      for (const [k, v] of Object.entries(rawWidgets)) {
+        if (VALID_WIDGET_KEYS.has(k)) strippedWidgets[k] = !!v;
       }
     }
     const nextWidgets = clampHsWidgets({ ...DEFAULT_HS_WIDGETS, ...strippedWidgets });
@@ -2327,7 +2126,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const toggleHsWidget = (key: keyof typeof hsWidgets) => {
     setHsWidgets(prev => {
-      const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
+      const VISIBLE: (keyof typeof hsWidgets)[] = ['showAgentWidget','showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
       const activeCount = VISIBLE.filter(k => prev[k]).length;
       const isOn = prev[key];
       // Enforce max 3 — don't allow enabling if already at 3
@@ -2735,6 +2534,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           {/* ── Edit options bar ── */}
           {editMode && (() => {
             const WIDGET_OPTIONS: { key: keyof typeof hsWidgets; labelEn: string; labelAr: string }[] = [
+              { key: 'showAgentWidget',    labelEn: 'Agent',    labelAr: 'الوكيل'   },
               { key: 'showTRWidget',       labelEn: 'Tasks',    labelAr: 'المهام'   },
               { key: 'showCalendarWidget', labelEn: 'Calendar', labelAr: 'التقويم' },
               { key: 'showMaw3dWidget',    labelEn: 'Maw3d',    labelAr: 'موعد'    },
@@ -2782,7 +2582,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                     title={language === 'ar' ? 'استعادة الإعدادات الافتراضية' : 'Restore defaults'}
                     onClick={() => {
                       const uid = _cachedUid();
-                      const DEFAULT_WIDGETS = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
+                      const DEFAULT_WIDGETS = { showNavWidget: false, showAgentWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
                       // Reset widgets
                       setHsWidgets(DEFAULT_WIDGETS);
                       localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(DEFAULT_WIDGETS));
