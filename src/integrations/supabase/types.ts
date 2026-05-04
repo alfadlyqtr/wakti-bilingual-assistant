@@ -1724,6 +1724,7 @@ export type Database = {
           current_round_no: number | null
           end_on_first_submit: boolean
           hints_enabled: boolean
+          hints_per_player_round: number
           host_name: string | null
           host_user_id: string | null
           language: string | null
@@ -1746,6 +1747,7 @@ export type Database = {
           current_round_no?: number | null
           end_on_first_submit?: boolean
           hints_enabled?: boolean
+          hints_per_player_round?: number
           host_name?: string | null
           host_user_id?: string | null
           language?: string | null
@@ -1768,6 +1770,7 @@ export type Database = {
           current_round_no?: number | null
           end_on_first_submit?: boolean
           hints_enabled?: boolean
+          hints_per_player_round?: number
           host_name?: string | null
           host_user_id?: string | null
           language?: string | null

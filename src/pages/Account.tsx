@@ -40,7 +40,7 @@ import { MyGallery } from "@/components/social/MyGallery";
 import { ContactsEmbedded } from "@/components/account/ContactsEmbedded";
 import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
 import { getPendingRequestsCount } from "@/services/contactsService";
-import { getAllUnreadCounts, getUnreadGalleryNotifCount } from "@/services/messageService";
+import { getAllUnreadCounts } from "@/services/messageService";
 
 
 // TrialCountdown Component - Shows remaining time of 24-hour trial
@@ -185,14 +185,7 @@ export default function Account() {
     refetchInterval: 60000,
     refetchOnWindowFocus: true,
   });
-  const { data: galleryNotifCount = 0 } = useQuery({
-    queryKey: ['galleryNotifCount'],
-    queryFn: getUnreadGalleryNotifCount,
-    staleTime: 30000,
-    refetchInterval: 60000,
-    refetchOnWindowFocus: true,
-  });
-  const socialBadgeCount = pendingRequestsCount + Object.values(perContactUnread).reduce((sum, count) => sum + Number(count || 0), 0) + galleryNotifCount;
+  const socialBadgeCount = pendingRequestsCount + Object.values(perContactUnread).reduce((sum, count) => sum + Number(count || 0), 0);
   const [wishesPrivacy, setWishesPrivacy] = useState("contacts");
   const [wishesAllowClaims, setWishesAllowClaims] = useState(true);
   const [wishesAutoApprove, setWishesAutoApprove] = useState(false);

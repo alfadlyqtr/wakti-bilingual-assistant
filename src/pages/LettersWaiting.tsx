@@ -24,7 +24,7 @@ function autoLetterForRound(c: string, lang: 'en'|'ar'|undefined, round: number)
 export default function LettersWaiting() {
   const { language } = useTheme();
   const navigate = useNavigate();
-  const location = useLocation() as { state?: { isHost?: boolean; gameCode?: string; gameTitle?: string; hostName?: string; maxPlayers?: number } };
+  const location = useLocation() as { state?: { isHost?: boolean; gameCode?: string; gameTitle?: string; hostName?: string; maxPlayers?: number; roundDurationSec?: number; hintsEnabled?: boolean; hintsPerPlayerRound?: number; endOnFirstSubmit?: boolean; gameLang?: 'en'|'ar'; letterMode?: 'auto'|'manual'; manualLetter?: string | null } };
   const isHost = !!location.state?.isHost;
   const [copied, setCopied] = useState(false);
   // Placeholder game code; in the future this would come from state/router.
@@ -37,11 +37,14 @@ export default function LettersWaiting() {
   const [hostUserId, setHostUserId] = useState<string | undefined>();
   const [navigated, setNavigated] = useState(false);
   const startChannelRef = useRef<any>(null);
-  const [hintsEnabled, setHintsEnabled] = useState<boolean>(false);
-  const [endOnFirstSubmit, setEndOnFirstSubmit] = useState<boolean>(false);
-  const [gameLang, setGameLang] = useState<'en'|'ar'>('en');
-  const [letterMode, setLetterMode] = useState<'auto'|'manual'>('auto');
-  const [manualLetter, setManualLetter] = useState<string|null>(null);
+  const [hintsEnabled, setHintsEnabled] = useState<boolean>(!!location.state?.hintsEnabled);
+  const [hintsPerPlayerRound, setHintsPerPlayerRound] = useState<number>(Math.max(0, location.state?.hintsPerPlayerRound || 0));
+  const [endOnFirstSubmit, setEndOnFirstSubmit] = useState<boolean>(!!location.state?.endOnFirstSubmit);
+  const [gameLang, setGameLang] = useState<'en'|'ar'>(location.state?.gameLang || 'en');
+  const [letterMode, setLetterMode] = useState<'auto'|'manual'>(location.state?.letterMode || 'auto');
+  const [manualLetter, setManualLetter] = useState<string|null>(location.state?.manualLetter || null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +53,7 @@ export default function LettersWaiting() {
       // Try Supabase first
       const { data, error } = await supabase
         .from('letters_games')
-        .select('title, host_name, host_user_id, max_players, hints_enabled, end_on_first_submit, phase, language, letter_mode, manual_letter')
+        .select('title, host_name, host_user_id, max_players, hints_enabled, hints_per_player_round, end_on_first_submit, phase, language, letter_mode, manual_letter')
         .eq('code', gameCode)
         .maybeSingle();
       if (!cancelled) {
@@ -59,14 +62,18 @@ export default function LettersWaiting() {
           if (!hostName && data.host_name) setHostName(data.host_name);
           if (data.host_user_id) setHostUserId(data.host_user_id);
           if (typeof data.max_players === 'number' && !location.state?.maxPlayers) setMaxPlayers(data.max_players);
-          if (typeof data.hints_enabled === 'boolean') setHintsEnabled(!!data.hints_enabled);
+          const resolvedHintLimit = typeof (data as any).hints_per_player_round === 'number'
+            ? Math.max(0, (data as any).hints_per_player_round)
+            : (data.hints_enabled ? 1 : 0);
+          setHintsPerPlayerRound(resolvedHintLimit);
+          if (typeof data.hints_enabled === 'boolean' || typeof (data as any).hints_per_player_round === 'number') setHintsEnabled(resolvedHintLimit > 0);
           if (typeof data.end_on_first_submit === 'boolean') setEndOnFirstSubmit(!!data.end_on_first_submit);
           if (data.language) setGameLang(data.language as 'en'|'ar');
           if (data.letter_mode) setLetterMode(data.letter_mode as 'auto'|'manual');
           if (data.manual_letter) setManualLetter(data.manual_letter);
           if ((data as any)?.phase === 'countdown' && !navigated) {
             setNavigated(true);
-            navigate(`/games/letters/play/${gameCode}`, { state: { lateJoin: true, hintsEnabled, endOnFirstSubmit } });
+            navigate(`/games/letters/play/${gameCode}`, { state: { lateJoin: true, hintsEnabled: resolvedHintLimit > 0, hintsPerPlayerRound: resolvedHintLimit, endOnFirstSubmit: !!data.end_on_first_submit } });
           }
         } else {
           // Fallback to localStorage if available
@@ -92,13 +99,16 @@ export default function LettersWaiting() {
       if (!gameCode || navigated) return;
       const { data } = await supabase
         .from('letters_games')
-        .select('started_at, round_duration_sec, hints_enabled, end_on_first_submit, phase')
+        .select('started_at, round_duration_sec, hints_enabled, hints_per_player_round, end_on_first_submit, phase')
         .eq('code', gameCode)
         .maybeSingle();
       if (!active) return;
       if (data && ((data as any).phase === 'countdown' || data.started_at)) {
+        const resolvedHintLimit = typeof (data as any).hints_per_player_round === 'number'
+          ? Math.max(0, (data as any).hints_per_player_round)
+          : (data.hints_enabled ? 1 : 0);
         setNavigated(true);
-        navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: data.round_duration_sec, hintsEnabled: !!data.hints_enabled, endOnFirstSubmit: !!data.end_on_first_submit, lateJoin: true } });
+        navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: data.round_duration_sec, hintsEnabled: resolvedHintLimit > 0, hintsPerPlayerRound: resolvedHintLimit, endOnFirstSubmit: !!data.end_on_first_submit, lateJoin: true } });
       }
     }
     pollStarted();
@@ -113,9 +123,12 @@ export default function LettersWaiting() {
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'letters_games', filter: `code=eq.${gameCode}` }, (payload: any) => {
         const started = payload?.new?.started_at;
         const phase = payload?.new?.phase;
+        const resolvedHintLimit = typeof payload?.new?.hints_per_player_round === 'number'
+          ? Math.max(0, payload.new.hints_per_player_round as number)
+          : (payload?.new?.hints_enabled ? 1 : 0);
         if ((phase === 'countdown' || started) && !navigated) {
           setNavigated(true);
-          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.new?.round_duration_sec, hintsEnabled: !!payload?.new?.hints_enabled, endOnFirstSubmit: !!payload?.new?.end_on_first_submit, lateJoin: true } });
+          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.new?.round_duration_sec, hintsEnabled: resolvedHintLimit > 0, hintsPerPlayerRound: resolvedHintLimit, endOnFirstSubmit: !!payload?.new?.end_on_first_submit, lateJoin: true } });
         }
       })
       .subscribe();
@@ -124,7 +137,7 @@ export default function LettersWaiting() {
       .on('broadcast', { event: 'started' }, (payload: any) => {
         if (!navigated) {
           setNavigated(true);
-          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.roundDurationSec, hintsEnabled: !!payload?.hintsEnabled, endOnFirstSubmit: !!payload?.endOnFirstSubmit } });
+          navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: payload?.roundDurationSec, hintsEnabled: !!payload?.hintsEnabled, hintsPerPlayerRound: Math.max(0, payload?.hintsPerPlayerRound || 0), endOnFirstSubmit: !!payload?.endOnFirstSubmit } });
         }
       })
       .subscribe();
@@ -189,6 +202,11 @@ export default function LettersWaiting() {
             ? 'بانتظار انضمام اللاعبين… شارك رمز اللعبة مع أصدقائك.'
             : 'Waiting for players to join… Share the game code with your friends.'}
         </p>
+        {errorMessage && (
+          <div className="rounded-md border border-rose-200 bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-200 px-4 py-2">
+            {errorMessage}
+          </div>
+        )}
 
         {(gameTitle || hostName) && (
           <div className="rounded-lg border p-4 bg-card/40">
@@ -253,23 +271,31 @@ export default function LettersWaiting() {
 
         {isHost && (
           <div className="pt-2 flex items-center justify-end">
-            <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={playersCount < 2}
+            <Button className="bg-emerald-600 hover:bg-emerald-700" disabled={playersCount < 2 || starting}
               title={playersCount < 2 ? (language === 'ar' ? 'يتطلب لاعبين على الأقل' : 'Requires at least 2 players') : undefined}
               onClick={async()=>{
                 if (!gameCode) return;
+                setErrorMessage(null);
+                setStarting(true);
                 try {
                   const nowIso = new Date().toISOString();
                   // Start DB-driven countdown (Option B)
-                  await supabase.from('letters_games').update({ phase: 'countdown', countdown_start_at: nowIso, countdown_sec: 3, current_round_no: 1, started_at: null }).eq('code', gameCode);
+                  const { error: updateError } = await supabase.from('letters_games').update({ phase: 'countdown', countdown_start_at: nowIso, countdown_sec: 3, current_round_no: 1, started_at: null }).eq('code', gameCode);
+                  if (updateError) throw updateError;
                   // SYNC FIX: Create round row immediately so non-host can preview letter during countdown
                   const letter = (letterMode === 'manual' && manualLetter) ? manualLetter : autoLetterForRound(gameCode, gameLang, 1);
-                  await supabase.from('letters_rounds').upsert({ game_code: gameCode, round_no: 1, letter, status: 'countdown' }, { onConflict: 'game_code,round_no' });
-                } catch {}
-                setNavigated(true);
-                navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec, hintsEnabled, endOnFirstSubmit, lateJoin: true } });
+                  const { error: roundError } = await supabase.from('letters_rounds').upsert({ game_code: gameCode, round_no: 1, letter, status: 'countdown' }, { onConflict: 'game_code,round_no' });
+                  if (roundError) throw roundError;
+                  setNavigated(true);
+                  navigate(`/games/letters/play/${gameCode}`, { state: { roundDurationSec: (location.state as any)?.roundDurationSec, hintsEnabled, hintsPerPlayerRound, endOnFirstSubmit, lateJoin: true } });
+                } catch (error: any) {
+                  setErrorMessage(error?.message || (language === 'ar' ? 'تعذر بدء اللعبة الآن.' : 'Could not start the game right now.'));
+                } finally {
+                  setStarting(false);
+                }
               }}
             >
-              {language === 'ar' ? 'ابدأ اللعبة الآن' : 'Start game now'}
+              {starting ? (language === 'ar' ? 'جارٍ البدء...' : 'Starting...') : (language === 'ar' ? 'ابدأ اللعبة الآن' : 'Start game now')}
             </Button>
           </div>
         )}

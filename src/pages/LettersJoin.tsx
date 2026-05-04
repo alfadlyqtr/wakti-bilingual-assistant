@@ -16,35 +16,53 @@ export default function LettersJoin() {
   const { user } = useAuth();
   const [code, setCode] = useState('');
   const [startedHost, setStartedHost] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [joining, setJoining] = useState(false);
 
   async function handleJoin() {
     const digits = code.trim().toUpperCase().replace(/^W?/, '').replace(/\D/g, '').slice(0, 6);
     const clean = digits.length === 6 ? ('W' + digits) : '';
     if (!/^W\d{6}$/.test(clean)) return;
+    if (!user?.id) {
+      setErrorMessage(language === 'ar' ? 'يجب تسجيل الدخول للانضمام إلى لعبة الحروف.' : 'You need to be logged in to join a Letters game.');
+      return;
+    }
     const displayName = (user?.user_metadata?.full_name
       || user?.user_metadata?.display_name
       || user?.user_metadata?.username
       || user?.email?.split('@')[0]
       || (language === 'ar' ? 'لاعب' : 'Player')) as string;
+    setErrorMessage(null);
+    setJoining(true);
     try {
       // Check if the game has already started BEFORE joining
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('letters_games')
-        .select('started_at, host_name')
+        .select('started_at, host_name, phase')
         .eq('code', clean)
         .maybeSingle();
-      if (data && data.started_at) {
+      if (error) throw error;
+      if (!data) {
+        setErrorMessage(language === 'ar' ? 'لم يتم العثور على هذه اللعبة.' : 'This game could not be found.');
+        return;
+      }
+      if (data.started_at || data.phase === 'countdown' || data.phase === 'playing' || data.phase === 'scoring' || data.phase === 'done') {
         setStartedHost(data.host_name || (language === 'ar' ? 'المضيف' : 'Host'));
         return; // do not insert player; do not navigate
       }
       // Safe to join
-      await supabase.from('letters_players').upsert({
+      const { error: joinError } = await supabase.from('letters_players').upsert({
         game_code: clean,
-        user_id: user?.id || null,
+        user_id: user.id,
         name: displayName,
       });
-    } catch {}
-    navigate('/games/letters/waiting', { state: { isHost: false, gameCode: clean } });
+      if (joinError) throw joinError;
+      navigate('/games/letters/waiting', { state: { isHost: false, gameCode: clean } });
+    } catch (error: any) {
+      setErrorMessage(error?.message || (language === 'ar' ? 'تعذر الانضمام إلى اللعبة الآن.' : 'Could not join the game right now.'));
+    } finally {
+      setJoining(false);
+    }
   }
 
   return (
@@ -57,6 +75,11 @@ export default function LettersJoin() {
             {language === 'ar'
               ? `تم بدء اللعبة بالفعل بواسطة ${startedHost}`
               : `Game already started by ${startedHost}`}
+          </div>
+        )}
+        {errorMessage && (
+          <div className="rounded-md border border-rose-200 bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-200 px-4 py-2">
+            {errorMessage}
           </div>
         )}
         <div className="flex items-center justify-between">
@@ -80,8 +103,8 @@ export default function LettersJoin() {
             />
           </div>
           <div className="pt-2">
-            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={handleJoin} disabled={!!startedHost}>
-              {language === 'ar' ? 'انضم' : 'Join'}
+            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={handleJoin} disabled={!!startedHost || joining}>
+              {joining ? (language === 'ar' ? 'جارٍ الانضمام...' : 'Joining...') : (language === 'ar' ? 'انضم' : 'Join')}
             </Button>
           </div>
         </div>

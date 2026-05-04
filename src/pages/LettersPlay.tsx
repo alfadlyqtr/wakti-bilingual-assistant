@@ -13,7 +13,8 @@ export default function LettersPlay() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { code } = useParams();
-  const location = useLocation() as { state?: { roundDurationSec?: number, lateJoin?: boolean, hostName?: string, submitEndsRound?: boolean, hintsEnabled?: boolean, endOnFirstSubmit?: boolean } };
+  const location = useLocation() as { state?: { roundDurationSec?: number, lateJoin?: boolean, hostName?: string, submitEndsRound?: boolean, hintsEnabled?: boolean, hintsPerPlayerRound?: number, endOnFirstSubmit?: boolean } };
+  const initialHintLimit = Math.max(0, typeof location.state?.hintsPerPlayerRound === 'number' ? location.state.hintsPerPlayerRound : (location.state?.hintsEnabled ? 1 : 0));
   const [gameTitle, setGameTitle] = React.useState<string | undefined>();
   const [hostName, setHostName] = React.useState<string | undefined>();
   const [hostUserId, setHostUserId] = React.useState<string | undefined>();
@@ -47,22 +48,40 @@ export default function LettersPlay() {
   const [submittedLeftSec, setSubmittedLeftSec] = React.useState<number | null>(null);
   const [roundAnswers, setRoundAnswers] = React.useState<Record<string, {name?:string;place?:string;plant?:string;animal?:string;thing?:string}>>({});
   // Validation is always strict now
-  const [submitEndsRoundFlag, setSubmitEndsRoundFlag] = React.useState<boolean>(!!location.state?.submitEndsRound);
-  const [hintsEnabledFlag, setHintsEnabledFlag] = React.useState<boolean>(!!location.state?.hintsEnabled);
+  const [hintsEnabledFlag, setHintsEnabledFlag] = React.useState<boolean>(initialHintLimit > 0);
+  const [hintsPerPlayerRound, setHintsPerPlayerRound] = React.useState<number>(initialHintLimit);
+  const [hintsUsedCount, setHintsUsedCount] = React.useState<number>(0);
   const [hintLoading, setHintLoading] = React.useState<boolean>(false);
+  const [activeHintCategory, setActiveHintCategory] = React.useState<'name'|'place'|'plant'|'animal'|'thing'|null>(null);
   const [hintText, setHintText] = React.useState<string | null>(null);
   const [hintUsed, setHintUsed] = React.useState<boolean>(false);
-  const [hintCategory, setHintCategory] = React.useState<'name'|'place'|'plant'|'animal'|'thing'>('name');
   const [endOnFirstSubmitFlag, setEndOnFirstSubmitFlag] = React.useState<boolean>(!!location.state?.endOnFirstSubmit);
   const [hintsMap, setHintsMap] = React.useState<{name?:string|null; place?:string|null; plant?:string|null; animal?:string|null; thing?:string|null}>({});
+  const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
+  const categoryFields = React.useMemo(() => ([
+    { key: 'name', label: language === 'ar' ? 'اسم' : 'Name' },
+    { key: 'place', label: language === 'ar' ? 'مكان' : 'Place' },
+    { key: 'plant', label: language === 'ar' ? 'نبات' : 'Plant' },
+    { key: 'animal', label: language === 'ar' ? 'حيوان' : 'Animal' },
+    { key: 'thing', label: language === 'ar' ? 'شيء' : 'Thing' },
+  ]), [language]);
 
   // Host-only: flip game to scoring and mark round ended
   async function endRoundNow() {
-    if (!code || !roundId) return;
-    if (!isHost) return; // Only host should authoritatively flip
-    await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
-    await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
-    setPhase('scoring');
+    if (!code || !roundId) return false;
+    if (!isHost) return false;
+    try {
+      const { error: gameError } = await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
+      if (gameError) throw gameError;
+      const { error: roundError } = await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
+      if (roundError) throw roundError;
+      setErrorMessage(null);
+      setPhase('scoring');
+      return true;
+    } catch (error: any) {
+      setErrorMessage(error?.message || (language === 'ar' ? 'تعذر إنهاء الجولة الآن.' : 'Could not end the round right now.'));
+      return false;
+    }
   }
 
   React.useEffect(() => {
@@ -71,7 +90,7 @@ export default function LettersPlay() {
       if (!code) return;
       const { data } = await supabase
         .from('letters_games')
-        .select('title, host_name, host_user_id, round_duration_sec, language, letter_mode, manual_letter, rounds_total, started_at, current_round_no, phase, validation_mode, submit_ends_round, hints_enabled, end_on_first_submit, countdown_start_at, countdown_sec')
+        .select('title, host_name, host_user_id, round_duration_sec, language, letter_mode, manual_letter, rounds_total, started_at, current_round_no, phase, validation_mode, submit_ends_round, hints_enabled, hints_per_player_round, end_on_first_submit, countdown_start_at, countdown_sec')
         .eq('code', code)
         .maybeSingle();
       if (!cancelled && data) {
@@ -92,8 +111,11 @@ export default function LettersPlay() {
         if (data.countdown_start_at) setCountdownStartAt(data.countdown_start_at as string);
         if (typeof data.countdown_sec === 'number') setCountdownSec(data.countdown_sec as number);
         // validation_mode is enforced as 'strict' globally
-        if (typeof data.submit_ends_round === 'boolean') setSubmitEndsRoundFlag(!!data.submit_ends_round);
-        if (typeof data.hints_enabled === 'boolean') setHintsEnabledFlag(!!data.hints_enabled);
+        const resolvedHintLimit = typeof (data as any).hints_per_player_round === 'number'
+          ? Math.max(0, (data as any).hints_per_player_round)
+          : (data.hints_enabled ? 1 : 0);
+        setHintsPerPlayerRound(resolvedHintLimit);
+        setHintsEnabledFlag(resolvedHintLimit > 0);
         if (typeof data.end_on_first_submit === 'boolean') setEndOnFirstSubmitFlag(!!data.end_on_first_submit);
       }
     }
@@ -110,7 +132,7 @@ export default function LettersPlay() {
       if (!active) return;
       const { data } = await supabase
         .from('letters_games')
-        .select('phase, current_round_no, started_at, countdown_start_at, countdown_sec, manual_letter')
+        .select('phase, current_round_no, started_at, countdown_start_at, countdown_sec, manual_letter, hints_enabled, hints_per_player_round')
         .eq('code', code)
         .maybeSingle();
       if (!active || !data) return;
@@ -133,11 +155,20 @@ export default function LettersPlay() {
       if (data.manual_letter && data.manual_letter !== manualLetter) {
         setManualLetter(data.manual_letter);
       }
+      const resolvedHintLimit = typeof (data as any).hints_per_player_round === 'number'
+        ? Math.max(0, (data as any).hints_per_player_round)
+        : (data.hints_enabled ? 1 : 0);
+      if (resolvedHintLimit !== hintsPerPlayerRound) {
+        setHintsPerPlayerRound(resolvedHintLimit);
+      }
+      if ((resolvedHintLimit > 0) !== hintsEnabledFlag) {
+        setHintsEnabledFlag(resolvedHintLimit > 0);
+      }
     }
     // Poll every 2 seconds as a fallback
     const id = window.setInterval(pollGameState, 2000) as unknown as number;
     return () => { active = false; clearInterval(id); };
-  }, [code, roundNo, phase, startedAt, countdownStartAt, countdownSec, manualLetter]);
+  }, [code, roundNo, phase, startedAt, countdownStartAt, countdownSec, manualLetter, hintsPerPlayerRound, hintsEnabledFlag]);
 
   // Load hint usage status per player per round
   React.useEffect(() => {
@@ -145,26 +176,31 @@ export default function LettersPlay() {
       setHintText(null);
       setHintsMap({});
       setHintUsed(false);
-      if (!code || !user?.id || !roundNo) return;
-      const { data } = await supabase
+      setHintsUsedCount(0);
+      if (!code || !user?.id || !roundNo || !hintsEnabledFlag || hintsPerPlayerRound <= 0) return;
+      const { count } = await supabase
         .from('letters_hints_used')
-        .select('id')
+        .select('*', { count: 'exact', head: true })
         .eq('game_code', code)
         .eq('round_no', roundNo)
         .eq('user_id', user.id)
-        .maybeSingle();
-      if (data) setHintUsed(true);
+      const usedCount = count || 0;
+      setHintsUsedCount(usedCount);
+      if (usedCount >= hintsPerPlayerRound) setHintUsed(true);
     })();
-  }, [code, user?.id, roundNo]);
+  }, [code, user?.id, roundNo, hintsEnabledFlag, hintsPerPlayerRound]);
 
   async function handleHint(cat: 'name'|'place'|'plant'|'animal'|'thing') {
-    if (hintUsed || !hintsEnabledFlag || !code || !roundNo) return;
+    if (hintUsed || !hintsEnabledFlag || hintsPerPlayerRound <= 0 || !code || !roundNo || !user?.id) return;
+    setActiveHintCategory(cat);
     setHintLoading(true);
     setHintText(null);
     try {
-      // Enforce one-use-per-player-per-round server-side via unique constraint
-      await supabase.from('letters_hints_used').insert({ game_code: code, round_no: roundNo, user_id: user?.id });
-      setHintUsed(true);
+      const { error: insertError } = await supabase.from('letters_hints_used').insert({ game_code: code, round_no: roundNo, user_id: user.id });
+      if (insertError) throw insertError;
+      const nextUsed = hintsUsedCount + 1;
+      setHintsUsedCount(nextUsed);
+      setHintUsed(nextUsed >= hintsPerPlayerRound);
       try {
         const payload: any = {
           game_code: code,
@@ -185,8 +221,21 @@ export default function LettersPlay() {
       } catch {
         setHintText(language==='ar' ? 'تلميح سريع غير متاح الآن.' : 'Quick hint is not available right now.');
       }
+    } catch (error: any) {
+      const message = String(error?.message || '');
+      if (message.toLowerCase().includes('hint limit reached')) {
+        setHintsUsedCount(hintsPerPlayerRound);
+        setHintUsed(true);
+        setErrorMessage(language === 'ar' ? 'وصلت إلى الحد المسموح من التلميحات في هذه الجولة.' : 'You reached the hint limit for this round.');
+      } else if (message.toLowerCase().includes('hints are disabled')) {
+        setHintsEnabledFlag(false);
+        setErrorMessage(language === 'ar' ? 'التلميحات غير مفعلة في هذه اللعبة.' : 'Hints are disabled for this game.');
+      } else {
+        setErrorMessage(error?.message || (language === 'ar' ? 'تعذر استخدام التلميح الآن.' : 'Could not use a hint right now.'));
+      }
     } finally {
       setHintLoading(false);
+      setActiveHintCategory(null);
     }
   }
 
@@ -259,15 +308,20 @@ export default function LettersPlay() {
           try {
             const startedIso = new Date(target).toISOString();
             // Update game state to playing with authoritative start time
-            await supabase.from('letters_games').update({ phase: 'playing', started_at: startedIso }).eq('code', code);
+            const { error: gameError } = await supabase.from('letters_games').update({ phase: 'playing', started_at: startedIso }).eq('code', code);
+            if (gameError) throw gameError;
             // Ensure round row exists for current round
             const letter = (letterMode === 'manual' && manualLetter) ? manualLetter : autoLetterForRound(code!, gameLang!, roundNo);
-            await supabase
+            const { error: roundError } = await supabase
               .from('letters_rounds')
               .upsert({ game_code: code, round_no: roundNo, letter, status: 'playing', started_at: startedIso }, { onConflict: 'game_code,round_no' });
+            if (roundError) throw roundError;
+            setErrorMessage(null);
             setStartedAt(startedIso);
             setPhase('playing');
-          } catch {}
+          } catch (error: any) {
+            setErrorMessage(error?.message || (language === 'ar' ? 'تعذر بدء الجولة الآن.' : 'Could not start the round right now.'));
+          }
         };
         doFlip();
       }
@@ -298,6 +352,11 @@ export default function LettersPlay() {
         if (typeof payload?.new?.phase === 'string') setPhase(payload.new.phase as any);
         if (typeof payload?.new?.round_duration_sec === 'number') setRoundDuration(payload.new.round_duration_sec as number);
         if (typeof payload?.new?.end_on_first_submit === 'boolean') setEndOnFirstSubmitFlag(!!payload?.new?.end_on_first_submit);
+        const resolvedHintLimit = typeof payload?.new?.hints_per_player_round === 'number'
+          ? Math.max(0, payload.new.hints_per_player_round as number)
+          : (payload?.new?.hints_enabled ? 1 : 0);
+        setHintsPerPlayerRound(resolvedHintLimit);
+        setHintsEnabledFlag(resolvedHintLimit > 0);
         if (typeof payload?.new?.countdown_sec === 'number') setCountdownSec(payload.new.countdown_sec as number);
         if (payload?.new?.countdown_start_at) setCountdownStartAt(payload.new.countdown_start_at as string);
       })
@@ -402,10 +461,7 @@ export default function LettersPlay() {
     }
     if (all && phase === 'playing' && code) {
       // Host-only: End early when everyone has submitted
-      await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
-      await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
-      setPhase('scoring');
-      return all;
+      return await endRoundNow();
     }
     return false;
   }
@@ -421,9 +477,7 @@ export default function LettersPlay() {
   React.useEffect(() => {
     if (remaining === 0 && phase === 'playing' && code && isHost) {
       (async () => {
-        await supabase.from('letters_games').update({ phase: 'scoring' }).eq('code', code);
-        if (roundId) await supabase.from('letters_rounds').update({ ended_at: new Date().toISOString(), status: 'scoring' }).eq('id', roundId);
-        setPhase('scoring');
+        await endRoundNow();
       })();
     }
   }, [remaining, phase, code, roundId, isHost]);
@@ -470,8 +524,11 @@ export default function LettersPlay() {
         } else if (typeof payload?.new?.phase === 'string') {
           setPhase(payload.new.phase as any);
         }
-        if (typeof payload?.new?.submit_ends_round === 'boolean') setSubmitEndsRoundFlag(!!payload?.new?.submit_ends_round);
-        if (typeof payload?.new?.hints_enabled === 'boolean') setHintsEnabledFlag(!!payload?.new?.hints_enabled);
+        const resolvedHintLimit = typeof payload?.new?.hints_per_player_round === 'number'
+          ? Math.max(0, payload.new.hints_per_player_round as number)
+          : (payload?.new?.hints_enabled ? 1 : 0);
+        setHintsPerPlayerRound(resolvedHintLimit);
+        setHintsEnabledFlag(resolvedHintLimit > 0);
         if (typeof payload?.new?.end_on_first_submit === 'boolean') setEndOnFirstSubmitFlag(!!payload?.new?.end_on_first_submit);
       })
       .subscribe();
@@ -535,13 +592,16 @@ export default function LettersPlay() {
           await supabase.from('letters_round_scores').upsert(roundRows, { onConflict: 'round_id,user_id' });
         }
         // Mark scored_at to gate other clients
-        await supabase.from('letters_rounds').update({ scored_at: new Date().toISOString() }).eq('id', roundId);
+        const { error: scoredError } = await supabase.from('letters_rounds').update({ scored_at: new Date().toISOString() }).eq('id', roundId);
+        if (scoredError) throw scoredError;
 
         // If last round, end game (host authoritative)
         if (roundsTotal && roundNo >= roundsTotal) {
           await new Promise(r => setTimeout(r, 2000));
-          await supabase.from('letters_games').update({ phase: 'done' }).eq('code', code);
-          await supabase.from('letters_rounds').update({ status: 'done' }).eq('id', roundId);
+          const { error: gameDoneError } = await supabase.from('letters_games').update({ phase: 'done' }).eq('code', code);
+          if (gameDoneError) throw gameDoneError;
+          const { error: roundDoneError } = await supabase.from('letters_rounds').update({ status: 'done' }).eq('id', roundId);
+          if (roundDoneError) throw roundDoneError;
           setPhase('done');
         } else {
           // Auto-advance to next round: schedule DB-driven countdown
@@ -558,13 +618,15 @@ export default function LettersPlay() {
             started_at: null,
           };
           if (letterMode === 'manual') updates.manual_letter = hostPick;
-          await supabase.from('letters_games').update(updates).eq('code', code);
+          const { error: nextGameError } = await supabase.from('letters_games').update(updates).eq('code', code);
+          if (nextGameError) throw nextGameError;
           // SYNC FIX: Create round row immediately so non-host can preview letter during countdown
           const roundRow = await supabase
             .from('letters_rounds')
             .upsert({ game_code: code, round_no: nextNo, letter, status: 'countdown' }, { onConflict: 'game_code,round_no' })
             .select('id')
             .single();
+          if (roundRow.error) throw roundRow.error;
           if (roundRow.data?.id) setRoundId(roundRow.data.id);
           // Update local state for host; others will sync via realtime
           setRoundNo(nextNo);
@@ -578,7 +640,9 @@ export default function LettersPlay() {
           setHintsMap({});
           setHintUsed(false);
         }
-      } catch {
+        setErrorMessage(null);
+      } catch (error: any) {
+        setErrorMessage(error?.message || (language === 'ar' ? 'تعذر احتساب الجولة الآن.' : 'Could not score the round right now.'));
         setResults(null);
       }
     })();
@@ -631,6 +695,10 @@ export default function LettersPlay() {
 
   async function handleSubmit() {
     if (submitting || submitted || !code || !roundId) return;
+    if (!user?.id) {
+      setErrorMessage(language === 'ar' ? 'يجب تسجيل الدخول لإرسال الإجابات.' : 'You need to be logged in to submit answers.');
+      return;
+    }
     setSubmitting(true);
     try {
       // Freeze local timer to current remaining
@@ -642,10 +710,10 @@ export default function LettersPlay() {
         setRemaining(left);
         setSubmittedLeftSec(left);
       }
-      await supabase.from('letters_answers').upsert({
+      const { error } = await supabase.from('letters_answers').upsert({
         game_code: code,
         round_id: roundId,
-        user_id: user?.id || null,
+        user_id: user.id,
         name: values.name || null,
         place: values.place || null,
         plant: values.plant || null,
@@ -654,6 +722,8 @@ export default function LettersPlay() {
         submitted_at: new Date().toISOString(),
         duration_ms: startedAt ? Math.max(0, Date.now() - new Date(startedAt).getTime()) : null,
       });
+      if (error) throw error;
+      setErrorMessage(null);
       setSubmitted(true);
       // Race mode: host will end via realtime listener; non-hosts do not flip locally
       if (endOnFirstSubmitFlag && phase === 'playing') {
@@ -661,6 +731,8 @@ export default function LettersPlay() {
       }
       // Regardless of race mode, if everyone has submitted, end early (host only)
       await checkAllSubmitted();
+    } catch (error: any) {
+      setErrorMessage(error?.message || (language === 'ar' ? 'تعذر إرسال الإجابات الآن.' : 'Could not submit answers right now.'));
     } finally {
       setSubmitting(false);
     }
@@ -682,26 +754,32 @@ export default function LettersPlay() {
       started_at: null,
     };
     if (letterMode === 'manual') updates.manual_letter = hostPick;
-    await supabase.from('letters_games').update(updates).eq('code', code);
-    // SYNC FIX: Create round row immediately so non-host can preview letter during countdown
-    const roundRow = await supabase
-      .from('letters_rounds')
-      .upsert({ game_code: code, round_no: nextNo, letter, status: 'countdown' }, { onConflict: 'game_code,round_no' })
-      .select('id')
-      .single();
-    if (roundRow.data?.id) setRoundId(roundRow.data.id);
-    // Local state moves to countdown; actual started_at will be set when countdown ends
-    setRoundNo(nextNo);
-    setPhase('countdown');
-    setStartedAt(undefined);
-    setCountdownStartAt(cdStartIso);
-    setCountdownSec(cdSec);
-    setSubmitted(false);
-    setValues({ name: '', place: '', plant: '', animal: '', thing: '' });
-    setCurrentLetter(letter);
-    setHintText(null);
-    setHintsMap({});
-    setHintUsed(false);
+    try {
+      const { error: gameError } = await supabase.from('letters_games').update(updates).eq('code', code);
+      if (gameError) throw gameError;
+      const roundRow = await supabase
+        .from('letters_rounds')
+        .upsert({ game_code: code, round_no: nextNo, letter, status: 'countdown' }, { onConflict: 'game_code,round_no' })
+        .select('id')
+        .single();
+      if (roundRow.error) throw roundRow.error;
+      if (roundRow.data?.id) setRoundId(roundRow.data.id);
+      setErrorMessage(null);
+      setRoundNo(nextNo);
+      setPhase('countdown');
+      setStartedAt(undefined);
+      setCountdownStartAt(cdStartIso);
+      setCountdownSec(cdSec);
+      setSubmitted(false);
+      setValues({ name: '', place: '', plant: '', animal: '', thing: '' });
+      setCurrentLetter(letter);
+      setResults(null);
+      setHintText(null);
+      setHintsMap({});
+      setHintUsed(false);
+    } catch (error: any) {
+      setErrorMessage(error?.message || (language === 'ar' ? 'تعذر بدء الجولة التالية.' : 'Could not start the next round.'));
+    }
   }
 
   // When round number or started_at changes from host, align local state
@@ -711,8 +789,10 @@ export default function LettersPlay() {
     setSubmittedLeftSec(null);
     setValues({ name: '', place: '', plant: '', animal: '', thing: '' });
     setResults(null);
+    setErrorMessage(null);
     setHintText(null);
     setHintsMap({});
+    setHintsUsedCount(0);
     setHintUsed(false);
   }, [roundNo, startedAt]);
 
@@ -729,13 +809,17 @@ export default function LettersPlay() {
     let active = true;
     async function fetchPlayers() {
       if (!code) return;
-      const { data } = await supabase
-        .from('letters_players')
-        .select('user_id, name')
-        .eq('game_code', code)
-        .order('joined_at', { ascending: true });
-      if (!active) return;
-      if (Array.isArray(data)) setPlayers(data as any);
+      try {
+        const { data } = await supabase
+          .from('letters_players')
+          .select('user_id, name')
+          .eq('game_code', code)
+          .order('joined_at', { ascending: true });
+        if (!active) return;
+        if (Array.isArray(data)) setPlayers(data as any);
+      } catch (error: any) {
+        setErrorMessage(error?.message || (language === 'ar' ? 'تعذر تحميل قائمة اللاعبين.' : 'Could not load players list.'));
+      }
     }
     fetchPlayers();
     const id = setInterval(fetchPlayers, 2000);
@@ -771,6 +855,11 @@ export default function LettersPlay() {
       </div>
 
         <div className="glass-hero p-5 rounded-xl space-y-6 relative z-10 bg-white/60 dark:bg-gray-900/35">
+        {errorMessage && (
+          <div className="rounded-md border border-rose-200 bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-200 px-4 py-2">
+            {errorMessage}
+          </div>
+        )}
         {phase==='countdown' && (
           <div className="rounded-md border p-4 bg-amber-50 text-amber-900 dark:bg-amber-900/30 dark:text-amber-200">
             <div className="text-sm font-medium">
@@ -797,7 +886,7 @@ export default function LettersPlay() {
               <div className={`ml-2 text-lg md:text-xl font-semibold tabular-nums ${remaining <= 10 ? 'text-red-600 animate-pulse' : ''}`}>{remaining}s</div>
             </div>
             <div className="mt-3 text-xs text-muted-foreground">
-              {language === 'ar' ? `الجولة 1 من ${roundsTotal ?? '-'}` : `Round 1 of ${roundsTotal ?? '-'}`}
+              {language === 'ar' ? `الجولة ${roundNo} من ${roundsTotal ?? '-'}` : `Round ${roundNo} of ${roundsTotal ?? '-'}`}
             </div>
             <div className="mt-1 text-xs text-muted-foreground">
               {language === 'ar' ? 'اللغة' : 'Language'}: {gameLang === 'ar' ? (language === 'ar' ? 'العربية' : 'Arabic') : (language === 'ar' ? 'الإنجليزية' : 'English')}
@@ -805,70 +894,57 @@ export default function LettersPlay() {
           </div>
           <div className="md:col-span-2 rounded-lg border p-4 bg-card/50">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground">{language === 'ar' ? 'اسم' : 'Name'}</label>
-                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.name || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.name} onChange={(e)=>updateValue('name', e.target.value)} />
-                {hintsEnabledFlag && hintsMap.name && !values.name && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.name}</div>
-                )}
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">{language === 'ar' ? 'مكان' : 'Place'}</label>
-                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.place || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.place} onChange={(e)=>updateValue('place', e.target.value)} />
-                {hintsEnabledFlag && hintsMap.place && !values.place && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.place}</div>
-                )}
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">{language === 'ar' ? 'نبات' : 'Plant'}</label>
-                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.plant || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.plant} onChange={(e)=>updateValue('plant', e.target.value)} />
-                {hintsEnabledFlag && hintsMap.plant && !values.plant && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.plant}</div>
-                )}
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground">{language === 'ar' ? 'حيوان' : 'Animal'}</label>
-                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.animal || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.animal} onChange={(e)=>updateValue('animal', e.target.value)} />
-                {hintsEnabledFlag && hintsMap.animal && !values.animal && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.animal}</div>
-                )}
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-xs text-muted-foreground">{language === 'ar' ? 'شيء' : 'Thing'}</label>
-                <input disabled={phase!=='playing' || submitted} placeholder={hintsMap.thing || ''} className="mt-1 w-full rounded-md border px-3 py-2 bg-background" value={values.thing} onChange={(e)=>updateValue('thing', e.target.value)} />
-                {hintsEnabledFlag && hintsMap.thing && !values.thing && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap.thing}</div>
-                )}
-              </div>
-            </div>
-            <div className="pt-3 flex items-center justify-between">
-              {submittedLeftSec !== null && (
-                <div className="text-xs text-muted-foreground">
-                  {language==='ar' ? `استغرقت ${Math.max(0, roundDuration - (submittedLeftSec||0))}ث` : `You took ${Math.max(0, roundDuration - (submittedLeftSec||0))}s`}
-                </div>
-              )}
-              {phase==='playing' ? (
-                <div className="flex items-center gap-2">
-                  {hintsEnabledFlag && (
-                    <>
-                      <select className="rounded-md border px-2 py-1 bg-background text-xs" value={hintCategory} onChange={(e)=>setHintCategory(e.target.value as any)}>
-                        <option value="name">{language==='ar'?'اسم':'Name'}</option>
-                        <option value="place">{language==='ar'?'مكان':'Place'}</option>
-                        <option value="plant">{language==='ar'?'نبات':'Plant'}</option>
-                        <option value="animal">{language==='ar'?'حيوان':'Animal'}</option>
-                        <option value="thing">{language==='ar'?'شيء':'Thing'}</option>
-                      </select>
-                      <Button type="button" variant="secondary" disabled={hintUsed || hintLoading || submitted} onClick={()=>handleHint(hintCategory)}>
-                        {hintUsed ? (language==='ar'?'تم استخدام التلميح':'Hint used') : (hintLoading ? (language==='ar'?'...':'...') : (language==='ar'?'تلميح سريع':'Quick Hint'))}
-                      </Button>
-                    </>
+              {categoryFields.map((field) => (
+                <div key={field.key} className={field.key === 'thing' ? 'sm:col-span-2' : ''}>
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-xs text-muted-foreground">{field.label}</label>
+                    {hintsEnabledFlag && (
+                      <button
+                        type="button"
+                        disabled={phase!=='playing' || submitted || hintLoading || hintUsed}
+                        onClick={()=>handleHint(field.key as 'name'|'place'|'plant'|'animal'|'thing')}
+                        className="text-xs font-medium text-emerald-700 disabled:opacity-50 dark:text-emerald-300"
+                      >
+                        {hintLoading && activeHintCategory === field.key
+                          ? (language === 'ar' ? '...' : '...')
+                          : (language === 'ar' ? 'تلميح' : 'Hint')}
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    disabled={phase!=='playing' || submitted}
+                    placeholder={hintsMap[field.key as keyof typeof hintsMap] || ''}
+                    className="mt-1 w-full rounded-md border px-3 py-2 bg-background"
+                    value={values[field.key as keyof typeof values]}
+                    onChange={(e)=>updateValue(field.key as keyof typeof values, e.target.value)}
+                  />
+                  {hintsEnabledFlag && hintsMap[field.key as keyof typeof hintsMap] && !values[field.key as keyof typeof values] && (
+                    <div className="mt-1 text-[11px] text-muted-foreground">{language==='ar'?'تلميح: ':'Hint: '}{hintsMap[field.key as keyof typeof hintsMap]}</div>
                   )}
-                  <Button disabled={submitted || submitting} className="bg-indigo-600 hover:bg-indigo-700" onClick={handleSubmit}>
-                    {submitted ? (language==='ar'?'تم الإرسال':'Submitted') : (submitting ? (language==='ar'?'جارٍ...':'Submitting...') : (language === 'ar' ? 'إرسال' : 'Submit'))}
-                  </Button>
                 </div>
-              ) : null}
+              ))}
             </div>
+            {(hintsEnabledFlag || submittedLeftSec !== null) && (
+              <div className="pt-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                {hintsEnabledFlag ? (
+                  <div className="text-xs text-muted-foreground">
+                    {language==='ar' ? `${hintsUsedCount}/${hintsPerPlayerRound} تلميحات مستخدمة` : `${hintsUsedCount}/${hintsPerPlayerRound} hints used`}
+                  </div>
+                ) : <div />}
+                {submittedLeftSec !== null && (
+                  <div className="text-xs text-muted-foreground">
+                    {language==='ar' ? `استغرقت ${Math.max(0, roundDuration - (submittedLeftSec||0))}ث` : `You took ${Math.max(0, roundDuration - (submittedLeftSec||0))}s`}
+                  </div>
+                )}
+              </div>
+            )}
+            {phase==='playing' ? (
+              <div className="pt-4 flex justify-stretch sm:justify-end">
+                <Button disabled={submitted || submitting} className="w-full sm:w-auto sm:min-w-[150px] bg-indigo-600 hover:bg-indigo-700" onClick={handleSubmit}>
+                  {submitted ? (language==='ar'?'تم الإرسال':'Submitted') : (submitting ? (language==='ar'?'جارٍ الإرسال...':'Submitting...') : (language === 'ar' ? 'إرسال الإجابات' : 'Submit Answers'))}
+                </Button>
+              </div>
+            ) : null}
             {/* per-field hint helper moved inline with fields below */}
           </div>
         </div>
@@ -949,7 +1025,7 @@ export default function LettersPlay() {
                   {letterMode === 'manual' ? (
                     <div className="flex items-center gap-2">
                       <div className="text-sm font-medium">{language==='ar'?'اختر الحرف للجولة التالية':'Pick letter for next round'}</div>
-                      <select className="rounded-md border px-2 py-1 bg-background" value={hostPick} onChange={(e)=>setHostPick(e.target.value)}>
+                      <select title={language==='ar' ? 'اختر حرف الجولة التالية' : 'Choose next round letter'} className="rounded-md border px-2 py-1 bg-background" value={hostPick} onChange={(e)=>setHostPick(e.target.value)}>
                         {(gameLang === 'ar' ? 'ابتثجحخدذرزسشصضطظعغفقكلمنهوي' : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ').split('').map(l => (
                           <option key={l} value={l}>{l}</option>
                         ))}

@@ -29,11 +29,18 @@ export default function LettersCreate() {
   const [copied, setCopied] = useState(false);
   const [maxPlayers, setMaxPlayers] = useState<number>(2);
   const [hintsEnabled, setHintsEnabled] = useState<boolean>(false);
+  const [hintLimitMode, setHintLimitMode] = useState<'1'|'2'|'3'|'custom'>('1');
+  const [customHintLimit, setCustomHintLimit] = useState<number>(4);
   const [endOnFirstSubmit, setEndOnFirstSubmit] = useState<boolean>(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const EN_LETTERS = useMemo(()=>"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split(""),[]);
   const AR_LETTERS = useMemo(()=>"ابتثجحخدذرزسشصضطظعغفقكلمنهوي".split(""),[]);
   const currentAlphabet = useMemo(()=> (langChoice === 'ar' ? AR_LETTERS : EN_LETTERS), [langChoice, AR_LETTERS, EN_LETTERS]);
+  const hintsPerPlayerRound = hintsEnabled
+    ? (hintLimitMode === 'custom' ? Math.max(1, Math.min(10, customHintLimit || 1)) : parseInt(hintLimitMode, 10))
+    : 0;
 
   React.useEffect(() => {
     if (letterMode === 'manual') {
@@ -43,18 +50,24 @@ export default function LettersCreate() {
   }, [langChoice, letterMode]);
 
   async function handleCreate() {
+    if (!user?.id) {
+      setErrorMessage(language === 'ar' ? 'يجب تسجيل الدخول لإنشاء لعبة الحروف.' : 'You need to be logged in to create a Letters game.');
+      return;
+    }
     const digitsFromState = (gameCode || '').toUpperCase().replace(/^W?/, '').replace(/\D/g, '').slice(0, 6);
     const ensureCode = digitsFromState.length === 6
       ? ('W' + digitsFromState)
       : ('W' + Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join(''));
     if (!gameCode) setGameCode(ensureCode);
     const code = ensureCode;
+    const resolvedHost = (user?.user_metadata?.full_name
+      || user?.user_metadata?.display_name
+      || user?.user_metadata?.username
+      || user?.email?.split('@')[0]
+      || (language === 'ar' ? 'المضيف' : 'Host')) as string;
+    setSubmitting(true);
+    setErrorMessage(null);
     try {
-      const resolvedHost = (user?.user_metadata?.full_name
-        || user?.user_metadata?.display_name
-        || user?.user_metadata?.username
-        || user?.email?.split('@')[0]
-        || (language === 'ar' ? 'المضيف' : 'Host')) as string;
       if (code) {
         const meta = {
           title: gameTitle || (language === 'ar' ? 'لعبة الحروف' : 'Letters Game'),
@@ -65,15 +78,15 @@ export default function LettersCreate() {
           letterMode: letterMode,
           manualLetter: letterMode === 'manual' ? manualLetter : null,
           roundsTotal: roundsMode === 'custom' ? Math.max(1, Math.min(10, customRounds || 1)) : parseInt(roundsMode, 10),
-          hintsEnabled,
+          hintsEnabled: hintsPerPlayerRound > 0,
+          hintsPerPlayerRound,
           endOnFirstSubmit,
         };
         localStorage.setItem(`wakti_letters_game_${code}`, JSON.stringify(meta));
-        // Persist to Supabase so others can fetch by code
-        await supabase.from('letters_games').upsert({
+        const { error: gameError } = await supabase.from('letters_games').upsert({
           code,
           title: meta.title,
-          host_user_id: user?.id || null,
+          host_user_id: user.id,
           host_name: resolvedHost,
           max_players: maxPlayers,
           round_duration_sec: meta.roundDurationSec,
@@ -81,24 +94,30 @@ export default function LettersCreate() {
           letter_mode: meta.letterMode,
           manual_letter: meta.manualLetter,
           rounds_total: meta.roundsTotal,
+          phase: 'waiting',
+          current_round_no: 1,
+          started_at: null,
+          countdown_start_at: null,
+          countdown_sec: 3,
           validation_mode: 'strict',
-          hints_enabled: hintsEnabled,
+          hints_enabled: hintsPerPlayerRound > 0,
+          hints_per_player_round: hintsPerPlayerRound,
           end_on_first_submit: endOnFirstSubmit,
         });
-        // Ensure host is recorded as a player
-        await supabase.from('letters_players').upsert({
+        if (gameError) throw gameError;
+        const { error: playerError } = await supabase.from('letters_players').upsert({
           game_code: code,
-          user_id: user?.id || null,
+          user_id: user.id,
           name: resolvedHost,
         });
+        if (playerError) throw playerError;
       }
-    } catch {}
-    const hostForState = (user?.user_metadata?.full_name
-      || user?.user_metadata?.display_name
-      || user?.user_metadata?.username
-      || user?.email?.split('@')[0]
-      || (language === 'ar' ? 'المضيف' : 'Host')) as string;
-    navigate('/games/letters/waiting', { state: { isHost: true, gameCode: code, maxPlayers, gameTitle, hostName: hostForState, roundDurationSec: durationMode === 'custom' ? Math.max(10, Math.min(300, customDuration || 60)) : parseInt(durationMode, 10), hintsEnabled, endOnFirstSubmit } });
+      navigate('/games/letters/waiting', { state: { isHost: true, gameCode: code, maxPlayers, gameTitle, hostName: resolvedHost, roundDurationSec: durationMode === 'custom' ? Math.max(10, Math.min(300, customDuration || 60)) : parseInt(durationMode, 10), hintsEnabled: hintsPerPlayerRound > 0, hintsPerPlayerRound, endOnFirstSubmit, gameLang: langChoice, letterMode, manualLetter: letterMode === 'manual' ? manualLetter : null } });
+    } catch (error: any) {
+      setErrorMessage(error?.message || (language === 'ar' ? 'تعذر إنشاء اللعبة الآن.' : 'Could not create the game right now.'));
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -124,6 +143,11 @@ export default function LettersCreate() {
         <p className="text-sm text-muted-foreground">
           {language === 'ar' ? 'حتى 6 لاعبين فقط' : 'Up to 6 players only'}
         </p>
+        {errorMessage && (
+          <div className="rounded-md border border-rose-200 bg-rose-50 text-rose-900 dark:bg-rose-950/40 dark:text-rose-200 px-4 py-2">
+            {errorMessage}
+          </div>
+        )}
         <div className="space-y-2">
           <Label htmlFor="letters-title">{language === 'ar' ? 'العنوان' : 'Title'}</Label>
           <Input id="letters-title" value={gameTitle} onChange={(e)=>setGameTitle(e.target.value)} placeholder={language === 'ar' ? 'أدخل عنوانًا جميلًا للعبة' : 'Give your game a nice title'} aria-required/>
@@ -229,11 +253,42 @@ export default function LettersCreate() {
               <input id="opt-hints" type="checkbox" className="mt-1" checked={hintsEnabled} onChange={(e)=>setHintsEnabled(e.target.checked)} />
               <div>
                 <label htmlFor="opt-hints" className="font-medium text-sm cursor-pointer">
-                  {language === 'ar' ? 'تفعيل التلميحات (مرة لكل لاعب في كل جولة)' : 'Enable hints (once per player per round)'}
+                  {language === 'ar' ? 'تفعيل التلميحات' : 'Enable hints'}
                 </label>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {language === 'ar' ? 'يساعد الذكاء بسرعة في الفئة العالقة، مرة واحدة لكل لاعب في كل جولة.' : 'Blazing-fast AI hint to help stuck category, once per player per round.'}
+                  {language === 'ar' ? 'حدد عدد التلميحات المسموح بها لكل لاعب في كل جولة.' : 'Choose how many hints each player gets per round.'}
                 </p>
+                {hintsEnabled && (
+                  <div className="mt-3 space-y-2">
+                    <Label className="text-xs text-muted-foreground">{language === 'ar' ? 'عدد التلميحات لكل لاعب في كل جولة' : 'Hints per player per round'}</Label>
+                    <RadioGroup value={hintLimitMode} onValueChange={(v)=>setHintLimitMode(v as '1'|'2'|'3'|'custom')} className="flex flex-wrap gap-4">
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="1" id="hints-1" />
+                        <Label htmlFor="hints-1">1</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="2" id="hints-2" />
+                        <Label htmlFor="hints-2">2</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="3" id="hints-3" />
+                        <Label htmlFor="hints-3">3</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <RadioGroupItem value="custom" id="hints-custom" />
+                        <Label htmlFor="hints-custom">{language === 'ar' ? 'مخصص' : 'Custom'}</Label>
+                      </div>
+                    </RadioGroup>
+                    {hintLimitMode === 'custom' && (
+                      <div className="max-w-[180px]">
+                        <Input type="number" min={1} max={10} value={customHintLimit} onChange={(e)=>setCustomHintLimit(parseInt(e.target.value || '1', 10))} />
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      {language === 'ar' ? `الحد الحالي: ${hintsPerPlayerRound} تلميح لكل لاعب في كل جولة.` : `Current limit: ${hintsPerPlayerRound} hint${hintsPerPlayerRound === 1 ? '' : 's'} per player per round.`}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -281,8 +336,8 @@ export default function LettersCreate() {
         </div>
 
         <div className="pt-2">
-          <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={handleCreate} disabled={!gameTitle.trim()}>
-            {language === 'ar' ? 'إنشاء' : 'Create'}
+          <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={handleCreate} disabled={!gameTitle.trim() || submitting}>
+            {submitting ? (language === 'ar' ? 'جارٍ الإنشاء...' : 'Creating...') : (language === 'ar' ? 'إنشاء' : 'Create')}
           </Button>
         </div>
       </div>

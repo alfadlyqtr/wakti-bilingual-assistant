@@ -206,6 +206,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [clipOrder, setClipOrder] = useState<number[]>([]);   // indices into videoClips for reorder
   const [swapClipIdx, setSwapClipIdx] = useState<number | null>(null); // first clip selected for swap
   const [clipsReady, setClipsReady] = useState(false); // true when all clips done, before stitch
+  const [autoStitchQueued, setAutoStitchQueued] = useState(false);
 
   // Visual Supervisor — per-scene spatial motion briefs from Gemini Flash-Lite
   const [visualSupervisorPrompts, setVisualSupervisorPrompts] = useState<(string | null)[]>([null, null, null, null]);
@@ -1394,9 +1395,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
 
     setIsFilming(true);
-    setAnimProgress(Array(cinemaSceneCount).fill('rendering'));
+    setAnimProgress(Array(cinemaSceneCount).fill('queued'));
+    setAnimTaskIds(Array(cinemaSceneCount).fill(null));
+    setAutoStitchQueued(false);
     setCinemaStep('filming');
-    setStitchStatus(language === 'ar' ? '🎬 جاري إطلاق كل المشاهد بالتوازي...' : '🎬 Firing all 4 scene tasks in parallel...');
+    setStitchStatus(language === 'ar' ? '🎬 جاري إطلاق مشاهد الإعلان...' : '🎬 Launching your ad scenes...');
 
     try {
       const imageUrls = images.slice(0, cinemaSceneCount) as string[];
@@ -1437,18 +1440,21 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           scene_index: idx,
           duration: String(AD_DURATIONS[idx] ?? 6),
         });
+        setAnimTaskIds(prev => { const n = [...prev]; n[idx] = result.task_id; return n; });
+        setAnimProgress(prev => { const n = [...prev]; n[idx] = 'queued'; return n; });
         console.log(`[ads] Beat ${idx + 1} task: ${result.task_id} (${AD_DURATIONS[idx]}s)`);
         return result.task_id as string;
       });
 
       const taskIds = await Promise.all(taskPromises);
-      setStitchStatus(language === 'ar' ? '🎬 الكل في الإنتاج... انتظر' : '🎬 All beats rendering… hang tight');
+      setStitchStatus(language === 'ar' ? '🎬 جاري تحريك اللقطات... ستظهر جاهزة واحدة تلو الأخرى' : '🎬 Rendering your clips... they will finish one by one');
 
       // ── Step 2: Poll all tasks in parallel until every clip is done ──
       const clipUrls: string[] = new Array(taskIds.length).fill('');
       const MAX_CLIP_POLLS = 80; // ~6.5 min
       for (let poll = 0; poll < MAX_CLIP_POLLS; poll++) {
         await new Promise(r => setTimeout(r, 5000));
+        let pollFailure: string | null = null;
         await Promise.all(taskIds.map(async (taskId, idx) => {
           if (clipUrls[idx]) return; // already done
           try {
@@ -1459,17 +1465,24 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
               console.log(`[ads] Beat ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}…`);
             } else if (statusResult.status === 'FAILED') {
-              throw new Error(statusResult.error || `Beat ${idx + 1} failed`);
+              setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
+              pollFailure = statusResult.error || `Beat ${idx + 1} failed`;
+            } else if (statusResult.status === 'IN_QUEUE') {
+              setAnimProgress(prev => { const n = [...prev]; if (n[idx] !== 'done') n[idx] = 'queued'; return n; });
+            } else {
+              setAnimProgress(prev => { const n = [...prev]; if (n[idx] !== 'done') n[idx] = 'rendering'; return n; });
             }
           } catch (pollErr: any) {
             console.warn(`[ads] Beat ${idx + 1} poll error:`, pollErr);
           }
         }));
+        if (pollFailure) throw new Error(pollFailure);
         const doneCount = clipUrls.filter(Boolean).length;
+        const activeCount = taskIds.length - doneCount;
         setStitchStatus(
           language === 'ar'
-            ? `🎬 الإنتاج... ${doneCount}/${taskIds.length} جاهز`
-            : `🎬 Rendering… ${doneCount}/${taskIds.length} ready`
+            ? `🎬 التحريك يعمل... ${doneCount}/${taskIds.length} جاهز • ${activeCount} ما زال يعمل`
+            : `🎬 Animation in progress... ${doneCount}/${taskIds.length} ready • ${activeCount} still working`
         );
         if (clipUrls.every(Boolean)) break;
       }
@@ -1481,15 +1494,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
       setClipOrder(clipUrls.map((_, i) => i));
       setClipsReady(true);
-      setStitchStatus('');
-      toast.success(language === 'ar' ? '🎬 الإعلان جاهز! راجع ثم اضغط تجميع' : '🎬 Ad ready! Review then tap Stitch');
+      setAutoStitchQueued(true);
+      setStitchStatus(language === 'ar' ? '🎬 كل اللقطات جاهزة — جاري بدء تجميع الفيلم النهائي...' : '🎬 All clips are ready — starting the final film stitch...');
     } catch (err: any) {
       console.error('[ads] Film produce error:', err);
       setAnimProgress(prev => prev.map(p => p === 'rendering' ? 'error' : p));
+      setAutoStitchQueued(false);
       toast.error(language === 'ar' ? 'فشل الإنتاج: ' + err.message : 'Production failed: ' + err.message);
     } finally {
       setIsFilming(false);
-      setStitchStatus('');
     }
   }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat, visualSupervisorPrompts]);
 
@@ -1498,6 +1511,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setClipsReady(false);
     setClipOrder([]);
     setSwapClipIdx(null);
+    setAutoStitchQueued(false);
     await handleFilm();
   }, [handleFilm]);
 
@@ -1505,16 +1519,18 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const handleStitchClips = useCallback(async () => {
     if (!user || isStitching) return;
     const orderedUrls = clipOrder.map(i => videoClips[i]).filter(Boolean) as string[];
+    const orderedDurations = clipOrder.map(i => AD_DURATIONS[i] ?? 10).slice(0, orderedUrls.length);
     if (orderedUrls.length < 1) return;
     setIsStitching(true);
-    setStitchStatus(language === 'ar' ? '🎬 جاري تجميع الفيلم...' : '🎬 Stitching your film...');
+    setAutoStitchQueued(false);
+    setStitchStatus(language === 'ar' ? '🎬 جاري تجميع الفيلم النهائي...' : '🎬 Stitching your final film...');
     try {
       const { data: stitchResult, error: stitchErr } = await supabase.functions.invoke('cinema-producer', {
         body: {
           videoUrls: orderedUrls,
           logoUrl: brandAnchor || null,
           format: cinemaFormat,
-          clipDuration: 10,
+          clipDurations: orderedDurations,
         },
       });
       if (stitchErr) throw new Error(stitchErr.message || 'Stitch invoke failed');
@@ -1539,6 +1555,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             : `🎬 Stitching... ${progress ? `(${progress}%)` : ''}`
         );
         if (status === 'done' && url) {
+          setPremiereClips(orderedUrls);
           setPremiereVideoUrl(url);
           setPremiereClipIndex(0);
           setAnimProgress(Array(cinemaSceneCount).fill('done'));
@@ -1560,6 +1577,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setStitchStatus('');
     }
   }, [user, isStitching, clipOrder, videoClips, brandAnchor, cinemaFormat, cinemaSceneCount, language, loadQuota]);
+
+  useEffect(() => {
+    if (!autoStitchQueued || isStitching || cinemaStep !== 'filming' || !clipsReady || clipOrder.length === 0) return;
+    handleStitchClips();
+  }, [autoStitchQueued, isStitching, cinemaStep, clipsReady, clipOrder, handleStitchClips]);
 
   // ── Role 5: Premiere — FFmpeg.wasm in-browser stitch → single MP4 blob ──
   const handleStitch = useCallback(async () => {
@@ -1630,12 +1652,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setClipOrder([]);
     setSwapClipIdx(null);
     setClipsReady(false);
+    setAutoStitchQueued(false);
     // cinemaSceneCount is hard-locked to AD_SCENE_COUNT (4) — no reset needed
     setIsFilming(false);
     setIsCasting(false);
     setIsStitching(false);
     setPremiereVideoUrl(null);
     setPremiereClipIndex(0);
+    setPremiereClips([]);
     setIsCinemaSaving(false);
     setIsCinemaSaving(false);
     setCinemaReferenceImages([]);
@@ -4007,6 +4031,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 {cinemaStep === 'filming' && (() => {
                   const hasError = animProgress.slice(0, cinemaSceneCount).some(p => p === 'error');
                   const allClipsDone = clipsReady && clipOrder.length > 0;
+                  const totalAdDuration = AD_DURATIONS.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0);
+                  const doneCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'done').length;
+                  const queuedCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'queued' || p === 'idle').length;
+                  const renderingCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'rendering').length;
                   return (
                     <div className="flex flex-col gap-6 pb-4">
                       {/* Header */}
@@ -4014,6 +4042,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         {hasError ? (
                           <h3 className="text-base font-bold" style={{color:'#f87171'}}>
                             {language === 'ar' ? '⚠️ فشل الإنتاج — اضغط إعادة المحاولة' : '⚠️ Production failed — tap Retry'}
+                          </h3>
+                        ) : autoStitchQueued ? (
+                          <h3 className="text-lg font-bold text-white">
+                            {language === 'ar' ? '🎬 جاري تجهيز الفيلم النهائي...' : '🎬 Preparing your final film...'}
                           </h3>
                         ) : allClipsDone && !isStitching ? (
                           <h3 className="text-lg font-bold text-white">
@@ -4029,11 +4061,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </h3>
                         )}
                         <p className="text-xs text-white/50">
-                          {allClipsDone && !isStitching
-                            ? (language === 'ar' ? 'اضغط مقطعين لتبديلهم • ثم اضغط تجميع' : 'Tap two clips to swap • then tap Stitch')
+                          {autoStitchQueued
+                            ? (language === 'ar' ? 'كل المقاطع جاهزة • سيبدأ التجميع الآن تلقائياً' : 'All clips are ready • the final stitch is starting automatically')
+                            : allClipsDone && !isStitching
+                            ? (language === 'ar' ? 'بدّل المقاطع إن أردت • ثم اضغط تجميع الفيلم النهائي' : 'Swap clips if needed • then tap Stitch Final Film')
                             : (language === 'ar'
-                              ? `${cinemaSceneCount} مشاهد • ${cinemaSceneCount * 10} ثانية إجمالياً`
-                              : `${cinemaSceneCount} scenes • ${cinemaSceneCount * 10}s total`)}
+                              ? `${doneCount}/${cinemaSceneCount} جاهز • ${renderingCount} قيد التحريك • ${queuedCount} في الانتظار • ${totalAdDuration}ث إجمالياً`
+                              : `${doneCount}/${cinemaSceneCount} ready • ${renderingCount} rendering • ${queuedCount} queued • ${totalAdDuration}s total`)}
                         </p>
                       </div>
 
@@ -4134,13 +4168,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         </div>
                       ) : (
                         /* ── Still generating: show keyframe thumbnails with progress ── */
-                        <div className="grid grid-cols-3 gap-2 px-1">
+                        <div className="grid grid-cols-2 gap-3 px-1">
                           {sceneImages.slice(0, cinemaSceneCount).map((img, idx) => {
+                            const sceneState = animProgress[idx];
                             const sceneDone = animProgress[idx] === 'done';
+                            const sceneRendering = sceneState === 'rendering';
+                            const sceneErrored = sceneState === 'error';
                             const clipUrl = videoClips[idx];
                             return (
                               <div key={idx} className="relative rounded-xl overflow-hidden"
-                                style={{aspectRatio:'9/16', minHeight:'100px', background:'rgba(12,15,20,0.8)', border: sceneDone ? '1px solid rgba(34,197,94,0.5)' : '1px solid rgba(226,199,168,0.2)'}}>
+                                style={{aspectRatio:'9/16', minHeight:'132px', background:'rgba(12,15,20,0.8)', border: sceneDone ? '1px solid rgba(34,197,94,0.5)' : sceneErrored ? '1px solid rgba(248,113,113,0.45)' : sceneRendering ? '1px solid rgba(59,130,246,0.45)' : '1px solid rgba(226,199,168,0.2)', boxShadow: sceneRendering ? '0 0 18px rgba(59,130,246,0.15)' : 'none'}}>
                                 {sceneDone && clipUrl ? (
                                   <video src={clipUrl} muted playsInline autoPlay loop className="w-full h-full object-cover" />
                                 ) : img ? (
@@ -4150,12 +4187,24 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   style={{background: sceneDone ? 'rgba(0,0,0,0.15)' : img ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.6)'}}>
                                   {sceneDone ? (
                                     <span className="text-green-400 text-lg font-bold">✓</span>
+                                  ) : sceneErrored ? (
+                                    <span className="text-red-400 text-lg font-bold">×</span>
                                   ) : !hasError ? (
-                                    <Loader2 className="h-4 w-4 animate-spin text-[#E2C7A8]/60" />
+                                    <Loader2 className={`h-4 w-4 ${sceneRendering ? 'animate-spin text-[hsl(210,100%,70%)]' : 'animate-pulse text-[#E2C7A8]/75'}`} />
                                   ) : null}
                                 </div>
-                                <span className="absolute top-1 left-1.5 text-[9px] font-bold" style={{color: sceneDone ? '#4ade80' : '#E2C7A8'}}>
+                                <span className="absolute top-1 left-1.5 text-[9px] font-bold" style={{color: sceneDone ? '#4ade80' : sceneRendering ? 'hsl(210,100%,70%)' : sceneErrored ? '#f87171' : '#E2C7A8'}}>
                                   {language === 'ar' ? `م${idx+1}` : `Ch.${idx+1}`}
+                                </span>
+                                <span className="absolute bottom-1.5 left-1.5 right-1.5 px-2 py-1 rounded-md text-[10px] font-semibold text-center"
+                                  style={{background: sceneDone ? 'rgba(34,197,94,0.16)' : sceneErrored ? 'rgba(248,113,113,0.16)' : sceneRendering ? 'rgba(59,130,246,0.16)' : 'rgba(226,199,168,0.14)', color: sceneDone ? '#86efac' : sceneErrored ? '#fca5a5' : sceneRendering ? '#93c5fd' : '#E2C7A8'}}>
+                                  {sceneDone
+                                    ? (language === 'ar' ? 'جاهز' : 'Ready')
+                                    : sceneErrored
+                                    ? (language === 'ar' ? 'فشل' : 'Failed')
+                                    : sceneRendering
+                                    ? (language === 'ar' ? 'جارٍ التحريك' : 'Animating')
+                                    : (language === 'ar' ? 'في الانتظار' : 'Queued')}
                                 </span>
                               </div>
                             );
@@ -4185,11 +4234,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </button>
                         ) : allClipsDone ? (
                           <button
-                            onClick={handleStitch}
+                            onClick={handleStitchClips}
+                            disabled={isStitching || autoStitchQueued}
                             className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                             style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',color:'#0c0f14',boxShadow:'0 6px 24px rgba(226,199,168,0.35)'}}
                           >
-                            <span>{language === 'ar' ? '🎬 عرض الفيلم' : '🎬 Watch Film'}</span>
+                            <span>{language === 'ar' ? '🎬 تجميع الفيلم النهائي' : '🎬 Stitch Final Film'}</span>
                           </button>
                         ) : (
                           <div
@@ -4214,7 +4264,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         </p>
                         <h2 className="text-2xl font-bold text-white">{language === 'ar' ? '🎬 العرض الأول' : '🎬 The Premiere'}</h2>
                         <p className="text-xs text-white/40">
-                          {language === 'ar' ? '٤ مشاهد • ٣٢ث' : '4 Scenes • 32s'}
+                          {language === 'ar' ? `${cinemaSceneCount} مشاهد • ${AD_DURATIONS.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}ث` : `${cinemaSceneCount} Scenes • ${AD_DURATIONS.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}s`}
                         </p>
                       </div>
                       {/* Clip progress dots */}

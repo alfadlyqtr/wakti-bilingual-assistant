@@ -85,7 +85,7 @@ serve(async (req) => {
       console.log(`[cinema-animator] Creating Hailuo I2V task for scene ${scene_index}, duration=${validDuration}s`);
 
       const requestBody = {
-        model: 'bytedance/hailuo-2.3-image-to-video-standard',
+        model: 'hailuo/2-3-image-to-video-standard',
         input: {
           image_url: String(image_url),
           duration: validDuration,

@@ -5,30 +5,45 @@ import { ContactSearch } from "@/components/contacts/ContactSearch";
 import { ContactRequests } from "@/components/contacts/ContactRequests";
 import { ContactList } from "@/components/contacts/ContactList";
 import { BlockedUsers } from "@/components/contacts/BlockedUsers";
+import { GroupChatTab } from "@/components/contacts/GroupChatTab";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { useQuery } from "@tanstack/react-query";
-import { Contact, Bell, ShieldCheck } from "lucide-react";
+import { Contact, Bell, ShieldCheck, Users } from "lucide-react";
 import { getPendingRequestsCount } from "@/services/contactsService";
 import { getAllUnreadCounts } from "@/services/messageService";
 
 export default function Contacts() {
   const { language } = useTheme();
-  const [activeTab, setActiveTab] = useState("contacts");
   const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = (() => {
+    const nextTab = (searchParams.get("tab") || "contacts").toLowerCase();
+    if (["contacts", "requests", "blocked", "groups"].includes(nextTab)) {
+      return nextTab;
+    }
+    return "contacts";
+  })();
+  const [activeTab, setActiveTab] = useState(initialTab);
   
   // Get openChat param from URL (for deep linking from push notifications)
   const openChatUserId = searchParams.get('openChat');
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", tab);
+    setSearchParams(nextParams, { replace: true });
+  };
 
   return (
     <ContactsContent 
       language={language} 
       activeTab={activeTab} 
-      setActiveTab={setActiveTab}
+      setActiveTab={handleTabChange}
       openChatUserId={openChatUserId}
       clearOpenChat={() => {
         searchParams.delete('openChat');
-        setSearchParams(searchParams);
+        setSearchParams(searchParams, { replace: true });
       }}
     />
   );
@@ -81,7 +96,7 @@ export function ContactsContent({
         value={activeTab}
         onValueChange={setActiveTab}
       >
-        <TabsList className="grid grid-cols-3 mb-4 h-10 rounded-2xl bg-black/5 dark:bg-white/5 p-1 border-0 w-[calc(100%+0.5rem)] -mx-1 sm:w-full sm:mx-0">
+        <TabsList className="grid grid-cols-4 mb-4 h-10 rounded-2xl bg-black/5 dark:bg-white/5 p-1 border-0 w-[calc(100%+0.5rem)] -mx-1 sm:w-full sm:mx-0">
           <TabsTrigger value="contacts" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex gap-1.5 items-center justify-center">
             <Contact className="h-3.5 w-3.5" />
             <span>{language === 'ar' ? 'الأصدقاء' : t("contacts", language)}</span>
@@ -99,9 +114,13 @@ export function ContactsContent({
             <ShieldCheck className="h-3.5 w-3.5" />
             <span>{language === 'ar' ? 'المحظورون' : t("blocked", language)}</span>
           </TabsTrigger>
+          <TabsTrigger value="groups" className="rounded-xl text-xs font-bold text-foreground/50 data-[state=active]:bg-[hsl(280,70%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex gap-1.5 items-center justify-center">
+            <Users className="h-3.5 w-3.5" />
+            <span>{language === 'ar' ? 'المجموعات' : 'Group Chat'}</span>
+          </TabsTrigger>
         </TabsList>
 
-        <ContactSearch />
+        {activeTab !== "groups" && <ContactSearch />}
         
         <TabsContent value="contacts" className="space-y-4 mt-4 animate-fade-in">
           <ContactList 
@@ -119,6 +138,10 @@ export function ContactsContent({
         
         <TabsContent value="blocked" className="space-y-4 animate-fade-in">
           <BlockedUsers onUnblockSuccess={handleUnblockSuccess} />
+        </TabsContent>
+
+        <TabsContent value="groups" className="space-y-4 animate-fade-in">
+          <GroupChatTab embedded={embedded} />
         </TabsContent>
       </Tabs>
     </div>

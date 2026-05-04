@@ -35,6 +35,7 @@ const WaktiAIV2 = lazy(() => import("@/pages/WaktiAIV2"));
 const Calendar = lazy(() => import("@/pages/Calendar"));
 const Contacts = lazy(() => import("@/pages/Contacts"));
 const ChatPage = lazy(() => import("@/pages/ChatPage"));
+const GroupChatPage = lazy(() => import("@/pages/GroupChatPage"));
 const Maw3d = lazy(() => import("@/pages/Maw3d"));
 const Maw3dCreate = lazy(() => import("@/pages/Maw3dCreate"));
 const Maw3dManage = lazy(() => import("@/pages/Maw3dManage"));
@@ -61,6 +62,8 @@ const VideoShare = lazy(() => import("@/pages/VideoShare"));
 const BusinessCardShare = lazy(() => import("@/pages/BusinessCardShare"));
 const WalletPass = lazy(() => import("@/pages/WalletPass"));
 const QRTextView = lazy(() => import("@/pages/QRTextView"));
+const LettersAiSetup = lazy(() => import("@/pages/LettersAiSetup"));
+const LettersAiPlay = lazy(() => import("@/pages/LettersAiPlay"));
 const LettersCreate = lazy(() => import("@/pages/LettersCreate"));
 const LettersWaiting = lazy(() => import("@/pages/LettersWaiting"));
 const LettersJoin = lazy(() => import("@/pages/LettersJoin"));
@@ -188,6 +191,8 @@ export default function ConsumerRouter() {
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/music" element={<MusicStudio />} />
+          <Route path="/games/letters/ai" element={<LettersAiSetup />} />
+          <Route path="/games/letters/ai/play" element={<LettersAiPlay />} />
           <Route path="/games/letters/create" element={<LettersCreate />} />
           <Route path="/games/letters/join" element={<LettersJoin />} />
           <Route path="/games/letters/waiting" element={<LettersWaiting />} />
@@ -196,6 +201,7 @@ export default function ConsumerRouter() {
           <Route path="/games" element={<Games />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/contacts/:contactId" element={<ChatPage />} />
+          <Route path="/group-chats/:conversationId" element={<GroupChatPage />} />
           <Route path="/maw3d" element={<Maw3d />} />
           <Route path="/maw3d/create" element={<Maw3dCreate />} />
           <Route path="/maw3d/manage/:id" element={<Maw3dManage />} />

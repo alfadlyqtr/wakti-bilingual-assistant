@@ -201,25 +201,10 @@ export default function MyWishlists() {
   };
 
   const navigateBackToSource = () => {
-    if (cameFromAccount) {
-      navigate("/account?tab=wishes");
-      return;
-    }
-
-    navigate("/wishlists");
+    navigate("/account?tab=wishes");
   };
 
   const handleRootBack = () => {
-    if (cameFromAccount) {
-      navigate("/account?tab=wishes");
-      return;
-    }
-
-    if (window.history.length > 1) {
-      navigate(-1);
-      return;
-    }
-
     navigate("/account?tab=wishes");
   };
 
@@ -933,12 +918,7 @@ export default function MyWishlists() {
     : "";
 
   const handleBackFromFriendListDetail = () => {
-    if (contactFilterId) {
-      blockedContactAutoOpenRef.current = contactFilterId;
-    }
-
-    setSelectedFriendListId(null);
-    setView("friends");
+    navigate("/account?tab=wishes");
   };
 
   const handleShowFriendWishlistGroup = (ownerUserId: string) => {
@@ -1083,14 +1063,14 @@ export default function MyWishlists() {
       <div>
         {/* Back + Header */}
         <div className="flex items-center gap-3 mb-4">
-          <button 
+          <Button
+            variant="outline"
+            className="h-10 rounded-xl px-3 shrink-0"
             onClick={navigateBackToSource}
-            className="flex items-center justify-center h-10 w-10 rounded-full bg-gradient-to-br from-[hsl(210,100%,55%)] to-[hsl(195,100%,50%)] text-white shadow-lg active:scale-95 transition-transform"
-            aria-label={isAr ? "رجوع" : "Back"}
-            title={isAr ? "رجوع" : "Back"}
           >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {isAr ? "رجوع" : "Back"}
+          </Button>
           <div className="flex-1 min-w-0">
             <h2 className="font-bold text-lg truncate">{selectedList.title}</h2>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -1236,8 +1216,9 @@ export default function MyWishlists() {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={handleBackFromFriendListDetail}>
-            <ArrowLeft className="h-5 w-5" />
+          <Button variant="outline" className="h-10 rounded-xl px-3 shrink-0" onClick={handleBackFromFriendListDetail}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {isAr ? "رجوع" : "Back"}
           </Button>
           <div className="flex-1 min-w-0">
             <p className="text-xs text-muted-foreground">
@@ -1245,8 +1226,8 @@ export default function MyWishlists() {
             </p>
             <p className="font-semibold truncate">
               {contactFilterId && selectedFriendOwnerListCount > 1
-                ? (isAr ? `العودة إلى ${selectedFriendOwnerListCount} قوائم` : `Back to ${selectedFriendOwnerListCount} wishlists`)
-                : (isAr ? "العودة" : "Back")}
+                ? (isAr ? `${selectedFriendOwnerListCount} قوائم لهذا الصديق` : `${selectedFriendOwnerListCount} wishlists for this contact`)
+                : (isAr ? "تفاصيل القائمة" : "Wishlist details")}
             </p>
           </div>
         </div>
@@ -1357,8 +1338,9 @@ export default function MyWishlists() {
     if (!sharedList) {
       return (
         <div className="space-y-4">
-          <Button variant="ghost" size="icon" onClick={() => { setSharedListId(null); setView("my"); navigate(buildWishlistRoute()); }}>
-            <ArrowLeft className="h-5 w-5" />
+          <Button variant="outline" className="h-10 rounded-xl px-3 shrink-0" onClick={() => { setSharedListId(null); setView("my"); navigate(buildWishlistRoute()); }}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {isAr ? "رجوع" : "Back"}
           </Button>
           <div className="text-center py-12 space-y-3">
             <ShoppingBag className="h-12 w-12 mx-auto text-muted-foreground/40" />
@@ -1375,8 +1357,9 @@ export default function MyWishlists() {
     return (
       <div>
         <div className="flex items-center gap-3 mb-4">
-          <Button variant="ghost" size="icon" onClick={() => { setSharedListId(null); setView("my"); navigate(buildWishlistRoute()); }}>
-            <ArrowLeft className="h-5 w-5" />
+          <Button variant="outline" className="h-10 rounded-xl px-3 shrink-0" onClick={() => { setSharedListId(null); setView("my"); navigate(buildWishlistRoute()); }}>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            {isAr ? "رجوع" : "Back"}
           </Button>
           <Avatar className="h-8 w-8">
             {sharedList.owner?.avatar_url && <AvatarImage src={sharedList.owner.avatar_url} />}
@@ -1719,12 +1702,12 @@ export default function MyWishlists() {
         <div className="flex items-start gap-3">
           {(view === "my" || view === "friends") && (
             <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 rounded-full"
+              variant="outline"
+              className="h-10 rounded-xl px-3 shrink-0"
               onClick={handleRootBack}
             >
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              {isAr ? "رجوع" : "Back"}
             </Button>
           )}
           <div>

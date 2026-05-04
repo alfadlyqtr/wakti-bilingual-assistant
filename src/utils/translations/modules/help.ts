@@ -259,10 +259,10 @@ export const help = {
   solitaireGame: "Solitaire",
   solitaireGameDesc: "Play classic Solitaire. Drag cards to build stacks.",
   lettersGame: "Letters Game",
-  lettersGameDesc: "Play a word game (shared or against AI).",
+  lettersGameDesc: "Play a word game against AI or in a shared game.",
   lettersGameStep1: "1. Tap 'Letters' tab",
-  lettersGameStep2: "2. Choose 'Create shared game', 'Join shared game', or 'Start now against AI'",
-  lettersGameStep3: "3. Follow the on-screen instructions",
+  lettersGameStep2: "2. Choose 'Start now against AI', 'Create shared game', or 'Join shared game'",
+  lettersGameStep3: "3. Pick your settings and follow the on-screen instructions",
   
   // Settings section
   settingsTitle: "Settings & Account",

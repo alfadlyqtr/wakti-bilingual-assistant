@@ -103,7 +103,7 @@ export default function Games() {
     {
       key: 'letters' as const,
       title: isArabic ? 'الحروف' : 'Letters',
-      subtitle: isArabic ? 'كما هي الآن بدون تعديل' : 'Kept exactly as it is',
+      subtitle: isArabic ? 'ألعب ضد الذكاء الاصطناعي أو مع الآخرين' : 'Play against AI or with other people',
       icon: Languages,
       glow: 'from-emerald-600 to-teal-500',
       badge: isArabic ? 'جاهز' : 'Ready',
@@ -122,7 +122,7 @@ export default function Games() {
     if (screen === 'chess') return chessExitHandler ? '' : (isArabic ? 'اختر طريقتك ثم ابدأ اللعب' : 'Pick your mode and start playing');
     if (screen === 'tictactoe') return ticTacToeExitHandler ? '' : (isArabic ? 'ابدأ بسرعة ضد الذكاء الاصطناعي أو صديق' : 'Jump in against AI or a friend');
     if (screen === 'solitaire') return isArabic ? 'جلسة فردية أنيقة وهادئة' : 'A focused solo session';
-    if (screen === 'letters') return isArabic ? 'تجربة الحروف كما هي' : 'Letters exactly as it already is';
+    if (screen === 'letters') return isArabic ? 'اختر اللعب ضد الذكاء الاصطناعي أو لعبة مشتركة' : 'Choose AI play or a shared game';
     return '';
   })();
 
@@ -207,7 +207,7 @@ export default function Games() {
                 <button onClick={() => navigate('/games/letters/join')} className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[#E9CEB0] bg-[#E9CEB0]/10 px-6 py-3 text-sm font-medium text-[#060541] transition-all duration-200 hover:bg-[#E9CEB0]/20 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10">
                   {isArabic ? 'الانضمام إلى لعبة مشتركة' : 'Join shared game'}
                 </button>
-                <button className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-medium text-white shadow-[0_4px_14px_rgba(16,185,129,0.3)] transition-all duration-200 hover:shadow-[0_6px_20px_rgba(16,185,129,0.4)] hover:-translate-y-0.5">
+                <button onClick={() => navigate('/games/letters/ai')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-medium text-white shadow-[0_4px_14px_rgba(16,185,129,0.3)] transition-all duration-200 hover:shadow-[0_6px_20px_rgba(16,185,129,0.4)] hover:-translate-y-0.5">
                   {isArabic ? 'ابدأ الآن ضد الذكاء الاصطناعي' : 'Start now against AI'}
                 </button>
               </div>
