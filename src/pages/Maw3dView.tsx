@@ -48,6 +48,17 @@ export default function Maw3dView() {
     }
   }, [shortId]);
 
+  useEffect(() => {
+    document.body.classList.add('public-page');
+    document.body.classList.remove('keyboard-visible', 'dashboard-page', 'wakti-ai-page', 'project-detail-page', 'deen-ask-page');
+    document.body.style.paddingBottom = '0';
+    document.body.style.marginBottom = '0';
+
+    return () => {
+      document.body.classList.remove('public-page');
+    };
+  }, []);
+
   // Enforce the creator's preferred theme on shared view
   useEffect(() => {
     const pref = event?.text_style?.preferred_theme as 'dark' | 'light' | undefined;
@@ -339,16 +350,14 @@ export default function Maw3dView() {
 
   if (isLoading) {
     return (
-      <div className="h-full flex flex-col bg-background">
+      <div className="min-h-screen min-h-dvh bg-background">
         <Toaster />
-        <div className="flex-1 overflow-y-auto">
-          <div className="container mx-auto px-4 py-8">
-            <div className="max-w-2xl mx-auto text-center space-y-4">
-              <div className="animate-pulse">
-                <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
-                <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
-              </div>
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center space-y-4">
+            <div className="animate-pulse">
+              <div className="w-64 h-48 bg-gray-200 rounded-lg mx-auto mb-4"></div>
+              <div className="h-4 bg-gray-200 rounded w-48 mx-auto mb-2"></div>
+              <div className="h-4 bg-gray-200 rounded w-32 mx-auto"></div>
             </div>
           </div>
         </div>
@@ -358,14 +367,12 @@ export default function Maw3dView() {
 
   if (!event) {
     return (
-      <div className="h-full flex flex-col bg-background">
+      <div className="min-h-screen min-h-dvh bg-background">
         <Toaster />
-        <div className="flex-1 overflow-y-auto">
-          <div className="container mx-auto px-4 py-8">
-            <div className="max-w-2xl mx-auto text-center space-y-4">
-              <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
-              <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
-            </div>
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-2xl mx-auto text-center space-y-4">
+            <h1 className="text-2xl font-bold mb-4">{t('eventNotFound', eventLanguage)}</h1>
+            <p className="text-muted-foreground">{t('eventMayHaveExpired', eventLanguage)}</p>
           </div>
         </div>
       </div>
@@ -426,64 +433,62 @@ export default function Maw3dView() {
   };
 
   return (
-    <div className="h-full flex flex-col bg-background">
+    <div className="min-h-screen min-h-dvh bg-background">
       <Toaster />
-      <div className="flex-1 overflow-y-auto">
-        <InAppWaktiEscape language={eventLanguage} containerClassName="max-w-2xl" />
-        <div className="container mx-auto px-4 py-8 pb-32">
-          <div className="max-w-2xl mx-auto space-y-6">
-            
-            {/* Event Preview with Image Blur */}
-            <EventPreview
-              event={event}
-              textStyle={event.text_style}
-              backgroundType={event.background_type}
-              backgroundValue={event.background_value}
-              rsvpCount={rsvpCounts}
-              showAttendingCount={event.show_attending_count}
-              language={eventLanguage}
-              imageBlur={event.image_blur}
-              eventStyle={event.event_style || undefined}
-            />
+      <InAppWaktiEscape language={eventLanguage} containerClassName="max-w-2xl" />
+      <div className="container mx-auto px-4 py-8 pb-32">
+        <div className="max-w-2xl mx-auto space-y-6">
+          
+          {/* Event Preview with Image Blur */}
+          <EventPreview
+            event={event}
+            textStyle={event.text_style}
+            backgroundType={event.background_type}
+            backgroundValue={event.background_value}
+            rsvpCount={rsvpCounts}
+            showAttendingCount={event.show_attending_count}
+            language={eventLanguage}
+            imageBlur={event.image_blur}
+            eventStyle={event.event_style || undefined}
+          />
 
-            {/* Audio playback (if event has audio) */}
-            {event.audio_preview_url && (
-              <Card style={buildLowerSectionStyle()}>
-                <CardContent className="p-3 space-y-1.5">
-                  {(() => {
-                    const isYouTube = /youtu\.be\//.test(event.audio_preview_url!) || /youtube\.com/.test(event.audio_preview_url!);
-                    if (event.audio_source === 'youtube' || isYouTube) {
-                      const match = event.audio_preview_url!.match(/[?&]v=([^&]+)/) || event.audio_preview_url!.match(/youtu\.be\/([^?]+)/);
-                      const vid = match ? match[1] : undefined;
-                      if (vid) {
-                        return (
-                          <YouTubeAudioPlayer
-                            videoId={vid}
-                            title={event.audio_title || undefined}
-                            autoplay={event.audio_playback_mode === 'autoplay'}
-                            compact={true}
-                            showTitle={false}
-                          />
-                        );
-                      }
+          {/* Audio playback (if event has audio) */}
+          {event.audio_preview_url && (
+            <Card style={buildLowerSectionStyle()}>
+              <CardContent className="p-3 space-y-1.5">
+                {(() => {
+                  const isYouTube = /youtu\.be\//.test(event.audio_preview_url!) || /youtube\.com/.test(event.audio_preview_url!);
+                  if (event.audio_source === 'youtube' || isYouTube) {
+                    const match = event.audio_preview_url!.match(/[?&]v=([^&]+)/) || event.audio_preview_url!.match(/youtu\.be\/([^?]+)/);
+                    const vid = match ? match[1] : undefined;
+                    if (vid) {
+                      return (
+                        <YouTubeAudioPlayer
+                          videoId={vid}
+                          title={event.audio_title || undefined}
+                          autoplay={event.audio_playback_mode === 'autoplay'}
+                          compact={true}
+                          showTitle={false}
+                        />
+                      );
                     }
-                    // Fallback to native audio via custom player
-                    return (
-                      <NativeAudioPlayer
-                        src={event.audio_preview_url!}
-                        title={event.audio_title || undefined}
-                        autoplay={event.audio_playback_mode === 'autoplay'}
-                        compact={true}
-                        rtl={eventLanguage === 'ar'}
-                      />
-                    );
-                  })()}
-                  {aacSupported === false && event.audio_source !== 'youtube' && (
-                    <div className="text-xs text-destructive mt-1">This browser may not support M4A/AAC previews. Please try Chrome or Edge.</div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+                  }
+                  return (
+                    <NativeAudioPlayer
+                      src={event.audio_preview_url!}
+                      title={event.audio_title || undefined}
+                      autoplay={event.audio_playback_mode === 'autoplay'}
+                      compact={true}
+                      rtl={eventLanguage === 'ar'}
+                    />
+                  );
+                })()}
+                {aacSupported === false && event.audio_source !== 'youtube' && (
+                  <div className="text-xs text-destructive mt-1">This browser may not support M4A/AAC previews. Please try Chrome or Edge.</div>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
             {/* Action Buttons - styled as its own card */}
             <Card style={buildLowerSectionStyle()}>
@@ -600,7 +605,6 @@ export default function Maw3dView() {
 
           </div>
         </div>
-      </div>
     </div>
   );
 }
