@@ -125,7 +125,7 @@ export async function getContacts() {
       profile,
       relationshipStatus: relationship,
     };
-  }).filter((contact) => Boolean(contact.profile));
+  });
 
   return results;
 }

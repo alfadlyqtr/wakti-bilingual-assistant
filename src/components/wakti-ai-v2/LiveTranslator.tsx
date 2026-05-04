@@ -3,6 +3,7 @@ import { ArrowLeftRight, Mic, User, UserRound, X, Volume2, Languages, Loader2 } 
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
+import { emitEvent } from '@/utils/eventBus';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,48 @@ interface LiveTranslatorProps {
   onBack?: () => void;
 }
 
+type LiveTranslatorStatus = 'idle' | 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking';
+
+type TrialErrorPayload = {
+  error?: string;
+  feature?: string;
+  reason?: 'feature_locked' | 'limit_reached' | 'trial_expired';
+  code?: 'TRIAL_LIMIT_REACHED' | 'TRIAL_FEATURE_LOCKED' | 'TRIAL_EXPIRED';
+  consumed?: number;
+  limit?: number;
+  remaining?: number;
+  details?: string;
+};
+
+async function parseFunctionsInvokeError(error: unknown): Promise<TrialErrorPayload | null> {
+  if (!error || typeof error !== 'object' || !('context' in error)) {
+    return null;
+  }
+
+  const response = (error as { context?: Response }).context;
+  if (!(response instanceof Response)) {
+    return null;
+  }
+
+  try {
+    return await response.clone().json() as TrialErrorPayload;
+  } catch {
+    try {
+      const text = await response.text();
+      return text ? { details: text } : null;
+    } catch {
+      return null;
+    }
+  }
+}
+
+type CleanupOptions = {
+  preserveError?: boolean;
+  preserveTranscripts?: boolean;
+  nextStatus?: LiveTranslatorStatus;
+};
+
+const MIN_USER_RECORD_MS = 300;
 const MAX_USER_RECORD_SECONDS = 15;
 const MAX_AI_RESPONSE_SECONDS = 20;
 
@@ -111,12 +154,13 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
     const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'];
     return (saved && validVoices.includes(saved)) ? saved : 'echo';
   });
-  const [status, setStatus] = useState<'idle' | 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking'>('idle');
+  const [status, setStatus] = useState<LiveTranslatorStatus>('idle');
   const [error, setError] = useState<string | null>(null);
   const [isHolding, setIsHolding] = useState(false);
   const [countdown, setCountdown] = useState(MAX_USER_RECORD_SECONDS);
   const [userTranscript, setUserTranscript] = useState('');
   const [translatedText, setTranslatedText] = useState('');
+  const [audioUnlocked, setAudioUnlocked] = useState(false);
 
   // Refs for OpenAI Realtime (WebRTC)
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -135,6 +179,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const aiResponseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const targetLanguageRef = useRef(initialTargetLanguage);
   const spokenLanguageRef = useRef(initialSpokenLanguage);
+  const activePointerIdRef = useRef<number | null>(null);
   const VALID_VOICES = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'] as const;
   const getValidVoice = (v: string | null): string => {
     if (v && VALID_VOICES.includes(v as any)) return v;
@@ -162,7 +207,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   }, [voice]);
 
   // --- 1. CORE UTILITIES ---
-  const cleanup = useCallback(() => {
+  const cleanup = useCallback((options?: CleanupOptions) => {
     if (connectionTimeoutRef.current) {
       clearTimeout(connectionTimeoutRef.current);
       connectionTimeoutRef.current = null;
@@ -195,12 +240,52 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
       try { pcRef.current.close(); } catch (e) { /* ignore */ }
       pcRef.current = null;
     }
-    setStatus('idle');
+    activePointerIdRef.current = null;
+    setStatus(options?.nextStatus ?? 'idle');
     setIsHolding(false);
-    setError(null);
-    setUserTranscript('');
-    setTranslatedText('');
+    setCountdown(MAX_USER_RECORD_SECONDS);
+    setAudioUnlocked(false);
+    if (!options?.preserveError) {
+      setError(null);
+    }
+    if (!options?.preserveTranscripts) {
+      setUserTranscript('');
+      setTranslatedText('');
+    }
   }, []);
+
+  const resetWithError = useCallback((message: string) => {
+    setError(message);
+    cleanup({ preserveError: true, preserveTranscripts: true });
+  }, [cleanup]);
+
+  const unlockAudio = useCallback(async () => {
+    if (audioUnlocked && audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      return;
+    }
+
+    try {
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new AudioContext();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
+    } catch (e) {
+      console.warn('[LiveTranslator] Failed to resume AudioContext:', e);
+    }
+
+    try {
+      if (audioRef.current) {
+        audioRef.current.muted = false;
+        audioRef.current.volume = 1;
+        await audioRef.current.play().catch(() => {});
+      }
+      setAudioUnlocked(true);
+    } catch (e) {
+      console.warn('[LiveTranslator] Audio play blocked:', e);
+    }
+  }, [audioUnlocked]);
 
   const waitForIceGatheringComplete = useCallback((pc: RTCPeerConnection, timeoutMs = 5000) => {
     return new Promise<void>((resolve) => {
@@ -261,6 +346,10 @@ INSTRUCTIONS:
     }
   }, []);
 
+  useEffect(() => {
+    return () => cleanup();
+  }, [cleanup]);
+
   // --- 2. REALTIME EVENT HANDLER ---
   const handleRealtimeEvent = useCallback((msg: any) => {
     switch (msg.type) {
@@ -268,7 +357,8 @@ INSTRUCTIONS:
         console.log('[LiveTranslator] Session updated:', msg.session?.instructions?.substring(0, 200));
         break;
       case 'conversation.item.input_audio_transcription.completed':
-        const transcript = msg.transcript?.trim() || '';
+      case 'input_audio_transcription.completed': {
+        const transcript = (msg.transcript ?? msg.delta ?? '').trim();
         console.log('[LiveTranslator] User transcript:', transcript);
         setUserTranscript(transcript);
         if (transcript.length > 0) {
@@ -281,6 +371,7 @@ INSTRUCTIONS:
           setStatus('ready');
         }
         break;
+      }
       case 'response.created':
         if (isProcessingResponseRef.current) return;
         isProcessingResponseRef.current = true;
@@ -296,6 +387,7 @@ INSTRUCTIONS:
             if (dcRef.current?.readyState === 'open') {
               dcRef.current.send(JSON.stringify({ type: 'response.cancel' }));
             }
+            setError(t('That took too long. Please try again.', 'استغرقت الترجمة وقتاً طويلاً. حاول مرة أخرى.'));
             setStatus('ready');
             aiResponseTimeoutRef.current = null;
           }, MAX_AI_RESPONSE_SECONDS * 1000);
@@ -314,8 +406,13 @@ INSTRUCTIONS:
         setError(null);
         break;
       case 'error':
-        if (!msg.error?.message?.includes('buffer too small') && !msg.error?.message?.includes('Conversation already has an active response')) {
-          setError(msg.error?.message || 'Realtime error');
+        if (msg.error?.message?.includes('buffer too small')) {
+          setError(t('Hold a little longer, then release to translate.', 'استمر بالضغط قليلاً ثم ارفع إصبعك للترجمة.'));
+          setStatus('ready');
+          break;
+        }
+        if (!msg.error?.message?.includes('Conversation already has an active response')) {
+          setError(t('Something went wrong. Please try again.', 'حدث خطأ. حاول مرة أخرى.'));
           setStatus('ready');
         }
         break;
@@ -335,13 +432,16 @@ INSTRUCTIONS:
     if (pcRef.current) { try { pcRef.current.close(); } catch (e) {} pcRef.current = null; }
 
     try {
+      await unlockAudio();
+
       if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
 
-      if (audioContextRef.current) { try { audioContextRef.current.close(); } catch (e) {} }
-      const audioCtx = new AudioContext();
-      audioContextRef.current = audioCtx;
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new AudioContext();
+      }
+      const audioCtx = audioContextRef.current;
       if (audioCtx.state === 'suspended') await audioCtx.resume();
       
       const source = audioCtx.createMediaStreamSource(stream);
@@ -360,8 +460,7 @@ INSTRUCTIONS:
           if (connectionLostTimeoutRef.current) clearTimeout(connectionLostTimeoutRef.current);
           connectionLostTimeoutRef.current = setTimeout(() => {
             if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-              setError(language === 'ar' ? 'انقطع الاتصال' : 'Connection lost');
-              cleanup();
+              resetWithError(language === 'ar' ? 'انقطع الاتصال. حاول مرة أخرى.' : 'Connection lost. Please try again.');
             }
           }, 1500);
           return;
@@ -377,6 +476,8 @@ INSTRUCTIONS:
       pc.ontrack = (event) => {
         if (audioRef.current && event.streams[0]) {
           audioRef.current.srcObject = event.streams[0];
+          audioRef.current.muted = false;
+          audioRef.current.volume = 1;
           audioRef.current.play().catch(() => {});
         }
       };
@@ -386,9 +487,7 @@ INSTRUCTIONS:
 
       if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
       connectionTimeoutRef.current = setTimeout(() => {
-        setError(language === 'ar' ? 'انتهت مهلة الاتصال' : 'Connection timeout');
-        setStatus('idle');
-        cleanup();
+        resetWithError(language === 'ar' ? 'انتهت مهلة الاتصال. حاول مرة أخرى.' : 'Connection timeout. Please try again.');
       }, 15000);
 
       dc.onopen = () => {
@@ -425,15 +524,13 @@ INSTRUCTIONS:
       };
 
       dc.onerror = () => {
-        setError(language === 'ar' ? 'خطأ في الاتصال' : 'Connection error');
-        setStatus('idle');
+        resetWithError(language === 'ar' ? 'حدث خطأ في الاتصال. حاول مرة أخرى.' : 'Connection error. Please try again.');
       };
 
       dc.onclose = () => {
         if (connectionLostTimeoutRef.current) clearTimeout(connectionLostTimeoutRef.current);
         connectionLostTimeoutRef.current = setTimeout(() => {
-          setError(language === 'ar' ? 'انقطع الاتصال' : 'Connection lost');
-          cleanup();
+          resetWithError(language === 'ar' ? 'انقطع الاتصال. حاول مرة أخرى.' : 'Connection lost. Please try again.');
         }, 1000);
       };
 
@@ -451,25 +548,56 @@ INSTRUCTIONS:
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
+      if (response.error) {
+        const errorPayload = await parseFunctionsInvokeError(response.error);
+        if (errorPayload?.error === 'TRIAL_LIMIT_REACHED') {
+          emitEvent('wakti-trial-limit-reached', {
+            feature: errorPayload.feature || 'interpreter',
+            reason: errorPayload.reason,
+            code: errorPayload.code,
+            consumed: errorPayload.consumed,
+            limit: errorPayload.limit,
+            remaining: errorPayload.remaining,
+          });
+          cleanup();
+          return;
+        }
+
+        throw new Error(errorPayload?.details || response.error.message || 'Failed to get SDP answer');
+      }
+
       if (response.data?.error === 'TRIAL_LIMIT_REACHED') {
-        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: response.data?.feature || 'interpreter' } }));
-        setStatus('idle');
+        emitEvent('wakti-trial-limit-reached', {
+          feature: response.data?.feature || 'interpreter',
+          reason: response.data?.reason,
+          code: response.data?.code,
+          consumed: response.data?.consumed,
+          limit: response.data?.limit,
+          remaining: response.data?.remaining,
+        });
         cleanup();
         return;
       }
 
-      if (response.error || !response.data?.sdp_answer) {
-        throw new Error(response.error?.message || 'Failed to get SDP answer');
+      if (!response.data?.sdp_answer) {
+        throw new Error('Failed to get SDP answer');
       }
 
       await pc.setRemoteDescription({ type: 'answer', sdp: response.data.sdp_answer });
 
+      if (response.data?.trial?.justExhausted || response.data?.trial?.remaining === 0) {
+        emitEvent('wakti-trial-quota-finished', {
+          feature: response.data?.trial?.feature || 'interpreter',
+          consumed: response.data?.trial?.consumed,
+          limit: response.data?.trial?.limit,
+          remaining: response.data?.trial?.remaining,
+        });
+      }
+
     } catch (err: any) {
-      setError(err.message || (language === 'ar' ? 'فشل الاتصال' : 'Connection failed'));
-      setStatus('idle');
-      cleanup();
+      resetWithError(err.message || (language === 'ar' ? 'فشل الاتصال. حاول مرة أخرى.' : 'Connection failed. Please try again.'));
     }
-  }, [language, cleanup, buildInstructions, handleRealtimeEvent, waitForIceGatheringComplete]);
+  }, [language, cleanup, buildInstructions, handleRealtimeEvent, resetWithError, unlockAudio, waitForIceGatheringComplete]);
 
   // --- 4. RECORDING LOGIC ---
   const stopRecording = useCallback(() => {
@@ -482,8 +610,9 @@ INSTRUCTIONS:
     }
 
     const holdDuration = Date.now() - holdStartRef.current;
-    if (holdDuration < 500) {
+    if (holdDuration < MIN_USER_RECORD_MS) {
       setIsHolding(false);
+      setError(t('Hold a little longer, then release to translate.', 'استمر بالضغط قليلاً ثم ارفع إصبعك للترجمة.'));
       setStatus('ready');
       setTimeout(() => { isStoppingRef.current = false; }, 300);
       return;
@@ -498,13 +627,15 @@ INSTRUCTIONS:
       }
       setTimeout(() => { isStoppingRef.current = false; }, 700);
     }, 300);
-  }, []);
+  }, [t]);
 
   const startRecording = useCallback(() => {
     if (dcRef.current?.readyState !== 'open') {
       setError(t('Not connected', 'غير متصل'));
       return;
     }
+
+    unlockAudio().catch(() => {});
 
     isStoppingRef.current = false;
     isHoldingRef.current = true;
@@ -524,11 +655,17 @@ INSTRUCTIONS:
       setCountdown(remaining);
       if (remaining <= 0) stopRecording();
     }, 200);
-  }, [t, stopRecording]);
+  }, [t, stopRecording, unlockAudio]);
 
   // --- 5. UI HANDLERS ---
   const handleHoldStart = (e: React.PointerEvent) => {
     e.preventDefault();
+    activePointerIdRef.current = e.pointerId;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {
+      console.warn('[LiveTranslator] Failed to capture pointer:', err);
+    }
     if (status === 'ready') {
       setIsHolding(true);
       startRecording();
@@ -537,6 +674,17 @@ INSTRUCTIONS:
 
   const handleHoldEnd = (e: React.PointerEvent) => {
     e.preventDefault();
+    if (activePointerIdRef.current !== null && e.pointerId !== activePointerIdRef.current) {
+      return;
+    }
+    try {
+      if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      }
+    } catch {
+      // ignore pointer release issues
+    }
+    activePointerIdRef.current = null;
     if (isHolding) {
       stopRecording();
       setIsHolding(false);
@@ -546,9 +694,9 @@ INSTRUCTIONS:
   const handleDisconnect = () => cleanup();
 
   const statusText: Record<typeof status, string> = {
-    idle: t('Tap Connect to start', 'اضغط اتصل للبدء'),
+    idle: t('Tap Start to connect', 'اضغط ابدأ للاتصال'),
     connecting: t('Connecting...', 'جارٍ الاتصال...'),
-    ready: t('Hold to speak', 'اضغط مع الاستمرار للتحدث'),
+    ready: t('Hold to speak, release to translate', 'اضغط مع الاستمرار للتحدث ثم ارفع إصبعك للترجمة'),
     listening: t('Listening...', 'أسمعك...'),
     processing: t('Translating...', 'جارٍ الترجمة...'),
     speaking: t('Speaking...', 'يتحدث...'),
@@ -582,7 +730,7 @@ INSTRUCTIONS:
           {t('Live Translator', 'المترجم الفوري')}
         </h2>
         <p className="text-xs text-muted-foreground">
-          {t('Translation only • clean interpreter voice', 'ترجمة فقط • صوت مترجم واضح')}
+          {t('Hold to speak • release to hear the translation', 'اضغط مع الاستمرار • ارفع إصبعك لسماع الترجمة')}
         </p>
       </div>
 
@@ -717,7 +865,7 @@ INSTRUCTIONS:
 
       {status === 'idle' ? (
         <Button onClick={initializeConnection} className="w-full h-10 text-sm bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700">
-          <Volume2 className="w-4 h-4 mr-2" /> {t('Start Interpreter', 'ابدأ الترجمة')}
+          <Volume2 className="w-4 h-4 mr-2" /> {t('Start Translator', 'ابدأ المترجم')}
         </Button>
       ) : (
         <Button onClick={handleDisconnect} variant="outline" size="sm" className="w-full">
@@ -750,10 +898,9 @@ INSTRUCTIONS:
           <button
             onPointerDown={handleHoldStart}
             onPointerUp={handleHoldEnd}
-            onPointerLeave={handleHoldEnd}
             onPointerCancel={handleHoldEnd}
             disabled={status === 'connecting' || status === 'processing' || status === 'speaking'}
-            className={`translator-orb ${status === 'listening' ? 'listening' : ''} ${status === 'speaking' ? 'speaking' : ''} ${status === 'processing' ? 'processing' : ''}`}
+            className={`translator-orb touch-none ${status === 'listening' ? 'listening' : ''} ${status === 'speaking' ? 'speaking' : ''} ${status === 'processing' ? 'processing' : ''}`}
           >
             {status === 'connecting' ? <Loader2 className="w-10 h-10 text-white animate-spin" /> : 
              status === 'speaking' ? <Volume2 className="w-10 h-10 text-white" /> : <Mic className="w-10 h-10 text-white" />}

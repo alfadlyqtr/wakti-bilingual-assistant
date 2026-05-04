@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -69,6 +69,19 @@ import { getContacts } from "@/services/contactsService";
 type WishlistPrivacy = "public" | "contacts" | "private";
 type ClaimStatus = "pending" | "approved" | "declined" | "unclaimed";
 
+interface WishlistClaimProfile {
+  username?: string;
+  display_name?: string;
+  avatar_url?: string;
+}
+
+interface WishlistClaim {
+  id: string;
+  status: ClaimStatus;
+  claimer_id: string;
+  claimer?: WishlistClaimProfile | null;
+}
+
 interface Wishlist {
   id: string;
   user_id: string;
@@ -81,6 +94,7 @@ interface Wishlist {
   allow_sharing: boolean;
   created_at: string;
   item_count?: number;
+  pending_claim_count?: number;
 }
 
 interface WishlistItem {
@@ -96,7 +110,7 @@ interface WishlistItem {
   is_received: boolean;
   ai_extracted: boolean;
   created_at: string;
-  claim?: { id: string; status: ClaimStatus; claimer_id: string } | null;
+  claim?: WishlistClaim | null;
 }
 
 interface FriendWishlist extends Wishlist {
@@ -167,6 +181,47 @@ export default function MyWishlists() {
   const queryClient = useQueryClient();
   const isAr = language === "ar";
   const [searchParams] = useSearchParams();
+  const entrySource = searchParams.get("from");
+  const cameFromAccount = entrySource === "account";
+
+  const buildWishlistRoute = (params?: Record<string, string | null | undefined>) => {
+    const nextParams = new URLSearchParams();
+
+    if (cameFromAccount) {
+      nextParams.set("from", "account");
+    }
+
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (!value) return;
+      nextParams.set(key, value);
+    });
+
+    const queryString = nextParams.toString();
+    return queryString ? `/wishlists?${queryString}` : "/wishlists";
+  };
+
+  const navigateBackToSource = () => {
+    if (cameFromAccount) {
+      navigate("/account?tab=wishes");
+      return;
+    }
+
+    navigate("/wishlists");
+  };
+
+  const handleRootBack = () => {
+    if (cameFromAccount) {
+      navigate("/account?tab=wishes");
+      return;
+    }
+
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+
+    navigate("/account?tab=wishes");
+  };
 
   // View state: "my" | "friends" | "list-detail" | "friend-list-detail" | "shared-list-detail"
   const [view, setView] = useState<"my" | "friends" | "list-detail" | "friend-list-detail" | "shared-list-detail">("my");
@@ -174,6 +229,7 @@ export default function MyWishlists() {
   const [selectedFriendListId, setSelectedFriendListId] = useState<string | null>(null);
   const [sharedListId, setSharedListId] = useState<string | null>(null);
   const [contactFilterId, setContactFilterId] = useState<string | null>(null);
+  const blockedContactAutoOpenRef = useRef<string | null>(null);
 
   // Check for list query parameter and auto-open that list
   useEffect(() => {
@@ -275,6 +331,60 @@ export default function MyWishlists() {
     if (payload.image_url?.trim()) setItemImageUrl(payload.image_url.trim());
   };
 
+  const enrichItemsWithClaims = async (items: WishlistItem[]) => {
+    if (!items.length) return [] as WishlistItem[];
+
+    const itemIds = items.map((item) => item.id);
+    const { data: claims, error: claimsError } = await supabase
+      .from("wishlist_claims")
+      .select("id, status, claimer_id, item_id, claimed_at")
+      .in("item_id", itemIds)
+      .neq("status", "unclaimed")
+      .neq("status", "declined")
+      .order("claimed_at", { ascending: false });
+
+    if (claimsError) throw claimsError;
+
+    const claimerIds = Array.from(new Set((claims || []).map((claim) => claim.claimer_id).filter(Boolean)));
+    let claimerProfileMap = new Map<string, WishlistClaimProfile>();
+
+    if (claimerIds.length > 0) {
+      const { data: claimerProfiles, error: claimerProfilesError } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_url")
+        .in("id", claimerIds);
+
+      if (claimerProfilesError) throw claimerProfilesError;
+
+      claimerProfileMap = new Map(
+        (claimerProfiles || []).map((profile) => [
+          profile.id,
+          {
+            username: profile.username || undefined,
+            display_name: profile.display_name || undefined,
+            avatar_url: profile.avatar_url || undefined,
+          },
+        ])
+      );
+    }
+
+    const latestClaimsByItemId = new Map<string, WishlistClaim>();
+    for (const claim of claims || []) {
+      if (latestClaimsByItemId.has(claim.item_id)) continue;
+      latestClaimsByItemId.set(claim.item_id, {
+        id: claim.id,
+        status: claim.status as ClaimStatus,
+        claimer_id: claim.claimer_id,
+        claimer: claimerProfileMap.get(claim.claimer_id) || null,
+      });
+    }
+
+    return items.map((item) => ({
+      ...item,
+      claim: latestClaimsByItemId.get(item.id) || null,
+    })) as WishlistItem[];
+  };
+
   const buildWishlistShareUrl = (wishlistId: string) => {
     return `${window.location.origin}/wishlist/${encodeURIComponent(wishlistId)}`;
   };
@@ -325,11 +435,23 @@ export default function MyWishlists() {
       // Count items per list
       const listsWithCount = await Promise.all(
         (data || []).map(async (list) => {
-          const { count } = await supabase
-            .from("wishlist_items")
-            .select("id", { count: "exact", head: true })
-            .eq("wishlist_id", list.id);
-          return { ...list, item_count: count || 0 };
+          const [{ count: itemCount }, { count: pendingClaimCount }] = await Promise.all([
+            supabase
+              .from("wishlist_items")
+              .select("id", { count: "exact", head: true })
+              .eq("wishlist_id", list.id),
+            supabase
+              .from("wishlist_claims")
+              .select("id", { count: "exact", head: true })
+              .eq("wishlist_id", list.id)
+              .eq("owner_id", user.id)
+              .eq("status", "pending"),
+          ]);
+          return {
+            ...list,
+            item_count: itemCount || 0,
+            pending_claim_count: pendingClaimCount || 0,
+          };
         })
       );
       return listsWithCount as Wishlist[];
@@ -349,20 +471,7 @@ export default function MyWishlists() {
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
       if (error) throw error;
-      // Check claims for each item
-      const itemsWithClaims = await Promise.all(
-        (data || []).map(async (item) => {
-          const { data: claim } = await supabase
-            .from("wishlist_claims")
-            .select("id, status, claimer_id")
-            .eq("item_id", item.id)
-            .neq("status", "unclaimed")
-            .neq("status", "declined")
-            .maybeSingle();
-          return { ...item, claim: claim || null };
-        })
-      );
-      return itemsWithClaims as WishlistItem[];
+      return await enrichItemsWithClaims((data || []) as WishlistItem[]);
     },
     enabled: !!selectedListId,
   });
@@ -375,17 +484,39 @@ export default function MyWishlists() {
       const contacts = await getContacts();
       if (!contacts || contacts.length === 0) return [];
       const contactIds = contacts.map((contact) => contact.contact_id);
-      // Get their non-private wishlists
       const { data: lists, error } = await supabase
         .from("wishlists")
-        .select("*, profiles!user_id(username, display_name, avatar_url)")
+        .select("*")
         .in("user_id", contactIds)
         .neq("privacy", "private")
         .order("created_at", { ascending: false });
       if (error) throw error;
-      return (lists || []).map((l: any) => ({
-        ...l,
-        owner: l.profiles || { username: "unknown", display_name: "" },
+
+      const rows = (lists || []) as Wishlist[];
+      if (rows.length === 0) return [];
+
+      const ownerIds = Array.from(new Set(rows.map((list) => list.user_id)));
+      const { data: ownerProfiles, error: ownerProfilesError } = await supabase
+        .from("profiles")
+        .select("id, username, display_name, avatar_url")
+        .in("id", ownerIds);
+
+      if (ownerProfilesError) throw ownerProfilesError;
+
+      const ownerProfileMap = new Map(
+        (ownerProfiles || []).map((profile) => [
+          profile.id,
+          {
+            username: profile.username || "unknown",
+            display_name: profile.display_name || "",
+            avatar_url: profile.avatar_url || undefined,
+          },
+        ])
+      );
+
+      return rows.map((list) => ({
+        ...list,
+        owner: ownerProfileMap.get(list.user_id) || { username: "unknown", display_name: "" },
       })) as FriendWishlist[];
     },
     enabled: !!user?.id && view === "friends",
@@ -402,19 +533,7 @@ export default function MyWishlists() {
         .eq("wishlist_id", selectedFriendListId)
         .order("sort_order", { ascending: true });
       if (error) throw error;
-      const itemsWithClaims = await Promise.all(
-        (data || []).map(async (item) => {
-          const { data: claim } = await supabase
-            .from("wishlist_claims")
-            .select("id, status, claimer_id")
-            .eq("item_id", item.id)
-            .neq("status", "unclaimed")
-            .neq("status", "declined")
-            .maybeSingle();
-          return { ...item, claim: claim || null };
-        })
-      );
-      return itemsWithClaims as WishlistItem[];
+      return await enrichItemsWithClaims((data || []) as WishlistItem[]);
     },
     enabled: !!selectedFriendListId,
   });
@@ -463,19 +582,7 @@ export default function MyWishlists() {
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: false });
       if (error) throw error;
-      const itemsWithClaims = await Promise.all(
-        (data || []).map(async (item) => {
-          const { data: claim } = await supabase
-            .from("wishlist_claims")
-            .select("id, status, claimer_id")
-            .eq("item_id", item.id)
-            .neq("status", "unclaimed")
-            .neq("status", "declined")
-            .maybeSingle();
-          return { ...item, claim: claim || null };
-        })
-      );
-      return itemsWithClaims as WishlistItem[];
+      return await enrichItemsWithClaims((data || []) as WishlistItem[]);
     },
     enabled: !!sharedListId && !!sharedList,
   });
@@ -633,6 +740,38 @@ export default function MyWishlists() {
     },
   });
 
+  const approveClaimMutation = useMutation({
+    mutationFn: async (claimId: string) => {
+      const { error } = await supabase
+        .from("wishlist_claims")
+        .update({ status: "approved", resolved_at: new Date().toISOString() })
+        .eq("id", claimId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wishlist-items"] });
+      queryClient.invalidateQueries({ queryKey: ["wishlists", "mine"] });
+      toast.success(isAr ? "تمت الموافقة على الحجز" : "Claim approved");
+    },
+    onError: () => toast.error(isAr ? "تعذرت الموافقة على الحجز" : "Couldn't approve the claim"),
+  });
+
+  const declineClaimMutation = useMutation({
+    mutationFn: async (claimId: string) => {
+      const { error } = await supabase
+        .from("wishlist_claims")
+        .update({ status: "declined", resolved_at: new Date().toISOString() })
+        .eq("id", claimId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["wishlist-items"] });
+      queryClient.invalidateQueries({ queryKey: ["wishlists", "mine"] });
+      toast.success(isAr ? "تم رفض الحجز" : "Claim declined");
+    },
+    onError: () => toast.error(isAr ? "تعذر رفض الحجز" : "Couldn't decline the claim"),
+  });
+
   // ── AI Extract from URL ─────────────────────────────────────────────────────
   const handleAIExtractURL = async () => {
     if (!itemUrl.trim()) {
@@ -786,9 +925,36 @@ export default function MyWishlists() {
   const visibleFriendLists = contactFilterId
     ? friendLists.filter((list) => list.user_id === contactFilterId)
     : friendLists;
+  const selectedFriendOwnerListCount = selectedFriendList
+    ? friendLists.filter((list) => list.user_id === selectedFriendList.user_id).length
+    : 0;
+  const selectedFriendOwnerName = selectedFriendList
+    ? selectedFriendList.owner?.display_name || selectedFriendList.owner?.username || (isAr ? "صديقك" : "Your contact")
+    : "";
+
+  const handleBackFromFriendListDetail = () => {
+    if (contactFilterId) {
+      blockedContactAutoOpenRef.current = contactFilterId;
+    }
+
+    setSelectedFriendListId(null);
+    setView("friends");
+  };
+
+  const handleShowFriendWishlistGroup = (ownerUserId: string) => {
+    blockedContactAutoOpenRef.current = ownerUserId;
+    setContactFilterId(ownerUserId);
+    setSelectedFriendListId(null);
+    setView("friends");
+  };
 
   useEffect(() => {
     if (!contactFilterId || view !== "friends" || selectedFriendListId || visibleFriendLists.length !== 1) {
+      return;
+    }
+
+    if (blockedContactAutoOpenRef.current === contactFilterId) {
+      blockedContactAutoOpenRef.current = null;
       return;
     }
 
@@ -881,6 +1047,11 @@ export default function MyWishlists() {
                           📅 {new Date(list.event_date).toLocaleDateString()}
                         </span>
                       )}
+                      {(list.pending_claim_count || 0) > 0 && (
+                        <Badge className="text-xs bg-orange-500/15 text-orange-600 border-orange-400/30">
+                          ⏳ {list.pending_claim_count} {isAr ? "بانتظار الموافقة" : "pending"}
+                        </Badge>
+                      )}
                     </div>
                   </div>
                   <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
@@ -905,12 +1076,15 @@ export default function MyWishlists() {
   const renderListDetail = () => {
     if (!selectedList) return null;
     const PrivacyIcon = privacyConfig[selectedList.privacy].icon;
+    const pendingClaimCount = loadingItems
+      ? selectedList.pending_claim_count || 0
+      : listItems.filter((item) => item.claim?.status === "pending").length;
     return (
       <div>
         {/* Back + Header */}
         <div className="flex items-center gap-3 mb-4">
           <button 
-            onClick={() => navigate('/account?tab=wishes')}
+            onClick={navigateBackToSource}
             className="flex items-center justify-center h-10 w-10 rounded-full bg-gradient-to-br from-[hsl(210,100%,55%)] to-[hsl(195,100%,50%)] text-white shadow-lg active:scale-95 transition-transform"
             aria-label={isAr ? "رجوع" : "Back"}
             title={isAr ? "رجوع" : "Back"}
@@ -926,6 +1100,13 @@ export default function MyWishlists() {
                 <span className="ml-1 text-green-500">• {isAr ? "الحجز مفعّل" : "Claims enabled"}</span>
               )}
             </div>
+            {pendingClaimCount > 0 && (
+              <div className="mt-1.5">
+                <Badge className="text-xs bg-orange-500/15 text-orange-600 border-orange-400/30">
+                  ⏳ {pendingClaimCount} {isAr ? "حجوزات بانتظار موافقتك" : "pending claims need your approval"}
+                </Badge>
+              </div>
+            )}
           </div>
           <Button
             variant="destructive"
@@ -974,6 +1155,8 @@ export default function MyWishlists() {
                 isAr={isAr}
                 onDelete={() => deleteItemMutation.mutate(item.id)}
                 onMarkReceived={() => markReceivedMutation.mutate(item.id)}
+                onApproveClaim={() => item.claim && approveClaimMutation.mutate(item.claim.id)}
+                onDeclineClaim={() => item.claim && declineClaimMutation.mutate(item.claim.id)}
               />
             ))}
           </div>
@@ -1045,21 +1228,86 @@ export default function MyWishlists() {
   const renderFriendListDetail = () => {
     if (!selectedFriendList) return null;
     const fl = selectedFriendList as FriendWishlist;
+    const ownerUsername = fl.owner?.username ? `@${fl.owner.username}` : selectedFriendOwnerName;
+    const friendEventLabel = fl.event_date
+      ? new Date(fl.event_date).toLocaleDateString(isAr ? "ar" : "en")
+      : null;
+
     return (
-      <div>
-        <div className="flex items-center gap-3 mb-4">
-          <Button variant="ghost" size="icon" onClick={() => { setView("friends"); setSelectedFriendListId(null); }}>
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={handleBackFromFriendListDetail}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <Avatar className="h-8 w-8">
-            {fl.owner?.avatar_url && <AvatarImage src={fl.owner.avatar_url} />}
-            <AvatarFallback>{(fl.owner?.username || "?").slice(0, 2).toUpperCase()}</AvatarFallback>
-          </Avatar>
           <div className="flex-1 min-w-0">
-            <h2 className="font-bold text-base truncate">{selectedFriendList.title}</h2>
-            <p className="text-xs text-muted-foreground">@{fl.owner?.username}</p>
+            <p className="text-xs text-muted-foreground">
+              {contactFilterId ? (isAr ? "قوائم هذا الصديق" : "This contact's wishlists") : (isAr ? "قوائم الأصدقاء" : "Friend wishlists")}
+            </p>
+            <p className="font-semibold truncate">
+              {contactFilterId && selectedFriendOwnerListCount > 1
+                ? (isAr ? `العودة إلى ${selectedFriendOwnerListCount} قوائم` : `Back to ${selectedFriendOwnerListCount} wishlists`)
+                : (isAr ? "العودة" : "Back")}
+            </p>
           </div>
         </div>
+
+        <Card className="border border-border/60 bg-card/80">
+          <CardContent className="p-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <Avatar className="h-11 w-11 flex-shrink-0">
+                {fl.owner?.avatar_url && <AvatarImage src={fl.owner.avatar_url} />}
+                <AvatarFallback>{(fl.owner?.username || "?").slice(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="font-bold text-lg leading-tight break-words">{selectedFriendList.title}</h2>
+                  {selectedFriendOwnerListCount > 1 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {selectedFriendOwnerListCount} {isAr ? "قوائم" : "wishlists"}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground break-words">
+                  {selectedFriendOwnerName}
+                  {fl.owner?.username ? ` • ${ownerUsername}` : ""}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {friendEventLabel && (
+                <Badge variant="outline" className="text-xs">
+                  📅 {friendEventLabel}
+                </Badge>
+              )}
+              <Badge variant="outline" className="text-xs">
+                🧾 {loadingFriendItems ? (isAr ? "جارٍ تحميل العناصر..." : "Loading items...") : `${friendListItems.length} ${isAr ? "عناصر" : "items"}`}
+              </Badge>
+              {selectedFriendList.allow_claims && (
+                <Badge className="text-xs bg-green-500/15 text-green-600 border-green-400/30">
+                  🎁 {isAr ? "الحجز مفتوح" : "Claims open"}
+                </Badge>
+              )}
+            </div>
+
+            {selectedFriendList.description && (
+              <p className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
+                {selectedFriendList.description}
+              </p>
+            )}
+
+            {selectedFriendOwnerListCount > 1 && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => handleShowFriendWishlistGroup(selectedFriendList.user_id)}
+              >
+                <Users className="h-4 w-4 mr-2" />
+                {isAr ? `عرض كل قوائم ${selectedFriendOwnerName}` : `View all ${selectedFriendOwnerListCount} wishlists`}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
 
         {loadingFriendItems ? (
           <div className="flex justify-center py-10">
@@ -1109,7 +1357,7 @@ export default function MyWishlists() {
     if (!sharedList) {
       return (
         <div className="space-y-4">
-          <Button variant="ghost" size="icon" onClick={() => { setSharedListId(null); setView("my"); navigate("/wishlists"); }}>
+          <Button variant="ghost" size="icon" onClick={() => { setSharedListId(null); setView("my"); navigate(buildWishlistRoute()); }}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="text-center py-12 space-y-3">
@@ -1127,12 +1375,12 @@ export default function MyWishlists() {
     return (
       <div>
         <div className="flex items-center gap-3 mb-4">
-          <Button variant="ghost" size="icon" onClick={() => { setSharedListId(null); setView("my"); navigate("/wishlists"); }}>
+          <Button variant="ghost" size="icon" onClick={() => { setSharedListId(null); setView("my"); navigate(buildWishlistRoute()); }}>
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <Avatar className="h-8 w-8">
             {sharedList.owner?.avatar_url && <AvatarImage src={sharedList.owner.avatar_url} />}
-            <AvatarFallback>{(sharedList.owner?.username || "?").slice(0, 2).toUpperCase()}</AvatarFallback>
+            <AvatarFallback>{(sharedList.owner?.display_name || sharedList.owner?.username || "?").charAt(0).toUpperCase()}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
             <h2 className="font-bold text-base truncate">{sharedList.title}</h2>
@@ -1200,23 +1448,27 @@ export default function MyWishlists() {
     onMarkReceived?: () => void;
     onClaim?: () => void;
     onUnclaim?: () => void;
+    onApproveClaim?: () => void;
+    onDeclineClaim?: () => void;
     onGenerateThankYou?: () => Promise<string>;
   }
 
   function WishlistItemCard({
     item, isOwner, isAr, allowClaims = false,
-    currentUserId, onDelete, onMarkReceived, onClaim, onUnclaim, onGenerateThankYou
+    currentUserId, onDelete, onMarkReceived, onClaim, onUnclaim, onApproveClaim, onDeclineClaim, onGenerateThankYou
   }: WishlistItemCardProps) {
     const [showThankYou, setShowThankYou] = useState(false);
     const [thankYouMsg, setThankYouMsg] = useState("");
     const [generatingTY, setGeneratingTY] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
+    const [expandedImageUrl, setExpandedImageUrl] = useState<string | null>(null);
 
     const isMyClaim = item.claim?.claimer_id === currentUserId;
     const isClaimedByOther = item.claim && !isMyClaim && item.claim.status !== "unclaimed";
     const isClaimedByMe = isMyClaim && item.claim?.status !== "unclaimed";
     const pConfig = priorityConfig[item.priority as keyof typeof priorityConfig] || priorityConfig[2];
     const canExpand = item.title.length > 28 || Boolean(item.description && item.description.length > 90);
+    const claimDisplayName = item.claim?.claimer?.display_name || item.claim?.claimer?.username || (isAr ? "أحد الأصدقاء" : "a friend");
 
     const handleGenerateTY = async () => {
       if (!onGenerateThankYou) return;
@@ -1228,171 +1480,234 @@ export default function MyWishlists() {
     };
 
     return (
-      <Card className={cn(
-        "border transition-all",
-        item.is_received && "opacity-60",
-        isClaimedByOther && "border-orange-400/40 bg-orange-500/5"
-      )}>
-        <CardContent className="p-3">
-          <div className="flex gap-3">
-            {/* Image */}
-            {item.image_url && (
-              <img
-                src={item.image_url}
-                alt={item.title}
-                className="w-16 h-16 object-cover rounded-lg flex-shrink-0 border"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-              />
-            )}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className={cn(
-                    "font-semibold text-sm",
-                    isExpanded ? "whitespace-normal break-words" : "truncate",
-                    item.is_received && "line-through text-muted-foreground"
-                  )}>
-                    {item.title}
-                    {item.ai_extracted && (
-                      <Sparkles className="h-3 w-3 inline ml-1 text-purple-500" />
-                    )}
-                  </p>
-                  {item.description && (
+      <>
+        <Card className={cn(
+          "border transition-all",
+          item.is_received && "opacity-60",
+          isClaimedByOther && "border-orange-400/40 bg-orange-500/5"
+        )}>
+          <CardContent className="p-3">
+            <div className="flex gap-3">
+              {item.image_url && (
+                <button
+                  type="button"
+                  className="w-16 h-16 rounded-lg flex-shrink-0 border overflow-hidden cursor-zoom-in active:scale-[0.98] transition-transform"
+                  onClick={() => setExpandedImageUrl(item.image_url || null)}
+                  title={isAr ? "اضغط لتكبير الصورة" : "Tap to enlarge image"}
+                >
+                  <img
+                    src={item.image_url}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      const wrapper = (e.target as HTMLImageElement).parentElement;
+                      if (wrapper) {
+                        wrapper.style.display = "none";
+                      }
+                    }}
+                  />
+                </button>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
                     <p className={cn(
-                      "text-xs text-muted-foreground mt-0.5",
-                      isExpanded ? "whitespace-pre-wrap break-words" : "truncate"
-                    )}>{item.description}</p>
-                  )}
-                  <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                    <span className={cn("text-xs font-medium", pConfig.color)}>
-                      {"⭐".repeat(pConfig.stars)}
-                    </span>
-                    {item.price && (
-                      <span className="text-xs text-muted-foreground">{item.price} {item.currency || "USD"}</span>
+                      "font-semibold text-sm",
+                      isExpanded ? "whitespace-normal break-words" : "truncate",
+                      item.is_received && "line-through text-muted-foreground"
+                    )}>
+                      {item.title}
+                      {item.ai_extracted && (
+                        <Sparkles className="h-3 w-3 inline ml-1 text-purple-500" />
+                      )}
+                    </p>
+                    {item.description && (
+                      <p className={cn(
+                        "text-xs text-muted-foreground mt-0.5",
+                        isExpanded ? "whitespace-pre-wrap break-words" : "truncate"
+                      )}>{item.description}</p>
                     )}
-                    {item.product_url && (
-                      <a
-                        href={item.product_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-blue-500 flex items-center gap-0.5"
-                        onClick={(e) => e.stopPropagation()}
+                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                      <span className={cn("text-xs font-medium", pConfig.color)}>
+                        {"⭐".repeat(pConfig.stars)}
+                      </span>
+                      {item.price && (
+                        <span className="text-xs text-muted-foreground">{item.price} {item.currency || "USD"}</span>
+                      )}
+                      {item.product_url && (
+                        <a
+                          href={item.product_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-blue-500 flex items-center gap-0.5"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          {isAr ? "الرابط" : "Link"}
+                        </a>
+                      )}
+                    </div>
+                    {canExpand && (
+                      <button
+                        type="button"
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[hsl(210,100%,65%)]"
+                        onClick={() => setIsExpanded((prev) => !prev)}
                       >
-                        <ExternalLink className="h-3 w-3" />
-                        {isAr ? "الرابط" : "Link"}
-                      </a>
+                        <span>{isExpanded ? (isAr ? "إخفاء" : "Show less") : (isAr ? "عرض المزيد" : "Show more")}</span>
+                        <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-180")} />
+                      </button>
                     )}
                   </div>
-                  {canExpand && (
-                    <button
-                      type="button"
-                      className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-[hsl(210,100%,65%)]"
-                      onClick={() => setIsExpanded((prev) => !prev)}
-                    >
-                      <span>{isExpanded ? (isAr ? "إخفاء" : "Show less") : (isAr ? "عرض المزيد" : "Show more")}</span>
-                      <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", isExpanded && "rotate-180")} />
-                    </button>
-                  )}
-                </div>
-                {/* Owner actions */}
-                {isOwner && (
-                  <div className="flex gap-1 flex-shrink-0">
-                    {!item.is_received && (
+                  {isOwner && (
+                    <div className="flex gap-1 flex-shrink-0">
+                      {!item.is_received && (
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-10 w-10 text-green-500"
+                          onClick={onMarkReceived}
+                          title={isAr ? "تم الاستلام" : "Mark received"}
+                        >
+                          <Check className="h-4.5 w-4.5" />
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="h-10 w-10 text-green-500"
-                        onClick={onMarkReceived}
-                        title={isAr ? "تم الاستلام" : "Mark received"}
+                        className="h-10 w-10 text-red-500"
+                        onClick={onDelete}
+                        title={isAr ? "حذف" : "Delete"}
                       >
-                        <Check className="h-4.5 w-4.5" />
+                        <Trash2 className="h-4.5 w-4.5" />
                       </Button>
-                    )}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-10 w-10 text-red-500"
-                      onClick={onDelete}
-                      title={isAr ? "حذف" : "Delete"}
-                    >
-                      <Trash2 className="h-4.5 w-4.5" />
-                    </Button>
-                  </div>
-                )}
-              </div>
+                    </div>
+                  )}
+                </div>
 
-              {/* Friend claim status */}
-              {!isOwner && (
-                <div className="mt-2 flex items-center gap-2 flex-wrap">
-                  {item.is_received ? (
-                    <Badge variant="secondary" className="text-xs">
-                      🎁 {isAr ? "تم استلامه" : "Received"}
-                    </Badge>
-                  ) : isClaimedByOther ? (
-                    <Badge className="text-xs bg-orange-500/20 text-orange-600 border-orange-400/30">
-                      🔒 {isAr ? "محجوز من شخص آخر" : "Claimed by someone"}
-                    </Badge>
-                  ) : isClaimedByMe ? (
-                    <div className="flex items-center gap-2">
-                      <Badge className="text-xs bg-green-500/20 text-green-600 border-green-400/30">
-                        ✅ {isAr ? "حجزته أنت" : "Claimed by you"}
-                        {item.claim?.status === "pending" && ` (${isAr ? "في الانتظار" : "pending"})`}
+                {!isOwner && (
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    {item.is_received ? (
+                      <Badge variant="secondary" className="text-xs">
+                        🎁 {isAr ? "تم استلامه" : "Received"}
                       </Badge>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="min-h-10 px-3 text-xs text-muted-foreground"
-                        onClick={onUnclaim}
-                      >
-                        <X className="h-3 w-3 mr-1" />{isAr ? "إلغاء" : "Unclaim"}
-                      </Button>
-                      {item.is_received && !item.claim?.["thank_you_sent"] && (
+                    ) : isClaimedByOther ? (
+                      <Badge className="text-xs bg-orange-500/20 text-orange-600 border-orange-400/30">
+                        🔒 {isAr ? "محجوز من شخص آخر" : "Claimed by someone"}
+                      </Badge>
+                    ) : isClaimedByMe ? (
+                      <div className="flex items-center gap-2">
+                        <Badge className="text-xs bg-green-500/20 text-green-600 border-green-400/30">
+                          ✅ {isAr ? "حجزته أنت" : "Claimed by you"}
+                          {item.claim?.status === "pending" && ` (${isAr ? "في الانتظار" : "pending"})`}
+                        </Badge>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="min-h-10 px-3 text-xs text-blue-500"
-                          onClick={handleGenerateTY}
-                          disabled={generatingTY}
+                          className="min-h-10 px-3 text-xs text-muted-foreground"
+                          onClick={onUnclaim}
                         >
-                          {generatingTY ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Heart className="h-3 w-3 mr-1" />}
-                          {isAr ? "شكر AI" : "AI Thank You"}
+                          <X className="h-3 w-3 mr-1" />{isAr ? "إلغاء" : "Unclaim"}
                         </Button>
-                      )}
-                    </div>
-                  ) : allowClaims ? (
-                    <Button
-                      size="sm"
-                      className="min-h-11 px-4 text-xs bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(180,85%,60%)] text-white"
-                      onClick={onClaim}
-                    >
-                      <GiftIcon className="h-3.5 w-3.5 mr-1" />
-                      {isAr ? "سأشتريه" : "I'll get this!"}
-                    </Button>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
+                        {item.is_received && !item.claim?.["thank_you_sent"] && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="min-h-10 px-3 text-xs text-blue-500"
+                            onClick={handleGenerateTY}
+                            disabled={generatingTY}
+                          >
+                            {generatingTY ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Heart className="h-3 w-3 mr-1" />}
+                            {isAr ? "شكر AI" : "AI Thank You"}
+                          </Button>
+                        )}
+                      </div>
+                    ) : allowClaims ? (
+                      <Button
+                        size="sm"
+                        className="min-h-11 px-4 text-xs bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(180,85%,60%)] text-white"
+                        onClick={onClaim}
+                      >
+                        <GiftIcon className="h-3.5 w-3.5 mr-1" />
+                        {isAr ? "سأشتريه" : "I'll get this!"}
+                      </Button>
+                    ) : null}
+                  </div>
+                )}
 
-        {/* AI Thank You message popup */}
-        {showThankYou && thankYouMsg && (
-          <div className="mx-3 mb-3 p-3 bg-blue-500/10 border border-blue-400/30 rounded-lg">
-            <div className="flex items-start gap-2">
-              <Heart className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-foreground flex-1">{thankYouMsg}</p>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-5 w-5"
-                onClick={() => setShowThankYou(false)}
-              >
-                <X className="h-3 w-3" />
-              </Button>
+                {isOwner && item.claim && (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <Badge className={cn(
+                      "text-xs border",
+                      item.claim.status === "pending"
+                        ? "bg-orange-500/15 text-orange-600 border-orange-400/30"
+                        : "bg-green-500/15 text-green-600 border-green-400/30"
+                    )}>
+                      {item.claim.status === "pending"
+                        ? `⏳ ${isAr ? `طلب حجز من ${claimDisplayName}` : `Claim request from ${claimDisplayName}`}`
+                        : `✅ ${isAr ? `محجوز بواسطة ${claimDisplayName}` : `Claimed by ${claimDisplayName}`}`}
+                    </Badge>
+                    {item.claim.status === "pending" && (
+                      <>
+                        <Button
+                          size="sm"
+                          className="min-h-10 px-3 text-xs bg-green-600 hover:bg-green-700 text-white"
+                          onClick={onApproveClaim}
+                        >
+                          <Check className="h-3.5 w-3.5 mr-1" />
+                          {isAr ? "موافقة" : "Approve"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="min-h-10 px-3 text-xs"
+                          onClick={onDeclineClaim}
+                        >
+                          <X className="h-3.5 w-3.5 mr-1" />
+                          {isAr ? "رفض" : "Decline"}
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </Card>
+          </CardContent>
+
+          {showThankYou && thankYouMsg && (
+            <div className="mx-3 mb-3 p-3 bg-blue-500/10 border border-blue-400/30 rounded-lg">
+              <div className="flex items-start gap-2">
+                <Heart className="h-4 w-4 text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-foreground flex-1">{thankYouMsg}</p>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-5 w-5"
+                  onClick={() => setShowThankYou(false)}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        <Dialog open={!!expandedImageUrl} onOpenChange={(open) => !open && setExpandedImageUrl(null)}>
+          <DialogContent className="max-w-3xl p-3 sm:p-4">
+            <DialogHeader>
+              <DialogTitle className="truncate pr-8">{item.title}</DialogTitle>
+            </DialogHeader>
+            {expandedImageUrl && (
+              <div className="overflow-hidden rounded-xl border bg-muted/20">
+                <img
+                  src={expandedImageUrl}
+                  alt={item.title}
+                  className="w-full max-h-[75vh] object-contain"
+                />
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+      </>
     );
   };
 
@@ -1401,13 +1716,25 @@ export default function MyWishlists() {
     <div className={cn("flex flex-col p-4 pb-28 min-h-screen", isAr && "rtl")}>
       {/* Page Header */}
       <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-2xl font-bold bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] bg-clip-text text-transparent">
-            {isAr ? "رغباتي" : "Wishlists"}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {isAr ? "شارك رغباتك مع أصدقائك" : "Share your wishes with friends"}
-          </p>
+        <div className="flex items-start gap-3">
+          {(view === "my" || view === "friends") && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 rounded-full"
+              onClick={handleRootBack}
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          )}
+          <div>
+            <h1 className="text-2xl font-bold bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] bg-clip-text text-transparent">
+              {isAr ? "رغباتي" : "Wishlists"}
+            </h1>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isAr ? "شارك رغباتك مع أصدقائك" : "Share your wishes with friends"}
+            </p>
+          </div>
         </div>
         {(view === "my" || view === "list-detail") && view !== "list-detail" && (
           <Button size="sm" onClick={() => setShowNewListDialog(true)}>

@@ -28,11 +28,13 @@ export function WishlistsEmbedded({ language, userId, navigate }: { language: st
     private: { icon: Lock, label: { en: "Private", ar: "خاص" }, color: "text-gray-500" },
   };
 
+  const wishlistRootPath = "/wishlists?from=account";
+
   return (
     <>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold">{language === 'ar' ? 'قوائم الرغبات' : 'My Wishlists'}</h2>
-        <Button size="sm" onClick={() => navigate('/wishlists')}>
+        <Button size="sm" onClick={() => navigate(wishlistRootPath)}>
           <Plus className="h-4 w-4 mr-1" />
           {language === 'ar' ? 'جديد' : 'New'}
         </Button>
@@ -52,7 +54,7 @@ export function WishlistsEmbedded({ language, userId, navigate }: { language: st
             <p className="text-xs text-muted-foreground mb-4">
               {language === 'ar' ? 'أنشئ قائمتك الأولى وشاركها مع أصدقائك' : 'Create your first list and share it with friends'}
             </p>
-            <Button size="sm" onClick={() => navigate('/wishlists')}>
+            <Button size="sm" onClick={() => navigate(wishlistRootPath)}>
               <Plus className="h-4 w-4 mr-1" />
               {language === 'ar' ? 'إنشاء قائمة' : 'Create Wishlist'}
             </Button>
@@ -66,7 +68,7 @@ export function WishlistsEmbedded({ language, userId, navigate }: { language: st
               <Card
                 key={list.id}
                 className="cursor-pointer transition-all active:scale-[0.99] border border-border/60"
-                onClick={() => navigate(`/wishlists?list=${list.id}`)}
+                onClick={() => navigate(`/wishlists?list=${list.id}&from=account`)}
               >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
