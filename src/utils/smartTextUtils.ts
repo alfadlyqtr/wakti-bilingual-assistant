@@ -1,3 +1,5 @@
+import { getActiveScopedUserId, getScopedStorageItem, getUserScopedStorageKey, migrateLegacyScopedStorage } from './userScopedStorage';
+
 export interface SavedSmartTextItem {
   id: string;
   text: string;
@@ -56,9 +58,18 @@ export function normalizeSmartText(value: string): string {
     .trim();
 }
 
+function readSavedSmartTextsRaw(storageKey: string): string | null {
+  try {
+    migrateLegacyScopedStorage(storageKey, undefined, storageKey);
+    return getScopedStorageItem(storageKey, undefined, storageKey);
+  } catch {
+    return null;
+  }
+}
+
 export function readSavedSmartTexts(storageKey: string): SavedSmartTextItem[] {
   try {
-    const raw = localStorage.getItem(storageKey);
+    const raw = readSavedSmartTextsRaw(storageKey);
     if (!raw) return [];
 
     const parsed = JSON.parse(raw);
@@ -92,5 +103,13 @@ export function readSavedSmartTexts(storageKey: string): SavedSmartTextItem[] {
 }
 
 export function writeSavedSmartTexts(storageKey: string, items: SavedSmartTextItem[]): void {
-  localStorage.setItem(storageKey, JSON.stringify(items));
+  const serialized = JSON.stringify(items);
+  const activeUserId = getActiveScopedUserId();
+
+  if (activeUserId) {
+    localStorage.setItem(getUserScopedStorageKey(storageKey, activeUserId), serialized);
+    return;
+  }
+
+  localStorage.setItem(storageKey, serialized);
 }

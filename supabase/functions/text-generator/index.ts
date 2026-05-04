@@ -811,12 +811,12 @@ Return ONLY the JSON, no additional text.`;
         ? `اقرأ النص التالي بعناية وأعد ملخصاً واضحاً وموجزاً يحتفظ بأهم النقاط والمعلومات الأساسية. الملخص يجب أن يكون قصيراً وسهل الفهم وخالياً من التفاصيل غير الضرورية.\n\nالنص المراد تلخيصه:\n${prompt}`
         : `Read the following text carefully and provide a clear, concise summary that captures the key points and essential information. The summary should be brief, easy to understand, and free of unnecessary details.\n\nText to summarize:\n${prompt}`;
     }
-
     const webSearchAllowed = !!contentType && WEB_SEARCH_ALLOWED_CONTENT_TYPES.has(contentType);
     const webSearchEnabled = !!webSearch && webSearchAllowed;
     const normalizedWebSearchUrl = typeof webSearchUrl === 'string' && webSearchUrl.trim() ? webSearchUrl.trim() : undefined;
     const urlFetchEnabled = !!fetchUrlOnly && !!normalizedWebSearchUrl;
-    const baseSystemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType, wordCount: wordCount ?? replyWordCount, captionPlatform });
+    const effectiveLengthSetting = length || replyLength;
+    const baseSystemPrompt = buildSystemPrompt(language, { tone, register, languageVariant, emojis, contentType, length: effectiveLengthSetting, wordCount: wordCount ?? replyWordCount, captionPlatform });
     const replyAutoToneInstruction = mode === 'reply' && !tone
       ? (language === 'ar'
         ? '\n\n⚠️ عند كون النبرة تلقائية في وضع الرد: حلّل الرسالة الأصلية أولاً، ثم اكتشف نبرتها تلقائياً، وبعدها اكتب رداً محسناً يحافظ على نفس الروح والأسلوب لكن بشكل أوضح وأذكى وأكثر ملاءمة.'
@@ -1335,7 +1335,6 @@ function stripHtml(input: string): string {
     .trim();
 }
 
-// ============================================================================
 // System prompt builder: uses structured fields from frontend
 // ============================================================================
 interface StructuredFields {
@@ -1344,13 +1343,14 @@ interface StructuredFields {
   languageVariant?: string;
   emojis?: string;
   contentType?: string;
+  length?: string;
   wordCount?: number | string | null;
   captionPlatform?: string | null;
 }
 
 function buildSystemPrompt(language: string, fields: StructuredFields): string {
   const isArabic = language === 'ar';
-  const { tone, register, languageVariant, emojis, contentType, wordCount, captionPlatform } = fields;
+  const { tone, register, languageVariant, emojis, contentType, length, wordCount, captionPlatform } = fields;
 
   // ── Base identity ──
   const basePrompt = isArabic
@@ -1379,6 +1379,35 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
       ? `📸 محتوى كابتشن: اكتب كابتشن قصير وجذاب مناسب لمنصة ${platformLabel}. اجعله موجزاً، لافتاً، وسهل القراءة. يمكن إضافة هاشتاقات مناسبة فقط إذا لزم.`
       : `📸 Captions: Write short, catchy captions tailored for ${platformLabel}. Keep it concise, attention-grabbing, and easy to read. Add hashtags only if needed.`
     );
+  }
+
+  if (length) {
+    const lengthInstructions: Record<string, { en: string; ar: string }> = {
+      very_short: {
+        en: '📏 LENGTH = VERY SHORT: Keep it extremely brief. 1 to 2 short sentences only, unless the content type absolutely requires a little more.',
+        ar: '📏 الطول = قصير جداً: اجعل النص قصيراً جداً. جملة إلى جملتين قصيرتين فقط، إلا إذا كان نوع المحتوى يتطلب أكثر قليلاً.'
+      },
+      short: {
+        en: '📏 LENGTH = SHORT: Keep it concise and tight. A short paragraph or a few short lines only.',
+        ar: '📏 الطول = قصير: اجعل النص موجزاً ومختصراً. فقرة قصيرة أو عدة سطور قصيرة فقط.'
+      },
+      medium: {
+        en: '📏 LENGTH = MEDIUM: Write a balanced amount. Not too short, not too long. Enough detail to feel complete.',
+        ar: '📏 الطول = متوسط: اكتب بطول متوازن. ليس قصيراً جداً ولا طويلاً جداً. تفاصيل كافية ليبدو النص مكتملاً.'
+      },
+      long: {
+        en: '📏 LENGTH = LONG: Expand the idea noticeably. Develop the message with more detail, fuller flow, and stronger coverage than a standard short response.',
+        ar: '📏 الطول = طويل: وسّع الفكرة بشكل واضح. طوّر الرسالة بتفاصيل أكثر، وتدفق أكمل، وتغطية أوضح من الرد القصير المعتاد.'
+      },
+      very_long: {
+        en: '📏 LENGTH = VERY LONG: Write a substantially expanded version. Go deep, add rich development and detail, and make it clearly longer than a normal long response.',
+        ar: '📏 الطول = طويل جداً: اكتب نسخة موسعة بشكل كبير. تعمّق أكثر، وأضف تطويراً وتفاصيل غنية، واجعلها أطول بوضوح من النص الطويل العادي.'
+      },
+    };
+    const li = lengthInstructions[length];
+    if (li) {
+      constraints.push(isArabic ? li.ar : li.en);
+    }
   }
 
   // ────────────────────────────────────────────────────

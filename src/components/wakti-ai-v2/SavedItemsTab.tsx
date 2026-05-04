@@ -66,7 +66,10 @@ export default function SavedItemsTab() {
       const items = readSavedSmartTexts(SAVED_TEXTS_KEY);
       setSavedTexts(items);
       writeSavedSmartTexts(SAVED_TEXTS_KEY, items);
-    } catch { }
+    } catch (err) {
+      console.error('Failed to load saved texts:', err);
+      toast.error(language === 'ar' ? 'فشل تحميل النصوص المحفوظة' : 'Failed to load saved texts');
+    }
   };
 
   const handleCopyText = async (item: SavedText) => {
@@ -84,7 +87,10 @@ export default function SavedItemsTab() {
       writeSavedSmartTexts(SAVED_TEXTS_KEY, next);
       setSavedTexts(next);
       toast.success(language === 'ar' ? 'تم الحذف' : 'Deleted');
-    } catch { }
+    } catch (err) {
+      console.error('Failed to delete saved text:', err);
+      toast.error(language === 'ar' ? 'فشل حذف النص' : 'Failed to delete text');
+    }
   };
 
   const loadPresentations = async () => {

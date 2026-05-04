@@ -79,7 +79,6 @@ const GoogleAuthCallback = lazy(() => import("@/pages/GoogleAuthCallback"));
 const MyWishlists = lazy(() => import("@/pages/MyWishlists"));
 const PublicWishlist = lazy(() => import("@/pages/PublicWishlist"));
 const ContactGallery = lazy(() => import("@/pages/ContactGallery"));
-const WaktiAgent = lazy(() => import("@/pages/WaktiAgent"));
 const Deen = lazy(() => import("@/pages/Deen"));
 const DeenQuran = lazy(() => import("@/pages/DeenQuran"));
 const DeenHadith = lazy(() => import("@/pages/DeenHadith"));
@@ -215,7 +214,6 @@ export default function ConsumerRouter() {
               <ProjectDetail />
             </DebugContextProvider>
           } />
-          <Route path="/wakti-agent" element={<WaktiAgent />} />
           <Route path="/help" element={<Help />} />
           <Route path="/fitness" element={<Vitality />} />
           <Route path="/fitness/callback" element={<FitnessWhoopCallback />} />

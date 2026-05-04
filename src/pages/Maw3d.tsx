@@ -9,8 +9,6 @@ import { Heart, Plus, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { t } from '@/utils/translations';
 import { PageHeader } from '@/components/PageHeader';
-import { WaktiAgentEntryButton } from '@/components/wakti-agent/WaktiAgentEntryButton';
-import { buildWaktiAgentHref } from '@/utils/waktiAgent';
 
 // Ultra-fast skeleton component (reduced further)
 const EventsSkeleton = () => (
@@ -43,14 +41,6 @@ const OptimizedMaw3dEvents = React.memo(() => {
     console.log('📱 Navigating to create event');
     navigate('/maw3d/create');
   }, [navigate]);
-
-  const handleOpenAgent = React.useCallback(() => {
-    navigate(buildWaktiAgentHref({
-      intent: 'prepare-event',
-      source: 'maw3d',
-      context: language === 'ar' ? 'من صفحة موعد' : 'From Maw3d'
-    }));
-  }, [language, navigate]);
 
   // Ensure the page starts at the title area on load
   useEffect(() => {
@@ -93,11 +83,6 @@ const OptimizedMaw3dEvents = React.memo(() => {
           subtitle={loading ? t('loading', language) : (language === 'ar' ? `عرض ${events.length} أحداث` : `Showing ${events.length} events`)}
           actions={(
             <div className="flex items-center gap-2">
-              <WaktiAgentEntryButton
-                label={language === 'ar' ? 'جهّز هذا الحدث' : 'Prepare this event'}
-                onClick={handleOpenAgent}
-                subtle
-              />
               <Button 
                 onClick={handleCreateEvent}
                 className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"

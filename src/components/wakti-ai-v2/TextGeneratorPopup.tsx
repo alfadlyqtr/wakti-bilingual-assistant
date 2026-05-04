@@ -672,35 +672,6 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     if (tab === 'compose') {
       const humanBlock = tone === 'human' ? humanVoiceGuidelines(language) : '';
       const normalizedTopic = topic.trim();
-      const composeLooksLikeDraft = looksLikeUserDraft(normalizedTopic);
-
-      if (composeLooksLikeDraft) {
-        const parts = [
-          language === 'ar'
-            ? 'المستخدم ألصق مسودة شبه جاهزة. المطلوب تحسين خفيف فقط، مع إبقاء النص قريبًا جدًا من الأصل.'
-            : 'The user pasted a near-finished draft. The task is light polishing only, while keeping the text extremely close to the original.',
-          language === 'ar'
-            ? 'حافظ على نفس المعنى، والأسماء، ونفس اتجاه الكلام، ونفس البنية العامة.'
-            : 'Keep the same meaning, names, direction of speech, and overall structure.',
-          language === 'ar'
-            ? 'لا تعِد الكتابة من الصفر، ولا تحوّله إلى رد، ولا تبدّل التحية إلى تحية مقابلة.'
-            : 'Do not rewrite from scratch, do not turn it into a reply, and do not flip a greeting into a response greeting.',
-          language === 'ar'
-            ? 'لا تضف عبارات جديدة مثل "وعليكم السلام" أو "يا غالي" أو دعاء أو مجاملات أو سطور عاطفية إضافية إلا إذا كانت موجودة أصلًا في النص أو طلبها المستخدم صراحة.'
-            : 'Do not add new phrases like "وعليكم السلام", "يا غالي", extra prayers, extra niceties, or extra emotional lines unless they already exist in the draft or the user explicitly asked for them.',
-          tone !== 'auto' && tone !== 'human' ? `Tone: ${tone}` : '',
-          length === 'word_count' && normalizedWordCount ? `Word count: ${normalizedWordCount}` : length !== 'auto' ? `Length: ${length}` : '',
-          contentType === 'captions' ? `Caption platform: ${captionPlatform}` : contentType !== 'auto' ? `Content type: ${contentType}` : '',
-          register !== 'auto' ? `Register: ${register}` : '',
-          languageVariant !== 'auto' ? `Language Variant: ${languageVariant}` : '',
-          emojis !== 'auto' ? `Emojis: ${emojis}` : '',
-          humanBlock,
-          '',
-          language === 'ar' ? 'النص الأصلي:' : 'Original draft:',
-          normalizedTopic,
-        ].filter(Boolean);
-        return parts.join('\n');
-      }
 
       const parts = [
         contentType === 'auto'
@@ -924,7 +895,10 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       setSavedTextsList(next);
       setSavedCount(c => c + 1);
       toast.success(language === 'ar' ? 'تم الحفظ في المحفوظات' : 'Saved to Saved tab');
-    } catch { }
+    } catch (err) {
+      console.error('Failed to save smart text:', err);
+      toast.error(language === 'ar' ? 'فشل حفظ النص' : 'Failed to save text');
+    }
   }, [parsedText.mainText, language]);
 
   const copyWithFeedback = useCallback(async (text: string) => {
@@ -994,11 +968,9 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
         return;
       }
       const modeForRequest: 'compose' | 'reply' = sourceTab === 'compose' ? 'compose' : sourceTab === 'reply' ? 'reply' : mode;
-      const effectiveLength = (val: string): 'short' | 'medium' | 'long' | undefined => {
+      const effectiveLength = (val: string): 'very_short' | 'short' | 'medium' | 'long' | 'very_long' | undefined => {
         if (!val || val === 'auto' || val === 'word_count') return undefined;
-        if (val === 'very_short') return 'short';
-        if (val === 'very_long') return 'long';
-        return val as 'short' | 'medium' | 'long';
+        return val as 'very_short' | 'short' | 'medium' | 'long' | 'very_long';
       };
       const normalizedWebSearchUrl = webSearchUrl.trim() || undefined;
       const body: any = {

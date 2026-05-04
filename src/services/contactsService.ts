@@ -47,9 +47,8 @@ export async function getContacts() {
     throw new Error("User not authenticated");
   }
   await ensurePassport();
-  
-  // 1. Get all contacts you added
-  const { data: youAddedRows, error: error1 } = await supabase
+
+  const { data: outgoingRows, error: outgoingError } = await supabase
     .from('contacts')
     .select(`
       id,
@@ -65,43 +64,68 @@ export async function getContacts() {
     `)
     .eq('user_id', userId)
     .eq('status', 'approved');
-  if (error1) {
-    console.error("Error fetching contacts:", error1);
-    throw error1;
+  if (outgoingError) {
+    console.error("Error fetching contacts:", outgoingError);
+    throw outgoingError;
   }
 
-  // 2. Get all contacts who have added you (reciprocal)
-  const contactIds = youAddedRows.map(contact => contact.contact_id);
-  let theyAddedRows = [];
-  if (contactIds.length > 0) {
-    const { data: reciprocalRows, error: error2 } = await supabase
-      .from('contacts')
-      .select('user_id, contact_id')
-      .in('user_id', contactIds)
-      .eq('contact_id', userId)
-      .eq('status', 'approved');
-    if (!error2) {
-      theyAddedRows = reciprocalRows;
+  const { data: incomingRows, error: incomingError } = await supabase
+    .from('contacts')
+    .select('id, user_id, contact_id, is_favorite')
+    .eq('contact_id', userId)
+    .eq('status', 'approved');
+
+  if (incomingError) {
+    console.error("Error fetching incoming contacts:", incomingError);
+    throw incomingError;
+  }
+
+  const outgoingContactIds = (outgoingRows || []).map(contact => contact.contact_id);
+  const incomingContactIds = (incomingRows || []).map(contact => contact.user_id);
+  const allContactIds = Array.from(new Set([...outgoingContactIds, ...incomingContactIds]));
+
+  const outgoingMap = new Map((outgoingRows || []).map((contact) => [contact.contact_id, contact]));
+  const incomingMap = new Map((incomingRows || []).map((contact) => [contact.user_id, contact]));
+
+  const missingProfileIds = allContactIds.filter((contactId) => !outgoingMap.get(contactId)?.profiles);
+  let fallbackProfiles: Array<{ id: string; username: string; display_name: string; avatar_url?: string }> = [];
+
+  if (missingProfileIds.length > 0) {
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, username, display_name, avatar_url')
+      .in('id', missingProfileIds);
+
+    if (profilesError) {
+      console.error("Error fetching fallback contact profiles:", profilesError);
+      throw profilesError;
     }
+
+    fallbackProfiles = profiles || [];
   }
 
-  // 3. Map relationship status
-  const reciprocalUserSet = new Set(theyAddedRows.map(c => c.user_id));
-  const results = youAddedRows.map(contact => {
+  const fallbackProfileMap = new Map(fallbackProfiles.map((profile) => [profile.id, profile]));
+
+  const results = allContactIds.map((contactId) => {
+    const outgoing = outgoingMap.get(contactId);
+    const incoming = incomingMap.get(contactId);
+    const profile = outgoing?.profiles || fallbackProfileMap.get(contactId);
     let relationship: "mutual" | "you-added-them" | "they-added-you" = "you-added-them";
-    if (reciprocalUserSet.has(contact.contact_id)) {
+
+    if (outgoing && incoming) {
       relationship = "mutual";
+    } else if (incoming && !outgoing) {
+      relationship = "they-added-you";
     }
-    // In this context, 'they-added-you' (where you haven't added them) is not possible,
-    // since we're only getting contacts YOU added, but we'll return either mutual or you-added-them.
+
     return {
-      id: contact.id,
-      contact_id: contact.contact_id,
-      is_favorite: contact.is_favorite,
-      profile: contact.profiles,
+      id: outgoing?.id || incoming?.id || contactId,
+      contact_id: contactId,
+      is_favorite: outgoing?.is_favorite || incoming?.is_favorite || false,
+      profile,
       relationshipStatus: relationship,
     };
-  });
+  }).filter((contact) => Boolean(contact.profile));
 
   return results;
 }

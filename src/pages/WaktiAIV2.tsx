@@ -218,34 +218,41 @@ const WaktiAIV2 = () => {
   useEffect(() => {
     loadUserProfile();
     loadPersonalTouch();
-    // Load active conversation from DB first, fallback to localStorage
+
+    // localStorage is the source of truth for the current active session.
+    // Always restore it first so the user lands back in their exact conversation.
+    const { messages: cachedMsgs, conversationId: cachedConvId } = EnhancedFrontendMemory.loadActiveConversation();
+    const hasLocalSession = cachedConvId && Array.isArray(cachedMsgs) && cachedMsgs.length > 0;
+
+    if (hasLocalSession) {
+      // Restore current session immediately from cache — no DB round-trip needed
+      setSessionMessages(cachedMsgs);
+      setCurrentConversationId(cachedConvId);
+      setIsNewConversation(false);
+    }
+
+    // Always fetch the sidebar conversation list from DB (for the left panel)
+    // and only use DB active as fallback when localStorage had nothing
     SavedConversationsService.listConversations()
       .then(async (list: any[]) => {
         setArchivedConversations(mapConversationList(list));
-        const active = list.find((c: any) => c.is_active);
-        if (active) {
-          const full = await SavedConversationsService.loadConversation(active.id);
-          if (full?.messages && Array.isArray(full.messages) && full.messages.length > 0) {
-            const msgs = full.messages.map((m: any) => ({ ...m, timestamp: m.timestamp ? new Date(m.timestamp) : new Date() }));
-            setSessionMessages(msgs);
-            setCurrentConversationId(active.conversation_id || active.id);
-            setIsNewConversation(false);
-            EnhancedFrontendMemory.saveActiveConversation(msgs, active.conversation_id || active.id);
-            return;
+
+        // Only load from DB if localStorage had no current session
+        if (!hasLocalSession) {
+          const active = list.find((c: any) => c.is_active);
+          if (active) {
+            const full = await SavedConversationsService.loadConversation(active.id);
+            if (full?.messages && Array.isArray(full.messages) && full.messages.length > 0) {
+              const msgs = full.messages.map((m: any) => ({ ...m, timestamp: m.timestamp ? new Date(m.timestamp) : new Date() }));
+              setSessionMessages(msgs);
+              setCurrentConversationId(active.conversation_id || active.id);
+              setIsNewConversation(false);
+              EnhancedFrontendMemory.saveActiveConversation(msgs, active.conversation_id || active.id);
+            }
           }
         }
-        // Fallback to localStorage
-        const { messages, conversationId } = EnhancedFrontendMemory.loadActiveConversation();
-        setSessionMessages(Array.isArray(messages) ? messages : []);
-        setCurrentConversationId(conversationId);
-        setIsNewConversation(!conversationId || messages.length === 0);
       })
       .catch(() => {
-        // Full localStorage fallback
-        const { messages, conversationId } = EnhancedFrontendMemory.loadActiveConversation();
-        setSessionMessages(Array.isArray(messages) ? messages : []);
-        setCurrentConversationId(conversationId);
-        setIsNewConversation(!conversationId || messages.length === 0);
         handleRefreshConversations();
       });
   }, [handleRefreshConversations, mapConversationList]);

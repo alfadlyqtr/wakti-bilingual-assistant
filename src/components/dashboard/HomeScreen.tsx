@@ -63,7 +63,6 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 import { toast } from "sonner";
 import { getScopedStorageItem, migrateLegacyScopedStorage, removeScopedStorageItem, setActiveScopedUserId, setScopedStorageItem } from "@/utils/userScopedStorage";
-import { buildWaktiAgentHref } from "@/utils/waktiAgent";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
 const ALL_APPS = [
@@ -123,11 +122,11 @@ const LS_HSBG_KEY         = () => lsKey(_cachedUid(), LS_HSBG_BASE);
 const LS_BG_CHOICE_KEY    = () => lsKey(_cachedUid(), LS_BG_CHOICE_BASE);
 
 // Widget IDs used in the unified grid
-const WIDGET_IDS = ['showAgentWidget','showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
+const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
 type BgChoice = 'default' | 'wallpaper' | 'style';
-const DEFAULT_HS_WIDGETS = { showNavWidget: false, showAgentWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
+const DEFAULT_HS_WIDGETS = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
 
 // ── Strict Hardcoded Grid Layout using grid-template-areas ──
 // 3 big rows x 2 big cols = 24 cells.
@@ -1235,69 +1234,6 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   const maw3dBg     = upcomingCount === 0 ? 'linear-gradient(135deg,#374151,#6b7280)' : upcomingCount <= 2 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#b45309,#f59e0b)';
   const labelColor  = isDark || hasBg ? '#ffffff' : '#060541';
 
-  const now         = new Date();
-  const dayNum      = now.getDate();
-  const dayLong     = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' });
-  const monthShort  = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
-  const agentHref   = buildWaktiAgentHref({ intent: pendingTasks > 0 ? 'plan-day' : upcomingCount > 0 ? 'prepare-event' : 'ask', source: 'home' });
-  const agentTitle  = language === 'ar' ? 'وكيل وكتي' : 'Wakti Agent';
-  const todayKey    = now.toISOString().slice(0, 10);
-  const todayStart  = new Date(`${todayKey}T00:00:00`);
-  const safeReminders = Array.isArray(reminders) ? reminders : [];
-  const safeEvents = Array.isArray(maw3dEvents) ? maw3dEvents : [];
-  const reminderMoment = (item: any) => {
-    try {
-      if (!item?.due_date) return null;
-      return new Date(`${item.due_date}T${item.due_time || '23:59:59'}`);
-    } catch {
-      return null;
-    }
-  };
-  const upcomingEventsList = safeEvents
-    .filter((event: any) => {
-      try { return new Date(event.event_date) >= todayStart; } catch { return false; }
-    })
-    .sort((a: any, b: any) => `${a.event_date} ${a.start_time || '23:59:59'}`.localeCompare(`${b.event_date} ${b.start_time || '23:59:59'}`));
-  const nextEvent = upcomingEventsList[0];
-  const todayEventsCount = upcomingEventsList.filter((event: any) => event.event_date === todayKey).length;
-  const overdueReminders = safeReminders
-    .filter((item: any) => {
-      const when = reminderMoment(item);
-      return when ? when.getTime() < now.getTime() : false;
-    })
-    .sort((a: any, b: any) => {
-      const aTime = reminderMoment(a)?.getTime() ?? 0;
-      const bTime = reminderMoment(b)?.getTime() ?? 0;
-      return aTime - bTime;
-    });
-  const nextEventTime = nextEvent?.start_time ? nextEvent.start_time.slice(0, 5) : null;
-  const statusLine = overdueReminders.length > 0
-    ? (language === 'ar'
-        ? `${overdueReminders.length} ${overdueReminders.length === 1 ? 'تذكير متأخر' : 'تذكيرات متأخرة'}`
-        : `${overdueReminders.length} overdue reminder${overdueReminders.length === 1 ? '' : 's'}`)
-    : todayEventsCount > 0 && nextEvent
-      ? (language === 'ar'
-          ? `الموعد التالي اليوم: ${nextEvent.title}${nextEventTime ? ` • ${nextEventTime}` : ''}`
-          : `Next event today: ${nextEvent.title}${nextEventTime ? ` • ${nextEventTime}` : ''}`)
-      : pendingTasks > 0
-        ? (language === 'ar'
-            ? `${pendingTasks} ${pendingTasks === 1 ? 'مهمة تحتاج انتباهك' : 'مهام تحتاج انتباهك'}`
-            : `${pendingTasks} task${pendingTasks === 1 ? '' : 's'} need attention`)
-        : (language === 'ar' ? 'لا يوجد شيء عاجل الآن' : 'No urgent items right now');
-  const nextActionLine = overdueReminders.length > 0
-    ? (language === 'ar'
-        ? `راجع ${overdueReminders[0]?.title || 'التذكير المتأخر'}`
-        : `Review ${overdueReminders[0]?.title || 'the overdue reminder'}`)
-    : todayEventsCount > 0 && nextEvent
-      ? (language === 'ar'
-          ? `جهّز ${nextEvent.title}`
-          : `Prep ${nextEvent.title}`)
-      : pendingTasks > 0
-        ? (language === 'ar'
-            ? `رتّب ${pendingTasks} ${pendingTasks === 1 ? 'مهمة' : 'مهام'} اليوم`
-            : `Plan ${pendingTasks} ${pendingTasks === 1 ? 'task' : 'tasks'} today`)
-        : (language === 'ar' ? 'افتح الوكيل لطلب جديد' : 'Open the agent for anything new');
-
   const recovery = whoopData?.recovery ?? null;
   const strain   = whoopData?.strain ?? null;
   const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
@@ -1319,36 +1255,6 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
       <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? 0.3 : 0.06 }} />
       <div className="absolute inset-0 pointer-events-none" style={{ background: hasBg ? 'linear-gradient(145deg, rgba(255,255,255,0.1) 0%, transparent 50%)' : 'linear-gradient(145deg, rgba(255,255,255,0.02) 0%, transparent 60%)' }} />
       <div className="relative z-10 w-full h-full">{children}</div>
-    </div>
-  );
-
-  if (wKey === 'showAgentWidget') return shell(
-    'linear-gradient(145deg,rgba(6,5,65,0.95) 0%,rgba(15,23,42,0.96) 45%,rgba(8,47,73,0.92) 100%)',
-    '#38bdf8',
-    () => navigate(agentHref),
-    <div className="flex h-full flex-col justify-between p-4">
-      <div className="inline-flex w-fit items-center gap-1.5 rounded-full border border-cyan-300/18 bg-cyan-400/8 px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.18em] text-cyan-100">
-        <Sparkles className="w-3.5 h-3.5 text-cyan-200" strokeWidth={2.2} />
-        <span>{language === 'ar' ? 'وكيل وكتي' : 'WAKTI AGENT'}</span>
-      </div>
-
-      <div className="space-y-2">
-        <div className="space-y-1">
-          <p className="text-[17px] font-black leading-tight text-white">{agentTitle}</p>
-          <p className="text-[12px] font-semibold leading-snug text-white/88">{statusLine}</p>
-        </div>
-        <p className="max-w-[92%] text-[11px] font-medium leading-snug text-cyan-100/82">{nextActionLine}</p>
-      </div>
-
-      <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-3">
-        <div className="min-w-0">
-          <p className="text-[9px] font-bold uppercase tracking-[0.16em] text-cyan-200/85">{language === 'ar' ? 'الإجراء التالي' : 'Next action'}</p>
-          <p className="mt-0.5 truncate text-[10px] font-semibold text-white/82">{nextActionLine}</p>
-        </div>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/10 bg-[linear-gradient(135deg,rgba(233,206,176,0.96)_0%,rgba(245,223,197,0.98)_100%)] shadow-[0_8px_20px_rgba(233,206,176,0.22)]">
-          <span className="text-[13px] font-black text-[#060541]">↗</span>
-        </div>
-      </div>
     </div>
   );
 
@@ -1679,7 +1585,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   }).length;
 
   const [hsWidgets, setHsWidgets] = useState(() => {
-    const defaults = { showNavWidget: false, showAgentWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
+    const defaults = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
     try {
       const cached = JSON.parse(localStorage.getItem(LS_WIDGETS_KEY()) || 'null');
       if (cached && typeof cached === 'object') return { ...defaults, ...cached };
@@ -1791,7 +1697,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const clampHsWidgets = (raw: Record<string, boolean>) => {
     const result = { ...raw, showNavWidget: false } as typeof hsWidgets;
-    const VISIBLE: (keyof typeof hsWidgets)[] = ['showAgentWidget','showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
+    const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
     let count = 0;
     for (const k of VISIBLE) {
       if (result[k]) { if (count < 3) count++; else result[k] = false; }
@@ -1803,7 +1709,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     if (!user?.id || !profile) return;
     const s = (profile.settings as any) || {};
     const hs = s?.homescreen || {};
-    const VALID_WIDGET_KEYS = new Set(['showAgentWidget','showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
+    const VALID_WIDGET_KEYS = new Set(['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
     const rawWidgets = hs?.homescreenWidgets || s?.homescreenWidgets;
     const strippedWidgets: Record<string, boolean> = {};
     if (rawWidgets) {
@@ -2126,7 +2032,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const toggleHsWidget = (key: keyof typeof hsWidgets) => {
     setHsWidgets(prev => {
-      const VISIBLE: (keyof typeof hsWidgets)[] = ['showAgentWidget','showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
+      const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
       const activeCount = VISIBLE.filter(k => prev[k]).length;
       const isOn = prev[key];
       // Enforce max 3 — don't allow enabling if already at 3
@@ -2534,11 +2440,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           {/* ── Edit options bar ── */}
           {editMode && (() => {
             const WIDGET_OPTIONS: { key: keyof typeof hsWidgets; labelEn: string; labelAr: string }[] = [
-              { key: 'showAgentWidget',    labelEn: 'Agent',    labelAr: 'الوكيل'   },
               { key: 'showTRWidget',       labelEn: 'Tasks',    labelAr: 'المهام'   },
               { key: 'showCalendarWidget', labelEn: 'Calendar', labelAr: 'التقويم' },
               { key: 'showMaw3dWidget',    labelEn: 'Maw3d',    labelAr: 'موعد'    },
-              { key: 'showVitalityWidget', labelEn: 'Vitality', labelAr: 'نشاطي'   },
+              { key: 'showVitalityWidget', labelEn: 'Vitality', labelAr: 'الحيوية' },
               { key: 'showJournalWidget',  labelEn: 'Journal',  labelAr: 'يومياتي' },
               { key: 'showQuoteWidget',    labelEn: 'Quote',    labelAr: 'اقتباس'  },
             ];
@@ -2582,7 +2487,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                     title={language === 'ar' ? 'استعادة الإعدادات الافتراضية' : 'Restore defaults'}
                     onClick={() => {
                       const uid = _cachedUid();
-                      const DEFAULT_WIDGETS = { showNavWidget: false, showAgentWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
+                      const DEFAULT_WIDGETS = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
                       // Reset widgets
                       setHsWidgets(DEFAULT_WIDGETS);
                       localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(DEFAULT_WIDGETS));
