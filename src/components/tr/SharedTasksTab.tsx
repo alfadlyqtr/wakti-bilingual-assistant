@@ -623,6 +623,9 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
   const [joinRequests, setJoinRequests] = useState<Assignment[]>([]);
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
 
+  const { user: _authUser } = useAuth();
+  const { profile: _cachedProfile } = useUserProfile();
+
   useEffect(() => {
     if (!_authUser?.id) return;
     setCurrentUserId(_authUser.id);
