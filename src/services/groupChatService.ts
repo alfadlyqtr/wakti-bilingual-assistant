@@ -89,11 +89,21 @@ export async function getMyGroupConversations(): Promise<GroupChatConversation[]
 
   const { data: participantRows, error: participantError } = await (supabase as any)
     .from("conversation_participants")
-    .select("conversation_id, user_id, last_read_at, profiles:user_id(id, username, display_name, avatar_url)")
+    .select("conversation_id, user_id, last_read_at")
     .in("conversation_id", filteredConversationIds);
 
   if (participantError) {
     throw participantError;
+  }
+
+  const allUserIds = Array.from(new Set((participantRows || []).map((row: any) => row.user_id)));
+  const profilesMap = new Map<string, any>();
+  if (allUserIds.length > 0) {
+    const { data: profileRows } = await (supabase as any)
+      .from("profiles")
+      .select("id, username, display_name, avatar_url")
+      .in("id", allUserIds);
+    (profileRows || []).forEach((p: any) => profilesMap.set(p.id, p));
   }
 
   const participantsByConversation = new Map<string, GroupChatParticipant[]>();
@@ -102,7 +112,7 @@ export async function getMyGroupConversations(): Promise<GroupChatConversation[]
     current.push({
       user_id: row.user_id,
       last_read_at: row.last_read_at || null,
-      profile: row.profiles || null,
+      profile: profilesMap.get(row.user_id) || null,
     });
     participantsByConversation.set(row.conversation_id, current);
   });
@@ -187,17 +197,27 @@ export async function getGroupConversation(conversationId: string): Promise<Grou
 
   const { data: participantRows, error: participantError } = await (supabase as any)
     .from("conversation_participants")
-    .select("conversation_id, user_id, last_read_at, profiles:user_id(id, username, display_name, avatar_url)")
+    .select("conversation_id, user_id, last_read_at")
     .eq("conversation_id", conversationId);
 
   if (participantError) {
     throw participantError;
   }
 
+  const participantUserIds = Array.from(new Set((participantRows || []).map((row: any) => row.user_id)));
+  const profilesMap2 = new Map<string, any>();
+  if (participantUserIds.length > 0) {
+    const { data: profileRows } = await (supabase as any)
+      .from("profiles")
+      .select("id, username, display_name, avatar_url")
+      .in("id", participantUserIds);
+    (profileRows || []).forEach((p: any) => profilesMap2.set(p.id, p));
+  }
+
   const participants = (participantRows || []).map((row: any) => ({
     user_id: row.user_id,
     last_read_at: row.last_read_at || null,
-    profile: row.profiles || null,
+    profile: profilesMap2.get(row.user_id) || null,
   }));
 
   const myParticipant = participants.find((participant) => participant.user_id === userId);
@@ -267,7 +287,33 @@ export async function getGroupConversationMessages(conversationId: string): Prom
   }));
 }
 
-export async function sendGroupConversationMessage(conversationId: string, content: string) {
+export async function uploadGroupMessageAttachment(file: File, type: 'image' | 'voice' | 'pdf'): Promise<string> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+  const fileExt = file.name.split('.').pop() || 'bin';
+  const fileName = `${userId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+  const { error } = await (supabase as any).storage
+    .from('message_attachments')
+    .upload(fileName, file, { contentType: file.type, cacheControl: '3600' });
+  if (error) throw error;
+  const { data: urlData } = (supabase as any).storage
+    .from('message_attachments')
+    .getPublicUrl(fileName);
+  return (urlData.publicUrl || '').trim();
+}
+
+export async function sendGroupConversationMessage(
+  conversationId: string,
+  payload: string | {
+    message_type: 'text' | 'image' | 'voice' | 'pdf';
+    content?: string;
+    media_url?: string;
+    media_type?: string;
+    voice_duration?: number;
+    file_size?: number;
+  }
+) {
   const userId = await getCurrentUserId();
   if (!userId) {
     throw new Error("User not authenticated");
@@ -275,20 +321,19 @@ export async function sendGroupConversationMessage(conversationId: string, conte
 
   await ensurePassport();
 
-  const trimmed = content.trim();
-  if (!trimmed) {
-    throw new Error("Message cannot be empty");
+  let insertData: any;
+  if (typeof payload === 'string') {
+    const trimmed = payload.trim();
+    if (!trimmed) throw new Error("Message cannot be empty");
+    insertData = { conversation_id: conversationId, sender_id: userId, message_type: 'text', content: trimmed };
+  } else {
+    insertData = { conversation_id: conversationId, sender_id: userId, ...payload };
   }
 
   const { data, error } = await (supabase as any)
     .from("conversation_messages")
-    .insert({
-      conversation_id: conversationId,
-      sender_id: userId,
-      message_type: "text",
-      content: trimmed,
-    })
-    .select("id, conversation_id, sender_id, message_type, content, created_at")
+    .insert(insertData)
+    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at")
     .single();
 
   if (error) {
@@ -296,6 +341,110 @@ export async function sendGroupConversationMessage(conversationId: string, conte
   }
 
   return data as GroupChatMessage;
+}
+
+export async function leaveGroupConversation(conversationId: string) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+  const { error } = await (supabase as any)
+    .from("conversation_participants")
+    .delete()
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId);
+  if (error) throw error;
+}
+
+export async function renameGroupConversation(conversationId: string, newName: string) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  const trimmed = newName.trim();
+  if (!trimmed) throw new Error("Group name is required");
+  if (trimmed.length > 80) throw new Error("Group name is too long");
+  await ensurePassport();
+  const { error } = await (supabase as any)
+    .from("conversations")
+    .update({ name: trimmed, updated_at: new Date().toISOString() })
+    .eq("id", conversationId)
+    .eq("created_by", userId);
+  if (error) throw error;
+}
+
+export async function addGroupMembers(conversationId: string, memberIds: string[]) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  if (!memberIds.length) throw new Error("No members selected");
+  await ensurePassport();
+
+  // Verify I'm a member first
+  const { data: me, error: meErr } = await (supabase as any)
+    .from("conversation_participants")
+    .select("user_id")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (meErr) throw meErr;
+  if (!me) throw new Error("You are not a member of this group");
+
+  // Insert new members
+  const rows = memberIds.map((id) => ({
+    conversation_id: conversationId,
+    user_id: id,
+    joined_at: new Date().toISOString(),
+    last_read_at: new Date().toISOString(),
+  }));
+
+  const { error } = await (supabase as any)
+    .from("conversation_participants")
+    .insert(rows);
+  if (error) throw error;
+}
+
+export async function addWaktiToGroup(conversationId: string) {
+  await ensurePassport();
+  const { data, error } = await (supabase as any).rpc("add_wakti_to_group", {
+    group_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function removeWaktiFromGroup(conversationId: string) {
+  await ensurePassport();
+  const { data, error } = await (supabase as any).rpc("remove_wakti_from_group", {
+    group_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return data;
+}
+
+export async function isWaktiInGroup(conversationId: string): Promise<boolean> {
+  const { data, error } = await (supabase as any).rpc("is_wakti_in_group", {
+    group_conversation_id: conversationId,
+  });
+  if (error) throw error;
+  return data || false;
+}
+
+export async function triggerWaktiAI(
+  conversationId: string,
+  payload: {
+    trigger_type: "mention" | "welcome_back";
+    message_id?: string;
+    language?: string;
+    sender_id?: string;
+    sender_location?: { lat: number; lng: number };
+  }
+) {
+  await ensurePassport();
+  const { data, error } = await (supabase as any).functions.invoke("wakti-group-ai", {
+    body: {
+      conversation_id: conversationId,
+      ...payload,
+    },
+  });
+  if (error) throw error;
+  return data;
 }
 
 export async function markGroupConversationRead(conversationId: string) {
