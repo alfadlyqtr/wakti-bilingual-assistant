@@ -60,9 +60,10 @@ export default function GoogleAuthCallback() {
 
       try {
         if (state) {
-          // Google may URL-encode the state — try decoding first
-          const rawState = (() => { try { return decodeURIComponent(state); } catch { return state; } })();
-          const decoded = JSON.parse(atob(rawState));
+          // state from Google comes URL-encoded; base64 '+' becomes ' ' in URL params
+          // Restore proper base64 before decoding
+          const base64 = state.replace(/ /g, '+');
+          const decoded = JSON.parse(atob(base64));
           if (decoded.redirect_after) redirectAfter = decoded.redirect_after;
           if (decoded.access_token) stateAccessToken = decoded.access_token;
           if (decoded.service === 'gmail' || decoded.service === 'youtube') {
@@ -94,7 +95,7 @@ export default function GoogleAuthCallback() {
         const accessToken = session?.access_token ?? stateAccessToken;
         if (!accessToken) {
           setStatus('error');
-          setMessage('You are not logged in. Please log in to Wakti first.');
+          setMessage('Session expired — please log in again and retry.');
           setTimeout(() => navigate('/login'), 3000);
           return;
         }
