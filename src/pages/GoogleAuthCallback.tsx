@@ -3,6 +3,38 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 
+type ServiceType = 'youtube' | 'gmail';
+
+function getServiceEndpoint(service: ServiceType): string {
+  switch (service) {
+    case 'gmail':
+      return 'gmail-oauth-callback';
+    case 'youtube':
+    default:
+      return 'youtube-oauth-callback';
+  }
+}
+
+function getServiceLabel(service: ServiceType): string {
+  switch (service) {
+    case 'gmail':
+      return 'Gmail';
+    case 'youtube':
+    default:
+      return 'YouTube';
+  }
+}
+
+function getSuccessMessage(json: any, service: ServiceType): string {
+  if (service === 'gmail' && json.email_address) {
+    return `Connected to ${json.email_address}`;
+  }
+  if (service === 'youtube' && json.channel_title) {
+    return `Connected to @${json.channel_title}`;
+  }
+  return `${getServiceLabel(service)} account connected!`;
+}
+
 export default function GoogleAuthCallback() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -15,30 +47,42 @@ export default function GoogleAuthCallback() {
     didRun.current = true;
 
     const run = async () => {
-      const ytCode = searchParams.get('yt_code') || searchParams.get('code');
-      const ytError = searchParams.get('yt_error') || searchParams.get('error');
+      const ytCode = searchParams.get('yt_code');
+      const rawCode = searchParams.get('code');
+      const code = ytCode || rawCode;
+      const error = searchParams.get('yt_error') || searchParams.get('error');
       const state = searchParams.get('state');
 
       let redirectAfter = '/studio';
       let stateAccessToken: string | null = null;
+      // If Google sent back a plain 'code' (not 'yt_code'), it came directly — default to gmail
+      let service: ServiceType = rawCode && !ytCode ? 'gmail' : 'youtube';
+
       try {
         if (state) {
-          const decoded = JSON.parse(atob(state));
+          // Google may URL-encode the state — try decoding first
+          const rawState = (() => { try { return decodeURIComponent(state); } catch { return state; } })();
+          const decoded = JSON.parse(atob(rawState));
           if (decoded.redirect_after) redirectAfter = decoded.redirect_after;
           if (decoded.access_token) stateAccessToken = decoded.access_token;
+          if (decoded.service === 'gmail' || decoded.service === 'youtube') {
+            service = decoded.service;
+          }
         }
-      } catch { /* ignore */ }
+      } catch { /* ignore — service already set by code-type heuristic above */ }
 
-      if (ytError) {
+      const serviceLabel = getServiceLabel(service);
+
+      if (error) {
         setStatus('error');
-        setMessage(ytError === 'access_denied'
-          ? 'YouTube access was denied. You can try again from the app.'
-          : `Error: ${ytError}`);
+        setMessage(error === 'access_denied'
+          ? `${serviceLabel} access was denied. You can try again from the app.`
+          : `Error: ${error}`);
         setTimeout(() => navigate(redirectAfter), 3000);
         return;
       }
 
-      if (!ytCode) {
+      if (!code) {
         setStatus('error');
         setMessage('No authorization code received.');
         setTimeout(() => navigate(redirectAfter), 3000);
@@ -56,8 +100,9 @@ export default function GoogleAuthCallback() {
         }
 
         const redirectUri = `${window.location.origin}/auth/google/callback`;
+        const endpoint = getServiceEndpoint(service);
 
-        const resp = await fetch(`${SUPABASE_URL}/functions/v1/youtube-oauth-callback`, {
+        const resp = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -66,7 +111,7 @@ export default function GoogleAuthCallback() {
           },
           body: JSON.stringify({
             action: 'exchange_code',
-            code: ytCode,
+            code,
             redirect_uri: redirectUri,
           }),
         });
@@ -76,9 +121,7 @@ export default function GoogleAuthCallback() {
         if (json.error) throw new Error(json.error);
 
         setStatus('success');
-        setMessage(json.channel_title
-          ? `Connected to @${json.channel_title}`
-          : 'YouTube account connected!');
+        setMessage(getSuccessMessage(json, service));
 
         setTimeout(() => navigate(redirectAfter), 2000);
       } catch (err: unknown) {
@@ -100,14 +143,14 @@ export default function GoogleAuthCallback() {
             <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-400/20 flex items-center justify-center">
               <Loader2 className="h-6 w-6 text-red-400 animate-spin" />
             </div>
-            <p className="text-sm font-semibold text-foreground">Connecting YouTube...</p>
+            <p className="text-sm font-semibold text-foreground">Connecting...</p>
             <p className="text-xs text-muted-foreground/60">Please wait a moment</p>
           </>
         )}
         {status === 'success' && (
           <>
-            <div className="w-14 h-14 rounded-full bg-red-500/10 border border-red-400/20 flex items-center justify-center">
-              <CheckCircle2 className="h-6 w-6 text-red-400" />
+            <div className="w-14 h-14 rounded-full bg-green-500/10 border border-green-400/20 flex items-center justify-center">
+              <CheckCircle2 className="h-6 w-6 text-green-400" />
             </div>
             <p className="text-sm font-semibold text-foreground">{message}</p>
             <p className="text-xs text-muted-foreground/60">Redirecting you back...</p>

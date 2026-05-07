@@ -6,25 +6,24 @@ import { isNativelyApp } from '@/integrations/natively/browserBridge';
 const PRODUCTION_ORIGIN = 'https://wakti.qa';
 
 const GOOGLE_CLIENT_ID = '255003091302-ll68065ch6fc94nkpbvd4kskq6ltl7g5.apps.googleusercontent.com';
-const YT_SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
+const GMAIL_SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
+].join(' ');
 
-export type YouTubeConnectionState = {
+export type GmailConnectionState = {
   connected: boolean;
   loading: boolean;
   connecting: boolean;
-  channelTitle: string | null;
-  channelThumbnail: string | null;
+  emailAddress: string | null;
 };
 
-export type YouTubeUploadState = 'idle' | 'uploading' | 'done' | 'error';
-
-export function useYouTubeConnection() {
-  const [connection, setConnection] = useState<YouTubeConnectionState>({
+export function useGmailConnection() {
+  const [connection, setConnection] = useState<GmailConnectionState>({
     connected: false,
     loading: true,
     connecting: false,
-    channelTitle: null,
-    channelThumbnail: null,
+    emailAddress: null,
   });
 
   const checkConnection = useCallback(async () => {
@@ -32,10 +31,10 @@ export function useYouTubeConnection() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        setConnection({ connected: false, loading: false, connecting: false, channelTitle: null, channelThumbnail: null });
+        setConnection({ connected: false, loading: false, connecting: false, emailAddress: null });
         return;
       }
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/youtube-oauth-callback`, {
+      const resp = await fetch(`${SUPABASE_URL}/functions/v1/gmail-oauth-callback`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -49,11 +48,10 @@ export function useYouTubeConnection() {
         connected: !!json.connected,
         loading: false,
         connecting: false,
-        channelTitle: json.channel_title || null,
-        channelThumbnail: json.channel_thumbnail || null,
+        emailAddress: json.email_address || null,
       });
     } catch {
-      setConnection({ connected: false, loading: false, connecting: false, channelTitle: null, channelThumbnail: null });
+      setConnection({ connected: false, loading: false, connecting: false, emailAddress: null });
     }
   }, []);
 
@@ -62,7 +60,7 @@ export function useYouTubeConnection() {
   }, [checkConnection]);
 
   // When the app/page regains focus (e.g. user returns from external OAuth browser),
-  // re-check the YouTube connection so 'connecting' / 'Opening...' state unsticks.
+  // re-check the Gmail connection so 'connecting' / 'Opening...' state unsticks.
   useEffect(() => {
     const handleVisible = () => {
       if (document.visibilityState === 'visible') {
@@ -80,8 +78,7 @@ export function useYouTubeConnection() {
     };
   }, [checkConnection]);
 
-  // Hard watchdog: if we've been 'connecting' for more than 2 minutes, reset so the
-  // user can retry instead of being stuck on the Opening... state forever.
+  // Hard watchdog: if we've been 'connecting' for more than 2 minutes, reset.
   useEffect(() => {
     if (!connection.connecting) return;
     const timeoutId = setTimeout(() => {
@@ -91,13 +88,17 @@ export function useYouTubeConnection() {
     return () => clearTimeout(timeoutId);
   }, [connection.connecting, checkConnection]);
 
-  const connectYouTube = useCallback(async () => {
+  const initiateGmailAuth = useCallback(async () => {
+    console.log('[Gmail] initiateGmailAuth called');
     setConnection(prev => ({ ...prev, connecting: true }));
     try {
       const inNatively = isNativelyApp();
       const origin = inNatively ? PRODUCTION_ORIGIN : window.location.origin;
       const redirectUri = `${origin}/auth/google/callback`;
+      console.log('[Gmail] redirectUri:', redirectUri, '| inNatively:', inNatively);
+
       const { data: { session } } = await supabase.auth.getSession();
+      console.log('[Gmail] session:', session ? 'found' : 'null');
 
       if (!session) {
         toast.error('Please log in first');
@@ -109,39 +110,43 @@ export function useYouTubeConnection() {
         origin,
         redirect_after: window.location.pathname,
         access_token: session.access_token,
-        service: 'youtube',
+        service: 'gmail',
       }));
 
       const params = new URLSearchParams({
         client_id: GOOGLE_CLIENT_ID,
         redirect_uri: redirectUri,
         response_type: 'code',
-        scope: YT_SCOPE,
+        scope: GMAIL_SCOPES,
         access_type: 'offline',
         prompt: 'consent',
         state,
       });
 
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+      console.log('[Gmail] navigating to Google:', authUrl.substring(0, 80) + '...');
 
       const nativelyObj = (window as any).natively;
       if (inNatively && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
+        console.log('[Gmail] using natively.openExternalURL (system browser to avoid WebView block)');
         nativelyObj.openExternalURL(authUrl, true);
       } else {
+        console.log('[Gmail] using window.location.href');
         window.location.href = authUrl;
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Failed to start YouTube connection';
+      console.error('[Gmail] initiateGmailAuth error:', err);
+      const msg = err instanceof Error ? err.message : 'Failed to start Gmail connection';
       toast.error(msg);
       setConnection(prev => ({ ...prev, connecting: false }));
     }
   }, []);
 
-  const disconnectYouTube = useCallback(async () => {
+  const disconnectGmail = useCallback(async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      await fetch(`${SUPABASE_URL}/functions/v1/youtube-oauth-callback`, {
+      await fetch(`${SUPABASE_URL}/functions/v1/gmail-oauth-callback`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
@@ -150,71 +155,14 @@ export function useYouTubeConnection() {
         },
         body: JSON.stringify({ action: 'disconnect' }),
       });
-      setConnection({ connected: false, loading: false, connecting: false, channelTitle: null, channelThumbnail: null });
+      setConnection({ connected: false, loading: false, connecting: false, emailAddress: null });
     } catch { /* ignore */ }
-  }, []);
-
-  const uploadToYouTube = useCallback(async ({
-    fileUrl,
-    title,
-    description = '',
-    tags = [] as string[],
-    privacy = 'public',
-    isShort = false,
-    audience = 'not_made_for_kids',
-  }: {
-    fileUrl: string;
-    title: string;
-    description?: string;
-    tags?: string[];
-    privacy?: 'public' | 'private' | 'unlisted';
-    isShort?: boolean;
-    audience?: 'made_for_kids' | 'not_made_for_kids';
-  }): Promise<{ videoId: string; videoUrl: string }> => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('Not authenticated');
-
-    const resp = await fetch(`${SUPABASE_URL}/functions/v1/youtube-upload`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'apikey': SUPABASE_ANON_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        file_url: fileUrl,
-        title,
-        description,
-        tags,
-        privacy,
-        is_short: isShort,
-        audience,
-      }),
-    });
-
-    const json = await resp.json();
-    if (json.error) {
-      if (json.reconnect_required) {
-        setConnection({
-          connected: false,
-          loading: false,
-          connecting: false,
-          channelTitle: null,
-          channelThumbnail: null,
-        });
-      }
-      const err = new Error(json.error) as Error & { reconnectRequired?: boolean };
-      err.reconnectRequired = !!json.reconnect_required;
-      throw err;
-    }
-    return { videoId: json.video_id, videoUrl: json.video_url };
   }, []);
 
   return {
     connection,
     checkConnection,
-    connectYouTube,
-    disconnectYouTube,
-    uploadToYouTube,
+    initiateGmailAuth,
+    disconnectGmail,
   };
 }
