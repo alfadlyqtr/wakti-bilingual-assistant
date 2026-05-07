@@ -50,6 +50,10 @@ async function verifyUser(req: Request): Promise<string | null> {
 }
 
 async function exchangeCodeForTokens(code: string, redirectUri: string) {
+  console.log("[gmail] exchangeCodeForTokens — redirect_uri:", redirectUri);
+  console.log("[gmail] client_id present:", !!GOOGLE_CLIENT_ID);
+  console.log("[gmail] client_secret present:", !!GOOGLE_CLIENT_SECRET);
+
   const params = new URLSearchParams({
     code,
     client_id: GOOGLE_CLIENT_ID,
@@ -65,7 +69,11 @@ async function exchangeCodeForTokens(code: string, redirectUri: string) {
   });
 
   const data = await res.json();
-  if (data.error) throw new Error(data.error_description || data.error);
+  console.log("[gmail] Google token response status:", res.status);
+  if (data.error) {
+    console.error("[gmail] Google token error:", data.error, "|", data.error_description);
+    throw new Error(data.error_description || data.error);
+  }
   return data as {
     access_token: string;
     refresh_token?: string;

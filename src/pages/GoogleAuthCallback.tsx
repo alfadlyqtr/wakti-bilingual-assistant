@@ -119,7 +119,7 @@ export default function GoogleAuthCallback() {
 
         const json = await resp.json();
 
-        if (json.error) throw new Error(json.error);
+        if (json.error) throw new Error(`${json.error} (HTTP ${resp.status})`);
 
         setStatus('success');
         setMessage(getSuccessMessage(json, service));
@@ -129,7 +129,7 @@ export default function GoogleAuthCallback() {
         const msg = err instanceof Error ? err.message : 'Connection failed';
         setStatus('error');
         setMessage(msg);
-        setTimeout(() => navigate(redirectAfter), 3000);
+        setTimeout(() => navigate(redirectAfter), 8000);
       }
     };
 
