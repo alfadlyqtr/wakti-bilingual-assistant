@@ -10,9 +10,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { TRTask } from '@/services/trService';
 import { TRSharedService } from '@/services/trSharedService';
 import { ActivityMonitor } from './ActivityMonitor';
+import { InAppSharedTaskViewer } from './InAppSharedTaskViewer';
 import { useTheme } from '@/providers/ThemeProvider';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
+import { buildSharedTaskUrl } from '@/utils/taskShare';
 
 interface Assignment {
   id: string;
@@ -869,7 +871,7 @@ export const SharedTasksTab: React.FC<SharedTasksTabProps> = ({ tasks, onTasksCh
             incomingShareLink={null}
             taskCodes={taskCodes}
             onCopyLink={(task) => {
-              navigator.clipboard.writeText(`${window.location.origin}/shared-task/${task.share_link}`);
+              navigator.clipboard.writeText(buildSharedTaskUrl(task.share_link));
               toast.success(language === 'ar' ? 'تم نسخ الرابط' : 'Link copied!');
             }}
             onGenerateCode={handleGenerateCode}

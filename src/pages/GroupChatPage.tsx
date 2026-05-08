@@ -80,7 +80,7 @@ export default function GroupChatPage() {
     onSuccess: () => {
       toast.success(language === "ar" ? "غادرت المجموعة" : "You left the group");
       queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
-      navigate("/contacts");
+      navigate(entrySource === "social" ? "/social?section=contacts&tab=groups" : "/contacts?tab=groups");
     },
     onError: (error: any) => {
       toast.error(error?.message || (language === "ar" ? "تعذر مغادرة المجموعة" : "Failed to leave group"));
@@ -233,7 +233,7 @@ export default function GroupChatPage() {
   }, [conversation, language, user?.id]);
 
   const handleBack = () => {
-    navigate(entrySource === "account" ? "/account?tab=social" : "/contacts?tab=groups");
+    navigate(entrySource === "social" ? "/social?section=contacts&tab=groups" : "/contacts?tab=groups");
   };
 
   // Get device GPS location — fast timeout so it doesn't block

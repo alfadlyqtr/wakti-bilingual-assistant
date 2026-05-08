@@ -197,8 +197,8 @@ export function DesktopHeader() {
       hoverClass: 'hover:bg-green-500/10'
     },
     { 
-      title: language === 'ar' ? 'جهات الاتصال' : 'Contacts', 
-      href: '/contacts',
+      title: language === 'ar' ? 'التواصل' : 'Social', 
+      href: '/social',
       icon: <Contacts className="w-4 h-4" />,
       colorClass: 'text-cyan-500',
       hoverClass: 'hover:bg-cyan-500/10'
@@ -211,7 +211,7 @@ export function DesktopHeader() {
       hoverClass: 'hover:bg-red-500/10'
     }
   ].filter(item => {
-    if (isHomescreenMode) return item.href !== '/account' && item.href !== '/contacts';
+    if (isHomescreenMode) return item.href !== '/account' && item.href !== '/social';
     return true;
   });
 

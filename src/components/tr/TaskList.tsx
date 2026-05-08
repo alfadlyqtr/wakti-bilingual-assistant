@@ -17,6 +17,8 @@ import { SubtaskManager } from './SubtaskManager';
 import { toast } from 'sonner';
 import { format, isAfter, parseISO, addDays } from 'date-fns';
 import { supabase } from '@/integrations/supabase/client';
+import { buildSharedTaskUrl } from '@/utils/taskShare';
+import { TaskSharePickerDialog } from './TaskSharePickerDialog';
 
 interface TaskListProps {
   tasks: TRTask[];
@@ -40,6 +42,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
   const [isMdUp, setIsMdUp] = useState<boolean>(false);
   const [latestCompletions, setLatestCompletions] = useState<Record<string, { who: string; when: string }>>({});
   const [deleteTarget, setDeleteTarget] = useState<TRTask | null>(null);
+  const [shareTarget, setShareTarget] = useState<TRTask | null>(null);
   const channelsRef = useRef<any[]>([]);
 
   useEffect(() => {
@@ -205,7 +208,7 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
 
   const handleShareTask = async (task: TRTask) => {
     if (task.share_link) {
-      const shareUrl = `${window.location.origin}/shared-task/${task.share_link}`;
+      const shareUrl = buildSharedTaskUrl(task.share_link);
       try {
         await navigator.clipboard.writeText(shareUrl);
         toast.success(t('linkCopied', language));
@@ -214,6 +217,10 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
         toast.error(t('errorCopyingLink', language));
       }
     }
+  };
+
+  const handleShareToWaktiContact = (task: TRTask) => {
+    setShareTarget(task);
   };
 
   if (tasks.length === 0) {
@@ -227,6 +234,12 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
 
   return (
     <div className="space-y-4">
+      <TaskSharePickerDialog
+        isOpen={!!shareTarget}
+        task={shareTarget ? { id: shareTarget.id, title: shareTarget.title, share_link: shareTarget.share_link || null, is_shared: shareTarget.is_shared } : null}
+        onClose={() => setShareTarget(null)}
+        onSent={onTasksChanged}
+      />
       {tasks.map((task) => {
         const completed = task.completed;
         const overdue = isOverdue(task);
@@ -404,6 +417,10 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
                       <DropdownMenuItem onClick={() => onTaskEdit(task)} className="rounded-xl py-2.5 px-3 text-[13px] font-medium">
                         <Edit className="h-4 w-4 mr-2.5" />
                         {t('edit', language)}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleShareToWaktiContact(task)} className="rounded-xl py-2.5 px-3 text-[13px] font-medium">
+                        <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="Wakti" className="h-4 w-4 mr-2.5 rounded object-contain" />
+                        {language === 'ar' ? 'مشاركة إلى جهات اتصال وقتي' : 'Share to Wakti Contact'}
                       </DropdownMenuItem>
                       {task.is_shared && task.share_link && (
                         <DropdownMenuItem onClick={() => handleShareTask(task)} className="rounded-xl py-2.5 px-3 text-[13px] font-medium">

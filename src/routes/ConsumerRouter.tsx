@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import { ImageShareNotificationProvider } from "@/components/notifications/ImageShareNotificationProvider";
 import { MusicShareNotificationProvider } from "@/components/notifications/MusicShareNotificationProvider";
+import { TaskShareNotificationProvider } from "@/components/notifications/TaskShareNotificationProvider";
 import { GameInviteNotificationProvider } from "@/components/notifications/GameInviteNotificationProvider";
 import { MessageNotificationProvider } from "@/components/notifications/MessageNotificationProvider";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -33,6 +34,7 @@ const TasksReminders = lazy(() => import("@/pages/TasksReminders"));
 const WaktiAi = lazy(() => import("@/pages/WaktiAi"));
 const WaktiAIV2 = lazy(() => import("@/pages/WaktiAIV2"));
 const Calendar = lazy(() => import("@/pages/Calendar"));
+const Social = lazy(() => import("@/pages/Social"));
 const Contacts = lazy(() => import("@/pages/Contacts"));
 const ChatPage = lazy(() => import("@/pages/ChatPage"));
 const GroupChatPage = lazy(() => import("@/pages/GroupChatPage"));
@@ -170,13 +172,15 @@ export default function ConsumerRouter() {
           <GiftNotificationProvider>
             <ImageShareNotificationProvider>
               <MusicShareNotificationProvider>
-                <GameInviteNotificationProvider>
-                  <MessageNotificationProvider>
-                    <ErrorBoundary>
-                      <AppLayout />
-                    </ErrorBoundary>
-                  </MessageNotificationProvider>
-                </GameInviteNotificationProvider>
+                <TaskShareNotificationProvider>
+                  <GameInviteNotificationProvider>
+                    <MessageNotificationProvider>
+                      <ErrorBoundary>
+                        <AppLayout />
+                      </ErrorBoundary>
+                    </MessageNotificationProvider>
+                  </GameInviteNotificationProvider>
+                </TaskShareNotificationProvider>
               </MusicShareNotificationProvider>
             </ImageShareNotificationProvider>
           </GiftNotificationProvider>
@@ -199,6 +203,7 @@ export default function ConsumerRouter() {
           <Route path="/games/letters/play/:code" element={<LettersPlay />} />
           <Route path="/games/letters/results/:code" element={<LettersResults />} />
           <Route path="/games" element={<Games />} />
+          <Route path="/social" element={<Social />} />
           <Route path="/contacts" element={<Contacts />} />
           <Route path="/contacts/:contactId" element={<ChatPage />} />
           <Route path="/group-chats/:conversationId" element={<GroupChatPage />} />

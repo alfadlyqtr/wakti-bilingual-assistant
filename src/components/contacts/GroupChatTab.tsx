@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { formatDistanceToNow } from "date-fns";
 import { MessageSquarePlus, Users, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -17,14 +16,16 @@ import { getEligibleGroupContacts, getMyGroupConversations, createGroupConversat
 
 interface GroupChatTabProps {
   embedded?: boolean;
+  source?: "contacts" | "social";
 }
 
-export function GroupChatTab({ embedded = false }: GroupChatTabProps) {
+export function GroupChatTab({ embedded = false, source = "contacts" }: GroupChatTabProps) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { language } = useTheme();
   const { user } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
+  const [membersDialogGroup, setMembersDialogGroup] = useState<any | null>(null);
   const [groupName, setGroupName] = useState("");
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
 
@@ -67,7 +68,7 @@ export function GroupChatTab({ embedded = false }: GroupChatTabProps) {
   };
 
   const getConversationRoute = (conversationId: string) => {
-    return embedded ? `/group-chats/${conversationId}?from=account` : `/group-chats/${conversationId}?from=contacts`;
+    return `/group-chats/${conversationId}?from=${source}`;
   };
 
   return (
@@ -108,11 +109,8 @@ export function GroupChatTab({ embedded = false }: GroupChatTabProps) {
       ) : (
         <div className="space-y-3">
           {groups.map((group) => {
-            const otherParticipants = group.participants.filter((participant) => participant.user_id !== user?.id);
-            const memberPreview = otherParticipants
-              .slice(0, 3)
-              .map((participant) => participant.profile?.display_name || participant.profile?.username || "User")
-              .join(language === "ar" ? "، " : ", ");
+            const creator = group.participants.find((participant) => participant.user_id === group.created_by);
+            const creatorName = creator?.profile?.display_name || creator?.profile?.username || (language === "ar" ? "غير معروف" : "Unknown");
 
             return (
               <Card
@@ -121,56 +119,89 @@ export function GroupChatTab({ embedded = false }: GroupChatTabProps) {
                 onClick={() => navigate(getConversationRoute(group.id))}
               >
                 <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="relative flex -space-x-3 rtl:space-x-reverse shrink-0 pt-0.5">
-                      {otherParticipants.slice(0, 3).map((participant) => {
-                        const label = participant.profile?.display_name || participant.profile?.username || "?";
-                        return (
-                          <Avatar key={participant.user_id} className="h-10 w-10 border-2 border-background shadow-sm">
-                            {participant.profile?.avatar_url && <AvatarImage src={participant.profile.avatar_url} />}
-                            <AvatarFallback className="bg-[linear-gradient(135deg,hsl(210_100%_65%)_0%,hsl(280_70%_65%)_100%)] text-white font-bold">
-                              {label.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                        );
-                      })}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-semibold text-base truncate text-[#060541] dark:text-white">{group.name}</h4>
+                      <p className="mt-1 text-sm text-muted-foreground truncate">
+                        {language === "ar" ? `المنشئ: ${creatorName}` : `Creator: ${creatorName}`}
+                      </p>
                     </div>
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <h4 className="font-semibold truncate">{group.name}</h4>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {memberPreview || (language === "ar" ? "مجموعة خاصة" : "Private group")}
-                          </p>
-                        </div>
-                        {group.unread && (
-                          <Badge className="bg-[hsl(210_100%_55%)] text-white border-transparent shrink-0">
-                            {language === "ar" ? "جديد" : "New"}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                        <span className="truncate">{group.last_message_text || (language === "ar" ? "لا توجد رسائل بعد" : "No messages yet")}</span>
-                        <span className="shrink-0">
-                          {group.last_message_at
-                            ? formatDistanceToNow(new Date(group.last_message_at), { addSuffix: true })
-                            : (language === "ar" ? "الآن" : "Now")}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                        <Users className="h-3.5 w-3.5" />
-                        <span>
-                          {group.participants.length} {language === "ar" ? "أعضاء" : "members"}
-                        </span>
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setMembersDialogGroup(group);
+                      }}
+                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,253,0.92))] dark:bg-[linear-gradient(180deg,rgba(20,24,35,0.98),rgba(14,17,26,0.98))] px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_4px_14px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_16px_rgba(0,0,0,0.16)] active:scale-95 transition-transform"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      <span>
+                        {group.participants.length} {language === "ar" ? "أعضاء" : "members"}
+                      </span>
+                    </button>
                   </div>
+                  {group.unread && (
+                    <div className="mt-3">
+                      <Badge className="bg-[hsl(210_100%_55%)] text-white border-transparent">
+                        {language === "ar" ? "جديد" : "New"}
+                      </Badge>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
           })}
         </div>
       )}
+
+      <Dialog open={Boolean(membersDialogGroup)} onOpenChange={(open) => !open && setMembersDialogGroup(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {language === "ar" ? "أعضاء المجموعة" : "Group members"}
+            </DialogTitle>
+            <DialogDescription>
+              {membersDialogGroup?.name || (language === "ar" ? "المجموعة" : "Group chat")}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-y-auto space-y-3">
+            {(membersDialogGroup?.participants || []).map((participant: any) => {
+              const participantIsCreator = participant.user_id === membersDialogGroup?.created_by;
+              const isMe = participant.user_id === user?.id;
+              const displayName = participant.profile?.display_name || participant.profile?.username || (language === "ar" ? "عضو" : "Member");
+
+              return (
+                <div key={participant.user_id} className="flex items-center gap-3 p-3 rounded-xl bg-card/50 border border-border/40">
+                  <Avatar className="h-10 w-10">
+                    {participant.profile?.avatar_url && <AvatarImage src={participant.profile.avatar_url} />}
+                    <AvatarFallback className="bg-[linear-gradient(135deg,hsl(210_100%_65%)_0%,hsl(280_70%_65%)_100%)] text-white text-xs font-bold">
+                      {displayName.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-medium text-sm truncate">
+                        {displayName}
+                        {isMe && (
+                          <span className="text-muted-foreground font-normal">
+                            {language === "ar" ? " (أنت)" : " (You)"}
+                          </span>
+                        )}
+                      </span>
+                      {participantIsCreator && (
+                        <Badge className="bg-amber-500/20 text-amber-600 border-amber-500/30 text-[10px] px-1.5 py-0">
+                          {language === "ar" ? "المؤسس" : "Creator"}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="sm:max-w-lg">

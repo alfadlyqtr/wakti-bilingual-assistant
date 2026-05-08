@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,7 @@ const MAX_CHARS = 200;
 export default function ChatPage() {
   const { contactId } = useParams<{ contactId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { language, theme } = useTheme();
   
   const [messageText, setMessageText] = useState("");
@@ -54,6 +55,7 @@ export default function ChatPage() {
   const [savedMessages, setSavedMessages] = useState<Set<string>>(new Set());
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const isContactOnline = contactId ? isOnline(contactId) : false;
+  const entrySource = searchParams.get("from");
 
   // Auto scroll to bottom on new messages
   const scrollToBottom = () => {
@@ -660,7 +662,7 @@ export default function ChatPage() {
         <Button 
           variant="ghost" 
           size="icon"
-          onClick={() => navigate('/account?tab=social')}
+          onClick={() => navigate(entrySource === 'social' ? '/social' : '/contacts')}
           className={`h-10 w-10 rounded-xl ${isDark ? 'bg-blue-500/20 hover:bg-blue-500/30 text-blue-400' : 'bg-blue-500/10 hover:bg-blue-500/20 text-blue-600'} transition-all active:scale-95`}
         >
           <ChevronLeft className="h-6 w-6" />

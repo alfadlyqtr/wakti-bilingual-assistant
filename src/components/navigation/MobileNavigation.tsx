@@ -32,9 +32,9 @@ export default function MobileNavigation() {
         </Link>
 
         <Link
-          to="/contacts"
+          to="/social"
           className={`flex flex-col items-center p-2 rounded-lg transition-colors ${
-            isActive('/contacts') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+            isActive('/social') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
           }`}
         >
           <div className="relative">
@@ -43,7 +43,7 @@ export default function MobileNavigation() {
               <UnreadBadge count={contactCount} size="sm" className="-top-1 -right-1" />
             )}
           </div>
-          <span className="text-xs mt-1">Contacts</span>
+          <span className="text-xs mt-1">Social</span>
         </Link>
 
         <Link

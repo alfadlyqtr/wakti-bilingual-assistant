@@ -14,6 +14,7 @@ export interface Contact {
     email?: string;
   };
   is_favorite: boolean;
+  favorite_record_id?: string | null;
 }
 
 export interface ContactRequest {
@@ -121,7 +122,8 @@ export async function getContacts() {
     return {
       id: outgoing?.id || incoming?.id || contactId,
       contact_id: contactId,
-      is_favorite: outgoing?.is_favorite || incoming?.is_favorite || false,
+      is_favorite: outgoing?.is_favorite === true,
+      favorite_record_id: outgoing?.id || null,
       profile,
       relationshipStatus: relationship,
     };

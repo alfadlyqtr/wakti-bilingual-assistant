@@ -125,13 +125,13 @@ export function UserMenu() {
           <Settings className="mr-2 h-4 w-4" />
           <span>{t("settings", language)}</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/contacts")}>
+        <DropdownMenuItem onClick={() => navigate("/social") }>
           <MessageSquare className="mr-2 h-4 w-4" />
-          <span>{t("contacts", language)}</span>
+          <span>{language === 'ar' ? 'التواصل' : 'Social'}</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => navigate("/contacts")}>
+        <DropdownMenuItem onClick={() => navigate("/social?section=contacts&tab=groups") }>
           <Users className="mr-2 h-4 w-4" />
-          <span>{t("contacts", language)}</span>
+          <span>{language === 'ar' ? 'المجموعات' : 'Group Chat'}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleSignOut} disabled={isLoggingOut}>

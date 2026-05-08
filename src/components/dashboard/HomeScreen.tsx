@@ -51,6 +51,7 @@ import {
   CalendarDays,
   Bell,
   Users,
+  MessageCircle,
 } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
@@ -65,7 +66,7 @@ import { toast } from "sonner";
 import { getScopedStorageItem, migrateLegacyScopedStorage, removeScopedStorageItem, setActiveScopedUserId, setScopedStorageItem } from "@/utils/userScopedStorage";
 
 // ─── App definitions ──────────────────────────────────────────────────────────
-const ALL_APPS = [
+ const ALL_APPS = [
   { id: "calendar",  nameEn: "Calendar",  nameAr: "التقويم",   path: "/calendar",           icon: Calendar,        gradient: "from-sky-400 to-sky-600",         glow: "#38bdf8" },
   { id: "journal",   nameEn: "Journal",   nameAr: "المذكرات",  path: "/journal",            icon: NotebookPen,     gradient: "from-pink-500 to-rose-600",       glow: "#ec4899" },
   { id: "maw3d",     nameEn: "Maw3d",     nameAr: "مواعيد",   path: "/maw3d",              icon: CalendarClock,   gradient: "from-purple-500 to-purple-700",   glow: "#a855f7" },
@@ -78,6 +79,7 @@ const ALL_APPS = [
   { id: "text",      nameEn: "Text",      nameAr: "نص",       path: "/tools/text",         icon: PenTool,         gradient: "from-violet-500 to-violet-700",   glow: "#8b5cf6" },
   { id: "voice",     nameEn: "Voice",     nameAr: "صوت",      path: "/tools/voice-studio", icon: Mic,             gradient: "from-pink-400 to-pink-600",       glow: "#f472b6" },
   { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500 to-red-700",         glow: "#ef4444" },
+  { id: "social",    nameEn: "Social",    nameAr: "التواصل",  path: "/social",             icon: MessageCircle,   gradient: "from-cyan-500 to-blue-600",       glow: "#38bdf8" },
   { id: "account",   nameEn: "Account",   nameAr: "حسابي",    path: "/account",            icon: Users,           gradient: "from-slate-500 to-slate-700",     glow: "#94a3b8", isAvatarIcon: true },
   { id: "deen",      nameEn: "Deen",      nameAr: "دين",      path: "/deen",               icon: BookOpen,        gradient: "from-sky-500 to-indigo-600",      glow: "#38bdf8" },
 ];
@@ -194,15 +196,26 @@ function sanitizeDock(raw: string[], maxSlots = MAX_DOCK_DESKTOP): string[] {
 
 // ─── Liquid-glass icon shell ───────────────────────────────────────────────────
 // The shimmer highlight on the top edge + soft inner glow gives real iOS 26 "liquid glass"
-function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, badgeCount = 0 }: {
+function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, badgeCount = 0, variant = "dock" }: {
   app: typeof ALL_APPS[0];
   size?: number;
   editMode: boolean;
   glowEnabled?: boolean;
   avatarUrl?: string;
   badgeCount?: number;
+  variant?: "grid" | "dock";
 }) {
   const px = `${size}px`;
+  const isGridVariant = variant === "grid";
+  const shellRadius = isGridVariant ? '27%' : '23%';
+  const iconScale = app.isAvatarIcon ? 1 : isGridVariant ? 0.46 : 0.5;
+  const glassShadow = glowEnabled
+    ? isGridVariant
+      ? `0 0 22px ${app.glow}99, 0 14px 32px ${app.glow}40, 0 8px 20px rgba(3,8,20,0.42), inset 0 1px 0 rgba(255,255,255,0.48), inset 0 -10px 18px rgba(255,255,255,0.08)`
+      : `0 0 16px ${app.glow}bb, 0 4px 14px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
+    : isGridVariant
+      ? `0 10px 24px ${app.glow}33, 0 6px 18px rgba(3,8,20,0.4), inset 0 1px 0 rgba(255,255,255,0.42), inset 0 -10px 18px rgba(255,255,255,0.07)`
+      : `0 4px 14px ${app.glow}44, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`;
   return (
     <div
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
@@ -210,32 +223,62 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
     >
       {/* Main gradient body with iOS-style frosted glass */}
       <div
-        className={`absolute inset-0 rounded-[23%] bg-gradient-to-br ${app.gradient}`}
+        className={`absolute inset-0 bg-gradient-to-br ${app.gradient}`}
         style={{
-          opacity: 0.75,
-          backdropFilter: 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-          boxShadow: glowEnabled
-            ? `0 0 16px ${app.glow}bb, 0 4px 14px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
-            : `0 4px 14px ${app.glow}44, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`,
-          outline: '0.5px solid rgba(180,190,200,0.28)',
+          borderRadius: shellRadius,
+          opacity: isGridVariant ? 0.9 : 0.75,
+          backdropFilter: isGridVariant ? 'blur(26px) saturate(195%)' : 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: isGridVariant ? 'blur(26px) saturate(195%)' : 'blur(20px) saturate(180%)',
+          boxShadow: glassShadow,
+          outline: isGridVariant ? '1px solid rgba(255,255,255,0.18)' : '0.5px solid rgba(180,190,200,0.28)',
         }}
       />
       {/* Liquid glass highlight */}
       <div
-        className="absolute rounded-[23%] pointer-events-none"
+        className="absolute pointer-events-none"
         style={{
           inset: 0,
-          background: "linear-gradient(145deg, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.08) 40%, transparent 70%)",
+          borderRadius: shellRadius,
+          background: isGridVariant
+            ? "linear-gradient(160deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.2) 18%, rgba(255,255,255,0.08) 38%, rgba(255,255,255,0.02) 52%, transparent 70%)"
+            : "linear-gradient(145deg, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.08) 40%, transparent 70%)",
+          mixBlendMode: 'screen',
         }}
       />
+      {isGridVariant && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            inset: '8% 12% 54% 12%',
+            borderRadius: '999px',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.08) 100%)',
+            filter: 'blur(2px)',
+            opacity: 0.95,
+          }}
+        />
+      )}
+      {isGridVariant && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: '12%',
+            right: '12%',
+            bottom: '10%',
+            height: '22%',
+            borderRadius: '999px',
+            background: 'linear-gradient(90deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.16) 100%)',
+            filter: 'blur(8px)',
+            opacity: 0.72,
+          }}
+        />
+      )}
       {/* Icon */}
-      <div className="absolute inset-0 flex items-center justify-center overflow-hidden rounded-[23%]">
+      <div className="absolute inset-0 flex items-center justify-center overflow-hidden" style={{ borderRadius: shellRadius }}>
         {app.isAvatarIcon && avatarUrl
-          ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+          ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" style={{ transform: isGridVariant ? 'scale(1.03)' : undefined }} />
           : app.isWaktiIcon
-            ? <WaktiIcon style={{ width: size * 0.5, height: size * 0.5, color: "#fff" }} />
-            : app.icon && <app.icon style={{ width: size * 0.5, height: size * 0.5, color: "#fff" }} strokeWidth={1.8} />
+            ? <WaktiIcon style={{ width: size * iconScale, height: size * iconScale, color: "#fff", filter: isGridVariant ? 'drop-shadow(0 2px 8px rgba(255,255,255,0.18)) drop-shadow(0 6px 12px rgba(0,0,0,0.35))' : undefined }} />
+            : app.icon && <app.icon style={{ width: size * iconScale, height: size * iconScale, color: "#fff", filter: isGridVariant ? 'drop-shadow(0 2px 8px rgba(255,255,255,0.18)) drop-shadow(0 6px 12px rgba(0,0,0,0.35))' : undefined }} strokeWidth={1.8} />
         }
       </div>
       {/* Notification badge */}
@@ -285,15 +328,17 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false,
       className="flex flex-col items-center gap-1.5 select-none cursor-pointer"
       onClick={editMode ? undefined : onTap}
     >
-      <LiquidIcon app={app} size={64} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
+      <LiquidIcon app={app} size={64} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} variant="grid" />
       <span
         className="text-[11px] font-bold text-center leading-tight text-white px-2 py-0.5 rounded-md"
         style={{
-          background: 'rgba(0,0,0,0.35)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          background: 'linear-gradient(180deg, rgba(18,24,38,0.34) 0%, rgba(8,12,20,0.22) 100%)',
+          backdropFilter: 'blur(14px) saturate(150%)',
+          WebkitBackdropFilter: 'blur(14px) saturate(150%)',
+          border: '1px solid rgba(255,255,255,0.14)',
+          boxShadow: '0 8px 18px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.12)',
           textShadow: '0 1px 3px rgba(0,0,0,0.8)',
-          maxWidth: 72,
+          maxWidth: 76,
           overflow: "hidden",
           textOverflow: "ellipsis",
           whiteSpace: "nowrap",
@@ -2817,7 +2862,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         navigate={navigate}
                         gridArea={gp}
                         avatarUrl={avatarUrl}
-                        badgeCount={app.id === 'account' ? connectBadge : 0}
+                        badgeCount={app.id === 'social' ? connectBadge : 0}
                       />
                     );
                   });
@@ -2844,7 +2889,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             >
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 {dockApps.map(app => (
-                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'account' ? connectBadge : 0} />
+                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'social' ? connectBadge : 0} />
                 ))}
                 {Array.from({ length: Math.max(0, maxDock - dockApps.length) }).map((_, i) => (
                   <div key={`slot-${i}`} className="w-14 h-14 rounded-[23%] border-2 border-dashed border-white/25" />

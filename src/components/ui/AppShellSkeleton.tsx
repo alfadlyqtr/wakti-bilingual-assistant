@@ -146,7 +146,7 @@ function pickSkeleton(path: string): React.ReactNode {
   if (path === "/dashboard" || path === "/") return <DashboardSkeleton />;
   if (path === "/tasks-reminders" || path === "/tr") return <ListSkeleton />;
   if (path === "/calendar") return <CalendarSkeleton />;
-  if (path === "/contacts" || path.startsWith("/contacts/")) return <ListSkeleton />;
+  if (path === "/social" || path === "/contacts" || path.startsWith("/contacts/")) return <ListSkeleton />;
   if (path.startsWith("/wakti-ai")) return <AISkeleton />;
   if (path === "/tasjeel") return <TasjeelSkeleton />;
   if (path === "/account") return <AccountSkeleton />;

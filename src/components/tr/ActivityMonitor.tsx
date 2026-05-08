@@ -30,6 +30,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { InAppSharedTaskViewer } from './InAppSharedTaskViewer';
 import { supabase } from '@/integrations/supabase/client';
+import { buildSharedTaskUrl } from '@/utils/taskShare';
 
 interface ActivityMonitorProps {
   tasks: TRTask[];
@@ -352,7 +353,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
       const subtask = taskSubtasks.find(s => s.id === activity.subtask_id);
       subtaskTitle = subtask ? subtask.title : 'a subtask';
     }
-    
+
     switch (activity.response_type) {
       case 'completion':
         if (activity.subtask_id) {
@@ -377,7 +378,7 @@ export const ActivityMonitor: React.FC<ActivityMonitorProps> = ({
   }, []);
 
   const copyShareLink = useCallback((shareLink: string) => {
-    navigator.clipboard.writeText(`${window.location.origin}/shared-task/${shareLink}`);
+    navigator.clipboard.writeText(buildSharedTaskUrl(shareLink));
     toast.success(t('linkCopied', language));
   }, [language]);
 

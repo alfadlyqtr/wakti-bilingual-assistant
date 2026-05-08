@@ -56,7 +56,7 @@ export const SharedTaskCard: React.FC<SharedTaskCardProps> = ({
 
   const openSharedTask = () => {
     if (task.share_link) {
-      window.open(`/shared/${task.share_link}`, '_blank');
+      window.open(`/shared-task/${task.share_link}`, '_blank');
     }
   };
 

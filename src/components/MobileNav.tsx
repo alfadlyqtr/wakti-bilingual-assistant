@@ -29,7 +29,7 @@ export function MobileNav({
       waktiBadges.clearBadge('task');
     } else if (pathname.startsWith('/maw3d')) {
       waktiBadges.clearBadge('event');
-    } else if (pathname.startsWith('/contacts')) {
+    } else if (pathname.startsWith('/social') || pathname.startsWith('/contacts')) {
       waktiBadges.clearBadge('contact');
     }
   }, [pathname]);

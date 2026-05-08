@@ -20,6 +20,7 @@ import { TRService, TRTask } from '@/services/trService';
 import { toast } from 'sonner';
 import { SubtaskManager } from '@/components/tr/SubtaskManager';
 import { supabase } from '@/integrations/supabase/client';
+import { buildSharedTaskUrl } from '@/utils/taskShare';
 
 // PHASE 2 FIX: Updated schema to make due_date truly optional
 const taskSchema = z.object({
@@ -241,7 +242,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
 
   const copyShareLink = async () => {
     if (task?.share_link) {
-      const shareUrl = `${window.location.origin}/shared-task/${task.share_link}`;
+      const shareUrl = buildSharedTaskUrl(task.share_link);
       try {
         await navigator.clipboard.writeText(shareUrl);
         toast.success(t('linkCopied', language));
@@ -994,7 +995,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
                 </Label>
                 <div className="flex items-center gap-2">
                   <Input 
-                    value={`${window.location.origin}/shared-task/${task.share_link}`}
+                    value={buildSharedTaskUrl(task.share_link)}
                     readOnly 
                     className="text-xs"
                   />

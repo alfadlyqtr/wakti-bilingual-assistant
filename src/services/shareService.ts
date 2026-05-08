@@ -1,7 +1,7 @@
-
 import { supabase } from "@/integrations/supabase/client";
 import { Maw3dEvent } from "@/types/maw3d";
 import { format } from 'date-fns';
+import { buildSharedTaskUrl } from '@/utils/taskShare';
 
 export class ShareService {
   // Share Maw3d event - Updated to share only clean URL without descriptive text
@@ -65,7 +65,7 @@ export class ShareService {
     console.log('Called with taskId:', taskId, 'shareLink:', shareLink);
     
     try {
-      const taskUrl = `${window.location.origin}/shared-task/${shareLink}`;
+      const taskUrl = buildSharedTaskUrl(shareLink);
       console.log('Generated task link:', taskUrl);
       
       const shareData = {

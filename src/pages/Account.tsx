@@ -36,11 +36,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { getPurchasesShellSnapshot, purchasePackage, showPaywall, getOfferings, restorePurchases } from "@/integrations/natively/purchasesBridge";
-import { MyGallery } from "@/components/social/MyGallery";
-import { ContactsEmbedded } from "@/components/account/ContactsEmbedded";
 import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
-import { getPendingRequestsCount } from "@/services/contactsService";
-import { getAllUnreadCounts } from "@/services/messageService";
 
 
 // TrialCountdown Component - Shows remaining time of 24-hour trial
@@ -140,52 +136,41 @@ export default function Account() {
   const location = useLocation();
   const { language } = useTheme();
   const queryClient = useQueryClient();
-  // Active tab synced with URL (?tab=profile|billing|social|wishes) without loops/flicker
+  // Active tab synced with URL (?tab=profile|billing|wishes) without loops/flicker
   const initialTab = (() => {
     const params = new URLSearchParams(location.search || '');
     const tab = (params.get('tab') || '').toLowerCase();
     if (tab === 'billing') return 'billing';
-    if (tab === 'social') return 'social';
     if (tab === 'wishes') return 'wishes';
-    return 'social';
+    return 'profile';
   })();
-  const [activeTab, setActiveTab] = useState<'profile' | 'billing' | 'social' | 'wishes'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'profile' | 'billing' | 'wishes'>(initialTab);
+
   useEffect(() => {
     const params = new URLSearchParams(location.search || '');
     const tab = (params.get('tab') || '').toLowerCase();
-    let urlTab: 'profile' | 'billing' | 'social' | 'wishes' = 'social';
+    if (tab === 'social') {
+      navigate('/social', { replace: true });
+    }
+  }, [location.search, navigate]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const tab = (params.get('tab') || '').toLowerCase();
+    let urlTab: 'profile' | 'billing' | 'wishes' = 'profile';
     if (tab === 'billing') urlTab = 'billing';
     else if (tab === 'profile') urlTab = 'profile';
-    else if (tab === 'social') urlTab = 'social';
     else if (tab === 'wishes') urlTab = 'wishes';
     if (urlTab !== activeTab) setActiveTab(urlTab);
   }, [location.search]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search || '');
-    if ((params.get('tab') || 'social') !== activeTab) {
+    if ((params.get('tab') || 'profile') !== activeTab) {
       params.set('tab', activeTab);
       navigate(`${location.pathname}?${params.toString()}`, { replace: true });
     }
   }, [activeTab]);
-
-  // Social tab state
-  const [socialSubTab, setSocialSubTab] = useState("contacts");
-  const { data: pendingRequestsCount = 0 } = useQuery({
-    queryKey: ['pendingRequestsCount'],
-    queryFn: getPendingRequestsCount,
-    staleTime: 30000,
-    refetchInterval: 60000,
-    refetchOnWindowFocus: true,
-  });
-  const { data: perContactUnread = {} } = useQuery({
-    queryKey: ['allUnreadCounts'],
-    queryFn: getAllUnreadCounts,
-    staleTime: 30000,
-    refetchInterval: 60000,
-    refetchOnWindowFocus: true,
-  });
-  const socialBadgeCount = pendingRequestsCount + Object.values(perContactUnread).reduce((sum, count) => sum + Number(count || 0), 0);
   const [wishesPrivacy, setWishesPrivacy] = useState("contacts");
   const [wishesAllowClaims, setWishesAllowClaims] = useState(true);
   const [wishesAutoApprove, setWishesAutoApprove] = useState(false);
@@ -863,20 +848,11 @@ export default function Account() {
 
         {/* ── TAB BAR — below hero, on page background ─────────────────────── */}
         <div className="sticky top-0 z-20 px-4 pt-1 pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 border-b border-[#d7dbe5] dark:border-border">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'profile' | 'billing' | 'social' | 'wishes')} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 h-10 bg-muted rounded-2xl p-1 border border-[#d7dbe5] dark:border-border shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'profile' | 'billing' | 'wishes')} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 h-10 bg-muted rounded-2xl p-1 border border-[#d7dbe5] dark:border-border shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
             <TabsTrigger value="profile" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[#060541] data-[state=active]:text-white dark:data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:shadow-none transition-all flex items-center gap-1">
               <User className="h-3 w-3 shrink-0" />
               {language === 'ar' ? 'الملف' : 'Profile'}
-            </TabsTrigger>
-            <TabsTrigger value="social" className="relative rounded-xl text-[11px] font-bold data-[state=active]:bg-[hsl(142,76%,42%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex items-center gap-1">
-              <Users className="h-3 w-3 shrink-0" />
-              {language === 'ar' ? 'التواصل' : 'Social'}
-              {socialBadgeCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[1rem] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
-                  {socialBadgeCount > 99 ? '99+' : socialBadgeCount}
-                </span>
-              )}
             </TabsTrigger>
             <TabsTrigger value="wishes" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all flex items-center gap-1">
               <Gift className="h-3 w-3 shrink-0" />
@@ -1216,28 +1192,6 @@ export default function Account() {
                 </Button>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {/* ── SOCIAL TAB ─────────────────────────────────────────────────── */}
-          <TabsContent value="social" className="pt-4 pb-24">
-            <Tabs defaultValue="contacts">
-              <TabsList className="w-full grid grid-cols-2 mb-4 min-h-12 rounded-2xl bg-black/5 dark:bg-white/5 p-1.5 border-0">
-                <TabsTrigger value="contacts" className="rounded-xl text-sm font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all py-2.5">
-                  {language === 'ar' ? 'الأصدقاء' : 'Contacts'}
-                </TabsTrigger>
-                <TabsTrigger value="gallery" className="rounded-xl text-sm font-bold text-foreground/50 data-[state=active]:bg-[hsl(25,95%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all py-2.5">
-                  {language === 'ar' ? 'المعرض' : 'My Gallery'}
-                </TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="contacts" className="mt-0">
-                <ContactsEmbedded language={language} />
-              </TabsContent>
-
-              <TabsContent value="gallery" className="mt-0">
-                <MyGallery />
-              </TabsContent>
-            </Tabs>
           </TabsContent>
 
           {/* ── WISHES TAB ─────────────────────────────────────────────── */}

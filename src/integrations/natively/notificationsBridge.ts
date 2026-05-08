@@ -159,7 +159,7 @@ export function setupNotificationClickHandler(navigate: (path: string) => void) 
       // Handle message notifications - navigate to contacts with openChat param
       if ((type === 'message_received' || type === 'message' || type === 'messages') && senderId) {
         console.log('[NativelyNotifications] Navigating to chat with:', senderId);
-        navigate(`/contacts?openChat=${senderId}`);
+        navigate(`/social?section=contacts&openChat=${senderId}`);
       } else if (data.deep_link) {
         // Use deep_link from data if available
         console.log('[NativelyNotifications] Using deep_link:', data.deep_link);
@@ -167,7 +167,7 @@ export function setupNotificationClickHandler(navigate: (path: string) => void) 
       } else {
         // Default: go to contacts
         console.log('[NativelyNotifications] No specific handler, going to contacts');
-        navigate('/contacts');
+        navigate('/social');
       }
     });
     

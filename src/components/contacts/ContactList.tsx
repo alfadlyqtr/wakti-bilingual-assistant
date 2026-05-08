@@ -54,6 +54,9 @@ interface ContactListProps {
    * the standalone /contacts route).
    */
   embedded?: boolean;
+  source?: "contacts" | "social";
+  viewMode?: "contacts" | "cards";
+  showViewToggle?: boolean;
 }
 
 export function ContactList({ 
@@ -62,6 +65,9 @@ export function ContactList({
   openChatUserId = null,
   clearOpenChat = () => {},
   embedded = false,
+  source = "contacts",
+  viewMode,
+  showViewToggle = true,
 }: ContactListProps) {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -77,7 +83,8 @@ export function ContactList({
   const [chatOpen, setChatOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<{id: string, name: string, avatar?: string} | null>(null);
   const [avatarErrors, setAvatarErrors] = useState<Record<string, boolean>>({});
-  const [compactView, setCompactView] = useState(false);
+  const [internalViewMode, setInternalViewMode] = useState<"contacts" | "cards">("cards");
+  const compactView = (viewMode ?? internalViewMode) === "contacts";
   
   // Debug logging for user and unread data
   useEffect(() => {
@@ -126,7 +133,7 @@ export function ContactList({
         
         if (useFullPageChat) {
           // Mobile/tablet: navigate to full-page chat
-          navigate(`/contacts/${openChatUserId}`);
+          navigate(`/contacts/${openChatUserId}?from=${source}`);
         } else {
           // Desktop: use popup
           setSelectedContact({ id: openChatUserId, name: displayName, avatar: avatarUrl });
@@ -188,7 +195,7 @@ export function ContactList({
   const handleOpenChat = (contactId: string, name: string, avatar?: string) => {
     if (useFullPageChat) {
       // Mobile/tablet: navigate to full-page chat
-      navigate(`/contacts/${contactId}`);
+      navigate(`/contacts/${contactId}?from=${source}`);
     } else {
       // Desktop: use popup
       setSelectedContact({ id: contactId, name, avatar });
@@ -196,8 +203,13 @@ export function ContactList({
     }
   };
 
-  const handleToggleFavorite = (contactId: string, isCurrentlyFavorite: boolean) => {
-    favoriteMutation.mutate({ contactId, currentVal: isCurrentlyFavorite });
+  const handleToggleFavorite = (favoriteRecordId: string | null | undefined, isCurrentlyFavorite: boolean) => {
+    if (!favoriteRecordId) {
+      toast.error(language === 'ar' ? 'لا يمكنك تعديل المفضلة لهذا الاتصال بعد' : 'You cannot change favorite for this contact yet');
+      return;
+    }
+
+    favoriteMutation.mutate({ contactId: favoriteRecordId, currentVal: isCurrentlyFavorite });
   };
 
   const handleBlock = (contactId: string) => {
@@ -280,16 +292,16 @@ export function ContactList({
     <>
       <div className="-mx-1.5 px-1.5 sm:mx-0 sm:px-0">
         {/* View toggle */}
-        {sortedContacts.length > 0 && (
+        {showViewToggle && sortedContacts.length > 0 && (
           <div className={`flex pb-2 ${language === 'ar' ? 'justify-start' : 'justify-end'}`}>
             <button
-              onClick={() => setCompactView(v => !v)}
-              aria-label={compactView ? 'Switch to card view' : 'Switch to compact view'}
+              onClick={() => setInternalViewMode((current) => current === "contacts" ? "cards" : "contacts")}
+              aria-label={compactView ? 'Switch to card view' : 'Switch to contacts view'}
               className="flex items-center gap-2 px-4 py-2 rounded-[1.1rem] text-xs font-semibold text-muted-foreground border border-[#e2d8cd] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(243,237,231,0.9))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.94),rgba(16,19,27,0.94))] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_10px_24px_rgba(0,0,0,0.26)] active:scale-95 transition-transform"
             >
               {compactView
                 ? <><LayoutGrid className="h-3.5 w-3.5" />{language === 'ar' ? 'بطاقات' : 'Cards'}</>
-                : <><LayoutList className="h-3.5 w-3.5" />{language === 'ar' ? 'مختصر' : 'Compact'}</>}
+                : <><LayoutList className="h-3.5 w-3.5" />{language === 'ar' ? 'جهات الاتصال' : 'Contacts'}</>}
             </button>
           </div>
         )}
@@ -311,6 +323,7 @@ export function ContactList({
               const unreadCount = perContactUnread[contact.contact_id] || 0;
               const avatarUrl = contactProfile.avatar_url;
               const isFavorite = contact.is_favorite === true;
+              const favoriteRecordId = contact.favorite_record_id || contact.id;
               const relationshipStatus: "mutual" | "you-added-them" | "they-added-you" = contact.relationshipStatus || "you-added-them";
               const isSupport = contact.contact_id === '00000000-0000-0000-0000-000000000001';
               
@@ -343,7 +356,7 @@ export function ContactList({
                     
                     <div className="flex items-center gap-1 shrink-0">
                       {!isSupport && (
-                        <button onClick={() => handleToggleFavorite(contact.id, isFavorite)} aria-label="Favorite" className="active:scale-90 transition-transform">
+                        <button onClick={() => handleToggleFavorite(favoriteRecordId, isFavorite)} aria-label="Favorite" className="active:scale-90 transition-transform">
                           <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/30'}`} />
                         </button>
                       )}
@@ -404,7 +417,7 @@ export function ContactList({
                         
                         {!isSupport && (
                           <button
-                            onClick={() => handleToggleFavorite(contact.id, isFavorite)}
+                            onClick={() => handleToggleFavorite(favoriteRecordId, isFavorite)}
                             disabled={favoriteMutation.isPending}
                             aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
                             className="shrink-0 rounded-full p-2.5 border border-[#c8d2e1] dark:border-white/15 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(245,248,252,0.94))] dark:bg-[linear-gradient(180deg,rgba(34,39,52,0.96),rgba(25,29,40,0.96))] shadow-[inset_0_1px_0_rgba(255,255,255,1),0_8px_18px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_8px_18px_rgba(0,0,0,0.24)] active:scale-90 transition-transform"
