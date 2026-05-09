@@ -47,10 +47,34 @@ const RippleGrid = ({
         : [1, 1, 1];
     };
 
-    const renderer = new Renderer({
-      dpr: Math.min(window.devicePixelRatio, 2),
-      alpha: true
-    });
+    // WebGL availability guard. iOS WebView (Natively wrapper) can return a null
+    // context under low memory / background / low-power conditions. OGL's Renderer
+    // crashes immediately ("null is not an object (evaluating 'this.gl.renderer=this')")
+    // if that happens. Bail out gracefully so the parent solid background still shows
+    // and the app does not blow up with an ErrorBoundary screen.
+    let renderer: Renderer;
+    try {
+      const probeCanvas = document.createElement('canvas');
+      const probeGl =
+        probeCanvas.getContext('webgl2') ||
+        probeCanvas.getContext('webgl') ||
+        probeCanvas.getContext('experimental-webgl');
+      if (!probeGl) {
+        console.warn('[RippleGrid] WebGL not available, skipping animated grid');
+        return;
+      }
+      renderer = new Renderer({
+        dpr: Math.min(window.devicePixelRatio || 1, 2),
+        alpha: true
+      });
+      if (!renderer || !renderer.gl) {
+        console.warn('[RippleGrid] OGL renderer returned no gl context, skipping');
+        return;
+      }
+    } catch (err) {
+      console.warn('[RippleGrid] Failed to initialize WebGL renderer, skipping', err);
+      return;
+    }
 
     const gl = renderer.gl;
     gl.enable(gl.BLEND);
