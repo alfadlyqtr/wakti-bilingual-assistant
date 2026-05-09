@@ -66,6 +66,7 @@ import {
   fetchUrlContent,
   expandIdea,
   retryA4Page,
+  normalizeA4ErrorMessage,
   A4_UNIVERSAL_DECOR_CHIPS,
   A4_MAX_CHIPS_PER_SIDE,
   type A4DocumentRow,
@@ -798,7 +799,7 @@ const PageCarousel: React.FC<{
             <AlertTriangle className="h-8 w-8 text-red-500" />
             <div className="text-sm font-medium">{t("Generation failed", "فشل التوليد")}</div>
             <div className="text-xs text-muted-foreground line-clamp-3">
-              {row.error_message || t("Unknown error", "خطأ غير معروف")}
+              {normalizeA4ErrorMessage(row.error_message) || t("Unknown error", "خطأ غير معروف")}
             </div>
             {onRetryPage && (
               <button
@@ -1821,7 +1822,7 @@ const A4Tab: React.FC = () => {
 
       if (!res.success || !res.batch_id) {
         setIsSubmitting(false);
-        setFatalError(res.error || t("Generation failed", "فشل التوليد"));
+        setFatalError(normalizeA4ErrorMessage(res.error) || t("Generation failed", "فشل التوليد"));
         setStage("failed");
         return;
       }
@@ -1844,7 +1845,7 @@ const A4Tab: React.FC = () => {
       });
     } catch (e) {
       setIsSubmitting(false);
-      setFatalError((e as Error).message);
+      setFatalError(normalizeA4ErrorMessage((e as Error).message));
       setStage("failed");
     }
   }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, inputMode, expandedContent, decorWanted, t]);
@@ -1928,7 +1929,7 @@ const A4Tab: React.FC = () => {
       setRetryingRowId(row.id);
       const res = await retryA4Page(row.id, row.theme_id || theme.id);
       if (!res.success) {
-        toast.error(res.error || t("Retry failed", "فشلت إعادة المحاولة"));
+        toast.error(normalizeA4ErrorMessage(res.error) || t("Retry failed", "فشلت إعادة المحاولة"));
         return;
       }
       // Optimistically flip the local row to "generating" until Realtime catches up.
@@ -1940,7 +1941,7 @@ const A4Tab: React.FC = () => {
       if (stage === "failed") setStage("generating");
       toast.success(t("Retry dispatched", "تمت إعادة المحاولة"));
     } catch (e) {
-      toast.error(`${t("Retry failed", "فشلت إعادة المحاولة")}: ${(e as Error).message}`);
+      toast.error(`${t("Retry failed", "فشلت إعادة المحاولة")}: ${normalizeA4ErrorMessage((e as Error).message)}`);
     } finally {
       setRetryingRowId(null);
     }
@@ -1978,6 +1979,10 @@ const A4Tab: React.FC = () => {
   const currentThemeVisual = theme ? (THEME_VISUALS[theme.id] ?? DEFAULT_VISUAL) : DEFAULT_VISUAL;
   const CurrentThemeIcon = currentThemeVisual.icon;
   const currentThemeBadge = theme ? THEME_BADGES[theme.id] : null;
+
+  const failedMessage = normalizeA4ErrorMessage(
+    fatalError || rows.find((row) => typeof row.error_message === "string" && row.error_message.trim().length > 0)?.error_message,
+  ) || t("Something went wrong. Please try again.", "حدث خطأ. يرجى المحاولة مرة أخرى.");
 
   return (
     <div className="w-full max-w-6xl mx-auto px-0 sm:px-1 md:px-2 pb-8" dir={lang === "ar" ? "rtl" : "ltr"}>
@@ -2585,7 +2590,7 @@ const A4Tab: React.FC = () => {
           <AlertTriangle className="h-10 w-10 text-red-500 mx-auto mb-3" />
           <div className="text-sm font-medium mb-1">{t("Generation failed", "فشل التوليد")}</div>
           <div className="text-xs text-muted-foreground mb-4 max-w-md mx-auto">
-            {fatalError || t("Something went wrong. Please try again.", "حدث خطأ. يرجى المحاولة مرة أخرى.")}
+            {failedMessage}
           </div>
           <button
             onClick={resetAll}

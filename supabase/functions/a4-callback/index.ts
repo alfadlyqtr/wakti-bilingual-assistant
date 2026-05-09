@@ -30,6 +30,24 @@ const KIE_TEXT_MODEL = "gpt-image-2-text-to-image";
 const KIE_IMAGE_MODEL = "gpt-image-2-image-to-image";
 const KIE_RECORD_INFO_ENDPOINT = "https://api.kie.ai/api/v1/jobs/recordInfo";
 
+const MODERATION_ERROR_MESSAGE = "This image could not be generated because the wording may be too sensitive or inappropriate";
+
+function normalizeGenerationErrorMessage(message: string): string {
+  const text = String(message ?? "").toLowerCase();
+  if (
+    text.includes("content safety") ||
+    text.includes("safety restrictions") ||
+    text.includes("could not return an image") ||
+    text.includes("error code: 131") ||
+    text.includes("content policy") ||
+    text.includes("content policies") ||
+    text.includes("openai")
+  ) {
+    return MODERATION_ERROR_MESSAGE;
+  }
+  return message;
+}
+
 function ok(body: unknown = { ok: true }) {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -337,7 +355,7 @@ async function dispatchNextPage(
     } else {
       await svc
         .from("user_a4_documents")
-        .update({ status: "failed", error_message: parsed?.msg || `Kie error (page ${row.page_number})` })
+        .update({ status: "failed", error_message: normalizeGenerationErrorMessage(parsed?.msg || `Kie error (page ${row.page_number})`) })
         .eq("id", row.id);
     }
   } catch (e) {
@@ -456,7 +474,7 @@ serve(async (req) => {
     if (isFailed) {
       await svc
         .from("user_a4_documents")
-        .update({ status: "failed", error_message: finalResult.errorMessage || "Kie reported failure" })
+        .update({ status: "failed", error_message: normalizeGenerationErrorMessage(finalResult.errorMessage || "Kie reported failure") })
         .eq("id", row.id);
       await svc
         .from("user_a4_documents")

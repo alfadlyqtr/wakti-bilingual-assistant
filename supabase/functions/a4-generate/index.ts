@@ -77,6 +77,24 @@ interface GenerateRequest {
   row_id?: string; // only used with mode="retry_page"
 }
 
+const MODERATION_ERROR_MESSAGE = "This image could not be generated because the wording may be too sensitive or inappropriate";
+
+function normalizeGenerationErrorMessage(message: string): string {
+  const text = String(message ?? "").toLowerCase();
+  if (
+    text.includes("content safety") ||
+    text.includes("safety restrictions") ||
+    text.includes("could not return an image") ||
+    text.includes("error code: 131") ||
+    text.includes("content policy") ||
+    text.includes("content policies") ||
+    text.includes("openai")
+  ) {
+    return MODERATION_ERROR_MESSAGE;
+  }
+  return message;
+}
+
 const KIE_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_TEXT_MODEL = "gpt-image-2-text-to-image";
 const KIE_IMAGE_MODEL = "gpt-image-2-image-to-image";
@@ -274,11 +292,11 @@ async function dispatchKieTask(opts: {
       return { error: `Kie non-JSON response (HTTP ${resp.status})` };
     }
     if (parsed?.code !== 200 || !parsed?.data?.taskId) {
-      return { error: parsed?.msg || `Kie error code ${parsed?.code}` };
+      return { error: normalizeGenerationErrorMessage(parsed?.msg || `Kie error code ${parsed?.code}`) };
     }
     return { taskId: String(parsed.data.taskId) };
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: normalizeGenerationErrorMessage((e as Error).message) };
   }
 }
 

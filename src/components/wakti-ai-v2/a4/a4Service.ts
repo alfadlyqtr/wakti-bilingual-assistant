@@ -240,6 +240,24 @@ export interface A4FetchUrlResponse {
   content?: string;
 }
 
+export const A4_MODERATION_MESSAGE = "This image could not be generated because the wording may be too sensitive or inappropriate";
+
+export function normalizeA4ErrorMessage(message: string | null | undefined): string {
+  const text = String(message ?? "").toLowerCase();
+  if (
+    text.includes("content safety") ||
+    text.includes("safety restrictions") ||
+    text.includes("could not return an image") ||
+    text.includes("error code: 131") ||
+    text.includes("content policy") ||
+    text.includes("content policies") ||
+    text.includes("openai")
+  ) {
+    return A4_MODERATION_MESSAGE;
+  }
+  return String(message ?? "");
+}
+
 async function getEdgeFunctionErrorMessage(error: unknown): Promise<string> {
   const fallback = error instanceof Error ? error.message : "Request failed";
   if (!error || typeof error !== "object" || !("context" in error)) return fallback;
@@ -336,9 +354,11 @@ export async function retryA4Page(rowId: string, themeId: string): Promise<A4Ret
     headers: { Authorization: `Bearer ${token}` },
   });
   if (resp.error) {
-    return { success: false, error: await getEdgeFunctionErrorMessage(resp.error) };
+    return { success: false, error: normalizeA4ErrorMessage(await getEdgeFunctionErrorMessage(resp.error)) };
   }
-  return resp.data ?? { success: false, error: "Empty response" };
+  return resp.data
+    ? { ...resp.data, error: resp.data.error ? normalizeA4ErrorMessage(resp.data.error) : undefined }
+    : { success: false, error: "Empty response" };
 }
 
 export async function generateA4Document(
@@ -356,9 +376,11 @@ export async function generateA4Document(
   });
 
   if (resp.error) {
-    return { success: false, error: resp.error.message };
+    return { success: false, error: normalizeA4ErrorMessage(await getEdgeFunctionErrorMessage(resp.error)) };
   }
-  return resp.data ?? { success: false, error: "Empty response" };
+  return resp.data
+    ? { ...resp.data, error: resp.data.error ? normalizeA4ErrorMessage(resp.data.error) : undefined }
+    : { success: false, error: "Empty response" };
 }
 
 // -----------------------------------------------------------------------------

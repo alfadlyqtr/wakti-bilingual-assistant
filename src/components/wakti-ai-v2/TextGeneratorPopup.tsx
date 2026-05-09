@@ -435,6 +435,18 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   initialTab = 'compose',
 }) => {
   const [activeTab, setActiveTab_internal] = useState<Tab>((initialTab as Tab) || 'compose');
+  const [mountedTabs, setMountedTabs] = useState<Record<Tab, boolean>>(() => {
+    const startTab = (initialTab as Tab) || 'compose';
+    return {
+      compose: startTab === 'compose',
+      reply: startTab === 'reply',
+      generated: startTab === 'generated',
+      diagrams: startTab === 'diagrams',
+      presentation: startTab === 'presentation',
+      translate: startTab === 'translate',
+      a4: startTab === 'a4',
+    };
+  });
   const setActiveTab = useCallback((tab: Tab) => {
     setActiveTab_internal(tab);
     onTabChange?.(tab);
@@ -595,6 +607,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       }
     }
   }, [initialTab]);
+
+  useEffect(() => {
+    setMountedTabs((prev) => {
+      if (prev[activeTab]) return prev;
+      return { ...prev, [activeTab]: true };
+    });
+  }, [activeTab]);
 
   // Note: auto-load from cache intentionally removed to avoid polluting the textarea
   // during streaming. Cached texts are shown below for manual selection.
@@ -2270,23 +2289,31 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           )}
 
           {/* Always render Diagrams and Presentation tabs to preserve state when switching tabs */}
-          <div className={activeTab === 'diagrams' ? '' : 'hidden'}>
-            <DiagramsTab />
-          </div>
-
-          <div className={activeTab === 'presentation' ? '' : 'hidden'}>
-            <PresentationTab />
-          </div>
-
-          <div className={activeTab === 'translate' ? '' : 'hidden'}>
-            <div className="-mx-6">
-              <TextTranslateTab />
+          {mountedTabs.diagrams && (
+            <div className={activeTab === 'diagrams' ? '' : 'hidden'}>
+              <DiagramsTab />
             </div>
-          </div>
+          )}
 
-          <div className={activeTab === 'a4' ? '' : 'hidden'}>
-            <A4Tab />
-          </div>
+          {mountedTabs.presentation && (
+            <div className={activeTab === 'presentation' ? '' : 'hidden'}>
+              <PresentationTab />
+            </div>
+          )}
+
+          {mountedTabs.translate && (
+            <div className={activeTab === 'translate' ? '' : 'hidden'}>
+              <div className="-mx-6">
+                <TextTranslateTab />
+              </div>
+            </div>
+          )}
+
+          {mountedTabs.a4 && (
+            <div className={activeTab === 'a4' ? '' : 'hidden'}>
+              <A4Tab />
+            </div>
+          )}
 
           {error && activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && activeTab !== 'a4' && (
             <div className="mt-4 text-sm text-destructive">{error}</div>
