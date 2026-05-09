@@ -1308,9 +1308,9 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
 }
 
 // ─── Widget content renderer (no drag logic, just visuals) ────────────────────
-function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote }: {
+function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote }: {
   wKey: WidgetId; editMode: boolean; language: string; theme: string;
-  hasBg: boolean; statCardBase: string;
+  hasBg: boolean; statCardBase: string; statLblColor: string;
   pendingTasks: number; completedToday: number; upcomingCount: number;
   navigate: (p: string) => void;
   quoteText?: string; quoteAuthor?: string;
@@ -1322,6 +1322,10 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   onExpandQuote?: () => void;
 }) {
   const isDark = theme === 'dark';
+  const now = new Date();
+  const dayNum = now.getDate();
+  const dayLong = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { weekday: 'long' });
+  const monthShort = now.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
   const total = pendingTasks + completedToday;
   const pct   = total > 0 ? Math.round((completedToday / total) * 100) : 0;
   const taskAccent  = pct >= 70 ? '#22c55e' : pct >= 30 ? '#f59e0b' : pendingTasks === 0 ? '#22c55e' : '#ef4444';
@@ -1474,7 +1478,7 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
     >
       <WidgetContent
         wKey={wKey} editMode={editMode} language={language} theme={theme}
-        hasBg={hasBg} statCardBase={statCardBase}
+        hasBg={hasBg} statCardBase={statCardBase} statLblColor={statLblColor}
         pendingTasks={pendingTasks} completedToday={completedToday}
         upcomingCount={upcomingCount} navigate={navigate}
         quoteText={quoteText} quoteAuthor={quoteAuthor}
@@ -1675,11 +1679,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const lastSaveErrorAtRef = useRef(0);
 
   const { tasks, reminders }  = useOptimizedTRData();
-  const { events, attendingCounts } = useOptimizedMaw3dEvents();
+  const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
   const whoopData = useWhoopData();
   const journalData = useJournalData();
   const pendingTasks  = tasks.filter(t => !t.completed).length;
-  const upcomingCount = events.filter(e => {
+  const upcomingCount = maw3dEvents.filter(e => {
     try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
   }).length;
 
