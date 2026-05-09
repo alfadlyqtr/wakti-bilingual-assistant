@@ -194,6 +194,57 @@ function sanitizeDock(raw: string[], maxSlots = MAX_DOCK_DESKTOP): string[] {
   return raw.filter(id => VALID_IDS.has(id) && !seen.has(id) && (seen.add(id), true)).slice(0, maxSlots);
 }
 
+function loadBlobImage(blob: Blob): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('wallpaper_image_load_failed'));
+    };
+    img.src = objectUrl;
+  });
+}
+
+async function prepareWallpaperUpload(file: File) {
+  const fallbackExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const fallbackType = file.type || 'image/jpeg';
+  if (!fallbackType.startsWith('image/')) {
+    return { body: file, ext: fallbackExt, contentType: fallbackType };
+  }
+  try {
+    const img = await loadBlobImage(file);
+    const srcWidth = img.naturalWidth || img.width;
+    const srcHeight = img.naturalHeight || img.height;
+    if (!srcWidth || !srcHeight) {
+      return { body: file, ext: fallbackExt, contentType: fallbackType };
+    }
+    const maxDimension = 2048;
+    const scale = Math.min(1, maxDimension / Math.max(srcWidth, srcHeight));
+    const width = Math.max(1, Math.round(srcWidth * scale));
+    const height = Math.max(1, Math.round(srcHeight * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return { body: file, ext: fallbackExt, contentType: fallbackType };
+    }
+    context.drawImage(img, 0, 0, width, height);
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.88));
+    if (!blob) {
+      return { body: file, ext: fallbackExt, contentType: fallbackType };
+    }
+    return { body: blob, ext: 'jpg', contentType: 'image/jpeg' };
+  } catch {
+    return { body: file, ext: fallbackExt, contentType: fallbackType };
+  }
+}
+
 // ─── Liquid-glass icon shell ───────────────────────────────────────────────────
 // The shimmer highlight on the top edge + soft inner glow gives real iOS 26 "liquid glass"
 function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, badgeCount = 0, variant = "dock" }: {
@@ -489,7 +540,7 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
             </div>
             <div>
               <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'مواعيد' : 'Maw3d'}</p>
-              <p className="text-[9px] mt-0.5 font-semibold" style={{ color: maw3dAccent }}>
+              <p className="text-[9px] font-semibold mt-0.5" style={{ color: maw3dAccent }}>
                 {upcomingCount === 0 ? (language === 'ar' ? 'لا مواعيد' : 'Clear') : upcomingCount <= 2 ? (language === 'ar' ? 'مجدولة ✓' : 'scheduled ✓') : (language === 'ar' ? 'مشغول 🔥' : 'busy 🔥')}
               </p>
             </div>
@@ -515,8 +566,8 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
       {visible.includes('showVitalityWidget') && (
         <div className={base} onClick={() => navigate('/fitness')}>
           <div className="p-2.5 flex flex-col gap-1.5">
-            <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#be123c,#ef4444)' }}>
-              <Activity className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+            <div className="w-7 h-7 rounded-xl bg-white/15 flex items-center justify-center flex-shrink-0">
+              <Activity className="w-4 h-4 text-white" strokeWidth={2} fill="rgba(255,255,255,0.4)" />
             </div>
             <div>
               <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>WHOOP</p>
@@ -530,8 +581,8 @@ function StatWidgets({ hsWidgets, language, theme, hasBg, pendingTasks, complete
         <div className={base} onClick={() => navigate('/journal')}
           style={{ background: hasBg ? 'rgba(139,92,246,0.2)' : isDark ? 'rgba(139,92,246,0.12)' : 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.35)' }}>
           <div className="p-2.5 flex flex-col gap-1.5">
-            <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg,#6d28d9,#8b5cf6)' }}>
-              <BookOpen className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />
+            <div className="w-7 h-7 rounded-xl flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.4)' }}>
+              <BookOpen className="w-3 h-3 text-white" strokeWidth={2.5} />
             </div>
             <div>
               <p className="text-[11px] font-bold leading-none" style={{ color: labelColor }}>{language === 'ar' ? 'يومياتي' : 'Journal'}</p>
@@ -606,8 +657,7 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
           ? 'linear-gradient(145deg,rgba(100,40,8,0.92) 0%,rgba(160,70,6,0.92) 100%)'
           : 'linear-gradient(145deg,rgba(110,20,20,0.92) 0%,rgba(170,20,20,0.92) 100%)')
     : 'linear-gradient(145deg,rgba(25,15,50,0.92) 0%,rgba(45,25,80,0.92) 100%)';
-
-  const bgHealth   = 'linear-gradient(145deg,rgba(10,60,40,0.92) 0%,rgba(15,90,60,0.92) 100%)';
+  const bgHealth   = 'linear-gradient(145deg,rgba(10,60,40,0.97) 0%,rgba(15,90,60,0.97) 50%,rgba(20,110,70,0.97) 100%)';
   const bgGradient = activeTab === 'whoop' ? bgWhoop : bgHealth;
   const glowColor  = activeTab === 'whoop' ? recColor : '#22c55e';
 
@@ -646,7 +696,7 @@ function VitalityWidget({ shell, language, navigate, whoopData }: {
                 <div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-black text-white tabular-nums leading-none">{Math.round(recovery)}%</span>
-                    <span className="text-[9px] text-white/90 font-bold uppercase">{language === 'ar' ? 'استشفاء' : 'REC'}</span>
+                    <span className="text-[9px] font-black text-white/90 uppercase">{language === 'ar' ? 'استشفاء' : 'REC'}</span>
                   </div>
                   {sleepHours != null && (
                     <div className="flex items-center gap-1 mt-0.5">
@@ -849,12 +899,12 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
       {/* Metric cards */}
       <div className="grid grid-cols-2 gap-1.5">
         <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
-          <span className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'الكل' : 'Total'}</span>
-          <span className="text-[20px] font-black text-white leading-none tabular-nums">{activeTab === 'tasks' ? total : 0}</span>
+          <span className="text-[7px] font-black" style={{ color: taskAccent }}>{total}</span>
+          <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{total}</span>
         </div>
         <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
-          <span className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'مكتمل' : 'Done'}</span>
-          <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{activeTab === 'tasks' ? completedToday : 0}</span>
+          <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{language === 'ar' ? 'مكتمل' : 'Done'}</span>
+          <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{completedToday}</span>
         </div>
       </div>
 
@@ -882,7 +932,7 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
                 return (
                   <div key={r.id} className="flex items-center justify-between rounded-lg px-2 py-1" style={{ background: overdue ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.1)' }}>
                     <span className="text-[8px] font-bold text-white truncate max-w-[55%]">{r.title}</span>
-                    <div className="flex items-center gap-0.5 flex-shrink-0">
+                    <div className="flex items-center gap-0.5">
                       {overdue && <span className="text-[7px] font-black text-red-400 uppercase">{language === 'ar' ? 'متأخر' : 'LATE'}</span>}
                       <span className={`text-[9px] font-black tabular-nums ${overdue ? 'text-red-300' : 'text-white'}`}>{countdown}</span>
                     </div>
@@ -892,14 +942,18 @@ function TRWidget({ shell, navigate, language, pendingTasks, completedToday, tot
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <span className="text-[8px] text-white/80 uppercase">{language === 'ar' ? 'لا تنبيهات' : 'No reminders'}</span>
+              <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? 'لا تنبيهات' : 'No reminders'}</span>
             </div>
           )}
         </div>
         <div className="flex justify-between">
-          <span className="text-[7px] text-white/85 font-bold">{language === 'ar' ? 'معلّق' : 'pending'}</span>
+          <span className="text-[7px] text-white/85 uppercase font-bold">
+            {language === 'ar' ? 'معلّق' : 'pending'}
+          </span>
           <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{activeTab === 'tasks' ? pct : 0}%</span>
-          <span className="text-[7px] text-white/85 font-bold">{language === 'ar' ? 'مكتمل' : 'done'}</span>
+          <span className="text-[7px] text-white/85 uppercase font-bold">
+            {language === 'ar' ? 'مكتمل' : 'done'}
+          </span>
         </div>
       </div>
     </div>
@@ -956,7 +1010,7 @@ function JournalWidget({ shell, navigate, language, journalData }: {
       {/* Header: title + streak badges */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <div className="w-6 h-6 rounded-lg flex items-center justify-center bg-white/20">
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.4)' }}>
             <BookOpen className="w-3 h-3 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[10px] font-black text-white uppercase tracking-wide">
@@ -1022,7 +1076,7 @@ function JournalWidget({ shell, navigate, language, journalData }: {
           const count = moodCounts[m];
           const pct = maxCount > 0 ? (count / maxCount) * 100 : 0;
           return (
-            <div key={m} className="flex-1 flex flex-col items-center gap-0.5 h-full justify-end">
+            <div key={m} className="flex-1 flex flex-col items-center gap-0">
               <div
                 className="w-full rounded-t-sm transition-all"
                 style={{
@@ -1091,7 +1145,7 @@ function Maw3dWidget({ shell, navigate, language, events, attendingCounts }: {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.5)' }}>
+          <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(124,58,237,0.4)' }}>
             <CalendarDays className="w-3 h-3 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[10px] font-black text-white uppercase tracking-wide">
@@ -1180,7 +1234,7 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
   ];
   const selectedDate = days.find(d => d.num === selectedDay) ?? days[1];
   const monthLabel = today.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short' });
-  const evAccent   = upcomingCount === 0 ? '#fb923c' : upcomingCount <= 3 ? '#f97316' : '#ea580c';
+  const evAccent   = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 3 ? '#22c55e' : '#f59e0b';
 
   const handleTouchStart = (e: React.TouchEvent) => setStartX(e.touches[0].clientX);
   const handleTouchEnd   = (e: React.TouchEvent) => {
@@ -1245,7 +1299,7 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
         <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: evAccent }} />
         <p className="text-[10px] font-semibold text-white/80">
           {upcomingCount === 0
-            ? (language === 'ar' ? 'لا أحداث قادمة' : 'No upcoming events')
+            ? (language === 'ar' ? 'لا أحداث' : 'No upcoming events')
             : `${upcomingCount} ${language === 'ar' ? 'حدث قادم' : upcomingCount === 1 ? 'upcoming event' : 'upcoming events'}`}
         </p>
       </div>
@@ -1278,7 +1332,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, p
   const maw3dAccent = upcomingCount === 0 ? '#6b7280' : upcomingCount <= 2 ? '#22c55e' : '#f59e0b';
   const maw3dBg     = upcomingCount === 0 ? 'linear-gradient(135deg,#374151,#6b7280)' : upcomingCount <= 2 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#b45309,#f59e0b)';
   const labelColor  = isDark || hasBg ? '#ffffff' : '#060541';
-
+  const subColor    = statLblColor;
   const recovery = whoopData?.recovery ?? null;
   const strain   = whoopData?.strain ?? null;
   const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
@@ -1499,7 +1553,7 @@ function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: { 
       <div className="absolute inset-0 bg-black/85 backdrop-blur-xl" />
       <div className="relative max-w-md text-center" dir={language === 'ar' ? 'rtl' : 'ltr'}>
         <p className="text-[clamp(19px,5.2vw,27px)] italic font-light leading-[1.72] text-white/95">{quoteText}</p>
-        {quoteAuthor ? <p className="mt-4 text-sm text-white/60">— {quoteAuthor}</p> : null}
+        {quoteAuthor && <p className="mt-4 text-sm text-white/60">— {quoteAuthor}</p>}
       </div>
     </div>
   );
@@ -1777,15 +1831,17 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         if (id.startsWith('widget::')) {
           if (enabledWidgets.has(id)) grid.push(id);
         } else if (id.startsWith('app::')) {
-          if (VALID_IDS.has(id.replace('app::',''))) grid.push(id);
-        } else if (id.startsWith('empty-w::') || id.startsWith('empty-i::')) {
-          grid.push(id);
+          const appId = id.replace('app::', '');
+          if (VALID_IDS.has(appId)) grid.push(id);
         }
       }
       for (const w of enabledWidgets) { if (!seen.has(w)) grid.push(w); }
       for (const appId of DEFAULT_ORDER) {
         const key = `app::${appId}`;
-        if (!seen.has(key)) grid.push(key);
+        if (!seen.has(key)) {
+          grid.push(key);
+          seen.add(key);
+        }
       }
       const gridJson = JSON.stringify(grid);
       setUnifiedGrid(prev => JSON.stringify(prev) === gridJson ? prev : grid);
@@ -1809,14 +1865,21 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       localStorage.setItem(LS_QUOTE_KEY(), String(hs.showQuote));
     }
 
-    const resolvedChoice: BgChoice = hs.bgChoice === 'style' || hs.bgChoice === 'wallpaper' || hs.bgChoice === 'default'
+    const localBgImage = getScopedStorageItem(LS_BG_BASE, user.id);
+    const localBgPositionRaw = getScopedStorageItem(LS_BG_POS_Y_BASE, user.id);
+    const parsedLocalBgPosition = localBgPositionRaw === null ? NaN : Number(localBgPositionRaw);
+    const localBgPosition = Number.isFinite(parsedLocalBgPosition) ? Math.max(0, Math.min(100, parsedLocalBgPosition)) : 50;
+    const hasLocalWallpaper = typeof localBgImage === 'string' && !!localBgImage && localBgImage !== DEFAULT_BG_DARK && localBgImage !== DEFAULT_BG_LIGHT;
+    const remoteChoice: BgChoice = hs.bgChoice === 'style' || hs.bgChoice === 'wallpaper' || hs.bgChoice === 'default'
       ? hs.bgChoice
       : (typeof hs.bgImage === 'string' && hs.bgImage ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default');
+    const resolvedChoice: BgChoice = remoteChoice === 'default' && hasLocalWallpaper ? 'wallpaper' : remoteChoice;
     setBgChoiceState(resolvedChoice);
 
     const remoteBg = s?.homescreenBg
       ? {
-          mode: s.homescreenBg.mode === 'gradient' ? 'gradient' : 'solid' as 'solid'|'gradient',
+          mode: s.homescreenBg.mode === 'gradient' ? 'gradient' as 'solid'|'gradient'
+          : 'solid' as 'solid'|'gradient',
           color1: s.homescreenBg.color1 || '',
           color2: s.homescreenBg.color2 || '',
           color3: s.homescreenBg.color3 || '',
@@ -1829,17 +1892,23 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     if (s?.homescreenBg) localStorage.setItem(LS_HSBG_KEY(), remoteBgJson);
     else removeScopedStorageItem(LS_HSBG_BASE, user.id);
 
-    const nextBgPosition = typeof hs.bgPositionY === 'number' ? Math.max(0, Math.min(100, hs.bgPositionY)) : 50;
+    const nextBgPosition = typeof hs.bgPositionY === 'number'
+      ? Math.max(0, Math.min(100, hs.bgPositionY))
+      : resolvedChoice === 'wallpaper' && hasLocalWallpaper
+        ? localBgPosition
+        : 50;
     setBgPositionY(prev => prev === nextBgPosition ? prev : nextBgPosition);
     localStorage.setItem(LS_BG_POS_Y_KEY(), String(nextBgPosition));
 
-    if (resolvedChoice === 'wallpaper' && typeof hs.bgImage === 'string' && hs.bgImage) {
-      setBgImage(prev => prev === hs.bgImage ? prev : hs.bgImage);
-      localStorage.setItem(LS_BG_KEY(), hs.bgImage);
+    if (resolvedChoice === 'wallpaper') {
+      const resolvedBgImage = typeof hs.bgImage === 'string' && hs.bgImage ? hs.bgImage : localBgImage;
+      if (resolvedBgImage) {
+        setBgImage(prev => prev === resolvedBgImage ? prev : resolvedBgImage);
+        localStorage.setItem(LS_BG_KEY(), resolvedBgImage);
+      }
     } else if (resolvedChoice === 'default') {
       const nextDefaultBg = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
       setBgImage(prev => prev === nextDefaultBg ? prev : nextDefaultBg);
-      removeScopedStorageItem(LS_BG_BASE, user.id);
     }
 
     if (typeof hs.headerColor === 'string') {
@@ -1865,7 +1934,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(next));
         // Sync enabled/disabled widgets into unified grid
         setUnifiedGrid(grid => {
-          const enabledWidgets = WIDGET_IDS.filter(k => next[k]).map(k => `widget::${k}`);
+          const enabledWidgets = WIDGET_IDS.filter(k => next[k]);
           // Remove disabled widget entries
           const withoutDisabled = grid.filter(id => !id.startsWith('widget::') || enabledWidgets.includes(id));
           // Add newly enabled ones at the front if not already present
@@ -1906,13 +1975,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     if (bgChoice !== 'default') return;
     const next = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
     setBgImage(prev => prev === next ? prev : next);
-    if (user?.id) removeScopedStorageItem(LS_BG_BASE, user.id);
-  }, [bgChoice, theme, user?.id]);
+  }, [bgChoice, theme]);
 
   // ── Sensors ──
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 10 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 5 } })
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
   );
 
   // ── Unified drag handler ──
@@ -2013,9 +2081,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const file = e.target.files?.[0];
     if (!file || !user?.id) return;
     try {
-      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
-      const path = `homescreen/${user.id}/wallpapers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('images').upload(path, file, { contentType: file.type || undefined, upsert: true });
+      const prepared = await prepareWallpaperUpload(file);
+      const path = `homescreen/${user.id}/wallpapers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${prepared.ext}`;
+      const { error: uploadError } = await supabase.storage.from('images').upload(path, prepared.body, { contentType: prepared.contentType || undefined, upsert: true, cacheControl: '31536000' });
       if (uploadError) throw uploadError;
       const { data: publicData } = supabase.storage.from('images').getPublicUrl(path);
       const url = publicData?.publicUrl;
@@ -2023,8 +2091,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       setBgImage(url);
       setBgPositionY(50);
       setBgChoiceState('wallpaper');
-      localStorage.setItem(LS_BG_KEY(), url);
-      localStorage.setItem(LS_BG_POS_Y_KEY(), '50');
+      setScopedStorageItem(LS_BG_BASE, url, user.id);
+      setScopedStorageItem(LS_BG_POS_Y_BASE, '50', user.id);
       await syncToSupabase({ bgChoice: 'wallpaper', bgImage: url, bgPositionY: 50 });
     } catch (error) {
       console.error('Wallpaper upload failed:', error);
@@ -2045,7 +2113,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const saveBgPositionY = (value: number) => {
     const next = Math.max(0, Math.min(100, value));
     setBgPositionY(next);
-    localStorage.setItem(LS_BG_POS_Y_KEY(), String(next));
+    if (user?.id) setScopedStorageItem(LS_BG_POS_Y_BASE, String(next), user.id);
     void syncToSupabase({ bgPositionY: next });
   };
   const saveBgStyle = () => {
@@ -2495,7 +2563,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             const activeWidgetCount = WIDGET_OPTIONS.filter(w => hsWidgets[w.key]).length;
             return (
               <div style={{ position: 'fixed', top: 76, left: 12, right: 12, zIndex: 60, isolation: 'isolate', pointerEvents: 'auto', backgroundColor: 'rgba(30,41,59,0.96)', border: '2px solid #64748b', borderRadius: '18px', padding: '12px', boxShadow: '0 22px 80px rgba(0,0,0,0.62)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', animation: 'hs-edit-sheet-in 0.24s cubic-bezier(0.22,1,0.36,1) forwards', maxHeight: 'calc(100vh - 108px)', overflowY: 'auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <div style={{ minHeight: '24px', display: 'flex', alignItems: 'center' }}>
                     {saveState === 'saving' && <span style={{ color: '#93c5fd', fontSize: '12px', fontWeight: 700 }}>{language === 'ar' ? 'جارٍ الحفظ...' : 'Saving...'}</span>}
                     {saveState === 'saved' && <span style={{ color: '#86efac', fontSize: '12px', fontWeight: 700 }}>{language === 'ar' ? 'تم الحفظ' : 'Saved'}</span>}
@@ -2509,20 +2577,20 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
                   {/* Dock */}
                   <button onClick={() => setDockPickerOpen(true)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '12px', fontWeight: 600 }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
                     <Settings2 style={{ width: '16px', height: '16px' }} />
                     <span>{language === 'ar' ? 'الدوك' : 'Dock'}</span>
                   </button>
                   {/* BG */}
                   <button onClick={() => setBgPanelOpen(v => !v)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: bgPanelOpen ? '#2563eb' : '#334155', border: `2px solid ${bgPanelOpen ? '#3b82f6' : '#64748b'}`, color: '#ffffff', fontSize: '12px', fontWeight: 600 }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: bgPanelOpen ? '#2563eb' : '#334155', border: `2px solid ${bgPanelOpen ? '#3b82f6' : '#64748b'}`, color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
                     <ImageIcon style={{ width: '16px', height: '16px' }} />
                     <span>{language === 'ar' ? 'خلفية' : 'BG'}</span>
                   </button>
                   {/* Remove BG */}
                   {bgImage && !isDefaultBgImage && (
                     <button onClick={removeBg}
-                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#dc2626', border: '2px solid #ef4444', color: '#ffffff', fontSize: '12px', fontWeight: 600 }}>
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#dc2626', border: '2px solid #ef4444', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
                       <X style={{ width: '16px', height: '16px' }} />
                       <span>{language === 'ar' ? 'حذف' : 'Rm BG'}</span>
                     </button>
@@ -2583,13 +2651,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         })();
                       }
                     }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '12px', fontWeight: 600 }}>
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
                     <RotateCcw style={{ width: '16px', height: '16px' }} />
                     <span>{language === 'ar' ? 'افتراضي' : 'Default'}</span>
                   </button>
                   {/* Header color */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b' }}>
-                    <span style={{ color: '#ffffff', fontSize: '12px', fontWeight: 600 }}>{language === 'ar' ? 'عنوان' : 'Head'}</span>
+                    <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600 }}>{language === 'ar' ? 'عنوان' : 'Head'}</span>
                     <input type="color" title="Header color" value={headerColor || '#ffffff'} onChange={e => saveHeaderColor(e.target.value)}
                       style={{ width: '28px', height: '28px', borderRadius: '6px', cursor: 'pointer', border: '2px solid #64748b' }} />
                     <button onClick={removeHeaderColor} title={language === 'ar' ? 'إعادة تعيين اللون' : 'Reset color'} style={{ padding: '4px', color: '#94a3b8' }}>
@@ -2744,7 +2812,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                   <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600, display: 'block', marginBottom: '8px' }}>{language === 'ar' ? 'اتجاه' : 'Direction'}</span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
                     {[{d:180,i:'↓'},{d:0,i:'↑'},{d:90,i:'→'},{d:270,i:'←'},{d:135,i:'↘'},{d:45,i:'↗'},{d:225,i:'↙'},{d:315,i:'↖'}].map(a => (
-                      <button key={a.d} onClick={() => setHsBg(p => ({ ...p, angle: a.d }))}
+                      <button
+                        key={a.d}
+                        onClick={() => setHsBg(p => ({ ...p, angle: a.d }))}
                         style={{
                           padding: '8px',
                           borderRadius: '8px',
@@ -2766,7 +2836,20 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600 }}>{language === 'ar' ? 'تأثير إضاءة' : 'Glow ✨'}</span>
                 <button title="Toggle glow" onClick={() => setHsBg(p => ({ ...p, glow: !p.glow }))}
                   style={{ width: '48px', height: '24px', borderRadius: '12px', border: '2px solid', backgroundColor: hsBg.glow ? '#3b82f6' : '#334155', borderColor: hsBg.glow ? '#60a5fa' : '#64748b', position: 'relative', cursor: 'pointer' }}>
-                  <div style={{ width: '18px', height: '18px', borderRadius: '50%', backgroundColor: '#ffffff', boxShadow: '0 2px 4px rgba(0,0,0,0.3)', position: 'absolute', top: '1px', left: hsBg.glow ? '26px' : '2px', transition: 'left 0.2s' }} />
+                  <div
+                    className="absolute inset-0"
+                    style={{
+                      width: '18px',
+                      height: '18px',
+                      borderRadius: '50%',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                      position: 'absolute',
+                      top: '1px',
+                      left: hsBg.glow ? '26px' : '2px',
+                      transition: 'left 0.2s',
+                    }}
+                  />
                 </button>
               </div>
 
@@ -2841,7 +2924,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           whoopData={whoopData}
                           journalData={journalData}
                           reminders={reminders}
-                          maw3dEvents={events}
+                          maw3dEvents={maw3dEvents}
                           attendingCounts={attendingCounts}
                           onExpandQuote={() => { setQuoteExpanded(true); setQuoteExiting(false); }}
                         />
@@ -2956,23 +3039,23 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           </div>
         )}
 
-        <input ref={bgInputRef} id={bgInputId} type="file" accept="image/*" className="hidden" onChange={handleBgChange} />
+          <input ref={bgInputRef} id={bgInputId} type="file" accept="image/*" className="hidden" onChange={handleBgChange} />
 
-        {/* Saved Images Picker Modal */}
-        {savedImagesOpen && (
-          <SavedImagesPicker
-            onSelect={(imageUrl) => {
-              setBgImage(imageUrl);
-              setBgPositionY(50);
-              setBgChoiceState('wallpaper');
-              localStorage.setItem(LS_BG_KEY(), imageUrl);
-              localStorage.setItem(LS_BG_POS_Y_KEY(), '50');
-              void syncToSupabase({ bgChoice: 'wallpaper', bgImage: imageUrl, bgPositionY: 50 });
-              setSavedImagesOpen(false);
-            }}
-            onClose={() => setSavedImagesOpen(false)}
-          />
-        )}
+          {/* Saved Images Picker Modal */}
+          {savedImagesOpen && (
+            <SavedImagesPicker
+              onSelect={(imageUrl) => {
+                setBgImage(imageUrl);
+                setBgPositionY(50);
+                setBgChoiceState('wallpaper');
+                setScopedStorageItem(LS_BG_BASE, imageUrl, user.id);
+                setScopedStorageItem(LS_BG_POS_Y_BASE, '50', user.id);
+                void syncToSupabase({ bgChoice: 'wallpaper', bgImage: imageUrl, bgPositionY: 50 });
+                setSavedImagesOpen(false);
+              }}
+              onClose={() => setSavedImagesOpen(false)}
+            />
+          )}
 
         {/* ── Quote Expand Overlay ── */}
         {quoteExpanded && (
