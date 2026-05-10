@@ -71,7 +71,55 @@ function extractGeminiText(result: any): string {
     .trim();
 }
 
-// Fetch conversation context
+type AiSettings = {
+  tone: string;
+  responseLength: string;
+  responseStyle: string;
+};
+
+const DEFAULT_AI_SETTINGS: AiSettings = {
+  tone: "friendly",
+  responseLength: "medium",
+  responseStyle: "natural",
+};
+
+// Tone descriptions for system prompt
+function getToneDescription(tone: string, lang: string): string {
+  const map: Record<string, { ar: string; en: string }> = {
+    friendly: { ar: "ودود ومتفائل", en: "friendly and upbeat" },
+    formal: { ar: "رسمي ومهذب", en: "formal and polite" },
+    sarcastic: { ar: "ساخر بشكل خفيف", en: "lightly sarcastic" },
+    chill: { ar: "هادئ وعفوي", en: "chill and laid-back" },
+    professional: { ar: "احترافي", en: "professional" },
+    enthusiastic: { ar: "متحمس", en: "enthusiastic" },
+  };
+  return map[tone]?.[lang === "ar" ? "ar" : "en"] || (lang === "ar" ? "ودود" : "friendly");
+}
+
+// Length descriptions for system prompt
+function getLengthDescription(length: string, lang: string): string {
+  const map: Record<string, { ar: string; en: string }> = {
+    short: { ar: "قصير جداً — 1-2 أسطر", en: "very short — 1-2 lines" },
+    medium: { ar: "متوسط — 3-5 أسطر", en: "medium — 3-5 lines" },
+    long: { ar: "مفصل — 6-10 أسطر", en: "detailed — 6-10 lines" },
+  };
+  return map[length]?.[lang === "ar" ? "ar" : "en"] || (lang === "ar" ? "متوسط" : "medium");
+}
+
+// Style descriptions for system prompt
+function getStyleDescription(style: string, lang: string): string {
+  const map: Record<string, { ar: string; en: string }> = {
+    natural: { ar: "طبيعي كأي عضو في المجموعة", en: "natural like any group member" },
+    concise: { ar: "مختصر وموجز", en: "concise and to the point" },
+    detailed: { ar: "مفصل مع أمثلة", en: "detailed with examples" },
+    funny: { ar: "فكاهي ومرح", en: "funny and playful" },
+    educational: { ar: "تعليمي معلوماتي", en: "educational and informative" },
+    encouraging: { ar: "محفز وداعم", en: "encouraging and supportive" },
+  };
+  return map[style]?.[lang === "ar" ? "ar" : "en"] || (lang === "ar" ? "طبيعي" : "natural");
+}
+
+// Fetch conversation context + AI settings
 async function fetchConversationContext(
   conversationId: string,
   limit = 30,
@@ -86,6 +134,22 @@ async function fetchConversationContext(
     .limit(limit);
 
   if (error) throw error;
+
+  // Fetch AI settings + name from conversation
+  const { data: convRow, error: sErr } = await supabaseAdmin
+    .from("conversations")
+    .select("name, ai_tone, ai_response_length, ai_response_style")
+    .eq("id", conversationId)
+    .single();
+
+  if (sErr) console.error("Failed to fetch AI settings:", sErr);
+
+  const aiSettings: AiSettings = {
+    tone: convRow?.ai_tone || DEFAULT_AI_SETTINGS.tone,
+    responseLength: convRow?.ai_response_length || DEFAULT_AI_SETTINGS.responseLength,
+    responseStyle: convRow?.ai_response_style || DEFAULT_AI_SETTINGS.responseStyle,
+  };
+  const conversationName = convRow?.name || "Group";
 
   // Fetch participant profiles with more detail
   const { data: participants, error: pErr } = await supabaseAdmin
@@ -119,7 +183,7 @@ async function fetchConversationContext(
     });
   }
 
-  return { messages: messages || [], nameMap, memberList };
+  return { messages: messages || [], nameMap, memberList, aiSettings, conversationName };
 }
 
 // Fetch the triggering message with media if any
@@ -154,7 +218,8 @@ async function fetchImageBase64(url: string): Promise<{ mimeType: string; data: 
 function buildSystemPrompt(
   language: string,
   groupName: string,
-  memberList: { name: string; location: string; isAi: boolean }[]
+  memberList: { name: string; location: string; isAi: boolean }[],
+  aiSettings: AiSettings
 ): string {
   const currentDate = new Date().toLocaleDateString("en-US", {
     weekday: "long",
@@ -169,8 +234,12 @@ function buildSystemPrompt(
     .map((m) => `- ${m.name}${m.location !== "Unknown" ? ` (${m.location})` : ""}`)
     .join("\n");
 
+  const toneDesc = getToneDescription(aiSettings.tone, language);
+  const lengthDesc = getLengthDescription(aiSettings.responseLength, language);
+  const styleDesc = getStyleDescription(aiSettings.responseStyle, language);
+
   if (language === "ar") {
-    return `أنت "وكتي" (Wakti)، عضو ذكي وودود في مجموعة دردشة اسمها "${groupName}".
+    return `أنت "وكتي" (Wakti)، عضو ذكي في مجموعة دردشة اسمها "${groupName}".
 
 معلومات المجموعة:
 - اسم المجموعة: ${groupName}
@@ -180,19 +249,26 @@ ${membersText}
 
 التاريخ: ${currentDate}
 
+شخصية Wakti في هذه المجموعة (تم ضبطها بواسطة منشئ المجموعة):
+- النبرة: ${toneDesc}
+- طول الرد: ${lengthDesc}
+- أسلوب الرد: ${styleDesc}
+
 قواعد السلوك:
 - أنت عضو حقيقي في هذه المجموعة — لست روبوت دردشة تقليدي
-- تحدث بلهجة طبيعية وودودة كأنك عضو عادي
+- تحدث بنبرة ${toneDesc} كأنك عضو عادي
+- ${styleDesc}
 - استخدم الإيموجي بشكل خفيف وطبيعي
 - لا تبدأ ردودك بـ "بصفتي مساعد AI" أو "Wakti:" — أنت مجرد "وكتي"
 - عندما يُطلب منك البحث، استخدم Google Search
 - عندما تُشارك صورة، انظر للتفاصيل بدقة — الخلفية، الأشخاص، الأشياء، النصوص، الأعلام، المكان. اذكر ما لاحظته بشكل محدد
 - لا تكن موجزاً جداً مع الصور — اذكر 2-3 ملاحظات محددة
+- طول الرد: ${lengthDesc}
 - تعرف على الأعضاء بأسمائهم وتحدث إليهم مباشرة
 - لا تذكر أبداً أنك "ذكاء اصطناعي"`;
   }
 
-  return `You are "Wakti", a smart and friendly member of a group chat called "${groupName}".
+  return `You are "Wakti", a smart member of a group chat called "${groupName}".
 
 Group info:
 - Group name: ${groupName}
@@ -202,14 +278,21 @@ ${membersText}
 
 Date: ${currentDate}
 
+Wakti personality in this group (set by the group creator):
+- Tone: ${toneDesc}
+- Response length: ${lengthDesc}
+- Response style: ${styleDesc}
+
 Behavior rules:
 - You are a REAL member of this group — not a traditional chatbot
-- Speak in a natural, casual, friendly tone like any group member
+- Speak in a ${toneDesc} tone like any group member
+- Reply in a ${styleDesc} manner
 - Use emojis lightly and naturally
 - Never start with "As an AI" or "Wakti:" — you are just "Wakti"
 - When asked to search, use Google Search
 - When someone shares an image, look closely at ALL details — background, people, objects, text, flags, signs, location clues. Mention what you notice specifically
 - Don't be too brief with images — share 2-3 specific observations
+- Keep responses ${lengthDesc}
 - Know members by name and speak to them directly
 - NEVER mention you are "artificial intelligence"`;
 }
@@ -310,26 +393,18 @@ serve(async (req) => {
       );
     }
 
-    // Fetch conversation name
-    const { data: conv, error: convErr } = await supabaseAdmin
-      .from("conversations")
-      .select("name")
-      .eq("id", conversation_id)
-      .single();
-
-    if (convErr) throw convErr;
-    const groupName = conv?.name || "Group";
-
-    // Fetch context (pass sender GPS if available)
+    // Fetch context (includes AI settings + conversation name)
     const senderLoc = sender_location && typeof sender_location.lat === "number" && typeof sender_location.lng === "number"
       ? { lat: sender_location.lat, lng: sender_location.lng }
       : undefined;
-    const { messages, nameMap, memberList }: { messages: any[]; nameMap: Map<string, string>; memberList: any[] } = await fetchConversationContext(
+    const { messages, nameMap, memberList, aiSettings, conversationName }: { messages: any[]; nameMap: Map<string, string>; memberList: any[]; aiSettings: AiSettings; conversationName: string } = await fetchConversationContext(
       conversation_id,
       15, // reduced from 30 for speed
       sender_id,
       senderLoc
     );
+
+    const groupName = conversationName;
 
     // Fetch triggering message if provided
     let triggerMessage = null;
@@ -337,8 +412,8 @@ serve(async (req) => {
       triggerMessage = await fetchTriggeringMessage(message_id);
     }
 
-    // Build system prompt
-    const systemPrompt = buildSystemPrompt(language, groupName, memberList);
+    // Build system prompt (passes AI personality settings)
+    const systemPrompt = buildSystemPrompt(language, groupName, memberList, aiSettings);
 
     // Build contents
     const contents = await buildContents(

@@ -23,6 +23,9 @@ export interface GroupChatConversation {
   last_message_by: string | null;
   participants: GroupChatParticipant[];
   unread: boolean;
+  ai_tone?: string | null;
+  ai_response_length?: string | null;
+  ai_response_style?: string | null;
 }
 
 export interface GroupChatMessage {
@@ -182,7 +185,7 @@ export async function getGroupConversation(conversationId: string): Promise<Grou
 
   const { data: conversation, error: conversationError } = await (supabase as any)
     .from("conversations")
-    .select("id, name, is_group, created_by, updated_at, last_message_text, last_message_at, last_message_by")
+    .select("id, name, is_group, created_by, updated_at, last_message_text, last_message_at, last_message_by, ai_tone, ai_response_length, ai_response_style")
     .eq("id", conversationId)
     .eq("is_group", true)
     .maybeSingle();
@@ -237,6 +240,9 @@ export async function getGroupConversation(conversationId: string): Promise<Grou
       conversation.last_message_by !== userId &&
       (!myParticipant?.last_read_at || new Date(conversation.last_message_at).getTime() > new Date(myParticipant.last_read_at).getTime())
     ),
+    ai_tone: conversation.ai_tone || null,
+    ai_response_length: conversation.ai_response_length || null,
+    ai_response_style: conversation.ai_response_style || null,
   };
 }
 
@@ -355,6 +361,26 @@ export async function leaveGroupConversation(conversationId: string) {
     .eq("conversation_id", conversationId)
     .eq("user_id", userId);
   if (error) throw error;
+}
+
+export async function updateGroupAiSettings(
+  conversationId: string,
+  settings: { tone?: string; responseLength?: string; responseStyle?: string }
+) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { data, error } = await (supabase as any)
+    .rpc("update_group_ai_settings", {
+      p_conversation_id: conversationId,
+      p_tone: settings.tone || null,
+      p_response_length: settings.responseLength || null,
+      p_response_style: settings.responseStyle || null,
+    });
+
+  if (error) throw error;
+  return data as boolean;
 }
 
 export async function renameGroupConversation(conversationId: string, newName: string) {

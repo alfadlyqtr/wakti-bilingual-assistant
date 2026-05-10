@@ -110,7 +110,7 @@ export default function TextGenerator() {
                   </div>
                 )}
                 <DropdownMenuItem
-                  onClick={() => initiateGmailAuth()}
+                  onSelect={(e) => { e.preventDefault(); initiateGmailAuth(); }}
                   className="flex items-center gap-2 cursor-pointer"
                 >
                   <svg viewBox="0 0 24 24" width={14} height={14} aria-hidden="true" fill="none">

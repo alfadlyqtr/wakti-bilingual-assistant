@@ -18,7 +18,7 @@ import {
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { getGroupConversation, getGroupConversationMessages, markGroupConversationRead, sendGroupConversationMessage, uploadGroupMessageAttachment, leaveGroupConversation, renameGroupConversation, addGroupMembers, getEligibleGroupContacts, addWaktiToGroup, removeWaktiFromGroup, isWaktiInGroup, triggerWaktiAI } from "@/services/groupChatService";
+import { getGroupConversation, getGroupConversationMessages, markGroupConversationRead, sendGroupConversationMessage, uploadGroupMessageAttachment, leaveGroupConversation, renameGroupConversation, addGroupMembers, getEligibleGroupContacts, addWaktiToGroup, removeWaktiFromGroup, isWaktiInGroup, triggerWaktiAI, updateGroupAiSettings } from "@/services/groupChatService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -36,8 +36,12 @@ export default function GroupChatPage() {
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showAddMembersModal, setShowAddMembersModal] = useState(false);
+  const [showAiSettingsModal, setShowAiSettingsModal] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [selectedNewMembers, setSelectedNewMembers] = useState<string[]>([]);
+  const [aiTone, setAiTone] = useState("friendly");
+  const [aiLength, setAiLength] = useState("medium");
+  const [aiStyle, setAiStyle] = useState("natural");
   const [attachedImage, setAttachedImage] = useState<{ url: string; type: string; size: number } | null>(null);
   const [waktiTyping, setWaktiTyping] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -747,6 +751,24 @@ export default function GroupChatPage() {
                     {language === "ar" ? "إضافة وكتي للمجموعة" : "Add Wakti to Group"}
                   </Button>
                 )}
+                {/* AI Settings button — only when Wakti is in group */}
+                {waktiInGroup && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full rounded-xl text-xs text-[hsl(280_60%_65%)] border-[hsl(280_60%_65%)]/30 hover:bg-[hsl(280_60%_65%)]/10"
+                    onClick={() => {
+                      setShowMembersModal(false);
+                      setAiTone(conversation?.ai_tone || "friendly");
+                      setAiLength(conversation?.ai_response_length || "medium");
+                      setAiStyle(conversation?.ai_response_style || "natural");
+                      setShowAiSettingsModal(true);
+                    }}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1" />
+                    {language === "ar" ? "إعدادات وكتي" : "Wakti AI Settings"}
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -842,6 +864,108 @@ export default function GroupChatPage() {
                 disabled={renameMutation.isPending || !newGroupName.trim() || newGroupName.trim() === conversation?.name}
               >
                 {renameMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Pencil className="h-4 w-4 mr-2" />}
+                {language === "ar" ? "حفظ" : "Save"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── AI Settings Modal ── */}
+      <Dialog open={showAiSettingsModal} onOpenChange={setShowAiSettingsModal}>
+        <DialogContent className="rounded-2xl border border-border/60 max-w-sm p-0 overflow-hidden">
+          <div className="p-5 pb-3">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-[hsl(280_60%_65%)]" />
+                {language === "ar" ? "إعدادات وكتي" : "Wakti AI Settings"}
+              </DialogTitle>
+              <DialogDescription className="sr-only">
+                {language === "ar" ? "تحكم في شخصية وكتي في هذه المجموعة" : "Control Wakti's personality in this group"}
+              </DialogDescription>
+            </DialogHeader>
+            <p className="text-xs text-muted-foreground mt-2">
+              {language === "ar"
+                ? "غيّر كيف يتصرف وكتي ويرد في هذه المجموعة"
+                : "Change how Wakti behaves and replies in this group"}
+            </p>
+          </div>
+          <div className="px-5 pb-5 space-y-4">
+            {/* Tone */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                {language === "ar" ? "النبرة" : "Tone"}
+              </label>
+              <select
+                value={aiTone}
+                onChange={(e) => setAiTone(e.target.value)}
+                className="w-full rounded-xl border border-border/60 bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(210_100%_55%)]"
+              >
+                <option value="friendly">{language === "ar" ? "ودود" : "Friendly"}</option>
+                <option value="formal">{language === "ar" ? "رسمي" : "Formal"}</option>
+                <option value="sarcastic">{language === "ar" ? "ساخر" : "Sarcastic"}</option>
+                <option value="chill">{language === "ar" ? "هادئ" : "Chill"}</option>
+                <option value="professional">{language === "ar" ? "احترافي" : "Professional"}</option>
+                <option value="enthusiastic">{language === "ar" ? "متحمس" : "Enthusiastic"}</option>
+              </select>
+            </div>
+
+            {/* Response Length */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                {language === "ar" ? "طول الرد" : "Response Length"}
+              </label>
+              <select
+                value={aiLength}
+                onChange={(e) => setAiLength(e.target.value)}
+                className="w-full rounded-xl border border-border/60 bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(210_100%_55%)]"
+              >
+                <option value="short">{language === "ar" ? "قصير — 1-2 أسطر" : "Short — 1-2 lines"}</option>
+                <option value="medium">{language === "ar" ? "متوسط — 3-5 أسطر" : "Medium — 3-5 lines"}</option>
+                <option value="long">{language === "ar" ? "مفصل — 6-10 أسطر" : "Long — 6-10 lines"}</option>
+              </select>
+            </div>
+
+            {/* Response Style */}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">
+                {language === "ar" ? "أسلوب الرد" : "Response Style"}
+              </label>
+              <select
+                value={aiStyle}
+                onChange={(e) => setAiStyle(e.target.value)}
+                className="w-full rounded-xl border border-border/60 bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(210_100%_55%)]"
+              >
+                <option value="natural">{language === "ar" ? "طبيعي" : "Natural"}</option>
+                <option value="concise">{language === "ar" ? "مختصر" : "Concise"}</option>
+                <option value="detailed">{language === "ar" ? "مفصل" : "Detailed"}</option>
+                <option value="funny">{language === "ar" ? "فكاهي" : "Funny"}</option>
+                <option value="educational">{language === "ar" ? "تعليمي" : "Educational"}</option>
+                <option value="encouraging">{language === "ar" ? "محفز" : "Encouraging"}</option>
+              </select>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setShowAiSettingsModal(false)}>
+                {language === "ar" ? "إلغاء" : "Cancel"}
+              </Button>
+              <Button
+                className="flex-1 rounded-xl"
+                onClick={async () => {
+                  try {
+                    await updateGroupAiSettings(conversationId!, {
+                      tone: aiTone,
+                      responseLength: aiLength,
+                      responseStyle: aiStyle,
+                    });
+                    queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
+                    toast.success(language === "ar" ? "تم تحديث إعدادات وكتي" : "Wakti settings updated");
+                    setShowAiSettingsModal(false);
+                  } catch (err: any) {
+                    toast.error(err?.message || (language === "ar" ? "تعذر التحديث" : "Update failed"));
+                  }
+                }}
+              >
                 {language === "ar" ? "حفظ" : "Save"}
               </Button>
             </div>
