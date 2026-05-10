@@ -76,6 +76,9 @@ export default function TextGenerator() {
                   <span className="flex flex-col items-center gap-0.5 w-full">
                     <span className="flex items-center gap-1">
                       <span>{language === 'ar' ? 'بريد' : 'Email'}</span>
+                      {gmailConnection.connected && (
+                        <CheckCircle2 className="h-3 w-3 text-green-500" />
+                      )}
                       <ChevronDown className="h-3 w-3 opacity-60" />
                     </span>
                     {/* Bottom row: G + status  |  Apple + status */}
@@ -121,9 +124,12 @@ export default function TextGenerator() {
                   </svg>
                   <span>
                     {gmailConnection.connected
-                      ? (language === 'ar' ? 'إعادة ربط Gmail' : 'Reconnect Gmail')
+                      ? (language === 'ar' ? 'Gmail متصل' : 'Gmail Connected')
                       : (language === 'ar' ? 'ربط Gmail' : 'Connect Gmail')}
                   </span>
+                  {gmailConnection.connected && (
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 ml-auto" />
+                  )}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {/* iCloud — coming soon */}}
