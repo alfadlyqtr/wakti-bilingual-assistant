@@ -166,7 +166,17 @@ if (typeof window !== 'undefined') {
         supabase.auth.signOut().catch(() => {});
         
         if (window.location.pathname !== '/login') {
-          window.location.href = '/login';
+          // Soft redirect — avoids Natively WebView "Ops! Error loading" crash
+          // Hard redirects (window.location.href) cause Natively to reload the WebView
+          // which triggers its native error page. Use history API instead so React
+          // Router handles the navigation without a full page reload.
+          try {
+            window.history.replaceState(null, '', '/login');
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          } catch {
+            // Absolute last resort — only if history API is unavailable
+            window.location.replace('/login');
+          }
         }
         isRecovering = false;
       }, 2000);

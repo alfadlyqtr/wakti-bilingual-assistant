@@ -93,9 +93,12 @@ export function useGmailConnection() {
     setConnection(prev => ({ ...prev, connecting: true }));
     try {
       const inNatively = isNativelyApp();
-      const origin = inNatively ? PRODUCTION_ORIGIN : window.location.origin;
+      const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+      // Mobile Natively: OAuth opens in system Safari → must redirect to production domain.
+      // Desktop (browser or desktop Natively): OAuth stays in same WebView → use current origin.
+      const origin = (inNatively && isMobile) ? PRODUCTION_ORIGIN : window.location.origin;
       const redirectUri = `${origin}/auth/google/callback`;
-      console.log('[Gmail] redirectUri:', redirectUri, '| inNatively:', inNatively);
+      console.log('[Gmail] redirectUri:', redirectUri, '| inNatively:', inNatively, '| isMobile:', isMobile);
 
       const { data: { session } } = await supabase.auth.getSession();
       console.log('[Gmail] session:', session ? 'found' : 'null');
@@ -130,12 +133,15 @@ export function useGmailConnection() {
       // (session is lost when coming back from external browser into WebView)
       try { localStorage.setItem('wakti_oauth_token', session.access_token); } catch { /* ignore */ }
 
+      // On mobile (iOS/Android) Natively, Google blocks OAuth in WebViews — must use system browser.
+      // On desktop Natively, openExternalURL opens system browser and the callback lands there (not in app) — use window.location.href instead.
+      const isMobileNatively = inNatively && /android|iphone|ipad|ipod/i.test(navigator.userAgent);
       const nativelyObj = (window as any).natively;
-      if (inNatively && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
-        console.log('[Gmail] using natively.openExternalURL (system browser to avoid WebView block)');
+      if (isMobileNatively && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
+        console.log('[Gmail] mobile Natively — using openExternalURL');
         nativelyObj.openExternalURL(authUrl, true);
       } else {
-        console.log('[Gmail] using window.location.href');
+        console.log('[Gmail] using window.location.href (desktop or browser)');
         window.location.href = authUrl;
       }
     } catch (err) {

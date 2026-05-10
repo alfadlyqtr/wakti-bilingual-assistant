@@ -51,11 +51,12 @@ import {
   getFormSchema,
   getThemeDocumentLane,
   isBasicFieldForTheme,
+  maxPagesForTheme,
   themeRequiresPurpose,
   searchThemes,
   type A4Theme,
   type A4FormField,
-} from "./a4Themes";
+} from "./a4Schema";
 import {
   generateA4Document,
   subscribeToBatch,
@@ -1662,8 +1663,8 @@ const A4Tab: React.FC = () => {
   const theme = themeId ? findTheme(themeId) : null;
   const schema = theme ? getFormSchema(theme, purposeId) : [];
   const needsPurpose = theme ? themeRequiresPurpose(theme) : false;
-  const canShowForm = !!theme && (!needsPurpose || !!purposeId);
-  const maxPages = theme?.max_pages ?? 3;
+  const canShowForm = !!theme;
+  const maxPages = theme ? maxPagesForTheme(theme) : 3;
   const documentLane = theme ? getThemeDocumentLane(theme.id, purposeId) : null;
   const visibleSchema = useMemo(() => {
     if (!theme) return [];
@@ -1760,9 +1761,18 @@ const A4Tab: React.FC = () => {
     });
   }, [theme, visibleSchema, formState, inputMode, expandedContent]);
 
+  const isPurposeMissing = needsPurpose && !purposeId;
+
   // --- Submit -----------------------------------------------------------------
   const handleGenerate = useCallback(async () => {
     if (!theme) return;
+    if (isPurposeMissing) {
+      toast.error(t(
+        "Please choose what this document is for first.",
+        "يرجى اختيار الغرض من هذا المستند أولاً.",
+      ));
+      return;
+    }
     if (missingRequired.length > 0) {
       // F19: use AR labels in the AR toast (was incorrectly using EN labels).
       toast.error(t(
@@ -1848,7 +1858,7 @@ const A4Tab: React.FC = () => {
       setFatalError(normalizeA4ErrorMessage((e as Error).message));
       setStage("failed");
     }
-  }, [theme, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, inputMode, expandedContent, decorWanted, t]);
+  }, [theme, isPurposeMissing, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, inputMode, expandedContent, decorWanted, t]);
 
   // --- Expand idea -----------------------------------------------------------
   const handleExpandIdea = useCallback(async () => {
@@ -2005,7 +2015,7 @@ const A4Tab: React.FC = () => {
                 </div>
                 {purposeId && theme.purpose_chips && (
                   <div className="mt-0.5 text-xs text-muted-foreground truncate">
-                    {lang === "ar"
+                    {t("AI context", "سياق الذكاء")}: {lang === "ar"
                       ? theme.purpose_chips.find((p) => p.id === purposeId)?.label_ar
                       : theme.purpose_chips.find((p) => p.id === purposeId)?.label_en}
                   </div>
@@ -2032,11 +2042,7 @@ const A4Tab: React.FC = () => {
             setThemeId(id);
             const th = findTheme(id);
             if (!th) return;
-            if (themeRequiresPurpose(th) || th.purpose_chips) {
-              setPurposeId(null);
-            } else {
-              setPurposeId(null);
-            }
+            setPurposeId(null);
             setStage("form");
           }}
         />
@@ -2049,7 +2055,12 @@ const A4Tab: React.FC = () => {
           {theme.purpose_chips && (
             <div className="mb-4">
               <div className="text-xs font-medium mb-2 text-foreground/70">
-                {t("Purpose", "الغرض")}
+                {t("What is this document for?", "ما الغرض من هذا المستند؟")}
+              </div>
+              <div className="mb-2 text-[11px] text-muted-foreground">
+                {needsPurpose
+                  ? t("Choose one so the document structure is correct.", "اختر واحدًا حتى يكون هيكل المستند صحيحًا.")
+                  : t("Optional helper for the AI — it guides the result but does not print by itself on the document.", "مساعد اختياري للذكاء الاصطناعي — يوجّه النتيجة لكنه لا يُطبع وحده على المستند.")}
               </div>
               <div className="flex flex-wrap gap-2">
                 {theme.purpose_chips.map((p) => (
@@ -2070,7 +2081,7 @@ const A4Tab: React.FC = () => {
           )}
 
           {/* Dynamic form */}
-          {canShowForm ? (
+          {canShowForm && (
             <div className="relative overflow-hidden rounded-2xl border border-border bg-card/95 p-3 sm:p-4 md:p-6 shadow-sm">
               <div className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${currentThemeVisual.bg} opacity-70`} />
               <CurrentThemeIcon className={`pointer-events-none absolute -right-4 bottom-3 h-24 w-24 ${currentThemeVisual.text} opacity-[0.06]`} />
@@ -2081,6 +2092,14 @@ const A4Tab: React.FC = () => {
                     "هذا النموذج يساعد في توجيه التصميم — املأ فقط الأجزاء التي تهمك."
                   )}
                 </div>
+                {isPurposeMissing && (
+                  <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    {t(
+                      "This document type still needs a purpose because it changes the actual document structure.",
+                      "هذا النوع من المستندات ما زال يحتاج إلى غرض لأنه يغيّر هيكل المستند نفسه.",
+                    )}
+                  </div>
+                )}
                 <div className="mb-3 rounded-xl border border-border bg-background/60 p-3 space-y-3">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -2502,10 +2521,6 @@ const A4Tab: React.FC = () => {
               )}
               </div>
             </div>
-          ) : (
-            <div className="text-sm text-muted-foreground text-center py-8">
-              {t("Pick a purpose to continue.", "اختر الغرض للمتابعة.")}
-            </div>
           )}
 
           {/* Generate button */}
@@ -2513,9 +2528,9 @@ const A4Tab: React.FC = () => {
             <div className="mt-5 flex justify-end">
               <button
                 onClick={handleGenerate}
-                disabled={isSubmitting || missingRequired.length > 0}
+                disabled={isSubmitting || missingRequired.length > 0 || isPurposeMissing}
                 className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-md bg-primary text-primary-foreground hover:opacity-90 transition-all active:scale-95 ${
-                  isSubmitting || missingRequired.length > 0 ? "opacity-60 cursor-not-allowed" : ""
+                  isSubmitting || missingRequired.length > 0 || isPurposeMissing ? "opacity-60 cursor-not-allowed" : ""
                 }`}
               >
                 {isSubmitting ? (

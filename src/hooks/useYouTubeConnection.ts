@@ -95,7 +95,8 @@ export function useYouTubeConnection() {
     setConnection(prev => ({ ...prev, connecting: true }));
     try {
       const inNatively = isNativelyApp();
-      const origin = inNatively ? PRODUCTION_ORIGIN : window.location.origin;
+      const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+      const origin = (inNatively && isMobile) ? PRODUCTION_ORIGIN : window.location.origin;
       const redirectUri = `${origin}/auth/google/callback`;
       const { data: { session } } = await supabase.auth.getSession();
 
@@ -126,8 +127,9 @@ export function useYouTubeConnection() {
 
       try { localStorage.setItem('wakti_oauth_token', session.access_token); } catch { /* ignore */ }
 
+      const isMobileNatively = inNatively && isMobile;
       const nativelyObj = (window as any).natively;
-      if (inNatively && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
+      if (isMobileNatively && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
         nativelyObj.openExternalURL(authUrl, true);
       } else {
         window.location.href = authUrl;

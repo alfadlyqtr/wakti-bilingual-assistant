@@ -1,3 +1,6 @@
+export * from "./a4Schema";
+
+void `
 // A4 Document Builder — Frontend Theme Registry (Display-only)
 // -----------------------------------------------------------------------------
 // Mirrors the subset of supabase/functions/_shared/a4-themes.ts that the UI
@@ -1095,8 +1098,6 @@ const BASIC_FIELD_KEYS_BY_THEME: Record<string, string[]> = {
     "awards",
     "hobbies",
     "logo",
-    "bilingual",
-    "raw_content",
   ],
 };
 
@@ -1117,3 +1118,4 @@ export function searchThemes(query: string): A4Theme[] {
     return (t.search_aliases ?? []).some((a) => a.toLowerCase().includes(q));
   });
 }
+`;

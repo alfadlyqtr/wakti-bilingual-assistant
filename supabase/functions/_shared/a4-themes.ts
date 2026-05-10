@@ -951,26 +951,45 @@ export function findTheme(themeId: string): A4Theme | null {
   return A4_THEMES.find((t) => t.id === themeId) ?? null;
 }
 
+function getMergedPurposeFields(theme: A4Theme): A4FormField[] {
+  const groups = theme.form_schema_by_purpose ? Object.values(theme.form_schema_by_purpose) : [];
+  if (groups.length === 0) return [];
+
+  const seen = new Set<string>((theme.form_schema_common ?? []).map((field) => field.key));
+  const merged: A4FormField[] = [];
+
+  for (const group of groups) {
+    for (const field of group) {
+      if (seen.has(field.key)) continue;
+      seen.add(field.key);
+      merged.push({ ...field, required: false });
+    }
+  }
+
+  return merged;
+}
+
 export function getThemeFormSchema(theme: A4Theme, purposeId: string | null | undefined): A4FormField[] {
   if (theme.form_schema) return theme.form_schema;
   const common = theme.form_schema_common ?? [];
-  if (theme.form_schema_by_purpose && purposeId) {
-    return [...common, ...(theme.form_schema_by_purpose[purposeId] ?? [])];
+  if (theme.form_schema_by_purpose) {
+    if (purposeId && theme.form_schema_by_purpose[purposeId]) {
+      return [...common, ...theme.form_schema_by_purpose[purposeId]];
+    }
+    const merged = getMergedPurposeFields(theme);
+    if (merged.length > 0) return [...common, ...merged];
   }
   if (common.length) return common;
   return [];
 }
 
 export function themeRequiresPurpose(theme: A4Theme): boolean {
-  return !!theme.purpose_chips && !!theme.form_schema_by_purpose && !theme.form_schema;
+  return theme.id === "clean_minimal" || theme.id === "invoice_receipt" || theme.id === "thank_you_invitation_card";
 }
 
 export function getThemeDocumentLane(themeId: string, purposeId?: string | null): A4DocumentLane {
   if (themeId === "clean_minimal") {
-    if (purposeId === "report" || purposeId === "letter" || purposeId === "notice") {
-      return "formal";
-    }
-    return "visual";
+    return purposeId === "flyer" || purposeId === "anything" ? "visual" : "formal";
   }
 
   if (

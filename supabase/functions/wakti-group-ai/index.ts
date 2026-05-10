@@ -75,12 +75,14 @@ type AiSettings = {
   tone: string;
   responseLength: string;
   responseStyle: string;
+  searchEnabled: boolean;
 };
 
 const DEFAULT_AI_SETTINGS: AiSettings = {
   tone: "friendly",
   responseLength: "medium",
   responseStyle: "natural",
+  searchEnabled: true,
 };
 
 // Tone descriptions for system prompt
@@ -138,7 +140,7 @@ async function fetchConversationContext(
   // Fetch AI settings + name from conversation
   const { data: convRow, error: sErr } = await supabaseAdmin
     .from("conversations")
-    .select("name, ai_tone, ai_response_length, ai_response_style")
+    .select("name, ai_tone, ai_response_length, ai_response_style, ai_search_enabled")
     .eq("id", conversationId)
     .single();
 
@@ -148,6 +150,7 @@ async function fetchConversationContext(
     tone: convRow?.ai_tone || DEFAULT_AI_SETTINGS.tone,
     responseLength: convRow?.ai_response_length || DEFAULT_AI_SETTINGS.responseLength,
     responseStyle: convRow?.ai_response_style || DEFAULT_AI_SETTINGS.responseStyle,
+    searchEnabled: convRow?.ai_search_enabled ?? DEFAULT_AI_SETTINGS.searchEnabled,
   };
   const conversationName = convRow?.name || "Group";
 
@@ -238,6 +241,16 @@ function buildSystemPrompt(
   const lengthDesc = getLengthDescription(aiSettings.responseLength, language);
   const styleDesc = getStyleDescription(aiSettings.responseStyle, language);
 
+  const searchRuleAr = aiSettings.searchEnabled
+    ? `- عندما يُطلب منك البحث (طقس، نتائج، أماكن قريبة، أخبار)، استخدم Google Search`
+    : `- Google Search معطل في هذه المجموعة. لا يمكنك البحث في الإنترنت.
+- إذا سألك أحد عن معلومات تحتاج بحث (طقس، نتائج رياضية، أماكن قريبة)، قولها بوضوح: "البحث معطل حالياً في هذه المجموعة"`;
+
+  const searchRuleEn = aiSettings.searchEnabled
+    ? `- When asked to search (weather, scores, nearby places, news), use Google Search`
+    : `- Google Search is DISABLED in this group. You CANNOT search the internet.
+- If someone asks for info that requires a search (weather, sports scores, nearby places), be honest: "Google Search is turned off in this group right now."`;
+
   if (language === "ar") {
     return `أنت "وكتي" (Wakti)، عضو ذكي في مجموعة دردشة اسمها "${groupName}".
 
@@ -260,11 +273,12 @@ ${membersText}
 - ${styleDesc}
 - استخدم الإيموجي بشكل خفيف وطبيعي
 - لا تبدأ ردودك بـ "بصفتي مساعد AI" أو "Wakti:" — أنت مجرد "وكتي"
-- عندما يُطلب منك البحث، استخدم Google Search
+${searchRuleAr}
 - عندما تُشارك صورة، انظر للتفاصيل بدقة — الخلفية، الأشخاص، الأشياء، النصوص، الأعلام، المكان. اذكر ما لاحظته بشكل محدد
 - لا تكن موجزاً جداً مع الصور — اذكر 2-3 ملاحظات محددة
 - طول الرد: ${lengthDesc}
 - تعرف على الأعضاء بأسمائهم وتحدث إليهم مباشرة
+- رد دائماً باللغة العربية — حتى لو السؤال بالإنجليزي
 - لا تذكر أبداً أنك "ذكاء اصطناعي"`;
   }
 
@@ -289,11 +303,12 @@ Behavior rules:
 - Reply in a ${styleDesc} manner
 - Use emojis lightly and naturally
 - Never start with "As an AI" or "Wakti:" — you are just "Wakti"
-- When asked to search, use Google Search
+${searchRuleEn}
 - When someone shares an image, look closely at ALL details — background, people, objects, text, flags, signs, location clues. Mention what you notice specifically
 - Don't be too brief with images — share 2-3 specific observations
 - Keep responses ${lengthDesc}
 - Know members by name and speak to them directly
+- ALWAYS reply in English — even if the question is in Arabic
 - NEVER mention you are "artificial intelligence"`;
 }
 
@@ -329,11 +344,11 @@ async function buildContents(
     contents.push({ role, parts: [{ text }] });
   }
 
-  // Add the current trigger instruction
+  // Add the current trigger instruction — always tell Gemini the EXACT language to reply in
   if (triggerType === "welcome_back") {
     const instruction = language === "ar"
-      ? `قدم ملخصاً قصيراً وودوداً لآخر ${messages.length} رسائل في المجموعة. اذكر الأسماء وما نوقش. لا تكتب أكثر من 4-5 أسطر.`
-      : `Give a short friendly summary of the last ${messages.length} messages in the group. Mention names and what was discussed. Keep it to 4-5 lines max.`;
+      ? `قدم ملخصاً قصيراً وودوداً لآخر ${messages.length} رسائل في المجموعة. اذكر الأسماء وما نوقش. لا تكتب أكثر من 4-5 أسطر. رد باللغة العربية فقط.`
+      : `Give a short friendly summary of the last ${messages.length} messages in the group. Mention names and what was discussed. Keep it to 4-5 lines max. Reply in English only.`;
     contents.push({ role: "user", parts: [{ text: instruction }] });
   } else if (triggerType === "mention" && triggerMessage) {
     const senderName = nameMap.get(triggerMessage.sender_id) || "Someone";
@@ -341,16 +356,16 @@ async function buildContents(
     const isImageTrigger = triggerMessage.message_type === "image";
     const instruction = language === "ar"
       ? isImageTrigger
-        ? `${senderName} شارك صورة وسألك: "${mentionText}"\n\nانظر للصورة بدقة وعلق على التفاصيل اللي تلاحظها — الخلفية، الأشخاص، الأشياء، المكان. رد بشكل طبيعي.`
-        : `${senderName} وجه سؤالاً لك: ${mentionText}\n\nرد بشكل طبيعي وموجز كعضو في المجموعة.`
+        ? `${senderName} شارك صورة وسألك: "${mentionText}"\n\nانظر للصورة بدقة وعلق على التفاصيل اللي تلاحظها — الخلفية، الأشخاص، الأشياء، المكان. رد بالعربية بشكل طبيعي.`
+        : `${senderName} وجه سؤالاً لك: ${mentionText}\n\nرد بالعربية بشكل طبيعي وموجز كعضو في المجموعة.`
       : isImageTrigger
-        ? `${senderName} shared an image and asked: "${mentionText}"\n\nLook closely at the image and comment on specific details you notice — background, people, objects, location. Reply naturally.`
-        : `${senderName} asked you: ${mentionText}\n\nReply naturally and concisely as a group member.`;
+        ? `${senderName} shared an image and asked: "${mentionText}"\n\nLook closely at the image and comment on specific details you notice — background, people, objects, location. Reply in English naturally.`
+        : `${senderName} asked you: ${mentionText}\n\nReply in English naturally and concisely as a group member.`;
     contents.push({ role: "user", parts: [{ text: instruction }] });
   } else {
     const instruction = language === "ar"
-      ? `شارك في المحادثة برد طبيعي وموجز كعضو في المجموعة.`
-      : `Jump into the conversation with a natural, brief reply as a group member.`;
+      ? `شارك في المحادثة برد طبيعي وموجز كعضو في المجموعة. رد بالعربية فقط.`
+      : `Jump into the conversation with a natural, brief reply as a group member. Reply in English only.`;
     contents.push({ role: "user", parts: [{ text: instruction }] });
   }
 
@@ -453,12 +468,12 @@ serve(async (req) => {
       }
     }
 
-    // Call Gemini 2.0 Flash with grounding
+    // Call Gemini 2.0 Flash — search grounding only if creator enabled it
     const geminiResult = await callGemini(
       "gemini-2.0-flash",
       contents,
       systemPrompt,
-      true // enable search grounding
+      aiSettings.searchEnabled // enable search grounding based on creator setting
     );
 
     let aiText = extractGeminiText(geminiResult);

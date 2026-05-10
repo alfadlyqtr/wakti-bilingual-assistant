@@ -217,17 +217,27 @@ void main() {
 
     resize();
 
+    // Track whether the context has been lost so the animation loop stops cleanly
+    let contextLost = false;
     let animId: number;
     const render = (t: number) => {
-      uniforms.iTime.value = t * 0.001;
-      const lerpFactor = 0.1;
-      mousePositionRef.current.x += (targetMouseRef.current.x - mousePositionRef.current.x) * lerpFactor;
-      mousePositionRef.current.y += (targetMouseRef.current.y - mousePositionRef.current.y) * lerpFactor;
-      const currentInfluence = uniforms.mouseInfluence.value;
-      const targetInfluence = mouseInfluenceRef.current;
-      uniforms.mouseInfluence.value += (targetInfluence - currentInfluence) * 0.05;
-      uniforms.mousePosition.value = [mousePositionRef.current.x, mousePositionRef.current.y];
-      renderer.render({ scene: mesh });
+      if (contextLost) return;
+      try {
+        uniforms.iTime.value = t * 0.001;
+        const lerpFactor = 0.1;
+        mousePositionRef.current.x += (targetMouseRef.current.x - mousePositionRef.current.x) * lerpFactor;
+        mousePositionRef.current.y += (targetMouseRef.current.y - mousePositionRef.current.y) * lerpFactor;
+        const currentInfluence = uniforms.mouseInfluence.value;
+        const targetInfluence = mouseInfluenceRef.current;
+        uniforms.mouseInfluence.value += (targetInfluence - currentInfluence) * 0.05;
+        uniforms.mousePosition.value = [mousePositionRef.current.x, mousePositionRef.current.y];
+        renderer.render({ scene: mesh });
+      } catch {
+        // WebGL context was lost mid-frame (e.g. iOS backgrounded the app).
+        // Stop the loop silently — the solid background behind the canvas remains visible.
+        contextLost = true;
+        return;
+      }
       animId = requestAnimationFrame(render);
     };
 
@@ -235,14 +245,40 @@ void main() {
 
     const container = containerRef.current;
 
+    const handleContextLost = (e: Event) => {
+      e.preventDefault(); // required so the browser doesn't destroy shader state
+      contextLost = true;
+      cancelAnimationFrame(animId);
+    };
+
+    const handleContextRestored = () => {
+      // Don't attempt to re-init — just leave the static background visible.
+      // A full re-init would require rebuilding all GL objects which is error-prone.
+      contextLost = true; // keep animation permanently stopped after a loss/restore cycle
+    };
+
+    gl.canvas.addEventListener('webglcontextlost', handleContextLost);
+    gl.canvas.addEventListener('webglcontextrestored', handleContextRestored);
+
     return () => {
+      contextLost = true;
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
       if (mouseInteraction) {
         window.removeEventListener('mousemove', handleMouseMove);
       }
-      renderer.gl.getExtension('WEBGL_lose_context')?.loseContext();
-      container?.removeChild(gl.canvas);
+      try {
+        gl.canvas.removeEventListener('webglcontextlost', handleContextLost);
+        gl.canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+      } catch {}
+      try {
+        if (renderer?.gl) {
+          renderer.gl.getExtension('WEBGL_lose_context')?.loseContext();
+        }
+      } catch {}
+      try {
+        container?.removeChild(gl.canvas);
+      } catch {}
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

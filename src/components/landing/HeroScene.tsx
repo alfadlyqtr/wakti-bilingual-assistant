@@ -7,6 +7,7 @@ import { ScrollIndicator } from "./ScrollIndicator";
 import { useTheme } from "@/providers/ThemeProvider";
 import { ArrowRight } from "lucide-react";
 import RippleGrid from "@/components/landing/RippleGrid";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 interface HeroSceneProps {
   language?: "en" | "ar";
@@ -39,6 +40,7 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
       {/* RippleGrid Background with parallax */}
       <motion.div className="absolute inset-0 z-0" style={{ y: gridY }}>
         <div className="absolute inset-0 bg-[#0c0f14]" />
+        <ErrorBoundary fallback={<></>}>
         <RippleGrid
           gridColor="#4a90d9"
           rippleIntensity={0.01}
@@ -52,6 +54,7 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
           mouseInteraction={true}
           mouseInteractionRadius={1.2}
         />
+        </ErrorBoundary>
         {/* Dark gradient overlay */}
         <div 
           className="absolute inset-0 pointer-events-none"

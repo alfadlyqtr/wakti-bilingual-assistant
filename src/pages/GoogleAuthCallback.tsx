@@ -55,6 +55,7 @@ export default function GoogleAuthCallback() {
 
       let redirectAfter = '/studio';
       let stateAccessToken: string | null = null;
+      let stateOrigin: string | null = null;
       // If Google sent back a plain 'code' (not 'yt_code'), it came directly — default to gmail
       let service: ServiceType = rawCode && !ytCode ? 'gmail' : 'youtube';
 
@@ -66,6 +67,7 @@ export default function GoogleAuthCallback() {
           const decoded = JSON.parse(atob(base64));
           if (decoded.redirect_after) redirectAfter = decoded.redirect_after;
           if (decoded.access_token) stateAccessToken = decoded.access_token;
+          if (decoded.origin) stateOrigin = decoded.origin;
           if (decoded.service === 'gmail' || decoded.service === 'youtube') {
             service = decoded.service;
           }
@@ -105,7 +107,11 @@ export default function GoogleAuthCallback() {
           return;
         }
 
-        const redirectUri = `${window.location.origin}/auth/google/callback`;
+        // Must match EXACTLY what was sent to Google during auth initiation.
+        // stateOrigin is the origin baked into the state param at auth start.
+        // On mobile Natively it's https://wakti.qa; on desktop it's window.location.origin.
+        const redirectUri = `${stateOrigin || window.location.origin}/auth/google/callback`;
+        console.log('[callback] redirectUri:', redirectUri, '| stateOrigin:', stateOrigin);
         const endpoint = getServiceEndpoint(service);
 
         const resp = await fetch(`${SUPABASE_URL}/functions/v1/${endpoint}`, {

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import BusinessContextForm, { type ContextField, type BusinessContextData } from '@/components/projects/BusinessContextForm';
 import { useNavigate, useLocation } from 'react-router-dom';
 import RippleGrid from '../components/landing/RippleGrid';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
@@ -1999,6 +2000,7 @@ Apply these styles consistently throughout the entire design.`;
         )} />
         {/* RippleGrid on top — reduced wobble */}
         <div className="absolute -top-10 left-0 right-0 bottom-0">
+          <ErrorBoundary fallback={<></>}>
           <RippleGrid
             enableRainbow
             gridColor={isDark ? "#0016bd" : "#3333ff"}
@@ -2013,6 +2015,7 @@ Apply these styles consistently throughout the entire design.`;
             mouseInteraction={false}
             mouseInteractionRadius={2.1}
           />
+          </ErrorBoundary>
         </div>
         {/* Subtle radial glow for depth */}
         <div 

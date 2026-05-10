@@ -42,6 +42,7 @@ export default function GroupChatPage() {
   const [aiTone, setAiTone] = useState("friendly");
   const [aiLength, setAiLength] = useState("medium");
   const [aiStyle, setAiStyle] = useState("natural");
+  const [aiSearchEnabled, setAiSearchEnabled] = useState(true);
   const [attachedImage, setAttachedImage] = useState<{ url: string; type: string; size: number } | null>(null);
   const [waktiTyping, setWaktiTyping] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -272,12 +273,28 @@ export default function GroupChatPage() {
   const needsLocationContext = (text: string): boolean => {
     const lower = text.toLowerCase();
     const locationKeywords = [
-      // English
+      // Location / Navigation
       "where", "location", "near", "nearby", "here", "meet", "coming", "address",
       "place", "direction", "map", "gps", "coordinates", "distance", "route",
+      "navigate", "closest", "nearest", "around me", "near me", "how to get to",
+      // Weather
+      "weather", "forecast", "temperature", "rain", "sunny", "cloud", "hot", "cold",
+      "humid", "wind", "storm", "snow", "climate",
+      // Places / Services
+      "gas station", "petrol", "fuel", "restaurant", "food", "eat", "cafe",
+      "coffee", "pharmacy", "hospital", "clinic", "atm", "bank", "supermarket",
+      "grocery", "mall", "shop", "store", "parking",
+      // Sports / Live info
+      "score", "match", "game", "result", "live", "league", "team", "player",
+      "played", "won", "lost", "standing", "fixture",
+      // Traffic
+      "traffic", "jam", "blocked", "road", "highway",
       // Arabic
       "أين", "وين", "مكان", "موقع", "قريب", "هنا", "نلتقي", "تجي", "عنوان",
-      "خريطة", "إحداثيات", "مسافة", "طريق", "وينك", "وينكم",
+      "خريطة", "إحداثيات", "مسافة", "طريق", "وينك", "وينكم", "قريب مني",
+      "أقرب", "جو", "طقس", "حرارة", "مطر", "غائم", "مشمس", "رياح",
+      "محطة بنزين", "بنزينة", "مطعم", "أكل", "قهوة", "صيدلية", "مستشفى",
+      "نتيجة", "مباراة", "فريق", "دوري", "لاعب",
     ];
     return locationKeywords.some((kw) => lower.includes(kw.toLowerCase()));
   };
@@ -306,10 +323,17 @@ export default function GroupChatPage() {
       payload = text;
     }
 
+    // If @wakti mentioned but Wakti is not in the group, warn the user
+    if (hasMention && !waktiInGroup) {
+      toast.info(language === "ar"
+        ? "وكتي مش موجود في المجموعة. اطلب من منشئ المجموعة يضيفه."
+        : "Wakti is not in this group. Ask the creator to add Wakti.");
+    }
+
     sendMutation.mutate(payload, {
       onSuccess: async (data: any) => {
         setAttachedImage(null);
-        // If @wakti was mentioned, trigger AI response
+        // If @wakti was mentioned and Wakti IS in the group, trigger AI response
         if (hasMention && waktiInGroup && data?.id) {
           setWaktiTyping(true);
           const triggerPayload: any = {
@@ -762,6 +786,7 @@ export default function GroupChatPage() {
                       setAiTone(conversation?.ai_tone || "friendly");
                       setAiLength(conversation?.ai_response_length || "medium");
                       setAiStyle(conversation?.ai_response_style || "natural");
+                      setAiSearchEnabled(conversation?.ai_search_enabled ?? true);
                       setShowAiSettingsModal(true);
                     }}
                   >
@@ -899,6 +924,7 @@ export default function GroupChatPage() {
               <select
                 value={aiTone}
                 onChange={(e) => setAiTone(e.target.value)}
+                aria-label={language === "ar" ? "نبرة وكتي" : "Wakti tone"}
                 className="w-full rounded-xl border border-border/60 bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(210_100%_55%)]"
               >
                 <option value="friendly">{language === "ar" ? "ودود" : "Friendly"}</option>
@@ -918,6 +944,7 @@ export default function GroupChatPage() {
               <select
                 value={aiLength}
                 onChange={(e) => setAiLength(e.target.value)}
+                aria-label={language === "ar" ? "طول رد وكتي" : "Wakti response length"}
                 className="w-full rounded-xl border border-border/60 bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(210_100%_55%)]"
               >
                 <option value="short">{language === "ar" ? "قصير — 1-2 أسطر" : "Short — 1-2 lines"}</option>
@@ -934,6 +961,7 @@ export default function GroupChatPage() {
               <select
                 value={aiStyle}
                 onChange={(e) => setAiStyle(e.target.value)}
+                aria-label={language === "ar" ? "أسلوب رد وكتي" : "Wakti response style"}
                 className="w-full rounded-xl border border-border/60 bg-background px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(210_100%_55%)]"
               >
                 <option value="natural">{language === "ar" ? "طبيعي" : "Natural"}</option>
@@ -943,6 +971,33 @@ export default function GroupChatPage() {
                 <option value="educational">{language === "ar" ? "تعليمي" : "Educational"}</option>
                 <option value="encouraging">{language === "ar" ? "محفز" : "Encouraging"}</option>
               </select>
+            </div>
+
+            {/* Search Toggle */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-border/40 bg-card/50">
+              <div>
+                <p className="text-sm font-medium">
+                  {language === "ar" ? "بحث Google" : "Google Search"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {language === "ar" ? "يسمح لوكتي بالبحث في الإنترنت" : "Allow Wakti to search the web"}
+                </p>
+              </div>
+              <button
+                onClick={() => setAiSearchEnabled((prev) => !prev)}
+                className={cn(
+                  "relative h-7 w-12 rounded-full transition-colors",
+                  aiSearchEnabled ? "bg-[hsl(210_100%_55%)]" : "bg-muted"
+                )}
+                aria-label={language === "ar" ? "تبديل البحث" : "Toggle search"}
+              >
+                <span
+                  className={cn(
+                    "absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform",
+                    aiSearchEnabled ? "left-[26px]" : "left-0.5"
+                  )}
+                />
+              </button>
             </div>
 
             <div className="flex gap-2 pt-2">
@@ -957,6 +1012,7 @@ export default function GroupChatPage() {
                       tone: aiTone,
                       responseLength: aiLength,
                       responseStyle: aiStyle,
+                      searchEnabled: aiSearchEnabled,
                     });
                     queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
                     toast.success(language === "ar" ? "تم تحديث إعدادات وكتي" : "Wakti settings updated");

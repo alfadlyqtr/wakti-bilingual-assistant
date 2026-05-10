@@ -26,6 +26,7 @@ export interface GroupChatConversation {
   ai_tone?: string | null;
   ai_response_length?: string | null;
   ai_response_style?: string | null;
+  ai_search_enabled?: boolean | null;
 }
 
 export interface GroupChatMessage {
@@ -185,7 +186,7 @@ export async function getGroupConversation(conversationId: string): Promise<Grou
 
   const { data: conversation, error: conversationError } = await (supabase as any)
     .from("conversations")
-    .select("id, name, is_group, created_by, updated_at, last_message_text, last_message_at, last_message_by, ai_tone, ai_response_length, ai_response_style")
+    .select("id, name, is_group, created_by, updated_at, last_message_text, last_message_at, last_message_by, ai_tone, ai_response_length, ai_response_style, ai_search_enabled")
     .eq("id", conversationId)
     .eq("is_group", true)
     .maybeSingle();
@@ -243,6 +244,7 @@ export async function getGroupConversation(conversationId: string): Promise<Grou
     ai_tone: conversation.ai_tone || null,
     ai_response_length: conversation.ai_response_length || null,
     ai_response_style: conversation.ai_response_style || null,
+    ai_search_enabled: conversation.ai_search_enabled ?? true,
   };
 }
 
@@ -365,7 +367,7 @@ export async function leaveGroupConversation(conversationId: string) {
 
 export async function updateGroupAiSettings(
   conversationId: string,
-  settings: { tone?: string; responseLength?: string; responseStyle?: string }
+  settings: { tone?: string; responseLength?: string; responseStyle?: string; searchEnabled?: boolean }
 ) {
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("User not authenticated");
@@ -377,6 +379,7 @@ export async function updateGroupAiSettings(
       p_tone: settings.tone || null,
       p_response_length: settings.responseLength || null,
       p_response_style: settings.responseStyle || null,
+      p_search_enabled: settings.searchEnabled !== undefined ? settings.searchEnabled : null,
     });
 
   if (error) throw error;
