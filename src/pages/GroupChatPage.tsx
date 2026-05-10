@@ -46,6 +46,7 @@ export default function GroupChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const initialScrollDoneRef = useRef(false);
   const isDark = theme === "dark";
   const entrySource = searchParams.get("from");
 
@@ -155,6 +156,7 @@ export default function GroupChatPage() {
 
   useEffect(() => {
     if (!conversationId) return;
+    initialScrollDoneRef.current = false; // reset when switching conversations
     markGroupConversationRead(conversationId).catch(() => undefined);
     queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
   }, [conversationId, queryClient]);
@@ -178,9 +180,20 @@ export default function GroupChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [conversationId, queryClient]);
 
+  // Scroll to bottom — instant on first load, smooth after that
   useEffect(() => {
-    if (messages.length > 0) {
-      endRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length === 0) return;
+    const container = messagesContainerRef.current;
+    const end = endRef.current;
+    if (!container || !end) return;
+
+    if (!initialScrollDoneRef.current) {
+      // First load — instant scroll to bottom
+      end.scrollIntoView({ behavior: "auto" });
+      initialScrollDoneRef.current = true;
+    } else {
+      // New message arrived while chatting — smooth scroll
+      end.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
 

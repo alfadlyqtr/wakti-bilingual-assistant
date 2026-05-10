@@ -124,6 +124,8 @@ export function useYouTubeConnection() {
 
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 
+      try { localStorage.setItem('wakti_oauth_token', session.access_token); } catch { /* ignore */ }
+
       const nativelyObj = (window as any).natively;
       if (inNatively && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
         nativelyObj.openExternalURL(authUrl, true);

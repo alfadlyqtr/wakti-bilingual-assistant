@@ -1573,6 +1573,65 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const { profile } = useUserProfile();
   const LS_AVATAR_CACHE = user?.id ? `wakti_avatar_${user.id}` : null;
+  const getLocalHomescreenState = (explicitUid?: string | null) => {
+    const read = (base: string) => getScopedStorageItem(base, explicitUid ?? user?.id ?? null);
+    const readJson = <T,>(base: string): T | null => {
+      try {
+        const raw = read(base);
+        if (!raw) return null;
+        return JSON.parse(raw) as T;
+      } catch {
+        return null;
+      }
+    };
+
+    const rawDock = readJson<string[]>(LS_DOCK_BASE);
+    const rawOrder = readJson<string[]>(LS_ORDER_BASE);
+    const rawBgPosition = read(LS_BG_POS_Y_BASE);
+    const parsedBgPosition = rawBgPosition ? parseInt(rawBgPosition, 10) : 50;
+    const savedBg = read(LS_BG_BASE);
+    const savedChoice = read(LS_BG_CHOICE_BASE) as BgChoice | null;
+    const savedTheme = localStorage.getItem('wakti-theme') || localStorage.getItem('theme') || 'dark';
+    const resolvedTheme = theme || savedTheme;
+    const rawHsBg = readJson<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(LS_HSBG_BASE);
+    const rawWidgets = readJson<Record<string, boolean>>(LS_WIDGETS_BASE);
+    const rawUnifiedGrid = readJson<string[]>(LS_UNIFIED_BASE);
+
+    return {
+      dockIds: Array.isArray(rawDock) ? sanitizeDock(rawDock) : sanitizeDock(DEFAULT_DOCK),
+      iconOrder: sanitizeOrder(Array.isArray(rawOrder) ? rawOrder : DEFAULT_ORDER),
+      showQuote: read(LS_QUOTE_BASE) !== 'false',
+      bgImage: savedBg || (resolvedTheme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK),
+      bgPositionY: Number.isFinite(parsedBgPosition) ? Math.max(0, Math.min(100, parsedBgPosition)) : 50,
+      headerColor: read(LS_HEADER_COLOR_BASE) || '',
+      bgChoice: savedChoice === 'default' || savedChoice === 'wallpaper' || savedChoice === 'style'
+        ? savedChoice
+        : savedBg && savedBg !== DEFAULT_BG_DARK && savedBg !== DEFAULT_BG_LIGHT
+          ? 'wallpaper'
+          : 'default',
+      hsBgActive: savedChoice === 'style'
+        ? true
+        : savedChoice === 'default' || savedChoice === 'wallpaper'
+          ? false
+          : read(LS_HSBG_ACTIVE_BASE) === 'true',
+      hsBg: rawHsBg && typeof rawHsBg === 'object'
+        ? {
+            mode: rawHsBg.mode || 'solid',
+            color1: rawHsBg.color1 || '#1a1a2e',
+            color2: rawHsBg.color2 || '#4a4a8a',
+            color3: rawHsBg.color3 || '',
+            angle: rawHsBg.angle ?? 180,
+            glow: typeof rawHsBg.glow === 'boolean' ? rawHsBg.glow : false,
+          }
+        : { mode: 'solid', color1: '#1a1a2e', color2: '#4a4a8a', color3: '', angle: 180, glow: false },
+      dockColor: read(LS_DOCK_COLOR_BASE) || '',
+      bgGradLeft: read('hs_grad_left') || '',
+      bgGradRight: read('hs_grad_right') || '',
+      hsWidgets: rawWidgets && typeof rawWidgets === 'object' ? { ...DEFAULT_HS_WIDGETS, ...rawWidgets } : { ...DEFAULT_HS_WIDGETS },
+      unifiedGrid: Array.isArray(rawUnifiedGrid) && rawUnifiedGrid.length > 0 ? rawUnifiedGrid : [],
+    };
+  };
+  const initialLocalState = useMemo(() => getLocalHomescreenState(user?.id), [theme, user?.id]);
   const [avatarUrl, setAvatarUrl] = useState<string>(() => {
     if (!user?.id) return '';
     return localStorage.getItem(`wakti_avatar_${user.id}`) || '';
@@ -1604,56 +1663,28 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   }, [user?.id]);
   const [editMode,        setEditMode]        = useState(false);
   const [dockIds,         setDockIds]         = useState<string[]>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(LS_DOCK_KEY()) || "null");
-      return Array.isArray(raw) ? sanitizeDock(raw) : sanitizeDock(DEFAULT_DOCK);
-    } catch { return sanitizeDock(DEFAULT_DOCK); }
+    return initialLocalState.dockIds;
   });
   const [iconOrder,       setIconOrder]       = useState<string[]>(() => {
-    try {
-      const dock = (() => {
-        try {
-          const raw = JSON.parse(localStorage.getItem(LS_DOCK_KEY()) || "null");
-          return Array.isArray(raw) ? sanitizeDock(raw) : DEFAULT_DOCK;
-        } catch { return DEFAULT_DOCK; }
-      })();
-      const raw = JSON.parse(localStorage.getItem(LS_ORDER_KEY()) || "null");
-      return sanitizeOrder(Array.isArray(raw) ? raw : DEFAULT_ORDER);
-    } catch { return sanitizeOrder(DEFAULT_ORDER); }
+    return initialLocalState.iconOrder;
   });
-  const [showQuote,       setShowQuote]       = useState<boolean>(() => localStorage.getItem(LS_QUOTE_KEY()) !== "false");
+  const [showQuote,       setShowQuote]       = useState<boolean>(() => initialLocalState.showQuote);
   const [bgImage,         setBgImage]         = useState<string>(() => {
-    const saved = localStorage.getItem(LS_BG_KEY());
-    if (saved) return saved;
-    const savedTheme = localStorage.getItem('wakti-theme') || localStorage.getItem('theme') || 'dark';
-    return savedTheme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
+    return initialLocalState.bgImage;
   });
   const [bgPositionY,     setBgPositionY]     = useState<number>(() => {
-    const raw = localStorage.getItem(LS_BG_POS_Y_KEY());
-    const parsed = raw ? parseInt(raw, 10) : 50;
-    return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : 50;
+    return initialLocalState.bgPositionY;
   });
-  const [headerColor,     setHeaderColor]     = useState<string>(() => localStorage.getItem(LS_HEADER_COLOR_KEY()) || "");
+  const [headerColor,     setHeaderColor]     = useState<string>(() => initialLocalState.headerColor);
   const [bgChoice,        setBgChoice]        = useState<BgChoice>(() => {
-    const savedChoice = localStorage.getItem(LS_BG_CHOICE_KEY()) as BgChoice | null;
-    if (savedChoice === 'default' || savedChoice === 'wallpaper' || savedChoice === 'style') return savedChoice;
-    if (localStorage.getItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE)) === 'true') return 'style';
-    const savedBg = localStorage.getItem(LS_BG_KEY());
-    return savedBg && savedBg !== DEFAULT_BG_DARK && savedBg !== DEFAULT_BG_LIGHT ? 'wallpaper' : 'default';
+    return initialLocalState.bgChoice;
   });
 
   const [hsBgActive, setHsBgActive] = useState<boolean>(() => {
-    const savedChoice = localStorage.getItem(LS_BG_CHOICE_KEY()) as BgChoice | null;
-    if (savedChoice === 'style') return true;
-    if (savedChoice === 'default' || savedChoice === 'wallpaper') return false;
-    return localStorage.getItem(lsKey(_cachedUid(), LS_HSBG_ACTIVE_BASE)) === 'true';
+    return initialLocalState.hsBgActive;
   });
   const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(() => {
-    try {
-      const cached = JSON.parse(localStorage.getItem(LS_HSBG_KEY()) || 'null');
-      if (cached && typeof cached === 'object') return { mode: cached.mode || 'solid', color1: cached.color1 || '#1a1a2e', color2: cached.color2 || '#4a4a8a', color3: cached.color3 || '', angle: cached.angle ?? 180, glow: typeof cached.glow === 'boolean' ? cached.glow : false };
-    } catch {}
-    return { mode: 'solid', color1: '#1a1a2e', color2: '#4a4a8a', color3: '', angle: 180, glow: false };
+    return initialLocalState.hsBg;
   });
   const [quote,           setQuote]           = useState<any>(null);
   const [quoteExpanded,   setQuoteExpanded]   = useState(false);
@@ -1665,11 +1696,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   });
   const [activeId,        setActiveId]        = useState<string | null>(null);
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
-  const [dockColor,       setDockColor]       = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)) || ''; } catch { return ''; } });
+  const [dockColor,       setDockColor]       = useState<string>(() => initialLocalState.dockColor);
   const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
   const [bgGradPicker,    setBgGradPicker]    = useState(false);
-  const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_left')) || ''; } catch { return ''; } });
-  const [bgGradRight,     setBgGradRight]     = useState<string>(() => { try { return localStorage.getItem(lsKey(_cachedUid(),'hs_grad_right')) || ''; } catch { return ''; } });
+  const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => initialLocalState.bgGradLeft);
+  const [bgGradRight,     setBgGradRight]     = useState<string>(() => initialLocalState.bgGradRight);
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const [saveState,       setSaveState]       = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const bgInputRef    = useRef<HTMLInputElement>(null);
@@ -1688,19 +1719,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   }).length;
 
   const [hsWidgets, setHsWidgets] = useState(() => {
-    const defaults = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
-    try {
-      const cached = JSON.parse(localStorage.getItem(LS_WIDGETS_KEY()) || 'null');
-      if (cached && typeof cached === 'object') return { ...defaults, ...cached };
-    } catch {}
-    return defaults;
+    return initialLocalState.hsWidgets;
   });
 
   const [unifiedGrid, setUnifiedGrid] = useState<string[]>(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(LS_UNIFIED_KEY()) || 'null');
-      return Array.isArray(raw) && raw.length > 0 ? raw : [];
-    } catch { return []; }
+    return initialLocalState.unifiedGrid;
   });
 
   useEffect(() => {
@@ -1711,25 +1734,23 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   useEffect(() => {
     if (!user?.id) return;
-    const prevUid = localStorage.getItem(LS_ACTIVE_USER);
-    if (prevUid === user.id) return;
-    if (prevUid) {
-      [LS_ORDER_BASE,LS_DOCK_BASE,LS_QUOTE_BASE,LS_BG_BASE,LS_BG_POS_Y_BASE,LS_HEADER_COLOR_BASE,LS_UNIFIED_BASE,LS_WIDGETS_BASE,LS_HSBG_BASE,LS_BG_CHOICE_BASE]
-        .forEach(base => localStorage.removeItem(lsKey(prevUid, base)));
-    }
     setActiveScopedUserId(user.id);
     migrateLegacyScopedStorage('vitality_widget_tab', user.id, 'vitality_widget_tab');
-    setDockIds(sanitizeDock(DEFAULT_DOCK));
-    setIconOrder(sanitizeOrder(DEFAULT_ORDER));
-    setShowQuote(true);
-    setBgImage(theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
-    setBgPositionY(50);
-    setHeaderColor("");
-    setBgChoice('default');
-    setHsBg({ mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false });
-    setHsBgActive(false);
-    setHsWidgets({ ...DEFAULT_HS_WIDGETS });
-    setUnifiedGrid([]);
+    const nextLocalState = getLocalHomescreenState(user.id);
+    setDockIds(nextLocalState.dockIds);
+    setIconOrder(nextLocalState.iconOrder);
+    setShowQuote(nextLocalState.showQuote);
+    setBgImage(nextLocalState.bgImage);
+    setBgPositionY(nextLocalState.bgPositionY);
+    setHeaderColor(nextLocalState.headerColor);
+    setBgChoice(nextLocalState.bgChoice);
+    setHsBg(nextLocalState.hsBg);
+    setHsBgActive(nextLocalState.hsBgActive);
+    setDockColor(nextLocalState.dockColor);
+    setBgGradLeft(nextLocalState.bgGradLeft);
+    setBgGradRight(nextLocalState.bgGradRight);
+    setHsWidgets(nextLocalState.hsWidgets);
+    setUnifiedGrid(nextLocalState.unifiedGrid);
   }, [theme, user?.id]);
 
   useEffect(() => { setQuote(getQuoteForDisplay()); }, []);

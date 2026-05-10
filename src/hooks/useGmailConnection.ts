@@ -126,6 +126,10 @@ export function useGmailConnection() {
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
       console.log('[Gmail] navigating to Google:', authUrl.substring(0, 80) + '...');
 
+      // Store token in localStorage as fallback for mobile Safari round-trip
+      // (session is lost when coming back from external browser into WebView)
+      try { localStorage.setItem('wakti_oauth_token', session.access_token); } catch { /* ignore */ }
+
       const nativelyObj = (window as any).natively;
       if (inNatively && nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
         console.log('[Gmail] using natively.openExternalURL (system browser to avoid WebView block)');

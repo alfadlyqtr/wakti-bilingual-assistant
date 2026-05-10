@@ -10,6 +10,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { purchasesLogin, purchasesLogout, purchasesWarmup } from '@/integrations/natively/purchasesBridge';
 import { setNotificationUser, removeNotificationUser, requestNotificationPermission, setupNotificationClickHandler } from '@/integrations/natively/notificationsBridge';
+import { ACTIVE_USER_STORAGE_KEY, setActiveScopedUserId } from '@/utils/userScopedStorage';
 
 interface AuthContextType {
   user: User | null;
@@ -106,6 +107,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+          setActiveScopedUserId(session.user.id);
           setSession(session);
           setUser(session.user ?? null);
         }
@@ -123,6 +125,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         .then(({ data: { session } }) => {
           console.log('AuthContext: getSession() succeeded.');
           window.clearTimeout(loadingTimer);
+          if (session?.user?.id) setActiveScopedUserId(session.user.id);
           setSession(session);
           setUser(session?.user ?? null);
           setLoading(false);
@@ -180,6 +183,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         
         // Auth state changed (only log errors, not every event)
         window.clearTimeout(loadingTimer);
+        if (session?.user?.id) setActiveScopedUserId(session.user.id);
         setSession(session);
         setUser(session?.user ?? null);
         setLoading(false);
@@ -302,6 +306,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
             // Clear session state
             supabase.auth.signOut({ scope: 'local' as any }).catch(() => {});
+            try { localStorage.removeItem(ACTIVE_USER_STORAGE_KEY); } catch {}
             setUser(null);
             setSession(null);
 
@@ -430,6 +435,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // Clear any app-level cached flags that might drive auto-login flows
     try {
       localStorage.removeItem('admin_session');
+      localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
       // Remove Supabase auth caches + wakti_ prefixed keys to prevent cross-user state leaks.
       // NOTE: wakti_profile_* is intentionally preserved — it is keyed by user.id so there
       // is no cross-user risk, and preserving it gives instant cold-start render on next sign-in.
@@ -514,6 +520,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const applyManualLoginRecovery = useCallback((recoveredUser: User, recoveredSession: Session, loginTimestamp: number) => {
     try { (window as any).__MANUAL_AUTH_LOCK = true; } catch {}
+    setActiveScopedUserId(recoveredUser.id);
     setUser(recoveredUser);
     setSession(recoveredSession);
     setLoading(false);

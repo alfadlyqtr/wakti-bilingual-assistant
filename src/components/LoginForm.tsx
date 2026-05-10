@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -10,6 +9,7 @@ import { Eye, EyeOff, Mail, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import { setActiveScopedUserId } from "@/utils/userScopedStorage";
 
 interface LoginFormProps {
   redirectTo?: string;
@@ -98,6 +98,7 @@ export function LoginForm({
 
             // === PREFETCH PROFILE (fire-and-forget — don't block navigation) ===
             const userId = data.user.id;
+            setActiveScopedUserId(userId);
             Promise.resolve(
               supabase
                 .from('profiles')

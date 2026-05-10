@@ -252,7 +252,8 @@ export async function getGroupConversationMessages(conversationId: string): Prom
     .from("conversation_messages")
     .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at")
     .eq("conversation_id", conversationId)
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: false })
+    .limit(100);
 
   if (error) {
     throw error;
@@ -272,7 +273,8 @@ export async function getGroupConversationMessages(conversationId: string): Prom
     });
   }
 
-  return (rows || []).map((row: any) => ({
+  // Latest 100 in desc order — reverse to chronological (oldest first) for UI rendering
+  return (rows || []).reverse().map((row: any) => ({
     id: row.id,
     conversation_id: row.conversation_id,
     sender_id: row.sender_id,

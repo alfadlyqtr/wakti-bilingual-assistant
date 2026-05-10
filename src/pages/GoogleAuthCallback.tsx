@@ -92,7 +92,12 @@ export default function GoogleAuthCallback() {
 
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        const accessToken = session?.access_token ?? stateAccessToken;
+        let localToken: string | null = null;
+        try { localToken = localStorage.getItem('wakti_oauth_token'); } catch { /* ignore */ }
+        const accessToken = session?.access_token ?? stateAccessToken ?? localToken;
+        try { localStorage.removeItem('wakti_oauth_token'); } catch { /* ignore */ }
+        console.log('[callback] token source:', session?.access_token ? 'session' : stateAccessToken ? 'state' : localToken ? 'localStorage' : 'NONE');
+        console.log('[callback] service:', service, '| hasCode:', !!code);
         if (!accessToken) {
           setStatus('error');
           setMessage('Session expired — please log in again and retry.');
