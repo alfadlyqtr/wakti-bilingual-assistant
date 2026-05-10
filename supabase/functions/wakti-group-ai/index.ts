@@ -279,6 +279,8 @@ ${searchRuleAr}
 - طول الرد: ${lengthDesc}
 - تعرف على الأعضاء بأسمائهم وتحدث إليهم مباشرة
 - رد دائماً باللغة العربية — حتى لو السؤال بالإنجليزي
+- إذا وُجه إليك سؤال عن أماكن قريبة أو طقس محلي وكان لديك إحداثيات GPS في قائمة الأعضاء، استخدمها للبحث لكن لا تذكر الإحداثيات الخام أبداً في ردك
+- عندما تعطي معلومات موقع، أضف رابط Google Maps في آخر الرد
 - لا تذكر أبداً أنك "ذكاء اصطناعي"`;
   }
 
@@ -309,6 +311,8 @@ ${searchRuleEn}
 - Keep responses ${lengthDesc}
 - Know members by name and speak to them directly
 - ALWAYS reply in English — even if the question is in Arabic
+- When asked about nearby places or local weather and you have GPS coordinates in the member list, use them for search but NEVER mention raw coordinates in your reply
+- When giving location info, include a Google Maps link at the end of your response
 - NEVER mention you are "artificial intelligence"`;
 }
 
@@ -319,7 +323,8 @@ async function buildContents(
   triggerType: string,
   language: string,
   groupName: string,
-  triggerMessage?: any
+  triggerMessage?: any,
+  senderLocation?: { lat: number; lng: number }
 ): Promise<GeminiContent[]> {
   const contents: GeminiContent[] = [];
 
@@ -354,14 +359,21 @@ async function buildContents(
     const senderName = nameMap.get(triggerMessage.sender_id) || "Someone";
     const mentionText = triggerMessage.content || "";
     const isImageTrigger = triggerMessage.message_type === "image";
-    const instruction = language === "ar"
+    const baseInstruction = language === "ar"
       ? isImageTrigger
-        ? `${senderName} شارك صورة وسألك: "${mentionText}"\n\nانظر للصورة بدقة وعلق على التفاصيل اللي تلاحظها — الخلفية، الأشخاص، الأشياء، المكان. رد بالعربية بشكل طبيعي.`
-        : `${senderName} وجه سؤالاً لك: ${mentionText}\n\nرد بالعربية بشكل طبيعي وموجز كعضو في المجموعة.`
+        ? `${senderName} شارك صورة وسألك: "${mentionText}"`
+        : `${senderName} وجه سؤالاً لك: ${mentionText}`
       : isImageTrigger
-        ? `${senderName} shared an image and asked: "${mentionText}"\n\nLook closely at the image and comment on specific details you notice — background, people, objects, location. Reply in English naturally.`
-        : `${senderName} asked you: ${mentionText}\n\nReply in English naturally and concisely as a group member.`;
-    contents.push({ role: "user", parts: [{ text: instruction }] });
+        ? `${senderName} shared an image and asked: "${mentionText}"`
+        : `${senderName} asked you: ${mentionText}`;
+    const replyRule = language === "ar"
+      ? isImageTrigger
+        ? `\n\nانظر للصورة بدقة وعلق على التفاصيل اللي تلاحظها — الخلفية، الأشخاص، الأشياء، المكان. رد بالعربية بشكل طبيعي.`
+        : `\n\nرد بالعربية بشكل طبيعي وموجز كعضو في المجموعة.`
+      : isImageTrigger
+        ? `\n\nLook closely at the image and comment on specific details you notice — background, people, objects, location. Reply in English naturally.`
+        : `\n\nReply in English naturally and concisely as a group member.`;
+    contents.push({ role: "user", parts: [{ text: baseInstruction + replyRule }] });
   } else {
     const instruction = language === "ar"
       ? `شارك في المحادثة برد طبيعي وموجز كعضو في المجموعة. رد بالعربية فقط.`
@@ -437,7 +449,8 @@ serve(async (req) => {
       trigger_type,
       language,
       groupName,
-      triggerMessage || undefined
+      triggerMessage || undefined,
+      senderLoc
     );
 
     // Handle vision — check trigger message AND recent messages for images
@@ -480,6 +493,23 @@ serve(async (req) => {
 
     // Strip "Wakti:" prefix if AI generated it (prevents "Wakti: Wakti:" display)
     aiText = aiText.replace(/^Wakti:\s*/i, "").trim();
+
+    // Strip any raw GPS coordinates that might have slipped through
+    aiText = aiText.replace(/\(\d{1,3}\.\d{1,6},\s*\d{1,3}\.\d{1,6}\)/g, "");
+    aiText = aiText.replace(/GPS:\s*\d{1,3}\.\d{1,6},\s*\d{1,3}\.\d{1,6}/gi, "");
+    aiText = aiText.replace(/\b\d{1,3}\.\d{5,6},\s*\d{1,3}\.\d{5,6}\b/g, "");
+    aiText = aiText.replace(/\s{2,}/g, " ").trim();
+
+    // Append Google Maps link if we have sender location and it's a mention
+    if (senderLoc && triggerMessage?.content) {
+      const cleanQuery = triggerMessage.content.replace(/@wakti\s*/i, "").trim();
+      if (cleanQuery) {
+        const searchQuery = encodeURIComponent(cleanQuery + (language === "ar" ? " بالقرب مني" : " near me"));
+        const mapsUrl = `https://www.google.com/maps/search/${searchQuery}/@${senderLoc.lat.toFixed(5)},${senderLoc.lng.toFixed(5)},15z`;
+        const mapsLabel = language === "ar" ? "📍 افتح في Google Maps" : "📍 Open in Google Maps";
+        aiText += `\n\n${mapsLabel}: ${mapsUrl}`;
+      }
+    }
 
     if (!aiText) {
       throw new Error("No response from Gemini");

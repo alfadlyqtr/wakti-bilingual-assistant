@@ -202,6 +202,13 @@ export default function GroupChatPage() {
     }
   }, [messages]);
 
+  // Scroll to bottom when Wakti starts typing so the indicator is visible
+  useEffect(() => {
+    if (waktiTyping && endRef.current) {
+      endRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [waktiTyping]);
+
   // Turn off Wakti typing indicator when a new Wakti message arrives
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
@@ -264,7 +271,7 @@ export default function GroupChatPage() {
       navigator.geolocation.getCurrentPosition(
         (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
         () => resolve(null),
-        { timeout: 1500, maximumAge: 300000 }
+        { timeout: 5000, maximumAge: 300000, enableHighAccuracy: true }
       );
     });
   };
@@ -347,10 +354,16 @@ export default function GroupChatPage() {
             const senderLoc = await getDeviceLocation();
             if (senderLoc) triggerPayload.sender_location = senderLoc;
           }
-          triggerWaktiAI(conversationId!, triggerPayload).catch((err: any) => {
-            console.error("Wakti AI trigger failed:", err);
-            setWaktiTyping(false);
-          });
+          triggerWaktiAI(conversationId!, triggerPayload)
+            .then(() => {
+              // Typing indicator will be hidden by useEffect when new message arrives
+              // But set a max display time just in case
+              setTimeout(() => setWaktiTyping(false), 30000);
+            })
+            .catch((err: any) => {
+              console.error("Wakti AI trigger failed:", err);
+              setWaktiTyping(false);
+            });
         }
       },
     });
@@ -586,14 +599,14 @@ export default function GroupChatPage() {
                     AI
                   </Badge>
                 </div>
-                <div className="rounded-3xl px-4 py-3 shadow-sm bg-[linear-gradient(135deg,hsl(280_60%_65%)/10_0%,hsl(210_100%_65%)/10_100%)] border border-[hsl(280_60%_65%)]/20 text-foreground">
+                <div className="rounded-3xl px-4 py-3 shadow-sm bg-[linear-gradient(135deg,hsl(280_60%_65%)/10_0%,hsl(210_100%_65%)/10_100%)] border border-[hsl(280_60%_65%)]/30 text-foreground animate-pulse">
                   <div className="flex gap-2 items-center">
-                    <div className="flex gap-1 items-center h-5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[hsl(280_60%_65%)] animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-[hsl(280_60%_65%)] animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <span className="w-1.5 h-1.5 rounded-full bg-[hsl(280_60%_65%)] animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <div className="flex gap-1.5 items-center h-5">
+                      <span className="w-2 h-2 rounded-full bg-[hsl(280_60%_65%)] animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-[hsl(280_60%_65%)] animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-2 h-2 rounded-full bg-[hsl(280_60%_65%)] animate-bounce" style={{ animationDelay: '300ms' }} />
                     </div>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm font-medium text-[hsl(280_60%_65%)]">
                       {language === "ar" ? "وكتي يفكر..." : "Wakti is thinking..."}
                     </span>
                   </div>
