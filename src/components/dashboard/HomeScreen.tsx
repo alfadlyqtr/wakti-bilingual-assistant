@@ -3291,7 +3291,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           <div
             ref={pageViewportRef}
             className="flex-1 min-h-0 px-3 pb-2 overflow-hidden relative"
-            style={{ opacity: editMode ? 0.08 : 1, transition: 'opacity 0.2s ease' }}
+            style={{ opacity: editMode ? 0.08 : 1, transition: 'opacity 0.2s ease', touchAction: 'none', overscrollBehavior: 'none' }}
             onTouchStart={handlePageTouchStart}
             onTouchEnd={handlePageTouchEnd}
           >
@@ -3314,7 +3314,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             )}
 
             <SortableContext items={currentPageData?.effectiveItems || []} strategy={rectSortingStrategy}>
-              <div className="grid gap-x-1 gap-y-2 relative z-10 h-full" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: currentPageData?.gridTemplateAreas, alignContent: 'start', paddingTop: 8 }}>
+              <div className="grid gap-x-1 gap-y-2 relative z-10 h-full" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: currentPageData?.gridTemplateAreas, alignContent: 'start', paddingTop: 8, touchAction: 'none' }}>
                 {(() => {
                   return (currentPageData?.effectiveItems || []).map(itemId => {
                     const gp = currentPageData?.gridPositions.get(itemId);
