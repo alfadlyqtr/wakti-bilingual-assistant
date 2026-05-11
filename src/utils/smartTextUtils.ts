@@ -8,18 +8,78 @@ export interface SavedSmartTextItem {
 
 const PERCENT_ENCODED_SEQUENCE_REGEX = /%[0-9A-Fa-f]{2}/g;
 
+function normalizeLineEndings(value: string): string {
+  return value
+    .replace(/\r\n/g, '\n')
+    .replace(/\r/g, '\n');
+}
+
+function buildEmailLikeText(subject: string, body: string): string {
+  const normalizedSubject = normalizeLineEndings(maybeDecodePercentEncodedText(subject)).trim();
+  const normalizedBody = normalizeLineEndings(maybeDecodePercentEncodedText(body)).trim();
+
+  if (normalizedSubject && normalizedBody) {
+    return `Subject: ${normalizedSubject}\n\n${normalizedBody}`;
+  }
+
+  return normalizedBody || normalizedSubject;
+}
+
+function parseQueryStyleEmailText(value: string): string | null {
+  const trimmed = (value || '').trim();
+  if (!trimmed) return null;
+
+  const looksLikeEmailQuery = /^mailto:/i.test(trimmed) || /^\??(?:subject|body|message)\s*(?:=|:)/i.test(trimmed);
+  if (!looksLikeEmailQuery) return null;
+
+  const normalizedQuery = trimmed
+    .replace(/^mailto:\??/i, '')
+    .replace(/^\?/, '')
+    .replace(/^subject\s*:/i, 'subject=')
+    .replace(/^body\s*:/i, 'body=')
+    .replace(/^message\s*:/i, 'body=')
+    .replace(/&subject\s*:/ig, '&subject=')
+    .replace(/&body\s*:/ig, '&body=')
+    .replace(/&message\s*:/ig, '&body=');
+
+  try {
+    const params = new URLSearchParams(normalizedQuery);
+    const subject = params.get('subject') || '';
+    const body = params.get('body') || params.get('message') || '';
+    if (!subject && !body) return null;
+    return buildEmailLikeText(subject, body);
+  } catch {
+    return null;
+  }
+}
+
+function parseHeaderStyleEmailText(value: string): string | null {
+  const decoded = normalizeLineEndings(maybeDecodePercentEncodedText((value || '').trim())).trim();
+  if (!decoded || !/^(?:subject|body|message)\s*[:=]/i.test(decoded)) return null;
+
+  const subjectMatch = decoded.match(/^\s*subject\s*[:=]\s*(.+?)(?=\n\s*\n|\n\s*(?:message|body)\s*[:=]|$)/is);
+  const bodyLabelMatch = decoded.match(/(?:^|\n)\s*(?:message|body)\s*[:=]\s*([\s\S]+)$/i);
+  const bodyAfterSubjectMatch = decoded.match(/^\s*subject\s*[:=]\s*.+?\n\s*\n([\s\S]+)$/is);
+  const firstLineBodyMatch = decoded.match(/^\s*subject\s*[:=]\s*.+?\n([\s\S]+)$/is);
+
+  const subject = (subjectMatch?.[1] || '').trim();
+  const body = (bodyLabelMatch?.[1] || bodyAfterSubjectMatch?.[1] || firstLineBodyMatch?.[1] || '').trim();
+
+  if (!subject && !body) return null;
+  return buildEmailLikeText(subject, body);
+}
+
 function maybeDecodePercentEncodedText(value: string): string {
   let current = value;
 
   for (let i = 0; i < 2; i += 1) {
     const currentMatches = current.match(PERCENT_ENCODED_SEQUENCE_REGEX) || [];
     if (currentMatches.length === 0) return current;
-
     try {
       const decoded = decodeURIComponent(current.replace(/\+/g, '%20'));
       const decodedMatches = decoded.match(PERCENT_ENCODED_SEQUENCE_REGEX) || [];
       const looksMoreReadable =
-        decodedMatches.length < currentMatches.length ||
+        decodedMatches.length < (current.match(PERCENT_ENCODED_SEQUENCE_REGEX) || []).length ||
         decoded.includes('\n') ||
         /\s/.test(decoded);
 
@@ -37,25 +97,38 @@ export function normalizeSmartText(value: string): string {
   let next = (value || '').trim();
   if (!next) return '';
 
-  if (/^mailto:/i.test(next)) {
-    try {
-      const query = next.split('?')[1] || '';
-      const params = new URLSearchParams(query);
-      const subject = maybeDecodePercentEncodedText(params.get('subject') || '').trim();
-      const body = maybeDecodePercentEncodedText(params.get('body') || '').trim();
-
-      if (subject && body) next = `Subject: ${subject}\n\n${body}`;
-      else next = body || subject || next;
-    } catch {
-    }
-  }
+  next = parseQueryStyleEmailText(next) || parseHeaderStyleEmailText(next) || next;
 
   next = maybeDecodePercentEncodedText(next);
 
-  return next
-    .replace(/\r\n/g, '\n')
-    .replace(/\r/g, '\n')
-    .trim();
+  next = parseQueryStyleEmailText(next) || parseHeaderStyleEmailText(next) || next;
+
+  return normalizeLineEndings(next).trim();
+}
+
+export function extractSmartTextEmailParts(value: string): { hasFillFormat: boolean; subject: string; message: string } {
+  const text = normalizeSmartText(value);
+  const labeledSubjectMatch = text.match(/\bSUBJECT:\s*(.+?)(?=\n\s*MESSAGE:|$)/is);
+  const labeledMessageMatch = text.match(/\bMESSAGE:\s*([\s\S]+)/i);
+
+  let subject = (labeledSubjectMatch?.[1] || '').trim();
+  let message = (labeledMessageMatch?.[1] || '').trim();
+
+  if (!subject || !message) {
+    const subjectLineMatch = text.match(/^\s*Subject:\s*(.+?)(?=\n\s*\n|$)/i);
+    const bodyLabelMatch = text.match(/(?:^|\n)\s*(?:Message|Body):\s*([\s\S]+)$/i);
+    const bodyAfterSubjectMatch = text.match(/^\s*Subject:\s*.+?\n\s*\n([\s\S]+)$/is);
+    const firstLineBodyMatch = text.match(/^\s*Subject:\s*.+?\n([\s\S]+)$/is);
+
+    subject = subject || (subjectLineMatch?.[1] || '').trim();
+    message = message || (bodyLabelMatch?.[1] || bodyAfterSubjectMatch?.[1] || firstLineBodyMatch?.[1] || '').trim();
+  }
+
+  return {
+    hasFillFormat: !!(subject && message),
+    subject,
+    message,
+  };
 }
 
 function readSavedSmartTextsRaw(storageKey: string): string | null {

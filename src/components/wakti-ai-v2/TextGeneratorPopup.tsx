@@ -12,7 +12,7 @@ import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
-import { normalizeSmartText, readSavedSmartTexts, writeSavedSmartTexts, type SavedSmartTextItem } from '@/utils/smartTextUtils';
+import { extractSmartTextEmailParts, normalizeSmartText, readSavedSmartTexts, writeSavedSmartTexts, type SavedSmartTextItem } from '@/utils/smartTextUtils';
 import { emitEvent } from '@/utils/eventBus';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -584,7 +584,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   };
 
   // Local accent for this page (match purple Text Generator icon)
-  const fieldAccent = "border-purple-500/40 focus:outline-none focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500";
+  const fieldAccent = "border-[#E9CEB0]/40 focus:outline-none focus:ring-2 focus:ring-[#E9CEB0]/20 focus:border-[#E9CEB0]";
   const placeholderMuted = "placeholder:text-muted-foreground/60 dark:placeholder:text-muted-foreground/50";
 
   // Load cache on mount
@@ -822,15 +822,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
     } catch { }
   }, [parsedText.mainText]);
 
-  const parsedGenerated = useMemo(() => {
-    const text = parsedText.mainText;
-    const subjectMatch = text.match(/\bSUBJECT:\s*(.+?)(?=\n\s*MESSAGE:|$)/is);
-    const messageMatch = text.match(/\bMESSAGE:\s*([\s\S]+)/i);
-    const subject = (subjectMatch?.[1] || '').trim();
-    const message = (messageMatch?.[1] || '').trim();
-    const hasFillFormat = !!(subject && message);
-    return { hasFillFormat, subject, message };
-  }, [parsedText.mainText]);
+  const parsedGenerated = useMemo(() => extractSmartTextEmailParts(parsedText.mainText), [parsedText.mainText]);
 
   const regeneratePromptSummary = useMemo(() => {
     const summary: string[] = [];
@@ -1370,7 +1362,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       type="button"
                       onClick={() => composeFileInputRef.current?.click()}
                       disabled={isExtractingCompose}
-                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingCompose ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
+                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingCompose ? 'bg-[#E9CEB0]/15 dark:bg-[#E9CEB0]/10 border-[#E9CEB0]/60 animate-pulse' : ''}`}
                       aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot or PDF'}
                       title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot or PDF to extract text'}
                     >
@@ -1660,7 +1652,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       type="button"
                       onClick={() => replyFileInputRef.current?.click()}
                       disabled={isExtractingReply}
-                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingReply ? 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 animate-pulse' : ''}`}
+                      className={`text-xs px-2 py-1 rounded-md border hover:bg-muted flex items-center gap-1 ${isExtractingReply ? 'bg-[#E9CEB0]/15 dark:bg-[#E9CEB0]/10 border-[#E9CEB0]/60 animate-pulse' : ''}`}
                       aria-label={language === 'ar' ? 'رفع صورة' : 'Upload screenshot or PDF'}
                       title={language === 'ar' ? 'رفع صورة لاستخراج النص' : 'Upload screenshot or PDF to extract text'}
                     >
@@ -1983,7 +1975,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           {activeTab === 'generated' && (
             <div className="space-y-4">
               {showRegeneratePrompt && (
-                <div className="rounded-2xl border border-purple-500/25 bg-[linear-gradient(135deg,#0c0f14_0%,hsl(235_25%_8%)_30%,hsl(250_20%_10%)_70%,#0c0f14_100%)] p-4 shadow-[0_4px_32px_hsla(0,0%,0%,0.7),0_2px_16px_hsla(210,100%,65%,0.22)]">
+                <div className="rounded-2xl border border-[#E9CEB0]/25 bg-[linear-gradient(135deg,#0c0f14_0%,hsl(235_25%_8%)_30%,hsl(250_20%_10%)_70%,#0c0f14_100%)] p-4 shadow-[0_4px_32px_hsla(0,0%,0%,0.7),0_2px_16px_hsla(210,100%,65%,0.22)]">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-1">
                       <p className="text-sm font-semibold text-white">
@@ -2013,8 +2005,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                           type="button"
                           onClick={() => toggleRegenerateIntent(intent)}
                           className={`rounded-full border px-3 py-1.5 text-xs font-medium transition-all ${active
-                            ? 'border-purple-400 bg-purple-500/20 text-white shadow-[0_0_14px_rgba(168,85,247,0.24)]'
-                            : 'border-white/10 bg-white/5 text-white/75 hover:border-purple-400/40 hover:text-white'}`}
+                            ? 'border-[#E9CEB0]/60 bg-[#E9CEB0]/15 text-white shadow-[0_0_14px_rgba(233,206,176,0.18)]'
+                            : 'border-white/10 bg-white/5 text-white/75 hover:border-[#E9CEB0]/35 hover:text-white'}`}
                         >
                           {regenerateIntentLabel(intent, language)}
                         </button>
@@ -2110,8 +2102,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       {/* Empty state — show when no text and not loading */}
                       {!parsedText.mainText && !isLoading && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 pointer-events-none">
-                          <div className="w-16 h-16 rounded-full bg-purple-500/10 flex items-center justify-center">
-                            <svg className="w-8 h-8 text-purple-500/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="w-16 h-16 rounded-full bg-[#E9CEB0]/10 flex items-center justify-center">
+                            <svg className="w-8 h-8 text-[#E9CEB0]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                           </div>
@@ -2130,8 +2122,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
                       {/* Loading state overlay */}
                       {isLoading && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/80 backdrop-blur-sm pointer-events-none">
-                          <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
-                          <p className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                          <Loader2 className="w-8 h-8 text-[#E9CEB0] animate-spin" />
+                          <p className="text-sm font-medium text-[#E9CEB0]">
                             {typingFrames[typingFrameIndex] || (language === 'ar' ? 'جارٍ التوليد...' : 'Generating...')}
                           </p>
                         </div>
@@ -2322,7 +2314,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
           {activeTab !== 'diagrams' && activeTab !== 'presentation' && activeTab !== 'translate' && activeTab !== 'generated' && activeTab !== 'a4' && (
           <div className="mt-6 flex justify-end">
               <button
-                className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
+                className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-lg bg-[#060541] text-white hover:bg-[#0a0a5c] hover:shadow-xl transition-all ${canGenerate ? '' : 'opacity-60 cursor-not-allowed'}`}
                 onClick={handleStandardGenerateClick}
                 disabled={!canGenerate}
               >
@@ -2414,7 +2406,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
             >{language === 'ar' ? 'المخططات' : 'Diagrams'}</button>
             <button
               onClick={() => setActiveTab('presentation')}
-              className={`px-3 py-2 rounded-md border text-sm bg-gradient-to-r ${activeTab === 'presentation' ? 'from-indigo-600 to-purple-600 text-white' : 'from-indigo-50 to-purple-50 dark:from-indigo-950/30 dark:to-purple-950/30 hover:from-indigo-100 hover:to-purple-100 dark:hover:from-indigo-900/40 dark:hover:to-purple-900/40 text-indigo-700 dark:text-indigo-300'}`}
+              className={`px-3 py-2 rounded-md border text-sm ${activeTab === 'presentation' ? 'bg-[#060541] border-[#060541] text-white' : 'bg-[#E9CEB0]/12 border-[#E9CEB0]/30 hover:bg-[#E9CEB0]/20 text-[#E9CEB0]'}`}
             >{language === 'ar' ? 'العروض التقديمية' : 'Presentations'}</button>
             <button
               onClick={() => setActiveTab('translate')}

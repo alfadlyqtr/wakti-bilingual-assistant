@@ -128,7 +128,43 @@ const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showV
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 3;
 type BgChoice = 'default' | 'wallpaper' | 'style';
+const isBgChoiceValue = (value: unknown): value is BgChoice => value === 'default' || value === 'wallpaper' || value === 'style';
+const isDefaultBgAsset = (value?: string | null) => !value || value === DEFAULT_BG_DARK || value === DEFAULT_BG_LIGHT;
 const DEFAULT_HS_WIDGETS = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
+const normalizeHexColor = (hex: string) => {
+  const trimmed = hex.trim().replace('#', '');
+  if (!trimmed) return null;
+  const normalized = trimmed.length === 3
+    ? trimmed.split('').map((char) => `${char}${char}`).join('')
+    : trimmed.padEnd(6, '0').slice(0, 6);
+  return /^[0-9a-fA-F]{6}$/.test(normalized) ? normalized : null;
+};
+const hexToRgb = (hex: string) => {
+  const normalized = normalizeHexColor(hex);
+  if (!normalized) return null;
+  return {
+    r: Number.parseInt(normalized.slice(0, 2), 16),
+    g: Number.parseInt(normalized.slice(2, 4), 16),
+    b: Number.parseInt(normalized.slice(4, 6), 16),
+  };
+};
+const rgbaFromHex = (hex: string, alpha: number) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return `rgba(255,255,255,${alpha})`;
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+};
+const getHexLuminance = (hex: string) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  const normalize = (value: number) => {
+    const scaled = value / 255;
+    return scaled <= 0.03928 ? scaled / 12.92 : Math.pow((scaled + 0.055) / 1.055, 2.4);
+  };
+  const r = normalize(rgb.r);
+  const g = normalize(rgb.g);
+  const b = normalize(rgb.b);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
 
 // ── Strict Hardcoded Grid Layout using grid-template-areas ──
 // 3 big rows x 2 big cols = 24 cells.
@@ -258,15 +294,33 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
 }) {
   const px = `${size}px`;
   const isGridVariant = variant === "grid";
-  const shellRadius = isGridVariant ? '27%' : '23%';
-  const iconScale = app.isAvatarIcon ? 1 : isGridVariant ? 0.46 : 0.5;
+  const isDockVariant = variant === "dock";
+  const shellRadius = isGridVariant ? '27%' : '30%';
+  const iconScale = app.isAvatarIcon ? 1 : isGridVariant ? 0.46 : 0.48;
+  const mixHexWithWhite = (hex: string, whiteRatio = 0.82) => {
+    const normalized = hex.replace('#', '');
+    const safe = normalized.length === 3
+      ? normalized.split('').map((char) => `${char}${char}`).join('')
+      : normalized.padEnd(6, 'f').slice(0, 6);
+    const toChannel = (start: number) => Number.parseInt(safe.slice(start, start + 2), 16);
+    const mixChannel = (value: number) => Math.round(value * (1 - whiteRatio) + 255 * whiteRatio);
+    return `rgb(${mixChannel(toChannel(0))}, ${mixChannel(toChannel(2))}, ${mixChannel(toChannel(4))})`;
+  };
+  const iconWhiteRatio = isGridVariant ? 0.34 : 0.38;
+  const iconTint = mixHexWithWhite(app.glow, iconWhiteRatio);
+  const iconFilter = isGridVariant
+    ? `drop-shadow(0 1px 3px rgba(255,255,255,0.04)) drop-shadow(0 4px 8px rgba(0,0,0,0.2)) drop-shadow(0 0 8px ${app.glow}24)`
+    : `drop-shadow(0 1px 2px rgba(255,255,255,0.03)) drop-shadow(0 3px 7px rgba(0,0,0,0.18)) drop-shadow(0 0 7px ${app.glow}1c)`;
   const glassShadow = glowEnabled
     ? isGridVariant
-      ? `0 0 22px ${app.glow}99, 0 14px 32px ${app.glow}40, 0 8px 20px rgba(3,8,20,0.42), inset 0 1px 0 rgba(255,255,255,0.48), inset 0 -10px 18px rgba(255,255,255,0.08)`
-      : `0 0 16px ${app.glow}bb, 0 4px 14px ${app.glow}55, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`
+      ? `0 24px 46px -18px rgba(4,10,24,0.72), 0 10px 22px rgba(0,0,0,0.28), 0 0 24px ${app.glow}32, inset 0 1.5px 0 rgba(255,255,255,0.38), inset 0 -16px 24px rgba(255,255,255,0.05)`
+      : `0 10px 24px -16px rgba(4,10,24,0.48), 0 4px 12px rgba(0,0,0,0.12), 0 0 14px ${app.glow}1f, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -14px 22px rgba(255,255,255,0.04)`
     : isGridVariant
-      ? `0 10px 24px ${app.glow}33, 0 6px 18px rgba(3,8,20,0.4), inset 0 1px 0 rgba(255,255,255,0.42), inset 0 -10px 18px rgba(255,255,255,0.07)`
-      : `0 4px 14px ${app.glow}44, 0 1px 4px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.35)`;
+      ? `0 22px 42px -18px rgba(4,10,24,0.66), 0 8px 20px rgba(0,0,0,0.24), 0 0 16px ${app.glow}1d, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -16px 22px rgba(255,255,255,0.05)`
+      : `0 8px 18px -14px rgba(4,10,24,0.38), 0 3px 10px rgba(0,0,0,0.1), 0 0 9px ${app.glow}12, inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -12px 18px rgba(255,255,255,0.04)`;
+  const shellFill = isGridVariant
+    ? `linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 18%, rgba(255,255,255,0.04) 100%), linear-gradient(135deg, ${app.glow}22 0%, rgba(255,255,255,0.04) 58%, rgba(255,255,255,0.01) 100%), rgba(255,255,255,0.07)`
+    : `linear-gradient(180deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.14) 24%, rgba(255,255,255,0.05) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 34%, transparent 62%), linear-gradient(135deg, ${app.glow}14 0%, rgba(255,255,255,0.04) 56%, rgba(255,255,255,0.015) 100%), rgba(255,255,255,0.08)`;
   return (
     <div
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
@@ -274,14 +328,14 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
     >
       {/* Main gradient body with iOS-style frosted glass */}
       <div
-        className={`absolute inset-0 bg-gradient-to-br ${app.gradient}`}
+        className="absolute inset-0"
         style={{
           borderRadius: shellRadius,
-          opacity: isGridVariant ? 0.9 : 0.75,
-          backdropFilter: isGridVariant ? 'blur(26px) saturate(195%)' : 'blur(20px) saturate(180%)',
-          WebkitBackdropFilter: isGridVariant ? 'blur(26px) saturate(195%)' : 'blur(20px) saturate(180%)',
+          background: shellFill,
+          backdropFilter: isGridVariant ? 'blur(30px) saturate(190%)' : 'blur(30px) saturate(170%)',
+          WebkitBackdropFilter: isGridVariant ? 'blur(30px) saturate(190%)' : 'blur(30px) saturate(170%)',
           boxShadow: glassShadow,
-          outline: isGridVariant ? '1px solid rgba(255,255,255,0.18)' : '0.5px solid rgba(180,190,200,0.28)',
+          border: isGridVariant ? '1px solid rgba(255,255,255,0.26)' : '1px solid rgba(255,255,255,0.28)',
         }}
       />
       {/* Liquid glass highlight */}
@@ -291,20 +345,47 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           inset: 0,
           borderRadius: shellRadius,
           background: isGridVariant
-            ? "linear-gradient(160deg, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.2) 18%, rgba(255,255,255,0.08) 38%, rgba(255,255,255,0.02) 52%, transparent 70%)"
-            : "linear-gradient(145deg, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.08) 40%, transparent 70%)",
+            ? "linear-gradient(165deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.16) 16%, rgba(255,255,255,0.06) 34%, rgba(255,255,255,0.02) 52%, transparent 70%)"
+            : "linear-gradient(160deg, rgba(255,255,255,0.46) 0%, rgba(255,255,255,0.16) 20%, rgba(255,255,255,0.05) 44%, transparent 74%)",
           mixBlendMode: 'screen',
         }}
       />
+      {isDockVariant && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            inset: '8% 10% 50% 10%',
+            borderRadius: '999px',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.08) 100%)',
+            filter: 'blur(4px)',
+            opacity: 0.72,
+          }}
+        />
+      )}
+      {isDockVariant && (
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            left: '16%',
+            right: '16%',
+            bottom: '8%',
+            height: '24%',
+            borderRadius: '999px',
+            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 54%, transparent 100%)',
+            filter: 'blur(10px)',
+            opacity: 0.7,
+          }}
+        />
+      )}
       {isGridVariant && (
         <div
           className="absolute pointer-events-none"
           style={{
-            inset: '8% 12% 54% 12%',
+            inset: '7% 11% 52% 11%',
             borderRadius: '999px',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.08) 100%)',
-            filter: 'blur(2px)',
-            opacity: 0.95,
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.08) 100%)',
+            filter: 'blur(3px)',
+            opacity: 0.76,
           }}
         />
       )}
@@ -317,9 +398,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             bottom: '10%',
             height: '22%',
             borderRadius: '999px',
-            background: 'linear-gradient(90deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.04) 35%, rgba(255,255,255,0.16) 100%)',
-            filter: 'blur(8px)',
-            opacity: 0.72,
+            background: 'linear-gradient(90deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 35%, rgba(255,255,255,0.1) 100%)',
+            filter: 'blur(10px)',
+            opacity: 0.58,
           }}
         />
       )}
@@ -328,8 +409,8 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
         {app.isAvatarIcon && avatarUrl
           ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" style={{ transform: isGridVariant ? 'scale(1.03)' : undefined }} />
           : app.isWaktiIcon
-            ? <WaktiIcon style={{ width: size * iconScale, height: size * iconScale, color: "#fff", filter: isGridVariant ? 'drop-shadow(0 2px 8px rgba(255,255,255,0.18)) drop-shadow(0 6px 12px rgba(0,0,0,0.35))' : undefined }} />
-            : app.icon && <app.icon style={{ width: size * iconScale, height: size * iconScale, color: "#fff", filter: isGridVariant ? 'drop-shadow(0 2px 8px rgba(255,255,255,0.18)) drop-shadow(0 6px 12px rgba(0,0,0,0.35))' : undefined }} strokeWidth={1.8} />
+            ? <WaktiIcon style={{ width: size * iconScale, height: size * iconScale, color: iconTint, filter: iconFilter, opacity: 1 }} />
+            : app.icon && <app.icon style={{ width: size * iconScale, height: size * iconScale, color: iconTint, filter: iconFilter, opacity: 1 }} strokeWidth={1.8} />
         }
       </div>
       {/* Notification badge */}
@@ -383,11 +464,11 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false,
       <span
         className="text-[11px] font-bold text-center leading-tight text-white px-2 py-0.5 rounded-md"
         style={{
-          background: 'linear-gradient(180deg, rgba(18,24,38,0.34) 0%, rgba(8,12,20,0.22) 100%)',
-          backdropFilter: 'blur(14px) saturate(150%)',
-          WebkitBackdropFilter: 'blur(14px) saturate(150%)',
-          border: '1px solid rgba(255,255,255,0.14)',
-          boxShadow: '0 8px 18px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.12)',
+          background: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.16) 100%)',
+          backdropFilter: 'blur(18px) saturate(175%)',
+          WebkitBackdropFilter: 'blur(18px) saturate(175%)',
+          border: '1px solid rgba(255,255,255,0.2)',
+          boxShadow: '0 12px 24px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.24)',
           textShadow: '0 1px 3px rgba(0,0,0,0.8)',
           maxWidth: 76,
           overflow: "hidden",
@@ -403,18 +484,28 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false,
 }
 
 // ─── Sortable dock icon ────────────────────────────────────────────────────────
-function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl, badgeCount = 0 }: {
+function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl, badgeCount = 0, dockColor }: {
   app: typeof ALL_APPS[0];
   editMode: boolean;
   onTap: () => void;
   glowEnabled?: boolean;
   avatarUrl?: string;
   badgeCount?: number;
+  dockColor?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `dock::${app.id}`,
     data: { type: "dock", appId: app.id },
   });
+  const dockTint = dockColor || '';
+  const hasDockTint = !!dockTint;
+  const dockTintIsDark = hasDockTint ? getHexLuminance(dockTint) < 0.32 : true;
+  const embeddedTopFill = hasDockTint
+    ? `linear-gradient(180deg, ${rgbaFromHex(dockTint, dockTintIsDark ? 0.28 : 0.14)} 0%, rgba(255,255,255,0.02) 100%)`
+    : 'linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 100%)';
+  const embeddedBottomFill = hasDockTint
+    ? `radial-gradient(circle at 50% 50%, ${rgbaFromHex(dockTint, dockTintIsDark ? 0.24 : 0.12)} 0%, rgba(255,255,255,0.04) 58%, transparent 100%)`
+    : 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 60%, transparent 100%)';
 
   return (
     <div
@@ -427,10 +518,28 @@ function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl, badgeC
       }}
       {...attributes}
       {...listeners}
-      className="flex flex-col items-center select-none cursor-pointer"
+      className="relative flex items-center justify-center w-[72px] h-[72px] select-none cursor-pointer"
       onClick={editMode ? undefined : onTap}
     >
-      <LiquidIcon app={app} size={58} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
+      <div
+        className="absolute inset-x-[8%] top-[10%] bottom-[12%] pointer-events-none"
+        style={{
+          borderRadius: '30%',
+          background: embeddedTopFill,
+          filter: 'blur(12px)',
+          opacity: hasDockTint && dockTintIsDark ? 0.68 : 0.8,
+        }}
+      />
+      <div
+        className="absolute left-[18%] right-[18%] bottom-[10%] h-[24%] pointer-events-none"
+        style={{
+          borderRadius: '999px',
+          background: embeddedBottomFill,
+          filter: 'blur(10px)',
+          opacity: hasDockTint && dockTintIsDark ? 0.72 : 0.88,
+        }}
+      />
+      <LiquidIcon app={app} size={56} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} variant="dock" />
     </div>
   );
 }
@@ -1346,17 +1455,21 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
       onClick={editMode ? undefined : onClick}
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
-        backdropFilter: hasBg ? 'blur(28px) saturate(160%)' : 'blur(12px) saturate(140%)',
-        WebkitBackdropFilter: hasBg ? 'blur(28px) saturate(160%)' : 'blur(12px) saturate(140%)',
+        background: hasBg
+          ? 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 100%)'
+          : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 100%)',
+        backdropFilter: hasBg ? 'blur(30px) saturate(170%)' : 'blur(24px) saturate(155%)',
+        WebkitBackdropFilter: hasBg ? 'blur(30px) saturate(170%)' : 'blur(24px) saturate(155%)',
         boxShadow: hasBg
-          ? `0 4px 24px rgba(0,0,0,0.3), 0 1px 4px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.15)`
-          : `0 2px 12px ${glow}18, 0 1px 4px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.08)`,
-        border: hasBg ? '0.5px solid rgba(255,255,255,0.22)' : '0.5px solid rgba(180,190,200,0.12)',
+          ? `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -18px 28px rgba(255,255,255,0.04)`
+          : `0 16px 38px rgba(0,0,0,0.22), 0 0 20px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.04)`,
+        border: hasBg ? '1px solid rgba(255,255,255,0.24)' : '1px solid rgba(255,255,255,0.18)',
       }}
     >
-      {hasBg && <div className="absolute inset-0" style={{ background: 'rgba(0,0,0,0.18)' }} />}
-      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? 0.3 : 0.06 }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: hasBg ? 'linear-gradient(145deg, rgba(255,255,255,0.1) 0%, transparent 50%)' : 'linear-gradient(145deg, rgba(255,255,255,0.02) 0%, transparent 60%)' }} />
+      {hasBg && <div className="absolute inset-0" style={{ background: 'rgba(10,14,24,0.14)' }} />}
+      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? 0.16 : 0.22, mixBlendMode: 'screen', filter: 'saturate(0.9)' }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.1) 22%, rgba(255,255,255,0.03) 56%, transparent 100%)' }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 15% 10%, rgba(255,255,255,0.24) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,0.12) 0%, transparent 26%)' }} />
       <div className="relative z-10 w-full h-full">{children}</div>
     </div>
   );
@@ -1412,7 +1525,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
           <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: 'rgba(99,102,241,0.4)' }}>
             <span className="text-[12px] leading-none">💬</span>
           </div>
-          <span className="text-[10px] font-black text-white/60 uppercase tracking-widest">{language === 'ar' ? 'اقتباس' : 'Quote'}</span>
+          <span className="text-[10px] font-black text-white/60 uppercase tracking-wide">{language === 'ar' ? 'اقتباس' : 'Quote'}</span>
         </div>
         <div className="flex gap-0.5">
           {[0,1,2].map(i => <div key={i} className="w-1 h-1 rounded-full" style={{ background: `rgba(99,102,241,${0.3 + i * 0.25})` }} />)}
@@ -1530,7 +1643,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
       <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
       <span
         className="text-[11px] font-bold text-center leading-tight mt-1.5 text-white px-2 py-0.5 rounded-md"
-        style={{ background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', textShadow: '0 1px 3px rgba(0,0,0,0.8)', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
+        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.14) 100%)', backdropFilter: 'blur(18px) saturate(175%)', WebkitBackdropFilter: 'blur(18px) saturate(175%)', border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.22)', textShadow: '0 1px 3px rgba(0,0,0,0.8)', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
       >
         {name}
       </span>
@@ -1597,18 +1710,26 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const rawWidgets = readJson<Record<string, boolean>>(LS_WIDGETS_BASE);
     const rawUnifiedGrid = readJson<string[]>(LS_UNIFIED_BASE);
 
+    const resolvedBgChoice: BgChoice = isBgChoiceValue(savedChoice)
+      ? savedChoice
+      : savedBg && !isDefaultBgAsset(savedBg)
+        ? 'wallpaper'
+        : 'default';
+    const resolvedBgPosition = resolvedBgChoice === 'wallpaper' && Number.isFinite(parsedBgPosition)
+      ? Math.max(0, Math.min(100, parsedBgPosition))
+      : 50;
+    const resolvedBgImage = resolvedBgChoice === 'wallpaper' && savedBg && !isDefaultBgAsset(savedBg)
+      ? savedBg
+      : (resolvedTheme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
+
     return {
       dockIds: Array.isArray(rawDock) ? sanitizeDock(rawDock) : sanitizeDock(DEFAULT_DOCK),
       iconOrder: sanitizeOrder(Array.isArray(rawOrder) ? rawOrder : DEFAULT_ORDER),
       showQuote: read(LS_QUOTE_BASE) !== 'false',
-      bgImage: savedBg || (resolvedTheme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK),
-      bgPositionY: Number.isFinite(parsedBgPosition) ? Math.max(0, Math.min(100, parsedBgPosition)) : 50,
+      bgImage: resolvedBgChoice === 'style' ? '' : resolvedBgImage,
+      bgPositionY: resolvedBgPosition,
       headerColor: read(LS_HEADER_COLOR_BASE) || '',
-      bgChoice: savedChoice === 'default' || savedChoice === 'wallpaper' || savedChoice === 'style'
-        ? savedChoice
-        : savedBg && savedBg !== DEFAULT_BG_DARK && savedBg !== DEFAULT_BG_LIGHT
-          ? 'wallpaper'
-          : 'default',
+      bgChoice: resolvedBgChoice,
       hsBgActive: savedChoice === 'style'
         ? true
         : savedChoice === 'default' || savedChoice === 'wallpaper'
@@ -1620,10 +1741,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             color1: rawHsBg.color1 || '#1a1a2e',
             color2: rawHsBg.color2 || '#4a4a8a',
             color3: rawHsBg.color3 || '',
-            angle: rawHsBg.angle ?? 180,
+            angle: typeof rawHsBg.angle === 'number' ? rawHsBg.angle : 180,
             glow: typeof rawHsBg.glow === 'boolean' ? rawHsBg.glow : false,
           }
-        : { mode: 'solid', color1: '#1a1a2e', color2: '#4a4a8a', color3: '', angle: 180, glow: false },
+        : { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false },
       dockColor: read(LS_DOCK_COLOR_BASE) || '',
       bgGradLeft: read('hs_grad_left') || '',
       bgGradRight: read('hs_grad_right') || '',
@@ -1891,14 +2012,21 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     }
 
     const localBgImage = getScopedStorageItem(LS_BG_BASE, user.id);
+    const localBgChoice = getScopedStorageItem(LS_BG_CHOICE_BASE, user.id);
     const localBgPositionRaw = getScopedStorageItem(LS_BG_POS_Y_BASE, user.id);
     const parsedLocalBgPosition = localBgPositionRaw === null ? NaN : Number(localBgPositionRaw);
     const localBgPosition = Number.isFinite(parsedLocalBgPosition) ? Math.max(0, Math.min(100, parsedLocalBgPosition)) : 50;
-    const hasLocalWallpaper = typeof localBgImage === 'string' && !!localBgImage && localBgImage !== DEFAULT_BG_DARK && localBgImage !== DEFAULT_BG_LIGHT;
-    const remoteChoice: BgChoice = hs.bgChoice === 'style' || hs.bgChoice === 'wallpaper' || hs.bgChoice === 'default'
-      ? hs.bgChoice
-      : (typeof hs.bgImage === 'string' && hs.bgImage ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default');
-    const resolvedChoice: BgChoice = remoteChoice === 'default' && hasLocalWallpaper ? 'wallpaper' : remoteChoice;
+    const localChoice = isBgChoiceValue(localBgChoice) ? localBgChoice : null;
+    const localWallpaper = typeof localBgImage === 'string' && !!localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
+    const remoteWallpaper = typeof hs.bgImage === 'string' && !!hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
+    const remoteChoice = isBgChoiceValue(hs.bgChoice) ? hs.bgChoice : null;
+    const inferredChoice: BgChoice = remoteChoice
+      ?? localChoice
+      ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default');
+    const resolvedChoice: BgChoice = inferredChoice === 'wallpaper' && !(remoteWallpaper || localWallpaper)
+      ? 'default'
+      : inferredChoice;
+
     setBgChoiceState(resolvedChoice);
 
     const remoteBg = s?.homescreenBg
@@ -1917,21 +2045,23 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     if (s?.homescreenBg) localStorage.setItem(LS_HSBG_KEY(), remoteBgJson);
     else removeScopedStorageItem(LS_HSBG_BASE, user.id);
 
-    const nextBgPosition = typeof hs.bgPositionY === 'number'
-      ? Math.max(0, Math.min(100, hs.bgPositionY))
-      : resolvedChoice === 'wallpaper' && hasLocalWallpaper
-        ? localBgPosition
-        : 50;
+    const nextBgPosition = resolvedChoice === 'wallpaper'
+      ? (typeof hs.bgPositionY === 'number'
+          ? Math.max(0, Math.min(100, hs.bgPositionY))
+          : localChoice === 'wallpaper'
+            ? localBgPosition
+            : 50)
+      : 50;
     setBgPositionY(prev => prev === nextBgPosition ? prev : nextBgPosition);
     localStorage.setItem(LS_BG_POS_Y_KEY(), String(nextBgPosition));
 
     if (resolvedChoice === 'wallpaper') {
-      const resolvedBgImage = typeof hs.bgImage === 'string' && hs.bgImage ? hs.bgImage : localBgImage;
+      const resolvedBgImage = remoteWallpaper || (localChoice === 'wallpaper' ? localWallpaper : '');
       if (resolvedBgImage) {
         setBgImage(prev => prev === resolvedBgImage ? prev : resolvedBgImage);
         localStorage.setItem(LS_BG_KEY(), resolvedBgImage);
       }
-    } else if (resolvedChoice === 'default') {
+    } else {
       const nextDefaultBg = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
       setBgImage(prev => prev === nextDefaultBg ? prev : nextDefaultBg);
     }
@@ -1988,13 +2118,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       };
       setHsBg(updated);
       localStorage.setItem(LS_HSBG_KEY(), JSON.stringify(updated));
-      if (bgChoice !== 'wallpaper') {
-        setBgChoiceState('style');
-        removeScopedStorageItem(LS_BG_BASE, user?.id);
-      }
+      setBgChoiceState('style');
+      setBgImage('');
+      removeScopedStorageItem(LS_BG_BASE, user?.id);
+      removeScopedStorageItem(LS_BG_POS_Y_BASE, user?.id);
     };
     return onEvent('homescreenBgChanged', handler);
-  }, [bgChoice, setBgChoiceState, user?.id]);
+  }, [setBgChoiceState, user?.id]);
 
   useEffect(() => {
     if (bgChoice !== 'default') return;
@@ -2132,10 +2262,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setBgChoiceState('default');
     removeScopedStorageItem(LS_BG_BASE, user?.id);
     removeScopedStorageItem(LS_BG_POS_Y_BASE, user?.id);
-    removeScopedStorageItem(LS_HSBG_BASE, user?.id);
-    void syncToSupabase({ bgChoice: 'default', bgImage: '', bgPositionY: 50 }, { homescreenBg: null });
+    void syncToSupabase({ bgChoice: 'default', bgImage: '', bgPositionY: 50 });
   };
   const saveBgPositionY = (value: number) => {
+    if (bgChoice !== 'wallpaper') return;
     const next = Math.max(0, Math.min(100, value));
     setBgPositionY(next);
     if (user?.id) setScopedStorageItem(LS_BG_POS_Y_BASE, String(next), user.id);
@@ -2146,8 +2276,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     localStorage.setItem(LS_HSBG_KEY(), JSON.stringify(patch));
     setBgChoiceState('style');
     setBgImage('');
+    setBgPositionY(50);
     removeScopedStorageItem(LS_BG_BASE, user?.id);
-    void syncToSupabase({ bgChoice: 'style', bgImage: '' }, { homescreenBg: patch });
+    removeScopedStorageItem(LS_BG_POS_Y_BASE, user?.id);
+    void syncToSupabase({ bgChoice: 'style', bgImage: '', bgPositionY: 50 }, { homescreenBg: patch });
     emitEvent('homescreenBgChanged', patch);
     setBgPanelOpen(false);
   };
@@ -2401,6 +2533,26 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const isDefaultBgImage = bgChoice === 'default' || bgImage === defaultBg || bgImage === DEFAULT_BG_DARK || bgImage === DEFAULT_BG_LIGHT;
   const hasBg  = !!bgImage && bgChoice !== 'style';
   const wallpaperTranslateY = `${(bgPositionY - 50) * 1.2}%`;
+  const effectiveDockColor = dockColor || (isDark ? '#0c0f14' : '#060541');
+  const dockTintIsDark = dockColor ? getHexLuminance(effectiveDockColor) < 0.32 : isDark;
+  const dockTrayBackground = dockColor
+    ? `linear-gradient(180deg, rgba(255,255,255,${dockTintIsDark ? 0.24 : 0.42}) 0%, rgba(255,255,255,${dockTintIsDark ? 0.08 : 0.16}) 22%, rgba(255,255,255,0.02) 100%), radial-gradient(circle at 50% -14%, rgba(255,255,255,${dockTintIsDark ? 0.2 : 0.34}) 0%, transparent 42%), linear-gradient(135deg, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.82 : 0.38)} 0%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.64 : 0.22)} 52%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.74 : 0.28)} 100%)`
+    : 'linear-gradient(180deg, rgba(255,255,255,0.66) 0%, rgba(255,255,255,0.34) 24%, rgba(255,255,255,0.16) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,0.42) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 46%, rgba(255,255,255,0.14) 100%)';
+  const dockTrayBorder = dockColor
+    ? `1px solid rgba(255,255,255,${dockTintIsDark ? 0.28 : 0.42})`
+    : '1px solid rgba(255,255,255,0.42)';
+  const dockTrayOutline = dockColor
+    ? `1px solid rgba(255,255,255,${dockTintIsDark ? 0.1 : 0.16})`
+    : '1px solid rgba(255,255,255,0.12)';
+  const dockTrayShadow = dockColor
+    ? `0 32px 64px -28px rgba(0,0,0,${dockTintIsDark ? 0.72 : 0.5}), 0 16px 34px rgba(0,0,0,${dockTintIsDark ? 0.26 : 0.14}), 0 0 24px ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.18 : 0.14)}, inset 0 1px 0 rgba(255,255,255,${dockTintIsDark ? 0.42 : 0.68}), inset 0 -18px 28px rgba(255,255,255,${dockTintIsDark ? 0.04 : 0.08}), inset 18px 0 28px rgba(255,255,255,${dockTintIsDark ? 0.02 : 0.05}), inset -18px 0 28px rgba(255,255,255,${dockTintIsDark ? 0.02 : 0.05})`
+    : '0 32px 64px -28px rgba(0,0,0,0.56), 0 16px 34px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -18px 28px rgba(255,255,255,0.08), inset 20px 0 28px rgba(255,255,255,0.05), inset -20px 0 28px rgba(255,255,255,0.05)';
+  const dockTopSheen = dockColor
+    ? `linear-gradient(180deg, rgba(255,255,255,${dockTintIsDark ? 0.38 : 0.62}) 0%, rgba(255,255,255,${dockTintIsDark ? 0.12 : 0.18}) 20%, transparent 58%)`
+    : 'linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.18) 22%, transparent 62%)';
+  const dockBottomTint = dockColor
+    ? `linear-gradient(180deg, transparent 36%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.18 : 0.08)} 100%)`
+    : 'linear-gradient(180deg, transparent 36%, rgba(255,255,255,0.14) 100%)';
 
   // Whether any custom/user background is active (wallpaper image OR solid/gradient)
   const hasAnyBg = hasBg || bgChoice === 'style';
@@ -2613,7 +2765,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                     <span>{language === 'ar' ? 'خلفية' : 'BG'}</span>
                   </button>
                   {/* Remove BG */}
-                  {bgImage && !isDefaultBgImage && (
+                  {bgChoice === 'wallpaper' && bgImage && !isDefaultBgImage && (
                     <button onClick={removeBg}
                       style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#dc2626', border: '2px solid #ef4444', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
                       <X style={{ width: '16px', height: '16px' }} />
@@ -2622,60 +2774,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                   )}
                   {/* Restore Default */}
                   <button
-                    title={language === 'ar' ? 'استعادة الإعدادات الافتراضية' : 'Restore defaults'}
-                    onClick={() => {
-                      const uid = _cachedUid();
-                      const DEFAULT_WIDGETS = { showNavWidget: false, showCalendarWidget: true, showTRWidget: true, showMaw3dWidget: false, showVitalityWidget: false, showJournalWidget: false, showQuoteWidget: false };
-                      // Reset widgets
-                      setHsWidgets(DEFAULT_WIDGETS);
-                      localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(DEFAULT_WIDGETS));
-                      // Reset BG image
-                      setBgImage(defaultBg);
-                      setBgPositionY(50);
-                      localStorage.removeItem(LS_BG_KEY());
-                      localStorage.removeItem(LS_BG_POS_Y_KEY());
-                      // Reset header color
-                      setHeaderColor('');
-                      localStorage.removeItem(LS_HEADER_COLOR_KEY());
-                      // Reset BG gradient colors
-                      setBgGradLeft('');
-                      setBgGradRight('');
-                      try { localStorage.removeItem(lsKey(uid,'hs_grad_left')); localStorage.removeItem(lsKey(uid,'hs_grad_right')); } catch {}
-                      // Reset custom BG style active flag
-                      setBgChoiceState('default');
-                      setHsBg({ mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false });
-                      try { localStorage.removeItem(lsKey(uid, LS_HSBG_ACTIVE_BASE)); } catch {}
-                      try { localStorage.removeItem(LS_HSBG_KEY()); } catch {}
-                      // Reset dock color
-                      setDockColor('');
-                      try { localStorage.removeItem(lsKey(uid, LS_DOCK_COLOR_BASE)); } catch {}
-                      // Reset unified grid
-                      setUnifiedGrid([]);
-                      localStorage.removeItem(LS_UNIFIED_KEY());
-                      // Sync — must set homescreenBg: null at root so the always-running BG effect
-                      // does NOT re-apply the old gradient on next navigation/load
-                      if (user) {
-                        (async () => {
-                          try {
-                            const { data } = await supabase.from("profiles").select("settings").eq("id", user.id).single();
-                            const cur = (data?.settings as any) || {};
-                            await supabase.from("profiles").update({
-                              settings: {
-                                ...cur,
-                                homescreenBg: null,
-                                homescreen: {
-                                  ...(cur.homescreen || {}),
-                                  bgImage: '',
-                                  bgPositionY: 50,
-                                  headerColor: '',
-                                  homescreenWidgets: DEFAULT_WIDGETS,
-                                },
-                              },
-                            }).eq("id", user.id);
-                          } catch { /* silent */ }
-                        })();
-                      }
-                    }}
+                    title={language === 'ar' ? 'استخدام الخلفية الافتراضية' : 'Use default background'}
+                    onClick={removeBg}
                     style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
                     <RotateCcw style={{ width: '16px', height: '16px' }} />
                     <span>{language === 'ar' ? 'افتراضي' : 'Default'}</span>
@@ -2757,7 +2857,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 <ImageIcon style={{ width: '20px', height: '20px' }} /> {language === "ar" ? "اختر من الصور المحفوظة" : "Pick from Saved"}
               </button>
 
-              {bgImage && !hasCustomBg && (
+              {bgChoice === 'wallpaper' && bgImage && (
                 <div style={{ marginBottom: '12px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                     <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600 }}>{language === 'ar' ? 'موضع الخلفية' : 'Wallpaper Position'}</span>
@@ -2982,26 +3082,46 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           {/* ── DOCK — always at very bottom ── */}
           <div className="mt-auto flex-none mx-2 md:mx-4 lg:mx-6 pt-1 hs-dock-bottom">
             <div
-              className="flex items-center justify-around w-full rounded-[2.75rem] py-3 px-5"
+              className="relative flex items-center justify-around w-full rounded-[2.75rem] py-3 px-5 overflow-hidden"
               style={{
-                background: dockColor
-                  ? `linear-gradient(135deg, ${dockColor}ee 0%, ${dockColor}cc 50%, ${dockColor}ee 100%)`
-                  : 'linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 50%, rgba(255,255,255,0.1) 100%), var(--gradient-background)',
-                backdropFilter: 'blur(20px)',
-                WebkitBackdropFilter: 'blur(20px)',
-                border: '1px solid transparent',
-                backgroundClip: 'padding-box',
-                outline: '0.5px solid rgba(180,190,200,0.35)',
-                boxShadow: '0 34px 70px -16px rgba(0,0,0,0.4), 0 16px 46px rgba(0,0,0,0.18), 0 0 0 1px rgba(192,200,210,0.45), 0 0 0 2px rgba(255,255,255,0.06)',
+                background: dockTrayBackground,
+                backdropFilter: 'blur(38px) saturate(170%)',
+                WebkitBackdropFilter: 'blur(38px) saturate(170%)',
+                border: dockTrayBorder,
+                outline: dockTrayOutline,
+                boxShadow: dockTrayShadow,
               }}
             >
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  borderRadius: 'inherit',
+                  background: dockTopSheen,
+                }}
+              />
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  borderRadius: 'inherit',
+                  background: dockBottomTint,
+                }}
+              />
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  borderRadius: 'inherit',
+                  background: 'radial-gradient(circle at 12% 18%, rgba(255,255,255,0.34) 0%, transparent 28%), radial-gradient(circle at 88% 18%, rgba(255,255,255,0.28) 0%, transparent 26%), radial-gradient(circle at 50% 115%, rgba(255,255,255,0.18) 0%, transparent 34%)',
+                }}
+              />
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
-                {dockApps.map(app => (
-                  <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'social' ? connectBadge : 0} />
-                ))}
-                {Array.from({ length: Math.max(0, maxDock - dockApps.length) }).map((_, i) => (
-                  <div key={`slot-${i}`} className="w-14 h-14 rounded-[23%] border-2 border-dashed border-white/25" />
-                ))}
+                <div className="relative z-10 flex w-full items-center justify-around gap-1.5">
+                  {dockApps.map(app => (
+                    <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'social' ? connectBadge : 0} dockColor={dockColor} />
+                  ))}
+                  {Array.from({ length: Math.max(0, maxDock - dockApps.length) }).map((_, i) => (
+                    <div key={`slot-${i}`} className="w-[72px] h-[72px] rounded-[30%] border border-dashed border-white/20 bg-white/[0.04]" />
+                  ))}
+                </div>
               </SortableContext>
             </div>
           </div>
@@ -3048,6 +3168,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 <div className="flex items-center gap-2">
                   <input type="color" title="Dock background color" value={dockColor || (isDark ? '#0c0f14' : '#060541')} onChange={e => { setDockColor(e.target.value); localStorage.setItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE), e.target.value); void syncToSupabase({ dockColor: e.target.value }); }}
                     className="w-7 h-7 rounded-lg cursor-pointer border border-border/30 p-0.5 bg-transparent" />
+                  <div className="w-7 h-7 rounded-lg border border-white/20 shadow-inner"
+                    style={{
+                      background: dockColor
+                        ? `linear-gradient(180deg, rgba(255,255,255,${dockTintIsDark ? 0.24 : 0.42}) 0%, rgba(255,255,255,${dockTintIsDark ? 0.08 : 0.16}) 100%), linear-gradient(135deg, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.82 : 0.38)} 0%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.64 : 0.24)} 100%)`
+                        : 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 100%)'
+                    }}
+                  />
                   {dockColor && (
                     <button onClick={() => { setDockColor(''); localStorage.removeItem(lsKey(_cachedUid(), LS_DOCK_COLOR_BASE)); void syncToSupabase({ dockColor: '' }); }}
                       className="text-[10px] px-2 py-1 rounded-full bg-red-500/20 text-red-500 border border-red-500/30 font-semibold">

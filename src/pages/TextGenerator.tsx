@@ -3,7 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import TextGeneratorPopup from '@/components/wakti-ai-v2/TextGeneratorPopup';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
-import { useGmailConnection } from '@/hooks/useGmailConnection';
+import { useEmailConnections } from '@/hooks/useEmailConnections';
+import { EmailConnectionModal } from '@/components/email/EmailConnectionModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,14 +12,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { AppleLogo } from '@/components/calendar/AppleLogo';
-import { Mail, ChevronDown, CheckCircle2, XCircle } from 'lucide-react';
+import { Mail, ChevronDown, CheckCircle2, XCircle, Settings2, Plug } from 'lucide-react';
 
 export default function TextGenerator() {
   const { language } = useTheme();
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4'>('compose');
-  const { initiateGmailAuth, connection: gmailConnection } = useGmailConnection();
+  const emailConn = useEmailConnections();
+  const { initiateGmailAuth, connection: gmailConnection } = emailConn.gmail;
+  const [emailMenuOpen, setEmailMenuOpen] = useState(false);
+  const [pendingOpenImapModal, setPendingOpenImapModal] = useState(false);
+  const [showImapModal, setShowImapModal] = useState(false);
 
   useEffect(() => {
     const tabParam = (searchParams.get('tab') || '').toLowerCase();
@@ -27,7 +32,14 @@ export default function TextGenerator() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  
+
+  useEffect(() => {
+    if (!emailMenuOpen && pendingOpenImapModal) {
+      setPendingOpenImapModal(false);
+      requestAnimationFrame(() => setShowImapModal(true));
+    }
+  }, [emailMenuOpen, pendingOpenImapModal]);
+
   return (
     <div className="w-full h-full">
       <div className="mx-auto w-full max-w-none pt-4 md:pt-8 pb-6 px-3 md:px-6 lg:px-8">
@@ -40,11 +52,11 @@ export default function TextGenerator() {
         <div className="mb-3">
           <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm" role="tablist" aria-label={language === 'ar' ? 'التبويبات' : 'Tabs'}>
             {[
-              { key: 'compose',      labelEn: 'Compose',         labelAr: 'تأليف',         activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
-              { key: 'reply',        labelEn: 'Reply',           labelAr: 'رد',            activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
-              { key: 'a4',           labelEn: 'A4 Document',     labelAr: 'مستند A4',     activeClass: 'bg-gradient-primary text-primary-foreground shadow-lg border-primary ring-1 ring-primary/60' },
+              { key: 'compose',      labelEn: 'Compose',         labelAr: 'تأليف',         activeClass: 'bg-[#060541] text-white shadow-lg border-[#060541] ring-1 ring-[#060541]/40' },
+              { key: 'reply',        labelEn: 'Reply',           labelAr: 'رد',            activeClass: 'bg-[#060541] text-white shadow-lg border-[#060541] ring-1 ring-[#060541]/40' },
+              { key: 'a4',           labelEn: 'A4 Document',     labelAr: 'مستند A4',     activeClass: 'bg-[#060541] text-white shadow-lg border-[#060541] ring-1 ring-[#060541]/40' },
               { key: 'diagrams',     labelEn: 'Diagrams',        labelAr: 'المخططات',      activeClass: 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20' },
-              { key: 'presentation', labelEn: 'Presentations',   labelAr: 'العروض',        activeClass: 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-lg' },
+              { key: 'presentation', labelEn: 'Presentations',   labelAr: 'العروض',        activeClass: 'bg-[#060541] text-white shadow-lg border-[#060541] ring-1 ring-[#060541]/40' },
               { key: 'translate',    labelEn: 'Text Translator',  labelAr: 'مترجم النص',   activeClass: 'bg-white text-foreground shadow-lg border-foreground/20 ring-1 ring-foreground/20' },
               { key: 'generated',    labelEn: 'Generated',       labelAr: 'النص المُولد',  activeClass: 'bg-muted/90 text-foreground shadow-lg border-muted-foreground/20 ring-1 ring-muted-foreground/20' },
             ].map(({ key, labelEn, labelAr, activeClass }) => (
@@ -64,7 +76,7 @@ export default function TextGenerator() {
               </button>
             ))}
             {/* Email dropdown — not a content tab, triggers OAuth */}
-            <DropdownMenu>
+            <DropdownMenu open={emailMenuOpen} onOpenChange={setEmailMenuOpen}>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
@@ -76,7 +88,7 @@ export default function TextGenerator() {
                   <span className="flex flex-col items-center gap-0.5 w-full">
                     <span className="flex items-center gap-1">
                       <span>{language === 'ar' ? 'بريد' : 'Email'}</span>
-                      {gmailConnection.connected && (
+                      {emailConn.anyConnected && (
                         <CheckCircle2 className="h-3 w-3 text-green-500" />
                       )}
                       <ChevronDown className="h-3 w-3 opacity-60" />
@@ -90,7 +102,7 @@ export default function TextGenerator() {
                           <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22z"/>
                           <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                         </svg>
-                        {gmailConnection.loading ? (
+                        {gmailConnection.loading || emailConn.imap.loading ? (
                           <span className="h-2.5 w-2.5 rounded-full border border-current border-t-transparent animate-spin" />
                         ) : gmailConnection.connected ? (
                           <CheckCircle2 className="h-2.5 w-2.5 text-green-500" />
@@ -107,11 +119,12 @@ export default function TextGenerator() {
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="center" className="min-w-[12rem]">
-                {gmailConnection.connected && gmailConnection.emailAddress && (
+                {emailConn.primaryEmail && (
                   <div className="px-2 py-1.5 text-xs text-muted-foreground border-b mb-1 truncate">
-                    {gmailConnection.emailAddress}
+                    {emailConn.primaryEmail}
                   </div>
                 )}
+                {/* Gmail option */}
                 <DropdownMenuItem
                   onSelect={(e) => { e.preventDefault(); initiateGmailAuth(); }}
                   className="flex items-center gap-2 cursor-pointer"
@@ -137,9 +150,44 @@ export default function TextGenerator() {
                 >
                   <AppleLogo size={14} />
                   <span>iCloud</span>
+                  <XCircle className="h-3 w-3 text-red-400 ml-auto" />
+                </DropdownMenuItem>
+
+                <div className="border-t my-1" />
+
+                {/* IMAP connections — show each connected one */}
+                {emailConn.imap.connections.map((conn) => (
+                  <DropdownMenuItem
+                    key={conn.id}
+                    onSelect={(e) => e.preventDefault()}
+                    className="flex items-center gap-2 cursor-default"
+                  >
+                    <Plug className="h-3.5 w-3.5 text-muted-foreground" />
+                    <span className="truncate max-w-[180px]">{conn.display_name || conn.email_address}</span>
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 ml-auto shrink-0" />
+                  </DropdownMenuItem>
+                ))}
+
+                {/* Add Other Provider */}
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setPendingOpenImapModal(true);
+                    setEmailMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 cursor-pointer"
+                >
+                  <Settings2 className="h-3.5 w-3.5 text-[#E9CEB0]" />
+                  <span>{language === 'ar' ? 'مزود آخر...' : 'Other Provider...'}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+
+            {/* IMAP Settings Modal */}
+            <EmailConnectionModal
+              open={showImapModal}
+              onOpenChange={setShowImapModal}
+              onSave={emailConn.imap.add}
+            />
           </div>
         </div>
 
