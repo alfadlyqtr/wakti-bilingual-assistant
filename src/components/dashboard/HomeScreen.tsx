@@ -265,119 +265,83 @@ function flattenUnifiedPages(pages: string[][]) {
 }
 
 function buildHomescreenPage(pageItems: string[]) {
+  // Grid: 4 columns × 6 rows (named areas).
+  // Layout slots (each slot = 2 grid-rows tall):
+  //   Slot type W = full-width widget  → "wN wN wN wN" × 2 rows
+  //   Slot type I = icon row of 4      → "i1 i2 i3 i4" + "i5 i6 i7 i8" (2 rows, 8 icons)
+  // We have 3 slots available per page.
+  // Each widget takes 1 slot. Up to MAX_WIDGETS widgets fit; the rest overflow.
+  // Remaining slots after widgets are used for icon rows (8 icons per slot).
+
   const widgets = pageItems.filter(id => id.startsWith('widget::'));
-  const apps = pageItems.filter(id => id.startsWith('app::'));
+  const apps    = pageItems.filter(id => id.startsWith('app::'));
 
-  // Grid is 6 rows × 4 columns (3 block-rows × 2 block-cols).
-  // Each block-row can hold: WW (two half-width widgets) or WF (one full-width widget) or II (one 4-icon block each side).
-  // Strategy: pair widgets side-by-side when we have 2+ so they each take 2 cols (half width).
-  // This means 2 paired widgets = 1 block-row (2 rows tall), leaving more space for icons.
-  // Max widgets on one page: 4 (fills 2 block-rows, leaving 1 block-row = 4 icons per side = 8 icons).
+  const widgetCount   = Math.min(MAX_WIDGETS, widgets.length);
+  const savedWidgets  = widgets.slice(0, widgetCount);
+  const overflowWidgets = widgets.slice(widgetCount);
 
-  // Decide how many widgets fit on this page
-  const widgetLimit = Math.min(MAX_WIDGETS, widgets.length);
-  const savedWidgets = widgets.slice(0, widgetLimit);
-  const overflowWidgets = widgets.slice(widgetLimit);
-
-  // Build layout rows. Each "row" is a pair of grid-rows (2 rows tall).
-  // We have 3 layout rows available.
-  type LayoutRow = { type: 'WW'; w1: string; w2: string } | { type: 'WF'; w: string } | { type: 'II'; icons: string[] };
-  const layoutRows: LayoutRow[] = [];
-  const wq = [...savedWidgets];
-
-  // Consume widgets: pair them 2-by-2 (side-by-side), lone widget gets full width
-  while (wq.length >= 2) {
-    layoutRows.push({ type: 'WW', w1: wq.shift()!, w2: wq.shift()! });
-  }
-  if (wq.length === 1) {
-    layoutRows.push({ type: 'WF', w: wq.shift()! });
-  }
-
-  // Remaining layout rows go to icons (max 3 total rows)
-  const remainingRows = Math.max(0, 3 - layoutRows.length);
-  const iconCapacity = remainingRows * 8; // each icon row holds 8 icons (2 cols × 4 icons each)
-  const savedIcons = apps.slice(0, iconCapacity);
+  const iconSlots     = Math.max(0, 3 - widgetCount);
+  const iconCapacity  = iconSlots * 8;
+  const savedIcons    = apps.slice(0, iconCapacity);
   const overflowIcons = apps.slice(iconCapacity);
 
-  // Fill icon rows
-  const iq = [...savedIcons];
-  for (let r = 0; r < remainingRows; r++) {
-    const rowIcons: string[] = [];
-    for (let i = 0; i < 8; i++) rowIcons.push(iq.length > 0 ? iq.shift()! : `empty-i::${r * 8 + i + 1}`);
-    layoutRows.push({ type: 'II', icons: rowIcons });
-  }
+  const savedItems    = [...savedWidgets, ...savedIcons];
+  const overflowItems = [...overflowWidgets, ...overflowIcons];
 
-  // If we somehow have fewer than 3 layout rows, pad with empty icon rows
-  while (layoutRows.length < 3) {
-    const r = layoutRows.length;
-    const rowIcons: string[] = [];
-    for (let i = 0; i < 8; i++) rowIcons.push(`empty-i::${r * 8 + i + 1}`);
-    layoutRows.push({ type: 'II', icons: rowIcons });
-  }
-
-  // Build savedItems (real items only, no empties)
-  const savedItems: string[] = [
-    ...savedWidgets,
-    ...savedIcons,
-  ];
-  const overflowItems: string[] = [...overflowWidgets, ...overflowIcons];
-
-  // Build effectiveItems (with empties for grid slots)
-  const effectiveItems: string[] = [];
+  // Build grid areas + effectiveItems (includes empty placeholders for visual slots)
+  const gridRows: string[]          = [];
+  const effectiveItems: string[]    = [];
+  const gridPositions               = new Map<string, string>();
+  let wIdx = 1;
+  let iIdx = 1;
   let emptyWIdx = 1;
-  for (const row of layoutRows) {
-    if (row.type === 'WW') {
-      effectiveItems.push(row.w1);
-      effectiveItems.push(row.w2);
-    } else if (row.type === 'WF') {
-      effectiveItems.push(row.w);
-    } else {
-      effectiveItems.push(...row.icons);
-    }
-  }
-  // Replace any leftover empty-w placeholders
-  const effectiveWithEmpties = effectiveItems.map(id => {
-    if (id === undefined) return `empty-w::${emptyWIdx++}`;
-    return id;
-  });
+  let emptyIIdx = 1;
 
-  // Build grid-template-areas: 6 rows × 4 columns
-  const gridRows: string[] = [];
-  let wGridIdx = 1;
-  let iGridIdx = 1;
-  const gridPositions = new Map<string, string>();
-
-  for (const row of layoutRows) {
-    if (row.type === 'WW') {
-      const n1 = `w${wGridIdx++}`;
-      const n2 = `w${wGridIdx++}`;
-      gridRows.push(`${n1} ${n1} ${n2} ${n2}`);
-      gridRows.push(`${n1} ${n1} ${n2} ${n2}`);
-      gridPositions.set(row.w1, n1);
-      gridPositions.set(row.w2, n2);
-    } else if (row.type === 'WF') {
-      const n = `w${wGridIdx++}`;
-      gridRows.push(`${n} ${n} ${n} ${n}`);
-      gridRows.push(`${n} ${n} ${n} ${n}`);
-      gridPositions.set(row.w, n);
-    } else {
-      const names = row.icons.map(id => {
-        const n = `i${iGridIdx++}`;
-        gridPositions.set(id, n);
-        return n;
-      });
-      gridRows.push(`${names[0]} ${names[1]} ${names[2]} ${names[3]}`);
-      gridRows.push(`${names[4]} ${names[5]} ${names[6]} ${names[7]}`);
-    }
+  // Widget slots first
+  for (let s = 0; s < widgetCount; s++) {
+    const id = savedWidgets[s] ?? `empty-w::${emptyWIdx++}`;
+    const name = `w${wIdx++}`;
+    gridRows.push(`${name} ${name} ${name} ${name}`);
+    gridRows.push(`${name} ${name} ${name} ${name}`);
+    gridPositions.set(id, name);
+    effectiveItems.push(id);
   }
 
-  const gridTemplateAreas = gridRows.map(r => `"${r}"`).join('\n');
+  // Icon slots
+  for (let s = 0; s < iconSlots; s++) {
+    const slotIcons: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const id = savedIcons[s * 8 + i] ?? `empty-i::${emptyIIdx++}`;
+      const name = `i${iIdx++}`;
+      gridPositions.set(id, name);
+      slotIcons.push(name);
+      effectiveItems.push(id);
+    }
+    gridRows.push(`${slotIcons[0]} ${slotIcons[1]} ${slotIcons[2]} ${slotIcons[3]}`);
+    gridRows.push(`${slotIcons[4]} ${slotIcons[5]} ${slotIcons[6]} ${slotIcons[7]}`);
+  }
+
+  // Pad to always have 6 grid rows (3 slots)
+  while (gridRows.length < 6) {
+    const rowNames: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      const id = `empty-i::${emptyIIdx++}`;
+      const name = `i${iIdx++}`;
+      gridPositions.set(id, name);
+      rowNames.push(name);
+      effectiveItems.push(id);
+    }
+    gridRows.push(`${rowNames[0]} ${rowNames[1]} ${rowNames[2]} ${rowNames[3]}`);
+    gridRows.push(`${rowNames[4]} ${rowNames[5]} ${rowNames[6]} ${rowNames[7]}`);
+  }
+
+  const gridTemplateAreas = gridRows.slice(0, 6).map(r => `"${r}"`).join('\n');
 
   return {
     savedItems,
     overflowItems,
-    effectiveItems: effectiveWithEmpties,
-    realItems: effectiveWithEmpties.filter(id => !id.startsWith('empty-')),
+    effectiveItems,
+    realItems: effectiveItems.filter(id => !id.startsWith('empty-')),
     gridTemplateAreas,
     gridPositions,
   };
@@ -2444,9 +2408,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       const current = _effectiveRef.current; // effectiveUnified (includes empties)
       if (!currentPageData) return;
       
-      const activeIsWidget = activeIdStr.startsWith('widget::') || activeIdStr.startsWith('empty-w::');
-      const overIsWidget = overId.startsWith('widget::') || overId.startsWith('empty-w::');
-
       const commitCurrentPage = (nextPageItems: string[]) => {
         const nextPages = savedPages.map((page, index) => index === currentPageData.index
           ? nextPageItems.filter(id => !id.startsWith('empty-'))
@@ -2455,60 +2416,17 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         persistSavedPages(nextPages, currentPageData.index);
       };
 
-      if (activeIsWidget === overIsWidget) {
-        // Same type: STRICT 1:1 SWAP (trade places)
-        const from = current.indexOf(activeIdStr);
-        const to = current.indexOf(overId);
-        if (from === -1 || to === -1) return;
+      // Simple swap in the effective (includes empties) array — works for same-type and cross-type
+      const from = current.indexOf(activeIdStr);
+      const to   = current.indexOf(overId);
+      if (from === -1 || to === -1) return;
 
-        const next = [...current];
-        next[from] = current[to];
-        next[to] = current[from];
+      const next = [...current];
+      next[from] = current[to];
+      next[to]   = current[from];
 
-        commitCurrentPage(next);
-        return;
-      } else {
-        if (currentPageData.mode !== 'mixed') return;
-        // Different types: BLOCK SWAP (swap entire section)
-        const blocks: { type: 'W' | 'I', items: string[] }[] = [];
-        let currentIconBlock: string[] = [];
-        
-        for (const id of current) {
-          if (id.startsWith('widget::') || id.startsWith('empty-w::')) {
-            if (currentIconBlock.length > 0) {
-              blocks.push({ type: 'I', items: currentIconBlock });
-              currentIconBlock = [];
-            }
-            blocks.push({ type: 'W', items: [id] });
-          } else {
-            currentIconBlock.push(id);
-            if (currentIconBlock.length === 4) {
-              blocks.push({ type: 'I', items: currentIconBlock });
-              currentIconBlock = [];
-            }
-          }
-        }
-        if (currentIconBlock.length > 0) {
-          blocks.push({ type: 'I', items: currentIconBlock });
-        }
-
-        let activeBlockIndex = -1;
-        let overBlockIndex = -1;
-        blocks.forEach((b, i) => {
-          if (b.items.includes(activeIdStr)) activeBlockIndex = i;
-          if (b.items.includes(overId)) overBlockIndex = i;
-        });
-
-        if (activeBlockIndex !== -1 && overBlockIndex !== -1) {
-          const temp = blocks[activeBlockIndex];
-          blocks[activeBlockIndex] = blocks[overBlockIndex];
-          blocks[overBlockIndex] = temp;
-          
-          const nextFlat = blocks.flatMap(b => b.items);
-          commitCurrentPage(nextFlat);
-        }
-        return;
-      }
+      commitCurrentPage(next);
+      return;
     }
 
     // dock → dock reorder
