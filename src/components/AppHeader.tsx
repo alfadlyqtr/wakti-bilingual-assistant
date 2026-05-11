@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft, Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Play, Pause, RotateCcw, RotateCw, Repeat, SkipForward } from "lucide-react";
+import { Moon, Sun, Calendar, CalendarClock, Mic, Sparkles, ListTodo, ChevronLeft, Settings, User as Account, HelpCircle as Help, Users as Contacts, LogOut, Play, Pause, RotateCcw, RotateCw, Repeat, SkipForward, Mail } from "lucide-react";
 import { bgAudio } from "@/utils/bgAudio";
 import { cn } from "@/lib/utils";
 import { Logo3D } from "@/components/Logo3D";
@@ -200,6 +200,11 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
         title: language === 'ar' ? 'WAKTI AI' : 'WAKTI AI',
         icon: Sparkles,
         colorClass: 'nav-icon-ai'
+      },
+      '/tools/email': {
+        title: language === 'ar' ? 'البريد' : 'Email',
+        icon: Mail,
+        colorClass: 'text-[#E9CEB0]'
       },
       '/tasjeel': {
         title: language === 'ar' ? 'تسجيل' : 'Tasjeel',

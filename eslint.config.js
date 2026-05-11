@@ -23,6 +23,18 @@ export default tseslint.config(
         "warn",
         { allowConstantExport: true },
       ],
+      "no-use-before-define": "off",
+      "no-unused-expressions": "off",
+      "@typescript-eslint/no-use-before-define": [
+        "error",
+        {
+          functions: false,
+          classes: true,
+          variables: true,
+          typedefs: true,
+        },
+      ],
+      "@typescript-eslint/no-unused-expressions": "off",
       "@typescript-eslint/no-unused-vars": "off",
     },
   }

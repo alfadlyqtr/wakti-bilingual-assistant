@@ -50,6 +50,7 @@ const PrivacyTerms = lazy(() => import("@/pages/PrivacyTerms"));
 const VoiceTTS = lazy(() => import("@/pages/VoiceTTS"));
 const VoiceStudio = lazy(() => import("@/pages/VoiceStudio"));
 const TextGenerator = lazy(() => import("@/pages/TextGenerator"));
+const Email = lazy(() => import("@/pages/Email"));
 const TextTranslationView = lazy(() => import("@/pages/TextTranslationView"));
 const GameMode = lazy(() => import("@/pages/GameMode"));
 const Games = lazy(() => import("@/pages/Games"));
@@ -214,6 +215,7 @@ export default function ConsumerRouter() {
           <Route path="/tasjeel" element={<Navigate to="/tools/voice-studio?tab=tasjeel" replace />} />
           <Route path="/voice-tts" element={<VoiceTTS />} />
           <Route path="/tools/text" element={<TextGenerator />} />
+          <Route path="/tools/email" element={<Email />} />
           <Route path="/tools/text/translation/:id" element={<TextTranslationView />} />
           <Route path="/tools/voice-studio" element={<VoiceStudio />} />
           <Route path="/tools/voice" element={<VoiceStudio />} />

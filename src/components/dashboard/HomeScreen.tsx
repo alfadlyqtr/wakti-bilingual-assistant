@@ -52,6 +52,7 @@ import {
   Bell,
   Users,
   MessageCircle,
+  Mail,
 } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
@@ -77,6 +78,7 @@ import { getScopedStorageItem, migrateLegacyScopedStorage, removeScopedStorageIt
   { id: "warranty",  nameEn: "My Files",  nameAr: "ملفاتي",   path: "/my-warranty",        icon: FolderOpen,      gradient: "from-emerald-400 to-emerald-600", glow: "#10b981" },
   { id: "projects",  nameEn: "Projects",  nameAr: "مشاريع",   path: "/projects",           icon: Code2,           gradient: "from-indigo-500 to-indigo-700",   glow: "#6366f1" },
   { id: "text",      nameEn: "Text",      nameAr: "نص",       path: "/tools/text",         icon: PenTool,         gradient: "from-violet-500 to-violet-700",   glow: "#8b5cf6" },
+  { id: "email",     nameEn: "Email",     nameAr: "البريد",    path: "/tools/email",        icon: Mail,            gradient: "from-[#E9CEB0] to-[#060541]",     glow: "#E9CEB0" },
   { id: "voice",     nameEn: "Voice",     nameAr: "صوت",      path: "/tools/voice-studio", icon: Mic,             gradient: "from-pink-400 to-pink-600",       glow: "#f472b6" },
   { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500 to-red-700",         glow: "#ef4444" },
   { id: "social",    nameEn: "Social",    nameAr: "التواصل",  path: "/social",             icon: MessageCircle,   gradient: "from-cyan-500 to-blue-600",       glow: "#38bdf8" },
@@ -90,6 +92,7 @@ const MAX_DOCK_MOBILE  = 3;
 const MAX_DOCK_DESKTOP = 3;
 const FIRST_PAGE_MAX_ICONS = 12;
 const ICONS_PER_OVERFLOW_PAGE = 24;
+const PAGE_BREAK_ID = '__page_break__';
 // ── Per-user localStorage key helpers ─────────────────────────────────────────
 // Keys are scoped to the logged-in user so different accounts on the same browser
 // never bleed their homescreen data into each other.
@@ -128,7 +131,9 @@ const LS_BG_CHOICE_KEY    = () => lsKey(_cachedUid(), LS_BG_CHOICE_BASE);
 // Widget IDs used in the unified grid
 const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
-const MAX_WIDGETS = 3;
+const MAX_WIDGETS = 4;
+const EDGE_PAGE_SWITCH_THRESHOLD = 56;
+const EDGE_PAGE_SWITCH_DELAY = 180;
 type BgChoice = 'default' | 'wallpaper' | 'style';
 const isBgChoiceValue = (value: unknown): value is BgChoice => value === 'default' || value === 'wallpaper' || value === 'style';
 const isDefaultBgAsset = (value?: string | null) => !value || value === DEFAULT_BG_DARK || value === DEFAULT_BG_LIGHT;
@@ -204,6 +209,11 @@ function buildIconsOnlyPage(items: string[]) {
   };
 }
 
+function isAppleMobileDevice() {
+  if (typeof navigator === 'undefined') return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
+}
+
 // Calculate explicit grid positions ("parking spots") for each item as area strings
 // Handles widget::, app::, and empty:: items
 function calcGridPositions(items: string[]) {
@@ -213,7 +223,7 @@ function calcGridPositions(items: string[]) {
   
   for (const id of items) {
     if (id.startsWith('widget::') || id.startsWith('empty-w::')) {
-      if (wIndex <= 3) {
+      if (wIndex <= MAX_WIDGETS) {
         positions.set(id, `w${wIndex}`);
         wIndex++;
       }
@@ -233,6 +243,144 @@ function buildDefaultUnifiedGrid(hsWidgets: Record<string, boolean>, dockApps: s
   const dockSet = new Set(dockApps);
   const apps = DEFAULT_ORDER.filter(id => !dockSet.has(id)).map(id => `app::${id}`);
   return [...widgets, ...apps];
+}
+
+function splitUnifiedPages(items: string[]) {
+  const pages: string[][] = [[]];
+  for (const id of items) {
+    if (id === PAGE_BREAK_ID) {
+      if (pages[pages.length - 1].length > 0) pages.push([]);
+      continue;
+    }
+    pages[pages.length - 1].push(id);
+  }
+  return pages.filter((page, index) => page.length > 0 || index === 0);
+}
+
+function flattenUnifiedPages(pages: string[][]) {
+  const normalized = pages
+    .map(page => page.filter(Boolean))
+    .filter((page, index) => page.length > 0 || index === 0);
+  return normalized.flatMap((page, index) => index === 0 ? page : [PAGE_BREAK_ID, ...page]);
+}
+
+function buildHomescreenPage(pageItems: string[]) {
+  const widgets = pageItems.filter(id => id.startsWith('widget::'));
+  const apps = pageItems.filter(id => id.startsWith('app::'));
+
+  // Grid is 6 rows × 4 columns (3 block-rows × 2 block-cols).
+  // Each block-row can hold: WW (two half-width widgets) or WF (one full-width widget) or II (one 4-icon block each side).
+  // Strategy: pair widgets side-by-side when we have 2+ so they each take 2 cols (half width).
+  // This means 2 paired widgets = 1 block-row (2 rows tall), leaving more space for icons.
+  // Max widgets on one page: 4 (fills 2 block-rows, leaving 1 block-row = 4 icons per side = 8 icons).
+
+  // Decide how many widgets fit on this page
+  const widgetLimit = Math.min(MAX_WIDGETS, widgets.length);
+  const savedWidgets = widgets.slice(0, widgetLimit);
+  const overflowWidgets = widgets.slice(widgetLimit);
+
+  // Build layout rows. Each "row" is a pair of grid-rows (2 rows tall).
+  // We have 3 layout rows available.
+  type LayoutRow = { type: 'WW'; w1: string; w2: string } | { type: 'WF'; w: string } | { type: 'II'; icons: string[] };
+  const layoutRows: LayoutRow[] = [];
+  const wq = [...savedWidgets];
+
+  // Consume widgets: pair them 2-by-2 (side-by-side), lone widget gets full width
+  while (wq.length >= 2) {
+    layoutRows.push({ type: 'WW', w1: wq.shift()!, w2: wq.shift()! });
+  }
+  if (wq.length === 1) {
+    layoutRows.push({ type: 'WF', w: wq.shift()! });
+  }
+
+  // Remaining layout rows go to icons (max 3 total rows)
+  const remainingRows = Math.max(0, 3 - layoutRows.length);
+  const iconCapacity = remainingRows * 8; // each icon row holds 8 icons (2 cols × 4 icons each)
+  const savedIcons = apps.slice(0, iconCapacity);
+  const overflowIcons = apps.slice(iconCapacity);
+
+  // Fill icon rows
+  const iq = [...savedIcons];
+  for (let r = 0; r < remainingRows; r++) {
+    const rowIcons: string[] = [];
+    for (let i = 0; i < 8; i++) rowIcons.push(iq.length > 0 ? iq.shift()! : `empty-i::${r * 8 + i + 1}`);
+    layoutRows.push({ type: 'II', icons: rowIcons });
+  }
+
+  // If we somehow have fewer than 3 layout rows, pad with empty icon rows
+  while (layoutRows.length < 3) {
+    const r = layoutRows.length;
+    const rowIcons: string[] = [];
+    for (let i = 0; i < 8; i++) rowIcons.push(`empty-i::${r * 8 + i + 1}`);
+    layoutRows.push({ type: 'II', icons: rowIcons });
+  }
+
+  // Build savedItems (real items only, no empties)
+  const savedItems: string[] = [
+    ...savedWidgets,
+    ...savedIcons,
+  ];
+  const overflowItems: string[] = [...overflowWidgets, ...overflowIcons];
+
+  // Build effectiveItems (with empties for grid slots)
+  const effectiveItems: string[] = [];
+  let emptyWIdx = 1;
+  for (const row of layoutRows) {
+    if (row.type === 'WW') {
+      effectiveItems.push(row.w1);
+      effectiveItems.push(row.w2);
+    } else if (row.type === 'WF') {
+      effectiveItems.push(row.w);
+    } else {
+      effectiveItems.push(...row.icons);
+    }
+  }
+  // Replace any leftover empty-w placeholders
+  const effectiveWithEmpties = effectiveItems.map(id => {
+    if (id === undefined) return `empty-w::${emptyWIdx++}`;
+    return id;
+  });
+
+  // Build grid-template-areas: 6 rows × 4 columns
+  const gridRows: string[] = [];
+  let wGridIdx = 1;
+  let iGridIdx = 1;
+  const gridPositions = new Map<string, string>();
+
+  for (const row of layoutRows) {
+    if (row.type === 'WW') {
+      const n1 = `w${wGridIdx++}`;
+      const n2 = `w${wGridIdx++}`;
+      gridRows.push(`${n1} ${n1} ${n2} ${n2}`);
+      gridRows.push(`${n1} ${n1} ${n2} ${n2}`);
+      gridPositions.set(row.w1, n1);
+      gridPositions.set(row.w2, n2);
+    } else if (row.type === 'WF') {
+      const n = `w${wGridIdx++}`;
+      gridRows.push(`${n} ${n} ${n} ${n}`);
+      gridRows.push(`${n} ${n} ${n} ${n}`);
+      gridPositions.set(row.w, n);
+    } else {
+      const names = row.icons.map(id => {
+        const n = `i${iGridIdx++}`;
+        gridPositions.set(id, n);
+        return n;
+      });
+      gridRows.push(`${names[0]} ${names[1]} ${names[2]} ${names[3]}`);
+      gridRows.push(`${names[4]} ${names[5]} ${names[6]} ${names[7]}`);
+    }
+  }
+
+  const gridTemplateAreas = gridRows.map(r => `"${r}"`).join('\n');
+
+  return {
+    savedItems,
+    overflowItems,
+    effectiveItems: effectiveWithEmpties,
+    realItems: effectiveWithEmpties.filter(id => !id.startsWith('empty-')),
+    gridTemplateAreas,
+    gridPositions,
+  };
 }
 
 const VALID_IDS = new Set(ALL_APPS.map(a => a.id));
@@ -322,6 +470,7 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
   const isDockVariant = variant === "dock";
   const shellRadius = isGridVariant ? '27%' : '30%';
   const iconScale = app.isAvatarIcon ? 1 : isGridVariant ? 0.46 : 0.48;
+  const isAppleMobile = isAppleMobileDevice();
   const mixHexWithWhite = (hex: string, whiteRatio = 0.82) => {
     const normalized = hex.replace('#', '');
     const safe = normalized.length === 3
@@ -331,21 +480,23 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
     const mixChannel = (value: number) => Math.round(value * (1 - whiteRatio) + 255 * whiteRatio);
     return `rgb(${mixChannel(toChannel(0))}, ${mixChannel(toChannel(2))}, ${mixChannel(toChannel(4))})`;
   };
-  const iconWhiteRatio = isGridVariant ? 0.24 : 0.28;
+  const iconWhiteRatio = isAppleMobile
+    ? isGridVariant ? 0.12 : 0.16
+    : isGridVariant ? 0.18 : 0.22;
   const iconTint = mixHexWithWhite(app.glow, iconWhiteRatio);
   const iconFilter = isGridVariant
-    ? `drop-shadow(0 1px 2px rgba(255,255,255,0.02)) drop-shadow(0 4px 8px rgba(0,0,0,0.24)) drop-shadow(0 0 7px ${app.glow}1a)`
-    : `drop-shadow(0 1px 2px rgba(255,255,255,0.015)) drop-shadow(0 3px 7px rgba(0,0,0,0.22)) drop-shadow(0 0 6px ${app.glow}16)`;
+    ? `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.008' : '0.015'})) drop-shadow(0 4px 8px rgba(0,0,0,${isAppleMobile ? '0.28' : '0.24'})) drop-shadow(0 0 ${isAppleMobile ? '6px' : '7px'} ${app.glow}${isAppleMobile ? '14' : '18'})`
+    : `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.006' : '0.012'})) drop-shadow(0 3px 7px rgba(0,0,0,${isAppleMobile ? '0.26' : '0.22'})) drop-shadow(0 0 ${isAppleMobile ? '5px' : '6px'} ${app.glow}${isAppleMobile ? '11' : '14'})`;
   const glassShadow = glowEnabled
     ? isGridVariant
-      ? `0 24px 46px -18px rgba(4,10,24,0.74), 0 10px 22px rgba(0,0,0,0.3), 0 0 20px ${app.glow}2b, inset 0 1.5px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.03)`
-      : `0 10px 24px -16px rgba(4,10,24,0.52), 0 4px 12px rgba(0,0,0,0.14), 0 0 11px ${app.glow}18, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -14px 22px rgba(255,255,255,0.025)`
+      ? `0 24px 46px -18px rgba(4,10,24,0.76), 0 10px 22px rgba(0,0,0,0.32), 0 0 ${isAppleMobile ? '16px' : '18px'} ${app.glow}${isAppleMobile ? '22' : '28'}, inset 0 1.5px 0 rgba(255,255,255,${isAppleMobile ? '0.12' : '0.18'}), inset 0 -16px 24px rgba(255,255,255,${isAppleMobile ? '0.015' : '0.025'})`
+      : `0 10px 24px -16px rgba(4,10,24,0.54), 0 4px 12px rgba(0,0,0,0.16), 0 0 ${isAppleMobile ? '8px' : '10px'} ${app.glow}${isAppleMobile ? '12' : '16'}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.1' : '0.16'}), inset 0 -14px 22px rgba(255,255,255,${isAppleMobile ? '0.012' : '0.02'})`
     : isGridVariant
-      ? `0 22px 42px -18px rgba(4,10,24,0.68), 0 8px 20px rgba(0,0,0,0.26), 0 0 13px ${app.glow}18, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -16px 22px rgba(255,255,255,0.03)`
-      : `0 8px 18px -14px rgba(4,10,24,0.42), 0 3px 10px rgba(0,0,0,0.12), 0 0 7px ${app.glow}0f, inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -12px 18px rgba(255,255,255,0.025)`;
+      ? `0 22px 42px -18px rgba(4,10,24,0.7), 0 8px 20px rgba(0,0,0,0.28), 0 0 ${isAppleMobile ? '10px' : '12px'} ${app.glow}${isAppleMobile ? '12' : '16'}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.1' : '0.16'}), inset 0 -16px 22px rgba(255,255,255,${isAppleMobile ? '0.015' : '0.025'})`
+      : `0 8px 18px -14px rgba(4,10,24,0.44), 0 3px 10px rgba(0,0,0,0.14), 0 0 ${isAppleMobile ? '5px' : '6px'} ${app.glow}${isAppleMobile ? '0c' : '0e'}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.09' : '0.14'}), inset 0 -12px 18px rgba(255,255,255,${isAppleMobile ? '0.012' : '0.02'})`;
   const shellFill = isGridVariant
-    ? `linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.07) 18%, rgba(255,255,255,0.025) 100%), linear-gradient(135deg, ${app.glow}18 0%, rgba(255,255,255,0.025) 58%, rgba(255,255,255,0.008) 100%), rgba(255,255,255,0.045)`
-    : `linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.09) 24%, rgba(255,255,255,0.03) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 34%, transparent 62%), linear-gradient(135deg, ${app.glow}12 0%, rgba(255,255,255,0.025) 56%, rgba(255,255,255,0.01) 100%), rgba(255,255,255,0.055)`;
+    ? `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.11' : '0.15'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.04' : '0.055'}) 18%, rgba(255,255,255,${isAppleMobile ? '0.015' : '0.02'}) 100%), linear-gradient(135deg, ${app.glow}${isAppleMobile ? '12' : '16'} 0%, rgba(255,255,255,${isAppleMobile ? '0.015' : '0.02'}) 58%, rgba(255,255,255,${isAppleMobile ? '0.004' : '0.006'}) 100%), rgba(255,255,255,${isAppleMobile ? '0.025' : '0.035'})`
+    : `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.14' : '0.18'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.05' : '0.07'}) 24%, rgba(255,255,255,${isAppleMobile ? '0.018' : '0.025'}) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,${isAppleMobile ? '0.07' : '0.1'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.018' : '0.025'}) 34%, transparent 62%), linear-gradient(135deg, ${app.glow}${isAppleMobile ? '0d' : '10'} 0%, rgba(255,255,255,${isAppleMobile ? '0.015' : '0.02'}) 56%, rgba(255,255,255,${isAppleMobile ? '0.005' : '0.008'}) 100%), rgba(255,255,255,${isAppleMobile ? '0.03' : '0.045'})`;
   return (
     <div
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
@@ -357,10 +508,10 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
         style={{
           borderRadius: shellRadius,
           background: shellFill,
-          backdropFilter: isGridVariant ? 'blur(30px) saturate(190%)' : 'blur(30px) saturate(170%)',
-          WebkitBackdropFilter: isGridVariant ? 'blur(30px) saturate(190%)' : 'blur(30px) saturate(170%)',
+          backdropFilter: isGridVariant ? `blur(${isAppleMobile ? '24px' : '30px'}) saturate(${isAppleMobile ? '165%' : '190%'})` : `blur(${isAppleMobile ? '24px' : '30px'}) saturate(${isAppleMobile ? '150%' : '170%'})`,
+          WebkitBackdropFilter: isGridVariant ? `blur(${isAppleMobile ? '24px' : '30px'}) saturate(${isAppleMobile ? '165%' : '190%'})` : `blur(${isAppleMobile ? '24px' : '30px'}) saturate(${isAppleMobile ? '150%' : '170%'})`,
           boxShadow: glassShadow,
-          border: isGridVariant ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(255,255,255,0.2)',
+          border: isGridVariant ? `1px solid rgba(255,255,255,${isAppleMobile ? '0.1' : '0.16'})` : `1px solid rgba(255,255,255,${isAppleMobile ? '0.11' : '0.18'})`,
         }}
       />
       {/* Liquid glass highlight */}
@@ -370,8 +521,8 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           inset: 0,
           borderRadius: shellRadius,
           background: isGridVariant
-            ? "linear-gradient(165deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.1) 16%, rgba(255,255,255,0.04) 34%, rgba(255,255,255,0.012) 52%, transparent 70%)"
-            : "linear-gradient(160deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.11) 20%, rgba(255,255,255,0.035) 44%, transparent 74%)",
+            ? `linear-gradient(165deg, rgba(255,255,255,${isAppleMobile ? '0.18' : '0.24'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.055' : '0.08'}) 16%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.03'}) 34%, rgba(255,255,255,${isAppleMobile ? '0.006' : '0.01'}) 52%, transparent 70%)`
+            : `linear-gradient(160deg, rgba(255,255,255,${isAppleMobile ? '0.2' : '0.28'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.06' : '0.09'}) 20%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.03'}) 44%, transparent 74%)`,
           mixBlendMode: 'screen',
         }}
       />
@@ -381,9 +532,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           style={{
             inset: '8% 10% 50% 10%',
             borderRadius: '999px',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 100%)',
+            background: `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.1' : '0.14'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.03'}) 100%)`,
             filter: 'blur(4px)',
-            opacity: 0.46,
+            opacity: isAppleMobile ? 0.28 : 0.36,
           }}
         />
       )}
@@ -396,9 +547,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             bottom: '8%',
             height: '24%',
             borderRadius: '999px',
-            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.025) 54%, transparent 100%)',
+            background: `radial-gradient(circle at 50% 50%, rgba(255,255,255,${isAppleMobile ? '0.055' : '0.08'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.012' : '0.02'}) 54%, transparent 100%)`,
             filter: 'blur(10px)',
-            opacity: 0.44,
+            opacity: isAppleMobile ? 0.24 : 0.34,
           }}
         />
       )}
@@ -408,9 +559,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           style={{
             inset: '7% 11% 52% 11%',
             borderRadius: '999px',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 100%)',
+            background: `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.11' : '0.16'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.025' : '0.04'}) 100%)`,
             filter: 'blur(3px)',
-            opacity: 0.54,
+            opacity: isAppleMobile ? 0.32 : 0.44,
           }}
         />
       )}
@@ -423,9 +574,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             bottom: '10%',
             height: '22%',
             borderRadius: '999px',
-            background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 35%, rgba(255,255,255,0.06) 100%)',
+            background: `linear-gradient(90deg, rgba(255,255,255,${isAppleMobile ? '0.045' : '0.06'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.012' : '0.018'}) 35%, rgba(255,255,255,${isAppleMobile ? '0.035' : '0.05'}) 100%)`,
             filter: 'blur(10px)',
-            opacity: 0.42,
+            opacity: isAppleMobile ? 0.24 : 0.34,
           }}
         />
       )}
@@ -1594,8 +1745,12 @@ interface UnifiedWidgetCellProps {
   maw3dEvents?: any[];
   attendingCounts?: Record<string, number>;
   onExpandQuote?: () => void;
+  canMovePrev?: boolean;
+  canMoveNext?: boolean;
+  onMovePrev?: () => void;
+  onMoveNext?: () => void;
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote, canMovePrev = false, canMoveNext = false, onMovePrev, onMoveNext }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -1632,6 +1787,16 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
           <GripVertical className="w-3 h-3 text-white/80" />
         </div>
       )}
+      {editMode && (canMovePrev || canMoveNext) && (
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1">
+          {canMovePrev && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onMovePrev?.(); }} className="w-6 h-6 rounded-full bg-black/75 border border-white/20 text-white text-[10px] font-bold">←</button>
+          )}
+          {canMoveNext && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onMoveNext?.(); }} className="w-6 h-6 rounded-full bg-black/75 border border-white/20 text-white text-[10px] font-bold">→</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1643,8 +1808,12 @@ interface UnifiedAppCellProps {
   gridArea: string;
   avatarUrl?: string;
   badgeCount?: number;
+  canMovePrev?: boolean;
+  canMoveNext?: boolean;
+  onMovePrev?: () => void;
+  onMoveNext?: () => void;
 }
-function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0 }: UnifiedAppCellProps) {
+function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0, canMovePrev = false, canMoveNext = false, onMovePrev, onMoveNext }: UnifiedAppCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id, data: { type: 'unified' },
   });
@@ -1672,6 +1841,16 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
       >
         {name}
       </span>
+      {editMode && (canMovePrev || canMoveNext) && (
+        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1">
+          {canMovePrev && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onMovePrev?.(); }} className="w-6 h-6 rounded-full bg-black/75 border border-white/20 text-white text-[10px] font-bold">←</button>
+          )}
+          {canMoveNext && (
+            <button type="button" onClick={(e) => { e.stopPropagation(); onMoveNext?.(); }} className="w-6 h-6 rounded-full bg-black/75 border border-white/20 text-white text-[10px] font-bold">→</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -1848,15 +2027,21 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => initialLocalState.bgGradLeft);
   const [bgGradRight,     setBgGradRight]     = useState<string>(() => initialLocalState.bgGradRight);
   const [currentPage,     setCurrentPage]     = useState(0);
+  const [dragPages,       setDragPages]       = useState<string[][] | null>(null);
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const [saveState,       setSaveState]       = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const bgInputRef    = useRef<HTMLInputElement>(null);
+  const pageViewportRef = useRef<HTMLDivElement | null>(null);
   const _pendingDock  = useRef<string[]>([]);
   const _effectiveRef = useRef<string[]>([]);
-  const _pageDragStateRef = useRef<{ currentPageData: any; allIconItems: string[]; widgetItems: string[] }>({ currentPageData: null, allIconItems: [], widgetItems: [] });
+  const _pageDragStateRef = useRef<{ currentPageData: any; savedPages: string[][] }>({ currentPageData: null, savedPages: [[]] });
   const saveStateTimerRef = useRef<number | null>(null);
   const lastSaveErrorAtRef = useRef(0);
   const pageTouchStartXRef = useRef<number | null>(null);
+  const dragItemIdRef = useRef<string | null>(null);
+  const dragPageIndexRef = useRef<number | null>(null);
+  const dragPageSwitchTimerRef = useRef<number | null>(null);
+  const pendingPageSwitchTargetRef = useRef<number | null>(null);
 
   const { tasks, reminders }  = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1900,6 +2085,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setBgGradRight(nextLocalState.bgGradRight);
     setHsWidgets(nextLocalState.hsWidgets);
     setUnifiedGrid(nextLocalState.unifiedGrid);
+    setDragPages(null);
     setCurrentPage(0);
   }, [theme, user?.id]);
 
@@ -1923,6 +2109,27 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     }, nextState === 'saved' ? 1200 : 2200);
   }, [clearSaveStateTimer]);
 
+  const clearDragPageSwitchTimer = useCallback(() => {
+    if (dragPageSwitchTimerRef.current !== null) {
+      window.clearTimeout(dragPageSwitchTimerRef.current);
+      dragPageSwitchTimerRef.current = null;
+    }
+    pendingPageSwitchTargetRef.current = null;
+  }, []);
+
+  const moveUnifiedItemToPage = useCallback((pagesInput: string[][], itemId: string, targetPageIndex: number) => {
+    const nextPages = pagesInput.map(page => page.filter(id => id !== itemId));
+    while (nextPages.length <= targetPageIndex) nextPages.push([]);
+    const targetPage = nextPages[targetPageIndex] ? [...nextPages[targetPageIndex]] : [];
+    nextPages[targetPageIndex] = [itemId, ...targetPage.filter(id => id !== itemId)];
+    return nextPages.map((page, index, arr) => {
+      if (index === 0) return page;
+      if (page.length > 0) return page;
+      const hasItemsAhead = arr.slice(index + 1).some(candidate => candidate.length > 0);
+      return hasItemsAhead ? page : [];
+    });
+  }, []);
+
   const reportSaveError = useCallback(() => {
     settleSaveState('error');
     const now = Date.now();
@@ -1934,6 +2141,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   useEffect(() => {
     return () => clearSaveStateTimer();
   }, [clearSaveStateTimer]);
+
+  useEffect(() => {
+    return () => clearDragPageSwitchTimer();
+  }, [clearDragPageSwitchTimer]);
 
   const setBgChoiceState = useCallback((nextChoice: BgChoice) => {
     setBgChoice(nextChoice);
@@ -1974,10 +2185,26 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
     let count = 0;
     for (const k of VISIBLE) {
-      if (result[k]) { if (count < 3) count++; else result[k] = false; }
+      if (result[k]) { if (count < MAX_WIDGETS) count++; else result[k] = false; }
     }
     return result;
   };
+
+  const persistSavedPages = useCallback((nextPages: string[][], nextPageIndex?: number) => {
+    const flat = flattenUnifiedPages(nextPages);
+    clearDragPageSwitchTimer();
+    setDragPages(null);
+    setUnifiedGrid(flat);
+    localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(flat));
+    syncToSupabase({ unifiedGrid: flat });
+    const nextLength = splitUnifiedPages(flat).length;
+    const maxPageIndex = Math.max(0, nextLength - 1);
+    if (typeof nextPageIndex === 'number') {
+      setCurrentPage(Math.max(0, Math.min(nextPageIndex, maxPageIndex)));
+      return;
+    }
+    setCurrentPage(prev => Math.min(prev, maxPageIndex));
+  }, [clearDragPageSwitchTimer, syncToSupabase]);
 
   useEffect(() => {
     if (!user?.id || !profile) return;
@@ -2001,6 +2228,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       const seen = new Set<string>();
       const grid: string[] = [];
       for (const id of hs.unifiedGrid) {
+        if (id === PAGE_BREAK_ID) {
+          if (grid[grid.length - 1] !== PAGE_BREAK_ID) grid.push(id);
+          continue;
+        }
         if (seen.has(id)) continue;
         seen.add(id);
         if (id.startsWith('widget::')) {
@@ -2116,22 +2347,18 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       setHsWidgets(prev => {
         const next = clampHsWidgets({ ...prev, ...nextDetail });
         localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(next));
-        // Sync enabled/disabled widgets into unified grid
-        setUnifiedGrid(grid => {
-          const enabledWidgets = WIDGET_IDS.filter(k => next[k]);
-          // Remove disabled widget entries
-          const withoutDisabled = grid.filter(id => !id.startsWith('widget::') || enabledWidgets.includes(id));
-          // Add newly enabled ones at the front if not already present
-          const newOnes = enabledWidgets.filter(w => !withoutDisabled.includes(w));
-          const updated = [...newOnes, ...withoutDisabled];
-          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
-          return updated;
-        });
+        const enabledWidgets = WIDGET_IDS.filter(k => next[k]).map(k => `widget::${k}`);
+        const nextPages = (_pageDragStateRef.current.savedPages || [[]]).map(page => [...page]);
+        const withoutDisabled = nextPages.map(page => page.filter(id => !id.startsWith('widget::') || enabledWidgets.includes(id)));
+        const missing = enabledWidgets.filter(widgetId => !withoutDisabled.some(page => page.includes(widgetId)));
+        if (!withoutDisabled[0]) withoutDisabled[0] = [];
+        withoutDisabled[0] = [...missing, ...withoutDisabled[0]];
+        persistSavedPages(withoutDisabled);
         return next;
       });
     };
     return onEvent('widgetSettingsChanged', handler);
-  }, []);
+  }, [persistSavedPages]);
 
   // Live update from Settings page background style changes
   useEffect(() => {
@@ -2168,16 +2395,47 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   );
 
   // ── Unified drag handler ──
-  const handleDragStart = (e: any) => { setActiveId(e.active.id); };
+  const handleDragStart = useCallback((e: any) => {
+    clearDragPageSwitchTimer();
+    setActiveId(e.active.id);
+    if (e.active.data.current?.type === 'unified') {
+      dragItemIdRef.current = e.active.id as string;
+      dragPageIndexRef.current = _pageDragStateRef.current.currentPageData?.index ?? currentPage;
+    } else {
+      dragItemIdRef.current = null;
+      dragPageIndexRef.current = null;
+    }
+  }, [clearDragPageSwitchTimer, currentPage]);
   const handleDragEnd   = useCallback((e: any) => {
+    clearDragPageSwitchTimer();
     setActiveId(null);
     const { active, over } = e;
-    if (!over || active.id === over.id) return;
 
-    const { currentPageData, allIconItems, widgetItems } = _pageDragStateRef.current;
+    const { currentPageData, savedPages } = _pageDragStateRef.current;
 
     const activeType  = active.data.current?.type as "unified" | "dock";
     const overType    = over.data.current?.type   as "unified" | "dock" | undefined;
+
+    if (activeType === "unified" && (!over || active.id === over.id)) {
+      const nextPageIndex = dragPageIndexRef.current ?? currentPageData?.index ?? currentPage;
+      const nextPages = dragPages ?? savedPages;
+      dragItemIdRef.current = null;
+      dragPageIndexRef.current = null;
+      if (dragPages) {
+        persistSavedPages(nextPages, nextPageIndex);
+      } else {
+        setDragPages(null);
+      }
+      return;
+    }
+
+    dragItemIdRef.current = null;
+    dragPageIndexRef.current = null;
+
+    if (!over || active.id === over.id) {
+      setDragPages(null);
+      return;
+    }
 
     // ── unified grid reorder (widgets + apps together) ──
     if (activeType === "unified" && (overType === "unified" || !overType)) {
@@ -2190,24 +2448,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       const overIsWidget = overId.startsWith('widget::') || overId.startsWith('empty-w::');
 
       const commitCurrentPage = (nextPageItems: string[]) => {
-        const persistNextGrid = (nextGrid: string[]) => {
-          setUnifiedGrid(nextGrid);
-          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(nextGrid));
-          syncToSupabase({ unifiedGrid: nextGrid });
-        };
-
-        if (currentPageData.mode === 'mixed') {
-          const nextWidgets = nextPageItems.filter(id => id.startsWith('widget::'));
-          const nextFirstPageIcons = nextPageItems.filter(id => id.startsWith('app::'));
-          const remainingIcons = allIconItems.slice(FIRST_PAGE_MAX_ICONS);
-          persistNextGrid([...nextWidgets, ...nextFirstPageIcons, ...remainingIcons]);
-          return;
-        }
-
-        const nextPageIcons = nextPageItems.filter(id => id.startsWith('app::'));
-        const nextAllIcons = [...allIconItems];
-        nextAllIcons.splice(currentPageData.iconStart, nextPageIcons.length, ...nextPageIcons);
-        persistNextGrid([...widgetItems, ...nextAllIcons]);
+        const nextPages = savedPages.map((page, index) => index === currentPageData.index
+          ? nextPageItems.filter(id => !id.startsWith('empty-'))
+          : [...page]
+        );
+        persistSavedPages(nextPages, currentPageData.index);
       };
 
       if (activeIsWidget === overIsWidget) {
@@ -2279,7 +2524,16 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         return next;
       });
     }
-  }, [syncToSupabase]);
+    setDragPages(null);
+  }, [clearDragPageSwitchTimer, currentPage, dragPages, persistSavedPages, syncToSupabase]);
+
+  const handleDragCancel = useCallback(() => {
+    clearDragPageSwitchTimer();
+    dragItemIdRef.current = null;
+    dragPageIndexRef.current = null;
+    setActiveId(null);
+    setDragPages(null);
+  }, [clearDragPageSwitchTimer]);
 
   // ── BG ──
   const handleBgChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2307,7 +2561,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     }
   };
   const removeBg = () => {
-    setBgImage(defaultBg);
+    setBgImage(theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
     setBgPositionY(50);
     setBgChoiceState('default');
     removeScopedStorageItem(LS_BG_BASE, user?.id);
@@ -2355,26 +2609,22 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
       const activeCount = VISIBLE.filter(k => prev[k]).length;
       const isOn = prev[key];
-      // Enforce max 3 — don't allow enabling if already at 3
-      if (!isOn && activeCount >= 3) return prev;
+      // Enforce max widget count — don't allow enabling if already full
+      if (!isOn && activeCount >= MAX_WIDGETS) return prev;
       const next = { ...prev, [key]: !isOn };
       localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(next));
       void syncToSupabase({ homescreenWidgets: next });
-      // Sync unified grid
-      setUnifiedGrid(grid => {
-        const widgetId = `widget::${key}`;
-        if (!isOn) {
-          if (grid.includes(widgetId)) return grid;
-          const updated = [widgetId, ...grid];
-          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
-          setCurrentPage(0);
-          return updated;
-        } else {
-          const updated = grid.filter(id => id !== widgetId);
-          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
-          return updated;
+      const widgetId = `widget::${key}`;
+      const nextPages = (_pageDragStateRef.current.savedPages || [[]]).map(page => [...page]);
+      if (!isOn) {
+        if (!nextPages[0]) nextPages[0] = [];
+        if (!nextPages.some(page => page.includes(widgetId))) {
+          nextPages[0] = [widgetId, ...nextPages[0]];
         }
-      });
+        persistSavedPages(nextPages, 0);
+      } else {
+        persistSavedPages(nextPages.map(page => page.filter(id => id !== widgetId)));
+      }
       return next;
     });
   };
@@ -2385,43 +2635,40 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const toggleDockIcon = useCallback((id: string) => {
     setDockIds(prevDock => {
       let nextDock: string[];
+      const nextPages = (_pageDragStateRef.current.savedPages || [[]]).map(page => [...page]);
+      const pageIndex = Math.max(0, Math.min(currentPage, Math.max(0, nextPages.length - 1)));
       if (prevDock.includes(id)) {
         nextDock = prevDock.filter(x => x !== id);
-        // Return the app to the unified grid
-        setUnifiedGrid(prev => {
-          if (prev.includes(`app::${id}`)) return prev;
-          const updated = [...prev, `app::${id}`];
-          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
-          syncToSupabase({ dockIds: nextDock, unifiedGrid: updated });
-          return updated;
-        });
+        const appKey = `app::${id}`;
+        if (!nextPages[pageIndex]) nextPages[pageIndex] = [];
+        if (!nextPages.some(page => page.includes(appKey))) {
+          nextPages[pageIndex].push(appKey);
+        }
+        persistSavedPages(nextPages, pageIndex);
+        void syncToSupabase({ dockIds: nextDock, unifiedGrid: flattenUnifiedPages(nextPages) });
       } else {
         if (prevDock.length < maxDockCallback) {
           nextDock = [...prevDock, id];
         } else {
           const evicted = prevDock[prevDock.length - 1];
           nextDock = [...prevDock.slice(0, maxDockCallback - 1), id];
-          setUnifiedGrid(prev => {
-            if (prev.includes(`app::${evicted}`)) return prev;
-            const updated = [...prev, `app::${evicted}`];
-            localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
-            return updated;
-          });
+          const evictedKey = `app::${evicted}`;
+          if (!nextPages[pageIndex]) nextPages[pageIndex] = [];
+          if (!nextPages.some(page => page.includes(evictedKey))) {
+            nextPages[pageIndex].push(evictedKey);
+          }
         }
-        // Remove from unified grid and sync both dock + grid together
-        setUnifiedGrid(prev => {
-          const updated = prev.filter(x => x !== `app::${id}`);
-          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
-          syncToSupabase({ dockIds: nextDock, unifiedGrid: updated });
-          return updated;
-        });
+        const appKey = `app::${id}`;
+        const updatedPages = nextPages.map(page => page.filter(x => x !== appKey));
+        persistSavedPages(updatedPages, pageIndex);
+        void syncToSupabase({ dockIds: nextDock, unifiedGrid: flattenUnifiedPages(updatedPages) });
       }
       localStorage.setItem(LS_DOCK_KEY(), JSON.stringify(nextDock));
       _pendingDock.current = nextDock;
       if (prevDock.includes(id)) setCurrentPage(0);
       return nextDock;
     });
-  }, [syncToSupabase]);
+  }, [currentPage, persistSavedPages, syncToSupabase]);
 
   // ── Derived lists — bulletproof dedup & dynamic grid generation ──
   // Cap dockSet to the actual rendered slots so overflow apps (e.g. Maw3d on mobile)
@@ -2431,172 +2678,137 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const dockSet = new Set(dockIds.slice(0, _maxDockGrid));
   const enabledWidgetIds = new Set(WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`));
 
-  const { pages, widgetItems, allIconItems } = React.useMemo(() => {
-    // 1. Extract valid real items from saved grid
-    const widgets: string[] = [];
-    const icons: string[] = [];
+  const { pages, savedPages } = React.useMemo(() => {
     const seen = new Set<string>();
-    
-    const sourceGrid = unifiedGrid.length > 0 ? unifiedGrid : buildDefaultUnifiedGrid(hsWidgets, dockIds);
-
-    for (const id of sourceGrid) {
-      if (seen.has(id)) continue;
-      seen.add(id);
+    const rawPages: string[][] = [];
+    const pushPage = () => {
+      rawPages.push([]);
+    };
+    const appendItem = (id: string, page: string[]) => {
+      if (seen.has(id)) return;
       if (id.startsWith('widget::')) {
-        if (enabledWidgetIds.has(id) && widgets.length < 3) widgets.push(id);
+        if (!enabledWidgetIds.has(id)) return;
       } else if (id.startsWith('app::')) {
         const appId = id.replace('app::', '');
-        if (VALID_IDS.has(appId) && !dockSet.has(appId)) icons.push(id);
+        if (!VALID_IDS.has(appId) || dockSet.has(appId)) return;
+      } else {
+        return;
+      }
+      seen.add(id);
+      page.push(id);
+    };
+
+    if (dragPages && dragPages.length > 0) {
+      dragPages.forEach((page, index) => {
+        if (!rawPages[index]) rawPages[index] = [];
+        page.forEach(id => appendItem(id, rawPages[index]));
+      });
+    } else {
+      const sourceGrid = unifiedGrid.length > 0 ? unifiedGrid : buildDefaultUnifiedGrid(hsWidgets, dockIds);
+      pushPage();
+      for (const id of sourceGrid) {
+        if (id === PAGE_BREAK_ID) {
+          pushPage();
+          continue;
+        }
+        appendItem(id, rawPages[rawPages.length - 1]);
       }
     }
 
-    // Append any enabled widgets missing from the saved grid so selected widgets always render
+    if (rawPages.length === 0) pushPage();
+
     for (const widgetId of Array.from(enabledWidgetIds)) {
-      if (!widgets.includes(widgetId) && widgets.length < 3) {
-        widgets.push(widgetId);
+      if (!seen.has(widgetId)) {
+        rawPages[0].unshift(widgetId);
+        seen.add(widgetId);
       }
     }
-    
-    // Append missing apps
+
     for (const appId of DEFAULT_ORDER) {
       const key = `app::${appId}`;
       if (!seen.has(key) && !dockSet.has(appId)) {
-        icons.push(key);
+        rawPages[rawPages.length - 1].push(key);
         seen.add(key);
       }
     }
 
-    const allWidgets = [...widgets];
-    const allIcons = [...icons];
-    const firstPageIcons = allIcons.slice(0, FIRST_PAGE_MAX_ICONS);
-    
-    // 2. Determine block types based on sourceGrid
-    const blockTypes: ('W' | 'I')[] = [];
-    let currentIconCount = 0;
-    for (const id of sourceGrid) {
-      if (id.startsWith('widget::') || id.startsWith('empty-w::')) {
-        if (currentIconCount > 0) { // incomplete icon block, force close it
-          blockTypes.push('I');
-          currentIconCount = 0;
-        }
-        blockTypes.push('W');
-      } else if (id.startsWith('app::') || id.startsWith('empty-i::')) {
-        currentIconCount++;
-        if (currentIconCount === 4) {
-          blockTypes.push('I');
-          currentIconCount = 0;
-        }
-      }
+    const normalizedPages: string[][] = [];
+    let carry: string[] = [];
+    for (const rawPage of rawPages) {
+      const built = buildHomescreenPage([...rawPage, ...carry]);
+      normalizedPages.push(built.savedItems);
+      carry = built.overflowItems;
     }
-    if (currentIconCount > 0) blockTypes.push('I');
-    
-    // 3. Force exactly 3 W and 3 I blocks
-    const finalTypes: ('W' | 'I')[] = [];
-    let wCount = 0, iCount = 0;
-    for (const t of blockTypes) {
-      if (t === 'W' && wCount < 3) { finalTypes.push('W'); wCount++; }
-      if (t === 'I' && iCount < 3) { finalTypes.push('I'); iCount++; }
+    while (carry.length > 0) {
+      const built = buildHomescreenPage(carry);
+      normalizedPages.push(built.savedItems);
+      carry = built.overflowItems;
     }
-    // Pad missing types with default iPhone layout (W, I, I, W, W, I)
-    const defaultTypes = ['W', 'I', 'I', 'W', 'W', 'I'];
-    for (const t of defaultTypes) {
-      if (finalTypes.length === 6) break;
-      if (t === 'W' && wCount < 3) { finalTypes.push('W'); wCount++; }
-      if (t === 'I' && iCount < 3) { finalTypes.push('I'); iCount++; }
-    }
+    if (normalizedPages.length === 0) normalizedPages.push([]);
 
-    // 4. Fill blocks from queues
-    let wIdx = 1, iIdx = 1;
-    const finalItems: string[] = [];
-    const widgetQueue = [...allWidgets];
-    const iconQueue = [...firstPageIcons];
-    for (const t of finalTypes) {
-      if (t === 'W') {
-        finalItems.push(widgetQueue.length > 0 ? widgetQueue.shift()! : `empty-w::${wIdx++}`);
-      } else {
-        for (let i=0; i<4; i++) {
-          finalItems.push(iconQueue.length > 0 ? iconQueue.shift()! : `empty-i::${iIdx++}`);
-        }
-      }
-    }
-    
-    // 5. Generate grid-template-areas dynamically
-    const rowStrings = ["", "", "", "", "", ""];
-    let gW = 1, gI = 1;
-    finalTypes.forEach((t, i) => {
-      const rStart = Math.floor(i / 2) * 2;
-      const isLeft = i % 2 === 0;
-      let topStr = "", botStr = "";
-      
-      if (t === 'W') {
-        const wName = `w${gW++}`;
-        topStr = `${wName} ${wName}`;
-        botStr = `${wName} ${wName}`;
-      } else {
-        const i1 = `i${gI++}`, i2 = `i${gI++}`, i3 = `i${gI++}`, i4 = `i${gI++}`;
-        topStr = `${i1} ${i2}`;
-        botStr = `${i3} ${i4}`;
-      }
-      
-      if (isLeft) {
-        rowStrings[rStart] += topStr;
-        rowStrings[rStart+1] += botStr;
-      } else {
-        rowStrings[rStart] += " " + topStr;
-        rowStrings[rStart+1] += " " + botStr;
-      }
+    const builtPages = normalizedPages.map((pageItems, index) => {
+      const built = buildHomescreenPage(pageItems);
+      return {
+        index,
+        mode: 'mixed' as const,
+        savedItems: built.savedItems,
+        effectiveItems: built.effectiveItems,
+        realItems: built.realItems,
+        gridTemplateAreas: built.gridTemplateAreas,
+        gridPositions: built.gridPositions,
+      };
     });
-    
-    const gridAreas = rowStrings.map(s => `"${s.trim()}"`).join("\n");
-    const rItems = finalItems.filter(id => !id.startsWith('empty-'));
-    
-    // Build gridPositions map: iterate finalItems in order, assign w1/w2.../i1/i2...
-    const gpMap = new Map<string, string>();
-    let gW2 = 1, gI2 = 1;
-    for (const id of finalItems) {
-      if (id.startsWith('widget::') || id.startsWith('empty-w::')) {
-        gpMap.set(id, `w${gW2++}`);
-      } else {
-        gpMap.set(id, `i${gI2++}`);
-      }
-    }
 
-    const builtPages = [{
-      index: 0,
-      mode: 'mixed' as const,
-      effectiveItems: finalItems,
-      realItems: rItems,
-      gridTemplateAreas: gridAreas,
-      gridPositions: gpMap,
-      iconStart: 0,
-      iconEnd: firstPageIcons.length,
-    }];
-
-    const overflowIcons = allIcons.slice(FIRST_PAGE_MAX_ICONS);
-    for (let pageIndex = 0; pageIndex < overflowIcons.length; pageIndex += ICONS_PER_OVERFLOW_PAGE) {
-      const iconChunk = overflowIcons.slice(pageIndex, pageIndex + ICONS_PER_OVERFLOW_PAGE);
-      const iconPage = buildIconsOnlyPage(iconChunk);
-      builtPages.push({
-        index: builtPages.length,
-        mode: 'icons' as const,
-        effectiveItems: iconPage.effectiveItems,
-        realItems: iconPage.realItems,
-        gridTemplateAreas: iconPage.gridTemplateAreas,
-        gridPositions: iconPage.gridPositions,
-        iconStart: FIRST_PAGE_MAX_ICONS + pageIndex,
-        iconEnd: FIRST_PAGE_MAX_ICONS + pageIndex + iconChunk.length,
-      });
-    }
-    
-    return { pages: builtPages, widgetItems: allWidgets, allIconItems: allIcons };
-  }, [unifiedGrid, hsWidgets, dockIds]);
+    return { pages: builtPages, savedPages: normalizedPages };
+  }, [dragPages, unifiedGrid, hsWidgets, dockIds]);
 
   const safeCurrentPage = Math.min(currentPage, Math.max(0, pages.length - 1));
   const currentPageData = pages[safeCurrentPage] || pages[0];
   const pageCount = pages.length;
 
   _effectiveRef.current = currentPageData?.effectiveItems || [];
-  _pageDragStateRef.current = { currentPageData, allIconItems, widgetItems };
+  _pageDragStateRef.current = { currentPageData, savedPages };
+
+  const handleDragMove = useCallback((event: any) => {
+    if (event.active.data.current?.type !== 'unified') {
+      clearDragPageSwitchTimer();
+      return;
+    }
+    const itemId = dragItemIdRef.current;
+    const container = pageViewportRef.current;
+    const initialRect = event.active.rect.current.initial;
+    const translatedRect = event.active.rect.current.translated;
+    if (!itemId || !container || !initialRect) {
+      clearDragPageSwitchTimer();
+      return;
+    }
+    const activeLeft = typeof translatedRect?.left === 'number' ? translatedRect.left : initialRect.left + event.delta.x;
+    const activeRight = typeof translatedRect?.right === 'number' ? translatedRect.right : initialRect.right + event.delta.x;
+    const bounds = container.getBoundingClientRect();
+    const dragPageIndex = dragPageIndexRef.current ?? safeCurrentPage;
+    let targetPageIndex: number | null = null;
+    if (activeLeft <= bounds.left + EDGE_PAGE_SWITCH_THRESHOLD && dragPageIndex > 0) {
+      targetPageIndex = dragPageIndex - 1;
+    } else if (activeRight >= bounds.right - EDGE_PAGE_SWITCH_THRESHOLD) {
+      targetPageIndex = dragPageIndex + 1;
+    }
+    if (targetPageIndex === null) {
+      clearDragPageSwitchTimer();
+      return;
+    }
+    if (pendingPageSwitchTargetRef.current === targetPageIndex && dragPageSwitchTimerRef.current !== null) return;
+    clearDragPageSwitchTimer();
+    pendingPageSwitchTargetRef.current = targetPageIndex;
+    dragPageSwitchTimerRef.current = window.setTimeout(() => {
+      setDragPages(prevPages => {
+        const basePages = (prevPages && prevPages.length > 0 ? prevPages : _pageDragStateRef.current.savedPages).map(page => [...page]);
+        return moveUnifiedItemToPage(basePages, itemId, targetPageIndex as number);
+      });
+      dragPageIndexRef.current = targetPageIndex;
+      setCurrentPage(targetPageIndex);
+      clearDragPageSwitchTimer();
+    }, EDGE_PAGE_SWITCH_DELAY);
+  }, [clearDragPageSwitchTimer, moveUnifiedItemToPage, safeCurrentPage]);
 
   useEffect(() => {
     setCurrentPage(prev => Math.min(prev, Math.max(0, pages.length - 1)));
@@ -2736,7 +2948,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragStart={handleDragStart}
+      onDragMove={handleDragMove}
       onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
     >
       <>
       <style>{`
@@ -2912,14 +3126,14 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                     <span style={{ color: '#cbd5e1', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       {language === 'ar' ? 'الودجتات' : 'Widgets'}
                     </span>
-                    <span style={{ color: activeWidgetCount >= 3 ? '#f59e0b' : '#94a3b8', fontSize: '11px', fontWeight: 700 }}>
-                      {activeWidgetCount}/3 {language === 'ar' ? 'نشط' : 'active'}
+                    <span style={{ color: activeWidgetCount >= MAX_WIDGETS ? '#f59e0b' : '#94a3b8', fontSize: '11px', fontWeight: 700 }}>
+                      {activeWidgetCount}/{MAX_WIDGETS} {language === 'ar' ? 'نشط' : 'active'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                     {WIDGET_OPTIONS.map(({ key, labelEn, labelAr }) => {
                       const isOn = hsWidgets[key];
-                      const isDisabled = !isOn && activeWidgetCount >= 3;
+                      const isDisabled = !isOn && activeWidgetCount >= MAX_WIDGETS;
                       return (
                         <button
                           key={key}
@@ -2946,9 +3160,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       );
                     })}
                   </div>
-                  {activeWidgetCount >= 3 && (
+                  {activeWidgetCount >= MAX_WIDGETS && (
                     <p style={{ color: '#fbbf24', fontSize: '10px', margin: 0 }}>
-                      {language === 'ar' ? '⚠ الحد الأقصى 3 ودجتات. أزل واحدة لإضافة أخرى.' : '⚠ Max 3 widgets. Remove one to add another.'}
+                      {language === 'ar' ? '⚠ الحد الأقصى 4 ودجتات. أزل واحدة لإضافة أخرى.' : '⚠ Max 4 widgets. Remove one to add another.'}
                     </p>
                   )}
                 </div>
@@ -3103,6 +3317,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
           {/* ── Unified iPhone-style grid: 3 big rows × 2 big cols = 6 rows × 4 cols ── */}
           <div
+            ref={pageViewportRef}
             className="flex-1 min-h-0 px-3 pb-2 overflow-hidden relative"
             style={{ opacity: editMode ? 0.08 : 1, transition: 'opacity 0.2s ease' }}
             onTouchStart={handlePageTouchStart}
@@ -3126,32 +3341,21 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               </div>
             )}
 
-            {pageCount > 1 && !editMode && (
-              <div className="absolute top-2 right-3 z-20 flex items-center gap-1.5 rounded-full bg-black/20 px-2 py-1 backdrop-blur-md border border-white/10">
-                {Array.from({ length: pageCount }).map((_, index) => (
-                  <button
-                    key={`page-dot-${index}`}
-                    type="button"
-                    aria-label={`Go to page ${index + 1}`}
-                    onClick={() => setCurrentPage(index)}
-                    className="transition-all"
-                    style={{
-                      width: safeCurrentPage === index ? 16 : 6,
-                      height: 6,
-                      borderRadius: 999,
-                      background: safeCurrentPage === index ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.36)',
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
             <SortableContext items={currentPageData?.effectiveItems || []} strategy={rectSortingStrategy}>
               <div className="grid gap-x-1 gap-y-2 relative z-10 h-full" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: currentPageData?.gridTemplateAreas, alignContent: 'start', paddingTop: 8 }}>
                 {(() => {
                   return (currentPageData?.effectiveItems || []).map(itemId => {
                     const gp = currentPageData?.gridPositions.get(itemId);
                     if (!gp) return null;
+                    const moveItemToPage = (direction: -1 | 1) => {
+                      const nextIndex = safeCurrentPage + direction;
+                      if (nextIndex < 0 || nextIndex >= savedPages.length) return;
+                      const nextPages = savedPages.map(page => [...page]);
+                      nextPages[safeCurrentPage] = nextPages[safeCurrentPage].filter(id => id !== itemId);
+                      if (!nextPages[nextIndex]) nextPages[nextIndex] = [];
+                      nextPages[nextIndex].unshift(itemId);
+                      persistSavedPages(nextPages, nextIndex);
+                    };
 
                     // Empty placeholder slots — droppable targets in edit mode
                     if (itemId.startsWith('empty-w::') || itemId.startsWith('empty-i::')) {
@@ -3192,6 +3396,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           maw3dEvents={maw3dEvents}
                           attendingCounts={attendingCounts}
                           onExpandQuote={() => { setQuoteExpanded(true); setQuoteExiting(false); }}
+                          canMovePrev={safeCurrentPage > 0}
+                          canMoveNext={safeCurrentPage < pageCount - 1}
+                          onMovePrev={() => moveItemToPage(-1)}
+                          onMoveNext={() => moveItemToPage(1)}
                         />
                       );
                     }
@@ -3211,6 +3419,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         gridArea={gp}
                         avatarUrl={avatarUrl}
                         badgeCount={app.id === 'social' ? connectBadge : 0}
+                        canMovePrev={safeCurrentPage > 0}
+                        canMoveNext={safeCurrentPage < pageCount - 1}
+                        onMovePrev={() => moveItemToPage(-1)}
+                        onMoveNext={() => moveItemToPage(1)}
                       />
                     );
                   });
@@ -3221,35 +3433,22 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
           {pageCount > 1 && (
             <div className="flex-none pb-1 flex items-center justify-center gap-2 relative z-20">
-              <button
-                type="button"
-                onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
-                disabled={safeCurrentPage === 0}
-                className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                style={{
-                  background: 'rgba(255,255,255,0.14)',
-                  color: safeCurrentPage === 0 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.88)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                }}
-              >
-                {language === 'ar' ? 'السابق' : 'Prev'}
-              </button>
-              <span className="text-[11px] font-semibold text-white/75 px-1">
-                {safeCurrentPage + 1} / {pageCount}
-              </span>
-              <button
-                type="button"
-                onClick={() => setCurrentPage(prev => Math.min(pageCount - 1, prev + 1))}
-                disabled={safeCurrentPage === pageCount - 1}
-                className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
-                style={{
-                  background: 'rgba(255,255,255,0.14)',
-                  color: safeCurrentPage === pageCount - 1 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.88)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                }}
-              >
-                {language === 'ar' ? 'التالي' : 'Next'}
-              </button>
+              {Array.from({ length: pageCount }).map((_, index) => (
+                <button
+                  key={`bottom-page-pill-${index}`}
+                  type="button"
+                  aria-label={`Go to page ${index + 1}`}
+                  onClick={() => setCurrentPage(index)}
+                  className="rounded-full transition-all"
+                  style={{
+                    minWidth: safeCurrentPage === index ? 28 : 12,
+                    width: safeCurrentPage === index ? 28 : 12,
+                    height: 12,
+                    background: safeCurrentPage === index ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.28)',
+                    border: '1px solid rgba(255,255,255,0.12)',
+                  }}
+                />
+              ))}
             </div>
           )}
 
