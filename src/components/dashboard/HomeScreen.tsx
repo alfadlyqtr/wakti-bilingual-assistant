@@ -265,80 +265,72 @@ function flattenUnifiedPages(pages: string[][]) {
 }
 
 function buildHomescreenPage(pageItems: string[]) {
-  // ─── Grid: 4 columns × 6 rows, always. ───────────────────────────────────
-  // A page has exactly 3 "slots". Each slot = 2 grid-rows tall. Slot types:
+  // ─── Grid: 4 columns × 6 rows, always (3 slots × 2 rows each) ───────────
+  // Slot types:
+  //   BIG   = 1 full-width widget   (4 cols × 2 rows)
+  //   PAIR  = 2 half-width widgets  (2 cols × 2 rows each)
+  //   ICONS = 8 app icons           (4 per row × 2 rows)
   //
-  //   BIG   = 1 full-width widget   → cols 1-4 both rows  (4 cols × 2 rows)
-  //   PAIR  = 2 half-width widgets  → w1 takes cols 1-2, w2 takes cols 3-4 (2 cols × 2 rows each)
-  //   ICONS = 8 app icons           → 4 icons per row × 2 rows
-  //
-  // Widget packing rules (greedy):
-  //   - Take widgets from the queue 2-at-a-time → PAIR slot
-  //   - If 1 left over → BIG slot
-  //   - Remaining slots → ICONS
+  // INPUT ORDER IS PRESERVED — items come in the order the user arranged them.
+  // Widgets are grouped into slots in input order (pairs consumed first).
+  // Icons fill remaining slots in input order.
   // ─────────────────────────────────────────────────────────────────────────
 
+  // Separate widgets and apps while preserving relative order within each type
   const widgets = pageItems.filter(id => id.startsWith('widget::'));
   const apps    = pageItems.filter(id => id.startsWith('app::'));
 
-  // Determine slots
   type Slot =
     | { kind: 'BIG';   w: string }
     | { kind: 'PAIR';  w1: string; w2: string }
     | { kind: 'ICONS'; icons: string[] };
 
   const slots: Slot[] = [];
-  const wq = [...widgets];
+  const wq = [...widgets]; // preserves input order
 
-  // Consume widgets into slots (pairs first, then lone)
+  // Consume widgets 2-at-a-time → PAIR, lone leftover → BIG
   while (wq.length >= 2 && slots.length < 3) {
     slots.push({ kind: 'PAIR', w1: wq.shift()!, w2: wq.shift()! });
   }
-  if (wq.length >= 1 && slots.length < 3) {
+  if (wq.length === 1 && slots.length < 3) {
     slots.push({ kind: 'BIG', w: wq.shift()! });
   }
+  const overflowWidgets = [...wq]; // widgets beyond 3 slots worth
 
-  // Overflow: widgets that didn't fit
-  const overflowWidgets = [...wq];
-
-  // Fill remaining slots with icons
+  // Remaining slots → ICONS (preserves app input order)
   const iconSlotsCount = 3 - slots.length;
   const iconCapacity   = iconSlotsCount * 8;
   const savedIcons     = apps.slice(0, iconCapacity);
   const overflowIcons  = apps.slice(iconCapacity);
-  let iconQueue        = [...savedIcons];
-
+  const iconQ          = [...savedIcons];
   for (let s = 0; s < iconSlotsCount; s++) {
     const slotIcons: string[] = [];
-    for (let i = 0; i < 8; i++) slotIcons.push(iconQueue.shift()!);
+    for (let i = 0; i < 8; i++) slotIcons.push(iconQ.shift()!);
     slots.push({ kind: 'ICONS', icons: slotIcons });
   }
 
-  // Build savedItems (real items only — no empties — in slot order)
-  const savedWidgets  = slots.flatMap(sl => sl.kind === 'BIG' ? [sl.w] : sl.kind === 'PAIR' ? [sl.w1, sl.w2] : []);
-  const savedItems    = [...savedWidgets, ...savedIcons];
+  // savedItems = real items IN INPUT ORDER (widgets order preserved, icons order preserved)
+  const savedWidgetsOrdered = slots
+    .flatMap(sl => sl.kind === 'BIG' ? [sl.w] : sl.kind === 'PAIR' ? [sl.w1, sl.w2] : []);
+  const savedItems    = [...savedWidgetsOrdered, ...savedIcons];
   const overflowItems = [...overflowWidgets, ...overflowIcons];
 
-  // Build effectiveItems + gridPositions + gridTemplateAreas
-  const effectiveItems: string[]         = [];
-  const gridPositions                    = new Map<string, string>();
-  const gridRows: string[]               = [];
-  let wIdx    = 1;
-  let iIdx    = 1;
-  let emptyWIdx = 1;
-  let emptyIIdx = 1;
+  // Build grid
+  const effectiveItems: string[] = [];
+  const gridPositions            = new Map<string, string>();
+  const gridRows: string[]       = [];
+  let wIdx = 1, iIdx = 1, emptyIIdx = 1;
 
   for (const slot of slots) {
     if (slot.kind === 'BIG') {
-      const n  = `w${wIdx++}`;
+      const n = `w${wIdx++}`;
       gridPositions.set(slot.w, n);
       effectiveItems.push(slot.w);
       gridRows.push(`${n} ${n} ${n} ${n}`);
       gridRows.push(`${n} ${n} ${n} ${n}`);
 
     } else if (slot.kind === 'PAIR') {
-      const n1 = `w${wIdx++}`;
-      const n2 = `w${wIdx++}`;
+      const n1 = `w${wIdx++}`, n2 = `w${wIdx++}`;
       gridPositions.set(slot.w1, n1);
       gridPositions.set(slot.w2, n2);
       effectiveItems.push(slot.w1, slot.w2);
@@ -346,7 +338,6 @@ function buildHomescreenPage(pageItems: string[]) {
       gridRows.push(`${n1} ${n1} ${n2} ${n2}`);
 
     } else {
-      // ICONS: 8 icons per slot, fill empties if needed
       const names: string[] = [];
       for (let i = 0; i < 8; i++) {
         const id   = slot.icons[i] ?? `empty-i::${emptyIIdx++}`;
@@ -360,12 +351,11 @@ function buildHomescreenPage(pageItems: string[]) {
     }
   }
 
-  // Safety: pad to exactly 6 grid rows if somehow short
+  // Pad to 6 grid rows
   while (gridRows.length < 6) {
     const names: string[] = [];
     for (let i = 0; i < 8; i++) {
-      const id   = `empty-i::${emptyIIdx++}`;
-      const name = `i${iIdx++}`;
+      const id = `empty-i::${emptyIIdx++}`, name = `i${iIdx++}`;
       gridPositions.set(id, name);
       effectiveItems.push(id);
       names.push(name);
@@ -376,14 +366,9 @@ function buildHomescreenPage(pageItems: string[]) {
 
   const gridTemplateAreas = gridRows.slice(0, 6).map(r => `"${r}"`).join('\n');
 
-  return {
-    savedItems,
-    overflowItems,
-    effectiveItems,
+  return { savedItems, overflowItems, effectiveItems,
     realItems: effectiveItems.filter(id => !id.startsWith('empty-')),
-    gridTemplateAreas,
-    gridPositions,
-  };
+    gridTemplateAreas, gridPositions };
 }
 
 const VALID_IDS = new Set(ALL_APPS.map(a => a.id));
