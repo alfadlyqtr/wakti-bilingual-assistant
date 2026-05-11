@@ -7,6 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Mail, Settings2, XCircle, Plug, RefreshCw, Trash2, Star, Loader2 } from 'lucide-react';
+import { GmailClient } from '@/components/email/GmailClient';
+import { CustomMailClient } from '@/components/email/CustomMailClient';
 
 type EmailTab = 'settings' | 'gmail' | 'apple' | 'mail';
 
@@ -151,11 +153,13 @@ export default function Email() {
                   <GmailIcon size={16} />
                   <span className="font-medium">Gmail</span>
                 </div>
-                {emailConn.gmail.connection.emailAddress && (
-                  <div className="mt-1 text-sm text-muted-foreground break-all">
-                    {emailConn.gmail.connection.emailAddress}
-                  </div>
-                )}
+                <div className="mt-1 text-sm text-muted-foreground break-all">
+                  {emailConn.gmail.connection.emailAddress
+                    ? emailConn.gmail.connection.emailAddress
+                    : gmailConnected
+                    ? '...'
+                    : null}
+                </div>
               </div>
               <div className="flex flex-col items-end gap-2 shrink-0">
                 {gmailConnected ? (
@@ -229,7 +233,6 @@ export default function Email() {
                           )}
                         </div>
                         <div className="text-sm text-muted-foreground break-all">{connection.email_address || connection.username}</div>
-                        <div className="text-xs text-muted-foreground break-all">{connection.smtp_host}:{connection.smtp_port}</div>
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         {!connection.is_primary && (
@@ -255,43 +258,15 @@ export default function Email() {
   );
 
   const renderGmailTab = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <GmailIcon size={18} />
-          Gmail
-        </CardTitle>
-        <CardDescription>{t.gmailSubtitle}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center gap-2">
-          {gmailConnected ? (
-            <Badge className="bg-green-600 text-white hover:bg-green-600">{t.connected}</Badge>
-          ) : (
-            <Badge variant="outline" className="border-red-400/40 text-red-400">{t.notConnected}</Badge>
-          )}
-        </div>
-        {emailConn.gmail.connection.emailAddress && (
-          <div className="rounded-xl border border-border/60 bg-background/40 p-4">
-            <div className="text-sm text-muted-foreground">{t.connectedEmail}</div>
-            <div className="mt-1 text-base font-medium break-all">{emailConn.gmail.connection.emailAddress}</div>
-          </div>
-        )}
-        <div className="flex gap-2">
-          {gmailConnected ? (
-            <Button variant="outline" onClick={emailConn.gmail.disconnectGmail}>
-              <XCircle className="h-4 w-4" />
-              {t.disconnectGmail}
-            </Button>
-          ) : (
-            <Button onClick={emailConn.gmail.initiateGmailAuth} className="bg-[#060541] hover:bg-[#0a0a5c] text-white">
-              <GmailIcon size={16} />
-              {t.connectGmail}
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-2">
+      <GmailClient
+        connected={gmailConnected}
+        emailAddress={emailConn.gmail.connection.emailAddress}
+        onConnect={emailConn.gmail.initiateGmailAuth}
+        onDisconnect={emailConn.gmail.disconnectGmail}
+        language={language}
+      />
+    </div>
   );
 
   const renderAppleTab = () => (
@@ -319,61 +294,13 @@ export default function Email() {
   );
 
   const renderMailTab = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Mail className="h-4 w-4 text-[#E9CEB0]" />
-          {t.customMail}
-        </CardTitle>
-        <CardDescription>{t.mailSubtitle}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {customConnections.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border/70 p-5 text-center">
-            <div className="text-base font-medium">{t.noCustomMail}</div>
-            <div className="mt-2 text-sm text-muted-foreground">{t.noCustomMailHint}</div>
-            <div className="mt-4">
-              <Button variant="outline" onClick={() => setActiveTab('settings')}>
-                <Settings2 className="h-4 w-4" />
-                {t.openSettings}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          customConnections.map((connection) => (
-            <div key={connection.id} className="rounded-xl border border-border/60 bg-background/40 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Plug className="h-4 w-4 text-[#E9CEB0]" />
-                    <span className="font-medium">{connection.display_name || connection.email_address}</span>
-                    {connection.is_primary && (
-                      <Badge className="bg-green-600 text-white hover:bg-green-600">{t.primaryEmail}</Badge>
-                    )}
-                  </div>
-                  <div className="text-sm text-muted-foreground break-all">{connection.email_address}</div>
-                  <div className="text-xs text-muted-foreground">{t.provider}: {connection.provider}</div>
-                  <div className="text-xs text-muted-foreground break-all">{t.username}: {connection.username}</div>
-                  <div className="text-xs text-muted-foreground break-all">SMTP: {connection.smtp_host}:{connection.smtp_port}</div>
-                </div>
-                <div className="flex gap-2">
-                  {!connection.is_primary && (
-                    <Button variant="outline" size="sm" onClick={() => emailConn.imap.setPrimary(connection.id)}>
-                      <Star className="h-4 w-4" />
-                      {t.makePrimary}
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" onClick={() => emailConn.imap.remove(connection.id)}>
-                    <Trash2 className="h-4 w-4" />
-                    {t.remove}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-      </CardContent>
-    </Card>
+    <div className="space-y-2">
+      <CustomMailClient
+        connections={customConnections}
+        onOpenSettings={() => setActiveTab('settings')}
+        language={language}
+      />
+    </div>
   );
 
   return (

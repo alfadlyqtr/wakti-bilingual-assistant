@@ -17,7 +17,20 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
-    // Update state so the next render will show the fallback UI
+    // Transient chunk-load / MIME errors (e.g. after OAuth Safari round-trip in Natively)
+    // auto-recover with a silent reload instead of showing the error screen.
+    const msg = error?.message || '';
+    const isTransient =
+      msg.includes('text/html') ||
+      msg.includes('MIME type') ||
+      msg.includes('Failed to fetch dynamically imported module') ||
+      msg.includes('Importing a module script failed') ||
+      msg.includes('Loading chunk') ||
+      msg.includes('Loading CSS chunk');
+    if (isTransient) {
+      window.location.reload();
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error };
   }
 

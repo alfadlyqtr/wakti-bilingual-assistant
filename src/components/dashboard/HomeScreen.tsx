@@ -109,6 +109,7 @@ const LS_BG_POS_Y_BASE     = "homescreen_bg_pos_y";
 const LS_HEADER_COLOR_BASE = "homescreen_header_color";
 const LS_UNIFIED_BASE      = "homescreen_unified_grid_v6";
 const LS_WIDGETS_BASE      = "homescreen_widgets_v1";
+const LS_WIDGET_SIZES_BASE = "homescreen_widget_sizes_v1";
 const LS_HSBG_BASE         = "homescreen_bg_style_v1";
 const LS_HSBG_ACTIVE_BASE  = "homescreen_bg_style_active";
 const LS_BG_CHOICE_BASE    = "homescreen_bg_choice_v1";
@@ -125,6 +126,7 @@ const LS_BG_POS_Y_KEY     = () => lsKey(_cachedUid(), LS_BG_POS_Y_BASE);
 const LS_HEADER_COLOR_KEY = () => lsKey(_cachedUid(), LS_HEADER_COLOR_BASE);
 const LS_UNIFIED_KEY      = () => lsKey(_cachedUid(), LS_UNIFIED_BASE);
 const LS_WIDGETS_KEY      = () => lsKey(_cachedUid(), LS_WIDGETS_BASE);
+const LS_WIDGET_SIZES_KEY = () => lsKey(_cachedUid(), LS_WIDGET_SIZES_BASE);
 const LS_HSBG_KEY         = () => lsKey(_cachedUid(), LS_HSBG_BASE);
 const LS_BG_CHOICE_KEY    = () => lsKey(_cachedUid(), LS_BG_CHOICE_BASE);
 
@@ -132,8 +134,8 @@ const LS_BG_CHOICE_KEY    = () => lsKey(_cachedUid(), LS_BG_CHOICE_BASE);
 const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 4;
-const EDGE_PAGE_SWITCH_THRESHOLD = 56;
-const EDGE_PAGE_SWITCH_DELAY = 180;
+const EDGE_PAGE_SWITCH_THRESHOLD = 60;
+const EDGE_PAGE_SWITCH_DELAY = 500;
 type BgChoice = 'default' | 'wallpaper' | 'style';
 const isBgChoiceValue = (value: unknown): value is BgChoice => value === 'default' || value === 'wallpaper' || value === 'style';
 const isDefaultBgAsset = (value?: string | null) => !value || value === DEFAULT_BG_DARK || value === DEFAULT_BG_LIGHT;
@@ -264,56 +266,79 @@ function flattenUnifiedPages(pages: string[][]) {
   return normalized.flatMap((page, index) => index === 0 ? page : [PAGE_BREAK_ID, ...page]);
 }
 
-function buildHomescreenPage(pageItems: string[]) {
-  // ─── Grid: 4 columns × 6 rows, always (3 slots × 2 rows each) ───────────
-  // Slot types:
-  //   BIG   = 1 full-width widget   (4 cols × 2 rows)
-  //   PAIR  = 2 half-width widgets  (2 cols × 2 rows each)
-  //   ICONS = 8 app icons           (4 per row × 2 rows)
+function buildHomescreenPage(pageItems: string[], widgetSizes: Record<string, 'big' | 'small'> = {}) {
+  // ─── Grid: 4 cols × 6 rows always (3 slots × 2 rows each) ───────────────
   //
-  // INPUT ORDER IS PRESERVED — items come in the order the user arranged them.
-  // Widgets are grouped into slots in input order (pairs consumed first).
-  // Icons fill remaining slots in input order.
+  // Items processed IN ORDER — no forced grouping. Free placement.
+  //
+  // Slot assignment based on item type AND widget size preference:
+  //   widget 'big'   → BIG   (full row: 4 cols × 2 rows)
+  //   widget 'small' + next is small widget → PAIR (each 2 cols × 2 rows)
+  //   widget 'small' + next are apps → MIXED (widget left 2 cols + 4 icons right 2 cols)
+  //   widget 'small' alone → BIG (fallback)
+  //   consecutive apps → ICONS (up to 8, 4 cols × 2 rows)
+  //
+  // Max 3 slots per page. Anything beyond overflows.
   // ─────────────────────────────────────────────────────────────────────────
-
-  // Separate widgets and apps while preserving relative order within each type
-  const widgets = pageItems.filter(id => id.startsWith('widget::'));
-  const apps    = pageItems.filter(id => id.startsWith('app::'));
 
   type Slot =
     | { kind: 'BIG';   w: string }
     | { kind: 'PAIR';  w1: string; w2: string }
+    | { kind: 'MIXED'; w: string; icons: string[] }
     | { kind: 'ICONS'; icons: string[] };
 
+  const real = pageItems.filter(id => id.startsWith('widget::') || id.startsWith('app::'));
   const slots: Slot[] = [];
-  const wq = [...widgets]; // preserves input order
+  const overflowItems: string[] = [];
 
-  // Consume widgets 2-at-a-time → PAIR, lone leftover → BIG
-  while (wq.length >= 2 && slots.length < 3) {
-    slots.push({ kind: 'PAIR', w1: wq.shift()!, w2: wq.shift()! });
+  let i = 0;
+  while (i < real.length) {
+    if (slots.length >= 3) {
+      overflowItems.push(...real.slice(i));
+      break;
+    }
+    const id = real[i];
+    if (id.startsWith('widget::')) {
+      const wKey = id.replace('widget::', '');
+      const size = widgetSizes[wKey] ?? 'big';
+      if (size === 'small') {
+        const nextId   = i + 1 < real.length ? real[i + 1] : null;
+        const nextSize = nextId?.startsWith('widget::') ? (widgetSizes[nextId.replace('widget::','')] ?? 'big') : null;
+        if (nextId && nextId.startsWith('widget::') && nextSize === 'small') {
+          // PAIR: both widgets are small → side by side
+          slots.push({ kind: 'PAIR', w1: id, w2: nextId });
+          i += 2;
+        } else if (nextId && nextId.startsWith('app::')) {
+          // MIXED: small widget left half + up to 4 icons right half
+          const mixedIcons: string[] = [];
+          let j = i + 1;
+          while (j < real.length && real[j].startsWith('app::') && mixedIcons.length < 4) {
+            mixedIcons.push(real[j++]);
+          }
+          slots.push({ kind: 'MIXED', w: id, icons: mixedIcons });
+          i = j;
+        } else {
+          // small but no valid partner → full row BIG
+          slots.push({ kind: 'BIG', w: id });
+          i += 1;
+        }
+      } else {
+        // big → always full row
+        slots.push({ kind: 'BIG', w: id });
+        i += 1;
+      }
+    } else {
+      // Collect consecutive apps into one ICONS slot (up to 8)
+      const icons: string[] = [];
+      while (i < real.length && real[i].startsWith('app::') && icons.length < 8) {
+        icons.push(real[i++]);
+      }
+      slots.push({ kind: 'ICONS', icons });
+    }
   }
-  if (wq.length === 1 && slots.length < 3) {
-    slots.push({ kind: 'BIG', w: wq.shift()! });
-  }
-  const overflowWidgets = [...wq]; // widgets beyond 3 slots worth
 
-  // Remaining slots → ICONS (preserves app input order)
-  const iconSlotsCount = 3 - slots.length;
-  const iconCapacity   = iconSlotsCount * 8;
-  const savedIcons     = apps.slice(0, iconCapacity);
-  const overflowIcons  = apps.slice(iconCapacity);
-  const iconQ          = [...savedIcons];
-  for (let s = 0; s < iconSlotsCount; s++) {
-    const slotIcons: string[] = [];
-    for (let i = 0; i < 8; i++) slotIcons.push(iconQ.shift()!);
-    slots.push({ kind: 'ICONS', icons: slotIcons });
-  }
-
-  // savedItems = real items IN INPUT ORDER (widgets order preserved, icons order preserved)
-  const savedWidgetsOrdered = slots
-    .flatMap(sl => sl.kind === 'BIG' ? [sl.w] : sl.kind === 'PAIR' ? [sl.w1, sl.w2] : []);
-  const savedItems    = [...savedWidgetsOrdered, ...savedIcons];
-  const overflowItems = [...overflowWidgets, ...overflowIcons];
+  // savedItems preserves input order (no re-sort)
+  const savedItems = real.slice(0, real.length - overflowItems.length);
 
   // Build grid
   const effectiveItems: string[] = [];
@@ -337,10 +362,26 @@ function buildHomescreenPage(pageItems: string[]) {
       gridRows.push(`${n1} ${n1} ${n2} ${n2}`);
       gridRows.push(`${n1} ${n1} ${n2} ${n2}`);
 
+    } else if (slot.kind === 'MIXED') {
+      // Small widget (left 2 cols) + 4 icons (right 2 cols)
+      const wn = `w${wIdx++}`;
+      gridPositions.set(slot.w, wn);
+      effectiveItems.push(slot.w);
+      const iNames: string[] = [];
+      for (let k = 0; k < 4; k++) {
+        const id = slot.icons[k] ?? `empty-i::${emptyIIdx++}`;
+        const name = `i${iIdx++}`;
+        gridPositions.set(id, name);
+        effectiveItems.push(id);
+        iNames.push(name);
+      }
+      gridRows.push(`${wn} ${wn} ${iNames[0]} ${iNames[1]}`);
+      gridRows.push(`${wn} ${wn} ${iNames[2]} ${iNames[3]}`);
+
     } else {
       const names: string[] = [];
-      for (let i = 0; i < 8; i++) {
-        const id   = slot.icons[i] ?? `empty-i::${emptyIIdx++}`;
+      for (let k = 0; k < 8; k++) {
+        const id   = slot.icons[k] ?? `empty-i::${emptyIIdx++}`;
         const name = `i${iIdx++}`;
         gridPositions.set(id, name);
         effectiveItems.push(id);
@@ -351,10 +392,10 @@ function buildHomescreenPage(pageItems: string[]) {
     }
   }
 
-  // Pad to 6 grid rows
+  // Pad to exactly 6 rows
   while (gridRows.length < 6) {
     const names: string[] = [];
-    for (let i = 0; i < 8; i++) {
+    for (let k = 0; k < 8; k++) {
       const id = `empty-i::${emptyIIdx++}`, name = `i${iIdx++}`;
       gridPositions.set(id, name);
       effectiveItems.push(id);
@@ -1739,7 +1780,7 @@ interface UnifiedWidgetCellProps {
   onMoveNext?: () => void;
 }
 function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote, canMovePrev = false, canMoveNext = false, onMovePrev, onMoveNext }: UnifiedWidgetCellProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id, data: { type: 'unified' },
   });
   return (
@@ -1753,6 +1794,9 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         opacity: isDragging ? 0.35 : 1,
         touchAction: 'none',
         zIndex: isDragging ? 50 : 'auto',
+        outline: isOver ? '3px solid rgba(99,102,241,0.9)' : undefined,
+        borderRadius: isOver ? '18px' : undefined,
+        boxShadow: isOver ? '0 0 0 4px rgba(99,102,241,0.35), 0 0 20px rgba(99,102,241,0.5)' : undefined,
       }}
       {...attributes}
       {...listeners}
@@ -1802,7 +1846,7 @@ interface UnifiedAppCellProps {
   onMoveNext?: () => void;
 }
 function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0, canMovePrev = false, canMoveNext = false, onMovePrev, onMoveNext }: UnifiedAppCellProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id, data: { type: 'unified' },
   });
   const name = language === 'ar' ? app.nameAr : app.nameEn;
@@ -1817,6 +1861,9 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
         opacity: isDragging ? 0.25 : 1,
         touchAction: 'none',
         zIndex: isDragging ? 50 : 'auto',
+        outline: isOver ? '2px solid rgba(99,102,241,0.9)' : undefined,
+        borderRadius: isOver ? '18px' : undefined,
+        boxShadow: isOver ? '0 0 0 3px rgba(99,102,241,0.35), 0 0 14px rgba(99,102,241,0.4)' : undefined,
       }}
       {...attributes}
       {...listeners}
@@ -2042,6 +2089,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const [hsWidgets, setHsWidgets] = useState(() => {
     return initialLocalState.hsWidgets;
+  });
+  const [hsWidgetSizes, setHsWidgetSizes] = useState<Record<string, 'big' | 'small'>>(() => {
+    try { const raw = localStorage.getItem(LS_WIDGET_SIZES_KEY()); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
   });
 
   const [unifiedGrid, setUnifiedGrid] = useState<string[]>(() => {
@@ -2464,19 +2514,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       let nextSaved: string[];
 
       if (overId.startsWith('empty-')) {
-        // Dropped onto empty slot — just move active to end of its type group
-        // (keep everything else, active stays in its position)
-        nextSaved = savedReal;
+        nextSaved = savedReal; // dropped on empty — no change
       } else {
         const overInSaved = savedReal.indexOf(overId);
         if (overInSaved === -1) {
           setDragPages(null);
           return;
         }
-        // Swap positions of active and over in savedItems
-        nextSaved = [...savedReal];
-        nextSaved[activeInSaved] = savedReal[overInSaved];
-        nextSaved[overInSaved]   = savedReal[activeInSaved];
+        // Use arrayMove so items shift smoothly (not just swap)
+        nextSaved = arrayMove(savedReal, activeInSaved, overInSaved);
       }
 
       commitCurrentPage(nextSaved);
@@ -2707,19 +2753,24 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const normalizedPages: string[][] = [];
     let carry: string[] = [];
     for (const rawPage of rawPages) {
-      const built = buildHomescreenPage([...rawPage, ...carry]);
+      const built = buildHomescreenPage([...rawPage, ...carry], hsWidgetSizes);
       normalizedPages.push(built.savedItems);
       carry = built.overflowItems;
     }
     while (carry.length > 0) {
-      const built = buildHomescreenPage(carry);
+      const built = buildHomescreenPage(carry, hsWidgetSizes);
       normalizedPages.push(built.savedItems);
       carry = built.overflowItems;
     }
     if (normalizedPages.length === 0) normalizedPages.push([]);
+    // Cap at 2 pages max — overflow items are pushed back into page 2
+    while (normalizedPages.length > 2) {
+      const extra = normalizedPages.pop()!;
+      normalizedPages[normalizedPages.length - 1] = [...normalizedPages[normalizedPages.length - 1], ...extra];
+    }
 
     const builtPages = normalizedPages.map((pageItems, index) => {
-      const built = buildHomescreenPage(pageItems);
+      const built = buildHomescreenPage(pageItems, hsWidgetSizes);
       return {
         index,
         mode: 'mixed' as const,
@@ -2732,7 +2783,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     });
 
     return { pages: builtPages, savedPages: normalizedPages };
-  }, [dragPages, unifiedGrid, hsWidgets, dockIds]);
+  }, [dragPages, unifiedGrid, hsWidgets, hsWidgetSizes, dockIds]);
 
   const safeCurrentPage = Math.min(currentPage, Math.max(0, pages.length - 1));
   const currentPageData = pages[safeCurrentPage] || pages[0];
@@ -2741,46 +2792,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   _effectiveRef.current = currentPageData?.effectiveItems || [];
   _pageDragStateRef.current = { currentPageData, savedPages };
 
-  const handleDragMove = useCallback((event: any) => {
-    if (event.active.data.current?.type !== 'unified') {
-      clearDragPageSwitchTimer();
-      return;
-    }
-    const itemId = dragItemIdRef.current;
-    const container = pageViewportRef.current;
-    const initialRect = event.active.rect.current.initial;
-    const translatedRect = event.active.rect.current.translated;
-    if (!itemId || !container || !initialRect) {
-      clearDragPageSwitchTimer();
-      return;
-    }
-    const activeLeft = typeof translatedRect?.left === 'number' ? translatedRect.left : initialRect.left + event.delta.x;
-    const activeRight = typeof translatedRect?.right === 'number' ? translatedRect.right : initialRect.right + event.delta.x;
-    const bounds = container.getBoundingClientRect();
-    const dragPageIndex = dragPageIndexRef.current ?? safeCurrentPage;
-    let targetPageIndex: number | null = null;
-    if (activeLeft <= bounds.left + EDGE_PAGE_SWITCH_THRESHOLD && dragPageIndex > 0) {
-      targetPageIndex = dragPageIndex - 1;
-    } else if (activeRight >= bounds.right - EDGE_PAGE_SWITCH_THRESHOLD) {
-      targetPageIndex = dragPageIndex + 1;
-    }
-    if (targetPageIndex === null) {
-      clearDragPageSwitchTimer();
-      return;
-    }
-    if (pendingPageSwitchTargetRef.current === targetPageIndex && dragPageSwitchTimerRef.current !== null) return;
+  // Automatic page-switching during drag is DISABLED — it caused instant jumps
+  // for full-width widgets. Use the arrow buttons on widgets to move between pages.
+  const handleDragMove = useCallback((_event: any) => {
     clearDragPageSwitchTimer();
-    pendingPageSwitchTargetRef.current = targetPageIndex;
-    dragPageSwitchTimerRef.current = window.setTimeout(() => {
-      setDragPages(prevPages => {
-        const basePages = (prevPages && prevPages.length > 0 ? prevPages : _pageDragStateRef.current.savedPages).map(page => [...page]);
-        return moveUnifiedItemToPage(basePages, itemId, targetPageIndex as number);
-      });
-      dragPageIndexRef.current = targetPageIndex;
-      setCurrentPage(targetPageIndex);
-      clearDragPageSwitchTimer();
-    }, EDGE_PAGE_SWITCH_DELAY);
-  }, [clearDragPageSwitchTimer, moveUnifiedItemToPage, safeCurrentPage]);
+  }, [clearDragPageSwitchTimer]);
 
   useEffect(() => {
     setCurrentPage(prev => Math.min(prev, Math.max(0, pages.length - 1)));
@@ -3102,33 +3118,52 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                       {activeWidgetCount}/{MAX_WIDGETS} {language === 'ar' ? 'نشط' : 'active'}
                     </span>
                   </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     {WIDGET_OPTIONS.map(({ key, labelEn, labelAr }) => {
                       const isOn = hsWidgets[key];
                       const isDisabled = !isOn && activeWidgetCount >= MAX_WIDGETS;
+                      const currentSize = hsWidgetSizes[key] ?? 'big';
                       return (
-                        <button
-                          key={key}
-                          onClick={() => !isDisabled && toggleHsWidget(key)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '4px',
-                            padding: '8px 12px',
-                            borderRadius: '8px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            border: '2px solid',
-                            backgroundColor: isOn ? '#4f46e5' : isDisabled ? '#1e293b' : '#334155',
-                            borderColor: isOn ? '#6366f1' : isDisabled ? '#334155' : '#64748b',
-                            color: isOn ? '#ffffff' : isDisabled ? '#475569' : '#e2e8f0',
-                            cursor: isDisabled ? 'not-allowed' : 'pointer',
-                            opacity: isDisabled ? 0.5 : 1
-                          }}>
-                          {isOn && <Check style={{ width: '12px', height: '12px' }} />}
-                          <span>{language === 'ar' ? labelAr : labelEn}</span>
-                        </button>
+                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {/* On/Off toggle */}
+                          <button
+                            onClick={() => !isDisabled && toggleHsWidget(key)}
+                            style={{
+                              flex: 1, display: 'flex', alignItems: 'center', gap: '4px',
+                              padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
+                              border: '2px solid',
+                              backgroundColor: isOn ? '#4f46e5' : isDisabled ? '#1e293b' : '#334155',
+                              borderColor: isOn ? '#6366f1' : isDisabled ? '#334155' : '#64748b',
+                              color: isOn ? '#ffffff' : isDisabled ? '#475569' : '#e2e8f0',
+                              cursor: isDisabled ? 'not-allowed' : 'pointer',
+                              opacity: isDisabled ? 0.5 : 1
+                            }}>
+                            {isOn && <Check style={{ width: '12px', height: '12px' }} />}
+                            <span>{language === 'ar' ? labelAr : labelEn}</span>
+                          </button>
+                          {/* Size toggle — only shown when widget is ON */}
+                          {isOn && (
+                            <button
+                              title={currentSize === 'big' ? 'Full row — tap to make half' : 'Half row — tap to make full'}
+                              onClick={() => {
+                                const next = currentSize === 'big' ? 'small' : 'big';
+                                setHsWidgetSizes(prev => {
+                                  const updated = { ...prev, [key]: next };
+                                  localStorage.setItem(LS_WIDGET_SIZES_KEY(), JSON.stringify(updated));
+                                  return updated;
+                                });
+                              }}
+                              style={{
+                                padding: '6px 10px', borderRadius: '8px', fontSize: '10px', fontWeight: 700,
+                                border: '2px solid',
+                                backgroundColor: currentSize === 'big' ? '#0f172a' : '#7c3aed',
+                                borderColor: currentSize === 'big' ? '#334155' : '#8b5cf6',
+                                color: '#ffffff', cursor: 'pointer', whiteSpace: 'nowrap'
+                              }}>
+                              {currentSize === 'big' ? (language === 'ar' ? '▬ كبير' : '▬ Big') : (language === 'ar' ? '▪ صغير' : '▪ Small')}
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>

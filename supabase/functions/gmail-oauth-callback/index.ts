@@ -229,9 +229,50 @@ Deno.serve(async (req: Request) => {
           }
         }
 
+        // If email_address missing, backfill it — refresh token first since access_token may be expired
+        let emailAddress = data.email_address;
+        if (!emailAddress) {
+          try {
+            const { data: tokenRow } = await supabase
+              .from("gmail_tokens")
+              .select("access_token, refresh_token")
+              .eq("user_id", userId)
+              .maybeSingle();
+            if (tokenRow) {
+              let activeToken = tokenRow.access_token;
+              // Always try to refresh first to ensure we have a valid token
+              if (tokenRow.refresh_token) {
+                try {
+                  const refreshed = await refreshAccessToken(tokenRow.refresh_token);
+                  activeToken = refreshed.access_token;
+                  await supabase
+                    .from("gmail_tokens")
+                    .update({
+                      access_token: refreshed.access_token,
+                      expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
+                    })
+                    .eq("user_id", userId);
+                } catch (e) {
+                  console.error("[gmail] refresh for backfill failed:", e);
+                }
+              }
+              const fetched = await fetchUserEmail(activeToken);
+              if (fetched) {
+                await supabase
+                  .from("gmail_tokens")
+                  .update({ email_address: fetched })
+                  .eq("user_id", userId);
+                emailAddress = fetched;
+              }
+            }
+          } catch (e) {
+            console.error("[gmail] email backfill failed:", e);
+          }
+        }
+
         return jsonResponse({
           connected: true,
-          email_address: data.email_address,
+          email_address: emailAddress,
         });
       }
 
