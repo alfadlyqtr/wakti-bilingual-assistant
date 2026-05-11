@@ -2221,13 +2221,23 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         if (VALID_WIDGET_KEYS.has(k)) strippedWidgets[k] = !!v;
       }
     }
-    const nextWidgets = clampHsWidgets({ ...DEFAULT_HS_WIDGETS, ...strippedWidgets });
-    const nextWidgetsJson = JSON.stringify(nextWidgets);
-    setHsWidgets(prev => JSON.stringify(prev) === nextWidgetsJson ? prev : nextWidgets);
-    localStorage.setItem(LS_WIDGETS_KEY(), nextWidgetsJson);
+    const fromSupabase = clampHsWidgets({ ...DEFAULT_HS_WIDGETS, ...strippedWidgets });
+    // Prefer localStorage over Supabase if local has more widgets active
+    // (user just toggled something locally and the profile hasn't caught up yet)
+    const VISIBLE_KEYS = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
+    setHsWidgets(prev => {
+      const prevCount = VISIBLE_KEYS.filter(k => prev[k]).length;
+      const nextCount = VISIBLE_KEYS.filter(k => fromSupabase[k]).length;
+      // If local state has more widgets enabled, keep it (don't let stale Supabase overwrite)
+      if (prevCount > nextCount) return prev;
+      const nextWidgetsJson = JSON.stringify(fromSupabase);
+      if (JSON.stringify(prev) === nextWidgetsJson) return prev;
+      localStorage.setItem(LS_WIDGETS_KEY(), nextWidgetsJson);
+      return fromSupabase;
+    });
 
     if (Array.isArray(hs?.unifiedGrid) && hs.unifiedGrid.length > 0) {
-      const enabledWidgets = new Set(WIDGET_IDS.filter(k => nextWidgets[k as keyof typeof nextWidgets]).map(k => `widget::${k}`));
+      const enabledWidgets = new Set(WIDGET_IDS.filter(k => fromSupabase[k as keyof typeof fromSupabase]).map(k => `widget::${k}`));
       const seen = new Set<string>();
       const grid: string[] = [];
       for (const id of hs.unifiedGrid) {
@@ -2448,23 +2458,43 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       if (!currentPageData) return;
       
       const commitCurrentPage = (nextPageItems: string[]) => {
-        const nextPages = savedPages.map((page, index) => index === currentPageData.index
-          ? nextPageItems.filter(id => !id.startsWith('empty-'))
-          : [...page]
+        const cleanItems = nextPageItems.filter(id => !id.startsWith('empty-'));
+        const nextPages = savedPages.map((page, index) =>
+          index === currentPageData.index ? cleanItems : [...page]
         );
         persistSavedPages(nextPages, currentPageData.index);
+        setDragPages(null);
       };
 
-      // Simple swap in the effective (includes empties) array — works for same-type and cross-type
-      const from = current.indexOf(activeIdStr);
-      const to   = current.indexOf(overId);
-      if (from === -1 || to === -1) return;
+      // Work on savedItems (real items only, no empties) to avoid losing items during swap
+      const savedReal = currentPageData.savedItems; // real items in order
+      const activeInSaved = savedReal.indexOf(activeIdStr);
 
-      const next = [...current];
-      next[from] = current[to];
-      next[to]   = current[from];
+      if (activeInSaved === -1) {
+        // Active item not in saved (shouldn't happen) — just commit current
+        setDragPages(null);
+        return;
+      }
 
-      commitCurrentPage(next);
+      let nextSaved: string[];
+
+      if (overId.startsWith('empty-')) {
+        // Dropped onto empty slot — just move active to end of its type group
+        // (keep everything else, active stays in its position)
+        nextSaved = savedReal;
+      } else {
+        const overInSaved = savedReal.indexOf(overId);
+        if (overInSaved === -1) {
+          setDragPages(null);
+          return;
+        }
+        // Swap positions of active and over in savedItems
+        nextSaved = [...savedReal];
+        nextSaved[activeInSaved] = savedReal[overInSaved];
+        nextSaved[overInSaved]   = savedReal[activeInSaved];
+      }
+
+      commitCurrentPage(nextSaved);
       return;
     }
 

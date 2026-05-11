@@ -92,12 +92,14 @@ export function useGmailConnection() {
     console.log('[Gmail] initiateGmailAuth called');
     setConnection(prev => ({ ...prev, connecting: true }));
     try {
-      // natively.injected is only true when the real native shell has called natively.notify()
-      // This is the ONLY reliable way to detect the real Natively app vs a browser loading the SDK
-      const inNatively = !!(window as any).natively?.injected;
-      const origin = inNatively ? PRODUCTION_ORIGIN : window.location.origin;
+      // User-agent is set at the OS/WebView level by Natively — always reliable regardless of SDK state
+      const ua = navigator.userAgent;
+      const isNativelyIOS = /natively\/ios/i.test(ua);
+      const isNativelyAndroid = /natively\/android/i.test(ua);
+      const inNativeApp = isNativelyIOS || isNativelyAndroid;
+      const origin = inNativeApp ? PRODUCTION_ORIGIN : window.location.origin;
       const redirectUri = `${origin}/auth/google/callback`;
-      console.log('[Gmail] redirectUri:', redirectUri, '| inNatively (injected):', inNatively);
+      console.log('[Gmail] redirectUri:', redirectUri, '| iOS:', isNativelyIOS, '| Android:', isNativelyAndroid);
 
       const { data: { session } } = await supabase.auth.getSession();
       console.log('[Gmail] session:', session ? 'found' : 'null');
@@ -132,27 +134,21 @@ export function useGmailConnection() {
       // (session is lost when coming back from external browser into WebView)
       try { localStorage.setItem('wakti_oauth_token', session.access_token); } catch { /* ignore */ }
 
-      if (inNatively) {
-        // On iOS Natively: x-safari-https:// forces system Safari (bypasses WebView entirely)
-        // This is required because Google blocks OAuth in WebViews (disallowed_useragent)
-        const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
-        if (isIOS && authUrl.startsWith('https://')) {
-          const safariUrl = authUrl.replace('https://', 'x-safari-https://');
-          console.log('[Gmail] iOS → x-safari-https:// to force system Safari');
-          window.location.href = safariUrl;
+      if (isNativelyIOS) {
+        // x-safari-https:// forces full Safari.app — the only method Google accepts from iOS WebView
+        console.log('[Gmail] iOS → x-safari-https://');
+        window.location.href = authUrl.replace('https://', 'x-safari-https://');
+      } else if (isNativelyAndroid) {
+        // Android: openExternalURL opens in system Chrome
+        console.log('[Gmail] Android → openExternalURL');
+        const nativelyObj = (window as any).natively;
+        if (nativelyObj?.openExternalURL) {
+          nativelyObj.openExternalURL(authUrl, true);
         } else {
-          // Android: use openExternalURL
-          const nativelyObj = (window as any).natively || (window as any).Natively;
-          if (nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
-            console.log('[Gmail] Android → natively.openExternalURL');
-            nativelyObj.openExternalURL(authUrl, true);
-          } else {
-            console.log('[Gmail] fallback → window.location.href');
-            window.location.href = authUrl;
-          }
+          window.location.href = authUrl;
         }
       } else {
-        console.log('[Gmail] using window.location.href');
+        console.log('[Gmail] browser → window.location.href');
         window.location.href = authUrl;
       }
     } catch (err) {
