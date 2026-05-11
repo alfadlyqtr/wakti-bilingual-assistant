@@ -88,6 +88,8 @@ const DEFAULT_ORDER = ALL_APPS.map(a => a.id);
 const DEFAULT_DOCK  = ["wakti-ai", "calendar", "tr", "maw3d", "journal"];
 const MAX_DOCK_MOBILE  = 3;
 const MAX_DOCK_DESKTOP = 3;
+const FIRST_PAGE_MAX_ICONS = 12;
+const ICONS_PER_OVERFLOW_PAGE = 24;
 // ── Per-user localStorage key helpers ─────────────────────────────────────────
 // Keys are scoped to the logged-in user so different accounts on the same browser
 // never bleed their homescreen data into each other.
@@ -178,6 +180,29 @@ const GRID_TEMPLATE_AREAS = `
   "w3 w3 i9 i10"
   "w3 w3 i11 i12"
 `;
+
+const ICONS_ONLY_TEMPLATE_AREAS = `
+  "i1 i2 i3 i4"
+  "i5 i6 i7 i8"
+  "i9 i10 i11 i12"
+  "i13 i14 i15 i16"
+  "i17 i18 i19 i20"
+  "i21 i22 i23 i24"
+`;
+
+function buildIconsOnlyPage(items: string[]) {
+  const effectiveItems = Array.from({ length: ICONS_PER_OVERFLOW_PAGE }, (_, index) => items[index] || `empty-i::${index + 1}`);
+  const gridPositions = new Map<string, string>();
+  effectiveItems.forEach((id, index) => {
+    gridPositions.set(id, `i${index + 1}`);
+  });
+  return {
+    effectiveItems,
+    realItems: effectiveItems.filter(id => !id.startsWith('empty-')),
+    gridTemplateAreas: ICONS_ONLY_TEMPLATE_AREAS,
+    gridPositions,
+  };
+}
 
 // Calculate explicit grid positions ("parking spots") for each item as area strings
 // Handles widget::, app::, and empty:: items
@@ -306,21 +331,21 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
     const mixChannel = (value: number) => Math.round(value * (1 - whiteRatio) + 255 * whiteRatio);
     return `rgb(${mixChannel(toChannel(0))}, ${mixChannel(toChannel(2))}, ${mixChannel(toChannel(4))})`;
   };
-  const iconWhiteRatio = isGridVariant ? 0.34 : 0.38;
+  const iconWhiteRatio = isGridVariant ? 0.24 : 0.28;
   const iconTint = mixHexWithWhite(app.glow, iconWhiteRatio);
   const iconFilter = isGridVariant
-    ? `drop-shadow(0 1px 3px rgba(255,255,255,0.04)) drop-shadow(0 4px 8px rgba(0,0,0,0.2)) drop-shadow(0 0 8px ${app.glow}24)`
-    : `drop-shadow(0 1px 2px rgba(255,255,255,0.03)) drop-shadow(0 3px 7px rgba(0,0,0,0.18)) drop-shadow(0 0 7px ${app.glow}1c)`;
+    ? `drop-shadow(0 1px 2px rgba(255,255,255,0.02)) drop-shadow(0 4px 8px rgba(0,0,0,0.24)) drop-shadow(0 0 7px ${app.glow}1a)`
+    : `drop-shadow(0 1px 2px rgba(255,255,255,0.015)) drop-shadow(0 3px 7px rgba(0,0,0,0.22)) drop-shadow(0 0 6px ${app.glow}16)`;
   const glassShadow = glowEnabled
     ? isGridVariant
-      ? `0 24px 46px -18px rgba(4,10,24,0.72), 0 10px 22px rgba(0,0,0,0.28), 0 0 24px ${app.glow}32, inset 0 1.5px 0 rgba(255,255,255,0.38), inset 0 -16px 24px rgba(255,255,255,0.05)`
-      : `0 10px 24px -16px rgba(4,10,24,0.48), 0 4px 12px rgba(0,0,0,0.12), 0 0 14px ${app.glow}1f, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -14px 22px rgba(255,255,255,0.04)`
+      ? `0 24px 46px -18px rgba(4,10,24,0.74), 0 10px 22px rgba(0,0,0,0.3), 0 0 20px ${app.glow}2b, inset 0 1.5px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.03)`
+      : `0 10px 24px -16px rgba(4,10,24,0.52), 0 4px 12px rgba(0,0,0,0.14), 0 0 11px ${app.glow}18, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -14px 22px rgba(255,255,255,0.025)`
     : isGridVariant
-      ? `0 22px 42px -18px rgba(4,10,24,0.66), 0 8px 20px rgba(0,0,0,0.24), 0 0 16px ${app.glow}1d, inset 0 1px 0 rgba(255,255,255,0.34), inset 0 -16px 22px rgba(255,255,255,0.05)`
-      : `0 8px 18px -14px rgba(4,10,24,0.38), 0 3px 10px rgba(0,0,0,0.1), 0 0 9px ${app.glow}12, inset 0 1px 0 rgba(255,255,255,0.3), inset 0 -12px 18px rgba(255,255,255,0.04)`;
+      ? `0 22px 42px -18px rgba(4,10,24,0.68), 0 8px 20px rgba(0,0,0,0.26), 0 0 13px ${app.glow}18, inset 0 1px 0 rgba(255,255,255,0.22), inset 0 -16px 22px rgba(255,255,255,0.03)`
+      : `0 8px 18px -14px rgba(4,10,24,0.42), 0 3px 10px rgba(0,0,0,0.12), 0 0 7px ${app.glow}0f, inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -12px 18px rgba(255,255,255,0.025)`;
   const shellFill = isGridVariant
-    ? `linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 18%, rgba(255,255,255,0.04) 100%), linear-gradient(135deg, ${app.glow}22 0%, rgba(255,255,255,0.04) 58%, rgba(255,255,255,0.01) 100%), rgba(255,255,255,0.07)`
-    : `linear-gradient(180deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.14) 24%, rgba(255,255,255,0.05) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 34%, transparent 62%), linear-gradient(135deg, ${app.glow}14 0%, rgba(255,255,255,0.04) 56%, rgba(255,255,255,0.015) 100%), rgba(255,255,255,0.08)`;
+    ? `linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.07) 18%, rgba(255,255,255,0.025) 100%), linear-gradient(135deg, ${app.glow}18 0%, rgba(255,255,255,0.025) 58%, rgba(255,255,255,0.008) 100%), rgba(255,255,255,0.045)`
+    : `linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.09) 24%, rgba(255,255,255,0.03) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 34%, transparent 62%), linear-gradient(135deg, ${app.glow}12 0%, rgba(255,255,255,0.025) 56%, rgba(255,255,255,0.01) 100%), rgba(255,255,255,0.055)`;
   return (
     <div
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
@@ -335,7 +360,7 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           backdropFilter: isGridVariant ? 'blur(30px) saturate(190%)' : 'blur(30px) saturate(170%)',
           WebkitBackdropFilter: isGridVariant ? 'blur(30px) saturate(190%)' : 'blur(30px) saturate(170%)',
           boxShadow: glassShadow,
-          border: isGridVariant ? '1px solid rgba(255,255,255,0.26)' : '1px solid rgba(255,255,255,0.28)',
+          border: isGridVariant ? '1px solid rgba(255,255,255,0.18)' : '1px solid rgba(255,255,255,0.2)',
         }}
       />
       {/* Liquid glass highlight */}
@@ -345,8 +370,8 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           inset: 0,
           borderRadius: shellRadius,
           background: isGridVariant
-            ? "linear-gradient(165deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0.16) 16%, rgba(255,255,255,0.06) 34%, rgba(255,255,255,0.02) 52%, transparent 70%)"
-            : "linear-gradient(160deg, rgba(255,255,255,0.46) 0%, rgba(255,255,255,0.16) 20%, rgba(255,255,255,0.05) 44%, transparent 74%)",
+            ? "linear-gradient(165deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.1) 16%, rgba(255,255,255,0.04) 34%, rgba(255,255,255,0.012) 52%, transparent 70%)"
+            : "linear-gradient(160deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.11) 20%, rgba(255,255,255,0.035) 44%, transparent 74%)",
           mixBlendMode: 'screen',
         }}
       />
@@ -356,9 +381,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           style={{
             inset: '8% 10% 50% 10%',
             borderRadius: '999px',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.08) 100%)',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 100%)',
             filter: 'blur(4px)',
-            opacity: 0.72,
+            opacity: 0.46,
           }}
         />
       )}
@@ -371,9 +396,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             bottom: '8%',
             height: '24%',
             borderRadius: '999px',
-            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 54%, transparent 100%)',
+            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.025) 54%, transparent 100%)',
             filter: 'blur(10px)',
-            opacity: 0.7,
+            opacity: 0.44,
           }}
         />
       )}
@@ -383,9 +408,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           style={{
             inset: '7% 11% 52% 11%',
             borderRadius: '999px',
-            background: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.08) 100%)',
+            background: 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.05) 100%)',
             filter: 'blur(3px)',
-            opacity: 0.76,
+            opacity: 0.54,
           }}
         />
       )}
@@ -398,9 +423,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             bottom: '10%',
             height: '22%',
             borderRadius: '999px',
-            background: 'linear-gradient(90deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 35%, rgba(255,255,255,0.1) 100%)',
+            background: 'linear-gradient(90deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 35%, rgba(255,255,255,0.06) 100%)',
             filter: 'blur(10px)',
-            opacity: 0.58,
+            opacity: 0.42,
           }}
         />
       )}
@@ -501,11 +526,11 @@ function DockIcon({ app, editMode, onTap, glowEnabled = false, avatarUrl, badgeC
   const hasDockTint = !!dockTint;
   const dockTintIsDark = hasDockTint ? getHexLuminance(dockTint) < 0.32 : true;
   const embeddedTopFill = hasDockTint
-    ? `linear-gradient(180deg, ${rgbaFromHex(dockTint, dockTintIsDark ? 0.28 : 0.14)} 0%, rgba(255,255,255,0.02) 100%)`
-    : 'linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 100%)';
+    ? `linear-gradient(180deg, ${rgbaFromHex(dockTint, dockTintIsDark ? 0.18 : 0.09)} 0%, rgba(255,255,255,0.015) 100%)`
+    : 'linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.025) 100%)';
   const embeddedBottomFill = hasDockTint
-    ? `radial-gradient(circle at 50% 50%, ${rgbaFromHex(dockTint, dockTintIsDark ? 0.24 : 0.12)} 0%, rgba(255,255,255,0.04) 58%, transparent 100%)`
-    : 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.04) 60%, transparent 100%)';
+    ? `radial-gradient(circle at 50% 50%, ${rgbaFromHex(dockTint, dockTintIsDark ? 0.14 : 0.08)} 0%, rgba(255,255,255,0.025) 58%, transparent 100%)`
+    : 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.025) 60%, transparent 100%)';
 
   return (
     <div
@@ -1822,13 +1847,16 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [bgGradPicker,    setBgGradPicker]    = useState(false);
   const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => initialLocalState.bgGradLeft);
   const [bgGradRight,     setBgGradRight]     = useState<string>(() => initialLocalState.bgGradRight);
+  const [currentPage,     setCurrentPage]     = useState(0);
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const [saveState,       setSaveState]       = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const bgInputRef    = useRef<HTMLInputElement>(null);
   const _pendingDock  = useRef<string[]>([]);
   const _effectiveRef = useRef<string[]>([]);
+  const _pageDragStateRef = useRef<{ currentPageData: any; allIconItems: string[]; widgetItems: string[] }>({ currentPageData: null, allIconItems: [], widgetItems: [] });
   const saveStateTimerRef = useRef<number | null>(null);
   const lastSaveErrorAtRef = useRef(0);
+  const pageTouchStartXRef = useRef<number | null>(null);
 
   const { tasks, reminders }  = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1872,6 +1900,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setBgGradRight(nextLocalState.bgGradRight);
     setHsWidgets(nextLocalState.hsWidgets);
     setUnifiedGrid(nextLocalState.unifiedGrid);
+    setCurrentPage(0);
   }, [theme, user?.id]);
 
   useEffect(() => { setQuote(getQuoteForDisplay()); }, []);
@@ -2145,6 +2174,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
 
+    const { currentPageData, allIconItems, widgetItems } = _pageDragStateRef.current;
+
     const activeType  = active.data.current?.type as "unified" | "dock";
     const overType    = over.data.current?.type   as "unified" | "dock" | undefined;
 
@@ -2153,9 +2184,31 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       const overId = over.id as string;
       const activeIdStr = active.id as string;
       const current = _effectiveRef.current; // effectiveUnified (includes empties)
+      if (!currentPageData) return;
       
       const activeIsWidget = activeIdStr.startsWith('widget::') || activeIdStr.startsWith('empty-w::');
       const overIsWidget = overId.startsWith('widget::') || overId.startsWith('empty-w::');
+
+      const commitCurrentPage = (nextPageItems: string[]) => {
+        const persistNextGrid = (nextGrid: string[]) => {
+          setUnifiedGrid(nextGrid);
+          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(nextGrid));
+          syncToSupabase({ unifiedGrid: nextGrid });
+        };
+
+        if (currentPageData.mode === 'mixed') {
+          const nextWidgets = nextPageItems.filter(id => id.startsWith('widget::'));
+          const nextFirstPageIcons = nextPageItems.filter(id => id.startsWith('app::'));
+          const remainingIcons = allIconItems.slice(FIRST_PAGE_MAX_ICONS);
+          persistNextGrid([...nextWidgets, ...nextFirstPageIcons, ...remainingIcons]);
+          return;
+        }
+
+        const nextPageIcons = nextPageItems.filter(id => id.startsWith('app::'));
+        const nextAllIcons = [...allIconItems];
+        nextAllIcons.splice(currentPageData.iconStart, nextPageIcons.length, ...nextPageIcons);
+        persistNextGrid([...widgetItems, ...nextAllIcons]);
+      };
 
       if (activeIsWidget === overIsWidget) {
         // Same type: STRICT 1:1 SWAP (trade places)
@@ -2167,11 +2220,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         next[from] = current[to];
         next[to] = current[from];
 
-        setUnifiedGrid(next);
-        localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(next));
-        syncToSupabase({ unifiedGrid: next });
+        commitCurrentPage(next);
         return;
       } else {
+        if (currentPageData.mode !== 'mixed') return;
         // Different types: BLOCK SWAP (swap entire section)
         const blocks: { type: 'W' | 'I', items: string[] }[] = [];
         let currentIconBlock: string[] = [];
@@ -2208,9 +2260,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           blocks[overBlockIndex] = temp;
           
           const nextFlat = blocks.flatMap(b => b.items);
-          setUnifiedGrid(nextFlat);
-          localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(nextFlat));
-          syncToSupabase({ unifiedGrid: nextFlat });
+          commitCurrentPage(nextFlat);
         }
         return;
       }
@@ -2317,6 +2367,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           if (grid.includes(widgetId)) return grid;
           const updated = [widgetId, ...grid];
           localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(updated));
+          setCurrentPage(0);
           return updated;
         } else {
           const updated = grid.filter(id => id !== widgetId);
@@ -2367,6 +2418,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       }
       localStorage.setItem(LS_DOCK_KEY(), JSON.stringify(nextDock));
       _pendingDock.current = nextDock;
+      if (prevDock.includes(id)) setCurrentPage(0);
       return nextDock;
     });
   }, [syncToSupabase]);
@@ -2379,7 +2431,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const dockSet = new Set(dockIds.slice(0, _maxDockGrid));
   const enabledWidgetIds = new Set(WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`));
 
-  const { effectiveUnified, realItems, gridTemplateAreas, gridPositions } = React.useMemo(() => {
+  const { pages, widgetItems, allIconItems } = React.useMemo(() => {
     // 1. Extract valid real items from saved grid
     const widgets: string[] = [];
     const icons: string[] = [];
@@ -2413,6 +2465,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         seen.add(key);
       }
     }
+
+    const allWidgets = [...widgets];
+    const allIcons = [...icons];
+    const firstPageIcons = allIcons.slice(0, FIRST_PAGE_MAX_ICONS);
     
     // 2. Determine block types based on sourceGrid
     const blockTypes: ('W' | 'I')[] = [];
@@ -2452,12 +2508,14 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     // 4. Fill blocks from queues
     let wIdx = 1, iIdx = 1;
     const finalItems: string[] = [];
+    const widgetQueue = [...allWidgets];
+    const iconQueue = [...firstPageIcons];
     for (const t of finalTypes) {
       if (t === 'W') {
-        finalItems.push(widgets.length > 0 ? widgets.shift()! : `empty-w::${wIdx++}`);
+        finalItems.push(widgetQueue.length > 0 ? widgetQueue.shift()! : `empty-w::${wIdx++}`);
       } else {
         for (let i=0; i<4; i++) {
-          finalItems.push(icons.length > 0 ? icons.shift()! : `empty-i::${iIdx++}`);
+          finalItems.push(iconQueue.length > 0 ? iconQueue.shift()! : `empty-i::${iIdx++}`);
         }
       }
     }
@@ -2502,11 +2560,47 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         gpMap.set(id, `i${gI2++}`);
       }
     }
+
+    const builtPages = [{
+      index: 0,
+      mode: 'mixed' as const,
+      effectiveItems: finalItems,
+      realItems: rItems,
+      gridTemplateAreas: gridAreas,
+      gridPositions: gpMap,
+      iconStart: 0,
+      iconEnd: firstPageIcons.length,
+    }];
+
+    const overflowIcons = allIcons.slice(FIRST_PAGE_MAX_ICONS);
+    for (let pageIndex = 0; pageIndex < overflowIcons.length; pageIndex += ICONS_PER_OVERFLOW_PAGE) {
+      const iconChunk = overflowIcons.slice(pageIndex, pageIndex + ICONS_PER_OVERFLOW_PAGE);
+      const iconPage = buildIconsOnlyPage(iconChunk);
+      builtPages.push({
+        index: builtPages.length,
+        mode: 'icons' as const,
+        effectiveItems: iconPage.effectiveItems,
+        realItems: iconPage.realItems,
+        gridTemplateAreas: iconPage.gridTemplateAreas,
+        gridPositions: iconPage.gridPositions,
+        iconStart: FIRST_PAGE_MAX_ICONS + pageIndex,
+        iconEnd: FIRST_PAGE_MAX_ICONS + pageIndex + iconChunk.length,
+      });
+    }
     
-    return { effectiveUnified: finalItems, realItems: rItems, gridTemplateAreas: gridAreas, gridPositions: gpMap };
+    return { pages: builtPages, widgetItems: allWidgets, allIconItems: allIcons };
   }, [unifiedGrid, hsWidgets, dockIds]);
 
-  _effectiveRef.current = effectiveUnified; // Use the FULL padded array for drag reference
+  const safeCurrentPage = Math.min(currentPage, Math.max(0, pages.length - 1));
+  const currentPageData = pages[safeCurrentPage] || pages[0];
+  const pageCount = pages.length;
+
+  _effectiveRef.current = currentPageData?.effectiveItems || [];
+  _pageDragStateRef.current = { currentPageData, allIconItems, widgetItems };
+
+  useEffect(() => {
+    setCurrentPage(prev => Math.min(prev, Math.max(0, pages.length - 1)));
+  }, [pages.length]);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const maxDock = isMobile ? MAX_DOCK_MOBILE : MAX_DOCK_DESKTOP;
@@ -2522,6 +2616,27 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const activeInDock = activeId?.startsWith("dock::");
   const isDraggingLayout = activeId !== null;
   const showLayoutGuides = editMode || isDraggingLayout;
+
+  const handlePageTouchStart = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (editMode) return;
+    pageTouchStartXRef.current = event.touches[0]?.clientX ?? null;
+  }, [editMode]);
+
+  const handlePageTouchEnd = useCallback((event: React.TouchEvent<HTMLDivElement>) => {
+    if (editMode) return;
+    const startX = pageTouchStartXRef.current;
+    const endX = event.changedTouches[0]?.clientX;
+    pageTouchStartXRef.current = null;
+    if (startX == null || endX == null) return;
+    const deltaX = endX - startX;
+    if (Math.abs(deltaX) < 42) return;
+    if (deltaX < 0 && safeCurrentPage < pageCount - 1) {
+      setCurrentPage(safeCurrentPage + 1);
+    }
+    if (deltaX > 0 && safeCurrentPage > 0) {
+      setCurrentPage(safeCurrentPage - 1);
+    }
+  }, [editMode, pageCount, safeCurrentPage]);
 
   const quoteText   = useMemo(() => quote ? getQuoteText(quote, language) : "", [quote, language]);
   const quoteAuthor = useMemo(() => quote ? getQuoteAuthor(quote) : "", [quote]);
@@ -2987,14 +3102,19 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           )}
 
           {/* ── Unified iPhone-style grid: 3 big rows × 2 big cols = 6 rows × 4 cols ── */}
-          <div className="flex-1 min-h-0 px-3 pb-2 overflow-hidden relative" style={{ opacity: editMode ? 0.08 : 1, transition: 'opacity 0.2s ease' }}>
+          <div
+            className="flex-1 min-h-0 px-3 pb-2 overflow-hidden relative"
+            style={{ opacity: editMode ? 0.08 : 1, transition: 'opacity 0.2s ease' }}
+            onTouchStart={handlePageTouchStart}
+            onTouchEnd={handlePageTouchEnd}
+          >
             
             {/* Visual Guide exactly matching the user's diagram in edit mode */}
-            {showLayoutGuides && (
-              <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: gridTemplateAreas, zIndex: 0 }}>
+            {showLayoutGuides && currentPageData && (
+              <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: currentPageData.gridTemplateAreas, zIndex: 0 }}>
                 {/* Visual grid is dynamically rendered based on gridTemplateAreas now to match real positions */}
-                {effectiveUnified.map(itemId => {
-                  const gp = gridPositions.get(itemId);
+                {currentPageData.effectiveItems.map(itemId => {
+                  const gp = currentPageData.gridPositions.get(itemId);
                   if (!gp) return null;
                   if (itemId.startsWith('empty-w::') || itemId.startsWith('widget::')) {
                     return <div key={`vis-${itemId}`} style={{ gridArea: gp }} className="border-[3px] border-dashed border-white/50 rounded-3xl" />;
@@ -3006,11 +3126,31 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               </div>
             )}
 
-            <SortableContext items={effectiveUnified} strategy={rectSortingStrategy}>
-              <div className="grid gap-x-1 gap-y-2 relative z-10 h-full" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: gridTemplateAreas, alignContent: 'start', paddingTop: 8 }}>
+            {pageCount > 1 && !editMode && (
+              <div className="absolute top-2 right-3 z-20 flex items-center gap-1.5 rounded-full bg-black/20 px-2 py-1 backdrop-blur-md border border-white/10">
+                {Array.from({ length: pageCount }).map((_, index) => (
+                  <button
+                    key={`page-dot-${index}`}
+                    type="button"
+                    aria-label={`Go to page ${index + 1}`}
+                    onClick={() => setCurrentPage(index)}
+                    className="transition-all"
+                    style={{
+                      width: safeCurrentPage === index ? 16 : 6,
+                      height: 6,
+                      borderRadius: 999,
+                      background: safeCurrentPage === index ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.36)',
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            <SortableContext items={currentPageData?.effectiveItems || []} strategy={rectSortingStrategy}>
+              <div className="grid gap-x-1 gap-y-2 relative z-10 h-full" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: currentPageData?.gridTemplateAreas, alignContent: 'start', paddingTop: 8 }}>
                 {(() => {
-                  return effectiveUnified.map(itemId => {
-                    const gp = gridPositions.get(itemId);
+                  return (currentPageData?.effectiveItems || []).map(itemId => {
+                    const gp = currentPageData?.gridPositions.get(itemId);
                     if (!gp) return null;
 
                     // Empty placeholder slots — droppable targets in edit mode
@@ -3078,6 +3218,40 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               </div>
             </SortableContext>
           </div>
+
+          {pageCount > 1 && (
+            <div className="flex-none pb-1 flex items-center justify-center gap-2 relative z-20">
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.max(0, prev - 1))}
+                disabled={safeCurrentPage === 0}
+                className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                style={{
+                  background: 'rgba(255,255,255,0.14)',
+                  color: safeCurrentPage === 0 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.88)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
+                {language === 'ar' ? 'السابق' : 'Prev'}
+              </button>
+              <span className="text-[11px] font-semibold text-white/75 px-1">
+                {safeCurrentPage + 1} / {pageCount}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage(prev => Math.min(pageCount - 1, prev + 1))}
+                disabled={safeCurrentPage === pageCount - 1}
+                className="px-2.5 py-1 rounded-full text-[11px] font-semibold"
+                style={{
+                  background: 'rgba(255,255,255,0.14)',
+                  color: safeCurrentPage === pageCount - 1 ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.88)',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                }}
+              >
+                {language === 'ar' ? 'التالي' : 'Next'}
+              </button>
+            </div>
+          )}
 
           {/* ── DOCK — always at very bottom ── */}
           <div className="mt-auto flex-none mx-2 md:mx-4 lg:mx-6 pt-1 hs-dock-bottom">
