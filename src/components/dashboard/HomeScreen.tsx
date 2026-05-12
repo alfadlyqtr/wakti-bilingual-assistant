@@ -302,25 +302,41 @@ function buildHomescreenPage(pageItems: string[], widgetSizes: Record<string, 'b
       const wKey = id.replace('widget::', '');
       const size = widgetSizes[wKey] ?? 'big';
       if (size === 'small') {
-        const nextId   = i + 1 < real.length ? real[i + 1] : null;
-        const nextSize = nextId?.startsWith('widget::') ? (widgetSizes[nextId.replace('widget::','')] ?? 'big') : null;
-        if (nextId && nextId.startsWith('widget::') && nextSize === 'small') {
-          // PAIR: both widgets are small → side by side
-          slots.push({ kind: 'PAIR', w1: id, w2: nextId });
-          i += 2;
-        } else if (nextId && nextId.startsWith('app::')) {
-          // MIXED: small widget left half + up to 4 icons right half
-          const mixedIcons: string[] = [];
-          let j = i + 1;
-          while (j < real.length && real[j].startsWith('app::') && mixedIcons.length < 4) {
-            mixedIcons.push(real[j++]);
+        // Look ahead: find the NEXT widget anywhere after i (skip over icons)
+        let partnerIdx = -1;
+        for (let k = i + 1; k < real.length; k++) {
+          if (real[k].startsWith('widget::')) {
+            const pSize = widgetSizes[real[k].replace('widget::','')] ?? 'big';
+            if (pSize === 'small') partnerIdx = k;
+            break; // stop at first widget found regardless
           }
-          slots.push({ kind: 'MIXED', w: id, icons: mixedIcons });
-          i = j;
+        }
+
+        if (partnerIdx !== -1) {
+          // PAIR: collect icons between i and partnerIdx into a separate ICONS slot
+          const betweenIcons = real.slice(i + 1, partnerIdx).filter(x => x.startsWith('app::'));
+          slots.push({ kind: 'PAIR', w1: id, w2: real[partnerIdx] });
+          // The icons between them go into the next available slot
+          if (betweenIcons.length > 0 && slots.length < 3) {
+            slots.push({ kind: 'ICONS', icons: betweenIcons });
+          }
+          i = partnerIdx + 1;
         } else {
-          // small but no valid partner → full row BIG
-          slots.push({ kind: 'BIG', w: id });
-          i += 1;
+          // No small partner found — check if icons follow for MIXED
+          const nextId = i + 1 < real.length ? real[i + 1] : null;
+          if (nextId && nextId.startsWith('app::')) {
+            const mixedIcons: string[] = [];
+            let j = i + 1;
+            while (j < real.length && real[j].startsWith('app::') && mixedIcons.length < 4) {
+              mixedIcons.push(real[j++]);
+            }
+            slots.push({ kind: 'MIXED', w: id, icons: mixedIcons });
+            i = j;
+          } else {
+            // Alone — render as BIG
+            slots.push({ kind: 'BIG', w: id });
+            i += 1;
+          }
         }
       } else {
         // big → always full row
@@ -3326,7 +3342,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           <div
             ref={pageViewportRef}
             className="flex-1 min-h-0 px-3 pb-2 overflow-hidden relative"
-            style={{ opacity: editMode ? 0.08 : 1, transition: 'opacity 0.2s ease', touchAction: 'none', overscrollBehavior: 'none' }}
+            style={{ opacity: editMode ? 0.6 : 1, transition: 'opacity 0.2s ease', touchAction: 'none', overscrollBehavior: 'none' }}
             onTouchStart={handlePageTouchStart}
             onTouchEnd={handlePageTouchEnd}
           >
@@ -3356,10 +3372,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                     if (!gp) return null;
                     const moveItemToPage = (direction: -1 | 1) => {
                       const nextIndex = safeCurrentPage + direction;
-                      if (nextIndex < 0 || nextIndex >= savedPages.length) return;
+                      if (nextIndex < 0 || nextIndex > 1) return; // max 2 pages (0 and 1)
                       const nextPages = savedPages.map(page => [...page]);
+                      // Ensure target page exists
+                      while (nextPages.length <= nextIndex) nextPages.push([]);
                       nextPages[safeCurrentPage] = nextPages[safeCurrentPage].filter(id => id !== itemId);
-                      if (!nextPages[nextIndex]) nextPages[nextIndex] = [];
                       nextPages[nextIndex].unshift(itemId);
                       persistSavedPages(nextPages, nextIndex);
                     };
