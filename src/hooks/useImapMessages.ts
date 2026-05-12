@@ -48,7 +48,7 @@ export function useImapMessages(connectionId: string) {
   const [activeFolder, setActiveFolder] = useState<'INBOX' | 'SENT'>('INBOX');
 
   const fetchMessages = useCallback(async (folder: 'INBOX' | 'SENT' = 'INBOX', pageNum = 1) => {
-    if (!connectionId) return;
+    if (!connectionId) return null;
     setLoading(true);
     try {
       const data = await callImapApi('list_messages', {
@@ -64,8 +64,10 @@ export function useImapMessages(connectionId: string) {
       setHasMore(data.hasMore || false);
       setPage(pageNum);
       setActiveFolder(folder);
+      return data;
     } catch (err: any) {
       toast.error(err.message || 'Failed to load messages');
+      return null;
     } finally {
       setLoading(false);
     }

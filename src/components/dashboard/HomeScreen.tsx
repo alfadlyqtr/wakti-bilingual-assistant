@@ -283,6 +283,7 @@ function buildHomescreenPage(pageItems: string[], widgetSizes: Record<string, 'b
 
   type Slot =
     | { kind: 'BIG';   w: string }
+    | { kind: 'HALF';  w: string }           // small widget alone — left 2 cols, right 2 cols empty
     | { kind: 'PAIR';  w1: string; w2: string }
     | { kind: 'MIXED'; w: string; icons: string[] }
     | { kind: 'ICONS'; icons: string[] };
@@ -333,8 +334,8 @@ function buildHomescreenPage(pageItems: string[], widgetSizes: Record<string, 'b
             slots.push({ kind: 'MIXED', w: id, icons: mixedIcons });
             i = j;
           } else {
-            // Alone — render as BIG
-            slots.push({ kind: 'BIG', w: id });
+            // Alone — render as HALF (2 cols widget + 2 cols empty)
+            slots.push({ kind: 'HALF', w: id });
             i += 1;
           }
         }
@@ -369,6 +370,17 @@ function buildHomescreenPage(pageItems: string[], widgetSizes: Record<string, 'b
       effectiveItems.push(slot.w);
       gridRows.push(`${n} ${n} ${n} ${n}`);
       gridRows.push(`${n} ${n} ${n} ${n}`);
+
+    } else if (slot.kind === 'HALF') {
+      // Small widget: left 2 cols × 2 rows; right 2 cols = 4 empty icon slots
+      const wn = `w${wIdx++}`;
+      gridPositions.set(slot.w, wn);
+      effectiveItems.push(slot.w);
+      const ids = [0,1,2,3].map(() => `empty-i::${emptyIIdx++}`);
+      const ns  = ids.map(() => `i${iIdx++}`);
+      ids.forEach((id, k) => { gridPositions.set(id, ns[k]); effectiveItems.push(id); });
+      gridRows.push(`${wn} ${wn} ${ns[0]} ${ns[1]}`);
+      gridRows.push(`${wn} ${wn} ${ns[2]} ${ns[3]}`);
 
     } else if (slot.kind === 'PAIR') {
       const n1 = `w${wIdx++}`, n2 = `w${wIdx++}`;
@@ -1790,15 +1802,27 @@ interface UnifiedWidgetCellProps {
   maw3dEvents?: any[];
   attendingCounts?: Record<string, number>;
   onExpandQuote?: () => void;
-  canMovePrev?: boolean;
-  canMoveNext?: boolean;
-  onMovePrev?: () => void;
-  onMoveNext?: () => void;
+  onLongPress?: () => void;
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote, canMovePrev = false, canMoveNext = false, onMovePrev, onMoveNext }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote, onLongPress }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id, data: { type: 'unified' },
   });
+  const lpTimer = useRef<number | null>(null);
+  const lpStart = useRef<{ x: number; y: number } | null>(null);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    lpStart.current = { x: t.clientX, y: t.clientY };
+    lpTimer.current = window.setTimeout(() => { lpTimer.current = null; onLongPress?.(); }, 600);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!lpStart.current || !lpTimer.current) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - lpStart.current.x) > 8 || Math.abs(t.clientY - lpStart.current.y) > 8) {
+      clearTimeout(lpTimer.current); lpTimer.current = null;
+    }
+  };
+  const handleTouchEnd = () => { if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; } lpStart.current = null; };
   return (
     <div
       ref={setNodeRef}
@@ -1814,6 +1838,9 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         borderRadius: isOver ? '18px' : undefined,
         boxShadow: isOver ? '0 0 0 4px rgba(99,102,241,0.35), 0 0 20px rgba(99,102,241,0.5)' : undefined,
       }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       {...attributes}
       {...listeners}
     >
@@ -1835,16 +1862,6 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
           <GripVertical className="w-3 h-3 text-white/80" />
         </div>
       )}
-      {editMode && (canMovePrev || canMoveNext) && (
-        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1">
-          {canMovePrev && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); onMovePrev?.(); }} className="w-6 h-6 rounded-full bg-black/75 border border-white/20 text-white text-[10px] font-bold">←</button>
-          )}
-          {canMoveNext && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); onMoveNext?.(); }} className="w-6 h-6 rounded-full bg-black/75 border border-white/20 text-white text-[10px] font-bold">→</button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -1856,16 +1873,28 @@ interface UnifiedAppCellProps {
   gridArea: string;
   avatarUrl?: string;
   badgeCount?: number;
-  canMovePrev?: boolean;
-  canMoveNext?: boolean;
-  onMovePrev?: () => void;
-  onMoveNext?: () => void;
+  onLongPress?: () => void;
 }
-function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0, canMovePrev = false, canMoveNext = false, onMovePrev, onMoveNext }: UnifiedAppCellProps) {
+function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0, onLongPress }: UnifiedAppCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id, data: { type: 'unified' },
   });
   const name = language === 'ar' ? app.nameAr : app.nameEn;
+  const lpTimer = useRef<number | null>(null);
+  const lpStart = useRef<{ x: number; y: number } | null>(null);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    lpStart.current = { x: t.clientX, y: t.clientY };
+    lpTimer.current = window.setTimeout(() => { lpTimer.current = null; onLongPress?.(); }, 600);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!lpStart.current || !lpTimer.current) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - lpStart.current.x) > 8 || Math.abs(t.clientY - lpStart.current.y) > 8) {
+      clearTimeout(lpTimer.current); lpTimer.current = null;
+    }
+  };
+  const handleTouchEnd = () => { if (lpTimer.current) { clearTimeout(lpTimer.current); lpTimer.current = null; } lpStart.current = null; };
   return (
     <div
       ref={setNodeRef}
@@ -1881,6 +1910,9 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
         borderRadius: isOver ? '18px' : undefined,
         boxShadow: isOver ? '0 0 0 3px rgba(99,102,241,0.35), 0 0 14px rgba(99,102,241,0.4)' : undefined,
       }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       {...attributes}
       {...listeners}
       onClick={editMode ? undefined : () => navigate(app.path)}
@@ -1892,16 +1924,6 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
       >
         {name}
       </span>
-      {editMode && (canMovePrev || canMoveNext) && (
-        <div className="absolute -bottom-2 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1">
-          {canMovePrev && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); onMovePrev?.(); }} className="w-6 h-6 rounded-full bg-black/75 border border-white/20 text-white text-[10px] font-bold">←</button>
-          )}
-          {canMoveNext && (
-            <button type="button" onClick={(e) => { e.stopPropagation(); onMoveNext?.(); }} className="w-6 h-6 rounded-full bg-black/75 border border-white/20 text-white text-[10px] font-bold">→</button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -2079,6 +2101,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [bgGradRight,     setBgGradRight]     = useState<string>(() => initialLocalState.bgGradRight);
   const [currentPage,     setCurrentPage]     = useState(0);
   const [dragPages,       setDragPages]       = useState<string[][] | null>(null);
+  const [contextMenu,     setContextMenu]     = useState<{ itemId: string } | null>(null);
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const [saveState,       setSaveState]       = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const bgInputRef    = useRef<HTMLInputElement>(null);
@@ -3420,10 +3443,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           maw3dEvents={maw3dEvents}
                           attendingCounts={attendingCounts}
                           onExpandQuote={() => { setQuoteExpanded(true); setQuoteExiting(false); }}
-                          canMovePrev={safeCurrentPage > 0}
-                          canMoveNext={safeCurrentPage < pageCount - 1}
-                          onMovePrev={() => moveItemToPage(-1)}
-                          onMoveNext={() => moveItemToPage(1)}
+                          onLongPress={() => setContextMenu({ itemId: itemId })}
                         />
                       );
                     }
@@ -3443,10 +3463,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         gridArea={gp}
                         avatarUrl={avatarUrl}
                         badgeCount={app.id === 'social' ? connectBadge : 0}
-                        canMovePrev={safeCurrentPage > 0}
-                        canMoveNext={safeCurrentPage < pageCount - 1}
-                        onMovePrev={() => moveItemToPage(-1)}
-                        onMoveNext={() => moveItemToPage(1)}
+                        onLongPress={() => setContextMenu({ itemId: itemId })}
                       />
                     );
                   });
@@ -3605,6 +3622,64 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               onClose={() => setSavedImagesOpen(false)}
             />
           )}
+
+        {/* ── Long-press Context Menu (Move to Page) ── */}
+        {contextMenu && (() => {
+          const cmItemId = contextMenu.itemId;
+          const doMove = (direction: -1 | 1) => {
+            const nextIndex = safeCurrentPage + direction;
+            if (nextIndex < 0 || nextIndex > 1) { setContextMenu(null); return; }
+            const nextPages = savedPages.map((page: string[]) => [...page]);
+            while (nextPages.length <= nextIndex) nextPages.push([]);
+            nextPages[safeCurrentPage] = nextPages[safeCurrentPage].filter((id: string) => id !== cmItemId);
+            nextPages[nextIndex].unshift(cmItemId);
+            persistSavedPages(nextPages, nextIndex);
+            setContextMenu(null);
+          };
+          const isWidget = cmItemId.startsWith('widget::');
+          const wKey = isWidget ? cmItemId.replace('widget::','') : '';
+          const matchedApp = !isWidget ? ALL_APPS.find(a => `app::${a.id}` === cmItemId) : null;
+          const itemLabel = isWidget
+            ? (language === 'ar' ? (wKey === 'showTRWidget' ? 'ودجت المهام' : wKey === 'showCalendarWidget' ? 'ودجت التقويم' : wKey === 'showMaw3dWidget' ? 'ودجت المواعيد' : wKey === 'showVitalityWidget' ? 'ودجت الصحة' : wKey === 'showJournalWidget' ? 'ودجت اليوميات' : 'ودجت') : (wKey === 'showTRWidget' ? 'Tasks Widget' : wKey === 'showCalendarWidget' ? 'Calendar Widget' : wKey === 'showMaw3dWidget' ? 'Events Widget' : wKey === 'showVitalityWidget' ? 'Vitality Widget' : wKey === 'showJournalWidget' ? 'Journal Widget' : 'Widget'))
+            : (language === 'ar' ? matchedApp?.nameAr : matchedApp?.nameEn) || 'Item';
+          return (
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+              onClick={() => setContextMenu(null)}
+            >
+              <div
+                style={{ background: 'rgba(28,28,30,0.97)', borderRadius: '18px', minWidth: '220px', padding: '6px 0', boxShadow: '0 20px 60px rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.12)' }}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{ padding: '12px 18px 8px', borderBottom: '1px solid rgba(255,255,255,0.08)', textAlign: 'center' }}>
+                  <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>{itemLabel}</span>
+                </div>
+                {safeCurrentPage > 0 && (
+                  <button
+                    onClick={() => doMove(-1)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px 18px', background: 'none', border: 'none', color: '#fff', fontSize: '15px', fontWeight: 500, cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                  >
+                    ← {language === 'ar' ? 'نقل إلى الصفحة 1' : 'Move to Page 1'}
+                  </button>
+                )}
+                {safeCurrentPage < 1 && (
+                  <button
+                    onClick={() => doMove(1)}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px 18px', background: 'none', border: 'none', color: '#fff', fontSize: '15px', fontWeight: 500, cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                  >
+                    {language === 'ar' ? 'نقل إلى الصفحة 2' : 'Move to Page 2'} →
+                  </button>
+                )}
+                <button
+                  onClick={() => setContextMenu(null)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: '14px 18px', background: 'none', border: 'none', color: '#ff453a', fontSize: '15px', fontWeight: 600, cursor: 'pointer' }}
+                >
+                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                </button>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* ── Quote Expand Overlay ── */}
         {quoteExpanded && (

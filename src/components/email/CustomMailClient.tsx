@@ -205,6 +205,8 @@ export function CustomMailClient({ connections, onOpenSettings, language = 'en' 
 
   const [selectedMessage, setSelectedMessage] = useState<ImapMessageFull | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(false);
+  // Track the real IMAP folder name returned by the server (e.g. "INBOX", "Sent Items")
+  const [realFolderName, setRealFolderName] = useState('INBOX');
   const [showCompose, setShowCompose] = useState(false);
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string } | undefined>();
 
@@ -213,7 +215,9 @@ export function CustomMailClient({ connections, onOpenSettings, language = 'en' 
   useEffect(() => {
     if (activeConnectionId) {
       setSelectedMessage(null);
-      imap.fetchMessages('INBOX', 1);
+      imap.fetchMessages('INBOX', 1).then((result: any) => {
+        if (result?.folder) setRealFolderName(result.folder);
+      }).catch(() => {});
     }
   }, [activeConnectionId]);
 
@@ -227,7 +231,8 @@ export function CustomMailClient({ connections, onOpenSettings, language = 'en' 
 
   const handleOpenMessage = async (msg: ImapMessage) => {
     setLoadingMessage(true);
-    const full = await imap.fetchMessage(msg.uid, imap.activeFolder);
+    setSelectedMessage(null);
+    const full = await imap.fetchMessage(msg.uid, realFolderName);
     setLoadingMessage(false);
     if (full) {
       setSelectedMessage({
@@ -314,7 +319,12 @@ export function CustomMailClient({ connections, onOpenSettings, language = 'en' 
         {(['INBOX', 'SENT'] as const).map(f => (
           <button
             key={f}
-            onClick={() => { setSelectedMessage(null); imap.fetchMessages(f, 1); }}
+            onClick={() => {
+              setSelectedMessage(null);
+              imap.fetchMessages(f, 1).then((r: any) => {
+                if (r?.folder) setRealFolderName(r.folder);
+              }).catch(() => {});
+            }}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               imap.activeFolder === f
                 ? 'bg-blue-600 text-white'
@@ -331,17 +341,16 @@ export function CustomMailClient({ connections, onOpenSettings, language = 'en' 
       <div className="rounded-xl border border-border/50 bg-background/30 overflow-hidden min-h-[300px]">
         {selectedMessage ? (
           <div className="p-4 h-full">
-            {loadingMessage ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : (
-              <MessageView
-                message={selectedMessage}
-                onBack={() => setSelectedMessage(null)}
-                onReply={handleReply}
-              />
-            )}
+            <MessageView
+              message={selectedMessage}
+              onBack={() => setSelectedMessage(null)}
+              onReply={handleReply}
+            />
+          </div>
+        ) : loadingMessage ? (
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Loading message...</span>
           </div>
         ) : (
           <>
