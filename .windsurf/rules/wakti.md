@@ -142,6 +142,7 @@ YOU ALWAYS DO EXACTLY AS TOLD. ALWAYS OBEY MY INSTRUCTIONS UNLESS I EXPLICITLY C
 - Include pros/cons
 - Give a clear recommendation
 - Then wait for approval
+- BUT when i say proceed, no need for options or anything recomendatiopns proceed with what i say only
 
 ---
 

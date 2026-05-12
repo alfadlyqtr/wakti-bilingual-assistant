@@ -227,7 +227,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
           {/* Advanced fields */}
           {showAdvanced && (
             <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
-              <div className="rounded-xl border border-white/10 bg-background/40 p-3 space-y-2">
+              <div className="space-y-2 rounded-xl border border-border/60 bg-background/70 p-3">
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.loginSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.loginHint}</div>
@@ -244,7 +244,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 ) : null}
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-background/40 p-3 space-y-3">
+              <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3">
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.incomingSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.incomingHint}</div>
@@ -270,7 +270,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 </label>
               </div>
 
-              <div className="rounded-xl border border-white/10 bg-background/40 p-3 space-y-3">
+              <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3">
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.outgoingSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.outgoingHint}</div>

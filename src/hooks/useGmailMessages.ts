@@ -74,19 +74,23 @@ export function useGmailMessages() {
   const messageCacheRef = useRef<Record<string, GmailMessageFull>>({});
   const labelsCacheRef = useRef<GmailLabel[] | null>(null);
 
-  const fetchMessages = useCallback(async (folder = 'INBOX', pageToken?: string, options?: { forceRefresh?: boolean }) => {
+  const fetchMessages = useCallback(async (folder = 'INBOX', pageToken?: string, options?: { forceRefresh?: boolean; background?: boolean; quiet?: boolean }) => {
     const cacheKey = folder;
     if (!pageToken && folderCacheRef.current[cacheKey] && !options?.forceRefresh) {
-      setMessages(folderCacheRef.current[cacheKey].messages);
-      setNextPageToken(folderCacheRef.current[cacheKey].nextPageToken);
-      setActiveFolder(folder);
+      if (!options?.background) {
+        setMessages(folderCacheRef.current[cacheKey].messages);
+        setNextPageToken(folderCacheRef.current[cacheKey].nextPageToken);
+        setActiveFolder(folder);
+      }
       return {
         messages: folderCacheRef.current[cacheKey].messages,
         nextPageToken: folderCacheRef.current[cacheKey].nextPageToken,
       };
     }
 
-    setLoading(true);
+    if (!options?.background) {
+      setLoading(true);
+    }
     try {
       const data = await callGmailApi('list_messages', {
         folder,
@@ -97,19 +101,25 @@ export function useGmailMessages() {
         ? [...(folderCacheRef.current[cacheKey]?.messages || []), ...(data.messages || [])]
         : (data.messages || []);
 
-      setMessages(nextMessages);
-      setNextPageToken(data.nextPageToken || null);
-      setActiveFolder(folder);
+      if (!options?.background) {
+        setMessages(nextMessages);
+        setNextPageToken(data.nextPageToken || null);
+        setActiveFolder(folder);
+      }
       folderCacheRef.current[cacheKey] = {
         messages: nextMessages,
         nextPageToken: data.nextPageToken || null,
       };
       return data;
     } catch (err: any) {
-      toast.error(err.message || 'Failed to load messages');
+      if (!options?.quiet) {
+        toast.error(err.message || 'Failed to load messages');
+      }
       return null;
     } finally {
-      setLoading(false);
+      if (!options?.background) {
+        setLoading(false);
+      }
     }
   }, []);
 

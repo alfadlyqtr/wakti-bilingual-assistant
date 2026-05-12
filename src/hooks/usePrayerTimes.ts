@@ -1,6 +1,22 @@
 import { useState, useEffect, useRef } from "react";
-import * as adhan from "adhan";
 import { getNativeLocation } from "@/integrations/natively/locationBridge";
+
+type AdhanModule = typeof import("adhan");
+
+let adhanModulePromise: Promise<AdhanModule> | null = null;
+
+async function loadAdhanModule(): Promise<AdhanModule | null> {
+  try {
+    if (!adhanModulePromise) {
+      adhanModulePromise = import("adhan");
+    }
+    return await adhanModulePromise;
+  } catch (error) {
+    console.warn("usePrayerTimes: Failed to load adhan module", error);
+    adhanModulePromise = null;
+    return null;
+  }
+}
 
 export interface NextPrayer {
   name: string;
@@ -27,16 +43,19 @@ const PRAYER_NAMES_AR: Record<string, string> = {
   isha: "العشاء",
 };
 
-function getPrayerTimes(lat: number, lng: number, date: Date): adhan.PrayerTimes {
-  const coords = new adhan.Coordinates(lat, lng);
-  const params = adhan.CalculationMethod.UmmAlQura();
-  params.madhab = adhan.Madhab.Shafi;
-  return new adhan.PrayerTimes(coords, date, params);
+function getPrayerTimes(adhanLib: AdhanModule, lat: number, lng: number, date: Date) {
+  const coords = new adhanLib.Coordinates(lat, lng);
+  const params = adhanLib.CalculationMethod.UmmAlQura();
+  params.madhab = adhanLib.Madhab.Shafi;
+  return new adhanLib.PrayerTimes(coords, date, params);
 }
 
-function getNextPrayer(lat: number, lng: number): NextPrayer | null {
+async function getNextPrayer(lat: number, lng: number): Promise<NextPrayer | null> {
+  const adhanLib = await loadAdhanModule();
+  if (!adhanLib) return null;
+
   const now = new Date();
-  const pt = getPrayerTimes(lat, lng, now);
+  const pt = getPrayerTimes(adhanLib, lat, lng, now);
 
   const candidates: { key: string; time: Date }[] = [
     { key: "fajr", time: pt.fajr },
@@ -60,7 +79,7 @@ function getNextPrayer(lat: number, lng: number): NextPrayer | null {
   // All prayers passed today — next is tomorrow's Fajr
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const ptTomorrow = getPrayerTimes(lat, lng, tomorrow);
+  const ptTomorrow = getPrayerTimes(adhanLib, lat, lng, tomorrow);
   const minutesLeft = Math.round((ptTomorrow.fajr.getTime() - now.getTime()) / 60000);
   return {
     name: PRAYER_NAMES_EN["fajr"],
@@ -90,9 +109,9 @@ export function usePrayerTimes() {
   const coordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  function refresh() {
+  async function refresh() {
     if (!coordsRef.current) return;
-    const result = getNextPrayer(coordsRef.current.lat, coordsRef.current.lng);
+    const result = await getNextPrayer(coordsRef.current.lat, coordsRef.current.lng);
     setNextPrayer(result);
   }
 
@@ -105,7 +124,7 @@ export function usePrayerTimes() {
         const loc = await getNativeLocation({ timeoutMs: 8000 });
         if (!cancelled && loc) {
           coordsRef.current = { lat: loc.latitude, lng: loc.longitude };
-          const result = getNextPrayer(loc.latitude, loc.longitude);
+          const result = await getNextPrayer(loc.latitude, loc.longitude);
           setNextPrayer(result);
         }
       } catch {
@@ -119,7 +138,7 @@ export function usePrayerTimes() {
 
     // Refresh countdown every 60 seconds
     intervalRef.current = setInterval(() => {
-      refresh();
+      void refresh();
     }, 60000);
 
     return () => {

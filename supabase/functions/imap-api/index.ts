@@ -150,7 +150,7 @@ class ImapClient {
     return boxes;
   }
 
-  async fetchHeaders(page: number, pageSize: number, exists: number): Promise<{ seq: number; headers: string }[]> {
+  async fetchHeaders(page: number, pageSize: number, exists: number): Promise<{ seq: number; headers: string; isUnread: boolean }[]> {
     if (exists === 0) return [];
     const end = Math.max(1, exists - (page - 1) * pageSize);
     const start = Math.max(1, end - pageSize + 1);
@@ -160,21 +160,25 @@ class ImapClient {
     return this.parseHeaders(lines);
   }
 
-  private parseHeaders(lines: string[]): { seq: number; headers: string }[] {
-    const results: { seq: number; headers: string }[] = [];
+  private parseHeaders(lines: string[]): { seq: number; headers: string; isUnread: boolean }[] {
+    const results: { seq: number; headers: string; isUnread: boolean }[] = [];
     let currentSeq = 0;
     let collecting = false;
     let headerBuf = "";
+    let currentIsUnread = false;
 
     for (const line of lines) {
       const fetchMatch = line.match(/^\* (\d+) FETCH/);
       if (fetchMatch) {
         if (currentSeq > 0 && headerBuf.trim()) {
-          results.push({ seq: currentSeq, headers: headerBuf.trim() });
+          results.push({ seq: currentSeq, headers: headerBuf.trim(), isUnread: currentIsUnread });
         }
         currentSeq = parseInt(fetchMatch[1], 10);
         collecting = line.includes("BODY[HEADER");
         headerBuf = "";
+        const flagsMatch = line.match(/FLAGS \(([^)]*)\)/i);
+        const flags = flagsMatch?.[1] || "";
+        currentIsUnread = !/\\Seen/i.test(flags);
         continue;
       }
       if (collecting) {
@@ -187,7 +191,7 @@ class ImapClient {
     }
 
     if (currentSeq > 0 && headerBuf.trim()) {
-      results.push({ seq: currentSeq, headers: headerBuf.trim() });
+      results.push({ seq: currentSeq, headers: headerBuf.trim(), isUnread: currentIsUnread });
     }
 
     return results.sort((a, b) => b.seq - a.seq);
@@ -441,9 +445,9 @@ class SmtpClient {
     throw new Error("SMTP read timeout");
   }
 
-  private async expectCode(expected: number): Promise<string> {
+  private async expectCode(expected: number, timeoutMs = 10000): Promise<string> {
     while (true) {
-      const line = await this.readLine();
+      const line = await this.readLine(timeoutMs);
       if (!line.slice(3, 4).match(/[-]/)) {
         const code = parseInt(line.slice(0, 3), 10);
         if (code !== expected) throw new Error(`SMTP ${code}: ${line}`);
@@ -507,7 +511,7 @@ class SmtpClient {
     await this.expectCode(354);
     const msg = buildSmtpMessage({ from, to, cc, subject, body, attachments });
     await this.write(msg + "\r\n.\r\n");
-    await this.expectCode(250);
+    await this.expectCode(250, attachments.length > 0 ? 45000 : 15000);
   }
 
   async quit(): Promise<void> {
@@ -518,7 +522,11 @@ class SmtpClient {
 
   private async write(data: string): Promise<void> {
     if (!this.conn) throw new Error("Not connected");
-    await this.conn.write(this.encoder.encode(data));
+    const bytes = this.encoder.encode(data);
+    const chunkSize = 16 * 1024;
+    for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+      await this.conn.write(bytes.subarray(offset, offset + chunkSize));
+    }
   }
 }
 
@@ -802,7 +810,7 @@ Deno.serve(async (req: Request) => {
           to: parseHeader(h.headers, "To"),
           date: parseHeader(h.headers, "Date"),
           snippet: "",
-          isUnread: false,
+          isUnread: requestedFolder === "INBOX" ? h.isUnread : false,
         }));
         return jsonResponse({
           messages,
@@ -825,6 +833,18 @@ Deno.serve(async (req: Request) => {
       if (!uid) return jsonResponse({ error: "uid required" }, 400);
       const session = await openMailbox(conn, folder, uid);
       try {
+        if (folder.toUpperCase() === "INBOX") {
+          try {
+            await session.imap.addFlags(uid, ["\\Seen"]);
+          } catch (error) {
+            console.log("[imap-api] mark seen failed", {
+              login: session.login,
+              uid,
+              folder,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
         const rawBody = await session.imap.fetchBody(uid);
         const { text, html, snippet } = extractBodyParts(rawBody);
         return jsonResponse({ uid, body: { text, html }, snippet });

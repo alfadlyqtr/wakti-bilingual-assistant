@@ -55,25 +55,25 @@ function MessageRow({ message, activeFolder, deleting, onOpen, onDelete }: Messa
     : extractName(message.from) || message.from;
 
   return (
-    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-white/[0.04] sm:px-5 sm:py-3.5">
+    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/50 sm:px-5 sm:py-3.5">
       <div className="pt-1.5">
-        <div className={`h-2.5 w-2.5 rounded-full ${message.isUnread ? 'bg-blue-500' : 'bg-white/10'}`} />
+        <div className={`h-2.5 w-2.5 rounded-full ${message.isUnread ? 'bg-blue-500' : 'bg-muted-foreground/20'}`} />
       </div>
 
       <button onClick={onOpen} className="min-w-0 flex-1 text-left">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
-            <div className={`truncate text-sm ${message.isUnread ? 'font-semibold text-white' : 'font-medium text-white/88'}`}>
+            <div className={`truncate text-sm ${message.isUnread ? 'font-semibold text-foreground' : 'font-medium text-foreground/80'}`}>
               {personLabel}
             </div>
-            <div className={`mt-0.5 truncate text-sm ${message.isUnread ? 'text-white/92' : 'text-white/72'}`}>
+            <div className={`mt-0.5 truncate text-sm ${message.isUnread ? 'text-foreground/90' : 'text-muted-foreground'}`}>
               {message.subject || '(no subject)'}
             </div>
-            <div className="mt-1 truncate text-xs text-white/45">
+            <div className="mt-1 truncate text-xs text-muted-foreground">
               {message.snippet || 'No preview available'}
             </div>
           </div>
-          <div className="shrink-0 pt-0.5 text-[11px] text-white/45">{formatDate(message.date)}</div>
+          <div className="shrink-0 pt-0.5 text-[11px] text-muted-foreground">{formatDate(message.date)}</div>
         </div>
       </button>
 
@@ -81,7 +81,7 @@ function MessageRow({ message, activeFolder, deleting, onOpen, onDelete }: Messa
         title="Delete"
         onClick={onDelete}
         disabled={deleting}
-        className="mt-0.5 shrink-0 rounded-xl p-2 text-white/45 transition-colors hover:bg-white/10 hover:text-red-400 disabled:opacity-60"
+        className="mt-0.5 shrink-0 rounded-xl p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-red-500 disabled:opacity-60"
       >
         {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
       </button>
@@ -101,14 +101,14 @@ function MessageView({ message, onBack, onReply, onDelete, deleting }: MessageVi
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-1 pb-3 border-b border-border/40">
-        <button title="Back" onClick={onBack} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+        <button title="Back" onClick={onBack} className="p-1.5 rounded-lg transition-colors hover:bg-accent/70">
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span className="text-sm font-medium truncate flex-1">{message.subject}</span>
-        <button title="Reply" onClick={onReply} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-blue-400">
+        <button title="Reply" onClick={onReply} className="p-1.5 rounded-lg transition-colors hover:bg-accent/70 text-blue-500">
           <Reply className="h-4 w-4" />
         </button>
-        <button title="Delete" onClick={onDelete} disabled={deleting} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-red-400 disabled:opacity-60">
+        <button title="Delete" onClick={onDelete} disabled={deleting} className="p-1.5 rounded-lg transition-colors hover:bg-accent/70 text-red-500 disabled:opacity-60">
           {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
         </button>
       </div>
@@ -121,7 +121,7 @@ function MessageView({ message, onBack, onReply, onDelete, deleting }: MessageVi
       <div className="flex-1 overflow-y-auto pt-3">
         {message.body.html ? (
           <div
-            className="text-sm prose prose-invert max-w-none"
+            className="prose prose-sm max-w-none break-words dark:prose-invert"
             dangerouslySetInnerHTML={{ __html: message.body.html }}
           />
         ) : (
@@ -219,9 +219,12 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
 
   const handleSend = async (input: MailComposerSubmitInput) => {
     const ok = await gmail.sendMessage(input);
-    if (ok && gmail.activeFolder === 'SENT') {
-      gmail.fetchMessages('SENT');
-    }
+    if (!ok) return false;
+    await gmail.fetchMessages('SENT', undefined, {
+      forceRefresh: true,
+      background: gmail.activeFolder !== 'SENT',
+      quiet: true,
+    });
     return ok;
   };
 
@@ -257,7 +260,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
   if (!connected) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
-        <div className="rounded-full bg-white/5 p-4">
+        <div className="rounded-full border border-border/60 bg-muted/40 p-4">
           <GmailIcon size={32} />
         </div>
         <div>
@@ -274,32 +277,32 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-[22px] border border-white/10 bg-[#0c0f14] p-3 sm:p-4">
+      <div className="rounded-[22px] border border-border bg-card/95 p-3 text-card-foreground shadow-sm sm:p-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/10">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-background/70">
                 <GmailIcon size={18} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-col items-start gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
-                  <span className="block max-w-full truncate text-base font-semibold text-white">{emailAddress || 'Gmail'}</span>
+                  <span className="block max-w-full truncate text-base font-semibold text-foreground">{emailAddress || 'Gmail'}</span>
                   <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">{connectedLabel}</Badge>
                 </div>
-                <div className="mt-1 max-w-full truncate text-xs text-white/55">{mailboxLine}</div>
+                <div className="mt-1 max-w-full truncate text-xs text-muted-foreground">{mailboxLine}</div>
               </div>
             </div>
 
             <div className="mt-3 flex flex-wrap gap-2">
               {emailAddress ? (
-                <div className="max-w-full rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/70">
+                <div className="max-w-full rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground">
                   <span className="block max-w-[220px] truncate sm:max-w-[280px]">{emailAddress}</span>
                 </div>
               ) : null}
-              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/75">
+              <div className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-foreground/80">
                 {activeFolderLabel}
               </div>
-              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/55">
+              <div className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground">
                 {gmail.messages.length} shown
               </div>
             </div>
@@ -308,7 +311,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
           <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
             <button
               onClick={handleRefresh}
-              className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 transition-colors hover:bg-white/10"
+              className="rounded-xl border border-border/70 bg-background/70 p-2.5 text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               title={refreshLabel}
             >
               {gmail.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -333,7 +336,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
             className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-medium transition-all ${
               gmail.activeFolder === f.id
                 ? 'bg-blue-600 text-white shadow-sm'
-                : 'border border-white/10 bg-white/[0.04] text-white/60 hover:bg-white/10 hover:text-white'
+                : 'border border-border/70 bg-background/70 text-muted-foreground hover:bg-accent hover:text-accent-foreground'
             }`}
           >
             {f.icon}
@@ -344,18 +347,18 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
           <div className="relative">
             <button
               onClick={() => setShowFolders(v => !v)}
-              className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-medium text-white/60 transition-all hover:bg-white/10 hover:text-white"
+              className="flex items-center gap-1 rounded-full border border-border/70 bg-background/70 px-3.5 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-accent hover:text-accent-foreground"
             >
               More
               <ChevronDown className="h-3 w-3" />
             </button>
             {showFolders && (
-              <div className="absolute top-full mt-1 left-0 z-20 bg-[#0c0f14] border border-white/10 rounded-xl shadow-xl min-w-[140px] overflow-hidden">
+              <div className="absolute left-0 top-full z-20 mt-1 min-w-[140px] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl">
                 {customFolders.map(f => (
                   <button
                     key={f.id}
                     onClick={() => handleFolderSwitch(f.id)}
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors flex items-center gap-2"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-accent"
                   >
                     <MailOpen className="h-3 w-3 text-muted-foreground" />
                     {f.name}
@@ -370,7 +373,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
         )}
       </div>
 
-      <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-white/10 bg-[#0c0f14]">
+      <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-border bg-card/95 text-card-foreground shadow-sm">
         {selectedMessage ? (
           <div className="h-full p-4 sm:p-5">
             {loadingMessage ? (
@@ -400,7 +403,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                 <span className="text-sm text-muted-foreground">No messages in {gmail.activeFolder === 'INBOX' ? 'Inbox' : gmail.activeFolder === 'SENT' ? 'Sent' : gmail.activeFolder}</span>
               </div>
             ) : (
-              <div className="divide-y divide-white/10">
+              <div className="divide-y divide-border">
                 {gmail.messages.map(msg => (
                   <MessageRow
                     key={msg.id}

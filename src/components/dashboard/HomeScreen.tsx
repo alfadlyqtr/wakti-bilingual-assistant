@@ -221,6 +221,19 @@ function isAppleMobileDevice() {
   return /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 }
 
+function isLargeSurfaceMobileDevice() {
+  if (typeof window !== 'undefined') {
+    const narrowViewport = window.innerWidth <= 820;
+    const coarsePointer = typeof window.matchMedia === 'function'
+      ? window.matchMedia('(pointer: coarse)').matches
+      : false;
+    const touchCapable = typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
+    if (narrowViewport && (coarsePointer || touchCapable)) return true;
+  }
+  if (typeof navigator === 'undefined') return false;
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
+}
+
 // Calculate explicit grid positions ("parking spots") for each item as area strings
 // Handles widget::, app::, and empty:: items
 function calcGridPositions(items: string[]) {
@@ -401,6 +414,49 @@ function findValidSwapTargets(
   return layout
     .filter(item => item.page === activeItem.page && item.id !== activeItem.id)
     .filter(item => canSwapLayoutItems(layout, activeItem, item, widgetSizes));
+}
+
+function getBulkPlacementPriority(
+  itemOrId: HomescreenLayoutItem | string,
+  widgetSizes: Record<string, 'big' | 'small'> = {}
+) {
+  const id = typeof itemOrId === 'string' ? itemOrId : itemOrId.id;
+  if (id.startsWith('widget::')) {
+    const widgetKey = id.replace('widget::', '') as WidgetId;
+    return widgetSizes[widgetKey] === 'big' ? 0 : 1;
+  }
+  return 2;
+}
+
+function autoPackLayoutItems(
+  layout: HomescreenLayoutItem[],
+  itemIds: string[],
+  targetPage: number,
+  widgetSizes: Record<string, 'big' | 'small'> = {}
+) {
+  const selectedSet = new Set(itemIds);
+  const selectedItems = layout.filter(item => selectedSet.has(item.id));
+  if (selectedItems.length !== itemIds.length) return null;
+  const orderedItems = [...selectedItems].sort((a, b) => {
+    return getBulkPlacementPriority(a, widgetSizes) - getBulkPlacementPriority(b, widgetSizes)
+      || a.page - b.page
+      || a.row - b.row
+      || a.col - b.col;
+  });
+  const layoutWithoutSelected = layout.filter(item => !selectedSet.has(item.id));
+  const workingLayout = [...layoutWithoutSelected];
+  const placedItems: HomescreenLayoutItem[] = [];
+  for (const item of orderedItems) {
+    const nextSpot = findFirstOpenPosition(workingLayout, item.id, targetPage, widgetSizes);
+    if (!nextSpot) return null;
+    workingLayout.push(nextSpot);
+    placedItems.push(nextSpot);
+  }
+  return {
+    selectedItems,
+    placedItems,
+    nextLayout: [...layoutWithoutSelected, ...placedItems],
+  };
 }
 
 function extractLegacyPages(sourceGrid: string[], enabledWidgets: Set<string>, dockSet: Set<string>) {
@@ -1935,7 +1991,7 @@ function CalendarWidget({ shell, navigate, language, upcomingCount }: {
 }
 
 // ─── Widget content renderer (no drag logic, just visuals) ────────────────────
-function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote }: {
+function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote, bulkSelectionActive = false, isBulkSelected = false, onBulkSelectToggle }: {
   wKey: WidgetId; editMode: boolean; language: string; theme: string;
   hasBg: boolean; statCardBase: string; statLblColor: string;
   pendingTasks: number; completedToday: number; upcomingCount: number;
@@ -1947,6 +2003,9 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
   maw3dEvents?: any[];
   attendingCounts?: Record<string, number>;
   onExpandQuote?: () => void;
+  bulkSelectionActive?: boolean;
+  isBulkSelected?: boolean;
+  onBulkSelectToggle?: () => void;
 }) {
   const isDark = theme === 'dark';
   const now = new Date();
@@ -1967,43 +2026,59 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
   const recovery = whoopData?.recovery ?? null;
   const strain   = whoopData?.strain ?? null;
   const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
-  const isAppleMobile = isAppleMobileDevice();
+  const isMobileGlass = isLargeSurfaceMobileDevice();
 
   const shell = (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => (
     <div
-      onClick={editMode ? undefined : onClick}
+      onClick={editMode || bulkSelectionActive ? undefined : onClick}
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
         background: hasBg
-          ? isAppleMobile
-            ? 'linear-gradient(180deg, rgba(10,14,24,0.22) 0%, rgba(10,14,24,0.18) 100%), linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)'
+          ? isMobileGlass
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.38) 0%, rgba(8,12,20,0.3) 100%), linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)'
             : 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 100%)'
-          : isAppleMobile
-            ? 'linear-gradient(180deg, rgba(8,12,20,0.18) 0%, rgba(8,12,20,0.12) 100%), linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.06) 100%)'
+          : isMobileGlass
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.3) 0%, rgba(8,12,20,0.22) 100%), linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
             : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 100%)',
         backdropFilter: hasBg
-          ? `blur(${isAppleMobile ? '24px' : '30px'}) saturate(${isAppleMobile ? '145%' : '170%'})`
-          : `blur(${isAppleMobile ? '20px' : '24px'}) saturate(${isAppleMobile ? '135%' : '155%'})`,
+          ? `blur(${isMobileGlass ? '18px' : '30px'}) saturate(${isMobileGlass ? '125%' : '170%'})`
+          : `blur(${isMobileGlass ? '16px' : '24px'}) saturate(${isMobileGlass ? '118%' : '155%'})`,
         WebkitBackdropFilter: hasBg
-          ? `blur(${isAppleMobile ? '24px' : '30px'}) saturate(${isAppleMobile ? '145%' : '170%'})`
-          : `blur(${isAppleMobile ? '20px' : '24px'}) saturate(${isAppleMobile ? '135%' : '155%'})`,
+          ? `blur(${isMobileGlass ? '18px' : '30px'}) saturate(${isMobileGlass ? '125%' : '170%'})`
+          : `blur(${isMobileGlass ? '16px' : '24px'}) saturate(${isMobileGlass ? '118%' : '155%'})`,
         boxShadow: hasBg
-          ? isAppleMobile
-            ? `0 18px 42px rgba(0,0,0,0.34), 0 8px 20px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -18px 28px rgba(255,255,255,0.02)`
+          ? isMobileGlass
+            ? `0 18px 42px rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -18px 28px rgba(255,255,255,0.01)`
             : `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -18px 28px rgba(255,255,255,0.04)`
-          : isAppleMobile
-            ? `0 16px 38px rgba(0,0,0,0.28), 0 0 16px ${glow}10, inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -16px 24px rgba(255,255,255,0.02)`
+          : isMobileGlass
+            ? `0 16px 38px rgba(0,0,0,0.34), 0 0 12px ${glow}0d, inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -16px 24px rgba(255,255,255,0.01)`
             : `0 16px 38px rgba(0,0,0,0.22), 0 0 20px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.04)`,
         border: hasBg
-          ? `1px solid rgba(255,255,255,${isAppleMobile ? '0.14' : '0.24'})`
-          : `1px solid rgba(255,255,255,${isAppleMobile ? '0.12' : '0.18'})`,
+          ? `1px solid rgba(255,255,255,${isMobileGlass ? '0.08' : '0.24'})`
+          : `1px solid rgba(255,255,255,${isMobileGlass ? '0.08' : '0.18'})`,
       }}
     >
-      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isAppleMobile ? '0.22' : '0.14'})` }} />}
-      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? (isAppleMobile ? 0.1 : 0.16) : (isAppleMobile ? 0.16 : 0.22), mixBlendMode: 'screen', filter: `saturate(${isAppleMobile ? '0.82' : '0.9'})` }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.18' : '0.32'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.055' : '0.1'}) 22%, rgba(255,255,255,${isAppleMobile ? '0.015' : '0.03'}) 56%, transparent 100%)` }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isAppleMobile ? '0.14' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isAppleMobile ? '0.06' : '0.12'}) 0%, transparent 26%)` }} />
+      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isMobileGlass ? '0.3' : '0.14'})` }} />}
+      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? (isMobileGlass ? 0.08 : 0.16) : (isMobileGlass ? 0.1 : 0.22), mixBlendMode: 'screen', filter: `saturate(${isMobileGlass ? '0.72' : '0.9'})` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? '0.08' : '0.32'}) 0%, rgba(255,255,255,${isMobileGlass ? '0.028' : '0.1'}) 22%, rgba(255,255,255,${isMobileGlass ? '0.008' : '0.03'}) 56%, transparent 100%)` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isMobileGlass ? '0.07' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isMobileGlass ? '0.03' : '0.12'}) 0%, transparent 26%)` }} />
       <div className="relative z-10 w-full h-full">{children}</div>
+      {bulkSelectionActive && (
+        <button
+          type="button"
+          aria-label={isBulkSelected ? (language === 'ar' ? 'إلغاء تحديد هذا العنصر' : 'Deselect this item') : (language === 'ar' ? 'تحديد هذا العنصر' : 'Select this item')}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onBulkSelectToggle?.();
+          }}
+          className="absolute inset-0 z-20"
+          style={{
+            border: 'none',
+            background: isBulkSelected ? 'rgba(34,197,94,0.12)' : 'rgba(15,23,42,0.02)',
+          }}
+        />
+      )}
     </div>
   );
 
@@ -2103,8 +2178,11 @@ interface UnifiedWidgetCellProps {
   attendingCounts?: Record<string, number>;
   onExpandQuote?: () => void;
   onLongPress?: () => void;
+  bulkSelectionActive?: boolean;
+  isBulkSelected?: boolean;
+  onBulkSelectToggle?: () => void;
 }
-function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote, onLongPress }: UnifiedWidgetCellProps) {
+function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote, onLongPress, bulkSelectionActive = false, isBulkSelected = false, onBulkSelectToggle }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id, data: { type: 'unified' }, disabled: !editMode,
   });
@@ -2135,9 +2213,13 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         opacity: isDragging ? 0.35 : 1,
         touchAction: 'none',
         zIndex: isDragging ? 50 : 'auto',
-        outline: isOver ? '3px solid rgba(99,102,241,0.9)' : undefined,
-        borderRadius: isOver ? '18px' : undefined,
-        boxShadow: isOver ? '0 0 0 4px rgba(99,102,241,0.35), 0 0 20px rgba(99,102,241,0.5)' : undefined,
+        outline: isOver ? '3px solid rgba(99,102,241,0.9)' : isBulkSelected ? '3px solid rgba(34,197,94,0.95)' : undefined,
+        borderRadius: isOver || isBulkSelected ? '18px' : undefined,
+        boxShadow: isOver
+          ? '0 0 0 4px rgba(99,102,241,0.35), 0 0 20px rgba(99,102,241,0.5)'
+          : isBulkSelected
+            ? '0 0 0 4px rgba(34,197,94,0.22), 0 0 22px rgba(34,197,94,0.32)'
+            : undefined,
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
@@ -2157,7 +2239,15 @@ function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCar
         maw3dEvents={maw3dEvents}
         attendingCounts={attendingCounts}
         onExpandQuote={onExpandQuote}
+        bulkSelectionActive={bulkSelectionActive}
+        isBulkSelected={isBulkSelected}
+        onBulkSelectToggle={onBulkSelectToggle}
       />
+      {isBulkSelected && (
+        <div className="absolute top-2 right-2 z-20 w-6 h-6 rounded-full bg-green-500 border border-white/70 shadow-[0_8px_18px_rgba(34,197,94,0.45)] flex items-center justify-center pointer-events-none">
+          <Check className="w-3.5 h-3.5 text-white" />
+        </div>
+      )}
       {editMode && (
         <div className="absolute -top-1 -right-1 z-10 w-5 h-5 rounded-full bg-black/70 border border-white/30 flex items-center justify-center">
           <GripVertical className="w-3 h-3 text-white/80" />
@@ -2175,8 +2265,11 @@ interface UnifiedAppCellProps {
   avatarUrl?: string;
   badgeCount?: number;
   onLongPress?: () => void;
+  bulkSelectionActive?: boolean;
+  isBulkSelected?: boolean;
+  onBulkSelectToggle?: () => void;
 }
-function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0, onLongPress }: UnifiedAppCellProps) {
+function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0, onLongPress, bulkSelectionActive = false, isBulkSelected = false, onBulkSelectToggle }: UnifiedAppCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id, data: { type: 'unified' }, disabled: !editMode,
   });
@@ -2208,17 +2301,34 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
         opacity: isDragging ? 0.25 : 1,
         touchAction: 'none',
         zIndex: isDragging ? 50 : 'auto',
-        outline: isOver ? '2px solid rgba(99,102,241,0.9)' : undefined,
-        borderRadius: isOver ? '18px' : undefined,
-        boxShadow: isOver ? '0 0 0 3px rgba(99,102,241,0.35), 0 0 14px rgba(99,102,241,0.4)' : undefined,
+        outline: isOver ? '2px solid rgba(99,102,241,0.9)' : isBulkSelected ? '2px solid rgba(34,197,94,0.95)' : undefined,
+        borderRadius: isOver || isBulkSelected ? '18px' : undefined,
+        boxShadow: isOver
+          ? '0 0 0 3px rgba(99,102,241,0.35), 0 0 14px rgba(99,102,241,0.4)'
+          : isBulkSelected
+            ? '0 0 0 3px rgba(34,197,94,0.22), 0 0 18px rgba(34,197,94,0.3)'
+            : undefined,
       }}
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
       {...attributes}
       {...listeners}
-      onClick={editMode ? undefined : () => navigate(app.path)}
+      onClick={editMode ? undefined : (event) => {
+        if (bulkSelectionActive) {
+          event.preventDefault();
+          event.stopPropagation();
+          onBulkSelectToggle?.();
+          return;
+        }
+        navigate(app.path);
+      }}
     >
+      {isBulkSelected && (
+        <div className="absolute top-0 right-2 z-20 w-6 h-6 rounded-full bg-green-500 border border-white/70 shadow-[0_8px_18px_rgba(34,197,94,0.45)] flex items-center justify-center pointer-events-none">
+          <Check className="w-3.5 h-3.5 text-white" />
+        </div>
+      )}
       <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
       <span
         className="text-[11px] font-bold text-center leading-tight mt-1.5 text-white px-2 py-0.5 rounded-md"
@@ -2410,6 +2520,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [contextMenu,     setContextMenu]     = useState<{ itemId: string } | null>(null);
   const [samePageMoveState, setSamePageMoveState] = useState<{ itemId: string; viewport: { top: number; left: number; width: number; height: number } | null } | null>(null);
   const [samePageSwapState, setSamePageSwapState] = useState<{ itemId: string; viewport: { top: number; left: number; width: number; height: number } | null } | null>(null);
+  const [bulkMoveSelection, setBulkMoveSelection] = useState<{ anchorItemId: string; selectedIds: string[] } | null>(null);
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const [saveState,       setSaveState]       = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const bgInputRef    = useRef<HTMLInputElement>(null);
@@ -2455,7 +2566,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     );
   });
   const homescreenDirtyRef = useRef(false);
-  const didHydrateProfileRef = useRef(false);
 
   useEffect(() => {
     const h = new Date().getHours();
@@ -2492,10 +2602,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       nextLocalState.dockIds,
     ));
     homescreenDirtyRef.current = false;
-    didHydrateProfileRef.current = false;
     setDragPages(null);
     setSamePageMoveState(null);
     setSamePageSwapState(null);
+    setBulkMoveSelection(null);
     setCurrentPage(0);
   }, [theme, user?.id]);
 
@@ -2640,6 +2750,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setDragPages(null);
     setSamePageMoveState(null);
     setSamePageSwapState(null);
+    setBulkMoveSelection(null);
     setHomescreenLayout(normalized);
     setUnifiedGrid(flat);
     localStorage.setItem(LS_LAYOUT_KEY(), JSON.stringify(normalized));
@@ -2660,6 +2771,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const hs = s?.homescreen || {};
     const VALID_WIDGET_KEYS = new Set(['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
     const rawWidgets = hs?.homescreenWidgets || s?.homescreenWidgets;
+    const hasRemoteWidgets = !!rawWidgets && typeof rawWidgets === 'object';
     const strippedWidgets: Record<string, boolean> = {};
     if (rawWidgets) {
       for (const [k, v] of Object.entries(rawWidgets)) {
@@ -2670,37 +2782,51 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const remoteWidgetSizes = hs?.homescreenWidgetSizes && typeof hs.homescreenWidgetSizes === 'object'
       ? hs.homescreenWidgetSizes as Record<string, 'big' | 'small'>
       : null;
+    const remoteUnifiedGrid = Array.isArray(hs?.unifiedGrid)
+      ? hs.unifiedGrid as string[]
+      : [];
     const remoteLayout = Array.isArray(hs?.homescreenLayout)
       ? hs.homescreenLayout as HomescreenLayoutItem[]
       : [];
-    const hasLocalWidgets = getScopedStorageItem(LS_WIDGETS_BASE, user.id) !== null;
-    const hasLocalWidgetSizes = getScopedStorageItem(LS_WIDGET_SIZES_BASE, user.id) !== null;
-    const hasLocalLayout = getScopedStorageItem(LS_LAYOUT_BASE, user.id) !== null;
-    if (!didHydrateProfileRef.current && !homescreenDirtyRef.current) {
-      if (!hasLocalWidgets) {
+    const hasRemoteWidgetSizes = !!remoteWidgetSizes;
+    const hasRemoteLayoutState = remoteLayout.length > 0 || remoteUnifiedGrid.length > 0;
+    const hasRemoteHomescreenState = hasRemoteWidgets
+      || hasRemoteWidgetSizes
+      || hasRemoteLayoutState
+      || Array.isArray(hs?.dockIds)
+      || Array.isArray(hs?.iconOrder)
+      || typeof hs?.showQuote === 'boolean'
+      || typeof hs?.headerColor === 'string'
+      || typeof hs?.dockColor === 'string'
+      || typeof hs?.bgImage === 'string'
+      || typeof hs?.bgPositionY === 'number'
+      || isBgChoiceValue(hs?.bgChoice)
+      || !!s?.homescreenBg;
+    if (!homescreenDirtyRef.current && hasRemoteHomescreenState) {
+      const remoteDockIds = Array.isArray(hs?.dockIds) ? sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP) : dockIds;
+      const nextWidgets = hasRemoteWidgets ? fromSupabase : hsWidgets;
+      const nextSizes = remoteWidgetSizes || hsWidgetSizes;
+      if (hasRemoteWidgets) {
         setHsWidgets(fromSupabase);
-        localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(fromSupabase));
+        setScopedStorageItem(LS_WIDGETS_BASE, JSON.stringify(fromSupabase), user.id);
       }
-      if (!hasLocalWidgetSizes && remoteWidgetSizes) {
+      if (hasRemoteWidgetSizes && remoteWidgetSizes) {
         setHsWidgetSizes(remoteWidgetSizes);
-        localStorage.setItem(LS_WIDGET_SIZES_KEY(), JSON.stringify(remoteWidgetSizes));
+        setScopedStorageItem(LS_WIDGET_SIZES_BASE, JSON.stringify(remoteWidgetSizes), user.id);
       }
-      if (!hasLocalLayout) {
-        const baseWidgets = hasLocalWidgets ? hsWidgets : fromSupabase;
-        const baseSizes = hasLocalWidgetSizes ? hsWidgetSizes : (remoteWidgetSizes || hsWidgetSizes);
+      if (hasRemoteLayoutState) {
         const nextLayout = normalizeHomescreenLayout(
-          remoteLayout.length > 0 ? remoteLayout : buildLayoutFromLegacy(Array.isArray(hs?.unifiedGrid) ? hs.unifiedGrid : unifiedGrid, baseWidgets, baseSizes, Array.isArray(hs?.dockIds) ? sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP) : dockIds),
-          baseWidgets,
-          baseSizes,
-          Array.isArray(hs?.dockIds) ? sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP) : dockIds,
+          remoteLayout.length > 0 ? remoteLayout : buildLayoutFromLegacy(remoteUnifiedGrid, nextWidgets, nextSizes, remoteDockIds),
+          nextWidgets,
+          nextSizes,
+          remoteDockIds,
         );
         const nextUnified = layoutToUnifiedGrid(nextLayout);
         setHomescreenLayout(nextLayout);
         setUnifiedGrid(nextUnified);
-        localStorage.setItem(LS_LAYOUT_KEY(), JSON.stringify(nextLayout));
-        localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(nextUnified));
+        setScopedStorageItem(LS_LAYOUT_BASE, JSON.stringify(nextLayout), user.id);
+        setScopedStorageItem(LS_UNIFIED_BASE, JSON.stringify(nextUnified), user.id);
       }
-      didHydrateProfileRef.current = true;
     }
 
     if (Array.isArray(hs.dockIds)) {
@@ -2729,10 +2855,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const localWallpaper = typeof localBgImage === 'string' && !!localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
     const remoteWallpaper = typeof hs.bgImage === 'string' && !!hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
     const remoteChoice = isBgChoiceValue(hs.bgChoice) ? hs.bgChoice : null;
-    const inferredChoice: BgChoice = remoteChoice
-      ?? localChoice
-      ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default');
-    const resolvedChoice: BgChoice = inferredChoice === 'wallpaper' && !(remoteWallpaper || localWallpaper)
+    const useRemoteBgState = hasRemoteHomescreenState;
+    const inferredChoice: BgChoice = useRemoteBgState
+      ? (remoteChoice ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'))
+      : (remoteChoice ?? localChoice ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'));
+    const resolvedChoice: BgChoice = inferredChoice === 'wallpaper' && !(remoteWallpaper || (!useRemoteBgState && localWallpaper))
       ? 'default'
       : inferredChoice;
 
@@ -2757,7 +2884,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const nextBgPosition = resolvedChoice === 'wallpaper'
       ? (typeof hs.bgPositionY === 'number'
           ? Math.max(0, Math.min(100, hs.bgPositionY))
-          : localChoice === 'wallpaper'
+          : !useRemoteBgState && localChoice === 'wallpaper'
             ? localBgPosition
             : 50)
       : 50;
@@ -2765,7 +2892,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     localStorage.setItem(LS_BG_POS_Y_KEY(), String(nextBgPosition));
 
     if (resolvedChoice === 'wallpaper') {
-      const resolvedBgImage = remoteWallpaper || (localChoice === 'wallpaper' ? localWallpaper : '');
+      const resolvedBgImage = remoteWallpaper || (!useRemoteBgState && localChoice === 'wallpaper' ? localWallpaper : '');
       if (resolvedBgImage) {
         setBgImage(prev => prev === resolvedBgImage ? prev : resolvedBgImage);
         localStorage.setItem(LS_BG_KEY(), resolvedBgImage);
@@ -2773,6 +2900,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     } else {
       const nextDefaultBg = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
       setBgImage(prev => prev === nextDefaultBg ? prev : nextDefaultBg);
+      removeScopedStorageItem(LS_BG_BASE, user.id);
     }
 
     if (typeof hs.headerColor === 'string') {
@@ -3104,6 +3232,67 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     return { activeItem, targets };
   }, [homescreenLayout, hsWidgetSizes, samePageSwapState]);
 
+  const bulkMoveOptions = useMemo(() => {
+    if (!bulkMoveSelection) return null;
+    const selectedSet = new Set(bulkMoveSelection.selectedIds);
+    const selectedItems = homescreenLayout.filter(item => selectedSet.has(item.id));
+    const anchorItem = homescreenLayout.find(item => item.id === bulkMoveSelection.anchorItemId) || selectedItems[0] || null;
+    if (!anchorItem || selectedItems.length !== bulkMoveSelection.selectedIds.length) return null;
+    return {
+      anchorItem,
+      selectedIds: bulkMoveSelection.selectedIds,
+      selectedItems,
+      selectedSet,
+    };
+  }, [bulkMoveSelection, homescreenLayout]);
+  const bulkSelectionCount = bulkMoveOptions?.selectedIds.length || 0;
+  const bulkMoveOtherPage = safeCurrentPage === 0 ? 1 : 0;
+
+  const clearBulkMoveSelection = useCallback(() => {
+    setBulkMoveSelection(null);
+  }, []);
+
+  const startBulkMoveSelection = useCallback((itemId: string) => {
+    setSamePageMoveState(null);
+    setSamePageSwapState(null);
+    setContextMenu(null);
+    setBulkMoveSelection({ anchorItemId: itemId, selectedIds: [itemId] });
+  }, []);
+
+  const toggleBulkMoveSelection = useCallback((itemId: string) => {
+    setBulkMoveSelection(prev => {
+      if (!prev) return prev;
+      const anchorItem = homescreenLayout.find(item => item.id === prev.anchorItemId);
+      const nextItem = homescreenLayout.find(item => item.id === itemId);
+      if (!anchorItem || !nextItem || nextItem.page !== anchorItem.page) return prev;
+      const exists = prev.selectedIds.includes(itemId);
+      const nextSelectedIds = exists
+        ? prev.selectedIds.filter(id => id !== itemId)
+        : [...prev.selectedIds, itemId];
+      if (nextSelectedIds.length === 0) return null;
+      return {
+        anchorItemId: nextSelectedIds.includes(prev.anchorItemId) ? prev.anchorItemId : nextSelectedIds[0],
+        selectedIds: nextSelectedIds,
+      };
+    });
+  }, [homescreenLayout]);
+
+  const autoPackBulkMoveSelection = useCallback((targetPage: number) => {
+    if (!bulkMoveSelection) return;
+    const packed = autoPackLayoutItems(homescreenLayout, bulkMoveSelection.selectedIds, targetPage, hsWidgetSizes);
+    if (!packed) {
+      toast.error(language === 'ar' ? 'لا توجد مساحة كافية لكل العناصر المحددة' : 'Not enough space for all selected items');
+      return;
+    }
+    persistLayout(packed.nextLayout, targetPage);
+  }, [bulkMoveSelection, homescreenLayout, hsWidgetSizes, language, persistLayout]);
+
+  useEffect(() => {
+    if (bulkMoveSelection && !bulkMoveOptions) {
+      setBulkMoveSelection(null);
+    }
+  }, [bulkMoveOptions, bulkMoveSelection]);
+
   _effectiveRef.current = currentPageData?.effectiveItems || [];
   _pageDragStateRef.current = { currentPageData, savedPages };
 
@@ -3116,6 +3305,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   useEffect(() => {
     setCurrentPage(prev => Math.min(prev, Math.max(0, pages.length - 1)));
   }, [pages.length]);
+
+  useEffect(() => {
+    if (editMode) setBulkMoveSelection(null);
+  }, [editMode]);
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const maxDock = isMobile ? MAX_DOCK_MOBILE : MAX_DOCK_DESKTOP;
@@ -3162,44 +3355,45 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const hasUserImage = bgChoice === 'wallpaper' && !!bgImage;
   const isDefaultBgImage = bgChoice === 'default' || bgImage === defaultBg || bgImage === DEFAULT_BG_DARK || bgImage === DEFAULT_BG_LIGHT;
   const hasBg  = !!bgImage && bgChoice !== 'style';
+  const hasCustomBg = bgChoice === 'style';
+  const hasAnyBg = hasBg || hasCustomBg;
   const wallpaperTranslateY = `${(bgPositionY - 50) * 1.2}%`;
   const isAppleMobile = isAppleMobileDevice();
+  const isMobileGlass = isLargeSurfaceMobileDevice();
   const effectiveDockColor = dockColor || (isDark ? '#0c0f14' : '#060541');
   const dockTintIsDark = dockColor ? getHexLuminance(effectiveDockColor) < 0.32 : isDark;
   const dockTrayBackground = dockColor
-    ? `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.16 : 0.26) : (dockTintIsDark ? 0.24 : 0.42)}) 0%, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.04 : 0.1) : (dockTintIsDark ? 0.08 : 0.16)}) 22%, rgba(255,255,255,${isAppleMobile ? 0.012 : 0.02}) 100%), radial-gradient(circle at 50% -14%, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.12 : 0.22) : (dockTintIsDark ? 0.2 : 0.34)}) 0%, transparent 42%), linear-gradient(135deg, ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.88 : 0.48) : (dockTintIsDark ? 0.82 : 0.38))} 0%, ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.74 : 0.3) : (dockTintIsDark ? 0.64 : 0.22))} 52%, ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.82 : 0.36) : (dockTintIsDark ? 0.74 : 0.28))} 100%)`
-    : `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? 0.42 : 0.66}) 0%, rgba(255,255,255,${isAppleMobile ? 0.2 : 0.34}) 24%, rgba(255,255,255,${isAppleMobile ? 0.08 : 0.16}) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,${isAppleMobile ? 0.24 : 0.42}) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,${isAppleMobile ? 0.12 : 0.22}) 0%, rgba(255,255,255,${isAppleMobile ? 0.04 : 0.08}) 46%, rgba(255,255,255,${isAppleMobile ? 0.08 : 0.14}) 100%)`;
+    ? `linear-gradient(180deg, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.42 : 0.92)} 0%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.3 : 0.84)} 100%)`
+    : `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? 0.26 : isAppleMobile ? 0.42 : 0.66}) 0%, rgba(255,255,255,${isMobileGlass ? 0.12 : isAppleMobile ? 0.2 : 0.34}) 24%, rgba(255,255,255,${isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.16}) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,${isMobileGlass ? 0.14 : isAppleMobile ? 0.24 : 0.42}) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,${isMobileGlass ? 0.07 : isAppleMobile ? 0.12 : 0.22}) 0%, rgba(255,255,255,${isMobileGlass ? 0.02 : isAppleMobile ? 0.04 : 0.08}) 46%, rgba(255,255,255,${isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.14}) 100%)`;
   const dockTrayBorder = dockColor
-    ? `1px solid rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.2 : 0.3) : (dockTintIsDark ? 0.28 : 0.42)})`
-    : `1px solid rgba(255,255,255,${isAppleMobile ? 0.28 : 0.42})`;
+    ? `1px solid rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.12 : 0.18) : isAppleMobile ? (dockTintIsDark ? 0.2 : 0.3) : (dockTintIsDark ? 0.28 : 0.42)})`
+    : `1px solid rgba(255,255,255,${isMobileGlass ? 0.16 : isAppleMobile ? 0.28 : 0.42})`;
   const dockTrayOutline = dockColor
-    ? `1px solid rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.06 : 0.1) : (dockTintIsDark ? 0.1 : 0.16)})`
-    : `1px solid rgba(255,255,255,${isAppleMobile ? 0.08 : 0.12})`;
+    ? `1px solid rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.03 : 0.06) : isAppleMobile ? (dockTintIsDark ? 0.06 : 0.1) : (dockTintIsDark ? 0.1 : 0.16)})`
+    : `1px solid rgba(255,255,255,${isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.12})`;
   const dockTrayShadow = dockColor
-    ? `0 32px 64px -28px rgba(0,0,0,${isAppleMobile ? (dockTintIsDark ? 0.8 : 0.58) : (dockTintIsDark ? 0.72 : 0.5)}), 0 16px 34px rgba(0,0,0,${isAppleMobile ? (dockTintIsDark ? 0.32 : 0.18) : (dockTintIsDark ? 0.26 : 0.14)}), 0 0 24px ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.12 : 0.1) : (dockTintIsDark ? 0.18 : 0.14))}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.26 : 0.42) : (dockTintIsDark ? 0.42 : 0.68)}), inset 0 -18px 28px rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.02 : 0.04) : (dockTintIsDark ? 0.04 : 0.08)}), inset 18px 0 28px rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.012 : 0.024) : (dockTintIsDark ? 0.02 : 0.05)}), inset -18px 0 28px rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.012 : 0.024) : (dockTintIsDark ? 0.02 : 0.05)})`
-    : `0 32px 64px -28px rgba(0,0,0,${isAppleMobile ? 0.64 : 0.56}), 0 16px 34px rgba(0,0,0,${isAppleMobile ? 0.22 : 0.16}), inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? 0.42 : 0.72}), inset 0 -18px 28px rgba(255,255,255,${isAppleMobile ? 0.04 : 0.08}), inset 20px 0 28px rgba(255,255,255,${isAppleMobile ? 0.03 : 0.05}), inset -20px 0 28px rgba(255,255,255,${isAppleMobile ? 0.03 : 0.05})`;
+    ? `0 18px 36px rgba(0,0,0,${isMobileGlass ? '0.42' : '0.26'}), inset 0 1px 0 rgba(255,255,255,${isMobileGlass ? '0.08' : '0.16'})`
+    : isMobileGlass
+      ? '0 18px 38px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.06)'
+      : `0 22px 48px rgba(0,0,0,${isAppleMobile ? '0.3' : '0.24'}), inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.12' : '0.18'})`;
   const dockTopSheen = dockColor
-    ? `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.24 : 0.4) : (dockTintIsDark ? 0.38 : 0.62)}) 0%, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.06 : 0.12) : (dockTintIsDark ? 0.12 : 0.18)}) 20%, transparent 58%)`
-    : `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? 0.4 : 0.62}) 0%, rgba(255,255,255,${isAppleMobile ? 0.12 : 0.18}) 22%, transparent 62%)`;
+    ? `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.08 : 0.18) : dockTintIsDark ? 0.12 : 0.24}) 0%, rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.02 : 0.06) : dockTintIsDark ? 0.04 : 0.12}) 42%, transparent 100%)`
+    : `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? 0.08 : isAppleMobile ? 0.18 : 0.26}) 0%, rgba(255,255,255,${isMobileGlass ? 0.02 : isAppleMobile ? 0.06 : 0.12}) 42%, transparent 100%)`;
   const dockBottomTint = dockColor
-    ? `linear-gradient(180deg, transparent 36%, ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.24 : 0.12) : (dockTintIsDark ? 0.18 : 0.08))} 100%)`
-    : `linear-gradient(180deg, transparent 36%, rgba(255,255,255,${isAppleMobile ? 0.08 : 0.14}) 100%)`;
+    ? `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isMobileGlass ? (dockTintIsDark ? 0.16 : 0.08) : dockTintIsDark ? 0.24 : 0.12}) 100%)`
+    : `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isMobileGlass ? 0.2 : isAppleMobile ? 0.14 : 0.1}) 100%)`;
 
-  // Whether any custom/user background is active (wallpaper image OR solid/gradient)
-  const hasAnyBg = hasBg || bgChoice === 'style';
-
-  // Greeting text — custom header color overrides, then universal white-on-blur when any bg, else theme default
   const headColor = headerColor || (hasAnyBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541");
   const subColor  = headerColor ? `${headerColor}b3` : (hasAnyBg ? "rgba(255,255,255,0.72)" : isDark ? "rgba(242,242,242,0.55)" : "rgba(6,5,65,0.55)");
 
   // Stat card surface — frosted glass with dark tint so white text is always readable
   const statCardBase = hasAnyBg
-    ? isAppleMobile
-      ? "bg-black/40 backdrop-blur-xl border border-white/12 shadow-[0_6px_18px_rgba(0,0,0,0.26)]"
+    ? isMobileGlass
+      ? "bg-black/52 backdrop-blur-lg border border-white/[0.08] shadow-[0_10px_24px_rgba(0,0,0,0.34)]"
       : "bg-black/30 backdrop-blur-xl border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.2)]"
     : isDark
-      ? isAppleMobile
-        ? "bg-black/[0.24] backdrop-blur-xl border border-white/[0.08]"
+      ? isMobileGlass
+        ? "bg-black/[0.3] backdrop-blur-lg border border-white/[0.06] shadow-[0_10px_24px_rgba(0,0,0,0.3)]"
         : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-white backdrop-blur-xl border border-[#060541]/10 shadow-[0_2px_12px_rgba(6,5,65,0.08)]";
 
@@ -3208,19 +3402,23 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Dock glass
   const dockGlass = hasAnyBg
-    ? "bg-black/40 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.15)]"
+    ? isMobileGlass
+      ? "bg-black/55 backdrop-blur-xl border border-white/[0.08] shadow-[0_12px_30px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.06)]"
+      : "bg-black/40 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.15)]"
     : isDark
-      ? "bg-white/[0.08] backdrop-blur-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]"
+      ? isMobileGlass
+        ? "bg-black/[0.34] backdrop-blur-xl border border-white/[0.06] shadow-[0_12px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)]"
+        : "bg-white/[0.08] backdrop-blur-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]"
       : "bg-[#060541]/90 backdrop-blur-2xl border border-[#060541]/20 shadow-[0_8px_32px_rgba(6,5,65,0.25),inset_0_1px_0_rgba(255,255,255,0.15)]";
 
   // Quote glass
   const quoteGlass = hasAnyBg
-    ? isAppleMobile
-      ? "bg-black/40 backdrop-blur-xl border border-white/10"
+    ? isMobileGlass
+      ? "bg-black/48 backdrop-blur-lg border border-white/[0.08]"
       : "bg-black/30 backdrop-blur-xl border border-white/15"
     : isDark
-      ? isAppleMobile
-        ? "bg-black/[0.22] backdrop-blur-xl border border-white/[0.08]"
+      ? isMobileGlass
+        ? "bg-black/[0.3] backdrop-blur-lg border border-white/[0.06]"
         : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-[#060541]/[0.06] backdrop-blur-xl border border-[#060541]/10 shadow-sm";
   const quoteTextColor   = hasAnyBg || isDark ? "rgba(255,255,255,0.9)" : "#060541";
@@ -3230,7 +3428,6 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const editBarGlass = "bg-black/40 backdrop-blur-xl border-b border-white/10";
 
   // Custom background from Settings (solid/gradient) — only active when user explicitly saved
-  const hasCustomBg = bgChoice === 'style';
   const hasWallpaperImage = !!bgImage && bgChoice !== 'style';
   const customBgStyle = hasCustomBg
     ? hsBg.mode === 'gradient'
@@ -3728,7 +3925,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                           maw3dEvents={maw3dEvents}
                           attendingCounts={attendingCounts}
                           onExpandQuote={() => { setQuoteExpanded(true); setQuoteExiting(false); }}
-                          onLongPress={() => setContextMenu({ itemId: itemId })}
+                          onLongPress={bulkMoveOptions ? undefined : () => setContextMenu({ itemId: itemId })}
+                          bulkSelectionActive={!!bulkMoveOptions}
+                          isBulkSelected={bulkMoveOptions?.selectedSet.has(itemId) || false}
+                          onBulkSelectToggle={bulkMoveOptions ? () => toggleBulkMoveSelection(itemId) : undefined}
                         />
                       );
                     }
@@ -3748,7 +3948,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         gridArea={gp}
                         avatarUrl={avatarUrl}
                         badgeCount={app.id === 'social' ? connectBadge : 0}
-                        onLongPress={() => setContextMenu({ itemId: itemId })}
+                        onLongPress={bulkMoveOptions ? undefined : () => setContextMenu({ itemId: itemId })}
+                        bulkSelectionActive={!!bulkMoveOptions}
+                        isBulkSelected={bulkMoveOptions?.selectedSet.has(itemId) || false}
+                        onBulkSelectToggle={bulkMoveOptions ? () => toggleBulkMoveSelection(itemId) : undefined}
                       />
                     );
                   });
@@ -3784,8 +3987,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               className="relative flex items-center justify-around w-full rounded-[2.75rem] py-3 px-5 overflow-hidden"
               style={{
                 background: dockTrayBackground,
-                backdropFilter: `blur(${isAppleMobile ? '30px' : '38px'}) saturate(${isAppleMobile ? '145%' : '170%'})`,
-                WebkitBackdropFilter: `blur(${isAppleMobile ? '30px' : '38px'}) saturate(${isAppleMobile ? '145%' : '170%'})`,
+                backdropFilter: `blur(${isMobileGlass ? '24px' : isAppleMobile ? '30px' : '38px'}) saturate(${isMobileGlass ? '125%' : isAppleMobile ? '145%' : '170%'})`,
+                WebkitBackdropFilter: `blur(${isMobileGlass ? '24px' : isAppleMobile ? '30px' : '38px'}) saturate(${isMobileGlass ? '125%' : isAppleMobile ? '145%' : '170%'})`,
                 border: dockTrayBorder,
                 outline: dockTrayOutline,
                 boxShadow: dockTrayShadow,
@@ -3976,6 +4179,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                     {language === 'ar' ? 'تبديل في نفس الصفحة' : 'Swap on this page'}
                   </button>
                 )}
+                <button
+                  onClick={() => startBulkMoveSelection(cmItemId)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px 18px', background: 'none', border: 'none', color: '#fff', fontSize: '15px', fontWeight: 500, cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                >
+                  {language === 'ar' ? 'تحديد المزيد من العناصر' : 'Select more items'}
+                </button>
                 {safeCurrentPage > 0 && (
                   <button
                     onClick={() => doMove(-1)}
@@ -4002,6 +4211,87 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </div>
           );
         })()}
+
+        {bulkMoveOptions && (
+          <div className="fixed inset-x-0 bottom-5 z-[9997] flex justify-center px-4 pointer-events-none">
+            <div
+              className="w-full max-w-sm rounded-[28px] border border-white/15 shadow-[0_24px_60px_rgba(0,0,0,0.45)] px-4 py-4 pointer-events-auto"
+              style={{ background: 'rgba(15,23,42,0.9)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)' }}
+            >
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">
+                    {language === 'ar'
+                      ? `تم تحديد ${bulkMoveOptions.selectedIds.length} عنصر`
+                      : `${bulkMoveOptions.selectedIds.length} item${bulkMoveOptions.selectedIds.length === 1 ? '' : 's'} selected`}
+                  </p>
+                  <p className="text-[11px] text-white/60">
+                    {language === 'ar' ? 'اضغط على عناصر أخرى لإضافتها أو إزالتها' : 'Tap more items to add or remove them'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearBulkMoveSelection}
+                  className="w-8 h-8 rounded-full border border-white/15 bg-white/5 text-white/70 flex items-center justify-center"
+                  aria-label={language === 'ar' ? 'إلغاء التحديد المتعدد' : 'Cancel multi selection'}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {bulkSelectionCount > 1 ? (
+                <div className="grid grid-cols-1 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => autoPackBulkMoveSelection(bulkMoveOtherPage)}
+                    className="rounded-2xl px-3 py-3 text-sm font-semibold text-white border border-white/12 bg-white/8"
+                  >
+                    {language === 'ar'
+                      ? `نقل المحدد إلى الصفحة ${bulkMoveOtherPage + 1}`
+                      : `Move selected to Page ${bulkMoveOtherPage + 1}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearBulkMoveSelection}
+                    className="rounded-2xl px-3 py-3 text-sm font-semibold text-red-300 border border-red-400/20 bg-red-500/10"
+                  >
+                    {language === 'ar' ? 'إلغاء التحديد' : 'Cancel selection'}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => autoPackBulkMoveSelection(0)}
+                    className="rounded-2xl px-3 py-3 text-sm font-semibold text-white border border-white/12 bg-white/8"
+                  >
+                    {language === 'ar' ? 'نقل المحدد إلى الصفحة 1' : 'Move selected to Page 1'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => autoPackBulkMoveSelection(1)}
+                    className="rounded-2xl px-3 py-3 text-sm font-semibold text-white border border-white/12 bg-white/8"
+                  >
+                    {language === 'ar' ? 'نقل المحدد إلى الصفحة 2' : 'Move selected to Page 2'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => autoPackBulkMoveSelection(safeCurrentPage)}
+                    className="rounded-2xl px-3 py-3 text-sm font-semibold text-white border border-blue-400/30 bg-blue-500/18"
+                  >
+                    {language === 'ar' ? 'ضع المحدد في هذه الصفحة' : 'Place selected on this page'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearBulkMoveSelection}
+                    className="rounded-2xl px-3 py-3 text-sm font-semibold text-red-300 border border-red-400/20 bg-red-500/10"
+                  >
+                    {language === 'ar' ? 'إلغاء التحديد' : 'Cancel selection'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {samePageMoveState && samePageMoveOptions?.activeItem && samePageMoveState.viewport && (
           <div

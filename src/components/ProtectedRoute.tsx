@@ -229,6 +229,19 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     effectiveHasSession = true;
   }
 
+  if (accessStampRef.current) {
+    return (
+      <>
+        {CustomPaywallModal && (
+          <Suspense fallback={null}>
+            <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant ?? 'new_user'} />
+          </Suspense>
+        )}
+        {children}
+      </>
+    );
+  }
+
   if (!effectiveHasSession && isLoading) {
     if (DEV) {
       const key = location.pathname;
@@ -247,20 +260,6 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     );
   }
 
-  // TASK 1: Kill the 'Polite' Returns - Block by Default
-  // IMPORTANT: Never redirect to /login while AuthContext is still loading.
-  // On refresh, Supabase session restoration can complete AFTER initial render.
-  if (isLoading) {
-    if (DEV) console.log("ProtectedRoute: Auth still loading - BLOCKING access");
-    return (
-      <div className="w-screen h-[100dvh] bg-background flex items-center justify-center overflow-hidden">
-        <div className="mx-auto mt-2 px-3 py-1 rounded-full text-xs bg-primary/10 text-primary shadow-sm">
-          Signing you in…
-        </div>
-      </div>
-    );
-  }
-
   // Proper authentication check - redirect appropriately if not authenticated
   // NOTE: stamped users never reach this line (effectiveHasSession forced true above)
   if (!effectiveHasSession) {
@@ -271,23 +270,6 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {
     if (DEV) console.log("ProtectedRoute: TEMP DISABLE - allowing access after auth");
     return <>{children}</>;
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════
-  // STAMP CHECK: Stamped users already bypassed the redirect above.
-  // Render children immediately — no subscription/profile/paywall gates.
-  // ═══════════════════════════════════════════════════════════════════════
-  if (accessStampRef.current) {
-    return (
-      <>
-        {CustomPaywallModal && (
-          <Suspense fallback={null}>
-            <CustomPaywallModal open={showPaywall} onOpenChange={setShowPaywall} variant={paywallVariant ?? 'new_user'} />
-          </Suspense>
-        )}
-        {children}
-      </>
-    );
   }
 
   // CRITICAL: Block while profile is loading - never let children render during load
@@ -310,7 +292,7 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   const isAllowedIn = accessState === 'subscribed'
     || accessState === 'admin_gifted'
     || accessState === 'trial_active';
-  const hasConfirmedAccess = !isLoading && !isProfileLoading && isAllowedIn;
+  const hasConfirmedAccess = !isProfileLoading && isAllowedIn;
 
   // Log access decision only when values actually change (not on every render)
   if (DEV && !accessStampRef.current) {
