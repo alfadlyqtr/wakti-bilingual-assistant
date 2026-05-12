@@ -44,11 +44,39 @@ export type EmailConnectionState = {
   primaryEmail: string | null;
 };
 
+const IMAP_HEALTH_STORAGE_KEY = 'wakti-imap-health-v1';
+
+function readStoredImapHealth(): Record<string, ImapConnectionHealth> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(IMAP_HEALTH_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredImapHealth(value: Record<string, ImapConnectionHealth>) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(IMAP_HEALTH_STORAGE_KEY, JSON.stringify(value));
+  } catch {}
+}
+
+let cachedImapHealth: Record<string, ImapConnectionHealth> = readStoredImapHealth();
+
 export function useEmailConnections() {
   const gmail = useGmailConnection();
+  const supabaseAny = supabase as any;
   const [imapConnections, setImapConnections] = useState<ImapConnection[]>([]);
   const [imapLoading, setImapLoading] = useState(true);
-  const [imapHealth, setImapHealth] = useState<Record<string, ImapConnectionHealth>>({});
+  const [imapHealth, setImapHealth] = useState<Record<string, ImapConnectionHealth>>(() => cachedImapHealth);
+
+  const shouldValidateConnection = useCallback((health?: ImapConnectionHealth, revalidate?: boolean) => {
+    return Boolean(revalidate && health);
+  }, []);
 
   const callImapApi = useCallback(async (action: string, params: Record<string, unknown>) => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -130,7 +158,7 @@ export function useEmailConnections() {
     return data.proof as ImapConnectionProof;
   }, [callImapApi]);
 
-  const loadImapConnections = useCallback(async () => {
+  const loadImapConnections = useCallback(async (options?: { revalidate?: boolean }) => {
     setImapLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -139,7 +167,7 @@ export function useEmailConnections() {
         setImapHealth({});
         return;
       }
-      const { data, error } = await supabase
+      const { data, error } = await supabaseAny
         .from('email_connections')
         .select('id, provider, display_name, email_address, smtp_host, smtp_port, smtp_secure, username, is_primary, is_active, created_at')
         .eq('user_id', session.user.id)
@@ -149,14 +177,19 @@ export function useEmailConnections() {
       if (error) throw error;
       const rows = data || [];
       setImapConnections(rows);
+      let nextHealth: Record<string, ImapConnectionHealth> = {};
       setImapHealth(prev => {
         const next: Record<string, ImapConnectionHealth> = {};
         for (const row of rows) {
-          next[row.id] = prev[row.id] || { status: 'unknown' };
+          next[row.id] = prev[row.id] || cachedImapHealth[row.id] || { status: 'verified' };
         }
+        nextHealth = next;
         return next;
       });
-      await Promise.all(rows.map((row) => validateSavedConnection(row.id)));
+      const rowsToValidate = rows.filter((row) => shouldValidateConnection(nextHealth[row.id], options?.revalidate));
+      if (rowsToValidate.length > 0) {
+        await Promise.all(rowsToValidate.map((row) => validateSavedConnection(row.id)));
+      }
     } catch (err) {
       console.error('[EmailConnections] Failed to load IMAP:', err);
       setImapConnections([]);
@@ -164,18 +197,16 @@ export function useEmailConnections() {
     } finally {
       setImapLoading(false);
     }
-  }, [validateSavedConnection]);
+  }, [shouldValidateConnection, validateSavedConnection]);
 
   useEffect(() => {
     loadImapConnections();
   }, [loadImapConnections]);
 
-  // Re-check when window regains focus (user may have just set up a connection)
   useEffect(() => {
-    const handleFocus = () => loadImapConnections();
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [loadImapConnections]);
+    cachedImapHealth = imapHealth;
+    writeStoredImapHealth(imapHealth);
+  }, [imapHealth]);
 
   const addImapConnection = useCallback(async (config: {
     provider: string;
@@ -201,7 +232,7 @@ export function useEmailConnections() {
       // Check if this is the first connection — make it primary
       const isFirst = imapConnections.length === 0 && !gmail.connection.connected;
 
-      const { data, error } = await supabase.from('email_connections').insert({
+      const { data, error } = await supabaseAny.from('email_connections').insert({
         user_id: session.user.id,
         provider: config.provider,
         display_name: config.display_name || config.provider,
@@ -246,7 +277,7 @@ export function useEmailConnections() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
-      const { error } = await supabase
+      const { error } = await supabaseAny
         .from('email_connections')
         .delete()
         .eq('id', id)
@@ -271,13 +302,13 @@ export function useEmailConnections() {
       if (!session) return;
 
       // Unset all primary first
-      await supabase
+      await supabaseAny
         .from('email_connections')
         .update({ is_primary: false })
         .eq('user_id', session.user.id);
 
       // Set the chosen one as primary
-      const { error } = await supabase
+      const { error } = await supabaseAny
         .from('email_connections')
         .update({ is_primary: true })
         .eq('id', id)
@@ -338,8 +369,9 @@ export function useEmailConnections() {
   const anyConnected = gmailConnected || imapConnected;
 
   // Primary email to display
-  const primaryEmail = gmail.connection.emailAddress
-    || verifiedImapConnections.find(c => c.is_primary)?.email_address
+  const primaryImapConnection = imapConnections.find(c => c.is_primary);
+  const primaryEmail = primaryImapConnection?.email_address
+    || gmail.connection.emailAddress
     || verifiedImapConnections[0]?.email_address
     || null;
 
@@ -359,7 +391,7 @@ export function useEmailConnections() {
     anyConnected,
     primaryEmail,
     allConnections: [
-      ...(gmailConnected ? [{ id: 'gmail', provider: 'gmail', email_address: gmail.connection.emailAddress, is_primary: true }] : []),
+      ...(gmailConnected ? [{ id: 'gmail', provider: 'gmail', email_address: gmail.connection.emailAddress, is_primary: !primaryImapConnection }] : []),
       ...imapConnections.map(c => ({ id: c.id, provider: c.provider, email_address: c.email_address, is_primary: c.is_primary })),
     ],
   };

@@ -212,6 +212,30 @@ class ImapClient {
     return body;
   }
 
+  async copy(seq: number, mailbox: string): Promise<void> {
+    const tag = this.nextTag();
+    await this.send(`${tag} COPY ${seq} "${mailbox.replace(/"/g, '\\"')}"`);
+    const lines = await this.readUntilTagged(tag, 20000);
+    const last = lines[lines.length - 1] || "";
+    if (!last.includes("OK")) throw new Error(`COPY to "${mailbox}" failed: ${last}`);
+  }
+
+  async addFlags(seq: number, flags: string[]): Promise<void> {
+    const tag = this.nextTag();
+    await this.send(`${tag} STORE ${seq} +FLAGS.SILENT (${flags.join(" ")})`);
+    const lines = await this.readUntilTagged(tag, 20000);
+    const last = lines[lines.length - 1] || "";
+    if (!last.includes("OK")) throw new Error(`STORE flags failed: ${last}`);
+  }
+
+  async expunge(): Promise<void> {
+    const tag = this.nextTag();
+    await this.send(`${tag} EXPUNGE`);
+    const lines = await this.readUntilTagged(tag, 20000);
+    const last = lines[lines.length - 1] || "";
+    if (!last.includes("OK")) throw new Error(`EXPUNGE failed: ${last}`);
+  }
+
   async logout(): Promise<void> {
     try {
       const tag = this.nextTag();
@@ -308,6 +332,81 @@ function extractBodyParts(raw: string): { text: string; html: string; snippet: s
   return { text: decoded, html: "", snippet: decoded.slice(0, 160).trim() };
 }
 
+type DraftAttachment = {
+  name: string;
+  contentType?: string;
+  content: string;
+};
+
+function normalizeRecipients(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map(String).map((item) => item.trim()).filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value.split(/[,;]+/).map((item) => item.trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function sanitizeAttachmentName(value: string): string {
+  return sanitizeHeaderValue(value).replace(/"/g, "'");
+}
+
+function wrapBase64(value: string): string {
+  const clean = value.replace(/\s+/g, "");
+  return clean.match(/.{1,76}/g)?.join("\r\n") || "";
+}
+
+function buildSmtpMessage(params: {
+  from: string;
+  to: string[];
+  cc: string[];
+  subject: string;
+  body: string;
+  attachments: DraftAttachment[];
+}): string {
+  const { from, to, cc, subject, body, attachments } = params;
+  const boundary = `----WaktiMail${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+
+  let msg = "";
+  msg += `MIME-Version: 1.0\r\n`;
+  msg += `From: ${sanitizeHeaderValue(from)}\r\n`;
+  msg += `To: ${to.map(sanitizeHeaderValue).join(", ")}\r\n`;
+  if (cc.length > 0) {
+    msg += `Cc: ${cc.map(sanitizeHeaderValue).join(", ")}\r\n`;
+  }
+  msg += `Subject: ${sanitizeHeaderValue(subject)}\r\n`;
+  msg += `Date: ${new Date().toUTCString()}\r\n`;
+
+  if (attachments.length > 0) {
+    msg += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
+    msg += `--${boundary}\r\n`;
+    msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
+    msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+    msg += `${body}\r\n`;
+
+    for (const attachment of attachments) {
+      msg += `--${boundary}\r\n`;
+      msg += `Content-Type: ${attachment.contentType || "application/octet-stream"}; name="${sanitizeAttachmentName(attachment.name)}"\r\n`;
+      msg += `Content-Disposition: attachment; filename="${sanitizeAttachmentName(attachment.name)}"\r\n`;
+      msg += `Content-Transfer-Encoding: base64\r\n\r\n`;
+      msg += `${wrapBase64(attachment.content)}\r\n`;
+    }
+
+    msg += `--${boundary}--`;
+    return msg;
+  }
+
+  msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
+  msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+  msg += body;
+  return msg;
+}
+
 class SmtpClient {
   private conn: Deno.Conn | null = null;
   private reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
@@ -397,27 +496,17 @@ class SmtpClient {
     await this.expectCode(235);
   }
 
-  async send(from: string, to: string[], subject: string, body: string): Promise<void> {
+  async send(from: string, to: string[], cc: string[], subject: string, body: string, attachments: DraftAttachment[]): Promise<void> {
     await this.write(`MAIL FROM:<${from}>\r\n`);
     await this.expectCode(250);
-    for (const r of to) {
+    for (const r of Array.from(new Set([...to, ...cc]))) {
       await this.write(`RCPT TO:<${r}>\r\n`);
       await this.expectCode(250);
     }
     await this.write(`DATA\r\n`);
     await this.expectCode(354);
-    const msg = [
-      `MIME-Version: 1.0`,
-      `From: ${from}`,
-      `To: ${to.join(", ")}`,
-      `Subject: ${subject}`,
-      `Date: ${new Date().toUTCString()}`,
-      `Content-Type: text/plain; charset=UTF-8`,
-      ``,
-      body,
-      `.`,
-    ].join("\r\n");
-    await this.write(msg + "\r\n");
+    const msg = buildSmtpMessage({ from, to, cc, subject, body, attachments });
+    await this.write(msg + "\r\n.\r\n");
     await this.expectCode(250);
   }
 
@@ -479,6 +568,17 @@ async function detectSentFolder(imap: ImapClient): Promise<string> {
   if (exact) return exact;
   const fuzzy = boxes.find((box) => /sent/i.test(box));
   return fuzzy || "Sent";
+}
+
+async function detectTrashFolder(imap: ImapClient): Promise<string | null> {
+  const boxes = await imap.listMailboxes();
+  const trashFolderCandidates = ["Trash", "Deleted Items", "Deleted Messages", "Bin", "[Gmail]/Trash"];
+  const exact = trashFolderCandidates.find((candidate) =>
+    boxes.some((box) => box.toLowerCase() === candidate.toLowerCase())
+  );
+  if (exact) return exact;
+  const fuzzy = boxes.find((box) => /trash|bin|deleted/i.test(box));
+  return fuzzy || null;
 }
 
 async function openMailbox(conn: Record<string, unknown>, requestedFolder: string, requiredSeq?: number): Promise<MailboxSession> {
@@ -549,7 +649,14 @@ async function listFoldersWithFallback(conn: Record<string, unknown>): Promise<s
   throw lastError || new Error("Unable to list mail folders with saved credentials");
 }
 
-async function sendViaBestSmtpLogin(conn: Record<string, unknown>, recipients: string[], subject: string, body: string): Promise<void> {
+async function sendViaBestSmtpLogin(
+  conn: Record<string, unknown>,
+  recipients: string[],
+  ccRecipients: string[],
+  subject: string,
+  body: string,
+  attachments: DraftAttachment[]
+): Promise<void> {
   const candidates = getLoginCandidates(conn);
   let lastError: Error | null = null;
   for (const login of candidates) {
@@ -567,9 +674,9 @@ async function sendViaBestSmtpLogin(conn: Record<string, unknown>, recipients: s
         try { await smtp.startTls(); } catch {}
       }
       await smtp.auth();
-      await smtp.send(String(conn.email_address || login), recipients, subject, body);
+      await smtp.send(String(conn.email_address || login), recipients, ccRecipients, subject, body, attachments);
       await smtp.quit();
-      console.log("[imap-api] smtp sent", { login, recipientsCount: recipients.length });
+      console.log("[imap-api] smtp sent", { login, recipientsCount: recipients.length + ccRecipients.length, attachmentsCount: attachments.length });
       return;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -610,6 +717,34 @@ async function validateConnection(conn: Record<string, unknown>): Promise<Connec
         sentFolder,
         foldersCount: folders.length,
       },
+    };
+  } finally {
+    await session.imap.logout();
+  }
+}
+
+async function deleteMessage(conn: Record<string, unknown>, folder: string, uid: number): Promise<{ success: true; targetFolder: string }> {
+  const session = await openMailbox(conn, folder, uid);
+  try {
+    const trashFolder = await detectTrashFolder(session.imap);
+    if (trashFolder && trashFolder.toLowerCase() !== session.selectedFolder.toLowerCase()) {
+      try {
+        await session.imap.copy(uid, trashFolder);
+      } catch (error) {
+        console.log("[imap-api] copy to trash failed", {
+          login: session.login,
+          uid,
+          selectedFolder: session.selectedFolder,
+          trashFolder,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+    await session.imap.addFlags(uid, ["\\Deleted"]);
+    await session.imap.expunge();
+    return {
+      success: true,
+      targetFolder: trashFolder || session.selectedFolder,
     };
   } finally {
     await session.imap.logout();
@@ -699,14 +834,32 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "send_message") {
-      const recipients = Array.isArray(body.to) ? body.to.map(String) : [String(body.to || "")].filter(Boolean);
+      const recipients = normalizeRecipients(body.to);
+      const ccRecipients = normalizeRecipients(body.cc);
       const subject = String(body.subject || "");
       const emailBody = String(body.body || "");
+      const attachments = Array.isArray(body.attachments)
+        ? (body.attachments as Array<Record<string, unknown>>)
+            .map((item) => ({
+              name: String(item.name || "attachment"),
+              contentType: item.contentType ? String(item.contentType) : undefined,
+              content: String(item.content || ""),
+            }))
+            .filter((item) => item.name && item.content)
+        : [];
       if (recipients.length === 0 || !subject || !emailBody) {
         return jsonResponse({ error: "to, subject, body required" }, 400);
       }
-      await sendViaBestSmtpLogin(conn, recipients, subject, emailBody);
+      await sendViaBestSmtpLogin(conn, recipients, ccRecipients, subject, emailBody, attachments);
       return jsonResponse({ success: true });
+    }
+
+    if (action === "delete_message") {
+      const uid = Number(body.uid || 0);
+      const folder = String(body.folder || "INBOX");
+      if (!uid) return jsonResponse({ error: "uid required" }, 400);
+      const result = await deleteMessage(conn, folder, uid);
+      return jsonResponse(result);
     }
 
     if (action === "list_folders") {

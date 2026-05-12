@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTheme } from '@/providers/ThemeProvider';
 import { detectProviderSettings } from '@/hooks/useEmailConnections';
-import { Mail, Server, Shield, TestTube, Save, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Mail, Server, Save, Loader2, CheckCircle2, XCircle } from 'lucide-react';
 
 interface Props {
   open: boolean;
@@ -61,20 +61,28 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
       : 'For 2FA accounts, use an "App Password" from your security settings',
     nameLabel: isAr ? 'اسم العرض (اختياري)' : 'Display Name (optional)',
     autoDetect: isAr ? 'تم اكتشاف الإعدادات تلقائيًا' : 'Settings auto-detected',
-    manual: isAr ? 'إعدادات متقدمة' : 'Advanced Settings',
-    smtpHost: isAr ? 'خادم SMTP' : 'SMTP Server',
-    smtpPort: isAr ? 'منفذ SMTP' : 'SMTP Port',
+    manual: isAr ? 'إعدادات الخادم اليدوية' : 'Manual Server Settings',
+    smtpHost: isAr ? 'عنوان الخادم' : 'Server Address',
+    smtpPort: isAr ? 'المنفذ' : 'Port',
     smtpSecure: isAr ? 'SMTP TLS (465) — بدلاً من STARTTLS (587)' : 'SMTP TLS (port 465) — instead of STARTTLS (587)',
-    imapHost: isAr ? 'خادم IMAP' : 'IMAP Server',
-    imapPort: isAr ? 'منفذ IMAP' : 'IMAP Port',
+    imapHost: isAr ? 'عنوان الخادم' : 'Server Address',
+    imapPort: isAr ? 'المنفذ' : 'Port',
     imapSecure: isAr ? 'IMAP SSL/TLS' : 'IMAP SSL/TLS',
-    usernameLabel: isAr ? 'اسم المستخدم (عادةً نفس البريد)' : 'Username (usually same as email)',
-    testBtn: isAr ? 'اختبار الاتصال' : 'Test Connection',
+    usernameLabel: isAr ? 'اسم المستخدم للدخول' : 'Login Username',
     saveBtn: isAr ? 'حفظ وحفظ' : 'Save & Connect',
     cancel: isAr ? 'إلغاء' : 'Cancel',
     required: isAr ? 'مطلوب' : 'Required',
     providerLabel: isAr ? 'مزود البريد' : 'Email Provider',
     unknownProvider: isAr ? 'مزود مخصص' : 'Custom Provider',
+    loginSection: isAr ? 'بيانات تسجيل الدخول' : 'Login Details',
+    loginHint: isAr ? 'استخدم البريد الإلكتروني الكامل كاسم مستخدم ما لم يطلب مزودك غير ذلك' : 'Use the full email address as the username unless your provider told you otherwise',
+    incomingSection: isAr ? 'الخادم الوارد' : 'Incoming Server',
+    incomingHint: isAr ? 'هذا الخادم يُستخدم لاستقبال الرسائل (IMAP)' : 'This server is used to receive messages (IMAP)',
+    outgoingSection: isAr ? 'الخادم الصادر' : 'Outgoing Server',
+    outgoingHint: isAr ? 'هذا الخادم يُستخدم لإرسال الرسائل (SMTP)' : 'This server is used to send messages (SMTP)',
+    usernameHelp: isAr ? 'في أغلب استضافات cPanel يكون اسم المستخدم هو نفس البريد الإلكتروني الكامل' : 'For most cPanel mailboxes, the username is the full email address',
+    usernameMismatch: isAr ? 'اسم المستخدم الحالي مختلف عن البريد الإلكتروني. إذا كنت تستخدم cPanel أو SecureServer فالغالب أنه يجب أن يكون البريد الكامل.' : 'The username currently differs from the email. If this is a cPanel or SecureServer mailbox, it usually needs to be the full email address.',
+    timeoutHint: isAr ? 'انتهت مهلة اتصال IMAP. تحقق أولاً من أن اسم المستخدم هو البريد الإلكتروني الكامل، ثم راجع كلمة المرور وعنوان الخادم والمنفذ.' : 'IMAP connection timed out. First check that the username is the full email address, then verify the password, server address, and port.',
   };
 
   // Auto-detect when email changes
@@ -83,6 +91,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
       setDetectedProvider(null);
       return;
     }
+    if (!username.trim()) setUsername(email.trim());
     const settings = detectProviderSettings(email);
     if (settings) {
       setDetectedProvider(settings.provider);
@@ -142,6 +151,10 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
   const providerDisplayName = detectedProvider
     ? detectedProvider.charAt(0).toUpperCase() + detectedProvider.slice(1)
     : t.unknownProvider;
+  const normalizedEmail = email.trim();
+  const normalizedUsername = username.trim();
+  const showUsernameMismatch = Boolean(normalizedEmail && normalizedUsername && normalizedEmail !== normalizedUsername);
+  const friendlyError = error.includes('IMAP timeout waiting for A0001') ? t.timeoutHint : error;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -214,44 +227,39 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
           {/* Advanced fields */}
           {showAdvanced && (
             <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
-              {/* SMTP */}
-              <div className="space-y-1">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">SMTP</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <Label htmlFor="smtp-host" className="text-xs">{t.smtpHost}</Label>
-                    <Input id="smtp-host" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.example.com" />
-                  </div>
-                  <div>
-                    <Label htmlFor="smtp-port" className="text-xs">{t.smtpPort}</Label>
-                    <Input id="smtp-port" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" />
-                  </div>
+              <div className="rounded-xl border border-white/10 bg-background/40 p-3 space-y-2">
+                <div>
+                  <div className="text-sm font-medium text-foreground">{t.loginSection}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{t.loginHint}</div>
                 </div>
-                <label className="flex items-center gap-2 text-xs mt-1 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={smtpSecure}
-                    onChange={(e) => setSmtpSecure(e.target.checked)}
-                    className="rounded border-muted-foreground"
-                  />
-                  {t.smtpSecure}
-                </label>
+                <div className="space-y-1">
+                  <Label htmlFor="conn-username" className="text-xs">{t.usernameLabel}</Label>
+                  <Input id="conn-username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={email || 'user@example.com'} />
+                  <p className="text-xs text-muted-foreground">{t.usernameHelp}{normalizedEmail ? `: ${normalizedEmail}` : ''}</p>
+                </div>
+                {showUsernameMismatch ? (
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    {t.usernameMismatch}
+                  </div>
+                ) : null}
               </div>
 
-              {/* IMAP */}
-              <div className="space-y-1">
-                <Label className="text-xs uppercase tracking-wider text-muted-foreground">IMAP</Label>
+              <div className="rounded-xl border border-white/10 bg-background/40 p-3 space-y-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">{t.incomingSection}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{t.incomingHint}</div>
+                </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <div>
+                  <div className="col-span-2 sm:col-span-1">
                     <Label htmlFor="imap-host" className="text-xs">{t.imapHost}</Label>
                     <Input id="imap-host" value={imapHost} onChange={(e) => setImapHost(e.target.value)} placeholder="imap.example.com" />
                   </div>
-                  <div>
+                  <div className="col-span-2 sm:col-span-1">
                     <Label htmlFor="imap-port" className="text-xs">{t.imapPort}</Label>
                     <Input id="imap-port" value={imapPort} onChange={(e) => setImapPort(e.target.value)} placeholder="993" />
                   </div>
                 </div>
-                <label className="flex items-center gap-2 text-xs mt-1 cursor-pointer">
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
                   <input
                     type="checkbox"
                     checked={imapSecure}
@@ -262,10 +270,30 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 </label>
               </div>
 
-              {/* Username */}
-              <div className="space-y-1">
-                <Label htmlFor="conn-username" className="text-xs">{t.usernameLabel}</Label>
-                <Input id="conn-username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={email || 'user@example.com'} />
+              <div className="rounded-xl border border-white/10 bg-background/40 p-3 space-y-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">{t.outgoingSection}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{t.outgoingHint}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="col-span-2 sm:col-span-1">
+                    <Label htmlFor="smtp-host" className="text-xs">{t.smtpHost}</Label>
+                    <Input id="smtp-host" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.example.com" />
+                  </div>
+                  <div className="col-span-2 sm:col-span-1">
+                    <Label htmlFor="smtp-port" className="text-xs">{t.smtpPort}</Label>
+                    <Input id="smtp-port" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" />
+                  </div>
+                </div>
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={smtpSecure}
+                    onChange={(e) => setSmtpSecure(e.target.checked)}
+                    className="rounded border-muted-foreground"
+                  />
+                  {t.smtpSecure}
+                </label>
               </div>
             </div>
           )}
@@ -274,7 +302,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
           {error && (
             <div className="flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">
               <XCircle className="h-4 w-4 shrink-0" />
-              {error}
+              {friendlyError}
             </div>
           )}
           {success && (

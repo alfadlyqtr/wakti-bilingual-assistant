@@ -3,9 +3,10 @@ import { useImapMessages, ImapMessage, ImapMessageFull } from '@/hooks/useImapMe
 import { ImapConnection, ImapConnectionHealth } from '@/hooks/useEmailConnections';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { MailComposer, MailComposerSubmitInput } from '@/components/email/MailComposer';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
-  X, Reply, Plug, Settings2, ChevronDown,
+  Reply, Plug, Settings2, Trash2,
 } from 'lucide-react';
 
 function formatDate(dateStr: string): string {
@@ -29,81 +30,44 @@ function extractName(emailStr: string): string {
   return emailStr.replace(/<.*>/, '').trim() || emailStr;
 }
 
-interface ComposeProps {
-  onClose: () => void;
-  onSend: (to: string, subject: string, body: string) => Promise<boolean>;
-  replyTo?: { to: string; subject: string };
+interface MessageRowProps {
+  message: ImapMessage;
+  activeFolder: 'INBOX' | 'SENT';
+  deleting: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
 }
 
-function ComposeModal({ onClose, onSend, replyTo }: ComposeProps) {
-  const [to, setTo] = useState(replyTo?.to || '');
-  const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : '');
-  const [body, setBody] = useState('');
-  const [sending, setSending] = useState(false);
-
-  const handleSend = async () => {
-    if (!to.trim() || !subject.trim() || !body.trim()) return;
-    setSending(true);
-    const ok = await onSend(to, subject, body);
-    setSending(false);
-    if (ok) onClose();
-  };
+function MessageRow({ message, activeFolder, deleting, onOpen, onDelete }: MessageRowProps) {
+  const personLabel = activeFolder === 'SENT'
+    ? `To: ${extractName(message.to) || message.to}`
+    : extractName(message.from) || message.from;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-2">
-      <div className="w-full max-w-lg bg-[#0c0f14] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-          <span className="font-semibold text-sm">{replyTo ? 'Reply' : 'New Message'}</span>
-          <button title="Close" onClick={onClose} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">To</label>
-            <input
-              type="email"
-              value={to}
-              onChange={e => setTo(e.target.value)}
-              placeholder="recipient@email.com"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500/60 transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Subject</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={e => setSubject(e.target.value)}
-              placeholder="Subject"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500/60 transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Message</label>
-            <textarea
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              placeholder="Write your message..."
-              rows={8}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500/60 transition-colors resize-none"
-            />
-          </div>
-        </div>
-        <div className="flex items-center justify-between px-4 pb-4">
-          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            Discard
-          </button>
-          <Button
-            onClick={handleSend}
-            disabled={sending || !to || !subject || !body}
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
-          >
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {sending ? 'Sending...' : 'Send'}
-          </Button>
-        </div>
+    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-white/[0.04] sm:px-5 sm:py-3.5">
+      <div className="pt-1.5">
+        <div className="h-2.5 w-2.5 rounded-full bg-white/10" />
       </div>
+
+      <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-sm font-medium text-white/88">{personLabel}</div>
+            <div className="mt-0.5 truncate text-sm text-white/92">{message.subject || '(no subject)'}</div>
+            <div className="mt-1 truncate text-xs text-white/45">{message.snippet || 'No preview available'}</div>
+          </div>
+          <div className="shrink-0 pt-0.5 text-[11px] text-white/45">{formatDate(message.date)}</div>
+        </div>
+      </button>
+
+      <button
+        title="Delete"
+        onClick={onDelete}
+        disabled={deleting}
+        className="mt-0.5 shrink-0 rounded-xl p-2 text-white/45 transition-colors hover:bg-white/10 hover:text-red-400 disabled:opacity-60"
+      >
+        {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+      </button>
     </div>
   );
 }
@@ -112,9 +76,11 @@ interface MessageViewProps {
   message: ImapMessageFull;
   onBack: () => void;
   onReply: () => void;
+  onDelete: () => void;
+  deleting: boolean;
 }
 
-function MessageView({ message, onBack, onReply }: MessageViewProps) {
+function MessageView({ message, onBack, onReply, onDelete, deleting }: MessageViewProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 pb-3 border-b border-border/40">
@@ -124,6 +90,9 @@ function MessageView({ message, onBack, onReply }: MessageViewProps) {
         <span className="text-sm font-medium truncate flex-1">{message.subject}</span>
         <button title="Reply" onClick={onReply} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-blue-400">
           <Reply className="h-4 w-4" />
+        </button>
+        <button title="Delete" onClick={onDelete} disabled={deleting} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-red-400 disabled:opacity-60">
+          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
         </button>
       </div>
       <div className="py-3 border-b border-border/40 space-y-1">
@@ -150,43 +119,35 @@ function MessageView({ message, onBack, onReply }: MessageViewProps) {
 
 interface AccountSelectorProps {
   connections: ImapConnection[];
+  health: Record<string, ImapConnectionHealth>;
   activeId: string;
   onChange: (id: string) => void;
 }
 
-function AccountSelector({ connections, activeId, onChange }: AccountSelectorProps) {
-  const [open, setOpen] = useState(false);
-  const active = connections.find(c => c.id === activeId);
-
-  if (connections.length <= 1) return null;
-
+function AccountSelector({ connections, health, activeId, onChange }: AccountSelectorProps) {
   return (
-    <div className="relative">
-      <button
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 border border-white/10 hover:bg-white/10 transition-all max-w-[160px]"
-      >
-        <Plug className="h-3 w-3 text-[#E9CEB0] shrink-0" />
-        <span className="truncate">{active?.display_name || active?.email_address || 'Account'}</span>
-        <ChevronDown className="h-3 w-3 shrink-0" />
-      </button>
-      {open && (
-        <div className="absolute top-full mt-1 left-0 z-20 bg-[#0c0f14] border border-white/10 rounded-xl shadow-xl min-w-[180px] overflow-hidden">
-          {connections.map(c => (
-            <button
-              key={c.id}
-              onClick={() => { onChange(c.id); setOpen(false); }}
-              className={`w-full text-left px-3 py-2 text-xs hover:bg-white/10 transition-colors flex items-center gap-2 ${c.id === activeId ? 'text-blue-400' : ''}`}
-            >
-              <Plug className="h-3 w-3 text-[#E9CEB0] shrink-0" />
-              <div className="min-w-0">
-                <div className="truncate font-medium">{c.display_name || c.email_address}</div>
-                <div className="truncate text-muted-foreground">{c.email_address}</div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="flex gap-2 overflow-x-auto pb-1">
+      {connections.map((connection) => {
+        const status = health[connection.id]?.status;
+        const statusClass = status === 'verified'
+          ? 'bg-green-500'
+          : status === 'failed'
+            ? 'bg-red-500'
+            : status === 'checking'
+              ? 'bg-yellow-400'
+              : 'bg-muted-foreground/40';
+
+        return (
+          <button
+            key={connection.id}
+            onClick={() => onChange(connection.id)}
+            className={`flex h-9 shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-all ${connection.id === activeId ? 'border-blue-500/60 bg-blue-500/10 text-foreground shadow-sm' : 'border-border/60 bg-background/40 text-muted-foreground hover:bg-white/5 hover:text-foreground'}`}
+          >
+            <span className={`h-2 w-2 rounded-full ${statusClass}`} />
+            <span className="max-w-[120px] truncate font-medium">{connection.display_name || connection.email_address || 'Account'}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -206,10 +167,11 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
 
   const [selectedMessage, setSelectedMessage] = useState<ImapMessageFull | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(false);
-  // Track the real IMAP folder name returned by the server (e.g. "INBOX", "Sent Items")
   const [realFolderName, setRealFolderName] = useState('INBOX');
   const [showCompose, setShowCompose] = useState(false);
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string } | undefined>();
+  const [deletingMessage, setDeletingMessage] = useState(false);
+  const [deletingRowUid, setDeletingRowUid] = useState<number | null>(null);
 
   const activeConn = connections.find(c => c.id === activeConnectionId);
   const activeHealth = activeConnectionId ? health[activeConnectionId] : undefined;
@@ -218,23 +180,28 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
   const failedLabel = language === 'ar' ? 'تحتاج مراجعة' : 'Needs attention';
   const mailboxLabel = language === 'ar' ? 'الصندوق الحالي' : 'Active mailbox';
   const inboxLabel = language === 'ar' ? 'الوارد' : 'Inbox';
+  const sentLabel = language === 'ar' ? 'المرسل' : 'Sent';
+  const composeLabel = language === 'ar' ? 'إنشاء' : 'Compose';
+  const refreshLabel = language === 'ar' ? 'تحديث' : 'Refresh';
+  const folderLabel = imap.activeFolder === 'SENT' ? sentLabel : inboxLabel;
+  const activeEmail = activeConn?.email_address || activeHealth?.proof?.emailAddress || activeConn?.username || '';
+  const activeMailboxLogin = imap.mailboxInfo?.login || activeHealth?.proof?.login || activeEmail || null;
+  const showMailboxLoginChip = Boolean(activeMailboxLogin && activeMailboxLogin !== activeEmail);
+  const activeMailboxFolder = imap.mailboxInfo?.folder && imap.mailboxInfo.folder.toUpperCase() !== imap.activeFolder
+    ? `${folderLabel} · ${imap.mailboxInfo.folder}`
+    : folderLabel;
+  const activeMailboxCount = typeof imap.mailboxInfo?.exists === 'number'
+    ? imap.mailboxInfo.exists
+    : typeof activeHealth?.proof?.inboxCount === 'number'
+      ? activeHealth.proof.inboxCount
+      : null;
 
-  useEffect(() => {
-    if (activeConnectionId) {
-      setSelectedMessage(null);
-      imap.fetchMessages('INBOX', 1).then((result: any) => {
-        if (result?.folder) setRealFolderName(result.folder);
-      }).catch(() => {});
-    }
-  }, [activeConnectionId]);
-
-  // When connections list changes, keep active id valid
   useEffect(() => {
     if (connections.length > 0 && !connections.find(c => c.id === activeConnectionId)) {
       const newId = connections.find(c => c.is_primary)?.id || connections[0]?.id || '';
       setActiveConnectionId(newId);
     }
-  }, [connections]);
+  }, [activeConnectionId, connections]);
 
   const handleOpenMessage = async (msg: ImapMessage) => {
     setLoadingMessage(true);
@@ -264,6 +231,43 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
     setReplyTo(undefined);
   };
 
+  const handleAccountChange = (id: string) => {
+    setSelectedMessage(null);
+    setRealFolderName('INBOX');
+    setActiveConnectionId(id);
+  };
+
+  const handleFolderSwitch = (folder: 'INBOX' | 'SENT') => {
+    setSelectedMessage(null);
+    imap.fetchMessages(folder, 1).then((result: any) => {
+      if (result?.folder) setRealFolderName(result.folder);
+    }).catch(() => {});
+  };
+
+  const handleRefresh = () => {
+    imap.fetchMessages(imap.activeFolder, 1, { forceRefresh: true }).then((result: any) => {
+      if (result?.folder) setRealFolderName(result.folder);
+    }).catch(() => {});
+  };
+
+  const handleDeleteMessage = async () => {
+    if (!selectedMessage) return;
+    setDeletingMessage(true);
+    const deleted = await imap.deleteMessage(selectedMessage.uid, realFolderName);
+    if (deleted) {
+      setSelectedMessage(null);
+      const result = await imap.fetchMessages(imap.activeFolder, 1, { forceRefresh: true });
+      if (result?.folder) setRealFolderName(result.folder);
+    }
+    setDeletingMessage(false);
+  };
+
+  const handleDeleteFromList = async (message: ImapMessage) => {
+    setDeletingRowUid(message.uid);
+    await imap.deleteMessage(message.uid, realFolderName);
+    setDeletingRowUid(null);
+  };
+
   if (connections.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
@@ -284,87 +288,107 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Header bar */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="rounded-[22px] border border-white/10 bg-[#0c0f14] p-3 sm:p-4 space-y-3">
+        {connections.length > 1 ? (
           <AccountSelector
             connections={connections}
+            health={health}
             activeId={activeConnectionId}
-            onChange={id => setActiveConnectionId(id)}
+            onChange={handleAccountChange}
           />
-          {connections.length === 1 && (
-            <div className="flex items-center gap-1.5 min-w-0">
-              <Plug className="h-3.5 w-3.5 text-[#E9CEB0] shrink-0" />
-              <div className="min-w-0">
-                <div className="text-sm font-medium text-muted-foreground truncate max-w-[160px]">
-                  {activeConn?.display_name || activeConn?.email_address}
-                </div>
-                {activeHealth?.proof && (
-                  <div className="text-[11px] text-muted-foreground truncate max-w-[220px]">
-                    {mailboxLabel}: {activeHealth.proof.login} · {inboxLabel} {activeHealth.proof.inboxCount}
-                  </div>
-                )}
+        ) : null}
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04]">
+                <Plug className="h-4 w-4 text-[#E9CEB0] shrink-0" />
               </div>
-              {activeHealth?.status === 'verified' ? (
-                <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">{connectedLabel}</Badge>
-              ) : activeHealth?.status === 'checking' ? (
-                <Badge variant="outline" className="border-yellow-400/40 text-yellow-400 text-[10px] px-1.5 py-0">{checkingLabel}</Badge>
-              ) : activeHealth?.status === 'failed' ? (
-                <Badge variant="outline" className="border-red-400/40 text-red-400 text-[10px] px-1.5 py-0">{failedLabel}</Badge>
-              ) : null}
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-col items-start gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+                  <span className="block max-w-full truncate text-base font-semibold text-white">{activeEmail || activeConn?.display_name || 'Custom mail'}</span>
+                  {activeHealth?.status === 'verified' ? (
+                    <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">{connectedLabel}</Badge>
+                  ) : activeHealth?.status === 'checking' ? (
+                    <Badge variant="outline" className="border-yellow-400/40 text-yellow-400 text-[10px] px-1.5 py-0">{checkingLabel}</Badge>
+                  ) : activeHealth?.status === 'failed' ? (
+                    <Badge variant="outline" className="border-red-400/40 text-red-400 text-[10px] px-1.5 py-0">{failedLabel}</Badge>
+                  ) : null}
+                </div>
+                {connections.length === 1 && activeConn?.display_name && activeConn.display_name !== activeEmail ? (
+                  <div className="mt-1 truncate text-xs text-white/55">{activeConn.display_name}</div>
+                ) : null}
+              </div>
             </div>
-          )}
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            title="Refresh"
-            onClick={() => imap.fetchMessages(imap.activeFolder, 1)}
-            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-          >
-            {imap.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </button>
-          <Button
-            size="sm"
-            onClick={() => { setReplyTo(undefined); setShowCompose(true); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-7 text-xs px-3"
-          >
-            <Pencil className="h-3 w-3" />
-            Compose
-          </Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {showMailboxLoginChip ? (
+                <div className="max-w-full rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/70">
+                  <span className="block max-w-[220px] truncate sm:max-w-[280px]">{activeMailboxLogin}</span>
+                </div>
+              ) : null}
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/75">
+                {activeMailboxFolder}
+              </div>
+              {activeMailboxCount !== null ? (
+                <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/55">
+                  {activeMailboxCount} emails
+                </div>
+              ) : null}
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/55">
+                {imap.messages.length} shown
+              </div>
+            </div>
+            {activeHealth?.status === 'failed' && activeHealth.error ? (
+              <div className="mt-2 text-xs text-red-400">{activeHealth.error}</div>
+            ) : null}
+          </div>
+
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+            <button
+              title={refreshLabel}
+              onClick={handleRefresh}
+              className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 transition-colors hover:bg-white/10"
+            >
+              {imap.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </button>
+            <Button
+              size="sm"
+              onClick={() => { setReplyTo(undefined); setShowCompose(true); }}
+              className="h-10 flex-1 rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700 gap-1.5 sm:flex-none"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              {composeLabel}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Folder tabs */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1.5">
         {(['INBOX', 'SENT'] as const).map(f => (
           <button
             key={f}
-            onClick={() => {
-              setSelectedMessage(null);
-              imap.fetchMessages(f, 1).then((r: any) => {
-                if (r?.folder) setRealFolderName(r.folder);
-              }).catch(() => {});
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            onClick={() => handleFolderSwitch(f)}
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-medium transition-all ${
               imap.activeFolder === f
-                ? 'bg-blue-600 text-white'
-                : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'border border-white/10 bg-white/[0.04] text-white/60 hover:bg-white/10 hover:text-white'
             }`}
           >
             {f === 'INBOX' ? <Inbox className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
-            {f === 'INBOX' ? 'Inbox' : 'Sent'}
+            {f === 'INBOX' ? inboxLabel : sentLabel}
           </button>
         ))}
       </div>
 
-      {/* Message view or list */}
-      <div className="rounded-xl border border-border/50 bg-background/30 overflow-hidden min-h-[300px]">
+      <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-white/10 bg-[#0c0f14]">
         {selectedMessage ? (
-          <div className="p-4 h-full">
+          <div className="p-4 h-full sm:p-5">
             <MessageView
               message={selectedMessage}
               onBack={() => setSelectedMessage(null)}
               onReply={handleReply}
+              onDelete={handleDeleteMessage}
+              deleting={deletingMessage}
             />
           </div>
         ) : loadingMessage ? (
@@ -374,16 +398,6 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
           </div>
         ) : (
           <>
-            {activeHealth?.status === 'failed' && activeHealth.error ? (
-              <div className="border-b border-red-400/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
-                {activeHealth.error}
-              </div>
-            ) : null}
-            {imap.mailboxInfo ? (
-              <div className="border-b border-border/40 px-4 py-2 text-xs text-muted-foreground">
-                {mailboxLabel}: {imap.mailboxInfo.login} · {imap.mailboxInfo.folder} · {inboxLabel} {imap.mailboxInfo.exists}
-              </div>
-            ) : null}
             {imap.loading && imap.messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -397,27 +411,16 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
                 </span>
               </div>
             ) : (
-              <div className="divide-y divide-border/40">
+              <div className="divide-y divide-white/10">
                 {imap.messages.map(msg => (
-                  <button
+                  <MessageRow
                     key={msg.uid}
-                    onClick={() => handleOpenMessage(msg)}
-                    className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-start gap-3"
-                  >
-                    <div className="mt-1.5 shrink-0 h-2 w-2 rounded-full bg-transparent" />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm truncate font-normal text-muted-foreground">
-                          {imap.activeFolder === 'SENT' ? extractName(msg.to) : extractName(msg.from)}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground shrink-0">{formatDate(msg.date)}</span>
-                      </div>
-                      <div className="text-sm truncate text-foreground">{msg.subject}</div>
-                      {msg.snippet && (
-                        <div className="text-xs text-muted-foreground/70 truncate mt-0.5">{msg.snippet}</div>
-                      )}
-                    </div>
-                  </button>
+                    message={msg}
+                    activeFolder={imap.activeFolder}
+                    deleting={deletingRowUid === msg.uid}
+                    onOpen={() => handleOpenMessage(msg)}
+                    onDelete={() => handleDeleteFromList(msg)}
+                  />
                 ))}
                 {imap.hasMore && (
                   <div className="px-4 py-3 flex justify-center">
@@ -440,10 +443,11 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
       </div>
 
       {showCompose && (
-        <ComposeModal
+        <MailComposer
           onClose={handleCloseCompose}
-          onSend={imap.sendMessage}
+          onSend={async (input: MailComposerSubmitInput) => imap.sendMessage(input)}
           replyTo={replyTo}
+          fromLabel={activeEmail || activeConn?.display_name || 'Custom mail'}
         />
       )}
     </div>

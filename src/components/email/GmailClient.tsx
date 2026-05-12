@@ -2,9 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { useGmailMessages, GmailMessage, GmailMessageFull, GmailLabel } from '@/hooks/useGmailMessages';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { MailComposer, MailComposerSubmitInput } from '@/components/email/MailComposer';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
-  ChevronDown, X, Reply, Trash2, MailOpen,
+  ChevronDown, Reply, Trash2, MailOpen,
 } from 'lucide-react';
 
 function GmailIcon({ size = 16 }: { size?: number }) {
@@ -40,81 +41,50 @@ function extractName(emailStr: string): string {
   return emailStr.replace(/<.*>/, '').trim() || emailStr;
 }
 
-interface ComposeProps {
-  onClose: () => void;
-  onSend: (to: string, subject: string, body: string, threadId?: string) => Promise<boolean>;
-  replyTo?: { to: string; subject: string; threadId: string };
+interface MessageRowProps {
+  message: GmailMessage;
+  activeFolder: string;
+  deleting: boolean;
+  onOpen: () => void;
+  onDelete: () => void;
 }
 
-function ComposeModal({ onClose, onSend, replyTo }: ComposeProps) {
-  const [to, setTo] = useState(replyTo?.to || '');
-  const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : '');
-  const [body, setBody] = useState('');
-  const [sending, setSending] = useState(false);
-
-  const handleSend = async () => {
-    if (!to.trim() || !subject.trim() || !body.trim()) return;
-    setSending(true);
-    const ok = await onSend(to, subject, body, replyTo?.threadId);
-    setSending(false);
-    if (ok) onClose();
-  };
+function MessageRow({ message, activeFolder, deleting, onOpen, onDelete }: MessageRowProps) {
+  const personLabel = activeFolder === 'SENT'
+    ? `To: ${extractName(message.to) || message.to}`
+    : extractName(message.from) || message.from;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-2">
-      <div className="w-full max-w-lg bg-[#0c0f14] border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-          <span className="font-semibold text-sm">{replyTo ? 'Reply' : 'New Message'}</span>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-white/10 transition-colors">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <div className="p-4 space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">To</label>
-            <input
-              type="email"
-              value={to}
-              onChange={e => setTo(e.target.value)}
-              placeholder="recipient@email.com"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500/60 transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Subject</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={e => setSubject(e.target.value)}
-              placeholder="Subject"
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500/60 transition-colors"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Message</label>
-            <textarea
-              value={body}
-              onChange={e => setBody(e.target.value)}
-              placeholder="Write your message..."
-              rows={8}
-              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-blue-500/60 transition-colors resize-none"
-            />
-          </div>
-        </div>
-        <div className="flex items-center justify-between px-4 pb-4">
-          <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-            Discard
-          </button>
-          <Button
-            onClick={handleSend}
-            disabled={sending || !to || !subject || !body}
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-2"
-          >
-            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            {sending ? 'Sending...' : 'Send'}
-          </Button>
-        </div>
+    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-white/[0.04] sm:px-5 sm:py-3.5">
+      <div className="pt-1.5">
+        <div className={`h-2.5 w-2.5 rounded-full ${message.isUnread ? 'bg-blue-500' : 'bg-white/10'}`} />
       </div>
+
+      <button onClick={onOpen} className="min-w-0 flex-1 text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className={`truncate text-sm ${message.isUnread ? 'font-semibold text-white' : 'font-medium text-white/88'}`}>
+              {personLabel}
+            </div>
+            <div className={`mt-0.5 truncate text-sm ${message.isUnread ? 'text-white/92' : 'text-white/72'}`}>
+              {message.subject || '(no subject)'}
+            </div>
+            <div className="mt-1 truncate text-xs text-white/45">
+              {message.snippet || 'No preview available'}
+            </div>
+          </div>
+          <div className="shrink-0 pt-0.5 text-[11px] text-white/45">{formatDate(message.date)}</div>
+        </div>
+      </button>
+
+      <button
+        title="Delete"
+        onClick={onDelete}
+        disabled={deleting}
+        className="mt-0.5 shrink-0 rounded-xl p-2 text-white/45 transition-colors hover:bg-white/10 hover:text-red-400 disabled:opacity-60"
+      >
+        {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+      </button>
     </div>
   );
 }
@@ -123,18 +93,23 @@ interface MessageViewProps {
   message: GmailMessageFull;
   onBack: () => void;
   onReply: () => void;
+  onDelete: () => void;
+  deleting: boolean;
 }
 
-function MessageView({ message, onBack, onReply }: MessageViewProps) {
+function MessageView({ message, onBack, onReply, onDelete, deleting }: MessageViewProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-1 pb-3 border-b border-border/40">
-        <button onClick={onBack} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
+        <button title="Back" onClick={onBack} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors">
           <ChevronLeft className="h-4 w-4" />
         </button>
         <span className="text-sm font-medium truncate flex-1">{message.subject}</span>
-        <button onClick={onReply} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-blue-400">
+        <button title="Reply" onClick={onReply} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-blue-400">
           <Reply className="h-4 w-4" />
+        </button>
+        <button title="Delete" onClick={onDelete} disabled={deleting} className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-red-400 disabled:opacity-60">
+          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
         </button>
       </div>
       <div className="py-3 border-b border-border/40 space-y-1">
@@ -187,13 +162,24 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string; threadId: string } | undefined>();
   const [customFolders, setCustomFolders] = useState<GmailLabel[]>([]);
   const [showFolders, setShowFolders] = useState(false);
+  const [deletingMessage, setDeletingMessage] = useState(false);
+  const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
+  const connectedLabel = language === 'ar' ? 'متصل' : 'Connected';
+  const composeLabel = language === 'ar' ? 'إنشاء' : 'Compose';
+  const refreshLabel = language === 'ar' ? 'تحديث' : 'Refresh';
+  const activeFolderLabel = gmail.activeFolder === 'INBOX'
+    ? 'Inbox'
+    : gmail.activeFolder === 'SENT'
+      ? 'Sent'
+      : gmail.activeFolder;
+  const mailboxLine = emailAddress ? `${language === 'ar' ? 'الحساب' : 'Account'}: ${emailAddress}` : 'Gmail account';
 
   useEffect(() => {
     if (connected) {
       gmail.fetchMessages('INBOX');
       gmail.fetchLabels().then(() => {});
     }
-  }, [connected]);
+  }, [connected, gmail.fetchLabels, gmail.fetchMessages]);
 
   useEffect(() => {
     if (gmail.labels.length > 0) {
@@ -231,8 +217,8 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
     setReplyTo(undefined);
   };
 
-  const handleSend = async (to: string, subject: string, body: string, threadId?: string) => {
-    const ok = await gmail.sendMessage(to, subject, body, threadId);
+  const handleSend = async (input: MailComposerSubmitInput) => {
+    const ok = await gmail.sendMessage(input);
     if (ok && gmail.activeFolder === 'SENT') {
       gmail.fetchMessages('SENT');
     }
@@ -243,6 +229,29 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
     setSelectedMessage(null);
     setShowFolders(false);
     gmail.fetchMessages(folderId);
+  };
+
+  const handleRefresh = async () => {
+    await gmail.fetchMessages(gmail.activeFolder, undefined, { forceRefresh: true });
+    await gmail.fetchLabels({ forceRefresh: true });
+  };
+
+  const handleDeleteMessage = async () => {
+    if (!selectedMessage) return;
+    setDeletingMessage(true);
+    const deleted = await gmail.trashMessage(selectedMessage.id);
+    if (deleted) {
+      setSelectedMessage(null);
+      await gmail.fetchLabels({ forceRefresh: true });
+    }
+    setDeletingMessage(false);
+  };
+
+  const handleDeleteFromList = async (message: GmailMessage) => {
+    setDeletingRowId(message.id);
+    await gmail.trashMessage(message.id);
+    await gmail.fetchLabels({ forceRefresh: true });
+    setDeletingRowId(null);
   };
 
   if (!connected) {
@@ -265,44 +274,66 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Header bar */}
-      <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
-          <GmailIcon size={16} />
-          <span className="text-sm font-medium text-muted-foreground truncate max-w-[160px]">
-            {emailAddress || 'Gmail'}
-          </span>
-          <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">Connected</Badge>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button
-            onClick={() => gmail.fetchMessages(gmail.activeFolder)}
-            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
-            title="Refresh"
-          >
-            {gmail.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-          </button>
-          <Button
-            size="sm"
-            onClick={() => { setReplyTo(undefined); setShowCompose(true); }}
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 h-7 text-xs px-3"
-          >
-            <Pencil className="h-3 w-3" />
-            Compose
-          </Button>
+      <div className="rounded-[22px] border border-white/10 bg-[#0c0f14] p-3 sm:p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/[0.04] border border-white/10">
+                <GmailIcon size={18} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-col items-start gap-1 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+                  <span className="block max-w-full truncate text-base font-semibold text-white">{emailAddress || 'Gmail'}</span>
+                  <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">{connectedLabel}</Badge>
+                </div>
+                <div className="mt-1 max-w-full truncate text-xs text-white/55">{mailboxLine}</div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {emailAddress ? (
+                <div className="max-w-full rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/70">
+                  <span className="block max-w-[220px] truncate sm:max-w-[280px]">{emailAddress}</span>
+                </div>
+              ) : null}
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/75">
+                {activeFolderLabel}
+              </div>
+              <div className="rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[11px] text-white/55">
+                {gmail.messages.length} shown
+              </div>
+            </div>
+          </div>
+
+          <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
+            <button
+              onClick={handleRefresh}
+              className="rounded-xl border border-white/10 bg-white/[0.04] p-2.5 transition-colors hover:bg-white/10"
+              title={refreshLabel}
+            >
+              {gmail.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </button>
+            <Button
+              size="sm"
+              onClick={() => { setReplyTo(undefined); setShowCompose(true); }}
+              className="h-10 flex-1 rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700 gap-1.5 sm:flex-none"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              {composeLabel}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Folder tabs */}
-      <div className="flex items-center gap-1 flex-wrap">
+      <div className="flex items-center gap-1.5 flex-wrap">
         {SYSTEM_FOLDERS.map(f => (
           <button
             key={f.id}
             onClick={() => handleFolderSwitch(f.id)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-medium transition-all ${
               gmail.activeFolder === f.id
-                ? 'bg-blue-600 text-white'
-                : 'bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'border border-white/10 bg-white/[0.04] text-white/60 hover:bg-white/10 hover:text-white'
             }`}
           >
             {f.icon}
@@ -313,7 +344,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
           <div className="relative">
             <button
               onClick={() => setShowFolders(v => !v)}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/5 text-muted-foreground hover:bg-white/10 hover:text-foreground transition-all"
+              className="flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-medium text-white/60 transition-all hover:bg-white/10 hover:text-white"
             >
               More
               <ChevronDown className="h-3 w-3" />
@@ -339,10 +370,9 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
         )}
       </div>
 
-      {/* Message view or list */}
-      <div className="rounded-xl border border-border/50 bg-background/30 overflow-hidden min-h-[300px]">
+      <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-white/10 bg-[#0c0f14]">
         {selectedMessage ? (
-          <div className="p-4 h-full">
+          <div className="h-full p-4 sm:p-5">
             {loadingMessage ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -352,6 +382,8 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                 message={selectedMessage}
                 onBack={() => setSelectedMessage(null)}
                 onReply={handleReply}
+                onDelete={handleDeleteMessage}
+                deleting={deletingMessage}
               />
             )}
           </div>
@@ -368,33 +400,16 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                 <span className="text-sm text-muted-foreground">No messages in {gmail.activeFolder === 'INBOX' ? 'Inbox' : gmail.activeFolder === 'SENT' ? 'Sent' : gmail.activeFolder}</span>
               </div>
             ) : (
-              <div className="divide-y divide-border/40">
+              <div className="divide-y divide-white/10">
                 {gmail.messages.map(msg => (
-                  <button
+                  <MessageRow
                     key={msg.id}
-                    onClick={() => handleOpenMessage(msg)}
-                    className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors flex items-start gap-3"
-                  >
-                    <div className="mt-0.5 shrink-0">
-                      {msg.isUnread ? (
-                        <div className="h-2 w-2 rounded-full bg-blue-500 mt-1" />
-                      ) : (
-                        <div className="h-2 w-2 rounded-full bg-transparent mt-1" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`text-sm truncate ${msg.isUnread ? 'font-semibold' : 'font-normal text-muted-foreground'}`}>
-                          {gmail.activeFolder === 'SENT' ? extractName(msg.to) : extractName(msg.from)}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground shrink-0">{formatDate(msg.date)}</span>
-                      </div>
-                      <div className={`text-sm truncate ${msg.isUnread ? 'text-foreground' : 'text-muted-foreground'}`}>
-                        {msg.subject}
-                      </div>
-                      <div className="text-xs text-muted-foreground/70 truncate mt-0.5">{msg.snippet}</div>
-                    </div>
-                  </button>
+                    message={msg}
+                    activeFolder={gmail.activeFolder}
+                    deleting={deletingRowId === msg.id}
+                    onOpen={() => handleOpenMessage(msg)}
+                    onDelete={() => handleDeleteFromList(msg)}
+                  />
                 ))}
                 {gmail.nextPageToken && (
                   <div className="px-4 py-3 flex justify-center">
@@ -416,12 +431,12 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
         )}
       </div>
 
-      {/* Compose modal */}
       {showCompose && (
-        <ComposeModal
+        <MailComposer
           onClose={handleCloseCompose}
           onSend={handleSend}
           replyTo={replyTo}
+          fromLabel={emailAddress || 'Gmail'}
         />
       )}
     </div>

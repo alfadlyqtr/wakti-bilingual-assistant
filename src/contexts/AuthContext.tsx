@@ -91,6 +91,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastLoginTimestamp, setLastLoginTimestamp] = useState<number | null>(null);
+  const isLocalhost = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
 
   // Warm up Natively Purchases SDK if present (no-op on web)
   useEffect(() => {
@@ -117,7 +118,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.log('AuthContext: Finishing loading state after fallback timeout.');
         setLoading(false);
       }
-    }, 4000);
+    }, isLocalhost ? 1200 : 4000);
 
     // 1) Try to get initial session with graceful 400/401 error handling
     try {
@@ -200,7 +201,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try { window.clearTimeout(loadingTimer); } catch {}
       try { subscription?.unsubscribe(); } catch {}
     };
-  }, []);
+  }, [isLocalhost]);
 
   // Track when the Natively SDK finishes loading inside the WebView
   const [nativelyReady, setNativelyReady] = useState<boolean>(
@@ -226,6 +227,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // OneSignal Web Push: bind/unbind browser push identity to Supabase user
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (isLocalhost) return;
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     if (user?.id) {
       window.OneSignalDeferred.push(async function(OneSignal: any) {
@@ -246,7 +248,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       });
     }
-  }, [user?.id]);
+  }, [isLocalhost, user?.id]);
 
   // Sync timezone to profile for localized notifications (runs for ALL users, web + native)
   useEffect(() => {
@@ -427,10 +429,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try { removeNotificationUser(); } catch {}
     // OneSignal Web Push: logout on explicit sign out
     try {
-      window.OneSignalDeferred = window.OneSignalDeferred || [];
-      window.OneSignalDeferred.push(async function(OneSignal: any) {
-        await OneSignal.logout();
-      });
+      if (!isLocalhost) {
+        window.OneSignalDeferred = window.OneSignalDeferred || [];
+        window.OneSignalDeferred.push(async function(OneSignal: any) {
+          await OneSignal.logout();
+        });
+      }
     } catch {}
     // Clear any app-level cached flags that might drive auto-login flows
     try {

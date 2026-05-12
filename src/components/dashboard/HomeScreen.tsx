@@ -1967,6 +1967,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
   const recovery = whoopData?.recovery ?? null;
   const strain   = whoopData?.strain ?? null;
   const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
+  const isAppleMobile = isAppleMobileDevice();
 
   const shell = (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => (
     <div
@@ -1974,20 +1975,34 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
         background: hasBg
-          ? 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 100%)'
-          : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 100%)',
-        backdropFilter: hasBg ? 'blur(30px) saturate(170%)' : 'blur(24px) saturate(155%)',
-        WebkitBackdropFilter: hasBg ? 'blur(30px) saturate(170%)' : 'blur(24px) saturate(155%)',
+          ? isAppleMobile
+            ? 'linear-gradient(180deg, rgba(10,14,24,0.22) 0%, rgba(10,14,24,0.18) 100%), linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%)'
+            : 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 100%)'
+          : isAppleMobile
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.18) 0%, rgba(8,12,20,0.12) 100%), linear-gradient(180deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.06) 100%)'
+            : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 100%)',
+        backdropFilter: hasBg
+          ? `blur(${isAppleMobile ? '24px' : '30px'}) saturate(${isAppleMobile ? '145%' : '170%'})`
+          : `blur(${isAppleMobile ? '20px' : '24px'}) saturate(${isAppleMobile ? '135%' : '155%'})`,
+        WebkitBackdropFilter: hasBg
+          ? `blur(${isAppleMobile ? '24px' : '30px'}) saturate(${isAppleMobile ? '145%' : '170%'})`
+          : `blur(${isAppleMobile ? '20px' : '24px'}) saturate(${isAppleMobile ? '135%' : '155%'})`,
         boxShadow: hasBg
-          ? `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -18px 28px rgba(255,255,255,0.04)`
-          : `0 16px 38px rgba(0,0,0,0.22), 0 0 20px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.04)`,
-        border: hasBg ? '1px solid rgba(255,255,255,0.24)' : '1px solid rgba(255,255,255,0.18)',
+          ? isAppleMobile
+            ? `0 18px 42px rgba(0,0,0,0.34), 0 8px 20px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -18px 28px rgba(255,255,255,0.02)`
+            : `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -18px 28px rgba(255,255,255,0.04)`
+          : isAppleMobile
+            ? `0 16px 38px rgba(0,0,0,0.28), 0 0 16px ${glow}10, inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -16px 24px rgba(255,255,255,0.02)`
+            : `0 16px 38px rgba(0,0,0,0.22), 0 0 20px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.04)`,
+        border: hasBg
+          ? `1px solid rgba(255,255,255,${isAppleMobile ? '0.14' : '0.24'})`
+          : `1px solid rgba(255,255,255,${isAppleMobile ? '0.12' : '0.18'})`,
       }}
     >
-      {hasBg && <div className="absolute inset-0" style={{ background: 'rgba(10,14,24,0.14)' }} />}
-      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? 0.16 : 0.22, mixBlendMode: 'screen', filter: 'saturate(0.9)' }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.1) 22%, rgba(255,255,255,0.03) 56%, transparent 100%)' }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: 'radial-gradient(circle at 15% 10%, rgba(255,255,255,0.24) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,0.12) 0%, transparent 26%)' }} />
+      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isAppleMobile ? '0.22' : '0.14'})` }} />}
+      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? (isAppleMobile ? 0.1 : 0.16) : (isAppleMobile ? 0.16 : 0.22), mixBlendMode: 'screen', filter: `saturate(${isAppleMobile ? '0.82' : '0.9'})` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.18' : '0.32'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.055' : '0.1'}) 22%, rgba(255,255,255,${isAppleMobile ? '0.015' : '0.03'}) 56%, transparent 100%)` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isAppleMobile ? '0.14' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isAppleMobile ? '0.06' : '0.12'}) 0%, transparent 26%)` }} />
       <div className="relative z-10 w-full h-full">{children}</div>
     </div>
   );
@@ -3148,26 +3163,27 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const isDefaultBgImage = bgChoice === 'default' || bgImage === defaultBg || bgImage === DEFAULT_BG_DARK || bgImage === DEFAULT_BG_LIGHT;
   const hasBg  = !!bgImage && bgChoice !== 'style';
   const wallpaperTranslateY = `${(bgPositionY - 50) * 1.2}%`;
+  const isAppleMobile = isAppleMobileDevice();
   const effectiveDockColor = dockColor || (isDark ? '#0c0f14' : '#060541');
   const dockTintIsDark = dockColor ? getHexLuminance(effectiveDockColor) < 0.32 : isDark;
   const dockTrayBackground = dockColor
-    ? `linear-gradient(180deg, rgba(255,255,255,${dockTintIsDark ? 0.24 : 0.42}) 0%, rgba(255,255,255,${dockTintIsDark ? 0.08 : 0.16}) 22%, rgba(255,255,255,0.02) 100%), radial-gradient(circle at 50% -14%, rgba(255,255,255,${dockTintIsDark ? 0.2 : 0.34}) 0%, transparent 42%), linear-gradient(135deg, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.82 : 0.38)} 0%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.64 : 0.22)} 52%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.74 : 0.28)} 100%)`
-    : 'linear-gradient(180deg, rgba(255,255,255,0.66) 0%, rgba(255,255,255,0.34) 24%, rgba(255,255,255,0.16) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,0.42) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.08) 46%, rgba(255,255,255,0.14) 100%)';
+    ? `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.16 : 0.26) : (dockTintIsDark ? 0.24 : 0.42)}) 0%, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.04 : 0.1) : (dockTintIsDark ? 0.08 : 0.16)}) 22%, rgba(255,255,255,${isAppleMobile ? 0.012 : 0.02}) 100%), radial-gradient(circle at 50% -14%, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.12 : 0.22) : (dockTintIsDark ? 0.2 : 0.34)}) 0%, transparent 42%), linear-gradient(135deg, ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.88 : 0.48) : (dockTintIsDark ? 0.82 : 0.38))} 0%, ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.74 : 0.3) : (dockTintIsDark ? 0.64 : 0.22))} 52%, ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.82 : 0.36) : (dockTintIsDark ? 0.74 : 0.28))} 100%)`
+    : `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? 0.42 : 0.66}) 0%, rgba(255,255,255,${isAppleMobile ? 0.2 : 0.34}) 24%, rgba(255,255,255,${isAppleMobile ? 0.08 : 0.16}) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,${isAppleMobile ? 0.24 : 0.42}) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,${isAppleMobile ? 0.12 : 0.22}) 0%, rgba(255,255,255,${isAppleMobile ? 0.04 : 0.08}) 46%, rgba(255,255,255,${isAppleMobile ? 0.08 : 0.14}) 100%)`;
   const dockTrayBorder = dockColor
-    ? `1px solid rgba(255,255,255,${dockTintIsDark ? 0.28 : 0.42})`
-    : '1px solid rgba(255,255,255,0.42)';
+    ? `1px solid rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.2 : 0.3) : (dockTintIsDark ? 0.28 : 0.42)})`
+    : `1px solid rgba(255,255,255,${isAppleMobile ? 0.28 : 0.42})`;
   const dockTrayOutline = dockColor
-    ? `1px solid rgba(255,255,255,${dockTintIsDark ? 0.1 : 0.16})`
-    : '1px solid rgba(255,255,255,0.12)';
+    ? `1px solid rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.06 : 0.1) : (dockTintIsDark ? 0.1 : 0.16)})`
+    : `1px solid rgba(255,255,255,${isAppleMobile ? 0.08 : 0.12})`;
   const dockTrayShadow = dockColor
-    ? `0 32px 64px -28px rgba(0,0,0,${dockTintIsDark ? 0.72 : 0.5}), 0 16px 34px rgba(0,0,0,${dockTintIsDark ? 0.26 : 0.14}), 0 0 24px ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.18 : 0.14)}, inset 0 1px 0 rgba(255,255,255,${dockTintIsDark ? 0.42 : 0.68}), inset 0 -18px 28px rgba(255,255,255,${dockTintIsDark ? 0.04 : 0.08}), inset 18px 0 28px rgba(255,255,255,${dockTintIsDark ? 0.02 : 0.05}), inset -18px 0 28px rgba(255,255,255,${dockTintIsDark ? 0.02 : 0.05})`
-    : '0 32px 64px -28px rgba(0,0,0,0.56), 0 16px 34px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.72), inset 0 -18px 28px rgba(255,255,255,0.08), inset 20px 0 28px rgba(255,255,255,0.05), inset -20px 0 28px rgba(255,255,255,0.05)';
+    ? `0 32px 64px -28px rgba(0,0,0,${isAppleMobile ? (dockTintIsDark ? 0.8 : 0.58) : (dockTintIsDark ? 0.72 : 0.5)}), 0 16px 34px rgba(0,0,0,${isAppleMobile ? (dockTintIsDark ? 0.32 : 0.18) : (dockTintIsDark ? 0.26 : 0.14)}), 0 0 24px ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.12 : 0.1) : (dockTintIsDark ? 0.18 : 0.14))}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.26 : 0.42) : (dockTintIsDark ? 0.42 : 0.68)}), inset 0 -18px 28px rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.02 : 0.04) : (dockTintIsDark ? 0.04 : 0.08)}), inset 18px 0 28px rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.012 : 0.024) : (dockTintIsDark ? 0.02 : 0.05)}), inset -18px 0 28px rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.012 : 0.024) : (dockTintIsDark ? 0.02 : 0.05)})`
+    : `0 32px 64px -28px rgba(0,0,0,${isAppleMobile ? 0.64 : 0.56}), 0 16px 34px rgba(0,0,0,${isAppleMobile ? 0.22 : 0.16}), inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? 0.42 : 0.72}), inset 0 -18px 28px rgba(255,255,255,${isAppleMobile ? 0.04 : 0.08}), inset 20px 0 28px rgba(255,255,255,${isAppleMobile ? 0.03 : 0.05}), inset -20px 0 28px rgba(255,255,255,${isAppleMobile ? 0.03 : 0.05})`;
   const dockTopSheen = dockColor
-    ? `linear-gradient(180deg, rgba(255,255,255,${dockTintIsDark ? 0.38 : 0.62}) 0%, rgba(255,255,255,${dockTintIsDark ? 0.12 : 0.18}) 20%, transparent 58%)`
-    : 'linear-gradient(180deg, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.18) 22%, transparent 62%)';
+    ? `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.24 : 0.4) : (dockTintIsDark ? 0.38 : 0.62)}) 0%, rgba(255,255,255,${isAppleMobile ? (dockTintIsDark ? 0.06 : 0.12) : (dockTintIsDark ? 0.12 : 0.18)}) 20%, transparent 58%)`
+    : `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? 0.4 : 0.62}) 0%, rgba(255,255,255,${isAppleMobile ? 0.12 : 0.18}) 22%, transparent 62%)`;
   const dockBottomTint = dockColor
-    ? `linear-gradient(180deg, transparent 36%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.18 : 0.08)} 100%)`
-    : 'linear-gradient(180deg, transparent 36%, rgba(255,255,255,0.14) 100%)';
+    ? `linear-gradient(180deg, transparent 36%, ${rgbaFromHex(effectiveDockColor, isAppleMobile ? (dockTintIsDark ? 0.24 : 0.12) : (dockTintIsDark ? 0.18 : 0.08))} 100%)`
+    : `linear-gradient(180deg, transparent 36%, rgba(255,255,255,${isAppleMobile ? 0.08 : 0.14}) 100%)`;
 
   // Whether any custom/user background is active (wallpaper image OR solid/gradient)
   const hasAnyBg = hasBg || bgChoice === 'style';
@@ -3178,9 +3194,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Stat card surface — frosted glass with dark tint so white text is always readable
   const statCardBase = hasAnyBg
-    ? "bg-black/30 backdrop-blur-xl border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.2)]"
+    ? isAppleMobile
+      ? "bg-black/40 backdrop-blur-xl border border-white/12 shadow-[0_6px_18px_rgba(0,0,0,0.26)]"
+      : "bg-black/30 backdrop-blur-xl border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.2)]"
     : isDark
-      ? "bg-white/[0.06] backdrop-blur-xl border border-white/10"
+      ? isAppleMobile
+        ? "bg-black/[0.24] backdrop-blur-xl border border-white/[0.08]"
+        : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-white backdrop-blur-xl border border-[#060541]/10 shadow-[0_2px_12px_rgba(6,5,65,0.08)]";
 
   const statNumBase = hasAnyBg || isDark ? "" : "!text-[#060541]";
@@ -3195,9 +3215,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Quote glass
   const quoteGlass = hasAnyBg
-    ? "bg-black/30 backdrop-blur-xl border border-white/15"
+    ? isAppleMobile
+      ? "bg-black/40 backdrop-blur-xl border border-white/10"
+      : "bg-black/30 backdrop-blur-xl border border-white/15"
     : isDark
-      ? "bg-white/[0.06] backdrop-blur-xl border border-white/10"
+      ? isAppleMobile
+        ? "bg-black/[0.22] backdrop-blur-xl border border-white/[0.08]"
+        : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-[#060541]/[0.06] backdrop-blur-xl border border-[#060541]/10 shadow-sm";
   const quoteTextColor   = hasAnyBg || isDark ? "rgba(255,255,255,0.9)" : "#060541";
   const quoteAuthorColor = hasAnyBg || isDark ? "rgba(255,255,255,0.45)" : "rgba(6,5,65,0.5)";
@@ -3760,8 +3784,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               className="relative flex items-center justify-around w-full rounded-[2.75rem] py-3 px-5 overflow-hidden"
               style={{
                 background: dockTrayBackground,
-                backdropFilter: 'blur(38px) saturate(170%)',
-                WebkitBackdropFilter: 'blur(38px) saturate(170%)',
+                backdropFilter: `blur(${isAppleMobile ? '30px' : '38px'}) saturate(${isAppleMobile ? '145%' : '170%'})`,
+                WebkitBackdropFilter: `blur(${isAppleMobile ? '30px' : '38px'}) saturate(${isAppleMobile ? '145%' : '170%'})`,
                 border: dockTrayBorder,
                 outline: dockTrayOutline,
                 boxShadow: dockTrayShadow,

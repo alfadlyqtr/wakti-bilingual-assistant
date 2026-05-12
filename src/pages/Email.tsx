@@ -339,20 +339,27 @@ export default function Email() {
 
   return (
     <div className="w-full h-full">
-      <div className="mx-auto w-full max-w-none pt-4 md:pt-8 pb-6 px-3 md:px-6 lg:px-8">
-        <div className="text-center mb-4">
-          <h1 className="text-xl md:text-2xl font-semibold">{t.title}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">{t.subtitle}</p>
+      <div className="mx-auto w-full max-w-none px-3 pb-6 pt-2 md:px-6 md:pt-4 lg:px-8">
+        <div className="mb-3 flex items-end justify-between gap-3">
+          <div>
+            <h1 className="text-lg font-semibold md:text-xl">{t.title}</h1>
+            <p className="mt-1 hidden text-xs text-muted-foreground sm:block sm:text-sm">{t.subtitle}</p>
+          </div>
+          {activeTab === 'settings' ? (
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="shrink-0">
+              {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
+          ) : null}
         </div>
 
-        <div className="mb-4">
-          <div className="grid grid-cols-4 gap-1.5 p-1 rounded-2xl border border-border/70 bg-white/60 dark:bg-white/5 shadow-sm">
+        <div className="mb-3">
+          <div className="grid grid-cols-4 gap-1.5 rounded-2xl border border-border/70 bg-white/60 p-1.5 shadow-sm dark:bg-white/5">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`min-h-[48px] px-2 py-2 rounded-xl border text-[11px] md:text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 leading-tight ${activeTab === tab.key ? 'bg-[#060541] text-white shadow-lg border-[#060541] ring-1 ring-[#060541]/40' : 'bg-white/80 dark:bg-white/5 border-border shadow-sm hover:shadow-md hover:bg-white dark:hover:bg-white/10'}`}
+                className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl border px-2 py-2 text-[11px] font-medium transition-all md:text-sm ${activeTab === tab.key ? 'border-[#060541] bg-[#060541] text-white shadow-lg ring-1 ring-[#060541]/40' : 'border-border bg-white/80 text-foreground shadow-sm hover:bg-white dark:bg-white/5 dark:hover:bg-white/10'}`}
               >
                 <span className="flex items-center gap-1">{tab.icon}</span>
                 <span>{tab.label}</span>
