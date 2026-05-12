@@ -22,6 +22,12 @@ export interface ImapMessageFull {
   body: { text: string; html: string };
 }
 
+export interface ImapMailboxInfo {
+  login: string;
+  exists: number;
+  folder: string;
+}
+
 async function callImapApi(action: string, params: Record<string, unknown>) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not logged in');
@@ -46,6 +52,7 @@ export function useImapMessages(connectionId: string) {
   const [hasMore, setHasMore] = useState(false);
   const [page, setPage] = useState(1);
   const [activeFolder, setActiveFolder] = useState<'INBOX' | 'SENT'>('INBOX');
+  const [mailboxInfo, setMailboxInfo] = useState<ImapMailboxInfo | null>(null);
 
   const fetchMessages = useCallback(async (folder: 'INBOX' | 'SENT' = 'INBOX', pageNum = 1) => {
     if (!connectionId) return null;
@@ -64,6 +71,13 @@ export function useImapMessages(connectionId: string) {
       setHasMore(data.hasMore || false);
       setPage(pageNum);
       setActiveFolder(folder);
+      if (data.mailbox) {
+        setMailboxInfo({
+          login: data.mailbox.login,
+          exists: Number(data.mailbox.exists || 0),
+          folder: data.folder || folder,
+        });
+      }
       return data;
     } catch (err: any) {
       toast.error(err.message || 'Failed to load messages');
@@ -116,6 +130,7 @@ export function useImapMessages(connectionId: string) {
     loading,
     hasMore,
     activeFolder,
+    mailboxInfo,
     fetchMessages,
     fetchMessage,
     sendMessage,

@@ -3,6 +3,23 @@ import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supaba
 import { toast } from 'sonner';
 import { useGmailConnection, GmailConnectionState } from './useGmailConnection';
 
+export type ImapConnectionProof = {
+  login: string;
+  emailAddress: string;
+  username: string;
+  inboxFolder: string;
+  inboxCount: number;
+  sentFolder: string;
+  foldersCount: number;
+};
+
+export type ImapConnectionHealth = {
+  status: 'unknown' | 'checking' | 'verified' | 'failed';
+  proof?: ImapConnectionProof;
+  error?: string;
+  checkedAt?: string;
+};
+
 export type ImapConnection = {
   id: string;
   provider: string;
@@ -31,6 +48,87 @@ export function useEmailConnections() {
   const gmail = useGmailConnection();
   const [imapConnections, setImapConnections] = useState<ImapConnection[]>([]);
   const [imapLoading, setImapLoading] = useState(true);
+  const [imapHealth, setImapHealth] = useState<Record<string, ImapConnectionHealth>>({});
+
+  const callImapApi = useCallback(async (action: string, params: Record<string, unknown>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('Please log in first');
+
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/imap-api`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ action, ...params }),
+    });
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      throw new Error(data.error || 'IMAP validation failed');
+    }
+    return data;
+  }, []);
+
+  const validateSavedConnection = useCallback(async (connectionId: string): Promise<ImapConnectionHealth> => {
+    setImapHealth(prev => ({
+      ...prev,
+      [connectionId]: {
+        status: 'checking',
+        proof: prev[connectionId]?.proof,
+        checkedAt: prev[connectionId]?.checkedAt,
+      },
+    }));
+
+    try {
+      const data = await callImapApi('validate_connection', { connection_id: connectionId });
+      const health: ImapConnectionHealth = {
+        status: 'verified',
+        proof: data.proof,
+        checkedAt: new Date().toISOString(),
+      };
+      setImapHealth(prev => ({ ...prev, [connectionId]: health }));
+      return health;
+    } catch (err: any) {
+      const health: ImapConnectionHealth = {
+        status: 'failed',
+        error: err.message || 'Validation failed',
+        checkedAt: new Date().toISOString(),
+      };
+      setImapHealth(prev => ({ ...prev, [connectionId]: health }));
+      return health;
+    }
+  }, [callImapApi]);
+
+  const validateInlineConfig = useCallback(async (config: {
+    provider: string;
+    display_name: string;
+    email_address: string;
+    smtp_host: string;
+    smtp_port: number;
+    smtp_secure: boolean;
+    username: string;
+    password: string;
+    imap_host?: string;
+    imap_port?: number;
+    imap_secure?: boolean;
+  }): Promise<ImapConnectionProof> => {
+    const data = await callImapApi('validate_connection', {
+      config: {
+        email_address: config.email_address,
+        username: config.username,
+        password: config.password,
+        smtp_host: config.smtp_host,
+        smtp_port: config.smtp_port,
+        smtp_secure: config.smtp_secure,
+        imap_host: config.imap_host,
+        imap_port: config.imap_port,
+        imap_secure: config.imap_secure,
+      },
+    });
+    return data.proof as ImapConnectionProof;
+  }, [callImapApi]);
 
   const loadImapConnections = useCallback(async () => {
     setImapLoading(true);
@@ -38,6 +136,7 @@ export function useEmailConnections() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         setImapConnections([]);
+        setImapHealth({});
         return;
       }
       const { data, error } = await supabase
@@ -48,14 +147,24 @@ export function useEmailConnections() {
         .order('is_primary', { ascending: false });
 
       if (error) throw error;
-      setImapConnections(data || []);
+      const rows = data || [];
+      setImapConnections(rows);
+      setImapHealth(prev => {
+        const next: Record<string, ImapConnectionHealth> = {};
+        for (const row of rows) {
+          next[row.id] = prev[row.id] || { status: 'unknown' };
+        }
+        return next;
+      });
+      await Promise.all(rows.map((row) => validateSavedConnection(row.id)));
     } catch (err) {
       console.error('[EmailConnections] Failed to load IMAP:', err);
       setImapConnections([]);
+      setImapHealth({});
     } finally {
       setImapLoading(false);
     }
-  }, []);
+  }, [validateSavedConnection]);
 
   useEffect(() => {
     loadImapConnections();
@@ -87,10 +196,12 @@ export function useEmailConnections() {
         return { success: false, error: 'Please log in first' };
       }
 
+      const proof = await validateInlineConfig(config);
+
       // Check if this is the first connection — make it primary
       const isFirst = imapConnections.length === 0 && !gmail.connection.connected;
 
-      const { error } = await supabase.from('email_connections').insert({
+      const { data, error } = await supabase.from('email_connections').insert({
         user_id: session.user.id,
         provider: config.provider,
         display_name: config.display_name || config.provider,
@@ -105,9 +216,20 @@ export function useEmailConnections() {
         imap_secure: config.imap_secure ?? true,
         is_primary: isFirst,
         is_active: true,
-      });
+      }).select('id').single();
 
       if (error) throw error;
+
+      if (data?.id) {
+        setImapHealth(prev => ({
+          ...prev,
+          [data.id]: {
+            status: 'verified',
+            proof,
+            checkedAt: new Date().toISOString(),
+          },
+        }));
+      }
 
       toast.success('Email account connected successfully');
       await loadImapConnections();
@@ -118,7 +240,7 @@ export function useEmailConnections() {
       toast.error(msg);
       return { success: false, error: msg };
     }
-  }, [imapConnections.length, gmail.connection.connected, loadImapConnections]);
+  }, [imapConnections.length, gmail.connection.connected, loadImapConnections, validateInlineConfig]);
 
   const removeImapConnection = useCallback(async (id: string): Promise<void> => {
     try {
@@ -132,6 +254,11 @@ export function useEmailConnections() {
 
       if (error) throw error;
       toast.success('Email connection removed');
+      setImapHealth(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
       await loadImapConnections();
     } catch (err: any) {
       toast.error(err.message || 'Failed to remove connection');
@@ -206,13 +333,14 @@ export function useEmailConnections() {
 
   // Determine if any email is connected
   const gmailConnected = gmail.connection.connected;
-  const imapConnected = imapConnections.length > 0;
+  const verifiedImapConnections = imapConnections.filter(c => imapHealth[c.id]?.status === 'verified');
+  const imapConnected = verifiedImapConnections.length > 0;
   const anyConnected = gmailConnected || imapConnected;
 
   // Primary email to display
   const primaryEmail = gmail.connection.emailAddress
-    || imapConnections.find(c => c.is_primary)?.email_address
-    || imapConnections[0]?.email_address
+    || verifiedImapConnections.find(c => c.is_primary)?.email_address
+    || verifiedImapConnections[0]?.email_address
     || null;
 
   return {
@@ -220,10 +348,12 @@ export function useEmailConnections() {
     imap: {
       connections: imapConnections,
       loading: imapLoading,
+      health: imapHealth,
       add: addImapConnection,
       remove: removeImapConnection,
       setPrimary: setPrimaryConnection,
       refresh: loadImapConnections,
+      validate: validateSavedConnection,
       test: testSmtpConnection,
     },
     anyConnected,

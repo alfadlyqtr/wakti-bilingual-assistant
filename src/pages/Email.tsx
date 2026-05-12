@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useEmailConnections } from '@/hooks/useEmailConnections';
+import { useEmailConnections, ImapConnectionHealth } from '@/hooks/useEmailConnections';
 import { EmailConnectionModal } from '@/components/email/EmailConnectionModal';
 import { AppleLogo } from '@/components/calendar/AppleLogo';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +32,7 @@ export default function Email() {
 
   const customConnections = emailConn.imap.connections;
   const gmailConnected = emailConn.gmail.connection.connected;
+  const verifiedCustomCount = customConnections.filter(connection => emailConn.imap.health[connection.id]?.status === 'verified').length;
 
   const t = useMemo(() => ({
     title: language === 'ar' ? 'البريد' : 'Email',
@@ -71,7 +72,24 @@ export default function Email() {
     connectApple: language === 'ar' ? 'ربط Apple' : 'Connect Apple',
     customAccount: language === 'ar' ? 'حساب مخصص' : 'Custom account',
     customMailAccounts: language === 'ar' ? 'حسابات البريد المخصص' : 'Custom Mail Accounts',
+    checking: language === 'ar' ? 'جارٍ التحقق' : 'Checking',
+    needsAttention: language === 'ar' ? 'تحتاج مراجعة' : 'Needs attention',
+    verifiedMailbox: language === 'ar' ? 'تم التحقق من الصندوق' : 'Mailbox verified',
+    inboxProof: language === 'ar' ? 'صندوق الوارد' : 'Inbox',
   }), [language]);
+
+  const getHealthBadge = (health?: ImapConnectionHealth) => {
+    if (!health || health.status === 'unknown') {
+      return <Badge variant="outline" className="border-border/60 text-muted-foreground">{t.notConnected}</Badge>;
+    }
+    if (health.status === 'checking') {
+      return <Badge variant="outline" className="border-yellow-400/40 text-yellow-400">{t.checking}</Badge>;
+    }
+    if (health.status === 'verified') {
+      return <Badge className="bg-green-600 text-white hover:bg-green-600">{t.verifiedMailbox}</Badge>;
+    }
+    return <Badge variant="outline" className="border-red-400/40 text-red-400">{t.needsAttention}</Badge>;
+  };
 
   const tabs: Array<{
     key: EmailTab;
@@ -204,7 +222,11 @@ export default function Email() {
                   <Plug className="h-4 w-4 text-[#E9CEB0]" />
                   <span className="font-medium">{t.customMailAccounts}</span>
                   {customConnections.length > 0 ? (
-                    <Badge className="bg-green-600 text-white hover:bg-green-600">{customConnections.length} {t.customConnectedCount}</Badge>
+                    verifiedCustomCount > 0 ? (
+                      <Badge className="bg-green-600 text-white hover:bg-green-600">{verifiedCustomCount} {t.customConnectedCount}</Badge>
+                    ) : (
+                      <Badge variant="outline" className="border-red-400/40 text-red-400">0 {t.customConnectedCount}</Badge>
+                    )
                   ) : (
                     <Badge variant="outline" className="border-red-400/40 text-red-400">{t.notConnected}</Badge>
                   )}
@@ -231,8 +253,19 @@ export default function Email() {
                               {t.primaryEmail}
                             </Badge>
                           )}
+                          {getHealthBadge(emailConn.imap.health[connection.id])}
                         </div>
                         <div className="text-sm text-muted-foreground break-all">{connection.email_address || connection.username}</div>
+                        {emailConn.imap.health[connection.id]?.status === 'verified' && emailConn.imap.health[connection.id]?.proof && (
+                          <div className="text-xs text-muted-foreground">
+                            {emailConn.imap.health[connection.id]?.proof?.login} · {t.inboxProof.toLowerCase()} {emailConn.imap.health[connection.id]?.proof?.inboxCount}
+                          </div>
+                        )}
+                        {emailConn.imap.health[connection.id]?.status === 'failed' && emailConn.imap.health[connection.id]?.error && (
+                          <div className="text-xs text-red-400">
+                            {emailConn.imap.health[connection.id]?.error}
+                          </div>
+                        )}
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         {!connection.is_primary && (
@@ -297,6 +330,7 @@ export default function Email() {
     <div className="space-y-2">
       <CustomMailClient
         connections={customConnections}
+        health={emailConn.imap.health}
         onOpenSettings={() => setActiveTab('settings')}
         language={language}
       />

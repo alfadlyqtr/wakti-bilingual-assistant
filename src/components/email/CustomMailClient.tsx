@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useImapMessages, ImapMessage, ImapMessageFull } from '@/hooks/useImapMessages';
-import { ImapConnection } from '@/hooks/useEmailConnections';
+import { ImapConnection, ImapConnectionHealth } from '@/hooks/useEmailConnections';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -193,11 +193,12 @@ function AccountSelector({ connections, activeId, onChange }: AccountSelectorPro
 
 interface CustomMailClientProps {
   connections: ImapConnection[];
+  health: Record<string, ImapConnectionHealth>;
   onOpenSettings: () => void;
   language?: string;
 }
 
-export function CustomMailClient({ connections, onOpenSettings, language = 'en' }: CustomMailClientProps) {
+export function CustomMailClient({ connections, health, onOpenSettings, language = 'en' }: CustomMailClientProps) {
   const [activeConnectionId, setActiveConnectionId] = useState(
     connections.find(c => c.is_primary)?.id || connections[0]?.id || ''
   );
@@ -211,6 +212,12 @@ export function CustomMailClient({ connections, onOpenSettings, language = 'en' 
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string } | undefined>();
 
   const activeConn = connections.find(c => c.id === activeConnectionId);
+  const activeHealth = activeConnectionId ? health[activeConnectionId] : undefined;
+  const connectedLabel = language === 'ar' ? 'متصل فعليًا' : 'Verified';
+  const checkingLabel = language === 'ar' ? 'جارٍ التحقق' : 'Checking';
+  const failedLabel = language === 'ar' ? 'تحتاج مراجعة' : 'Needs attention';
+  const mailboxLabel = language === 'ar' ? 'الصندوق الحالي' : 'Active mailbox';
+  const inboxLabel = language === 'ar' ? 'الوارد' : 'Inbox';
 
   useEffect(() => {
     if (activeConnectionId) {
@@ -288,10 +295,23 @@ export function CustomMailClient({ connections, onOpenSettings, language = 'en' 
           {connections.length === 1 && (
             <div className="flex items-center gap-1.5 min-w-0">
               <Plug className="h-3.5 w-3.5 text-[#E9CEB0] shrink-0" />
-              <span className="text-sm font-medium text-muted-foreground truncate max-w-[160px]">
-                {activeConn?.display_name || activeConn?.email_address}
-              </span>
-              <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">Connected</Badge>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-muted-foreground truncate max-w-[160px]">
+                  {activeConn?.display_name || activeConn?.email_address}
+                </div>
+                {activeHealth?.proof && (
+                  <div className="text-[11px] text-muted-foreground truncate max-w-[220px]">
+                    {mailboxLabel}: {activeHealth.proof.login} · {inboxLabel} {activeHealth.proof.inboxCount}
+                  </div>
+                )}
+              </div>
+              {activeHealth?.status === 'verified' ? (
+                <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">{connectedLabel}</Badge>
+              ) : activeHealth?.status === 'checking' ? (
+                <Badge variant="outline" className="border-yellow-400/40 text-yellow-400 text-[10px] px-1.5 py-0">{checkingLabel}</Badge>
+              ) : activeHealth?.status === 'failed' ? (
+                <Badge variant="outline" className="border-red-400/40 text-red-400 text-[10px] px-1.5 py-0">{failedLabel}</Badge>
+              ) : null}
             </div>
           )}
         </div>
@@ -354,6 +374,16 @@ export function CustomMailClient({ connections, onOpenSettings, language = 'en' 
           </div>
         ) : (
           <>
+            {activeHealth?.status === 'failed' && activeHealth.error ? (
+              <div className="border-b border-red-400/20 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+                {activeHealth.error}
+              </div>
+            ) : null}
+            {imap.mailboxInfo ? (
+              <div className="border-b border-border/40 px-4 py-2 text-xs text-muted-foreground">
+                {mailboxLabel}: {imap.mailboxInfo.login} · {imap.mailboxInfo.folder} · {inboxLabel} {imap.mailboxInfo.exists}
+              </div>
+            ) : null}
             {imap.loading && imap.messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />

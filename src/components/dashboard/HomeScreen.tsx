@@ -108,6 +108,7 @@ const LS_BG_BASE           = "homescreen_bg";
 const LS_BG_POS_Y_BASE     = "homescreen_bg_pos_y";
 const LS_HEADER_COLOR_BASE = "homescreen_header_color";
 const LS_UNIFIED_BASE      = "homescreen_unified_grid_v6";
+const LS_LAYOUT_BASE       = "homescreen_layout_v1";
 const LS_WIDGETS_BASE      = "homescreen_widgets_v1";
 const LS_WIDGET_SIZES_BASE = "homescreen_widget_sizes_v1";
 const LS_HSBG_BASE         = "homescreen_bg_style_v1";
@@ -125,6 +126,7 @@ const LS_BG_KEY           = () => lsKey(_cachedUid(), LS_BG_BASE);
 const LS_BG_POS_Y_KEY     = () => lsKey(_cachedUid(), LS_BG_POS_Y_BASE);
 const LS_HEADER_COLOR_KEY = () => lsKey(_cachedUid(), LS_HEADER_COLOR_BASE);
 const LS_UNIFIED_KEY      = () => lsKey(_cachedUid(), LS_UNIFIED_BASE);
+const LS_LAYOUT_KEY       = () => lsKey(_cachedUid(), LS_LAYOUT_BASE);
 const LS_WIDGETS_KEY      = () => lsKey(_cachedUid(), LS_WIDGETS_BASE);
 const LS_WIDGET_SIZES_KEY = () => lsKey(_cachedUid(), LS_WIDGET_SIZES_BASE);
 const LS_HSBG_KEY         = () => lsKey(_cachedUid(), LS_HSBG_BASE);
@@ -134,6 +136,9 @@ const LS_BG_CHOICE_KEY    = () => lsKey(_cachedUid(), LS_BG_CHOICE_BASE);
 const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
 type WidgetId = typeof WIDGET_IDS[number];
 const MAX_WIDGETS = 4;
+const GRID_COLS = 4;
+const GRID_ROWS = 6;
+const MAX_PAGES = 2;
 const EDGE_PAGE_SWITCH_THRESHOLD = 60;
 const EDGE_PAGE_SWITCH_DELAY = 500;
 type BgChoice = 'default' | 'wallpaper' | 'style';
@@ -264,6 +269,286 @@ function flattenUnifiedPages(pages: string[][]) {
     .map(page => page.filter(Boolean))
     .filter((page, index) => page.length > 0 || index === 0);
   return normalized.flatMap((page, index) => index === 0 ? page : [PAGE_BREAK_ID, ...page]);
+}
+
+type HomescreenLayoutItem = {
+  id: string;
+  page: number;
+  col: number;
+  row: number;
+  w: number;
+  h: number;
+};
+
+type HomescreenPageData = {
+  index: number;
+  items: HomescreenLayoutItem[];
+  effectiveItems: string[];
+  gridPositions: Map<string, string>;
+  itemMap: Map<string, HomescreenLayoutItem>;
+};
+
+function getItemFootprint(id: string, widgetSizes: Record<string, 'big' | 'small'> = {}) {
+  if (id.startsWith('widget::')) {
+    const key = id.replace('widget::', '');
+    return widgetSizes[key] === 'small' ? { w: 2, h: 2 } : { w: 4, h: 2 };
+  }
+  return { w: 1, h: 1 };
+}
+
+function clampLayoutItem(item: HomescreenLayoutItem, widgetSizes: Record<string, 'big' | 'small'> = {}): HomescreenLayoutItem {
+  const span = getItemFootprint(item.id, widgetSizes);
+  return {
+    id: item.id,
+    page: Math.max(0, Math.min(MAX_PAGES - 1, Number.isFinite(item.page) ? item.page : 0)),
+    col: Math.max(0, Math.min(GRID_COLS - span.w, Number.isFinite(item.col) ? item.col : 0)),
+    row: Math.max(0, Math.min(GRID_ROWS - span.h, Number.isFinite(item.row) ? item.row : 0)),
+    w: span.w,
+    h: span.h,
+  };
+}
+
+function layoutItemsOverlap(a: HomescreenLayoutItem, b: HomescreenLayoutItem) {
+  if (a.page !== b.page) return false;
+  return a.col < b.col + b.w && a.col + a.w > b.col && a.row < b.row + b.h && a.row + a.h > b.row;
+}
+
+function canPlaceLayoutItem(
+  layout: HomescreenLayoutItem[],
+  candidate: HomescreenLayoutItem,
+  widgetSizes: Record<string, 'big' | 'small'> = {},
+  ignoreIds: string[] = []
+) {
+  const next = clampLayoutItem(candidate, widgetSizes);
+  if (next.col + next.w > GRID_COLS || next.row + next.h > GRID_ROWS) return false;
+  for (const raw of layout) {
+    if (!raw || raw.id === next.id || ignoreIds.includes(raw.id)) continue;
+    const existing = clampLayoutItem(raw, widgetSizes);
+    if (layoutItemsOverlap(next, existing)) return false;
+  }
+  return true;
+}
+
+function findFirstOpenPosition(
+  layout: HomescreenLayoutItem[],
+  id: string,
+  page: number,
+  widgetSizes: Record<string, 'big' | 'small'> = {}
+) {
+  const span = getItemFootprint(id, widgetSizes);
+  for (let row = 0; row <= GRID_ROWS - span.h; row++) {
+    for (let col = 0; col <= GRID_COLS - span.w; col++) {
+      const candidate = { id, page, col, row, w: span.w, h: span.h };
+      if (canPlaceLayoutItem(layout, candidate, widgetSizes, [id])) return candidate;
+    }
+  }
+  return null;
+}
+
+function findAllOpenPositions(
+  layout: HomescreenLayoutItem[],
+  id: string,
+  page: number,
+  widgetSizes: Record<string, 'big' | 'small'> = {}
+) {
+  const span = getItemFootprint(id, widgetSizes);
+  const positions: HomescreenLayoutItem[] = [];
+  for (let row = 0; row <= GRID_ROWS - span.h; row++) {
+    for (let col = 0; col <= GRID_COLS - span.w; col++) {
+      const candidate = { id, page, col, row, w: span.w, h: span.h };
+      if (canPlaceLayoutItem(layout, candidate, widgetSizes, [id])) {
+        positions.push(candidate);
+      }
+    }
+  }
+  return positions;
+}
+
+function canSwapLayoutItems(
+  layout: HomescreenLayoutItem[],
+  activeItem: HomescreenLayoutItem,
+  targetItem: HomescreenLayoutItem,
+  widgetSizes: Record<string, 'big' | 'small'> = {}
+) {
+  const activeIsWidget = activeItem.id.startsWith('widget::');
+  const targetIsWidget = targetItem.id.startsWith('widget::');
+  const activeIsApp = activeItem.id.startsWith('app::');
+  const targetIsApp = targetItem.id.startsWith('app::');
+  if (!((activeIsWidget && targetIsWidget) || (activeIsApp && targetIsApp))) return false;
+  const layoutWithoutBoth = layout.filter(item => item.id !== activeItem.id && item.id !== targetItem.id);
+  const activeAtTarget = clampLayoutItem({
+    ...activeItem,
+    page: targetItem.page,
+    row: targetItem.row,
+    col: targetItem.col,
+  }, widgetSizes);
+  const targetAtActive = clampLayoutItem({
+    ...targetItem,
+    page: activeItem.page,
+    row: activeItem.row,
+    col: activeItem.col,
+  }, widgetSizes);
+  if (!canPlaceLayoutItem(layoutWithoutBoth, activeAtTarget, widgetSizes, [activeItem.id, targetItem.id])) return false;
+  if (!canPlaceLayoutItem(layoutWithoutBoth, targetAtActive, widgetSizes, [activeItem.id, targetItem.id])) return false;
+  return true;
+}
+
+function findValidSwapTargets(
+  layout: HomescreenLayoutItem[],
+  activeItem: HomescreenLayoutItem,
+  widgetSizes: Record<string, 'big' | 'small'> = {}
+) {
+  return layout
+    .filter(item => item.page === activeItem.page && item.id !== activeItem.id)
+    .filter(item => canSwapLayoutItems(layout, activeItem, item, widgetSizes));
+}
+
+function extractLegacyPages(sourceGrid: string[], enabledWidgets: Set<string>, dockSet: Set<string>) {
+  const seen = new Set<string>();
+  const pages: string[][] = [[]];
+  for (const id of sourceGrid) {
+    if (id === PAGE_BREAK_ID) {
+      if (pages[pages.length - 1].length > 0 && pages.length < MAX_PAGES) pages.push([]);
+      continue;
+    }
+    if (seen.has(id)) continue;
+    if (id.startsWith('widget::')) {
+      if (!enabledWidgets.has(id)) continue;
+    } else if (id.startsWith('app::')) {
+      const appId = id.replace('app::', '');
+      if (!VALID_IDS.has(appId) || dockSet.has(appId)) continue;
+    } else {
+      continue;
+    }
+    seen.add(id);
+    pages[pages.length - 1].push(id);
+  }
+  return pages;
+}
+
+function buildLayoutFromLegacy(
+  sourceGrid: string[],
+  hsWidgets: Record<string, boolean>,
+  widgetSizes: Record<string, 'big' | 'small'> = {},
+  dockIds: string[] = []
+) {
+  const enabledWidgets = new Set(WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`));
+  const dockSet = new Set(dockIds);
+  const pages = extractLegacyPages(sourceGrid.length > 0 ? sourceGrid : buildDefaultUnifiedGrid(hsWidgets, dockIds), enabledWidgets, dockSet);
+  const layout: HomescreenLayoutItem[] = [];
+  const seen = new Set<string>();
+  const placeItem = (id: string, preferredPages: number[]) => {
+    if (seen.has(id)) return;
+    for (const page of preferredPages) {
+      const spot = findFirstOpenPosition(layout, id, page, widgetSizes);
+      if (spot) {
+        layout.push(spot);
+        seen.add(id);
+        return;
+      }
+    }
+  };
+  pages.slice(0, MAX_PAGES).forEach((page, pageIndex) => {
+    page.forEach(id => placeItem(id, [pageIndex, pageIndex === 0 ? 1 : 0]));
+  });
+  for (const widgetId of Array.from(enabledWidgets)) {
+    if (!seen.has(widgetId)) placeItem(widgetId, [0, 1]);
+  }
+  for (const appId of DEFAULT_ORDER) {
+    const id = `app::${appId}`;
+    if (!dockSet.has(appId) && !seen.has(id)) placeItem(id, [0, 1]);
+  }
+  return layout;
+}
+
+function normalizeHomescreenLayout(
+  rawLayout: HomescreenLayoutItem[],
+  hsWidgets: Record<string, boolean>,
+  widgetSizes: Record<string, 'big' | 'small'> = {},
+  dockIds: string[] = []
+) {
+  const enabledWidgets = new Set(WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`));
+  const dockSet = new Set(dockIds);
+  const layout: HomescreenLayoutItem[] = [];
+  const seen = new Set<string>();
+  const input = Array.isArray(rawLayout) ? rawLayout : [];
+  for (const item of input) {
+    if (!item || typeof item.id !== 'string' || seen.has(item.id)) continue;
+    if (item.id.startsWith('widget::')) {
+      if (!enabledWidgets.has(item.id)) continue;
+    } else if (item.id.startsWith('app::')) {
+      const appId = item.id.replace('app::', '');
+      if (!VALID_IDS.has(appId) || dockSet.has(appId)) continue;
+    } else {
+      continue;
+    }
+    const candidate = clampLayoutItem(item, widgetSizes);
+    const placed = canPlaceLayoutItem(layout, candidate, widgetSizes, [candidate.id])
+      ? candidate
+      : findFirstOpenPosition(layout, candidate.id, candidate.page, widgetSizes)
+        || findFirstOpenPosition(layout, candidate.id, 0, widgetSizes)
+        || findFirstOpenPosition(layout, candidate.id, 1, widgetSizes);
+    if (!placed) continue;
+    layout.push(placed);
+    seen.add(candidate.id);
+  }
+  for (const widgetId of Array.from(enabledWidgets)) {
+    if (seen.has(widgetId)) continue;
+    const spot = findFirstOpenPosition(layout, widgetId, 0, widgetSizes) || findFirstOpenPosition(layout, widgetId, 1, widgetSizes);
+    if (!spot) continue;
+    layout.push(spot);
+    seen.add(widgetId);
+  }
+  for (const appId of DEFAULT_ORDER) {
+    const id = `app::${appId}`;
+    if (dockSet.has(appId) || seen.has(id)) continue;
+    const spot = findFirstOpenPosition(layout, id, 0, widgetSizes) || findFirstOpenPosition(layout, id, 1, widgetSizes);
+    if (!spot) continue;
+    layout.push(spot);
+    seen.add(id);
+  }
+  return layout;
+}
+
+function layoutToUnifiedGrid(layout: HomescreenLayoutItem[]) {
+  const pages = Array.from({ length: MAX_PAGES }, () => [] as HomescreenLayoutItem[]);
+  for (const item of layout) {
+    pages[Math.max(0, Math.min(MAX_PAGES - 1, item.page))].push(item);
+  }
+  return flattenUnifiedPages(
+    pages
+      .map(page => page.sort((a, b) => a.row - b.row || a.col - b.col).map(item => item.id))
+      .filter((page, index) => page.length > 0 || index === 0)
+  );
+}
+
+function buildPageDataFromLayout(layout: HomescreenLayoutItem[], pageIndex: number): HomescreenPageData {
+  const items = layout
+    .filter(item => item.page === pageIndex)
+    .sort((a, b) => a.row - b.row || a.col - b.col);
+  const effectiveItems: string[] = [];
+  const gridPositions = new Map<string, string>();
+  const itemMap = new Map<string, HomescreenLayoutItem>();
+  const occupancy = Array.from({ length: GRID_ROWS }, () => Array<string | null>(GRID_COLS).fill(null));
+  for (const item of items) {
+    itemMap.set(item.id, item);
+    effectiveItems.push(item.id);
+    gridPositions.set(item.id, `${item.row + 1} / ${item.col + 1} / span ${item.h} / span ${item.w}`);
+    for (let row = item.row; row < item.row + item.h; row++) {
+      for (let col = item.col; col < item.col + item.w; col++) {
+        occupancy[row][col] = item.id;
+      }
+    }
+  }
+  for (let row = 0; row < GRID_ROWS; row++) {
+    for (let col = 0; col < GRID_COLS; col++) {
+      if (occupancy[row][col]) continue;
+      const emptyId = `empty::${pageIndex}:${row}:${col}`;
+      effectiveItems.push(emptyId);
+      gridPositions.set(emptyId, `${row + 1} / ${col + 1} / span 1 / span 1`);
+    }
+  }
+  return { index: pageIndex, items, effectiveItems, gridPositions, itemMap };
 }
 
 function buildHomescreenPage(pageItems: string[], widgetSizes: Record<string, 'big' | 'small'> = {}) {
@@ -1806,11 +2091,12 @@ interface UnifiedWidgetCellProps {
 }
 function UnifiedWidgetCell({ id, wKey, editMode, language, theme, hasBg, statCardBase, statLblColor, pendingTasks, completedToday, upcomingCount, navigate, gridArea, quoteText, quoteAuthor, whoopData, journalData, reminders, maw3dEvents, attendingCounts, onExpandQuote, onLongPress }: UnifiedWidgetCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
-    id, data: { type: 'unified' },
+    id, data: { type: 'unified' }, disabled: !editMode,
   });
   const lpTimer = useRef<number | null>(null);
   const lpStart = useRef<{ x: number; y: number } | null>(null);
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (editMode) return;
     const t = e.touches[0];
     lpStart.current = { x: t.clientX, y: t.clientY };
     lpTimer.current = window.setTimeout(() => { lpTimer.current = null; onLongPress?.(); }, 600);
@@ -1877,12 +2163,13 @@ interface UnifiedAppCellProps {
 }
 function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0, onLongPress }: UnifiedAppCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
-    id, data: { type: 'unified' },
+    id, data: { type: 'unified' }, disabled: !editMode,
   });
   const name = language === 'ar' ? app.nameAr : app.nameEn;
   const lpTimer = useRef<number | null>(null);
   const lpStart = useRef<{ x: number; y: number } | null>(null);
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (editMode) return;
     const t = e.touches[0];
     lpStart.current = { x: t.clientX, y: t.clientY };
     lpTimer.current = window.setTimeout(() => { lpTimer.current = null; onLongPress?.(); }, 600);
@@ -1929,7 +2216,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
 }
 
 function EmptySlotCell({ id, gridArea, isWidget, editMode }: { id: string; gridArea: string; isWidget: boolean; editMode: boolean }) {
-  const { setNodeRef, isOver } = useSortable({ id, data: { type: 'unified' } });
+  const { setNodeRef, isOver } = useSortable({ id, data: { type: 'unified' }, disabled: !editMode });
   return (
     <div
       ref={setNodeRef}
@@ -1985,7 +2272,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const resolvedTheme = theme || savedTheme;
     const rawHsBg = readJson<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(LS_HSBG_BASE);
     const rawWidgets = readJson<Record<string, boolean>>(LS_WIDGETS_BASE);
+    const rawWidgetSizes = readJson<Record<string, 'big' | 'small'>>(LS_WIDGET_SIZES_BASE);
     const rawUnifiedGrid = readJson<string[]>(LS_UNIFIED_BASE);
+    const rawLayout = readJson<HomescreenLayoutItem[]>(LS_LAYOUT_BASE);
 
     const resolvedBgChoice: BgChoice = isBgChoiceValue(savedChoice)
       ? savedChoice
@@ -2026,7 +2315,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       bgGradLeft: read('hs_grad_left') || '',
       bgGradRight: read('hs_grad_right') || '',
       hsWidgets: rawWidgets && typeof rawWidgets === 'object' ? { ...DEFAULT_HS_WIDGETS, ...rawWidgets } : { ...DEFAULT_HS_WIDGETS },
+      hsWidgetSizes: rawWidgetSizes && typeof rawWidgetSizes === 'object' ? rawWidgetSizes : {},
       unifiedGrid: Array.isArray(rawUnifiedGrid) && rawUnifiedGrid.length > 0 ? rawUnifiedGrid : [],
+      homescreenLayout: Array.isArray(rawLayout) ? rawLayout : [],
     };
   };
   const initialLocalState = useMemo(() => getLocalHomescreenState(user?.id), [theme, user?.id]);
@@ -2102,6 +2393,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const [currentPage,     setCurrentPage]     = useState(0);
   const [dragPages,       setDragPages]       = useState<string[][] | null>(null);
   const [contextMenu,     setContextMenu]     = useState<{ itemId: string } | null>(null);
+  const [samePageMoveState, setSamePageMoveState] = useState<{ itemId: string; viewport: { top: number; left: number; width: number; height: number } | null } | null>(null);
+  const [samePageSwapState, setSamePageSwapState] = useState<{ itemId: string; viewport: { top: number; left: number; width: number; height: number } | null } | null>(null);
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const [saveState,       setSaveState]       = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const bgInputRef    = useRef<HTMLInputElement>(null);
@@ -2130,12 +2423,24 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     return initialLocalState.hsWidgets;
   });
   const [hsWidgetSizes, setHsWidgetSizes] = useState<Record<string, 'big' | 'small'>>(() => {
-    try { const raw = localStorage.getItem(LS_WIDGET_SIZES_KEY()); return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+    return initialLocalState.hsWidgetSizes;
   });
 
   const [unifiedGrid, setUnifiedGrid] = useState<string[]>(() => {
     return initialLocalState.unifiedGrid;
   });
+  const [homescreenLayout, setHomescreenLayout] = useState<HomescreenLayoutItem[]>(() => {
+    return normalizeHomescreenLayout(
+      initialLocalState.homescreenLayout?.length
+        ? initialLocalState.homescreenLayout
+        : buildLayoutFromLegacy(initialLocalState.unifiedGrid, initialLocalState.hsWidgets, initialLocalState.hsWidgetSizes, initialLocalState.dockIds),
+      initialLocalState.hsWidgets,
+      initialLocalState.hsWidgetSizes,
+      initialLocalState.dockIds,
+    );
+  });
+  const homescreenDirtyRef = useRef(false);
+  const didHydrateProfileRef = useRef(false);
 
   useEffect(() => {
     const h = new Date().getHours();
@@ -2161,8 +2466,21 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setBgGradLeft(nextLocalState.bgGradLeft);
     setBgGradRight(nextLocalState.bgGradRight);
     setHsWidgets(nextLocalState.hsWidgets);
+    setHsWidgetSizes(nextLocalState.hsWidgetSizes);
     setUnifiedGrid(nextLocalState.unifiedGrid);
+    setHomescreenLayout(normalizeHomescreenLayout(
+      nextLocalState.homescreenLayout?.length
+        ? nextLocalState.homescreenLayout
+        : buildLayoutFromLegacy(nextLocalState.unifiedGrid, nextLocalState.hsWidgets, nextLocalState.hsWidgetSizes, nextLocalState.dockIds),
+      nextLocalState.hsWidgets,
+      nextLocalState.hsWidgetSizes,
+      nextLocalState.dockIds,
+    ));
+    homescreenDirtyRef.current = false;
+    didHydrateProfileRef.current = false;
     setDragPages(null);
+    setSamePageMoveState(null);
+    setSamePageSwapState(null);
     setCurrentPage(0);
   }, [theme, user?.id]);
 
@@ -2269,19 +2587,57 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const persistSavedPages = useCallback((nextPages: string[][], nextPageIndex?: number) => {
     const flat = flattenUnifiedPages(nextPages);
+    const normalizedLayout = normalizeHomescreenLayout(
+      buildLayoutFromLegacy(flat, hsWidgets, hsWidgetSizes, dockIds),
+      hsWidgets,
+      hsWidgetSizes,
+      dockIds,
+    );
+    const normalizedFlat = layoutToUnifiedGrid(normalizedLayout);
     clearDragPageSwitchTimer();
     setDragPages(null);
-    setUnifiedGrid(flat);
-    localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(flat));
-    syncToSupabase({ unifiedGrid: flat });
-    const nextLength = splitUnifiedPages(flat).length;
+    setHomescreenLayout(normalizedLayout);
+    setUnifiedGrid(normalizedFlat);
+    localStorage.setItem(LS_LAYOUT_KEY(), JSON.stringify(normalizedLayout));
+    localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(normalizedFlat));
+    void syncToSupabase({ homescreenLayout: normalizedLayout, unifiedGrid: normalizedFlat, homescreenWidgetSizes: hsWidgetSizes, homescreenWidgets: hsWidgets });
+    const nextLength = splitUnifiedPages(normalizedFlat).length;
     const maxPageIndex = Math.max(0, nextLength - 1);
     if (typeof nextPageIndex === 'number') {
       setCurrentPage(Math.max(0, Math.min(nextPageIndex, maxPageIndex)));
       return;
     }
     setCurrentPage(prev => Math.min(prev, maxPageIndex));
-  }, [clearDragPageSwitchTimer, syncToSupabase]);
+  }, [clearDragPageSwitchTimer, dockIds, hsWidgetSizes, hsWidgets, syncToSupabase]);
+
+  const persistLayout = useCallback((
+    nextLayoutInput: HomescreenLayoutItem[],
+    nextPageIndex?: number,
+    nextWidgetsOverride?: Record<string, boolean>,
+    nextSizesOverride?: Record<string, 'big' | 'small'>
+  ) => {
+    const nextWidgets = nextWidgetsOverride || hsWidgets;
+    const nextSizes = nextSizesOverride || hsWidgetSizes;
+    const normalized = normalizeHomescreenLayout(nextLayoutInput, nextWidgets, nextSizes, dockIds);
+    const flat = layoutToUnifiedGrid(normalized);
+    homescreenDirtyRef.current = true;
+    clearDragPageSwitchTimer();
+    setDragPages(null);
+    setSamePageMoveState(null);
+    setSamePageSwapState(null);
+    setHomescreenLayout(normalized);
+    setUnifiedGrid(flat);
+    localStorage.setItem(LS_LAYOUT_KEY(), JSON.stringify(normalized));
+    localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(flat));
+    void syncToSupabase({ homescreenLayout: normalized, unifiedGrid: flat, homescreenWidgetSizes: nextSizes, homescreenWidgets: nextWidgets });
+    if (typeof nextPageIndex === 'number') {
+      setCurrentPage(Math.max(0, Math.min(nextPageIndex, MAX_PAGES - 1)));
+      return;
+    }
+    const layoutPages = new Set(normalized.map(item => item.page));
+    const maxPageIndex = layoutPages.size > 0 ? Math.max(...Array.from(layoutPages)) : 0;
+    setCurrentPage(prev => Math.min(prev, maxPageIndex));
+  }, [clearDragPageSwitchTimer, dockIds, hsWidgetSizes, hsWidgets, syncToSupabase]);
 
   useEffect(() => {
     if (!user?.id || !profile) return;
@@ -2296,49 +2652,40 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       }
     }
     const fromSupabase = clampHsWidgets({ ...DEFAULT_HS_WIDGETS, ...strippedWidgets });
-    // Prefer localStorage over Supabase if local has more widgets active
-    // (user just toggled something locally and the profile hasn't caught up yet)
-    const VISIBLE_KEYS = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
-    setHsWidgets(prev => {
-      const prevCount = VISIBLE_KEYS.filter(k => prev[k]).length;
-      const nextCount = VISIBLE_KEYS.filter(k => fromSupabase[k]).length;
-      // If local state has more widgets enabled, keep it (don't let stale Supabase overwrite)
-      if (prevCount > nextCount) return prev;
-      const nextWidgetsJson = JSON.stringify(fromSupabase);
-      if (JSON.stringify(prev) === nextWidgetsJson) return prev;
-      localStorage.setItem(LS_WIDGETS_KEY(), nextWidgetsJson);
-      return fromSupabase;
-    });
-
-    if (Array.isArray(hs?.unifiedGrid) && hs.unifiedGrid.length > 0) {
-      const enabledWidgets = new Set(WIDGET_IDS.filter(k => fromSupabase[k as keyof typeof fromSupabase]).map(k => `widget::${k}`));
-      const seen = new Set<string>();
-      const grid: string[] = [];
-      for (const id of hs.unifiedGrid) {
-        if (id === PAGE_BREAK_ID) {
-          if (grid[grid.length - 1] !== PAGE_BREAK_ID) grid.push(id);
-          continue;
-        }
-        if (seen.has(id)) continue;
-        seen.add(id);
-        if (id.startsWith('widget::')) {
-          if (enabledWidgets.has(id)) grid.push(id);
-        } else if (id.startsWith('app::')) {
-          const appId = id.replace('app::', '');
-          if (VALID_IDS.has(appId)) grid.push(id);
-        }
+    const remoteWidgetSizes = hs?.homescreenWidgetSizes && typeof hs.homescreenWidgetSizes === 'object'
+      ? hs.homescreenWidgetSizes as Record<string, 'big' | 'small'>
+      : null;
+    const remoteLayout = Array.isArray(hs?.homescreenLayout)
+      ? hs.homescreenLayout as HomescreenLayoutItem[]
+      : [];
+    const hasLocalWidgets = getScopedStorageItem(LS_WIDGETS_BASE, user.id) !== null;
+    const hasLocalWidgetSizes = getScopedStorageItem(LS_WIDGET_SIZES_BASE, user.id) !== null;
+    const hasLocalLayout = getScopedStorageItem(LS_LAYOUT_BASE, user.id) !== null;
+    if (!didHydrateProfileRef.current && !homescreenDirtyRef.current) {
+      if (!hasLocalWidgets) {
+        setHsWidgets(fromSupabase);
+        localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(fromSupabase));
       }
-      for (const w of enabledWidgets) { if (!seen.has(w)) grid.push(w); }
-      for (const appId of DEFAULT_ORDER) {
-        const key = `app::${appId}`;
-        if (!seen.has(key)) {
-          grid.push(key);
-          seen.add(key);
-        }
+      if (!hasLocalWidgetSizes && remoteWidgetSizes) {
+        setHsWidgetSizes(remoteWidgetSizes);
+        localStorage.setItem(LS_WIDGET_SIZES_KEY(), JSON.stringify(remoteWidgetSizes));
       }
-      const gridJson = JSON.stringify(grid);
-      setUnifiedGrid(prev => JSON.stringify(prev) === gridJson ? prev : grid);
-      localStorage.setItem(LS_UNIFIED_KEY(), gridJson);
+      if (!hasLocalLayout) {
+        const baseWidgets = hasLocalWidgets ? hsWidgets : fromSupabase;
+        const baseSizes = hasLocalWidgetSizes ? hsWidgetSizes : (remoteWidgetSizes || hsWidgetSizes);
+        const nextLayout = normalizeHomescreenLayout(
+          remoteLayout.length > 0 ? remoteLayout : buildLayoutFromLegacy(Array.isArray(hs?.unifiedGrid) ? hs.unifiedGrid : unifiedGrid, baseWidgets, baseSizes, Array.isArray(hs?.dockIds) ? sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP) : dockIds),
+          baseWidgets,
+          baseSizes,
+          Array.isArray(hs?.dockIds) ? sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP) : dockIds,
+        );
+        const nextUnified = layoutToUnifiedGrid(nextLayout);
+        setHomescreenLayout(nextLayout);
+        setUnifiedGrid(nextUnified);
+        localStorage.setItem(LS_LAYOUT_KEY(), JSON.stringify(nextLayout));
+        localStorage.setItem(LS_UNIFIED_KEY(), JSON.stringify(nextUnified));
+      }
+      didHydrateProfileRef.current = true;
     }
 
     if (Array.isArray(hs.dockIds)) {
@@ -2433,19 +2780,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       if (nextDetail.mode !== 'homescreen') return;
       setHsWidgets(prev => {
         const next = clampHsWidgets({ ...prev, ...nextDetail });
+        homescreenDirtyRef.current = true;
         localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(next));
-        const enabledWidgets = WIDGET_IDS.filter(k => next[k]).map(k => `widget::${k}`);
-        const nextPages = (_pageDragStateRef.current.savedPages || [[]]).map(page => [...page]);
-        const withoutDisabled = nextPages.map(page => page.filter(id => !id.startsWith('widget::') || enabledWidgets.includes(id)));
-        const missing = enabledWidgets.filter(widgetId => !withoutDisabled.some(page => page.includes(widgetId)));
-        if (!withoutDisabled[0]) withoutDisabled[0] = [];
-        withoutDisabled[0] = [...missing, ...withoutDisabled[0]];
-        persistSavedPages(withoutDisabled);
+        const nextLayout = normalizeHomescreenLayout(homescreenLayout, next, hsWidgetSizes, dockIds);
+        persistLayout(nextLayout, currentPage, next, hsWidgetSizes);
         return next;
       });
     };
     return onEvent('widgetSettingsChanged', handler);
-  }, [persistSavedPages]);
+  }, [currentPage, dockIds, homescreenLayout, hsWidgetSizes, persistLayout]);
 
   // Live update from Settings page background style changes
   useEffect(() => {
@@ -2475,10 +2818,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setBgImage(prev => prev === next ? prev : next);
   }, [bgChoice, theme]);
 
-  // ── Sensors ──
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: editMode ? 180 : 750, tolerance: 6 } }),
   );
 
   // ── Unified drag handler ──
@@ -2498,21 +2840,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setActiveId(null);
     const { active, over } = e;
 
-    const { currentPageData, savedPages } = _pageDragStateRef.current;
+    const { currentPageData } = _pageDragStateRef.current;
 
     const activeType  = active.data.current?.type as "unified" | "dock";
     const overType    = over.data.current?.type   as "unified" | "dock" | undefined;
 
     if (activeType === "unified" && (!over || active.id === over.id)) {
-      const nextPageIndex = dragPageIndexRef.current ?? currentPageData?.index ?? currentPage;
-      const nextPages = dragPages ?? savedPages;
       dragItemIdRef.current = null;
       dragPageIndexRef.current = null;
-      if (dragPages) {
-        persistSavedPages(nextPages, nextPageIndex);
-      } else {
-        setDragPages(null);
-      }
+      setDragPages(null);
       return;
     }
 
@@ -2524,47 +2860,41 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       return;
     }
 
-    // ── unified grid reorder (widgets + apps together) ──
     if (activeType === "unified" && (overType === "unified" || !overType)) {
       const overId = over.id as string;
       const activeIdStr = active.id as string;
-      const current = _effectiveRef.current; // effectiveUnified (includes empties)
       if (!currentPageData) return;
-      
-      const commitCurrentPage = (nextPageItems: string[]) => {
-        const cleanItems = nextPageItems.filter(id => !id.startsWith('empty-'));
-        const nextPages = savedPages.map((page, index) =>
-          index === currentPageData.index ? cleanItems : [...page]
-        );
-        persistSavedPages(nextPages, currentPageData.index);
-        setDragPages(null);
-      };
-
-      // Work on savedItems (real items only, no empties) to avoid losing items during swap
-      const savedReal = currentPageData.savedItems; // real items in order
-      const activeInSaved = savedReal.indexOf(activeIdStr);
-
-      if (activeInSaved === -1) {
-        // Active item not in saved (shouldn't happen) — just commit current
+      const activeItem = homescreenLayout.find(item => item.id === activeIdStr);
+      if (!activeItem) {
         setDragPages(null);
         return;
       }
-
-      let nextSaved: string[];
-
-      if (overId.startsWith('empty-')) {
-        nextSaved = savedReal; // dropped on empty — no change
-      } else {
-        const overInSaved = savedReal.indexOf(overId);
-        if (overInSaved === -1) {
-          setDragPages(null);
-          return;
+      let targetPage = activeItem.page;
+      let targetRow = activeItem.row;
+      let targetCol = activeItem.col;
+      if (overId.startsWith('empty::')) {
+        const parts = overId.replace('empty::', '').split(':').map(Number);
+        if (parts.length === 3) {
+          targetPage = Math.max(0, Math.min(MAX_PAGES - 1, parts[0] || 0));
+          targetRow = Math.max(0, Math.min(GRID_ROWS - 1, parts[1] || 0));
+          targetCol = Math.max(0, Math.min(GRID_COLS - 1, parts[2] || 0));
         }
-        // Use arrayMove so items shift smoothly (not just swap)
-        nextSaved = arrayMove(savedReal, activeInSaved, overInSaved);
+      } else {
+        const targetItem = homescreenLayout.find(item => item.id === overId);
+        if (targetItem) {
+          targetPage = targetItem.page;
+          targetRow = targetItem.row;
+          targetCol = targetItem.col;
+        }
       }
-
-      commitCurrentPage(nextSaved);
+      const candidate = clampLayoutItem({ ...activeItem, page: targetPage, row: targetRow, col: targetCol }, hsWidgetSizes);
+      const layoutWithoutActive = homescreenLayout.filter(item => item.id !== activeIdStr);
+      if (!canPlaceLayoutItem(layoutWithoutActive, candidate, hsWidgetSizes, [activeIdStr])) {
+        setDragPages(null);
+        return;
+      }
+      persistLayout([...layoutWithoutActive, candidate], candidate.page);
+      setDragPages(null);
       return;
     }
 
@@ -2582,7 +2912,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       });
     }
     setDragPages(null);
-  }, [clearDragPageSwitchTimer, currentPage, dragPages, persistSavedPages, syncToSupabase]);
+  }, [clearDragPageSwitchTimer, currentPage, dragPages, homescreenLayout, hsWidgetSizes, persistLayout, syncToSupabase]);
 
   const handleDragCancel = useCallback(() => {
     clearDragPageSwitchTimer();
@@ -2666,22 +2996,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       const VISIBLE: (keyof typeof hsWidgets)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
       const activeCount = VISIBLE.filter(k => prev[k]).length;
       const isOn = prev[key];
-      // Enforce max widget count — don't allow enabling if already full
       if (!isOn && activeCount >= MAX_WIDGETS) return prev;
       const next = { ...prev, [key]: !isOn };
+      homescreenDirtyRef.current = true;
       localStorage.setItem(LS_WIDGETS_KEY(), JSON.stringify(next));
-      void syncToSupabase({ homescreenWidgets: next });
-      const widgetId = `widget::${key}`;
-      const nextPages = (_pageDragStateRef.current.savedPages || [[]]).map(page => [...page]);
-      if (!isOn) {
-        if (!nextPages[0]) nextPages[0] = [];
-        if (!nextPages.some(page => page.includes(widgetId))) {
-          nextPages[0] = [widgetId, ...nextPages[0]];
-        }
-        persistSavedPages(nextPages, 0);
-      } else {
-        persistSavedPages(nextPages.map(page => page.filter(id => id !== widgetId)));
-      }
+      const nextLayout = normalizeHomescreenLayout(homescreenLayout, next, hsWidgetSizes, dockIds);
+      persistLayout(nextLayout, !isOn ? 0 : currentPage, next, hsWidgetSizes);
       return next;
     });
   };
@@ -2736,97 +3056,38 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const enabledWidgetIds = new Set(WIDGET_IDS.filter(k => hsWidgets[k]).map(k => `widget::${k}`));
 
   const { pages, savedPages } = React.useMemo(() => {
-    const seen = new Set<string>();
-    const rawPages: string[][] = [];
-    const pushPage = () => {
-      rawPages.push([]);
+    const normalizedLayout = normalizeHomescreenLayout(homescreenLayout, hsWidgets, hsWidgetSizes, dockIds);
+    const builtPages = Array.from({ length: MAX_PAGES }, (_, index) => buildPageDataFromLayout(normalizedLayout, index));
+    const lastIndex = Math.max(0, ...builtPages.map(page => page.items.length > 0 ? page.index : 0));
+    const visiblePages = builtPages.slice(0, lastIndex + 1);
+    const nextSavedPages = visiblePages.map(page => page.items.map(item => item.id));
+    return {
+      pages: visiblePages.length > 0 ? visiblePages : [buildPageDataFromLayout(normalizedLayout, 0)],
+      savedPages: nextSavedPages.length > 0 ? nextSavedPages : [[]],
     };
-    const appendItem = (id: string, page: string[]) => {
-      if (seen.has(id)) return;
-      if (id.startsWith('widget::')) {
-        if (!enabledWidgetIds.has(id)) return;
-      } else if (id.startsWith('app::')) {
-        const appId = id.replace('app::', '');
-        if (!VALID_IDS.has(appId) || dockSet.has(appId)) return;
-      } else {
-        return;
-      }
-      seen.add(id);
-      page.push(id);
-    };
-
-    if (dragPages && dragPages.length > 0) {
-      dragPages.forEach((page, index) => {
-        if (!rawPages[index]) rawPages[index] = [];
-        page.forEach(id => appendItem(id, rawPages[index]));
-      });
-    } else {
-      const sourceGrid = unifiedGrid.length > 0 ? unifiedGrid : buildDefaultUnifiedGrid(hsWidgets, dockIds);
-      pushPage();
-      for (const id of sourceGrid) {
-        if (id === PAGE_BREAK_ID) {
-          pushPage();
-          continue;
-        }
-        appendItem(id, rawPages[rawPages.length - 1]);
-      }
-    }
-
-    if (rawPages.length === 0) pushPage();
-
-    for (const widgetId of Array.from(enabledWidgetIds)) {
-      if (!seen.has(widgetId)) {
-        rawPages[0].unshift(widgetId);
-        seen.add(widgetId);
-      }
-    }
-
-    for (const appId of DEFAULT_ORDER) {
-      const key = `app::${appId}`;
-      if (!seen.has(key) && !dockSet.has(appId)) {
-        rawPages[rawPages.length - 1].push(key);
-        seen.add(key);
-      }
-    }
-
-    const normalizedPages: string[][] = [];
-    let carry: string[] = [];
-    for (const rawPage of rawPages) {
-      const built = buildHomescreenPage([...rawPage, ...carry], hsWidgetSizes);
-      normalizedPages.push(built.savedItems);
-      carry = built.overflowItems;
-    }
-    while (carry.length > 0) {
-      const built = buildHomescreenPage(carry, hsWidgetSizes);
-      normalizedPages.push(built.savedItems);
-      carry = built.overflowItems;
-    }
-    if (normalizedPages.length === 0) normalizedPages.push([]);
-    // Cap at 2 pages max — overflow items are pushed back into page 2
-    while (normalizedPages.length > 2) {
-      const extra = normalizedPages.pop()!;
-      normalizedPages[normalizedPages.length - 1] = [...normalizedPages[normalizedPages.length - 1], ...extra];
-    }
-
-    const builtPages = normalizedPages.map((pageItems, index) => {
-      const built = buildHomescreenPage(pageItems, hsWidgetSizes);
-      return {
-        index,
-        mode: 'mixed' as const,
-        savedItems: built.savedItems,
-        effectiveItems: built.effectiveItems,
-        realItems: built.realItems,
-        gridTemplateAreas: built.gridTemplateAreas,
-        gridPositions: built.gridPositions,
-      };
-    });
-
-    return { pages: builtPages, savedPages: normalizedPages };
-  }, [dragPages, unifiedGrid, hsWidgets, hsWidgetSizes, dockIds]);
+  }, [dockIds, homescreenLayout, hsWidgetSizes, hsWidgets]);
 
   const safeCurrentPage = Math.min(currentPage, Math.max(0, pages.length - 1));
   const currentPageData = pages[safeCurrentPage] || pages[0];
   const pageCount = pages.length;
+
+  const samePageMoveOptions = useMemo(() => {
+    if (!samePageMoveState) return null;
+    const activeItem = homescreenLayout.find(item => item.id === samePageMoveState.itemId);
+    if (!activeItem) return null;
+    const layoutWithoutActive = homescreenLayout.filter(item => item.id !== samePageMoveState.itemId);
+    const positions = findAllOpenPositions(layoutWithoutActive, samePageMoveState.itemId, activeItem.page, hsWidgetSizes)
+      .filter(position => !(position.page === activeItem.page && position.row === activeItem.row && position.col === activeItem.col));
+    return { activeItem, layoutWithoutActive, positions };
+  }, [homescreenLayout, hsWidgetSizes, samePageMoveState]);
+
+  const samePageSwapOptions = useMemo(() => {
+    if (!samePageSwapState) return null;
+    const activeItem = homescreenLayout.find(item => item.id === samePageSwapState.itemId);
+    if (!activeItem) return null;
+    const targets = findValidSwapTargets(homescreenLayout, activeItem, hsWidgetSizes);
+    return { activeItem, targets };
+  }, [homescreenLayout, hsWidgetSizes, samePageSwapState]);
 
   _effectiveRef.current = currentPageData?.effectiveItems || [];
   _pageDragStateRef.current = { currentPageData, savedPages };
@@ -3188,7 +3449,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                                 const next = currentSize === 'big' ? 'small' : 'big';
                                 setHsWidgetSizes(prev => {
                                   const updated = { ...prev, [key]: next };
+                                  homescreenDirtyRef.current = true;
                                   localStorage.setItem(LS_WIDGET_SIZES_KEY(), JSON.stringify(updated));
+                                  const nextLayout = normalizeHomescreenLayout(homescreenLayout, hsWidgets, updated, dockIds);
+                                  persistLayout(nextLayout, currentPage, hsWidgets, updated);
                                   return updated;
                                 });
                               }}
@@ -3370,16 +3634,14 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             onTouchEnd={handlePageTouchEnd}
           >
             
-            {/* Visual Guide exactly matching the user's diagram in edit mode */}
             {showLayoutGuides && currentPageData && (
-              <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: currentPageData.gridTemplateAreas, zIndex: 0 }}>
-                {/* Visual grid is dynamically rendered based on gridTemplateAreas now to match real positions */}
+              <div className="absolute inset-0 px-3 pt-2 grid gap-x-1 gap-y-2 pointer-events-none" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', zIndex: 0 }}>
                 {currentPageData.effectiveItems.map(itemId => {
                   const gp = currentPageData.gridPositions.get(itemId);
                   if (!gp) return null;
-                  if (itemId.startsWith('empty-w::') || itemId.startsWith('widget::')) {
+                  if (itemId.startsWith('widget::')) {
                     return <div key={`vis-${itemId}`} style={{ gridArea: gp }} className="border-[3px] border-dashed border-white/50 rounded-3xl" />;
-                  } else if (itemId.startsWith('empty-i::') || itemId.startsWith('app::')) {
+                  } else if (itemId.startsWith('empty::') || itemId.startsWith('app::')) {
                     return <div key={`vis-${itemId}`} style={{ gridArea: gp }} className="border-2 border-dashed border-red-500/50 rounded-2xl" />;
                   }
                   return null;
@@ -3388,30 +3650,29 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             )}
 
             <SortableContext items={currentPageData?.effectiveItems || []} strategy={rectSortingStrategy}>
-              <div className="grid gap-x-1 gap-y-2 relative z-10 h-full" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', gridTemplateAreas: currentPageData?.gridTemplateAreas, alignContent: 'start', paddingTop: 8, touchAction: 'none' }}>
+              <div className="grid gap-x-1 gap-y-2 relative z-10 h-full" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', alignContent: 'start', paddingTop: 8, touchAction: 'none' }}>
                 {(() => {
                   return (currentPageData?.effectiveItems || []).map(itemId => {
                     const gp = currentPageData?.gridPositions.get(itemId);
                     if (!gp) return null;
                     const moveItemToPage = (direction: -1 | 1) => {
                       const nextIndex = safeCurrentPage + direction;
-                      if (nextIndex < 0 || nextIndex > 1) return; // max 2 pages (0 and 1)
-                      const nextPages = savedPages.map(page => [...page]);
-                      // Ensure target page exists
-                      while (nextPages.length <= nextIndex) nextPages.push([]);
-                      nextPages[safeCurrentPage] = nextPages[safeCurrentPage].filter(id => id !== itemId);
-                      nextPages[nextIndex].unshift(itemId);
-                      persistSavedPages(nextPages, nextIndex);
+                      if (nextIndex < 0 || nextIndex >= MAX_PAGES) return;
+                      const activeItem = homescreenLayout.find(item => item.id === itemId);
+                      if (!activeItem) return;
+                      const layoutWithoutActive = homescreenLayout.filter(item => item.id !== itemId);
+                      const nextSpot = findFirstOpenPosition(layoutWithoutActive, itemId, nextIndex, hsWidgetSizes);
+                      if (!nextSpot) return;
+                      persistLayout([...layoutWithoutActive, nextSpot], nextIndex);
                     };
 
-                    // Empty placeholder slots — droppable targets in edit mode
-                    if (itemId.startsWith('empty-w::') || itemId.startsWith('empty-i::')) {
+                    if (itemId.startsWith('empty::')) {
                       return (
                         <EmptySlotCell
                           key={itemId}
                           id={itemId}
                           gridArea={gp}
-                          isWidget={itemId.startsWith('empty-w::')}
+                          isWidget={false}
                           editMode={showLayoutGuides}
                         />
                       );
@@ -3626,14 +3887,21 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         {/* ── Long-press Context Menu (Move to Page) ── */}
         {contextMenu && (() => {
           const cmItemId = contextMenu.itemId;
+          const currentItem = homescreenLayout.find(item => item.id === cmItemId);
+          const samePageOptions = currentItem
+            ? findAllOpenPositions(homescreenLayout.filter(item => item.id !== cmItemId), cmItemId, currentItem.page, hsWidgetSizes)
+                .filter(position => !(position.page === currentItem.page && position.row === currentItem.row && position.col === currentItem.col))
+            : [];
+          const samePageSwapTargets = currentItem ? findValidSwapTargets(homescreenLayout, currentItem, hsWidgetSizes) : [];
           const doMove = (direction: -1 | 1) => {
             const nextIndex = safeCurrentPage + direction;
-            if (nextIndex < 0 || nextIndex > 1) { setContextMenu(null); return; }
-            const nextPages = savedPages.map((page: string[]) => [...page]);
-            while (nextPages.length <= nextIndex) nextPages.push([]);
-            nextPages[safeCurrentPage] = nextPages[safeCurrentPage].filter((id: string) => id !== cmItemId);
-            nextPages[nextIndex].unshift(cmItemId);
-            persistSavedPages(nextPages, nextIndex);
+            if (nextIndex < 0 || nextIndex >= MAX_PAGES) { setContextMenu(null); return; }
+            const activeItem = homescreenLayout.find(item => item.id === cmItemId);
+            if (!activeItem) { setContextMenu(null); return; }
+            const layoutWithoutActive = homescreenLayout.filter(item => item.id !== cmItemId);
+            const nextSpot = findFirstOpenPosition(layoutWithoutActive, cmItemId, nextIndex, hsWidgetSizes);
+            if (!nextSpot) { setContextMenu(null); return; }
+            persistLayout([...layoutWithoutActive, nextSpot], nextIndex);
             setContextMenu(null);
           };
           const isWidget = cmItemId.startsWith('widget::');
@@ -3654,6 +3922,36 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 <div style={{ padding: '12px 18px 8px', borderBottom: '1px solid rgba(255,255,255,0.08)', textAlign: 'center' }}>
                   <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>{itemLabel}</span>
                 </div>
+                {samePageOptions.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const rect = pageViewportRef.current?.getBoundingClientRect() || null;
+                      setSamePageMoveState({
+                        itemId: cmItemId,
+                        viewport: rect ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height } : null,
+                      });
+                      setContextMenu(null);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px 18px', background: 'none', border: 'none', color: '#fff', fontSize: '15px', fontWeight: 500, cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                  >
+                    {language === 'ar' ? 'نقل في نفس الصفحة' : 'Move on this page'}
+                  </button>
+                )}
+                {samePageSwapTargets.length > 0 && (
+                  <button
+                    onClick={() => {
+                      const rect = pageViewportRef.current?.getBoundingClientRect() || null;
+                      setSamePageSwapState({
+                        itemId: cmItemId,
+                        viewport: rect ? { top: rect.top, left: rect.left, width: rect.width, height: rect.height } : null,
+                      });
+                      setContextMenu(null);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%', padding: '14px 18px', background: 'none', border: 'none', color: '#fff', fontSize: '15px', fontWeight: 500, cursor: 'pointer', borderBottom: '1px solid rgba(255,255,255,0.08)' }}
+                  >
+                    {language === 'ar' ? 'تبديل في نفس الصفحة' : 'Swap on this page'}
+                  </button>
+                )}
                 {safeCurrentPage > 0 && (
                   <button
                     onClick={() => doMove(-1)}
@@ -3680,6 +3978,102 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </div>
           );
         })()}
+
+        {samePageMoveState && samePageMoveOptions?.activeItem && samePageMoveState.viewport && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 9998, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+            onClick={() => setSamePageMoveState(null)}
+          >
+            <div
+              style={{
+                position: 'fixed',
+                top: samePageMoveState.viewport.top,
+                left: samePageMoveState.viewport.left,
+                width: samePageMoveState.viewport.width,
+                height: samePageMoveState.viewport.height,
+                pointerEvents: 'none',
+              }}
+            >
+              <div
+                className="grid gap-x-1 gap-y-2 h-full"
+                style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', paddingTop: 8 }}
+              >
+                {samePageMoveOptions.positions.map(position => {
+                  const gridArea = `${position.row + 1} / ${position.col + 1} / span ${position.h} / span ${position.w}`;
+                  return (
+                    <button
+                      key={`same-page-grid-${position.page}-${position.row}-${position.col}`}
+                      title={language === 'ar' ? `ضع العنصر في الصف ${position.row + 1} العمود ${position.col + 1}` : `Place item at row ${position.row + 1}, column ${position.col + 1}`}
+                      aria-label={language === 'ar' ? `ضع العنصر في الصف ${position.row + 1} العمود ${position.col + 1}` : `Place item at row ${position.row + 1}, column ${position.col + 1}`}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        persistLayout([...samePageMoveOptions.layoutWithoutActive, position], position.page);
+                      }}
+                      style={{
+                        gridArea,
+                        pointerEvents: 'auto',
+                        borderRadius: position.w > 1 || position.h > 1 ? '22px' : '18px',
+                        border: '2px solid rgba(255,255,255,0.92)',
+                        background: 'rgba(59,130,246,0.3)',
+                        boxShadow: '0 0 0 1px rgba(255,255,255,0.12), 0 10px 24px rgba(37,99,235,0.24)',
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {samePageSwapState && samePageSwapOptions?.activeItem && samePageSwapState.viewport && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 9998, backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+            onClick={() => setSamePageSwapState(null)}
+          >
+            <div
+              style={{
+                position: 'fixed',
+                top: samePageSwapState.viewport.top,
+                left: samePageSwapState.viewport.left,
+                width: samePageSwapState.viewport.width,
+                height: samePageSwapState.viewport.height,
+                pointerEvents: 'none',
+              }}
+            >
+              <div
+                className="grid gap-x-1 gap-y-2 h-full"
+                style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', paddingTop: 8 }}
+              >
+                {samePageSwapOptions.targets.map(target => {
+                  const gridArea = `${target.row + 1} / ${target.col + 1} / span ${target.h} / span ${target.w}`;
+                  return (
+                    <button
+                      key={`same-page-swap-${target.id}`}
+                      title={language === 'ar' ? 'بدّل مع هذا العنصر' : 'Swap with this item'}
+                      aria-label={language === 'ar' ? 'بدّل مع هذا العنصر' : 'Swap with this item'}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        const activeItem = samePageSwapOptions.activeItem;
+                        const layoutWithoutBoth = homescreenLayout.filter(item => item.id !== activeItem.id && item.id !== target.id);
+                        const nextActive = clampLayoutItem({ ...activeItem, page: target.page, row: target.row, col: target.col }, hsWidgetSizes);
+                        const nextTarget = clampLayoutItem({ ...target, page: activeItem.page, row: activeItem.row, col: activeItem.col }, hsWidgetSizes);
+                        persistLayout([...layoutWithoutBoth, nextActive, nextTarget], activeItem.page);
+                      }}
+                      style={{
+                        gridArea,
+                        pointerEvents: 'auto',
+                        borderRadius: target.w > 1 || target.h > 1 ? '22px' : '18px',
+                        border: '2px solid rgba(255,255,255,0.92)',
+                        background: 'rgba(168,85,247,0.32)',
+                        boxShadow: '0 0 0 1px rgba(255,255,255,0.12), 0 10px 24px rgba(168,85,247,0.26)',
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Quote Expand Overlay ── */}
         {quoteExpanded && (
