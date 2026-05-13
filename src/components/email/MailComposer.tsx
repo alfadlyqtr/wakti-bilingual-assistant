@@ -28,6 +28,7 @@ interface MailComposerProps {
   onSend: (input: MailComposerSubmitInput) => Promise<boolean>;
   replyTo?: MailComposerReplyTo;
   fromLabel?: string | null;
+  initialBody?: string;
 }
 
 const COMPRESSIBLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/webp', 'image/png']);
@@ -129,12 +130,12 @@ function readFileAsBase64(file: File): Promise<MailComposerAttachment> {
   });
 }
 
-export function MailComposer({ onClose, onSend, replyTo, fromLabel }: MailComposerProps) {
+export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody = '' }: MailComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [to, setTo] = useState(replyTo?.to || '');
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : '');
-  const [body, setBody] = useState('');
+  const [body, setBody] = useState(initialBody);
   const [sending, setSending] = useState(false);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [attachments, setAttachments] = useState<MailComposerAttachment[]>([]);

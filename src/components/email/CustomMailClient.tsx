@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useImapMessages, ImapMessage, ImapMessageFull } from '@/hooks/useImapMessages';
 import { ImapConnection, ImapConnectionHealth } from '@/hooks/useEmailConnections';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MailComposer, MailComposerSubmitInput } from '@/components/email/MailComposer';
+import { EmailAiAssistant } from '@/components/email/EmailAiAssistant';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
   Reply, Plug, Settings2, Trash2,
@@ -79,9 +80,10 @@ interface MessageViewProps {
   onReply: () => void;
   onDelete: () => void;
   deleting: boolean;
+  aiPanel?: React.ReactNode;
 }
 
-function MessageView({ message, onBack, onReply, onDelete, deleting }: MessageViewProps) {
+function MessageView({ message, onBack, onReply, onDelete, deleting, aiPanel }: MessageViewProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 pb-3 border-b border-border/40">
@@ -102,6 +104,11 @@ function MessageView({ message, onBack, onReply, onDelete, deleting }: MessageVi
         <div className="text-xs text-muted-foreground">To: {message.to}</div>
         <div className="text-xs text-muted-foreground">{formatDate(message.date)}</div>
       </div>
+      {aiPanel ? (
+        <div className="pointer-events-none sticky top-0 z-10 flex justify-end px-1 py-3">
+          <div className="pointer-events-auto">{aiPanel}</div>
+        </div>
+      ) : null}
       <div className="flex-1 overflow-y-auto pt-3">
         {message.body.html ? (
           <div
@@ -168,9 +175,11 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
 
   const [selectedMessage, setSelectedMessage] = useState<ImapMessageFull | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [realFolderName, setRealFolderName] = useState('INBOX');
   const [showCompose, setShowCompose] = useState(false);
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string } | undefined>();
+  const [composerInitialBody, setComposerInitialBody] = useState('');
   const [deletingMessage, setDeletingMessage] = useState(false);
   const [deletingRowUid, setDeletingRowUid] = useState<number | null>(null);
 
@@ -196,6 +205,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
     : typeof activeHealth?.proof?.inboxCount === 'number'
       ? activeHealth.proof.inboxCount
       : null;
+  const hasInboxCache = imap.hasCachedFolder('INBOX');
 
   useEffect(() => {
     if (connections.length > 0 && !connections.find(c => c.id === activeConnectionId)) {
@@ -203,6 +213,16 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
       setActiveConnectionId(newId);
     }
   }, [activeConnectionId, connections]);
+
+  useEffect(() => {
+    if (!activeConnectionId) return;
+    const hasInboxCache = imap.hasCachedFolder('INBOX');
+    imap.fetchMessages('INBOX', 1, hasInboxCache ? { forceRefresh: true, background: true, quiet: true } : undefined)
+      .then((result: any) => {
+        if (result?.folder) setRealFolderName(result.folder);
+      })
+      .catch(() => {});
+  }, [activeConnectionId, hasInboxCache, imap.fetchMessages]);
 
   const handleOpenMessage = async (msg: ImapMessage) => {
     setLoadingMessage(true);
@@ -227,13 +247,22 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
   const handleReply = () => {
     if (!selectedMessage) return;
     setReplyTo({ to: selectedMessage.from, subject: selectedMessage.subject });
+    setComposerInitialBody('');
     setShowCompose(true);
   };
 
   const handleCloseCompose = () => {
     setShowCompose(false);
     setReplyTo(undefined);
+    setComposerInitialBody('');
   };
+
+  const handleUseAiReply = useCallback((text: string) => {
+    if (!selectedMessage) return;
+    setReplyTo({ to: selectedMessage.from, subject: selectedMessage.subject });
+    setComposerInitialBody(text);
+    setShowCompose(true);
+  }, [selectedMessage]);
 
   const handleSend = async (input: MailComposerSubmitInput) => {
     const ok = await imap.sendMessage(input);
@@ -263,9 +292,12 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
   };
 
   const handleRefresh = () => {
-    imap.fetchMessages(imap.activeFolder, 1, { forceRefresh: true }).then((result: any) => {
+    setRefreshing(true);
+    imap.fetchMessages(imap.activeFolder, 1, { forceRefresh: true, background: imap.messages.length > 0, quiet: imap.messages.length > 0 }).then((result: any) => {
       if (result?.folder) setRealFolderName(result.folder);
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => {
+      setRefreshing(false);
+    });
   };
 
   const handleDeleteMessage = async () => {
@@ -285,6 +317,45 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
     await imap.deleteMessage(message.uid, realFolderName);
     setDeletingRowUid(null);
   };
+
+  const selectedMessageAiSource = useMemo(() => {
+    if (!selectedMessage) return null;
+    return {
+      subject: selectedMessage.subject,
+      from: selectedMessage.from,
+      to: selectedMessage.to,
+      date: selectedMessage.date,
+      snippet: selectedMessage.snippet,
+      bodyText: selectedMessage.body.text || selectedMessage.snippet || '',
+    };
+  }, [selectedMessage]);
+
+  const resolveRecentMessages = useCallback(async () => {
+    const recent = imap.messages.slice(0, 5);
+    const resolved = await Promise.all(recent.map(async (message) => {
+      try {
+        const full = await imap.fetchMessage(message.uid, realFolderName);
+        return {
+          subject: message.subject,
+          from: message.from,
+          to: message.to,
+          date: message.date,
+          snippet: message.snippet,
+          bodyText: full?.body.text || message.snippet || '',
+        };
+      } catch {
+        return {
+          subject: message.subject,
+          from: message.from,
+          to: message.to,
+          date: message.date,
+          snippet: message.snippet,
+          bodyText: message.snippet || '',
+        };
+      }
+    }));
+    return resolved;
+  }, [imap.fetchMessage, imap.messages, realFolderName]);
 
   if (connections.length === 0) {
     return (
@@ -367,7 +438,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
               onClick={handleRefresh}
               className="rounded-xl border border-border/70 bg-background/70 p-2.5 text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
-              {imap.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </button>
             <Button
               size="sm"
@@ -407,6 +478,17 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
               onReply={handleReply}
               onDelete={handleDeleteMessage}
               deleting={deletingMessage}
+              aiPanel={selectedMessageAiSource ? (
+                <EmailAiAssistant
+                  mode="message"
+                  language={language}
+                  contextKey={`${activeConnectionId}:${selectedMessage.uid}`}
+                  message={selectedMessageAiSource}
+                  canReply={imap.activeFolder !== 'SENT'}
+                  onUseAsReply={handleUseAiReply}
+                  variant="floating"
+                />
+              ) : null}
             />
           </div>
         ) : loadingMessage ? (
@@ -466,6 +548,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
           onSend={handleSend}
           replyTo={replyTo}
           fromLabel={activeEmail || activeConn?.display_name || 'Custom mail'}
+          initialBody={composerInitialBody}
         />
       )}
     </div>

@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import TextGeneratorPopup from '@/components/wakti-ai-v2/TextGeneratorPopup';
 import { useTheme } from '@/providers/ThemeProvider';
+import { SmartTextPrefill, consumeSmartTextPrefill } from '@/utils/smartTextPrefill';
 
 export default function TextGenerator() {
   const { language } = useTheme();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4'>('compose');
+  const [initialPrefill, setInitialPrefill] = useState<SmartTextPrefill | null>(null);
 
   useEffect(() => {
     const tabParam = (searchParams.get('tab') || '').toLowerCase();
@@ -14,6 +16,15 @@ export default function TextGenerator() {
       setActiveTab(tabParam as any);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const prefill = consumeSmartTextPrefill();
+    if (!prefill) return;
+    setInitialPrefill(prefill);
+    if (prefill.tab === 'compose' || prefill.tab === 'reply' || prefill.tab === 'generated') {
+      setActiveTab(prefill.tab);
+    }
   }, []);
 
   return (
@@ -40,7 +51,7 @@ export default function TextGenerator() {
                 key={key}
                 type="button"
                 role="tab"
-                aria-selected={activeTab === key}
+                aria-selected={activeTab === key ? 'true' : 'false'}
                 onClick={() => setActiveTab(key as any)}
                 className={`min-h-[42px] md:h-12 px-2.5 md:px-4 py-2 md:py-0 rounded-xl border text-[11px] md:text-sm font-medium transition-all whitespace-normal leading-tight text-center flex items-center justify-center
                   ${activeTab === key
@@ -58,6 +69,7 @@ export default function TextGenerator() {
           isOpen={true}
           renderAsPage={true}
           initialTab={activeTab}
+          initialPrefill={initialPrefill}
           onClose={() => { /* no-op (page) */ }}
           onTabChange={(tab) => setActiveTab(tab as any)}
           onTextGenerated={(text) => {

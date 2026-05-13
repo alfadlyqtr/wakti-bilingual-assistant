@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGmailMessages, GmailMessage, GmailMessageFull, GmailLabel } from '@/hooks/useGmailMessages';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MailComposer, MailComposerSubmitInput } from '@/components/email/MailComposer';
+import { EmailAiAssistant } from '@/components/email/EmailAiAssistant';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
   ChevronDown, Reply, Trash2, MailOpen,
@@ -95,9 +96,10 @@ interface MessageViewProps {
   onReply: () => void;
   onDelete: () => void;
   deleting: boolean;
+  aiPanel?: React.ReactNode;
 }
 
-function MessageView({ message, onBack, onReply, onDelete, deleting }: MessageViewProps) {
+function MessageView({ message, onBack, onReply, onDelete, deleting, aiPanel }: MessageViewProps) {
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 px-1 pb-3 border-b border-border/40">
@@ -118,6 +120,11 @@ function MessageView({ message, onBack, onReply, onDelete, deleting }: MessageVi
         <div className="text-xs text-muted-foreground">To: {message.to}</div>
         <div className="text-xs text-muted-foreground">{formatDate(message.date)}</div>
       </div>
+      {aiPanel ? (
+        <div className="pointer-events-none sticky top-0 z-10 flex justify-end px-1 py-3">
+          <div className="pointer-events-auto">{aiPanel}</div>
+        </div>
+      ) : null}
       <div className="flex-1 overflow-y-auto pt-3">
         {message.body.html ? (
           <div
@@ -158,8 +165,10 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
   const gmail = useGmailMessages();
   const [selectedMessage, setSelectedMessage] = useState<GmailMessageFull | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string; threadId: string } | undefined>();
+  const [composerInitialBody, setComposerInitialBody] = useState('');
   const [customFolders, setCustomFolders] = useState<GmailLabel[]>([]);
   const [showFolders, setShowFolders] = useState(false);
   const [deletingMessage, setDeletingMessage] = useState(false);
@@ -173,13 +182,14 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
       ? 'Sent'
       : gmail.activeFolder;
   const mailboxLine = emailAddress ? `${language === 'ar' ? 'الحساب' : 'Account'}: ${emailAddress}` : 'Gmail account';
+  const hasInboxCache = gmail.hasCachedFolder('INBOX');
 
   useEffect(() => {
     if (connected) {
-      gmail.fetchMessages('INBOX');
+      gmail.fetchMessages('INBOX', undefined, hasInboxCache ? { forceRefresh: true, background: true, quiet: true } : undefined);
       gmail.fetchLabels().then(() => {});
     }
-  }, [connected, gmail.fetchLabels, gmail.fetchMessages]);
+  }, [connected, gmail.fetchLabels, gmail.fetchMessages, hasInboxCache]);
 
   useEffect(() => {
     if (gmail.labels.length > 0) {
@@ -209,13 +219,26 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
       subject: selectedMessage.subject,
       threadId: selectedMessage.threadId,
     });
+    setComposerInitialBody('');
     setShowCompose(true);
   };
 
   const handleCloseCompose = () => {
     setShowCompose(false);
     setReplyTo(undefined);
+    setComposerInitialBody('');
   };
+
+  const handleUseAiReply = useCallback((text: string) => {
+    if (!selectedMessage) return;
+    setReplyTo({
+      to: selectedMessage.from,
+      subject: selectedMessage.subject,
+      threadId: selectedMessage.threadId,
+    });
+    setComposerInitialBody(text);
+    setShowCompose(true);
+  }, [selectedMessage]);
 
   const handleSend = async (input: MailComposerSubmitInput) => {
     const ok = await gmail.sendMessage(input);
@@ -235,8 +258,13 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
   };
 
   const handleRefresh = async () => {
-    await gmail.fetchMessages(gmail.activeFolder, undefined, { forceRefresh: true });
-    await gmail.fetchLabels({ forceRefresh: true });
+    setRefreshing(true);
+    try {
+      await gmail.fetchMessages(gmail.activeFolder, undefined, { forceRefresh: true, background: gmail.messages.length > 0, quiet: gmail.messages.length > 0 });
+      await gmail.fetchLabels({ forceRefresh: true });
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleDeleteMessage = async () => {
@@ -256,6 +284,45 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
     await gmail.fetchLabels({ forceRefresh: true });
     setDeletingRowId(null);
   };
+
+  const selectedMessageAiSource = useMemo(() => {
+    if (!selectedMessage) return null;
+    return {
+      subject: selectedMessage.subject,
+      from: selectedMessage.from,
+      to: selectedMessage.to,
+      date: selectedMessage.date,
+      snippet: selectedMessage.snippet,
+      bodyText: selectedMessage.body.text || selectedMessage.snippet || '',
+    };
+  }, [selectedMessage]);
+
+  const resolveRecentMessages = useCallback(async () => {
+    const recent = gmail.messages.slice(0, 5);
+    const resolved = await Promise.all(recent.map(async (message) => {
+      try {
+        const full = await gmail.fetchMessage(message.id);
+        return {
+          subject: message.subject,
+          from: message.from,
+          to: message.to,
+          date: message.date,
+          snippet: message.snippet,
+          bodyText: full?.body.text || message.snippet || '',
+        };
+      } catch {
+        return {
+          subject: message.subject,
+          from: message.from,
+          to: message.to,
+          date: message.date,
+          snippet: message.snippet,
+          bodyText: message.snippet || '',
+        };
+      }
+    }));
+    return resolved;
+  }, [gmail.fetchMessage, gmail.messages]);
 
   if (!connected) {
     return (
@@ -314,7 +381,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
               className="rounded-xl border border-border/70 bg-background/70 p-2.5 text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
               title={refreshLabel}
             >
-              {gmail.loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </button>
             <Button
               size="sm"
@@ -387,6 +454,17 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                 onReply={handleReply}
                 onDelete={handleDeleteMessage}
                 deleting={deletingMessage}
+                aiPanel={selectedMessageAiSource ? (
+                  <EmailAiAssistant
+                    mode="message"
+                    language={language}
+                    contextKey={selectedMessage.id}
+                    message={selectedMessageAiSource}
+                    canReply={gmail.activeFolder !== 'SENT'}
+                    onUseAsReply={handleUseAiReply}
+                    variant="floating"
+                  />
+                ) : null}
               />
             )}
           </div>
@@ -395,7 +473,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
             {gmail.loading && gmail.messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Loading...</span>
+                <span className="text-sm text-muted-foreground">{language === 'ar' ? 'جاري تحميل البريد...' : 'Loading your inbox...'}</span>
               </div>
             ) : gmail.messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2 text-center px-4">
@@ -440,6 +518,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
           onSend={handleSend}
           replyTo={replyTo}
           fromLabel={emailAddress || 'Gmail'}
+          initialBody={composerInitialBody}
         />
       )}
     </div>

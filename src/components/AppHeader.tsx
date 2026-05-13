@@ -162,7 +162,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
       hoverClass: 'hover:bg-red-500/10'
     }
   ].filter(item => {
-    if (isHomescreenMode) return item.href !== '/account' && item.href !== '/social';
+    if (isHomescreenMode) return item.href !== '/account' && item.href !== '/social' && item.href !== '/settings';
     return true;
   });
   
@@ -627,13 +627,24 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
           </label>
           
           {/* User Menu - Made smaller */}
+          {!isHomescreenMode && (
           <DropdownMenu open={userMenuOpen} onOpenChange={setUserMenuOpen}>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0 rounded-full relative">
+              <Button
+                variant="ghost"
+                className="h-8 w-8 p-0 rounded-full relative"
+                aria-label={isHomescreenMode ? (language === 'ar' ? 'القائمة' : 'Menu') : (language === 'ar' ? 'قائمة الإعدادات' : 'Settings menu')}
+              >
                 <span className="relative">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background/60 border border-border/60">
-                    <Settings className="h-4 w-4 text-foreground/80" />
-                  </span>
+                  {isHomescreenMode ? (
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background/60 border border-border/60">
+                      <Account className="h-4 w-4 text-foreground/80" />
+                    </span>
+                  ) : (
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background/60 border border-border/60">
+                      <Settings className="h-4 w-4 text-foreground/80" />
+                    </span>
+                  )}
                   <UnreadBadge count={unreadTotal} size="sm" className="-right-0.5 -top-0.5" />
                 </span>
               </Button>
@@ -702,9 +713,12 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
+          )}
         </div>
       </div>
-      {isMobile && !isHomescreenMode && location.pathname === '/dashboard' && (
+
+      {/* Mobile slide-down nav */}
+      {!isHomescreenMode && location.pathname === '/dashboard' && (
         <MobileSlideDownNav
           isOpen={mobileNavOpen}
           onClose={() => setMobileNavOpen(false)}

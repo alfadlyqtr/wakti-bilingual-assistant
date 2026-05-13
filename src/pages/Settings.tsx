@@ -1,6 +1,6 @@
 // @ts-nocheck
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { emitEvent } from "@/utils/eventBus";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -30,13 +30,66 @@ import { supabase } from "@/integrations/supabase/client";
 import NotificationSettings from "@/components/notifications/NotificationSettings";
 import { QuotePreferencesManager } from "@/components/settings/QuotePreferencesManager";
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
+import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 import { t } from "@/utils/translations";
-import { Shield, Users, Eye, Quote, Palette, Bell, Layout, Home, LayoutDashboard, AlertTriangle } from "lucide-react";
+import { Shield, Users, Eye, Quote, Palette, Bell, Layout, Home, LayoutDashboard, AlertTriangle, Image as ImageIcon, RotateCcw, X } from "lucide-react";
 import { useAccessibility } from "@/hooks/useAccessibility";
 import { COLOR_BLIND_MODES } from "@/components/accessibility/ColorBlindFilters";
 import { useTextSize } from "@/hooks/useTextSize";
 import { useToastHelper } from "@/hooks/use-toast-helper";
-import { getScopedStorageItem, migrateLegacyScopedStorage, setScopedStorageItem } from "@/utils/userScopedStorage";
+import { getScopedStorageItem, migrateLegacyScopedStorage, removeScopedStorageItem, setScopedStorageItem } from "@/utils/userScopedStorage";
+
+const MAX_HOMESCREEN_WIDGETS = 4;
+const MAX_HOMESCREEN_DOCK = 3;
+const DEFAULT_BG_DARK = "/wakti-image-1773608945903.jpg";
+const DEFAULT_BG_LIGHT = "/wakti-image-1774727385038.jpg";
+const LS_DOCK_BASE = "homescreen_dock_v2";
+const LS_BG_BASE = "homescreen_bg";
+const LS_BG_POS_Y_BASE = "homescreen_bg_pos_y";
+const LS_HEADER_COLOR_BASE = "homescreen_header_color";
+const LS_WIDGETS_BASE = "homescreen_widgets_v1";
+const LS_WIDGET_SIZES_BASE = "homescreen_widget_sizes_v1";
+const LS_HSBG_BASE = "homescreen_bg_style_v1";
+const LS_HSBG_ACTIVE_BASE = "homescreen_bg_style_active";
+const LS_BG_CHOICE_BASE = "homescreen_bg_choice_v1";
+const LS_DOCK_COLOR_BASE = "homescreen_dock_color";
+
+const isBgChoiceValue = (value: unknown): value is 'default' | 'wallpaper' | 'style' => value === 'default' || value === 'wallpaper' || value === 'style';
+const isDefaultBgAsset = (value?: string | null) => !value || value === DEFAULT_BG_DARK || value === DEFAULT_BG_LIGHT;
+const sanitizeDockIds = (raw: string[]) => Array.from(new Set(raw.filter(Boolean))).slice(0, MAX_HOMESCREEN_DOCK);
+
+const HOMESCREEN_APPS = [
+  { id: "calendar", labelEn: "Calendar", labelAr: "التقويم" },
+  { id: "journal", labelEn: "Journal", labelAr: "المذكرات" },
+  { id: "maw3d", labelEn: "Maw3d", labelAr: "مواعيد" },
+  { id: "tr", labelEn: "T & R", labelAr: "م & ت" },
+  { id: "wakti-ai", labelEn: "WAKTI AI", labelAr: "WAKTI AI" },
+  { id: "studio", labelEn: "Studio", labelAr: "الاستوديو" },
+  { id: "vitality", labelEn: "Vitality", labelAr: "الحيوية" },
+  { id: "warranty", labelEn: "My Files", labelAr: "ملفاتي" },
+  { id: "projects", labelEn: "Projects", labelAr: "مشاريع" },
+  { id: "text", labelEn: "Text", labelAr: "نص" },
+  { id: "email", labelEn: "Email", labelAr: "البريد" },
+  { id: "voice", labelEn: "Voice", labelAr: "صوت" },
+  { id: "game", labelEn: "Game", labelAr: "لعبة" },
+  { id: "social", labelEn: "Social", labelAr: "التواصل" },
+  { id: "account", labelEn: "Account", labelAr: "حسابي" },
+  { id: "settings", labelEn: "Settings", labelAr: "الإعدادات" },
+  { id: "help", labelEn: "Help", labelAr: "المساعدة" },
+  { id: "deen", labelEn: "Deen", labelAr: "دين" },
+];
+
+async function prepareWallpaperUpload(file: File) {
+  const fallbackExt = (file.name.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg';
+  const fallbackType = file.type || 'image/jpeg';
+  if (!fallbackType.startsWith('image/')) {
+    throw new Error('invalid_image_type');
+  }
+  const needsHeicFallback = /heic|heif/i.test(fallbackExt) || /heic|heif/i.test(fallbackType);
+  const ext = needsHeicFallback ? 'jpg' : fallbackExt;
+  const contentType = needsHeicFallback ? 'image/jpeg' : fallbackType;
+  return { body: file, ext, contentType };
+}
 
 export default function Settings() {
   const { theme, setTheme, language, setLanguage } = useTheme();
@@ -61,7 +114,7 @@ export default function Settings() {
     showQuoteWidget: true, showMaw3dWidget: true, showTRWidget: true,
     showVitalityWidget: true, showJournalWidget: true,
   };
-  // Homescreen: only 3 on by default
+  // Homescreen defaults
   const DEFAULT_HOMESCREEN_WIDGETS: WidgetConfig = {
     showNavWidget: false, showCalendarWidget: true, showTRWidget: true,
     showEventsWidget: false, showQuoteWidget: false, showMaw3dWidget: false,
@@ -80,6 +133,15 @@ export default function Settings() {
   const [hsBgColor3, setHsBgColor3] = useState('');
   const [hsBgAngle,  setHsBgAngle]  = useState(180);
   const [hsGlow,     setHsGlow]     = useState(true);
+  const [homescreenWidgetSizes, setHomescreenWidgetSizes] = useState<Record<string, 'big' | 'small'>>({});
+  const [homescreenDockIds, setHomescreenDockIds] = useState<string[]>(["wakti-ai", "calendar", "tr"]);
+  const [homescreenBgChoice, setHomescreenBgChoice] = useState<'default' | 'wallpaper' | 'style'>('default');
+  const [homescreenBgImage, setHomescreenBgImage] = useState(theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
+  const [homescreenBgPositionY, setHomescreenBgPositionY] = useState(50);
+  const [homescreenHeaderColor, setHomescreenHeaderColor] = useState('');
+  const [homescreenDockColor, setHomescreenDockColor] = useState('');
+  const [savedImagesOpen, setSavedImagesOpen] = useState(false);
+  const bgInputRef = useRef<HTMLInputElement | null>(null);
 
   // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = new home screen look)
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
@@ -99,6 +161,15 @@ export default function Settings() {
   });
 
   const { profile: cachedProfile, refetch: refetchProfile } = useUserProfile();
+  const isHomescreenLook = dashboardLook === 'homescreen';
+  const homescreenWidgetEntries: { key: keyof WidgetConfig; labelEn: string; labelAr: string }[] = [
+    { key: 'showCalendarWidget', labelEn: 'Calendar', labelAr: 'التقويم' },
+    { key: 'showTRWidget', labelEn: 'Tasks & Reminders', labelAr: 'المهام والتذكيرات' },
+    { key: 'showMaw3dWidget', labelEn: 'Maw3d Events', labelAr: 'أحداث مواعيد' },
+    { key: 'showVitalityWidget', labelEn: 'Vitality (WHOOP + Health)', labelAr: 'الحيوية (WHOOP + صحتي)' },
+    { key: 'showJournalWidget', labelEn: "Today's Journal", labelAr: 'يوميات وقتي' },
+    { key: 'showQuoteWidget', labelEn: 'Daily Quote', labelAr: 'اقتباس اليوم' },
+  ];
 
   useEffect(() => {
     if (cachedProfile) {
@@ -114,6 +185,7 @@ export default function Settings() {
   const loadSettingsFromProfile = () => {
     try {
       const s = cachedProfile?.settings as any;
+      const hs = s?.homescreen || {};
 
       // Load dashboard widgets (legacy key 'widgets' maps to dashboard)
       if (s?.dashboardWidgets) {
@@ -125,23 +197,54 @@ export default function Settings() {
         setDashboardWidgets(prev => ({ ...prev, ...w, showTRWidget: (w.showTRWidget !== false) || (w.showTasksWidget === true) }));
       }
 
-      // Load homescreen widgets — enforce max 3 on load
-      if (s?.homescreenWidgets) {
-        const raw = { ...DEFAULT_HOMESCREEN_WIDGETS, ...s.homescreenWidgets, showNavWidget: false };
-        // Only the 7 visible widget keys count toward the 3-max
+      const rawHomescreenWidgets = hs?.homescreenWidgets || s?.homescreenWidgets;
+      if (rawHomescreenWidgets) {
+        const raw = { ...DEFAULT_HOMESCREEN_WIDGETS, ...rawHomescreenWidgets, showNavWidget: false };
         const VISIBLE_KEYS: (keyof WidgetConfig)[] = ['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'];
         let onCount = 0;
         const clamped = { ...raw };
         for (const k of VISIBLE_KEYS) {
           if (clamped[k]) {
-            if (onCount < 3) onCount++;
+            if (onCount < MAX_HOMESCREEN_WIDGETS) onCount++;
             else clamped[k] = false;
           }
         }
         setHomescreenWidgets(clamped);
+        setScopedStorageItem(LS_WIDGETS_BASE, JSON.stringify(clamped), user?.id);
+      } else {
+        const localWidgetsRaw = getScopedStorageItem(LS_WIDGETS_BASE, user?.id);
+        if (localWidgetsRaw) {
+          try {
+            setHomescreenWidgets({ ...DEFAULT_HOMESCREEN_WIDGETS, ...JSON.parse(localWidgetsRaw), showNavWidget: false });
+          } catch {}
+        }
       }
 
-      // Load homescreen background style
+      if (hs?.homescreenWidgetSizes && typeof hs.homescreenWidgetSizes === 'object') {
+        setHomescreenWidgetSizes(hs.homescreenWidgetSizes);
+        setScopedStorageItem(LS_WIDGET_SIZES_BASE, JSON.stringify(hs.homescreenWidgetSizes), user?.id);
+      } else {
+        const localSizesRaw = getScopedStorageItem(LS_WIDGET_SIZES_BASE, user?.id);
+        if (localSizesRaw) {
+          try {
+            setHomescreenWidgetSizes(JSON.parse(localSizesRaw));
+          } catch {}
+        }
+      }
+
+      if (Array.isArray(hs?.dockIds)) {
+        const nextDock = sanitizeDockIds(hs.dockIds);
+        setHomescreenDockIds(nextDock);
+        setScopedStorageItem(LS_DOCK_BASE, JSON.stringify(nextDock), user?.id);
+      } else {
+        const localDockRaw = getScopedStorageItem(LS_DOCK_BASE, user?.id);
+        if (localDockRaw) {
+          try {
+            setHomescreenDockIds(sanitizeDockIds(JSON.parse(localDockRaw)));
+          } catch {}
+        }
+      }
+
       if (s?.homescreenBg) {
         const bg = s.homescreenBg;
         if (bg.mode === 'solid' || bg.mode === 'gradient') setHsBgMode(bg.mode);
@@ -150,6 +253,56 @@ export default function Settings() {
         if (bg.color3 !== undefined) setHsBgColor3(bg.color3 || '');
         if (typeof bg.angle === 'number') setHsBgAngle(bg.angle);
         if (typeof bg.glow === 'boolean') setHsGlow(bg.glow);
+        setScopedStorageItem(LS_HSBG_BASE, JSON.stringify(bg), user?.id);
+      }
+
+      const localBgChoice = getScopedStorageItem(LS_BG_CHOICE_BASE, user?.id);
+      const localBgImage = getScopedStorageItem(LS_BG_BASE, user?.id);
+      const localBgPositionRaw = getScopedStorageItem(LS_BG_POS_Y_BASE, user?.id);
+      const parsedLocalBgPosition = localBgPositionRaw === null ? NaN : Number(localBgPositionRaw);
+      const localBgPosition = Number.isFinite(parsedLocalBgPosition) ? Math.max(0, Math.min(100, parsedLocalBgPosition)) : 50;
+      const localChoice = isBgChoiceValue(localBgChoice) ? localBgChoice : null;
+      const localWallpaper = typeof localBgImage === 'string' && localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
+      const remoteChoice = isBgChoiceValue(hs?.bgChoice) ? hs.bgChoice : null;
+      const remoteWallpaper = typeof hs?.bgImage === 'string' && hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
+      const hasRemoteBgState = remoteChoice !== null || !!remoteWallpaper || typeof hs?.bgPositionY === 'number' || !!s?.homescreenBg;
+      const resolvedChoice = hasRemoteBgState
+        ? (remoteChoice || (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'))
+        : (localChoice || (localWallpaper ? 'wallpaper' : 'default'));
+      setHomescreenBgChoice(resolvedChoice);
+      setScopedStorageItem(LS_BG_CHOICE_BASE, resolvedChoice, user?.id);
+      setScopedStorageItem(LS_HSBG_ACTIVE_BASE, String(resolvedChoice === 'style'), user?.id);
+      if (resolvedChoice === 'wallpaper') {
+        const resolvedWallpaper = hasRemoteBgState ? remoteWallpaper : localWallpaper;
+        if (resolvedWallpaper) {
+          setHomescreenBgImage(resolvedWallpaper);
+          setScopedStorageItem(LS_BG_BASE, resolvedWallpaper, user?.id);
+        }
+      } else {
+        setHomescreenBgImage(theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
+      }
+      const resolvedBgPosition = resolvedChoice === 'wallpaper'
+        ? (typeof hs?.bgPositionY === 'number'
+            ? Math.max(0, Math.min(100, hs.bgPositionY))
+            : !hasRemoteBgState && localChoice === 'wallpaper'
+              ? localBgPosition
+              : 50)
+        : 50;
+      setHomescreenBgPositionY(resolvedBgPosition);
+      setScopedStorageItem(LS_BG_POS_Y_BASE, String(resolvedBgPosition), user?.id);
+
+      if (typeof hs?.headerColor === 'string') {
+        setHomescreenHeaderColor(hs.headerColor);
+        if (hs.headerColor) setScopedStorageItem(LS_HEADER_COLOR_BASE, hs.headerColor, user?.id);
+      } else {
+        setHomescreenHeaderColor(getScopedStorageItem(LS_HEADER_COLOR_BASE, user?.id) || '');
+      }
+
+      if (typeof hs?.dockColor === 'string') {
+        setHomescreenDockColor(hs.dockColor);
+        if (hs.dockColor) setScopedStorageItem(LS_DOCK_COLOR_BASE, hs.dockColor, user?.id);
+      } else {
+        setHomescreenDockColor(getScopedStorageItem(LS_DOCK_COLOR_BASE, user?.id) || '');
       }
 
       // Load dashboard look preference
@@ -180,6 +333,22 @@ export default function Settings() {
     }
   };
 
+  const updateHomescreenSettings = async (homescreenPatch: Record<string, any> = {}, rootPatch: Record<string, any> = {}, showToast = true) => {
+    const currentSettings = (cachedProfile?.settings as any) || {};
+    const nextSettings = {
+      ...currentSettings,
+      ...rootPatch,
+      ...(homescreenPatch.homescreenWidgets ? { homescreenWidgets: homescreenPatch.homescreenWidgets } : {}),
+      homescreen: {
+        ...(currentSettings.homescreen || {}),
+        ...homescreenPatch,
+      },
+    };
+    await supabase.from('profiles').update({ settings: nextSettings }).eq('id', user?.id);
+    if (showToast) showSuccess(t("settingsUpdated", language));
+    refetchProfile();
+  };
+
   const updateWidgetSetting = async (key: keyof WidgetConfig, value: boolean) => {
     const isHomescreen = dashboardLook === 'homescreen';
     const current = isHomescreen ? homescreenWidgets : dashboardWidgets;
@@ -190,20 +359,22 @@ export default function Settings() {
     else setDashboardWidgets(newSettings);
 
     try {
-      const currentSettings = (cachedProfile?.settings as any) || {};
-      const storageKey = isHomescreen ? 'homescreenWidgets' : 'dashboardWidgets';
-
-      await supabase
-        .from('profiles')
-        .update({
-          settings: {
-            ...currentSettings,
-            [storageKey]: newSettings,
-            // Keep legacy 'widgets' key in sync for dashboard mode
-            ...(isHomescreen ? {} : { widgets: newSettings }),
-          }
-        })
-        .eq('id', user?.id);
+      if (isHomescreen) {
+        setScopedStorageItem(LS_WIDGETS_BASE, JSON.stringify(newSettings), user?.id);
+        await updateHomescreenSettings({ homescreenWidgets: newSettings }, {}, false);
+      } else {
+        const currentSettings = (cachedProfile?.settings as any) || {};
+        await supabase
+          .from('profiles')
+          .update({
+            settings: {
+              ...currentSettings,
+              dashboardWidgets: newSettings,
+              widgets: newSettings,
+            }
+          })
+          .eq('id', user?.id);
+      }
 
       showSuccess(t("settingsUpdated", language));
       refetchProfile();
@@ -248,11 +419,16 @@ export default function Settings() {
 
   const saveHomescreenBg = async (mode: BgMode, color1: string, color2: string, color3: string, angle: number, glow: boolean) => {
     try {
-      const currentSettings = (cachedProfile?.settings as any) || {};
       const payload = { mode, color1, color2, color3, angle, glow };
-      await supabase.from('profiles').update({
-        settings: { ...currentSettings, homescreenBg: payload }
-      }).eq('id', user?.id);
+      setScopedStorageItem(LS_HSBG_BASE, JSON.stringify(payload), user?.id);
+      setScopedStorageItem(LS_BG_CHOICE_BASE, 'style', user?.id);
+      setScopedStorageItem(LS_HSBG_ACTIVE_BASE, 'true', user?.id);
+      removeScopedStorageItem(LS_BG_BASE, user?.id);
+      removeScopedStorageItem(LS_BG_POS_Y_BASE, user?.id);
+      setHomescreenBgChoice('style');
+      setHomescreenBgImage('');
+      setHomescreenBgPositionY(50);
+      await updateHomescreenSettings({ bgChoice: 'style', bgImage: '', bgPositionY: 50 }, { homescreenBg: payload }, false);
       emitEvent('homescreenBgChanged', payload);
       showSuccess(t("settingsUpdated", language));
       refetchProfile();
@@ -261,6 +437,154 @@ export default function Settings() {
       showError(t("errorUpdatingSettings", language));
     }
   };
+
+  const updateHomescreenWidgetSize = async (key: keyof WidgetConfig, size: 'big' | 'small') => {
+    const nextSizes = { ...homescreenWidgetSizes, [key]: size };
+    setHomescreenWidgetSizes(nextSizes);
+    setScopedStorageItem(LS_WIDGET_SIZES_BASE, JSON.stringify(nextSizes), user?.id);
+    try {
+      await updateHomescreenSettings({ homescreenWidgetSizes: nextSizes }, {}, false);
+      showSuccess(t("settingsUpdated", language));
+    } catch (error) {
+      console.error('Error updating homescreen widget size:', error);
+      showError(t("errorUpdatingSettings", language));
+      setHomescreenWidgetSizes(homescreenWidgetSizes);
+    }
+  };
+
+  const toggleHomescreenDockApp = async (appId: string) => {
+    const alreadySelected = homescreenDockIds.includes(appId);
+    if (!alreadySelected && homescreenDockIds.length >= MAX_HOMESCREEN_DOCK) return;
+    const nextDock = alreadySelected
+      ? homescreenDockIds.filter(id => id !== appId)
+      : [...homescreenDockIds, appId];
+    setHomescreenDockIds(nextDock);
+    setScopedStorageItem(LS_DOCK_BASE, JSON.stringify(nextDock), user?.id);
+    try {
+      await updateHomescreenSettings({ dockIds: nextDock }, {}, false);
+      showSuccess(t("settingsUpdated", language));
+    } catch (error) {
+      console.error('Error updating homescreen dock:', error);
+      showError(t("errorUpdatingSettings", language));
+      setHomescreenDockIds(homescreenDockIds);
+    }
+  };
+
+  const saveHomescreenHeaderColor = async (color: string) => {
+    setHomescreenHeaderColor(color);
+    setScopedStorageItem(LS_HEADER_COLOR_BASE, color, user?.id);
+    try {
+      await updateHomescreenSettings({ headerColor: color }, {}, false);
+    } catch (error) {
+      console.error('Error updating homescreen header color:', error);
+      showError(t("errorUpdatingSettings", language));
+    }
+  };
+
+  const clearHomescreenHeaderColor = async () => {
+    setHomescreenHeaderColor('');
+    removeScopedStorageItem(LS_HEADER_COLOR_BASE, user?.id);
+    try {
+      await updateHomescreenSettings({ headerColor: '' }, {}, false);
+    } catch (error) {
+      console.error('Error clearing homescreen header color:', error);
+      showError(t("errorUpdatingSettings", language));
+    }
+  };
+
+  const saveHomescreenDockColor = async (color: string) => {
+    setHomescreenDockColor(color);
+    setScopedStorageItem(LS_DOCK_COLOR_BASE, color, user?.id);
+    try {
+      await updateHomescreenSettings({ dockColor: color }, {}, false);
+    } catch (error) {
+      console.error('Error updating homescreen dock color:', error);
+      showError(t("errorUpdatingSettings", language));
+    }
+  };
+
+  const clearHomescreenDockColor = async () => {
+    setHomescreenDockColor('');
+    removeScopedStorageItem(LS_DOCK_COLOR_BASE, user?.id);
+    try {
+      await updateHomescreenSettings({ dockColor: '' }, {}, false);
+    } catch (error) {
+      console.error('Error clearing homescreen dock color:', error);
+      showError(t("errorUpdatingSettings", language));
+    }
+  };
+
+  const restoreDefaultHomescreenBackground = async () => {
+    const fallbackBg = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
+    setHomescreenBgChoice('default');
+    setHomescreenBgImage(fallbackBg);
+    setHomescreenBgPositionY(50);
+    setScopedStorageItem(LS_BG_CHOICE_BASE, 'default', user?.id);
+    setScopedStorageItem(LS_HSBG_ACTIVE_BASE, 'false', user?.id);
+    removeScopedStorageItem(LS_BG_BASE, user?.id);
+    removeScopedStorageItem(LS_BG_POS_Y_BASE, user?.id);
+    try {
+      await updateHomescreenSettings({ bgChoice: 'default', bgImage: '', bgPositionY: 50 }, {}, false);
+      showSuccess(t("settingsUpdated", language));
+    } catch (error) {
+      console.error('Error restoring homescreen background:', error);
+      showError(t("errorUpdatingSettings", language));
+    }
+  };
+
+  const saveHomescreenWallpaperPosition = async (value: number) => {
+    const next = Math.max(0, Math.min(100, value));
+    setHomescreenBgPositionY(next);
+    setScopedStorageItem(LS_BG_POS_Y_BASE, String(next), user?.id);
+    try {
+      await updateHomescreenSettings({ bgPositionY: next }, {}, false);
+    } catch (error) {
+      console.error('Error updating wallpaper position:', error);
+      showError(t("errorUpdatingSettings", language));
+    }
+  };
+
+  const applyHomescreenWallpaper = async (imageUrl: string) => {
+    setHomescreenBgChoice('wallpaper');
+    setHomescreenBgImage(imageUrl);
+    setHomescreenBgPositionY(50);
+    setScopedStorageItem(LS_BG_CHOICE_BASE, 'wallpaper', user?.id);
+    setScopedStorageItem(LS_BG_BASE, imageUrl, user?.id);
+    setScopedStorageItem(LS_BG_POS_Y_BASE, '50', user?.id);
+    setScopedStorageItem(LS_HSBG_ACTIVE_BASE, 'false', user?.id);
+    try {
+      await updateHomescreenSettings({ bgChoice: 'wallpaper', bgImage: imageUrl, bgPositionY: 50 }, {}, false);
+      showSuccess(t("settingsUpdated", language));
+    } catch (error) {
+      console.error('Error applying wallpaper:', error);
+      showError(t("errorUpdatingSettings", language));
+    }
+  };
+
+  const handleHomescreenWallpaperInput = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user?.id) return;
+    try {
+      const prepared = await prepareWallpaperUpload(file);
+      const path = `homescreen/${user.id}/wallpapers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${prepared.ext}`;
+      const { error: uploadError } = await supabase.storage.from('images').upload(path, prepared.body, { contentType: prepared.contentType || undefined, upsert: true, cacheControl: '31536000' });
+      if (uploadError) throw uploadError;
+      const { data: publicData } = supabase.storage.from('images').getPublicUrl(path);
+      const url = publicData?.publicUrl;
+      if (!url) throw new Error('wallpaper_public_url_missing');
+      await applyHomescreenWallpaper(url);
+    } catch (error) {
+      console.error('Wallpaper upload failed:', error);
+      showError(t("errorUpdatingSettings", language));
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  useEffect(() => {
+    if (homescreenBgChoice !== 'default') return;
+    setHomescreenBgImage(theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
+  }, [homescreenBgChoice, theme]);
 
   const updatePrivacySetting = async (key: keyof typeof privacySettings, value: boolean) => {
     try {
@@ -640,22 +964,11 @@ export default function Settings() {
             {/* Widget Visibility — always shown, behavior changes per mode */}
             {(() => {
               const isHomescreen = dashboardLook === 'homescreen';
-
-              // Widget entries — for homescreen these are the stats/app row choices
-              const widgetEntries: { key: keyof typeof widgetSettings; labelEn: string; labelAr: string }[] = [
-                { key: 'showCalendarWidget', labelEn: 'Calendar',                   labelAr: 'التقويم' },
-                { key: 'showTRWidget',       labelEn: 'Tasks & Reminders',          labelAr: 'المهام والتذكيرات' },
-                { key: 'showMaw3dWidget',    labelEn: 'Maw3d Events',               labelAr: 'أحداث مواعيد' },
-                { key: 'showVitalityWidget', labelEn: 'Vitality (WHOOP + Health)', labelAr: 'الحيوية (WHOOP + صحتي)' },
-                { key: 'showJournalWidget',  labelEn: "Today's Journal",            labelAr: 'يوميات وقتي' },
-                { key: 'showQuoteWidget',    labelEn: 'Daily Quote',                labelAr: 'اقتباس اليوم' },
-              ];
-
-              // Count only the visible widget entries (excludes showNavWidget)
+              const widgetEntries = homescreenWidgetEntries;
               const enabledCount = widgetEntries.filter(e => widgetSettings[e.key]).length;
 
               const handleWidgetToggle = (key: keyof typeof widgetSettings, checked: boolean) => {
-                if (isHomescreen && checked && enabledCount >= 3) return; // max 3 in homescreen
+                if (isHomescreen && checked && enabledCount >= MAX_HOMESCREEN_WIDGETS) return;
                 updateWidgetSetting(key, checked);
               };
 
@@ -667,20 +980,21 @@ export default function Settings() {
                         <span>{t("widgetVisibility", language)}</span>
                         {isHomescreen && (
                           <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-1 rounded-full">
-                            {language === 'ar' ? `${enabledCount}/3 محدد` : `${enabledCount}/3 selected`}
+                            {language === 'ar' ? `${enabledCount}/${MAX_HOMESCREEN_WIDGETS} محدد` : `${enabledCount}/${MAX_HOMESCREEN_WIDGETS} selected`}
                           </span>
                         )}
                       </CardTitle>
                       <CardDescription>
                         {isHomescreen
-                          ? (language === "ar" ? "اختر ما يصل إلى ٣ إحصائيات تظهر في الشاشة الرئيسية" : "Choose up to 3 stats to show on your Home Screen")
+                          ? (language === "ar" ? "اختر ما يصل إلى ٤ ودجتات تظهر في الشاشة الرئيسية" : "Choose up to 4 widgets to show on your Home Screen")
                           : (language === "ar" ? "اختر الأدوات التي تريد عرضها في لوحة التحكم" : "Choose which widgets to display on your dashboard")}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       {widgetEntries.map(({ key, labelEn, labelAr }) => {
                         const isOn = !!widgetSettings[key];
-                        const isDisabled = isHomescreen && !isOn && enabledCount >= 3;
+                        const isDisabled = isHomescreen && !isOn && enabledCount >= MAX_HOMESCREEN_WIDGETS;
+                        const currentSize = homescreenWidgetSizes[key] ?? 'big';
                         return (
                           <div
                             key={key}
@@ -692,23 +1006,171 @@ export default function Settings() {
                               </p>
                               {isDisabled && (
                                 <p className="text-xs text-muted-foreground">
-                                  {language === 'ar' ? 'الحد الأقصى ٣ عناصر' : 'Max 3 reached'}
+                                  {language === 'ar' ? 'الحد الأقصى ٤ ودجتات' : 'Max 4 reached'}
                                 </p>
                               )}
                             </div>
-                            <Switch
-                              checked={isOn}
-                              disabled={isDisabled}
-                              onCheckedChange={(checked) => handleWidgetToggle(key, checked)}
-                            />
+                            <div className="flex items-center gap-2">
+                              {isHomescreen && isOn && (
+                                <div className="flex overflow-hidden rounded-lg border border-border bg-muted/30">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateHomescreenWidgetSize(key, 'big')}
+                                    className={`px-3 py-1 text-[11px] font-semibold transition-colors ${currentSize === 'big' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                                  >
+                                    {language === 'ar' ? 'كبير' : 'Big'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateHomescreenWidgetSize(key, 'small')}
+                                    className={`px-3 py-1 text-[11px] font-semibold transition-colors ${currentSize === 'small' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground'}`}
+                                  >
+                                    {language === 'ar' ? 'صغير' : 'Small'}
+                                  </button>
+                                </div>
+                              )}
+                              <Switch
+                                checked={isOn}
+                                disabled={isDisabled}
+                                onCheckedChange={(checked) => handleWidgetToggle(key, checked)}
+                              />
+                            </div>
                           </div>
                         );
                       })}
+                      {isHomescreen && enabledCount >= MAX_HOMESCREEN_WIDGETS && (
+                        <p className="text-xs text-amber-500">
+                          {language === 'ar' ? 'الحد الأقصى ٤ ودجتات. ألغِ واحداً لإضافة غيره.' : 'Max 4 widgets. Turn one off to add another.'}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
                 </>
               );
             })()}
+
+            {dashboardLook === 'homescreen' && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ImageIcon className="h-5 w-5" />
+                      {language === 'ar' ? 'خلفية الشاشة الرئيسية' : 'Home Screen Wallpaper'}
+                    </CardTitle>
+                    <CardDescription>
+                      {language === 'ar' ? 'ارفع صورة أو اختر صورة محفوظة أو ارجع للخلفية الافتراضية' : 'Upload a wallpaper, pick a saved one, or go back to the default background'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" onClick={() => bgInputRef.current?.click()}>
+                        <ImageIcon className="h-4 w-4 mr-2" />
+                        {language === 'ar' ? 'رفع صورة' : 'Upload'}
+                      </Button>
+                      <Button type="button" variant="outline" onClick={() => setSavedImagesOpen(true)}>
+                        {language === 'ar' ? 'اختر من المحفوظ' : 'Pick Saved'}
+                      </Button>
+                      {homescreenBgChoice === 'wallpaper' && homescreenBgImage && !isDefaultBgAsset(homescreenBgImage) && (
+                        <Button type="button" variant="destructive" onClick={restoreDefaultHomescreenBackground}>
+                          <X className="h-4 w-4 mr-2" />
+                          {language === 'ar' ? 'حذف الخلفية' : 'Remove Wallpaper'}
+                        </Button>
+                      )}
+                      <Button type="button" variant="outline" onClick={restoreDefaultHomescreenBackground}>
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        {language === 'ar' ? 'افتراضي' : 'Default'}
+                      </Button>
+                    </div>
+                    {homescreenBgChoice === 'wallpaper' && homescreenBgImage && !isDefaultBgAsset(homescreenBgImage) && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-sm">
+                          <span>{language === 'ar' ? 'موضع الخلفية' : 'Wallpaper Position'}</span>
+                          <span className="text-primary font-semibold">{homescreenBgPositionY}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={homescreenBgPositionY}
+                          onChange={(event) => saveHomescreenWallpaperPosition(parseInt(event.target.value, 10))}
+                          title={language === 'ar' ? 'موضع الخلفية' : 'Wallpaper Position'}
+                          aria-label={language === 'ar' ? 'موضع الخلفية' : 'Wallpaper Position'}
+                          className="w-full"
+                        />
+                      </div>
+                    )}
+                    <input ref={bgInputRef} type="file" accept="image/*" title={language === 'ar' ? 'رفع خلفية الشاشة الرئيسية' : 'Upload Home Screen wallpaper'} aria-label={language === 'ar' ? 'رفع خلفية الشاشة الرئيسية' : 'Upload Home Screen wallpaper'} className="hidden" onChange={handleHomescreenWallpaperInput} />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{language === 'ar' ? 'الدوك' : 'Dock'}</CardTitle>
+                    <CardDescription>
+                      {language === 'ar' ? 'اختر حتى ٣ تطبيقات أسفل الشاشة الرئيسية' : 'Choose up to 3 apps for the Home Screen dock'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex items-center justify-between rounded-xl border p-4">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium">{language === 'ar' ? 'لون خلفية الدوك' : 'Dock Background Color'}</p>
+                        <p className="text-xs text-muted-foreground">{language === 'ar' ? `${homescreenDockIds.length}/${MAX_HOMESCREEN_DOCK} مختار` : `${homescreenDockIds.length}/${MAX_HOMESCREEN_DOCK} selected`}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input type="color" title="Dock color" value={homescreenDockColor || '#0c0f14'} onChange={(event) => saveHomescreenDockColor(event.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border border-border p-0.5 bg-transparent" />
+                        {homescreenDockColor && (
+                          <Button type="button" variant="outline" size="sm" onClick={clearHomescreenDockColor}>
+                            {language === 'ar' ? 'إعادة' : 'Reset'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {HOMESCREEN_APPS.map((app) => {
+                        const isSelected = homescreenDockIds.includes(app.id);
+                        const isDisabled = !isSelected && homescreenDockIds.length >= MAX_HOMESCREEN_DOCK;
+                        return (
+                          <button
+                            key={app.id}
+                            type="button"
+                            onClick={() => !isDisabled && toggleHomescreenDockApp(app.id)}
+                            className={`rounded-xl border px-3 py-3 text-sm font-medium transition-all text-left ${isSelected ? 'border-primary bg-primary/10 text-primary' : isDisabled ? 'border-border opacity-40 cursor-not-allowed' : 'border-border hover:border-primary/40'}`}
+                          >
+                            {language === 'ar' ? app.labelAr : app.labelEn}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>{language === 'ar' ? 'ألوان الشاشة الرئيسية' : 'Home Screen Colors'}</CardTitle>
+                    <CardDescription>
+                      {language === 'ar' ? 'تحكم في لون العنوان أعلى الشاشة' : 'Control the greeting/header color shown at the top of the Home Screen'}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between rounded-xl border p-4">
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium">{language === 'ar' ? 'لون العنوان' : 'Header Color'}</p>
+                        <p className="text-xs text-muted-foreground">{language === 'ar' ? 'للون جملة الترحيب في أعلى الشاشة' : 'For the greeting text at the top of the Home Screen'}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input type="color" title="Header color" value={homescreenHeaderColor || '#ffffff'} onChange={(event) => saveHomescreenHeaderColor(event.target.value)} className="w-10 h-10 rounded-xl cursor-pointer border border-border p-0.5 bg-transparent" />
+                        {homescreenHeaderColor && (
+                          <Button type="button" variant="outline" size="sm" onClick={clearHomescreenHeaderColor}>
+                            {language === 'ar' ? 'إعادة' : 'Reset'}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
 
             {/* Homescreen Background Style — only when homescreen look is active */}
             {dashboardLook === 'homescreen' && (() => {
@@ -897,6 +1359,16 @@ export default function Settings() {
                 </Card>
               );
             })()}
+
+            {dashboardLook === 'homescreen' && savedImagesOpen && (
+              <SavedImagesPicker
+                onSelect={(imageUrl) => {
+                  void applyHomescreenWallpaper(imageUrl);
+                  setSavedImagesOpen(false);
+                }}
+                onClose={() => setSavedImagesOpen(false)}
+              />
+            )}
           </TabsContent>
         </Tabs>
         </div>

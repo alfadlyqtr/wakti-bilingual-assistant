@@ -53,6 +53,8 @@ import {
   Users,
   MessageCircle,
   Mail,
+  HelpCircle,
+  Settings,
 } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
@@ -83,6 +85,8 @@ import { getScopedStorageItem, migrateLegacyScopedStorage, removeScopedStorageIt
   { id: "game",      nameEn: "Game",      nameAr: "لعبة",     path: "/tools/game",         icon: Gamepad2,        gradient: "from-red-500 to-red-700",         glow: "#ef4444" },
   { id: "social",    nameEn: "Social",    nameAr: "التواصل",  path: "/social",             icon: MessageCircle,   gradient: "from-cyan-500 to-blue-600",       glow: "#38bdf8" },
   { id: "account",   nameEn: "Account",   nameAr: "حسابي",    path: "/account",            icon: Users,           gradient: "from-slate-500 to-slate-700",     glow: "#94a3b8", isAvatarIcon: true },
+  { id: "settings",  nameEn: "Settings",  nameAr: "الإعدادات", path: "/settings",           icon: Settings,        gradient: "from-blue-400 to-indigo-600",     glow: "#60a5fa" },
+  { id: "help",      nameEn: "Help",      nameAr: "المساعدة",  path: "/help",               icon: HelpCircle,      gradient: "from-green-400 to-emerald-600",   glow: "#34d399" },
   { id: "deen",      nameEn: "Deen",      nameAr: "دين",      path: "/deen",               icon: BookOpen,        gradient: "from-sky-500 to-indigo-600",      glow: "#38bdf8" },
 ];
 
@@ -2027,6 +2031,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
   const strain   = whoopData?.strain ?? null;
   const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
   const isMobileGlass = isLargeSurfaceMobileDevice();
+  const isAppleLargeSurface = isMobileGlass && isAppleMobileDevice();
 
   const shell = (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => (
     <div
@@ -2034,34 +2039,42 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
         background: hasBg
-          ? isMobileGlass
+          ? isAppleLargeSurface
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.32) 0%, rgba(8,12,20,0.24) 100%), linear-gradient(180deg, rgba(255,255,255,0.035) 0%, rgba(255,255,255,0.012) 100%)'
+            : isMobileGlass
             ? 'linear-gradient(180deg, rgba(8,12,20,0.38) 0%, rgba(8,12,20,0.3) 100%), linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)'
             : 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 100%)'
-          : isMobileGlass
+          : isAppleLargeSurface
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.24) 0%, rgba(8,12,20,0.18) 100%), linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.016) 100%)'
+            : isMobileGlass
             ? 'linear-gradient(180deg, rgba(8,12,20,0.3) 0%, rgba(8,12,20,0.22) 100%), linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
             : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 100%)',
         backdropFilter: hasBg
-          ? `blur(${isMobileGlass ? '18px' : '30px'}) saturate(${isMobileGlass ? '125%' : '170%'})`
-          : `blur(${isMobileGlass ? '16px' : '24px'}) saturate(${isMobileGlass ? '118%' : '155%'})`,
+          ? `blur(${isAppleLargeSurface ? '15px' : isMobileGlass ? '18px' : '30px'}) saturate(${isAppleLargeSurface ? '112%' : isMobileGlass ? '125%' : '170%'})`
+          : `blur(${isAppleLargeSurface ? '14px' : isMobileGlass ? '16px' : '24px'}) saturate(${isAppleLargeSurface ? '108%' : isMobileGlass ? '118%' : '155%'})`,
         WebkitBackdropFilter: hasBg
-          ? `blur(${isMobileGlass ? '18px' : '30px'}) saturate(${isMobileGlass ? '125%' : '170%'})`
-          : `blur(${isMobileGlass ? '16px' : '24px'}) saturate(${isMobileGlass ? '118%' : '155%'})`,
+          ? `blur(${isAppleLargeSurface ? '15px' : isMobileGlass ? '18px' : '30px'}) saturate(${isAppleLargeSurface ? '112%' : isMobileGlass ? '125%' : '170%'})`
+          : `blur(${isAppleLargeSurface ? '14px' : isMobileGlass ? '16px' : '24px'}) saturate(${isAppleLargeSurface ? '108%' : isMobileGlass ? '118%' : '155%'})`,
         boxShadow: hasBg
-          ? isMobileGlass
+          ? isAppleLargeSurface
+            ? `0 16px 36px rgba(0,0,0,0.34), 0 6px 16px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -14px 22px rgba(255,255,255,0.006)`
+            : isMobileGlass
             ? `0 18px 42px rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -18px 28px rgba(255,255,255,0.01)`
             : `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -18px 28px rgba(255,255,255,0.04)`
-          : isMobileGlass
+          : isAppleLargeSurface
+            ? `0 14px 32px rgba(0,0,0,0.28), 0 0 10px ${glow}0a, inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -14px 22px rgba(255,255,255,0.006)`
+            : isMobileGlass
             ? `0 16px 38px rgba(0,0,0,0.34), 0 0 12px ${glow}0d, inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -16px 24px rgba(255,255,255,0.01)`
             : `0 16px 38px rgba(0,0,0,0.22), 0 0 20px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.04)`,
         border: hasBg
-          ? `1px solid rgba(255,255,255,${isMobileGlass ? '0.08' : '0.24'})`
-          : `1px solid rgba(255,255,255,${isMobileGlass ? '0.08' : '0.18'})`,
+          ? `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.055' : isMobileGlass ? '0.08' : '0.24'})`
+          : `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.05' : isMobileGlass ? '0.08' : '0.18'})`,
       }}
     >
-      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isMobileGlass ? '0.3' : '0.14'})` }} />}
-      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? (isMobileGlass ? 0.08 : 0.16) : (isMobileGlass ? 0.1 : 0.22), mixBlendMode: 'screen', filter: `saturate(${isMobileGlass ? '0.72' : '0.9'})` }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? '0.08' : '0.32'}) 0%, rgba(255,255,255,${isMobileGlass ? '0.028' : '0.1'}) 22%, rgba(255,255,255,${isMobileGlass ? '0.008' : '0.03'}) 56%, transparent 100%)` }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isMobileGlass ? '0.07' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isMobileGlass ? '0.03' : '0.12'}) 0%, transparent 26%)` }} />
+      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isAppleLargeSurface ? '0.24' : isMobileGlass ? '0.3' : '0.14'})` }} />}
+      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? (isAppleLargeSurface ? 0.06 : isMobileGlass ? 0.08 : 0.16) : (isAppleLargeSurface ? 0.075 : isMobileGlass ? 0.1 : 0.22), mixBlendMode: 'screen', filter: `saturate(${isAppleLargeSurface ? '0.68' : isMobileGlass ? '0.72' : '0.9'})` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? '0.05' : isMobileGlass ? '0.08' : '0.32'}) 0%, rgba(255,255,255,${isAppleLargeSurface ? '0.018' : isMobileGlass ? '0.028' : '0.1'}) 22%, rgba(255,255,255,${isAppleLargeSurface ? '0.004' : isMobileGlass ? '0.008' : '0.03'}) 56%, transparent 100%)` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isAppleLargeSurface ? '0.045' : isMobileGlass ? '0.07' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isAppleLargeSurface ? '0.018' : isMobileGlass ? '0.03' : '0.12'}) 0%, transparent 26%)` }} />
       <div className="relative z-10 w-full h-full">{children}</div>
       {bulkSelectionActive && (
         <button
@@ -2790,6 +2803,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       : [];
     const hasRemoteWidgetSizes = !!remoteWidgetSizes;
     const hasRemoteLayoutState = remoteLayout.length > 0 || remoteUnifiedGrid.length > 0;
+    const hasRemoteBgState = typeof hs?.bgImage === 'string'
+      || typeof hs?.bgPositionY === 'number'
+      || isBgChoiceValue(hs?.bgChoice)
+      || !!s?.homescreenBg;
     const hasRemoteHomescreenState = hasRemoteWidgets
       || hasRemoteWidgetSizes
       || hasRemoteLayoutState
@@ -2798,10 +2815,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       || typeof hs?.showQuote === 'boolean'
       || typeof hs?.headerColor === 'string'
       || typeof hs?.dockColor === 'string'
-      || typeof hs?.bgImage === 'string'
-      || typeof hs?.bgPositionY === 'number'
-      || isBgChoiceValue(hs?.bgChoice)
-      || !!s?.homescreenBg;
+      || hasRemoteBgState;
     if (!homescreenDirtyRef.current && hasRemoteHomescreenState) {
       const remoteDockIds = Array.isArray(hs?.dockIds) ? sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP) : dockIds;
       const nextWidgets = hasRemoteWidgets ? fromSupabase : hsWidgets;
@@ -2855,10 +2869,10 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const localWallpaper = typeof localBgImage === 'string' && !!localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
     const remoteWallpaper = typeof hs.bgImage === 'string' && !!hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
     const remoteChoice = isBgChoiceValue(hs.bgChoice) ? hs.bgChoice : null;
-    const useRemoteBgState = hasRemoteHomescreenState;
+    const useRemoteBgState = hasRemoteBgState;
     const inferredChoice: BgChoice = useRemoteBgState
       ? (remoteChoice ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'))
-      : (remoteChoice ?? localChoice ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'));
+      : (localChoice ?? (localWallpaper ? 'wallpaper' : remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'));
     const resolvedChoice: BgChoice = inferredChoice === 'wallpaper' && !(remoteWallpaper || (!useRemoteBgState && localWallpaper))
       ? 'default'
       : inferredChoice;
@@ -3360,39 +3374,46 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const wallpaperTranslateY = `${(bgPositionY - 50) * 1.2}%`;
   const isAppleMobile = isAppleMobileDevice();
   const isMobileGlass = isLargeSurfaceMobileDevice();
+  const isAppleLargeSurface = isMobileGlass && isAppleMobile;
   const effectiveDockColor = dockColor || (isDark ? '#0c0f14' : '#060541');
   const dockTintIsDark = dockColor ? getHexLuminance(effectiveDockColor) < 0.32 : isDark;
   const dockTrayBackground = dockColor
     ? `linear-gradient(180deg, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.42 : 0.92)} 0%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.3 : 0.84)} 100%)`
-    : `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? 0.26 : isAppleMobile ? 0.42 : 0.66}) 0%, rgba(255,255,255,${isMobileGlass ? 0.12 : isAppleMobile ? 0.2 : 0.34}) 24%, rgba(255,255,255,${isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.16}) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,${isMobileGlass ? 0.14 : isAppleMobile ? 0.24 : 0.42}) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,${isMobileGlass ? 0.07 : isAppleMobile ? 0.12 : 0.22}) 0%, rgba(255,255,255,${isMobileGlass ? 0.02 : isAppleMobile ? 0.04 : 0.08}) 46%, rgba(255,255,255,${isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.14}) 100%)`;
+    : `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? 0.18 : isMobileGlass ? 0.26 : isAppleMobile ? 0.42 : 0.66}) 0%, rgba(255,255,255,${isAppleLargeSurface ? 0.07 : isMobileGlass ? 0.12 : isAppleMobile ? 0.2 : 0.34}) 24%, rgba(255,255,255,${isAppleLargeSurface ? 0.02 : isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.16}) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,${isAppleLargeSurface ? 0.09 : isMobileGlass ? 0.14 : isAppleMobile ? 0.24 : 0.42}) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,${isAppleLargeSurface ? 0.045 : isMobileGlass ? 0.07 : isAppleMobile ? 0.12 : 0.22}) 0%, rgba(255,255,255,${isAppleLargeSurface ? 0.012 : isMobileGlass ? 0.02 : isAppleMobile ? 0.04 : 0.08}) 46%, rgba(255,255,255,${isAppleLargeSurface ? 0.026 : isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.14}) 100%)`;
   const dockTrayBorder = dockColor
-    ? `1px solid rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.12 : 0.18) : isAppleMobile ? (dockTintIsDark ? 0.2 : 0.3) : (dockTintIsDark ? 0.28 : 0.42)})`
-    : `1px solid rgba(255,255,255,${isMobileGlass ? 0.16 : isAppleMobile ? 0.28 : 0.42})`;
+    ? `1px solid rgba(255,255,255,${isAppleLargeSurface ? (dockTintIsDark ? 0.08 : 0.13) : isMobileGlass ? (dockTintIsDark ? 0.12 : 0.18) : isAppleMobile ? (dockTintIsDark ? 0.2 : 0.3) : (dockTintIsDark ? 0.28 : 0.42)})`
+    : `1px solid rgba(255,255,255,${isAppleLargeSurface ? 0.11 : isMobileGlass ? 0.16 : isAppleMobile ? 0.28 : 0.42})`;
   const dockTrayOutline = dockColor
-    ? `1px solid rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.03 : 0.06) : isAppleMobile ? (dockTintIsDark ? 0.06 : 0.1) : (dockTintIsDark ? 0.1 : 0.16)})`
-    : `1px solid rgba(255,255,255,${isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.12})`;
+    ? `1px solid rgba(255,255,255,${isAppleLargeSurface ? (dockTintIsDark ? 0.02 : 0.04) : isMobileGlass ? (dockTintIsDark ? 0.03 : 0.06) : isAppleMobile ? (dockTintIsDark ? 0.06 : 0.1) : (dockTintIsDark ? 0.1 : 0.16)})`
+    : `1px solid rgba(255,255,255,${isAppleLargeSurface ? 0.025 : isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.12})`;
   const dockTrayShadow = dockColor
-    ? `0 18px 36px rgba(0,0,0,${isMobileGlass ? '0.42' : '0.26'}), inset 0 1px 0 rgba(255,255,255,${isMobileGlass ? '0.08' : '0.16'})`
-    : isMobileGlass
+    ? `0 18px 36px rgba(0,0,0,${isAppleLargeSurface ? '0.34' : isMobileGlass ? '0.42' : '0.26'}), inset 0 1px 0 rgba(255,255,255,${isAppleLargeSurface ? '0.05' : isMobileGlass ? '0.08' : '0.16'})`
+    : isAppleLargeSurface
+      ? '0 16px 32px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.035)'
+      : isMobileGlass
       ? '0 18px 38px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.06)'
       : `0 22px 48px rgba(0,0,0,${isAppleMobile ? '0.3' : '0.24'}), inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.12' : '0.18'})`;
   const dockTopSheen = dockColor
-    ? `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.08 : 0.18) : dockTintIsDark ? 0.12 : 0.24}) 0%, rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.02 : 0.06) : dockTintIsDark ? 0.04 : 0.12}) 42%, transparent 100%)`
-    : `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? 0.08 : isAppleMobile ? 0.18 : 0.26}) 0%, rgba(255,255,255,${isMobileGlass ? 0.02 : isAppleMobile ? 0.06 : 0.12}) 42%, transparent 100%)`;
+    ? `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? (dockTintIsDark ? 0.05 : 0.12) : isMobileGlass ? (dockTintIsDark ? 0.08 : 0.18) : dockTintIsDark ? 0.12 : 0.24}) 0%, rgba(255,255,255,${isAppleLargeSurface ? (dockTintIsDark ? 0.012 : 0.035) : isMobileGlass ? (dockTintIsDark ? 0.02 : 0.06) : dockTintIsDark ? 0.04 : 0.12}) 42%, transparent 100%)`
+    : `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? 0.055 : isMobileGlass ? 0.08 : isAppleMobile ? 0.18 : 0.26}) 0%, rgba(255,255,255,${isAppleLargeSurface ? 0.012 : isMobileGlass ? 0.02 : isAppleMobile ? 0.06 : 0.12}) 42%, transparent 100%)`;
   const dockBottomTint = dockColor
-    ? `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isMobileGlass ? (dockTintIsDark ? 0.16 : 0.08) : dockTintIsDark ? 0.24 : 0.12}) 100%)`
-    : `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isMobileGlass ? 0.2 : isAppleMobile ? 0.14 : 0.1}) 100%)`;
+    ? `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isAppleLargeSurface ? (dockTintIsDark ? 0.12 : 0.06) : isMobileGlass ? (dockTintIsDark ? 0.16 : 0.08) : dockTintIsDark ? 0.24 : 0.12}) 100%)`
+    : `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isAppleLargeSurface ? 0.16 : isMobileGlass ? 0.2 : isAppleMobile ? 0.14 : 0.1}) 100%)`;
 
   const headColor = headerColor || (hasAnyBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541");
   const subColor  = headerColor ? `${headerColor}b3` : (hasAnyBg ? "rgba(255,255,255,0.72)" : isDark ? "rgba(242,242,242,0.55)" : "rgba(6,5,65,0.55)");
 
   // Stat card surface — frosted glass with dark tint so white text is always readable
   const statCardBase = hasAnyBg
-    ? isMobileGlass
+    ? isAppleLargeSurface
+      ? "bg-black/44 backdrop-blur-md border border-white/[0.05] shadow-[0_10px_24px_rgba(0,0,0,0.28)]"
+      : isMobileGlass
       ? "bg-black/52 backdrop-blur-lg border border-white/[0.08] shadow-[0_10px_24px_rgba(0,0,0,0.34)]"
       : "bg-black/30 backdrop-blur-xl border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.2)]"
     : isDark
-      ? isMobileGlass
+      ? isAppleLargeSurface
+        ? "bg-black/[0.24] backdrop-blur-md border border-white/[0.05] shadow-[0_10px_24px_rgba(0,0,0,0.26)]"
+        : isMobileGlass
         ? "bg-black/[0.3] backdrop-blur-lg border border-white/[0.06] shadow-[0_10px_24px_rgba(0,0,0,0.3)]"
         : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-white backdrop-blur-xl border border-[#060541]/10 shadow-[0_2px_12px_rgba(6,5,65,0.08)]";
@@ -3533,318 +3554,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             <div className="absolute inset-0 pointer-events-none z-0" style={{ backdropFilter: 'blur(0.5px)', WebkitBackdropFilter: 'blur(0.5px)' }} />
           )}
           <div className="flex-none flex items-center justify-between px-4 pt-3 pb-1 relative z-40">
-            <div className="px-3 py-2 rounded-xl bg-black/25 backdrop-blur-md border border-white/10">
+            <div className="px-5 py-1.5 rounded-xl bg-black/25 backdrop-blur-md border border-white/10">
               <p
-                className="text-[17px] font-semibold leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[68vw]"
+                className="text-[17px] font-semibold leading-tight whitespace-nowrap overflow-hidden text-ellipsis max-w-[82vw]"
                 style={{ color: headColor, textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}
               >
                 {displayName ? `${greeting}, ${displayName}` : greeting}
               </p>
             </div>
-            {!editMode ? (
-              <button 
-                onClick={() => setEditMode(true)} 
-                title="Edit homescreen" 
-                style={{ 
-                  backgroundColor: '#ffffff', 
-                  border: '3px solid #374151', 
-                  borderRadius: '50%', 
-                  padding: '12px',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
-                  zIndex: 9999,
-                  position: 'relative'
-                }}
-              >
-                <Pencil style={{ width: '20px', height: '20px', color: '#1f2937' }} />
-              </button>
-            ) : (
-              <button onClick={() => setEditMode(false)} className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-green-500/80 text-white text-xs font-semibold">
-                <Check className="w-3.5 h-3.5" />
-                {language === "ar" ? "تم" : "Done"}
-              </button>
-            )}
           </div>
-
-          {/* ── Edit options bar ── */}
-          {editMode && (() => {
-            const WIDGET_OPTIONS: { key: keyof typeof hsWidgets; labelEn: string; labelAr: string }[] = [
-              { key: 'showTRWidget',       labelEn: 'Tasks',    labelAr: 'المهام'   },
-              { key: 'showCalendarWidget', labelEn: 'Calendar', labelAr: 'التقويم' },
-              { key: 'showMaw3dWidget',    labelEn: 'Maw3d',    labelAr: 'موعد'    },
-              { key: 'showVitalityWidget', labelEn: 'Vitality', labelAr: 'الحيوية' },
-              { key: 'showJournalWidget',  labelEn: 'Journal',  labelAr: 'يومياتي' },
-              { key: 'showQuoteWidget',    labelEn: 'Quote',    labelAr: 'اقتباس'  },
-            ];
-            const activeWidgetCount = WIDGET_OPTIONS.filter(w => hsWidgets[w.key]).length;
-            return (
-              <div style={{ position: 'fixed', top: 76, left: 12, right: 12, zIndex: 60, isolation: 'isolate', pointerEvents: 'auto', backgroundColor: 'rgba(30,41,59,0.96)', border: '2px solid #64748b', borderRadius: '18px', padding: '12px', boxShadow: '0 22px 80px rgba(0,0,0,0.62)', backdropFilter: 'blur(22px)', WebkitBackdropFilter: 'blur(22px)', animation: 'hs-edit-sheet-in 0.24s cubic-bezier(0.22,1,0.36,1) forwards', maxHeight: 'calc(100vh - 108px)', overflowY: 'auto' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <div style={{ minHeight: '24px', display: 'flex', alignItems: 'center' }}>
-                    {saveState === 'saving' && <span style={{ color: '#93c5fd', fontSize: '12px', fontWeight: 700 }}>{language === 'ar' ? 'جارٍ الحفظ...' : 'Saving...'}</span>}
-                    {saveState === 'saved' && <span style={{ color: '#86efac', fontSize: '12px', fontWeight: 700 }}>{language === 'ar' ? 'تم الحفظ' : 'Saved'}</span>}
-                    {saveState === 'error' && <span style={{ color: '#fca5a5', fontSize: '12px', fontWeight: 700 }}>{language === 'ar' ? 'فشل الحفظ' : 'Save failed'}</span>}
-                  </div>
-                  <button onClick={() => setEditMode(false)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 14px', borderRadius: '999px', backgroundColor: '#16a34a', border: '2px solid #22c55e', color: '#ffffff', fontSize: '12px', fontWeight: 700 }}>
-                    <Check style={{ width: '14px', height: '14px' }} />
-                    <span>{language === 'ar' ? 'تم' : 'Done'}</span>
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '12px' }}>
-                  {/* Dock */}
-                  <button onClick={() => setDockPickerOpen(true)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
-                    <Settings2 style={{ width: '16px', height: '16px' }} />
-                    <span>{language === 'ar' ? 'الدوك' : 'Dock'}</span>
-                  </button>
-                  {/* BG */}
-                  <button onClick={() => setBgPanelOpen(v => !v)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: bgPanelOpen ? '#2563eb' : '#334155', border: `2px solid ${bgPanelOpen ? '#3b82f6' : '#64748b'}`, color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
-                    <ImageIcon style={{ width: '16px', height: '16px' }} />
-                    <span>{language === 'ar' ? 'خلفية' : 'BG'}</span>
-                  </button>
-                  {/* Remove BG */}
-                  {bgChoice === 'wallpaper' && bgImage && !isDefaultBgImage && (
-                    <button onClick={removeBg}
-                      style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#dc2626', border: '2px solid #ef4444', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
-                      <X style={{ width: '16px', height: '16px' }} />
-                      <span>{language === 'ar' ? 'حذف' : 'Rm BG'}</span>
-                    </button>
-                  )}
-                  {/* Restore Default */}
-                  <button
-                    title={language === 'ar' ? 'استخدام الخلفية الافتراضية' : 'Use default background'}
-                    onClick={removeBg}
-                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '12px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
-                    <RotateCcw style={{ width: '16px', height: '16px' }} />
-                    <span>{language === 'ar' ? 'افتراضي' : 'Default'}</span>
-                  </button>
-                  {/* Header color */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b' }}>
-                    <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600 }}>{language === 'ar' ? 'عنوان' : 'Head'}</span>
-                    <input type="color" title="Header color" value={headerColor || '#ffffff'} onChange={e => saveHeaderColor(e.target.value)}
-                      style={{ width: '28px', height: '28px', borderRadius: '6px', cursor: 'pointer', border: '2px solid #64748b' }} />
-                    <button onClick={removeHeaderColor} title={language === 'ar' ? 'إعادة تعيين اللون' : 'Reset color'} style={{ padding: '4px', color: '#94a3b8' }}>
-                      <X style={{ width: '16px', height: '16px' }} />
-                    </button>
-                  </div>
-                </div>
-
-                {/* Row 2: Widget toggles */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', paddingTop: '12px', borderTop: '1px solid #475569' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#cbd5e1', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      {language === 'ar' ? 'الودجتات' : 'Widgets'}
-                    </span>
-                    <span style={{ color: activeWidgetCount >= MAX_WIDGETS ? '#f59e0b' : '#94a3b8', fontSize: '11px', fontWeight: 700 }}>
-                      {activeWidgetCount}/{MAX_WIDGETS} {language === 'ar' ? 'نشط' : 'active'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {WIDGET_OPTIONS.map(({ key, labelEn, labelAr }) => {
-                      const isOn = hsWidgets[key];
-                      const isDisabled = !isOn && activeWidgetCount >= MAX_WIDGETS;
-                      const currentSize = hsWidgetSizes[key] ?? 'big';
-                      return (
-                        <div key={key} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {/* On/Off toggle */}
-                          <button
-                            onClick={() => !isDisabled && toggleHsWidget(key)}
-                            style={{
-                              flex: 1, display: 'flex', alignItems: 'center', gap: '4px',
-                              padding: '8px 12px', borderRadius: '8px', fontSize: '11px', fontWeight: 600,
-                              border: '2px solid',
-                              backgroundColor: isOn ? '#4f46e5' : isDisabled ? '#1e293b' : '#334155',
-                              borderColor: isOn ? '#6366f1' : isDisabled ? '#334155' : '#64748b',
-                              color: isOn ? '#ffffff' : isDisabled ? '#475569' : '#e2e8f0',
-                              cursor: isDisabled ? 'not-allowed' : 'pointer',
-                              opacity: isDisabled ? 0.5 : 1
-                            }}>
-                            {isOn && <Check style={{ width: '12px', height: '12px' }} />}
-                            <span>{language === 'ar' ? labelAr : labelEn}</span>
-                          </button>
-                          {/* Size toggle — only shown when widget is ON */}
-                          {isOn && (
-                            <button
-                              title={currentSize === 'big' ? 'Full row — tap to make half' : 'Half row — tap to make full'}
-                              onClick={() => {
-                                const next = currentSize === 'big' ? 'small' : 'big';
-                                setHsWidgetSizes(prev => {
-                                  const updated = { ...prev, [key]: next };
-                                  homescreenDirtyRef.current = true;
-                                  localStorage.setItem(LS_WIDGET_SIZES_KEY(), JSON.stringify(updated));
-                                  const nextLayout = normalizeHomescreenLayout(homescreenLayout, hsWidgets, updated, dockIds);
-                                  persistLayout(nextLayout, currentPage, hsWidgets, updated);
-                                  return updated;
-                                });
-                              }}
-                              style={{
-                                padding: '6px 10px', borderRadius: '8px', fontSize: '10px', fontWeight: 700,
-                                border: '2px solid',
-                                backgroundColor: currentSize === 'big' ? '#0f172a' : '#7c3aed',
-                                borderColor: currentSize === 'big' ? '#334155' : '#8b5cf6',
-                                color: '#ffffff', cursor: 'pointer', whiteSpace: 'nowrap'
-                              }}>
-                              {currentSize === 'big' ? (language === 'ar' ? '▬ كبير' : '▬ Big') : (language === 'ar' ? '▪ صغير' : '▪ Small')}
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {activeWidgetCount >= MAX_WIDGETS && (
-                    <p style={{ color: '#fbbf24', fontSize: '10px', margin: 0 }}>
-                      {language === 'ar' ? '⚠ الحد الأقصى 4 ودجتات. أزل واحدة لإضافة أخرى.' : '⚠ Max 4 widgets. Remove one to add another.'}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* ── BG Style Panel ── */}
-          {editMode && bgPanelOpen && (
-            <div style={{ position: 'fixed', top: 386, left: 12, right: 12, zIndex: 61, isolation: 'isolate', pointerEvents: 'auto', backgroundColor: 'rgba(30,41,59,0.98)', border: '2px solid #64748b', borderRadius: '16px', padding: '16px', boxShadow: '0 10px 40px rgba(0,0,0,0.5)', maxHeight: 'calc(100vh - 406px)', overflowY: 'auto', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', animation: 'hs-edit-sheet-in 0.24s cubic-bezier(0.22,1,0.36,1) forwards' }}>
-              {/* Upload photo */}
-              <label htmlFor={bgInputId}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '12px 16px', borderRadius: '10px', backgroundColor: '#334155', border: '2px solid #64748b', color: '#ffffff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
-                <ImageIcon style={{ width: '20px', height: '20px' }} /> {language === "ar" ? "رفع صورة" : "Upload Photo"}
-              </label>
-
-              {/* Pick from Saved Images */}
-              <button
-                onClick={() => setSavedImagesOpen(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', padding: '12px 16px', borderRadius: '10px', backgroundColor: '#ea580c', border: '2px solid #fb923c', color: '#ffffff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '12px' }}>
-                <ImageIcon style={{ width: '20px', height: '20px' }} /> {language === "ar" ? "اختر من الصور المحفوظة" : "Pick from Saved"}
-              </button>
-
-              {bgChoice === 'wallpaper' && bgImage && (
-                <div style={{ marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                    <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600 }}>{language === 'ar' ? 'موضع الخلفية' : 'Wallpaper Position'}</span>
-                    <span style={{ color: '#60a5fa', fontSize: '14px', fontWeight: 700 }}>{bgPositionY}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={bgPositionY}
-                    onChange={(e) => saveBgPositionY(parseInt(e.target.value, 10))}
-                    title={language === 'ar' ? 'موضع الخلفية' : 'Wallpaper Position'}
-                    aria-label={language === 'ar' ? 'موضع الخلفية' : 'Wallpaper Position'}
-                    style={{ width: '100%', accentColor: '#3b82f6' }}
-                  />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#64748b', fontSize: '11px', marginTop: '4px' }}>
-                    <span>{language === 'ar' ? 'أعلى' : 'Top'}</span>
-                    <span>{language === 'ar' ? 'وسط' : 'Center'}</span>
-                    <span>{language === 'ar' ? 'أسفل' : 'Bottom'}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Mode toggle */}
-              <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-                {(['solid', 'gradient'] as const).map(m => (
-                  <button key={m} onClick={() => setHsBg(p => ({ ...p, mode: m }))}
-                    style={{
-                      flex: 1,
-                      padding: '10px',
-                      borderRadius: '10px',
-                      fontSize: '14px',
-                      fontWeight: 600,
-                      border: '2px solid',
-                      backgroundColor: hsBg.mode === m ? '#2563eb' : '#334155',
-                      borderColor: hsBg.mode === m ? '#3b82f6' : '#64748b',
-                      color: '#ffffff',
-                      cursor: 'pointer'
-                    }}>
-                    {m === 'solid' ? (language === 'ar' ? 'لون ثابت' : 'Solid') : (language === 'ar' ? 'تدرج' : 'Gradient')}
-                  </button>
-                ))}
-              </div>
-
-              {/* Color 1 */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600 }}>{hsBg.mode === 'gradient' ? 'Color 1' : 'Color'}</span>
-                <input type="color" title="Color 1" value={hsBg.color1 || '#1a1a2e'} onChange={e => setHsBg(p => ({ ...p, color1: e.target.value }))}
-                  style={{ width: '40px', height: '40px', borderRadius: '8px', cursor: 'pointer', border: '2px solid #64748b' }} />
-              </div>
-
-              {/* Color 2 — gradient */}
-              {hsBg.mode === 'gradient' && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600 }}>Color 2</span>
-                  <input type="color" title="Color 2" value={hsBg.color2 || '#4a4a8a'} onChange={e => setHsBg(p => ({ ...p, color2: e.target.value }))}
-                    style={{ width: '40px', height: '40px', borderRadius: '8px', cursor: 'pointer', border: '2px solid #64748b' }} />
-                </div>
-              )}
-
-              {/* Color 3 — gradient optional */}
-              {hsBg.mode === 'gradient' && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600 }}>Color 3 <span style={{ color: '#64748b' }}>(opt)</span></span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {hsBg.color3 && <button onClick={() => setHsBg(p => ({ ...p, color3: '' }))} style={{ color: '#ef4444', padding: '4px 8px', borderRadius: '6px', border: '2px solid #ef4444', fontSize: '12px', cursor: 'pointer' }}>✕</button>}
-                    <input type="color" title="Color 3" value={hsBg.color3 || hsBg.color1 || '#1a1a2e'} onChange={e => setHsBg(p => ({ ...p, color3: e.target.value }))}
-                      style={{ width: '40px', height: '40px', borderRadius: '8px', cursor: 'pointer', border: '2px solid #64748b' }} />
-                  </div>
-                </div>
-              )}
-
-              {/* Angle — gradient */}
-              {hsBg.mode === 'gradient' && (
-                <div style={{ marginBottom: '12px' }}>
-                  <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600, display: 'block', marginBottom: '8px' }}>{language === 'ar' ? 'اتجاه' : 'Direction'}</span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
-                    {[{d:180,i:'↓'},{d:0,i:'↑'},{d:90,i:'→'},{d:270,i:'←'},{d:135,i:'↘'},{d:45,i:'↗'},{d:225,i:'↙'},{d:315,i:'↖'}].map(a => (
-                      <button
-                        key={a.d}
-                        onClick={() => setHsBg(p => ({ ...p, angle: a.d }))}
-                        style={{
-                          padding: '8px',
-                          borderRadius: '8px',
-                          fontSize: '16px',
-                          fontWeight: 700,
-                          border: '2px solid',
-                          backgroundColor: hsBg.angle === a.d ? '#2563eb' : '#334155',
-                          borderColor: hsBg.angle === a.d ? '#3b82f6' : '#64748b',
-                          color: '#ffffff',
-                          cursor: 'pointer'
-                        }}>{a.i}</button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Glow */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <span style={{ color: '#cbd5e1', fontSize: '14px', fontWeight: 600 }}>{language === 'ar' ? 'تأثير إضاءة' : 'Glow ✨'}</span>
-                <button title="Toggle glow" onClick={() => setHsBg(p => ({ ...p, glow: !p.glow }))}
-                  style={{ width: '48px', height: '24px', borderRadius: '12px', border: '2px solid', backgroundColor: hsBg.glow ? '#3b82f6' : '#334155', borderColor: hsBg.glow ? '#60a5fa' : '#64748b', position: 'relative', cursor: 'pointer' }}>
-                  <div
-                    className="absolute inset-0"
-                    style={{
-                      width: '18px',
-                      height: '18px',
-                      borderRadius: '50%',
-                      backgroundColor: '#ffffff',
-                      boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                      position: 'absolute',
-                      top: '1px',
-                      left: hsBg.glow ? '26px' : '2px',
-                      transition: 'left 0.2s',
-                    }}
-                  />
-                </button>
-              </div>
-
-              {/* Save */}
-              <button onClick={saveBgStyle}
-                style={{ width: '100%', padding: '14px', borderRadius: '10px', backgroundColor: '#16a34a', border: '2px solid #22c55e', color: '#ffffff', fontSize: '14px', fontWeight: 700, cursor: 'pointer' }}>
-                {language === 'ar' ? 'حفظ' : 'Save Style'}
-              </button>
-            </div>
-          )}
 
           {/* ── Unified iPhone-style grid: 3 big rows × 2 big cols = 6 rows × 4 cols ── */}
           <div
@@ -3987,8 +3705,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               className="relative flex items-center justify-around w-full rounded-[2.75rem] py-3 px-5 overflow-hidden"
               style={{
                 background: dockTrayBackground,
-                backdropFilter: `blur(${isMobileGlass ? '24px' : isAppleMobile ? '30px' : '38px'}) saturate(${isMobileGlass ? '125%' : isAppleMobile ? '145%' : '170%'})`,
-                WebkitBackdropFilter: `blur(${isMobileGlass ? '24px' : isAppleMobile ? '30px' : '38px'}) saturate(${isMobileGlass ? '125%' : isAppleMobile ? '145%' : '170%'})`,
+                backdropFilter: `blur(${isAppleLargeSurface ? '20px' : isMobileGlass ? '24px' : isAppleMobile ? '30px' : '38px'}) saturate(${isAppleLargeSurface ? '118%' : isMobileGlass ? '125%' : isAppleMobile ? '145%' : '170%'})`,
+                WebkitBackdropFilter: `blur(${isAppleLargeSurface ? '20px' : isMobileGlass ? '24px' : isAppleMobile ? '30px' : '38px'}) saturate(${isAppleLargeSurface ? '118%' : isMobileGlass ? '125%' : isAppleMobile ? '145%' : '170%'})`,
                 border: dockTrayBorder,
                 outline: dockTrayOutline,
                 boxShadow: dockTrayShadow,
@@ -4093,7 +3811,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           </div>
         )}
 
-          <input ref={bgInputRef} id={bgInputId} type="file" accept="image/*" className="hidden" onChange={handleBgChange} />
+          <input ref={bgInputRef} id={bgInputId} type="file" accept="image/*" title={language === 'ar' ? 'رفع خلفية الشاشة الرئيسية' : 'Upload Home Screen wallpaper'} aria-label={language === 'ar' ? 'رفع خلفية الشاشة الرئيسية' : 'Upload Home Screen wallpaper'} className="hidden" onChange={handleBgChange} />
 
           {/* Saved Images Picker Modal */}
           {savedImagesOpen && (

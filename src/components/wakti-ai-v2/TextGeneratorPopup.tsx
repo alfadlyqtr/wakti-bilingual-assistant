@@ -13,6 +13,7 @@ import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/integrations/supaba
 import { useTheme } from '@/providers/ThemeProvider';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import { extractSmartTextEmailParts, normalizeSmartText, readSavedSmartTexts, writeSavedSmartTexts, type SavedSmartTextItem } from '@/utils/smartTextUtils';
+import { SmartTextPrefill } from '@/utils/smartTextPrefill';
 import { emitEvent } from '@/utils/eventBus';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ interface TextGeneratorPopupProps {
   onTabChange?: (tab: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4') => void;
   renderAsPage?: boolean;
   initialTab?: 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4';
+  initialPrefill?: SmartTextPrefill | null;
 }
 
 type Mode = 'compose' | 'reply';
@@ -433,6 +435,7 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   onTabChange,
   renderAsPage = false,
   initialTab = 'compose',
+  initialPrefill = null,
 }) => {
   const [activeTab, setActiveTab_internal] = useState<Tab>((initialTab as Tab) || 'compose');
   const [mountedTabs, setMountedTabs] = useState<Record<Tab, boolean>>(() => {
@@ -607,6 +610,48 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
       }
     }
   }, [initialTab]);
+
+  useEffect(() => {
+    if (!initialPrefill) return;
+
+    if (initialPrefill.tab === 'compose') {
+      setActiveTab('compose');
+      setMode('compose');
+      if (typeof initialPrefill.topic === 'string') setTopic(initialPrefill.topic);
+      if (typeof initialPrefill.contentType === 'string' && CONTENT_TYPE_KEYS.includes(initialPrefill.contentType as ContentTypeKey)) {
+        setContentType(initialPrefill.contentType as ContentTypeKey);
+      }
+      if (typeof initialPrefill.tone === 'string' && TONE_KEYS.includes(initialPrefill.tone as ToneKey)) {
+        setTone(initialPrefill.tone as ToneKey);
+      }
+      if (typeof initialPrefill.length === 'string' && ['auto', 'very_short', 'short', 'medium', 'long', 'very_long', 'word_count'].includes(initialPrefill.length)) {
+        setLength(initialPrefill.length as 'auto' | 'very_short' | 'short' | 'medium' | 'long' | 'very_long' | 'word_count');
+      }
+      return;
+    }
+
+    if (initialPrefill.tab === 'reply') {
+      setActiveTab('reply');
+      setMode('reply');
+      if (typeof initialPrefill.originalMessage === 'string') setOriginalMessage(initialPrefill.originalMessage);
+      if (typeof initialPrefill.keyPoints === 'string') setKeyPoints(initialPrefill.keyPoints);
+      if (typeof initialPrefill.tone === 'string' && TONE_KEYS.includes(initialPrefill.tone as ToneKey)) {
+        setTone(initialPrefill.tone as ToneKey);
+      }
+      if (typeof initialPrefill.replyLength === 'string' && ['auto', 'very_short', 'short', 'medium', 'long', 'very_long', 'word_count'].includes(initialPrefill.replyLength)) {
+        setReplyLength(initialPrefill.replyLength as 'auto' | 'very_short' | 'short' | 'medium' | 'long' | 'very_long' | 'word_count');
+      }
+      return;
+    }
+
+    if (initialPrefill.tab === 'generated') {
+      setActiveTab('generated');
+      setGeneratedSubTab('current');
+      if (typeof initialPrefill.generatedText === 'string') {
+        setGeneratedText(initialPrefill.generatedText);
+      }
+    }
+  }, [initialPrefill, setActiveTab]);
 
   useEffect(() => {
     setMountedTabs((prev) => {

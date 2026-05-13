@@ -46,6 +46,29 @@ type GmailFolderCache = {
   nextPageToken: string | null;
 };
 
+const GMAIL_FOLDER_CACHE_STORAGE_KEY = 'wakti-gmail-folder-cache-v1';
+
+function readStoredFolderCache(): Record<string, GmailFolderCache> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(GMAIL_FOLDER_CACHE_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeStoredFolderCache(value: Record<string, GmailFolderCache>) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(GMAIL_FOLDER_CACHE_STORAGE_KEY, JSON.stringify(value));
+  } catch {}
+}
+
+const globalFolderCache: Record<string, GmailFolderCache> = readStoredFolderCache();
+
 async function callGmailApi(action: string, params: Record<string, unknown> = {}) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not logged in');
@@ -65,14 +88,18 @@ async function callGmailApi(action: string, params: Record<string, unknown> = {}
 }
 
 export function useGmailMessages() {
-  const [messages, setMessages] = useState<GmailMessage[]>([]);
+  const [messages, setMessages] = useState<GmailMessage[]>(() => globalFolderCache.INBOX?.messages || []);
   const [loading, setLoading] = useState(false);
-  const [nextPageToken, setNextPageToken] = useState<string | null>(null);
+  const [nextPageToken, setNextPageToken] = useState<string | null>(() => globalFolderCache.INBOX?.nextPageToken || null);
   const [labels, setLabels] = useState<GmailLabel[]>([]);
   const [activeFolder, setActiveFolder] = useState('INBOX');
-  const folderCacheRef = useRef<Record<string, GmailFolderCache>>({});
+  const folderCacheRef = useRef<Record<string, GmailFolderCache>>(globalFolderCache);
   const messageCacheRef = useRef<Record<string, GmailMessageFull>>({});
   const labelsCacheRef = useRef<GmailLabel[] | null>(null);
+
+  const hasCachedFolder = useCallback((folder = 'INBOX') => {
+    return Boolean(folderCacheRef.current[folder]);
+  }, []);
 
   const fetchMessages = useCallback(async (folder = 'INBOX', pageToken?: string, options?: { forceRefresh?: boolean; background?: boolean; quiet?: boolean }) => {
     const cacheKey = folder;
@@ -110,6 +137,7 @@ export function useGmailMessages() {
         messages: nextMessages,
         nextPageToken: data.nextPageToken || null,
       };
+      writeStoredFolderCache(folderCacheRef.current);
       return data;
     } catch (err: any) {
       if (!options?.quiet) {
@@ -164,6 +192,7 @@ export function useGmailMessages() {
         messages: nextMessages,
         nextPageToken,
       };
+      writeStoredFolderCache(folderCacheRef.current);
       delete messageCacheRef.current[messageId];
       toast.success('Email moved to trash');
       return true;
@@ -201,6 +230,7 @@ export function useGmailMessages() {
     nextPageToken,
     labels,
     activeFolder,
+    hasCachedFolder,
     fetchMessages,
     fetchMessage,
     sendMessage,

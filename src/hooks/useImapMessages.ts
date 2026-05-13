@@ -105,6 +105,10 @@ export function useImapMessages(connectionId: string) {
 
   const getFolderCacheKey = useCallback((folder: ImapFolderName) => `${connectionId}:${folder}`, [connectionId]);
   const getMessageCacheKey = useCallback((folder: string, uid: number) => `${connectionId}:${folder}:${uid}`, [connectionId]);
+  const hasCachedFolder = useCallback((folder: ImapFolderName = 'INBOX') => {
+    if (!connectionId) return false;
+    return Boolean(folderCacheRef.current[getFolderCacheKey(folder)]);
+  }, [connectionId, getFolderCacheKey]);
 
   useEffect(() => {
     if (!connectionId) {
@@ -317,6 +321,7 @@ export function useImapMessages(connectionId: string) {
     hasMore,
     activeFolder,
     mailboxInfo,
+    hasCachedFolder,
     fetchMessages,
     fetchMessage,
     sendMessage,
