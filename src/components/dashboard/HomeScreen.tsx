@@ -2307,7 +2307,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
   return (
     <div
       ref={setNodeRef}
-      className="flex flex-col items-center justify-center gap-0.5 select-none cursor-pointer relative"
+      className="flex flex-col items-center justify-start gap-0.5 select-none cursor-pointer relative pt-1.5"
       style={{
         gridArea,
         transform: isDragging ? CSS.Transform.toString(transform) : undefined,
@@ -2345,7 +2345,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
       )}
       <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
       <span
-        className="text-[11px] font-bold text-center leading-tight mt-1.5 text-white px-2 py-0.5 rounded-md"
+        className="text-[11px] font-bold text-center leading-tight mt-1 text-white px-2 py-0.5 rounded-md"
         style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.14) 100%)', backdropFilter: 'blur(18px) saturate(175%)', WebkitBackdropFilter: 'blur(18px) saturate(175%)', border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.22)', textShadow: '0 1px 3px rgba(0,0,0,0.8)', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
       >
         {name}
@@ -3568,8 +3568,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           {/* ── Unified iPhone-style grid: 3 big rows × 2 big cols = 6 rows × 4 cols ── */}
           <div
             ref={pageViewportRef}
-            className="flex-1 min-h-0 px-3 pb-2 overflow-hidden relative"
-            style={{ opacity: editMode ? 0.6 : 1, transition: 'opacity 0.2s ease', touchAction: 'none', overscrollBehavior: 'none' }}
+            className="flex-1 min-h-0 px-3 overflow-hidden relative"
+            style={{ opacity: editMode ? 0.6 : 1, transition: 'opacity 0.2s ease', touchAction: 'none', overscrollBehavior: 'none', paddingBottom: isAppleLargeSurface ? 26 : 8 }}
             onTouchStart={handlePageTouchStart}
             onTouchEnd={handlePageTouchEnd}
           >
@@ -3703,7 +3703,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           {/* ── DOCK — always at very bottom ── */}
           <div className="mt-auto flex-none mx-2 md:mx-4 lg:mx-6 pt-1 hs-dock-bottom">
             <div
-              className="relative flex items-center justify-around w-full rounded-[2.75rem] py-3 px-5 overflow-hidden"
+              className="relative flex items-center justify-around w-full rounded-[2.75rem] px-5 overflow-visible"
               style={{
                 background: dockTrayBackground,
                 backdropFilter: `blur(${isAppleLargeSurface ? '22px' : isMobileGlass ? '24px' : isAppleMobile ? '30px' : '38px'}) saturate(${isAppleLargeSurface ? '126%' : isMobileGlass ? '125%' : isAppleMobile ? '145%' : '170%'})`,
@@ -3711,24 +3711,26 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                 border: dockTrayBorder,
                 outline: dockTrayOutline,
                 boxShadow: dockTrayShadow,
+                paddingTop: isAppleLargeSurface ? '14px' : '12px',
+                paddingBottom: isAppleLargeSurface ? '16px' : '12px',
               }}
             >
               <div
-                className="absolute inset-0 pointer-events-none"
+                className="absolute inset-0 pointer-events-none overflow-hidden"
                 style={{
                   borderRadius: 'inherit',
                   background: dockTopSheen,
                 }}
               />
               <div
-                className="absolute inset-0 pointer-events-none"
+                className="absolute inset-0 pointer-events-none overflow-hidden"
                 style={{
                   borderRadius: 'inherit',
                   background: dockBottomTint,
                 }}
               />
               <div
-                className="absolute inset-0 pointer-events-none"
+                className="absolute inset-0 pointer-events-none overflow-hidden"
                 style={{
                   borderRadius: 'inherit',
                   background: 'radial-gradient(circle at 12% 18%, rgba(255,255,255,0.34) 0%, transparent 28%), radial-gradient(circle at 88% 18%, rgba(255,255,255,0.28) 0%, transparent 26%), radial-gradient(circle at 50% 115%, rgba(255,255,255,0.18) 0%, transparent 34%)',

@@ -155,12 +155,12 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
   const normalizedUsername = username.trim();
   const showUsernameMismatch = Boolean(normalizedEmail && normalizedUsername && normalizedEmail !== normalizedUsername);
   const friendlyError = error.includes('IMAP timeout waiting for A0001') ? t.timeoutHint : error;
-  const lightFieldClass = 'border-[#060541]/12 bg-white text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] placeholder:text-[#060541]/35 focus-visible:ring-[#060541]/20 dark:border-input dark:bg-background dark:text-foreground';
-  const lightOutlineButtonClass = 'border-[#060541]/12 bg-white text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.05)] hover:bg-[#f7f8ff] hover:text-[#060541] dark:border-border dark:bg-background dark:text-foreground dark:hover:bg-accent';
+  const lightFieldClass = 'border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(249,250,255,0.98))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.05)] placeholder:text-[#060541]/35 focus-visible:border-[#060541]/24 focus-visible:ring-[#060541]/20 dark:border-input dark:bg-background dark:text-foreground dark:shadow-none';
+  const lightOutlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-border dark:bg-background dark:text-foreground dark:hover:bg-accent';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(247,248,255,0.96))] shadow-[0_24px_70px_rgba(6,5,65,0.12)] dark:border-border dark:bg-background dark:shadow-2xl">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto border border-[#060541]/16 bg-[radial-gradient(circle_at_top,rgba(233,206,176,0.16),transparent_26%),linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] shadow-[0_28px_80px_rgba(6,5,65,0.14)] ring-1 ring-[#060541]/5 dark:border-border dark:bg-background dark:shadow-2xl dark:ring-0">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-[#E9CEB0]" />
@@ -231,8 +231,8 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
 
           {/* Advanced fields */}
           {showAdvanced && (
-            <div className="space-y-3 rounded-xl border border-[#060541]/10 bg-white/70 p-4 dark:border-border/60 dark:bg-muted/30">
-              <div className="space-y-2 rounded-xl border border-[#060541]/10 bg-white p-3 shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
+            <div className="space-y-3 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(246,248,255,0.92))] p-4 shadow-[0_10px_24px_rgba(6,5,65,0.06)] ring-1 ring-[#060541]/5 dark:border-border/60 dark:bg-muted/30 dark:shadow-none dark:ring-0">
+              <div className="space-y-2 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] p-3 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.loginSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.loginHint}</div>
@@ -249,7 +249,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 ) : null}
               </div>
 
-              <div className="space-y-3 rounded-xl border border-[#060541]/10 bg-white p-3 shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
+              <div className="space-y-3 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] p-3 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.incomingSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.incomingHint}</div>
@@ -275,7 +275,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 </label>
               </div>
 
-              <div className="space-y-3 rounded-xl border border-[#060541]/10 bg-white p-3 shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
+              <div className="space-y-3 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] p-3 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.outgoingSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.outgoingHint}</div>

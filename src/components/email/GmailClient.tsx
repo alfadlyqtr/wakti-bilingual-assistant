@@ -6,7 +6,7 @@ import { MailComposer, MailComposerSubmitInput } from '@/components/email/MailCo
 import { EmailAiAssistant } from '@/components/email/EmailAiAssistant';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
-  ChevronDown, Reply, Trash2, MailOpen,
+  ChevronDown, Reply, Trash2, MailOpen, Search, X,
 } from 'lucide-react';
 
 function GmailIcon({ size = 16 }: { size?: number }) {
@@ -42,6 +42,14 @@ function extractName(emailStr: string): string {
   return emailStr.replace(/<.*>/, '').trim() || emailStr;
 }
 
+function extractEmailAddress(emailStr: string): string {
+  if (!emailStr) return '';
+  const bracketMatch = emailStr.match(/<([^>]+)>/);
+  if (bracketMatch) return bracketMatch[1].trim();
+  const plainMatch = emailStr.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return plainMatch ? plainMatch[0] : emailStr.trim();
+}
+
 interface MessageRowProps {
   message: GmailMessage;
   activeFolder: string;
@@ -56,9 +64,9 @@ function MessageRow({ message, activeFolder, deleting, onOpen, onDelete }: Messa
     : extractName(message.from) || message.from;
 
   return (
-    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[#f7f8ff] sm:px-5 sm:py-3.5 dark:hover:bg-accent/50">
+    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[linear-gradient(180deg,rgba(243,245,255,0.96),rgba(239,242,255,0.96))] sm:px-5 sm:py-3.5 dark:hover:bg-accent/50">
       <div className="pt-1.5">
-        <div className={`h-2.5 w-2.5 rounded-full ${message.isUnread ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.45)]' : 'bg-[#060541]/12 dark:bg-muted-foreground/20'}`} />
+        <div className={`h-2.5 w-2.5 rounded-full ${message.isUnread ? 'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)]' : 'bg-[#060541]/14 dark:bg-muted-foreground/20'}`} />
       </div>
 
       <button onClick={onOpen} className="min-w-0 flex-1 text-left">
@@ -82,7 +90,7 @@ function MessageRow({ message, activeFolder, deleting, onOpen, onDelete }: Messa
         title="Delete"
         onClick={onDelete}
         disabled={deleting}
-        className="mt-0.5 shrink-0 rounded-xl p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-red-500 disabled:opacity-60"
+        className="mt-0.5 shrink-0 rounded-xl p-2 text-muted-foreground transition-colors hover:bg-[#eef2ff] hover:text-red-500 disabled:opacity-60 dark:hover:bg-accent"
       >
         {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
       </button>
@@ -96,46 +104,83 @@ interface MessageViewProps {
   onReply: () => void;
   onDelete: () => void;
   deleting: boolean;
+  language?: string;
+  canReply?: boolean;
   aiPanel?: React.ReactNode;
 }
 
-function MessageView({ message, onBack, onReply, onDelete, deleting, aiPanel }: MessageViewProps) {
+function MessageView({ message, onBack, onReply, onDelete, deleting, language = 'en', canReply = true, aiPanel }: MessageViewProps) {
+  const senderName = extractName(message.from) || message.from || '—';
+  const senderEmail = extractEmailAddress(message.from) || message.from || '—';
+  const backLabel = language === 'ar' ? 'رجوع' : 'Back';
+  const replyLabel = language === 'ar' ? 'رد' : 'Reply';
+  const senderLabel = language === 'ar' ? 'المرسل' : 'Sender';
+  const emailLabel = language === 'ar' ? 'البريد الإلكتروني' : 'Email';
+  const toLabel = language === 'ar' ? 'إلى' : 'To';
+  const dateLabel = language === 'ar' ? 'التاريخ' : 'Date';
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-2 px-1 pb-3 border-b border-border/40">
-        <button title="Back" onClick={onBack} className="p-1.5 rounded-lg transition-colors hover:bg-accent/70">
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <span className="text-sm font-medium truncate flex-1">{message.subject}</span>
-        <button title="Reply" onClick={onReply} className="p-1.5 rounded-lg transition-colors hover:bg-accent/70 text-blue-500">
-          <Reply className="h-4 w-4" />
-        </button>
-        <button title="Delete" onClick={onDelete} disabled={deleting} className="p-1.5 rounded-lg transition-colors hover:bg-accent/70 text-red-500 disabled:opacity-60">
-          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-        </button>
-      </div>
-      <div className="py-3 border-b border-border/40 space-y-1">
-        <div className="text-sm font-semibold">{extractName(message.from)}</div>
-        <div className="text-xs text-muted-foreground">{message.from}</div>
-        <div className="text-xs text-muted-foreground">To: {message.to}</div>
-        <div className="text-xs text-muted-foreground">{formatDate(message.date)}</div>
-      </div>
-      {aiPanel ? (
-        <div className="pointer-events-none sticky top-0 z-10 flex justify-end px-1 py-3">
-          <div className="pointer-events-auto">{aiPanel}</div>
+      <div className="border-b border-[#060541]/10 pb-4 dark:border-border/40">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Button type="button" variant="outline" onClick={onBack} className="gap-2 rounded-xl border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.05)] hover:bg-[#eef2ff] dark:border-border/70 dark:bg-background/70 dark:text-foreground dark:shadow-none dark:hover:bg-accent">
+            <ChevronLeft className="h-4 w-4" />
+            {backLabel}
+          </Button>
+          <div className="flex items-center gap-2">
+            {canReply ? (
+              <Button type="button" variant="outline" onClick={onReply} className="gap-2 rounded-xl border-blue-500/20 bg-blue-50 text-blue-600 shadow-[0_4px_12px_rgba(59,130,246,0.08)] hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:shadow-none dark:hover:bg-blue-500/20">
+                <Reply className="h-4 w-4" />
+                {replyLabel}
+              </Button>
+            ) : null}
+            <button title="Delete" aria-label="Delete" onClick={onDelete} disabled={deleting} className="rounded-xl p-2 text-red-500 transition-colors hover:bg-red-50 disabled:opacity-60 dark:hover:bg-red-500/10">
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
-      ) : null}
-      <div className="flex-1 overflow-y-auto pt-3">
-        {message.body.html ? (
-          <div
-            className="prose prose-sm max-w-none break-words dark:prose-invert"
-            dangerouslySetInnerHTML={{ __html: message.body.html }}
-          />
-        ) : (
-          <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-            {message.body.text || message.snippet}
-          </pre>
-        )}
+        <div className="mt-4">
+          <h2 className="text-base font-semibold text-foreground break-words">{message.subject || '(no subject)'}</h2>
+        </div>
+      </div>
+      <div className="mt-4 rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,249,255,0.96))] p-3 shadow-[0_8px_24px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/40 dark:shadow-none">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="min-w-0 rounded-xl border border-[#060541]/10 bg-white/75 px-3 py-2 dark:border-border/50 dark:bg-background/40">
+            <div className="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{senderLabel}</div>
+            <div className="mt-1 text-left truncate text-sm font-semibold text-foreground">{senderName}</div>
+          </div>
+          <div className="min-w-0 rounded-xl border border-[#060541]/10 bg-white/75 px-3 py-2 dark:border-border/50 dark:bg-background/40">
+            <div className="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{emailLabel}</div>
+            <div className="mt-1 text-left truncate text-sm text-foreground/85">{senderEmail}</div>
+          </div>
+          <div className="min-w-0 rounded-xl border border-[#060541]/10 bg-white/75 px-3 py-2 dark:border-border/50 dark:bg-background/40 sm:col-span-2 xl:col-span-1">
+            <div className="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{toLabel}</div>
+            <div className="mt-1 text-left truncate text-sm text-foreground/85">{message.to || '—'}</div>
+          </div>
+          <div className="min-w-0 rounded-xl border border-[#060541]/10 bg-white/75 px-3 py-2 dark:border-border/50 dark:bg-background/40">
+            <div className="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{dateLabel}</div>
+            <div className="mt-1 text-left truncate text-sm text-foreground/85">{formatDate(message.date)}</div>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0">
+        <div className="h-full overflow-y-auto pt-4 pr-1">
+          {aiPanel ? (
+            <div className="pointer-events-none sticky top-4 z-20 -mb-16 flex h-0 justify-end pr-2">
+              <div className="pointer-events-auto">{aiPanel}</div>
+            </div>
+          ) : null}
+          {message.body.html ? (
+            <div
+              className="email-message-html text-sm text-foreground"
+              dangerouslySetInnerHTML={{ __html: message.body.html }}
+            />
+          ) : (
+            <div className="email-message-plain text-foreground">
+              {message.body.text || message.snippet}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -166,6 +211,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
   const [selectedMessage, setSelectedMessage] = useState<GmailMessageFull | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [showCompose, setShowCompose] = useState(false);
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string; threadId: string } | undefined>();
   const [composerInitialBody, setComposerInitialBody] = useState('');
@@ -176,17 +222,32 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
   const connectedLabel = language === 'ar' ? 'متصل' : 'Connected';
   const composeLabel = language === 'ar' ? 'إنشاء' : 'Compose';
   const refreshLabel = language === 'ar' ? 'تحديث' : 'Refresh';
+  const searchPlaceholder = language === 'ar' ? 'ابحث في المرسل أو الموضوع' : 'Search sender or subject';
+  const noSearchResultsLabel = language === 'ar' ? 'لا توجد نتائج مطابقة' : 'No matching results';
   const activeFolderLabel = gmail.activeFolder === 'INBOX'
     ? 'Inbox'
     : gmail.activeFolder === 'SENT'
       ? 'Sent'
       : gmail.activeFolder;
   const mailboxLine = emailAddress ? `${language === 'ar' ? 'الحساب' : 'Account'}: ${emailAddress}` : 'Gmail account';
+  const normalizedSearch = searchQuery.trim().toLowerCase();
   const hasInboxCache = gmail.hasCachedFolder('INBOX');
-  const surfaceCardClass = 'rounded-[22px] border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] p-3 text-[#060541] shadow-[0_10px_24px_rgba(6,5,65,0.05)] sm:p-4 dark:border-border dark:bg-card/95 dark:text-card-foreground dark:shadow-sm';
-  const chipClass = 'rounded-full border border-[#060541]/10 bg-white px-3 py-1 text-[11px] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/70 dark:bg-background/70 dark:shadow-none';
-  const iconButtonClass = 'rounded-xl border border-[#060541]/12 bg-white p-2.5 text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.05)] transition-colors hover:bg-[#f7f8ff] dark:border-border/70 dark:bg-background/70 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-accent-foreground';
-  const folderButtonBaseClass = 'border border-[#060541]/10 bg-white text-[#060541]/72 shadow-[0_1px_2px_rgba(6,5,65,0.04)] hover:bg-[#f7f8ff] hover:text-[#060541] dark:border-border/70 dark:bg-background/70 dark:text-muted-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-accent-foreground';
+  const surfaceCardClass = 'rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] p-3 text-[#060541] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 sm:p-4 dark:border-border dark:bg-card/95 dark:text-card-foreground dark:shadow-sm dark:ring-0';
+  const chipClass = 'rounded-full border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] px-3 py-1 text-[11px] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/70 dark:bg-background/70 dark:shadow-none';
+  const iconButtonClass = 'rounded-xl border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-2.5 text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] transition-colors hover:bg-[#f3f5ff] dark:border-border/70 dark:bg-background/70 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-accent-foreground';
+  const folderButtonBaseClass = 'border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] text-[#060541]/76 shadow-[0_4px_12px_rgba(6,5,65,0.05)] hover:border-[#060541]/24 hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-border/70 dark:bg-background/70 dark:text-muted-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-accent-foreground';
+  const filteredMessages = useMemo(() => {
+    if (!normalizedSearch) return gmail.messages;
+
+    return gmail.messages.filter((message) => {
+      const searchableText = [message.from, message.to, message.subject]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchableText.includes(normalizedSearch);
+    });
+  }, [gmail.messages, normalizedSearch]);
 
   useEffect(() => {
     if (connected) {
@@ -331,7 +392,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
   if (!connected) {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
-        <div className="rounded-full border border-border/60 bg-muted/40 p-4">
+        <div className="rounded-full border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-4 shadow-[0_10px_24px_rgba(6,5,65,0.06)] dark:border-border/60 dark:bg-muted/40 dark:shadow-none">
           <GmailIcon size={32} />
         </div>
         <div>
@@ -352,7 +413,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#060541]/10 bg-white shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/70 dark:bg-background/70 dark:shadow-none">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/70 dark:bg-background/70 dark:shadow-none">
                 <GmailIcon size={18} />
               </div>
               <div className="min-w-0 flex-1">
@@ -374,7 +435,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                 {activeFolderLabel}
               </div>
               <div className={`${chipClass} text-muted-foreground`}>
-                {gmail.messages.length} shown
+                {filteredMessages.length} shown
               </div>
             </div>
           </div>
@@ -424,12 +485,12 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
               <ChevronDown className="h-3 w-3" />
             </button>
             {showFolders && (
-              <div className="absolute left-0 top-full z-20 mt-1 min-w-[140px] overflow-hidden rounded-xl border border-[#060541]/10 bg-white text-[#060541] shadow-[0_18px_40px_rgba(6,5,65,0.12)] dark:border-border dark:bg-popover dark:text-popover-foreground dark:shadow-xl">
+              <div className="absolute left-0 top-full z-20 mt-1 min-w-[150px] overflow-hidden rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] text-[#060541] shadow-[0_24px_50px_rgba(6,5,65,0.14)] ring-1 ring-[#060541]/5 dark:border-border dark:bg-popover dark:text-popover-foreground dark:shadow-xl dark:ring-0">
                 {customFolders.map(f => (
                   <button
                     key={f.id}
                     onClick={() => handleFolderSwitch(f.id)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-[#f7f8ff] dark:hover:bg-accent"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-[#eef2ff] dark:hover:bg-accent"
                   >
                     <MailOpen className="h-3 w-3 text-muted-foreground" />
                     {f.name}
@@ -444,7 +505,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
         )}
       </div>
 
-      <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-[#060541]/10 bg-white text-[#060541] shadow-[0_10px_24px_rgba(6,5,65,0.05)] dark:border-border dark:bg-card/95 dark:text-card-foreground dark:shadow-sm">
+      <div className="min-h-[360px] overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] text-[#060541] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-border dark:bg-card/95 dark:text-card-foreground dark:shadow-sm dark:ring-0">
         {selectedMessage ? (
           <div className="h-full p-4 sm:p-5">
             {loadingMessage ? (
@@ -458,6 +519,8 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                 onReply={handleReply}
                 onDelete={handleDeleteMessage}
                 deleting={deletingMessage}
+                language={language}
+                canReply={gmail.activeFolder !== 'SENT'}
                 aiPanel={selectedMessageAiSource ? (
                   <EmailAiAssistant
                     mode="message"
@@ -474,6 +537,29 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
           </div>
         ) : (
           <>
+            <div className="border-b border-[#060541]/10 px-4 py-3 dark:border-border/50 sm:px-5">
+              <div className="flex items-center gap-2 rounded-2xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] px-3 py-2.5 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/70 dark:bg-background/70 dark:shadow-none">
+                <Search className="h-4 w-4 shrink-0 text-[#060541]/45 dark:text-muted-foreground" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="h-5 w-full bg-transparent text-sm text-[#060541] outline-none placeholder:text-[#060541]/36 dark:text-foreground dark:placeholder:text-muted-foreground"
+                />
+                {searchQuery ? (
+                  <button
+                    type="button"
+                    title={language === 'ar' ? 'مسح البحث' : 'Clear search'}
+                    aria-label={language === 'ar' ? 'مسح البحث' : 'Clear search'}
+                    onClick={() => setSearchQuery('')}
+                    className="rounded-full p-1 text-[#060541]/55 transition-colors hover:bg-[#eef2ff] hover:text-[#060541] dark:text-muted-foreground dark:hover:bg-accent dark:hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+              </div>
+            </div>
             {gmail.loading && gmail.messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -484,9 +570,14 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                 <Inbox className="h-8 w-8 text-muted-foreground/50" />
                 <span className="text-sm text-muted-foreground">No messages in {gmail.activeFolder === 'INBOX' ? 'Inbox' : gmail.activeFolder === 'SENT' ? 'Sent' : gmail.activeFolder}</span>
               </div>
+            ) : filteredMessages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-2 text-center px-4">
+                <Search className="h-8 w-8 text-muted-foreground/50" />
+                <span className="text-sm text-muted-foreground">{noSearchResultsLabel}</span>
+              </div>
             ) : (
-              <div className="divide-y divide-[#060541]/8 dark:divide-border">
-                {gmail.messages.map(msg => (
+              <div className="divide-y divide-[#060541]/10 dark:divide-border">
+                {filteredMessages.map(msg => (
                   <MessageRow
                     key={msg.id}
                     message={msg}
@@ -503,7 +594,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                       size="sm"
                       onClick={gmail.loadMore}
                       disabled={gmail.loading}
-                      className="text-xs"
+                      className="border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-xs text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.05)] hover:bg-[#f3f5ff] dark:border-border dark:bg-background dark:text-foreground dark:shadow-none"
                     >
                       {gmail.loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                       Load more

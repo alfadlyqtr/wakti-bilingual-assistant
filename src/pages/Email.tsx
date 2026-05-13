@@ -6,7 +6,7 @@ import { AppleLogo } from '@/components/calendar/AppleLogo';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mail, Settings2, XCircle, Plug, RefreshCw, Trash2, Star, Loader2 } from 'lucide-react';
+import { Mail, Settings2, XCircle, Plug, RefreshCw, Trash2, Star, Loader2, Search } from 'lucide-react';
 import { GmailClient } from '@/components/email/GmailClient';
 import { CustomMailClient } from '@/components/email/CustomMailClient';
 
@@ -29,9 +29,9 @@ export default function Email() {
   const [activeTab, setActiveTab] = useState<EmailTab>('settings');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const pageCardClass = 'rounded-[24px] border border-[#060541]/10 bg-white/96 shadow-[0_12px_32px_rgba(6,5,65,0.06)] dark:border-border dark:bg-card dark:shadow-sm';
-  const panelClass = 'rounded-2xl border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] shadow-[0_6px_18px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/30 dark:shadow-none';
-  const outlineButtonClass = 'border-[#060541]/12 bg-white text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.05)] hover:bg-[#f7f8ff] hover:text-[#060541] dark:border-border dark:bg-background dark:text-foreground dark:hover:bg-accent';
+  const pageCardClass = 'rounded-[26px] border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,250,255,0.98))] shadow-[0_18px_48px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-border dark:bg-card dark:shadow-sm dark:ring-0';
+  const panelClass = 'rounded-[22px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] shadow-[0_10px_28px_rgba(6,5,65,0.07)] ring-1 ring-[#060541]/5 dark:border-border/60 dark:bg-background/30 dark:shadow-none dark:ring-0';
+  const outlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-border dark:bg-background dark:text-foreground dark:hover:bg-accent';
 
   const customConnections = emailConn.imap.connections;
   const gmailConnected = emailConn.gmail.connection.connected;
@@ -79,6 +79,8 @@ export default function Email() {
     needsAttention: language === 'ar' ? 'تحتاج مراجعة' : 'Needs attention',
     verifiedMailbox: language === 'ar' ? 'تم التحقق من الصندوق' : 'Mailbox verified',
     inboxProof: language === 'ar' ? 'صندوق الوارد' : 'Inbox',
+    searchPlaceholder: language === 'ar' ? 'ابحث في المرسل أو الموضوع' : 'Search sender or subject',
+    appleSearchHint: language === 'ar' ? 'سيعمل البحث هنا عندما يصبح Apple Mail متاحًا.' : 'Search will work here once Apple Mail is available.',
   }), [language]);
 
   const getHealthBadge = (health?: ImapConnectionHealth) => {
@@ -167,7 +169,7 @@ export default function Email() {
               </Button>
             </div>
           </div>
-          <div className="overflow-hidden rounded-[22px] border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] shadow-[0_10px_24px_rgba(6,5,65,0.05)] divide-y divide-[#060541]/8 dark:border-border/60 dark:bg-background/30 dark:divide-border/50 dark:shadow-none">
+          <div className="overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 divide-y divide-[#060541]/10 dark:border-border/60 dark:bg-background/30 dark:divide-border/50 dark:shadow-none dark:ring-0">
             <div className="flex items-center justify-between gap-3 px-4 py-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -241,7 +243,7 @@ export default function Email() {
               </div>
 
               {customConnections.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[#060541]/18 bg-white/70 p-5 text-sm text-muted-foreground dark:border-border/70 dark:bg-transparent">
+                <div className="rounded-xl border border-dashed border-[#060541]/24 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,248,255,0.9))] p-5 text-sm text-muted-foreground dark:border-border/70 dark:bg-transparent">
                   {t.noCustomMailHint}
                 </div>
               ) : (
@@ -320,12 +322,28 @@ export default function Email() {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
         </div>
-        <div className="rounded-xl border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] p-4 shadow-[0_6px_18px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/40 dark:shadow-none">
+        <div className="overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-border/60 dark:bg-background/40 dark:shadow-none dark:ring-0">
+          <div className="border-b border-[#060541]/10 px-4 py-3 dark:border-border/50 sm:px-5">
+            <div className="flex items-center gap-2 rounded-2xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] px-3 py-2.5 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/70 dark:bg-background/70 dark:shadow-none">
+              <Search className="h-4 w-4 shrink-0 text-[#060541]/45 dark:text-muted-foreground" />
+              <input
+                type="text"
+                value=""
+                readOnly
+                disabled
+                placeholder={t.searchPlaceholder}
+                className="h-5 w-full bg-transparent text-sm text-[#060541]/60 outline-none placeholder:text-[#060541]/36 disabled:cursor-not-allowed dark:text-foreground/70 dark:placeholder:text-muted-foreground"
+              />
+            </div>
+          </div>
+          <div className="p-4 sm:p-5">
           <div className="flex items-center gap-2 text-base font-medium">
             <XCircle className="h-5 w-5 text-red-400" />
             {t.appleUnavailable}
           </div>
           <div className="mt-2 text-sm text-muted-foreground">{t.appleUnavailableHint}</div>
+          <div className="mt-3 text-xs text-muted-foreground">{t.appleSearchHint}</div>
+          </div>
         </div>
       </CardContent>
     </Card>
@@ -344,7 +362,7 @@ export default function Email() {
 
   return (
     <div className="w-full h-full">
-      <div className="mx-auto w-full max-w-none px-3 pb-6 pt-2 md:px-6 md:pt-4 lg:px-8">
+      <div className="mx-auto w-full max-w-none bg-[radial-gradient(circle_at_top,rgba(233,206,176,0.16),transparent_28%),linear-gradient(180deg,rgba(252,254,253,1),rgba(245,247,255,0.95))] px-3 pb-6 pt-2 md:px-6 md:pt-4 lg:px-8 dark:bg-none">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
             <h1 className="text-lg font-semibold md:text-xl">{t.title}</h1>
@@ -358,13 +376,13 @@ export default function Email() {
         </div>
 
         <div className="mb-3">
-          <div className="grid grid-cols-4 gap-1.5 rounded-[24px] border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] p-1.5 shadow-[0_10px_24px_rgba(6,5,65,0.06)] dark:border-border/70 dark:bg-white/5 dark:shadow-sm">
+          <div className="grid grid-cols-4 gap-1.5 rounded-[26px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] p-1.5 shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-border/70 dark:bg-white/5 dark:shadow-sm dark:ring-0">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex min-h-[44px] items-center justify-center gap-2 rounded-[18px] border px-2 py-2 text-[11px] font-medium transition-all md:text-sm ${activeTab === tab.key ? 'border-[#060541] bg-[#060541] text-white shadow-[0_12px_24px_rgba(6,5,65,0.26)] ring-1 ring-[#060541]/35' : 'border-[#060541]/10 bg-white text-[#060541]/88 shadow-[0_1px_2px_rgba(6,5,65,0.05)] hover:bg-[#f7f8ff] dark:border-border dark:bg-white/5 dark:text-foreground dark:shadow-sm dark:hover:bg-white/10'}`}
+                className={`flex min-h-[46px] items-center justify-center gap-2 rounded-[18px] border px-2 py-2 text-[11px] font-medium transition-all md:text-sm ${activeTab === tab.key ? 'border-[#060541] bg-[#060541] text-white shadow-[0_14px_28px_rgba(6,5,65,0.3)] ring-1 ring-[#060541]/35' : 'border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] text-[#060541]/88 shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:border-[#060541]/22 hover:bg-[#f3f5ff] dark:border-border dark:bg-white/5 dark:text-foreground dark:shadow-sm dark:hover:bg-white/10'}`}
               >
                 <span className="flex items-center gap-1">{tab.icon}</span>
                 <span>{tab.label}</span>

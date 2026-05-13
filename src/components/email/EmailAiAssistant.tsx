@@ -200,7 +200,7 @@ export function EmailAiAssistant({
 
   if (variant === 'floating') {
     return (
-      <div className="flex flex-col items-center gap-1.5">
+      <div className="relative">
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <button
@@ -323,7 +323,6 @@ export function EmailAiAssistant({
             </div>
           </PopoverContent>
         </Popover>
-        <div className="text-[11px] font-semibold tracking-[0.02em] text-foreground/85">{lang === 'ar' ? 'Wakti AI' : 'Wakti AI'}</div>
       </div>
     );
   }
