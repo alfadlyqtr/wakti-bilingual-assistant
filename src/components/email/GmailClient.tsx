@@ -56,9 +56,9 @@ function MessageRow({ message, activeFolder, deleting, onOpen, onDelete }: Messa
     : extractName(message.from) || message.from;
 
   return (
-    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/50 sm:px-5 sm:py-3.5">
+    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[#f7f8ff] sm:px-5 sm:py-3.5 dark:hover:bg-accent/50">
       <div className="pt-1.5">
-        <div className={`h-2.5 w-2.5 rounded-full ${message.isUnread ? 'bg-blue-500' : 'bg-muted-foreground/20'}`} />
+        <div className={`h-2.5 w-2.5 rounded-full ${message.isUnread ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.45)]' : 'bg-[#060541]/12 dark:bg-muted-foreground/20'}`} />
       </div>
 
       <button onClick={onOpen} className="min-w-0 flex-1 text-left">
@@ -183,6 +183,10 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
       : gmail.activeFolder;
   const mailboxLine = emailAddress ? `${language === 'ar' ? 'الحساب' : 'Account'}: ${emailAddress}` : 'Gmail account';
   const hasInboxCache = gmail.hasCachedFolder('INBOX');
+  const surfaceCardClass = 'rounded-[22px] border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] p-3 text-[#060541] shadow-[0_10px_24px_rgba(6,5,65,0.05)] sm:p-4 dark:border-border dark:bg-card/95 dark:text-card-foreground dark:shadow-sm';
+  const chipClass = 'rounded-full border border-[#060541]/10 bg-white px-3 py-1 text-[11px] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/70 dark:bg-background/70 dark:shadow-none';
+  const iconButtonClass = 'rounded-xl border border-[#060541]/12 bg-white p-2.5 text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.05)] transition-colors hover:bg-[#f7f8ff] dark:border-border/70 dark:bg-background/70 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-accent-foreground';
+  const folderButtonBaseClass = 'border border-[#060541]/10 bg-white text-[#060541]/72 shadow-[0_1px_2px_rgba(6,5,65,0.04)] hover:bg-[#f7f8ff] hover:text-[#060541] dark:border-border/70 dark:bg-background/70 dark:text-muted-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-accent-foreground';
 
   useEffect(() => {
     if (connected) {
@@ -344,11 +348,11 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="rounded-[22px] border border-border bg-card/95 p-3 text-card-foreground shadow-sm sm:p-4">
+      <div className={surfaceCardClass}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-background/70">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#060541]/10 bg-white shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/70 dark:bg-background/70 dark:shadow-none">
                 <GmailIcon size={18} />
               </div>
               <div className="min-w-0 flex-1">
@@ -362,14 +366,14 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
 
             <div className="mt-3 flex flex-wrap gap-2">
               {emailAddress ? (
-                <div className="max-w-full rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground">
+                <div className={`${chipClass} max-w-full text-muted-foreground`}>
                   <span className="block max-w-[220px] truncate sm:max-w-[280px]">{emailAddress}</span>
                 </div>
               ) : null}
-              <div className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-foreground/80">
+              <div className={`${chipClass} text-foreground/80`}>
                 {activeFolderLabel}
               </div>
-              <div className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground">
+              <div className={`${chipClass} text-muted-foreground`}>
                 {gmail.messages.length} shown
               </div>
             </div>
@@ -378,7 +382,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
           <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
             <button
               onClick={handleRefresh}
-              className="rounded-xl border border-border/70 bg-background/70 p-2.5 text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={iconButtonClass}
               title={refreshLabel}
             >
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -403,7 +407,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
             className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-medium transition-all ${
               gmail.activeFolder === f.id
                 ? 'bg-blue-600 text-white shadow-sm'
-                : 'border border-border/70 bg-background/70 text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                : folderButtonBaseClass
             }`}
           >
             {f.icon}
@@ -414,18 +418,18 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
           <div className="relative">
             <button
               onClick={() => setShowFolders(v => !v)}
-              className="flex items-center gap-1 rounded-full border border-border/70 bg-background/70 px-3.5 py-2 text-xs font-medium text-muted-foreground transition-all hover:bg-accent hover:text-accent-foreground"
+              className={`flex items-center gap-1 rounded-full px-3.5 py-2 text-xs font-medium transition-all ${folderButtonBaseClass}`}
             >
               More
               <ChevronDown className="h-3 w-3" />
             </button>
             {showFolders && (
-              <div className="absolute left-0 top-full z-20 mt-1 min-w-[140px] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl">
+              <div className="absolute left-0 top-full z-20 mt-1 min-w-[140px] overflow-hidden rounded-xl border border-[#060541]/10 bg-white text-[#060541] shadow-[0_18px_40px_rgba(6,5,65,0.12)] dark:border-border dark:bg-popover dark:text-popover-foreground dark:shadow-xl">
                 {customFolders.map(f => (
                   <button
                     key={f.id}
                     onClick={() => handleFolderSwitch(f.id)}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-accent"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors hover:bg-[#f7f8ff] dark:hover:bg-accent"
                   >
                     <MailOpen className="h-3 w-3 text-muted-foreground" />
                     {f.name}
@@ -440,7 +444,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
         )}
       </div>
 
-      <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-border bg-card/95 text-card-foreground shadow-sm">
+      <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-[#060541]/10 bg-white text-[#060541] shadow-[0_10px_24px_rgba(6,5,65,0.05)] dark:border-border dark:bg-card/95 dark:text-card-foreground dark:shadow-sm">
         {selectedMessage ? (
           <div className="h-full p-4 sm:p-5">
             {loadingMessage ? (
@@ -481,7 +485,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                 <span className="text-sm text-muted-foreground">No messages in {gmail.activeFolder === 'INBOX' ? 'Inbox' : gmail.activeFolder === 'SENT' ? 'Sent' : gmail.activeFolder}</span>
               </div>
             ) : (
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-[#060541]/8 dark:divide-border">
                 {gmail.messages.map(msg => (
                   <MessageRow
                     key={msg.id}

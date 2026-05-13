@@ -155,10 +155,12 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
   const normalizedUsername = username.trim();
   const showUsernameMismatch = Boolean(normalizedEmail && normalizedUsername && normalizedEmail !== normalizedUsername);
   const friendlyError = error.includes('IMAP timeout waiting for A0001') ? t.timeoutHint : error;
+  const lightFieldClass = 'border-[#060541]/12 bg-white text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] placeholder:text-[#060541]/35 focus-visible:ring-[#060541]/20 dark:border-input dark:bg-background dark:text-foreground';
+  const lightOutlineButtonClass = 'border-[#060541]/12 bg-white text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.05)] hover:bg-[#f7f8ff] hover:text-[#060541] dark:border-border dark:bg-background dark:text-foreground dark:hover:bg-accent';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.99),rgba(247,248,255,0.96))] shadow-[0_24px_70px_rgba(6,5,65,0.12)] dark:border-border dark:bg-background dark:shadow-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mail className="h-5 w-5 text-[#E9CEB0]" />
@@ -177,6 +179,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              className={lightFieldClass}
             />
           </div>
 
@@ -189,6 +192,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
               placeholder="••••••••"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              className={lightFieldClass}
             />
             <p className="text-xs text-muted-foreground">{t.passwordHint}</p>
           </div>
@@ -201,6 +205,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
               placeholder={isAr ? 'مثال: بريدي في ياهو' : 'e.g. My Yahoo Mail'}
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
+              className={lightFieldClass}
             />
           </div>
 
@@ -226,15 +231,15 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
 
           {/* Advanced fields */}
           {showAdvanced && (
-            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
-              <div className="space-y-2 rounded-xl border border-border/60 bg-background/70 p-3">
+            <div className="space-y-3 rounded-xl border border-[#060541]/10 bg-white/70 p-4 dark:border-border/60 dark:bg-muted/30">
+              <div className="space-y-2 rounded-xl border border-[#060541]/10 bg-white p-3 shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.loginSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.loginHint}</div>
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="conn-username" className="text-xs">{t.usernameLabel}</Label>
-                  <Input id="conn-username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={email || 'user@example.com'} />
+                  <Input id="conn-username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder={email || 'user@example.com'} className={lightFieldClass} />
                   <p className="text-xs text-muted-foreground">{t.usernameHelp}{normalizedEmail ? `: ${normalizedEmail}` : ''}</p>
                 </div>
                 {showUsernameMismatch ? (
@@ -244,7 +249,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 ) : null}
               </div>
 
-              <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3">
+              <div className="space-y-3 rounded-xl border border-[#060541]/10 bg-white p-3 shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.incomingSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.incomingHint}</div>
@@ -252,11 +257,11 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 <div className="grid grid-cols-2 gap-2">
                   <div className="col-span-2 sm:col-span-1">
                     <Label htmlFor="imap-host" className="text-xs">{t.imapHost}</Label>
-                    <Input id="imap-host" value={imapHost} onChange={(e) => setImapHost(e.target.value)} placeholder="imap.example.com" />
+                    <Input id="imap-host" value={imapHost} onChange={(e) => setImapHost(e.target.value)} placeholder="imap.example.com" className={lightFieldClass} />
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <Label htmlFor="imap-port" className="text-xs">{t.imapPort}</Label>
-                    <Input id="imap-port" value={imapPort} onChange={(e) => setImapPort(e.target.value)} placeholder="993" />
+                    <Input id="imap-port" value={imapPort} onChange={(e) => setImapPort(e.target.value)} placeholder="993" className={lightFieldClass} />
                   </div>
                 </div>
                 <label className="flex items-center gap-2 text-xs cursor-pointer">
@@ -270,7 +275,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 </label>
               </div>
 
-              <div className="space-y-3 rounded-xl border border-border/60 bg-background/70 p-3">
+              <div className="space-y-3 rounded-xl border border-[#060541]/10 bg-white p-3 shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.outgoingSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.outgoingHint}</div>
@@ -278,11 +283,11 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 <div className="grid grid-cols-2 gap-2">
                   <div className="col-span-2 sm:col-span-1">
                     <Label htmlFor="smtp-host" className="text-xs">{t.smtpHost}</Label>
-                    <Input id="smtp-host" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.example.com" />
+                    <Input id="smtp-host" value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.example.com" className={lightFieldClass} />
                   </div>
                   <div className="col-span-2 sm:col-span-1">
                     <Label htmlFor="smtp-port" className="text-xs">{t.smtpPort}</Label>
-                    <Input id="smtp-port" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" />
+                    <Input id="smtp-port" value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)} placeholder="587" className={lightFieldClass} />
                   </div>
                 </div>
                 <label className="flex items-center gap-2 text-xs cursor-pointer">
@@ -317,7 +322,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="flex-1"
+              className={`flex-1 ${lightOutlineButtonClass}`}
             >
               {t.cancel}
             </Button>

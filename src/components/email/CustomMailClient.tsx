@@ -46,9 +46,9 @@ function MessageRow({ message, activeFolder, deleting, onOpen, onDelete }: Messa
   const isUnread = activeFolder === 'INBOX' && message.isUnread;
 
   return (
-    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-accent/50 sm:px-5 sm:py-3.5">
+    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[#f7f8ff] sm:px-5 sm:py-3.5 dark:hover:bg-accent/50">
       <div className="pt-1.5">
-        <div className={`h-2.5 w-2.5 rounded-full ${isUnread ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.55)]' : 'bg-muted-foreground/20'}`} />
+        <div className={`h-2.5 w-2.5 rounded-full ${isUnread ? 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.55)]' : 'bg-[#060541]/12 dark:bg-muted-foreground/20'}`} />
       </div>
 
       <button onClick={onOpen} className="min-w-0 flex-1 text-left">
@@ -149,7 +149,7 @@ function AccountSelector({ connections, health, activeId, onChange }: AccountSel
           <button
             key={connection.id}
             onClick={() => onChange(connection.id)}
-            className={`flex h-9 shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-all ${connection.id === activeId ? 'border-blue-500/60 bg-blue-500/10 text-foreground shadow-sm' : 'border-border/60 bg-background/70 text-muted-foreground hover:bg-accent hover:text-foreground'}`}
+            className={`flex h-9 shrink-0 items-center gap-2 rounded-xl border px-3 py-2 text-xs transition-all ${connection.id === activeId ? 'border-blue-500/40 bg-[linear-gradient(180deg,rgba(59,130,246,0.12),rgba(59,130,246,0.08))] text-[#060541] shadow-[0_6px_16px_rgba(59,130,246,0.12)] dark:border-blue-500/60 dark:bg-blue-500/10 dark:text-foreground dark:shadow-sm' : 'border-[#060541]/10 bg-white text-[#060541]/70 shadow-[0_1px_2px_rgba(6,5,65,0.05)] hover:bg-[#f7f8ff] hover:text-[#060541] dark:border-border/60 dark:bg-background/70 dark:text-muted-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-foreground'}`}
           >
             <span className={`h-2 w-2 rounded-full ${statusClass}`} />
             <span className="max-w-[120px] truncate font-medium">{connection.display_name || connection.email_address || 'Account'}</span>
@@ -206,6 +206,11 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
       ? activeHealth.proof.inboxCount
       : null;
   const hasInboxCache = imap.hasCachedFolder('INBOX');
+  const surfaceCardClass = 'space-y-3 rounded-[22px] border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] p-3 text-[#060541] shadow-[0_10px_24px_rgba(6,5,65,0.05)] sm:p-4 dark:border-border dark:bg-card/95 dark:text-card-foreground dark:shadow-sm';
+  const iconShellClass = 'flex h-10 w-10 items-center justify-center rounded-2xl border border-[#060541]/10 bg-white shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/70 dark:bg-background/70 dark:shadow-none';
+  const chipClass = 'rounded-full border border-[#060541]/10 bg-white px-3 py-1 text-[11px] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-border/70 dark:bg-background/70 dark:shadow-none';
+  const iconButtonClass = 'rounded-xl border border-[#060541]/12 bg-white p-2.5 text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.05)] transition-colors hover:bg-[#f7f8ff] dark:border-border/70 dark:bg-background/70 dark:text-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-accent-foreground';
+  const folderButtonBaseClass = 'border border-[#060541]/10 bg-white text-[#060541]/72 shadow-[0_1px_2px_rgba(6,5,65,0.04)] hover:bg-[#f7f8ff] hover:text-[#060541] dark:border-border/70 dark:bg-background/70 dark:text-muted-foreground dark:shadow-none dark:hover:bg-accent dark:hover:text-accent-foreground';
 
   useEffect(() => {
     if (connections.length > 0 && !connections.find(c => c.id === activeConnectionId)) {
@@ -377,7 +382,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="space-y-3 rounded-[22px] border border-border bg-card/95 p-3 text-card-foreground shadow-sm sm:p-4">
+      <div className={surfaceCardClass}>
         {connections.length > 1 ? (
           <AccountSelector
             connections={connections}
@@ -390,7 +395,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-background/70">
+              <div className={iconShellClass}>
                 <Plug className="h-4 w-4 text-[#E9CEB0] shrink-0" />
               </div>
               <div className="min-w-0 flex-1">
@@ -399,9 +404,9 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
                   {activeHealth?.status === 'verified' ? (
                     <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">{connectedLabel}</Badge>
                   ) : activeHealth?.status === 'checking' ? (
-                    <Badge variant="outline" className="border-yellow-400/40 text-yellow-400 text-[10px] px-1.5 py-0">{checkingLabel}</Badge>
+                    <Badge variant="outline" className="border-yellow-400/40 bg-yellow-50 text-yellow-600 text-[10px] px-1.5 py-0 dark:bg-transparent dark:text-yellow-400">{checkingLabel}</Badge>
                   ) : activeHealth?.status === 'failed' ? (
-                    <Badge variant="outline" className="border-red-400/40 text-red-400 text-[10px] px-1.5 py-0">{failedLabel}</Badge>
+                    <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 text-[10px] px-1.5 py-0 dark:bg-transparent dark:text-red-400">{failedLabel}</Badge>
                   ) : null}
                 </div>
                 {connections.length === 1 && activeConn?.display_name && activeConn.display_name !== activeEmail ? (
@@ -411,19 +416,19 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {showMailboxLoginChip ? (
-                <div className="max-w-full rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground">
+                <div className={`${chipClass} max-w-full text-muted-foreground`}>
                   <span className="block max-w-[220px] truncate sm:max-w-[280px]">{activeMailboxLogin}</span>
                 </div>
               ) : null}
-              <div className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-foreground/80">
+              <div className={`${chipClass} text-foreground/80`}>
                 {activeMailboxFolder}
               </div>
               {activeMailboxCount !== null ? (
-                <div className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground">
+                <div className={`${chipClass} text-muted-foreground`}>
                   {activeMailboxCount} emails
                 </div>
               ) : null}
-              <div className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] text-muted-foreground">
+              <div className={`${chipClass} text-muted-foreground`}>
                 {imap.messages.length} shown
               </div>
             </div>
@@ -436,7 +441,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
             <button
               title={refreshLabel}
               onClick={handleRefresh}
-              className="rounded-xl border border-border/70 bg-background/70 p-2.5 text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className={iconButtonClass}
             >
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </button>
@@ -460,7 +465,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
             className={`flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-medium transition-all ${
               imap.activeFolder === f
                 ? 'bg-blue-600 text-white shadow-sm'
-                : 'border border-border/70 bg-background/70 text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                : folderButtonBaseClass
             }`}
           >
             {f === 'INBOX' ? <Inbox className="h-3.5 w-3.5" /> : <Send className="h-3.5 w-3.5" />}
@@ -469,7 +474,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
         ))}
       </div>
 
-      <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-border bg-card/95 text-card-foreground shadow-sm">
+      <div className="min-h-[360px] overflow-hidden rounded-[22px] border border-[#060541]/10 bg-white text-[#060541] shadow-[0_10px_24px_rgba(6,5,65,0.05)] dark:border-border dark:bg-card/95 dark:text-card-foreground dark:shadow-sm">
         {selectedMessage ? (
           <div className="p-4 h-full sm:p-5">
             <MessageView
@@ -511,7 +516,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
                 </span>
               </div>
             ) : (
-              <div className="divide-y divide-border">
+              <div className="divide-y divide-[#060541]/8 dark:divide-border">
                 {imap.messages.map(msg => (
                   <MessageRow
                     key={msg.uid}

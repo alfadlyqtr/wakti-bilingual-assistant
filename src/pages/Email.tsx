@@ -29,6 +29,9 @@ export default function Email() {
   const [activeTab, setActiveTab] = useState<EmailTab>('settings');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const pageCardClass = 'rounded-[24px] border border-[#060541]/10 bg-white/96 shadow-[0_12px_32px_rgba(6,5,65,0.06)] dark:border-border dark:bg-card dark:shadow-sm';
+  const panelClass = 'rounded-2xl border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] shadow-[0_6px_18px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/30 dark:shadow-none';
+  const outlineButtonClass = 'border-[#060541]/12 bg-white text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.05)] hover:bg-[#f7f8ff] hover:text-[#060541] dark:border-border dark:bg-background dark:text-foreground dark:hover:bg-accent';
 
   const customConnections = emailConn.imap.connections;
   const gmailConnected = emailConn.gmail.connection.connected;
@@ -80,15 +83,15 @@ export default function Email() {
 
   const getHealthBadge = (health?: ImapConnectionHealth) => {
     if (!health || health.status === 'unknown') {
-      return <Badge variant="outline" className="border-border/60 text-muted-foreground">{t.notConnected}</Badge>;
+      return <Badge variant="outline" className="border-[#060541]/12 bg-white text-[#060541]/70 dark:border-border/60 dark:bg-transparent dark:text-muted-foreground">{t.notConnected}</Badge>;
     }
     if (health.status === 'checking') {
-      return <Badge variant="outline" className="border-yellow-400/40 text-yellow-400">{t.checking}</Badge>;
+      return <Badge variant="outline" className="border-yellow-400/40 bg-yellow-50 text-yellow-600 dark:bg-transparent dark:text-yellow-400">{t.checking}</Badge>;
     }
     if (health.status === 'verified') {
       return <Badge className="bg-green-600 text-white hover:bg-green-600">{t.verifiedMailbox}</Badge>;
     }
-    return <Badge variant="outline" className="border-red-400/40 text-red-400">{t.needsAttention}</Badge>;
+    return <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.needsAttention}</Badge>;
   };
 
   const tabs: Array<{
@@ -137,7 +140,7 @@ export default function Email() {
 
   const renderSettingsTab = () => (
     <div className="space-y-4">
-      <Card>
+      <Card className={pageCardClass}>
         <CardHeader>
           <CardTitle>{t.settings}</CardTitle>
           <CardDescription>{t.settingsSubtitle}</CardDescription>
@@ -158,14 +161,14 @@ export default function Email() {
                 <Mail className="h-4 w-4" />
                 {t.addCustomMail}
               </Button>
-              <Button variant="outline" onClick={handleRefresh} disabled={refreshing}>
+              <Button variant="outline" onClick={handleRefresh} disabled={refreshing} className={outlineButtonClass}>
                 {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
                 {t.refresh}
               </Button>
             </div>
           </div>
-          <div className="rounded-xl border border-border/60 bg-background/30 divide-y divide-border/50 overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
+          <div className="overflow-hidden rounded-[22px] border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] shadow-[0_10px_24px_rgba(6,5,65,0.05)] divide-y divide-[#060541]/8 dark:border-border/60 dark:bg-background/30 dark:divide-border/50 dark:shadow-none">
+            <div className="flex items-center justify-between gap-3 px-4 py-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <GmailIcon size={16} />
@@ -183,10 +186,10 @@ export default function Email() {
                 {gmailConnected ? (
                   <Badge className="bg-green-600 text-white hover:bg-green-600 shrink-0">{t.connected}</Badge>
                 ) : (
-                  <Badge variant="outline" className="border-red-400/40 text-red-400 shrink-0">{t.notConnected}</Badge>
+                  <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 shrink-0 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
                 )}
                 {gmailConnected ? (
-                  <Button variant="outline" size="sm" onClick={emailConn.gmail.disconnectGmail}>
+                  <Button variant="outline" size="sm" onClick={emailConn.gmail.disconnectGmail} className={outlineButtonClass}>
                     <XCircle className="h-4 w-4" />
                     {t.disconnectGmail}
                   </Button>
@@ -199,7 +202,7 @@ export default function Email() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="flex items-center justify-between gap-3 px-4 py-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <AppleLogo size={16} className="text-current" />
@@ -208,8 +211,8 @@ export default function Email() {
                 <div className="mt-1 text-sm text-muted-foreground">{t.comingSoon}</div>
               </div>
               <div className="flex flex-col items-end gap-2 shrink-0">
-                <Badge variant="outline" className="border-red-400/40 text-red-400 shrink-0">{t.comingSoon}</Badge>
-                <Button variant="outline" size="sm" disabled>
+                <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 shrink-0 dark:bg-transparent dark:text-red-400">{t.comingSoon}</Badge>
+                <Button variant="outline" size="sm" disabled className={outlineButtonClass}>
                   <AppleLogo size={14} className="text-current" />
                   {t.connectApple}
                 </Button>
@@ -225,25 +228,26 @@ export default function Email() {
                     verifiedCustomCount > 0 ? (
                       <Badge className="bg-green-600 text-white hover:bg-green-600">{verifiedCustomCount} {t.customConnectedCount}</Badge>
                     ) : (
-                      <Badge variant="outline" className="border-red-400/40 text-red-400">0 {t.customConnectedCount}</Badge>
+                      <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">0 {t.customConnectedCount}</Badge>
                     )
                   ) : (
-                    <Badge variant="outline" className="border-red-400/40 text-red-400">{t.notConnected}</Badge>
+                    <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
                   )}
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setShowConnectionModal(true)}>
+                <Button variant="outline" size="sm" onClick={() => setShowConnectionModal(true)} className={outlineButtonClass}>
                   <Mail className="h-4 w-4" />
                   {t.addCustomMail}
                 </Button>
               </div>
 
               {customConnections.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border/70 p-5 text-sm text-muted-foreground">
+                <div className="rounded-xl border border-dashed border-[#060541]/18 bg-white/70 p-5 text-sm text-muted-foreground dark:border-border/70 dark:bg-transparent">
                   {t.noCustomMailHint}
                 </div>
               ) : (
                 customConnections.map((connection) => (
-                  <div key={connection.id} className="rounded-xl border border-border/60 bg-background/30 p-4">
+                  <div key={connection.id} className={panelClass}>
+                    <div className="p-4">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -269,16 +273,17 @@ export default function Email() {
                       </div>
                       <div className="flex gap-2 flex-wrap">
                         {!connection.is_primary && (
-                          <Button variant="outline" size="sm" onClick={() => emailConn.imap.setPrimary(connection.id)}>
+                          <Button variant="outline" size="sm" onClick={() => emailConn.imap.setPrimary(connection.id)} className={outlineButtonClass}>
                             <Star className="h-4 w-4" />
                             {t.makePrimary}
                           </Button>
                         )}
-                        <Button variant="outline" size="sm" onClick={() => emailConn.imap.remove(connection.id)}>
+                        <Button variant="outline" size="sm" onClick={() => emailConn.imap.remove(connection.id)} className={outlineButtonClass}>
                           <Trash2 className="h-4 w-4" />
                           {t.remove}
                         </Button>
                       </div>
+                    </div>
                     </div>
                   </div>
                 ))
@@ -303,7 +308,7 @@ export default function Email() {
   );
 
   const renderAppleTab = () => (
-    <Card>
+    <Card className={pageCardClass}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <AppleLogo size={18} className="text-current" />
@@ -313,9 +318,9 @@ export default function Email() {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="border-red-400/40 text-red-400">{t.notConnected}</Badge>
+          <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
         </div>
-        <div className="rounded-xl border border-border/60 bg-background/40 p-4">
+        <div className="rounded-xl border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] p-4 shadow-[0_6px_18px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/40 dark:shadow-none">
           <div className="flex items-center gap-2 text-base font-medium">
             <XCircle className="h-5 w-5 text-red-400" />
             {t.appleUnavailable}
@@ -346,20 +351,20 @@ export default function Email() {
             <p className="mt-1 hidden text-xs text-muted-foreground sm:block sm:text-sm">{t.subtitle}</p>
           </div>
           {activeTab === 'settings' ? (
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className="shrink-0">
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing} className={`shrink-0 ${outlineButtonClass}`}>
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </Button>
           ) : null}
         </div>
 
         <div className="mb-3">
-          <div className="grid grid-cols-4 gap-1.5 rounded-2xl border border-border/70 bg-white/60 p-1.5 shadow-sm dark:bg-white/5">
+          <div className="grid grid-cols-4 gap-1.5 rounded-[24px] border border-[#060541]/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] p-1.5 shadow-[0_10px_24px_rgba(6,5,65,0.06)] dark:border-border/70 dark:bg-white/5 dark:shadow-sm">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl border px-2 py-2 text-[11px] font-medium transition-all md:text-sm ${activeTab === tab.key ? 'border-[#060541] bg-[#060541] text-white shadow-lg ring-1 ring-[#060541]/40' : 'border-border bg-white/80 text-foreground shadow-sm hover:bg-white dark:bg-white/5 dark:hover:bg-white/10'}`}
+                className={`flex min-h-[44px] items-center justify-center gap-2 rounded-[18px] border px-2 py-2 text-[11px] font-medium transition-all md:text-sm ${activeTab === tab.key ? 'border-[#060541] bg-[#060541] text-white shadow-[0_12px_24px_rgba(6,5,65,0.26)] ring-1 ring-[#060541]/35' : 'border-[#060541]/10 bg-white text-[#060541]/88 shadow-[0_1px_2px_rgba(6,5,65,0.05)] hover:bg-[#f7f8ff] dark:border-border dark:bg-white/5 dark:text-foreground dark:shadow-sm dark:hover:bg-white/10'}`}
               >
                 <span className="flex items-center gap-1">{tab.icon}</span>
                 <span>{tab.label}</span>
