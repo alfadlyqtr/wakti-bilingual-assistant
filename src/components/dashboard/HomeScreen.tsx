@@ -2276,6 +2276,7 @@ interface UnifiedAppCellProps {
   language: string; isDark: boolean; glowEnabled: boolean;
   navigate: (p: string) => void;
   gridArea: string;
+  compact?: boolean;
   avatarUrl?: string;
   badgeCount?: number;
   onLongPress?: () => void;
@@ -2283,11 +2284,12 @@ interface UnifiedAppCellProps {
   isBulkSelected?: boolean;
   onBulkSelectToggle?: () => void;
 }
-function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, avatarUrl, badgeCount = 0, onLongPress, bulkSelectionActive = false, isBulkSelected = false, onBulkSelectToggle }: UnifiedAppCellProps) {
+function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navigate, gridArea, compact = false, avatarUrl, badgeCount = 0, onLongPress, bulkSelectionActive = false, isBulkSelected = false, onBulkSelectToggle }: UnifiedAppCellProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging, isOver } = useSortable({
     id, data: { type: 'unified' }, disabled: !editMode,
   });
   const name = language === 'ar' ? app.nameAr : app.nameEn;
+  const iconSize = compact ? 56 : 60;
   const lpTimer = useRef<number | null>(null);
   const lpStart = useRef<{ x: number; y: number } | null>(null);
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -2307,7 +2309,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
   return (
     <div
       ref={setNodeRef}
-      className="flex flex-col items-center justify-start gap-0.5 select-none cursor-pointer relative pt-1.5"
+      className={`flex flex-col items-center ${compact ? 'justify-start pt-0.5' : 'justify-start pt-1.5'} gap-0.5 select-none cursor-pointer relative`}
       style={{
         gridArea,
         transform: isDragging ? CSS.Transform.toString(transform) : undefined,
@@ -2343,10 +2345,10 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
           <Check className="w-3.5 h-3.5 text-white" />
         </div>
       )}
-      <LiquidIcon app={app} size={60} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
+      <LiquidIcon app={app} size={iconSize} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
       <span
-        className="text-[11px] font-bold text-center leading-tight mt-1 text-white px-2 py-0.5 rounded-md"
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.14) 100%)', backdropFilter: 'blur(18px) saturate(175%)', WebkitBackdropFilter: 'blur(18px) saturate(175%)', border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.22)', textShadow: '0 1px 3px rgba(0,0,0,0.8)', maxWidth: 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
+        className={`font-bold text-center leading-tight text-white px-2 rounded-md ${compact ? 'text-[10px] mt-0.5 py-0' : 'text-[11px] mt-1 py-0.5'}`}
+        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.14) 100%)', backdropFilter: 'blur(18px) saturate(175%)', WebkitBackdropFilter: 'blur(18px) saturate(175%)', border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.22)', textShadow: '0 1px 3px rgba(0,0,0,0.8)', maxWidth: compact ? 64 : 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
       >
         {name}
       </span>
@@ -3590,7 +3592,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             )}
 
             <SortableContext items={currentPageData?.effectiveItems || []} strategy={rectSortingStrategy}>
-              <div className="grid gap-x-1 gap-y-2 relative z-10 h-full" style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', alignContent: 'start', paddingTop: 8, touchAction: 'none' }}>
+              <div className={`grid gap-x-1 ${isAppleLargeSurface ? 'gap-y-1' : 'gap-y-2'} relative z-10 h-full`} style={{ gridTemplateColumns: 'repeat(4, 1fr)', gridTemplateRows: 'repeat(6, 1fr)', alignContent: 'start', paddingTop: 8, touchAction: 'none' }}>
                 {(() => {
                   return (currentPageData?.effectiveItems || []).map(itemId => {
                     const gp = currentPageData?.gridPositions.get(itemId);
@@ -3665,6 +3667,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         glowEnabled={hsBg.glow}
                         navigate={navigate}
                         gridArea={gp}
+                        compact={isAppleLargeSurface}
                         avatarUrl={avatarUrl}
                         badgeCount={app.id === 'social' ? connectBadge : 0}
                         onLongPress={bulkMoveOptions ? undefined : () => setContextMenu({ itemId: itemId })}

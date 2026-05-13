@@ -29,9 +29,9 @@ export default function Email() {
   const [activeTab, setActiveTab] = useState<EmailTab>('settings');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const pageCardClass = 'rounded-[26px] border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,250,255,0.98))] shadow-[0_18px_48px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-border dark:bg-card dark:shadow-sm dark:ring-0';
-  const panelClass = 'rounded-[22px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] shadow-[0_10px_28px_rgba(6,5,65,0.07)] ring-1 ring-[#060541]/5 dark:border-border/60 dark:bg-background/30 dark:shadow-none dark:ring-0';
-  const outlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-border dark:bg-background dark:text-foreground dark:hover:bg-accent';
+  const pageCardClass = 'rounded-[26px] border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,250,255,0.98))] shadow-[0_18px_48px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(12,15,20,0.98),rgba(18,22,31,0.96))] dark:shadow-[0_20px_48px_rgba(0,0,0,0.45)] dark:ring-1 dark:ring-white/5';
+  const panelClass = 'rounded-[22px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] shadow-[0_10px_28px_rgba(6,5,65,0.07)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(15,18,26,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_12px_30px_rgba(0,0,0,0.36)] dark:ring-1 dark:ring-white/5';
+  const outlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.34)] dark:hover:!bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]';
 
   const customConnections = emailConn.imap.connections;
   const gmailConnected = emailConn.gmail.connection.connected;
@@ -158,7 +158,7 @@ export default function Email() {
             <div className="flex gap-2">
               <Button
                 onClick={() => setShowConnectionModal(true)}
-                className="bg-[#060541] hover:bg-[#0a0a5c] text-white"
+                className="bg-[#060541] text-white hover:bg-[#0a0a5c] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-white dark:shadow-[0_12px_28px_rgba(0,0,0,0.38)] dark:hover:bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]"
               >
                 <Mail className="h-4 w-4" />
                 {t.addCustomMail}
@@ -169,7 +169,7 @@ export default function Email() {
               </Button>
             </div>
           </div>
-          <div className="overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 divide-y divide-[#060541]/10 dark:border-border/60 dark:bg-background/30 dark:divide-border/50 dark:shadow-none dark:ring-0">
+          <div className="overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 divide-y divide-[#060541]/10 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(14,17,24,0.98),rgba(10,12,18,0.96))] dark:divide-white/10 dark:shadow-[0_18px_36px_rgba(0,0,0,0.4)] dark:ring-1 dark:ring-white/5">
             <div className="flex items-center justify-between gap-3 px-4 py-4">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -196,7 +196,7 @@ export default function Email() {
                     {t.disconnectGmail}
                   </Button>
                 ) : (
-                  <Button size="sm" onClick={emailConn.gmail.initiateGmailAuth} className="bg-[#060541] hover:bg-[#0a0a5c] text-white">
+                  <Button size="sm" onClick={emailConn.gmail.initiateGmailAuth} className="bg-[#060541] text-white hover:bg-[#0a0a5c] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-white dark:shadow-[0_12px_28px_rgba(0,0,0,0.38)] dark:hover:bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]">
                     <GmailIcon size={14} />
                     {t.connectGmail}
                   </Button>
@@ -243,7 +243,7 @@ export default function Email() {
               </div>
 
               {customConnections.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-[#060541]/24 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,248,255,0.9))] p-5 text-sm text-muted-foreground dark:border-border/70 dark:bg-transparent">
+                <div className="rounded-xl border border-dashed border-[#060541]/24 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(246,248,255,0.9))] p-5 text-sm text-muted-foreground dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.76),rgba(12,15,20,0.72))]">
                   {t.noCustomMailHint}
                 </div>
               ) : (
@@ -322,9 +322,9 @@ export default function Email() {
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
         </div>
-        <div className="overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-border/60 dark:bg-background/40 dark:shadow-none dark:ring-0">
+        <div className="overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(14,17,24,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_18px_36px_rgba(0,0,0,0.4)] dark:ring-1 dark:ring-white/5">
           <div className="border-b border-[#060541]/10 px-4 py-3 dark:border-border/50 sm:px-5">
-            <div className="flex items-center gap-2 rounded-2xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] px-3 py-2.5 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/70 dark:bg-background/70 dark:shadow-none">
+            <div className="flex items-center gap-2 rounded-2xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] px-3 py-2.5 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
               <Search className="h-4 w-4 shrink-0 text-[#060541]/45 dark:text-muted-foreground" />
               <input
                 type="text"
@@ -376,13 +376,13 @@ export default function Email() {
         </div>
 
         <div className="mb-3">
-          <div className="grid grid-cols-4 gap-1.5 rounded-[26px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] p-1.5 shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-border/70 dark:bg-white/5 dark:shadow-sm dark:ring-0">
+          <div className="grid grid-cols-4 gap-1.5 rounded-[26px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] p-1.5 shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(16,20,29,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_18px_36px_rgba(0,0,0,0.4)] dark:ring-1 dark:ring-white/5">
             {tabs.map((tab) => (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`flex min-h-[46px] items-center justify-center gap-2 rounded-[18px] border px-2 py-2 text-[11px] font-medium transition-all md:text-sm ${activeTab === tab.key ? 'border-[#060541] bg-[#060541] text-white shadow-[0_14px_28px_rgba(6,5,65,0.3)] ring-1 ring-[#060541]/35' : 'border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] text-[#060541]/88 shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:border-[#060541]/22 hover:bg-[#f3f5ff] dark:border-border dark:bg-white/5 dark:text-foreground dark:shadow-sm dark:hover:bg-white/10'}`}
+                className={`flex min-h-[46px] items-center justify-center gap-2 rounded-[18px] border px-2 py-2 text-[11px] font-medium transition-all md:text-sm ${activeTab === tab.key ? 'border-[#060541] bg-[#060541] text-white shadow-[0_14px_28px_rgba(6,5,65,0.3)] ring-1 ring-[#060541]/35 dark:border-white/15 dark:bg-[linear-gradient(180deg,rgba(34,40,56,0.98),rgba(16,20,29,0.96))] dark:text-white dark:shadow-[0_16px_30px_rgba(0,0,0,0.45)] dark:ring-white/10' : 'border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] text-[#060541]/88 shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:border-[#060541]/22 hover:bg-[#f3f5ff] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:text-foreground dark:shadow-[0_10px_22px_rgba(0,0,0,0.32)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))]'}`}
               >
                 <span className="flex items-center gap-1">{tab.icon}</span>
                 <span>{tab.label}</span>
