@@ -466,10 +466,12 @@ function buildOutgoingMessage(params: {
   cc: string[];
   subject: string;
   body: string;
+  htmlBody?: string;
   attachments: DraftAttachment[];
 }): { rawMessage: string; messageId: string } {
-  const { from, to, cc, subject, body, attachments } = params;
+  const { from, to, cc, subject, body, htmlBody, attachments } = params;
   const boundary = `----WaktiMail${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+  const alternativeBoundary = `----WaktiAlt${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
   const messageId = `<wakti-${crypto.randomUUID()}@mail.wakti.qa>`;
 
   let msg = "";
@@ -486,9 +488,22 @@ function buildOutgoingMessage(params: {
   if (attachments.length > 0) {
     msg += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
     msg += `--${boundary}\r\n`;
-    msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
-    msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-    msg += `${body}\r\n`;
+    if (htmlBody) {
+      msg += `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"\r\n\r\n`;
+      msg += `--${alternativeBoundary}\r\n`;
+      msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
+      msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+      msg += `${body}\r\n`;
+      msg += `--${alternativeBoundary}\r\n`;
+      msg += `Content-Type: text/html; charset=UTF-8\r\n`;
+      msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+      msg += `${htmlBody}\r\n`;
+      msg += `--${alternativeBoundary}--\r\n`;
+    } else {
+      msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
+      msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+      msg += `${body}\r\n`;
+    }
 
     for (const attachment of attachments) {
       msg += `--${boundary}\r\n`;
@@ -499,6 +514,20 @@ function buildOutgoingMessage(params: {
     }
 
     msg += `--${boundary}--`;
+    return { rawMessage: msg, messageId };
+  }
+
+  if (htmlBody) {
+    msg += `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"\r\n\r\n`;
+    msg += `--${alternativeBoundary}\r\n`;
+    msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
+    msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+    msg += `${body}\r\n`;
+    msg += `--${alternativeBoundary}\r\n`;
+    msg += `Content-Type: text/html; charset=UTF-8\r\n`;
+    msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+    msg += `${htmlBody}\r\n`;
+    msg += `--${alternativeBoundary}--`;
     return { rawMessage: msg, messageId };
   }
 
@@ -970,6 +999,7 @@ Deno.serve(async (req: Request) => {
       const ccRecipients = normalizeRecipients(body.cc);
       const subject = String(body.subject || "");
       const emailBody = String(body.body || "");
+      const htmlBody = body.htmlBody ? String(body.htmlBody) : "";
       const attachments = Array.isArray(body.attachments)
         ? (body.attachments as Array<Record<string, unknown>>)
             .map((item) => ({
@@ -979,7 +1009,7 @@ Deno.serve(async (req: Request) => {
             }))
             .filter((item) => item.name && item.content)
         : [];
-      if (recipients.length === 0 || !subject || !emailBody) {
+      if (recipients.length === 0 || !subject || (!emailBody && !htmlBody)) {
         return jsonResponse({ error: "to, subject, body required" }, 400);
       }
       const senderAddress = String(conn.email_address || conn.username || "").trim();
@@ -989,6 +1019,7 @@ Deno.serve(async (req: Request) => {
         cc: ccRecipients,
         subject,
         body: emailBody,
+        htmlBody: htmlBody || undefined,
         attachments,
       });
       await sendViaBestSmtpLogin(conn, recipients, ccRecipients, outgoing.rawMessage, attachments.length > 0);

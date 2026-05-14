@@ -156,10 +156,12 @@ function buildRawEmailMessage(params: {
   cc: string[];
   subject: string;
   body: string;
+  htmlBody?: string;
   attachments: DraftAttachment[];
 }): string {
-  const { from, to, cc, subject, body, attachments } = params;
+  const { from, to, cc, subject, body, htmlBody, attachments } = params;
   const outerBoundary = `----WaktiMixed${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+  const alternativeBoundary = `----WaktiAlt${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
 
   let raw = "";
   raw += `From: ${sanitizeHeaderValue(from)}\r\n`;
@@ -174,9 +176,22 @@ function buildRawEmailMessage(params: {
   if (attachments.length > 0) {
     raw += `Content-Type: multipart/mixed; boundary="${outerBoundary}"\r\n\r\n`;
     raw += `--${outerBoundary}\r\n`;
-    raw += `Content-Type: text/plain; charset="UTF-8"\r\n`;
-    raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-    raw += `${body}\r\n`;
+    if (htmlBody) {
+      raw += `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"\r\n\r\n`;
+      raw += `--${alternativeBoundary}\r\n`;
+      raw += `Content-Type: text/plain; charset="UTF-8"\r\n`;
+      raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+      raw += `${body}\r\n`;
+      raw += `--${alternativeBoundary}\r\n`;
+      raw += `Content-Type: text/html; charset="UTF-8"\r\n`;
+      raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+      raw += `${htmlBody}\r\n`;
+      raw += `--${alternativeBoundary}--\r\n`;
+    } else {
+      raw += `Content-Type: text/plain; charset="UTF-8"\r\n`;
+      raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+      raw += `${body}\r\n`;
+    }
 
     for (const attachment of attachments) {
       raw += `--${outerBoundary}\r\n`;
@@ -187,6 +202,20 @@ function buildRawEmailMessage(params: {
     }
 
     raw += `--${outerBoundary}--\r\n`;
+    return raw;
+  }
+
+  if (htmlBody) {
+    raw += `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"\r\n\r\n`;
+    raw += `--${alternativeBoundary}\r\n`;
+    raw += `Content-Type: text/plain; charset="UTF-8"\r\n`;
+    raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+    raw += `${body}\r\n`;
+    raw += `--${alternativeBoundary}\r\n`;
+    raw += `Content-Type: text/html; charset="UTF-8"\r\n`;
+    raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
+    raw += `${htmlBody}\r\n`;
+    raw += `--${alternativeBoundary}--\r\n`;
     return raw;
   }
 
@@ -308,6 +337,7 @@ Deno.serve(async (req: Request) => {
       const ccRecipients = normalizeRecipients(body.cc);
       const subject = String(body.subject || "");
       const emailBody = String(body.body || "");
+      const htmlBody = body.htmlBody ? String(body.htmlBody) : "";
       const threadId = body.threadId ? String(body.threadId) : undefined;
       const attachments = Array.isArray(body.attachments)
         ? (body.attachments as Array<Record<string, unknown>>)
@@ -319,7 +349,7 @@ Deno.serve(async (req: Request) => {
             .filter((item) => item.name && item.content)
         : [];
 
-      if (recipients.length === 0 || !subject || !emailBody) {
+      if (recipients.length === 0 || !subject || (!emailBody && !htmlBody)) {
         return jsonResponse({ error: "to, subject, and body are required" }, 400);
       }
 
@@ -336,6 +366,7 @@ Deno.serve(async (req: Request) => {
         cc: ccRecipients,
         subject,
         body: emailBody,
+        htmlBody: htmlBody || undefined,
         attachments,
       }));
 

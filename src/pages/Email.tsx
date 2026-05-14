@@ -6,9 +6,13 @@ import { AppleLogo } from '@/components/calendar/AppleLogo';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Mail, Settings2, XCircle, Plug, RefreshCw, Trash2, Star, Loader2, Search } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { Mail, Settings2, XCircle, Plug, RefreshCw, Trash2, Star, Loader2, Search, Sparkles, Save } from 'lucide-react';
 import { GmailClient } from '@/components/email/GmailClient';
 import { CustomMailClient } from '@/components/email/CustomMailClient';
+import { toast } from 'sonner';
+import { buildSignatureHtml, generateEmailSignatureHtml, readEmailSignatureSettings, saveEmailSignatureSettings } from '@/utils/emailSignature';
 
 type EmailTab = 'settings' | 'gmail' | 'apple' | 'mail';
 
@@ -26,9 +30,15 @@ function GmailIcon({ size = 16, className = '' }: { size?: number; className?: s
 export default function Email() {
   const { language } = useTheme();
   const emailConn = useEmailConnections();
+  const storedSignatureSettings = useMemo(() => readEmailSignatureSettings(), []);
   const [activeTab, setActiveTab] = useState<EmailTab>('settings');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [signatureEnabled, setSignatureEnabled] = useState(storedSignatureSettings.enabled);
+  const [signatureHtmlDraft, setSignatureHtmlDraft] = useState(storedSignatureSettings.html);
+  const [showWaktiAiFooter, setShowWaktiAiFooter] = useState(storedSignatureSettings.showWaktiAiFooter);
+  const [signaturePrompt, setSignaturePrompt] = useState('');
+  const [generatingSignature, setGeneratingSignature] = useState(false);
   const pageCardClass = 'rounded-[26px] border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,250,255,0.98))] shadow-[0_18px_48px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(12,15,20,0.98),rgba(18,22,31,0.96))] dark:shadow-[0_20px_48px_rgba(0,0,0,0.45)] dark:ring-1 dark:ring-white/5';
   const panelClass = 'rounded-[22px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] shadow-[0_10px_28px_rgba(6,5,65,0.07)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(15,18,26,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_12px_30px_rgba(0,0,0,0.36)] dark:ring-1 dark:ring-white/5';
   const outlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.34)] dark:hover:!bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]';
@@ -81,7 +91,29 @@ export default function Email() {
     inboxProof: language === 'ar' ? 'صندوق الوارد' : 'Inbox',
     searchPlaceholder: language === 'ar' ? 'ابحث في المرسل أو الموضوع' : 'Search sender or subject',
     appleSearchHint: language === 'ar' ? 'سيعمل البحث هنا عندما يصبح Apple Mail متاحًا.' : 'Search will work here once Apple Mail is available.',
+    signatureTitle: language === 'ar' ? 'توقيع البريد' : 'Email Signature',
+    signatureSubtitle: language === 'ar' ? 'أنشئ توقيع HTML صغيراً وأنيقاً لبريدك.' : 'Create a small, elegant HTML signature for your emails.',
+    signatureEnabled: language === 'ar' ? 'تفعيل التوقيع' : 'Enable signature',
+    aiFooter: language === 'ar' ? 'إظهار Wakti AI في الأسفل' : 'Show Wakti AI at the bottom',
+    signaturePromptLabel: language === 'ar' ? 'وصف التوقيع للذكاء الاصطناعي' : 'AI signature prompt',
+    signaturePromptPlaceholder: language === 'ar' ? 'مثال: توقيع فاخر باسم Ahmed، وظيفة Founder، شركة Wakti، رقم هاتف، وموقع إلكتروني.' : 'Example: premium signature with Ahmed, Founder, Wakti, phone number, and website.',
+    generateSignature: language === 'ar' ? 'توليد بالذكاء الاصطناعي' : 'Generate with AI',
+    generatingSignature: language === 'ar' ? 'جارٍ التوليد...' : 'Generating...',
+    signatureHtmlLabel: language === 'ar' ? 'كود التوقيع HTML' : 'Signature HTML',
+    signatureHtmlPlaceholder: language === 'ar' ? 'ألصق أو عدّل كود HTML المصغر هنا.' : 'Paste or edit your small HTML snippet here.',
+    saveSignature: language === 'ar' ? 'حفظ التوقيع' : 'Save signature',
+    signaturePreview: language === 'ar' ? 'معاينة التوقيع' : 'Signature preview',
+    signatureSaved: language === 'ar' ? 'تم حفظ التوقيع' : 'Signature saved',
+    signatureGenerated: language === 'ar' ? 'تم توليد التوقيع' : 'Signature generated',
+    signatureHelp: language === 'ar' ? 'سيظهر Wakti AI تلقائياً أسفل التوقيع بشكل افتراضي ويمكنك إيقافه.' : 'Wakti AI shows at the bottom by default and you can turn it off.',
   }), [language]);
+
+  const signaturePreviewHtml = useMemo(() => buildSignatureHtml({
+    enabled: signatureEnabled,
+    html: signatureHtmlDraft,
+    showWaktiAiFooter,
+    updatedAt: storedSignatureSettings.updatedAt,
+  }), [showWaktiAiFooter, signatureEnabled, signatureHtmlDraft, storedSignatureSettings.updatedAt]);
 
   const getHealthBadge = (health?: ImapConnectionHealth) => {
     if (!health || health.status === 'unknown') {
@@ -137,6 +169,32 @@ export default function Email() {
       ]);
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const handleSaveSignature = () => {
+    const saved = saveEmailSignatureSettings({
+      enabled: signatureEnabled,
+      html: signatureHtmlDraft,
+      showWaktiAiFooter,
+      updatedAt: new Date().toISOString(),
+    });
+    setSignatureEnabled(saved.enabled);
+    setSignatureHtmlDraft(saved.html);
+    setShowWaktiAiFooter(saved.showWaktiAiFooter);
+    toast.success(t.signatureSaved);
+  };
+
+  const handleGenerateSignature = async () => {
+    setGeneratingSignature(true);
+    try {
+      const generatedHtml = await generateEmailSignatureHtml(signaturePrompt, language === 'ar' ? 'ar' : 'en');
+      setSignatureHtmlDraft(generatedHtml);
+      toast.success(t.signatureGenerated);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to generate signature');
+    } finally {
+      setGeneratingSignature(false);
     }
   };
 
@@ -292,6 +350,80 @@ export default function Email() {
               )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className={pageCardClass}>
+        <CardHeader>
+          <CardTitle>{t.signatureTitle}</CardTitle>
+          <CardDescription>{t.signatureSubtitle}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] px-4 py-3 shadow-[0_8px_20px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">{t.signatureEnabled}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{t.signatureHelp}</div>
+                </div>
+                <Switch checked={signatureEnabled} onCheckedChange={setSignatureEnabled} aria-label={t.signatureEnabled} />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] px-4 py-3 shadow-[0_8px_20px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-foreground">{t.aiFooter}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Wakti AI</div>
+                </div>
+                <Switch checked={showWaktiAiFooter} onCheckedChange={setShowWaktiAiFooter} aria-label={t.aiFooter} />
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-4 shadow-[0_8px_20px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+            <div className="text-sm font-medium text-foreground">{t.signaturePromptLabel}</div>
+            <Textarea
+              value={signaturePrompt}
+              onChange={(event) => setSignaturePrompt(event.target.value)}
+              placeholder={t.signaturePromptPlaceholder}
+              className="mt-3 min-h-[110px] rounded-2xl border border-[#060541]/12 bg-white text-sm text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-white/10 dark:bg-background/70 dark:text-foreground"
+            />
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="button" onClick={handleGenerateSignature} disabled={generatingSignature} className="gap-2 rounded-xl bg-[#060541] text-white hover:bg-[#0a0a5c]">
+                {generatingSignature ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {generatingSignature ? t.generatingSignature : t.generateSignature}
+              </Button>
+              <Button type="button" variant="outline" onClick={handleSaveSignature} className={outlineButtonClass}>
+                <Save className="h-4 w-4" />
+                {t.saveSignature}
+              </Button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-4 shadow-[0_8px_20px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+            <div className="text-sm font-medium text-foreground">{t.signatureHtmlLabel}</div>
+            <Textarea
+              value={signatureHtmlDraft}
+              onChange={(event) => setSignatureHtmlDraft(event.target.value)}
+              placeholder={t.signatureHtmlPlaceholder}
+              className="mt-3 min-h-[180px] rounded-2xl border border-[#060541]/12 bg-white font-mono text-xs text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-white/10 dark:bg-background/70 dark:text-foreground"
+            />
+          </div>
+
+          {signaturePreviewHtml ? (
+            <div className="rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-4 shadow-[0_8px_20px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+              <div className="text-sm font-medium text-foreground">{t.signaturePreview}</div>
+              <div className="mt-3 overflow-hidden rounded-2xl border border-[#060541]/12 bg-white shadow-[inset_0_1px_2px_rgba(6,5,65,0.04)]">
+                <iframe
+                  title="Email signature settings preview"
+                  sandbox=""
+                  srcDoc={`<div style="padding:16px;background:#ffffff;">${signaturePreviewHtml}</div>`}
+                  className="h-40 w-full bg-white"
+                />
+              </div>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
     </div>

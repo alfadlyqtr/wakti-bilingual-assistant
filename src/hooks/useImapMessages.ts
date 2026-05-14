@@ -39,6 +39,7 @@ export interface ImapDraftInput {
   cc?: string | string[];
   subject: string;
   body: string;
+  htmlBody?: string;
   attachments?: ImapDraftAttachment[];
 }
 
@@ -241,7 +242,7 @@ export function useImapMessages(connectionId: string) {
     }
   }, [connectionId, getMessageCacheKey]);
 
-  const sendMessage = useCallback(async ({ to, cc, subject, body, attachments }: ImapDraftInput): Promise<boolean> => {
+  const sendMessage = useCallback(async ({ to, cc, subject, body, htmlBody, attachments }: ImapDraftInput): Promise<boolean> => {
     if (!connectionId) return false;
     try {
       await callImapApi('send_message', {
@@ -250,6 +251,7 @@ export function useImapMessages(connectionId: string) {
         cc,
         subject,
         body,
+        htmlBody,
         attachments: attachments || [],
       });
       toast.success('Email sent');

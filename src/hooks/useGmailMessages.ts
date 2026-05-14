@@ -37,6 +37,7 @@ export interface GmailDraftInput {
   cc?: string | string[];
   subject: string;
   body: string;
+  htmlBody?: string;
   threadId?: string;
   attachments?: GmailDraftAttachment[];
 }
@@ -180,13 +181,14 @@ export function useGmailMessages() {
     }
   }, []);
 
-  const sendMessage = useCallback(async ({ to, cc, subject, body, threadId, attachments }: GmailDraftInput) => {
+  const sendMessage = useCallback(async ({ to, cc, subject, body, htmlBody, threadId, attachments }: GmailDraftInput) => {
     try {
       await callGmailApi('send_message', {
         to,
         cc,
         subject,
         body,
+        htmlBody,
         threadId,
         attachments: attachments || [],
       });
