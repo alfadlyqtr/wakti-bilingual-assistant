@@ -53,6 +53,14 @@ type ImapFolderCache = {
 
 const IMAP_FOLDER_CACHE_STORAGE_KEY = 'wakti-imap-folder-cache-v1';
 
+function normalizeImapBody(body: unknown): { text: string; html: string } {
+  const safeBody = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+  return {
+    text: typeof safeBody.text === 'string' ? safeBody.text : '',
+    html: typeof safeBody.html === 'string' ? safeBody.html : '',
+  };
+}
+
 function readStoredFolderCache(): Record<string, ImapFolderCache> {
   if (typeof window === 'undefined') return {};
   try {
@@ -218,8 +226,15 @@ export function useImapMessages(connectionId: string) {
         uid,
         folder,
       });
-      messageCacheRef.current[cacheKey] = data as ImapMessageFull;
-      return data as ImapMessageFull;
+      if (!data || typeof data !== 'object') {
+        return null;
+      }
+      const normalized = {
+        ...(data as ImapMessageFull),
+        body: normalizeImapBody((data as Partial<ImapMessageFull>).body),
+      } satisfies ImapMessageFull;
+      messageCacheRef.current[cacheKey] = normalized;
+      return normalized;
     } catch (err: any) {
       toast.error(err.message || 'Failed to load message');
       return null;

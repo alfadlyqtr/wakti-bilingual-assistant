@@ -48,6 +48,14 @@ type GmailFolderCache = {
 
 const GMAIL_FOLDER_CACHE_STORAGE_KEY = 'wakti-gmail-folder-cache-v1';
 
+function normalizeGmailBody(body: unknown): { text: string; html: string } {
+  const safeBody = body && typeof body === 'object' ? body as Record<string, unknown> : {};
+  return {
+    text: typeof safeBody.text === 'string' ? safeBody.text : '',
+    html: typeof safeBody.html === 'string' ? safeBody.html : '',
+  };
+}
+
 function readStoredFolderCache(): Record<string, GmailFolderCache> {
   if (typeof window === 'undefined') return {};
   try {
@@ -157,8 +165,15 @@ export function useGmailMessages() {
     }
     try {
       const data = await callGmailApi('get_message', { messageId });
-      messageCacheRef.current[messageId] = data as GmailMessageFull;
-      return data as GmailMessageFull;
+      if (!data || typeof data !== 'object') {
+        return null;
+      }
+      const normalized = {
+        ...(data as GmailMessageFull),
+        body: normalizeGmailBody((data as Partial<GmailMessageFull>).body),
+      } satisfies GmailMessageFull;
+      messageCacheRef.current[messageId] = normalized;
+      return normalized;
     } catch (err: any) {
       toast.error(err.message || 'Failed to load message');
       return null;

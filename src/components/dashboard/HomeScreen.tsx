@@ -2707,6 +2707,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       };
       const { error: updateError } = await supabase.from("profiles").update({ settings: nextSettings }).eq("id", user.id);
       if (updateError) throw updateError;
+      homescreenDirtyRef.current = false;
       settleSaveState('saved');
       return true;
     } catch (error) {
@@ -2820,47 +2821,46 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       || typeof hs?.dockColor === 'string'
       || hasRemoteBgState;
     if (!homescreenDirtyRef.current && hasRemoteHomescreenState) {
-      const remoteDockIds = Array.isArray(hs?.dockIds) ? sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP) : dockIds;
-      const nextWidgets = hasRemoteWidgets ? fromSupabase : hsWidgets;
-      const nextSizes = remoteWidgetSizes || hsWidgetSizes;
-      if (hasRemoteWidgets) {
-        setHsWidgets(fromSupabase);
-        setScopedStorageItem(LS_WIDGETS_BASE, JSON.stringify(fromSupabase), user.id);
-      }
-      if (hasRemoteWidgetSizes && remoteWidgetSizes) {
-        setHsWidgetSizes(remoteWidgetSizes);
-        setScopedStorageItem(LS_WIDGET_SIZES_BASE, JSON.stringify(remoteWidgetSizes), user.id);
-      }
-      if (hasRemoteLayoutState) {
-        const nextLayout = normalizeHomescreenLayout(
-          remoteLayout.length > 0 ? remoteLayout : buildLayoutFromLegacy(remoteUnifiedGrid, nextWidgets, nextSizes, remoteDockIds),
-          nextWidgets,
-          nextSizes,
-          remoteDockIds,
-        );
-        const nextUnified = layoutToUnifiedGrid(nextLayout);
-        setHomescreenLayout(nextLayout);
-        setUnifiedGrid(nextUnified);
-        setScopedStorageItem(LS_LAYOUT_BASE, JSON.stringify(nextLayout), user.id);
-        setScopedStorageItem(LS_UNIFIED_BASE, JSON.stringify(nextUnified), user.id);
-      }
-    }
+      const remoteDockIds = Array.isArray(hs?.dockIds)
+        ? sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP)
+        : sanitizeDock(DEFAULT_DOCK, MAX_DOCK_DESKTOP);
+      const remoteIconOrder = Array.isArray(hs?.iconOrder)
+        ? sanitizeOrder(hs.iconOrder)
+        : sanitizeOrder(DEFAULT_ORDER);
+      const nextWidgets = hasRemoteWidgets ? fromSupabase : { ...DEFAULT_HS_WIDGETS };
+      const nextSizes = remoteWidgetSizes || {};
+      const nextLayout = normalizeHomescreenLayout(
+        remoteLayout.length > 0 ? remoteLayout : buildLayoutFromLegacy(remoteUnifiedGrid, nextWidgets, nextSizes, remoteDockIds),
+        nextWidgets,
+        nextSizes,
+        remoteDockIds,
+      );
+      const nextUnified = layoutToUnifiedGrid(nextLayout);
+      const nextShowQuote = typeof hs?.showQuote === 'boolean' ? hs.showQuote : true;
+      const nextHeaderColor = typeof hs?.headerColor === 'string' ? hs.headerColor : '';
+      const nextDockColor = typeof hs?.dockColor === 'string' ? hs.dockColor : '';
 
-    if (Array.isArray(hs.dockIds)) {
-      const d = sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP);
-      setDockIds(prev => JSON.stringify(prev) === JSON.stringify(d) ? prev : d);
-      localStorage.setItem(LS_DOCK_KEY(), JSON.stringify(d));
-    }
-
-    if (Array.isArray(hs.iconOrder)) {
-      const o = sanitizeOrder(hs.iconOrder);
-      setIconOrder(prev => JSON.stringify(prev) === JSON.stringify(o) ? prev : o);
-      localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(o));
-    }
-
-    if (typeof hs.showQuote === 'boolean') {
-      setShowQuote(prev => prev === hs.showQuote ? prev : hs.showQuote);
-      localStorage.setItem(LS_QUOTE_KEY(), String(hs.showQuote));
+      setHsWidgets(prev => JSON.stringify(prev) === JSON.stringify(nextWidgets) ? prev : nextWidgets);
+      setScopedStorageItem(LS_WIDGETS_BASE, JSON.stringify(nextWidgets), user.id);
+      setHsWidgetSizes(prev => JSON.stringify(prev) === JSON.stringify(nextSizes) ? prev : nextSizes);
+      if (Object.keys(nextSizes).length > 0) setScopedStorageItem(LS_WIDGET_SIZES_BASE, JSON.stringify(nextSizes), user.id);
+      else removeScopedStorageItem(LS_WIDGET_SIZES_BASE, user.id);
+      setDockIds(prev => JSON.stringify(prev) === JSON.stringify(remoteDockIds) ? prev : remoteDockIds);
+      setScopedStorageItem(LS_DOCK_BASE, JSON.stringify(remoteDockIds), user.id);
+      setIconOrder(prev => JSON.stringify(prev) === JSON.stringify(remoteIconOrder) ? prev : remoteIconOrder);
+      setScopedStorageItem(LS_ORDER_BASE, JSON.stringify(remoteIconOrder), user.id);
+      setShowQuote(prev => prev === nextShowQuote ? prev : nextShowQuote);
+      setScopedStorageItem(LS_QUOTE_BASE, String(nextShowQuote), user.id);
+      setHomescreenLayout(nextLayout);
+      setUnifiedGrid(nextUnified);
+      setScopedStorageItem(LS_LAYOUT_BASE, JSON.stringify(nextLayout), user.id);
+      setScopedStorageItem(LS_UNIFIED_BASE, JSON.stringify(nextUnified), user.id);
+      setHeaderColor(prev => prev === nextHeaderColor ? prev : nextHeaderColor);
+      if (nextHeaderColor) setScopedStorageItem(LS_HEADER_COLOR_BASE, nextHeaderColor, user.id);
+      else removeScopedStorageItem(LS_HEADER_COLOR_BASE, user.id);
+      setDockColor(prev => prev === nextDockColor ? prev : nextDockColor);
+      if (nextDockColor) setScopedStorageItem(LS_DOCK_COLOR_BASE, nextDockColor, user.id);
+      else removeScopedStorageItem(LS_DOCK_COLOR_BASE, user.id);
     }
 
     const localBgImage = getScopedStorageItem(LS_BG_BASE, user.id);
@@ -2872,7 +2872,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const localWallpaper = typeof localBgImage === 'string' && !!localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
     const remoteWallpaper = typeof hs.bgImage === 'string' && !!hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
     const remoteChoice = isBgChoiceValue(hs.bgChoice) ? hs.bgChoice : null;
-    const useRemoteBgState = hasRemoteBgState;
+    const useRemoteBgState = hasRemoteHomescreenState;
     const inferredChoice: BgChoice = useRemoteBgState
       ? (remoteChoice ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'))
       : (localChoice ?? (localWallpaper ? 'wallpaper' : remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'));
@@ -2906,30 +2906,18 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             : 50)
       : 50;
     setBgPositionY(prev => prev === nextBgPosition ? prev : nextBgPosition);
-    localStorage.setItem(LS_BG_POS_Y_KEY(), String(nextBgPosition));
+    setScopedStorageItem(LS_BG_POS_Y_BASE, String(nextBgPosition), user.id);
 
     if (resolvedChoice === 'wallpaper') {
       const resolvedBgImage = remoteWallpaper || (!useRemoteBgState && localChoice === 'wallpaper' ? localWallpaper : '');
       if (resolvedBgImage) {
         setBgImage(prev => prev === resolvedBgImage ? prev : resolvedBgImage);
-        localStorage.setItem(LS_BG_KEY(), resolvedBgImage);
+        setScopedStorageItem(LS_BG_BASE, resolvedBgImage, user.id);
       }
     } else {
       const nextDefaultBg = theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK;
       setBgImage(prev => prev === nextDefaultBg ? prev : nextDefaultBg);
       removeScopedStorageItem(LS_BG_BASE, user.id);
-    }
-
-    if (typeof hs.headerColor === 'string') {
-      setHeaderColor(prev => prev === hs.headerColor ? prev : hs.headerColor);
-      if (hs.headerColor) localStorage.setItem(LS_HEADER_COLOR_KEY(), hs.headerColor);
-      else localStorage.removeItem(LS_HEADER_COLOR_KEY());
-    }
-
-    if (typeof hs.dockColor === 'string') {
-      setDockColor(prev => prev === hs.dockColor ? prev : hs.dockColor);
-      if (hs.dockColor) localStorage.setItem(lsKey(user.id, LS_DOCK_COLOR_BASE), hs.dockColor);
-      else localStorage.removeItem(lsKey(user.id, LS_DOCK_COLOR_BASE));
     }
   }, [profile, setBgChoiceState, theme, user?.id]);
 

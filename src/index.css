@@ -1328,6 +1328,23 @@ body.admin-page #root {
   padding-bottom: var(--app-bottom-tabs-h) !important;
 }
 
+.native-app-shell,
+.native-app-shell body,
+.native-app-shell #root {
+  overflow-x: hidden;
+}
+
+.native-app-shell .app-layout-mobile,
+.native-app-shell .app-main-scroll,
+.native-app-shell .app-layout-tablet main {
+  overscroll-behavior-x: none;
+  touch-action: manipulation;
+}
+
+.native-app-shell [data-native-gesture="allow"] {
+  touch-action: auto;
+}
+
 /* Android scroll fix: ensure touch scrolling works */
 .app-main-scroll {
   -webkit-overflow-scrolling: touch;

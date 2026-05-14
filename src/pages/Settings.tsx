@@ -120,6 +120,7 @@ export default function Settings() {
     showEventsWidget: false, showQuoteWidget: false, showMaw3dWidget: false,
     showVitalityWidget: false, showJournalWidget: false,
   };
+  const DEFAULT_HOMESCREEN_DOCK = ["wakti-ai", "calendar", "tr"];
 
   // Separate widget settings for each mode — they never share state
   const [dashboardWidgets, setDashboardWidgets] = useState<WidgetConfig>({ ...DEFAULT_DASHBOARD_WIDGETS });
@@ -182,10 +183,44 @@ export default function Settings() {
     migrateLegacyScopedStorage('wakti_dashboard_look', user.id, 'wakti_dashboard_look');
   }, [user?.id]);
 
+  const fetchLatestProfileSettings = async () => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('settings')
+      .eq('id', user?.id)
+      .single();
+    if (error) throw error;
+    return (data?.settings as any) || {};
+  };
+
+  const updateProfileSettings = async (buildNextSettings: (currentSettings: any) => any) => {
+    const currentSettings = await fetchLatestProfileSettings();
+    const nextSettings = buildNextSettings(currentSettings);
+    const { error } = await supabase
+      .from('profiles')
+      .update({ settings: nextSettings })
+      .eq('id', user?.id);
+    if (error) throw error;
+    return nextSettings;
+  };
+
   const loadSettingsFromProfile = () => {
     try {
       const s = cachedProfile?.settings as any;
       const hs = s?.homescreen || {};
+      const hasRemoteWidgets = !!(hs?.homescreenWidgets || s?.homescreenWidgets) && typeof (hs?.homescreenWidgets || s?.homescreenWidgets) === 'object';
+      const hasRemoteWidgetSizes = !!hs?.homescreenWidgetSizes && typeof hs.homescreenWidgetSizes === 'object';
+      const hasRemoteBgState = isBgChoiceValue(hs?.bgChoice) || (typeof hs?.bgImage === 'string' && !!hs.bgImage) || typeof hs?.bgPositionY === 'number' || !!s?.homescreenBg;
+      const hasRemoteHomescreenState = hasRemoteWidgets
+        || hasRemoteWidgetSizes
+        || Array.isArray(hs?.dockIds)
+        || Array.isArray(hs?.iconOrder)
+        || Array.isArray(hs?.homescreenLayout)
+        || Array.isArray(hs?.unifiedGrid)
+        || typeof hs?.showQuote === 'boolean'
+        || typeof hs?.headerColor === 'string'
+        || typeof hs?.dockColor === 'string'
+        || hasRemoteBgState;
 
       // Load dashboard widgets (legacy key 'widgets' maps to dashboard)
       if (s?.dashboardWidgets) {
@@ -211,38 +246,47 @@ export default function Settings() {
         }
         setHomescreenWidgets(clamped);
         setScopedStorageItem(LS_WIDGETS_BASE, JSON.stringify(clamped), user?.id);
-      } else {
+      } else if (!hasRemoteHomescreenState) {
         const localWidgetsRaw = getScopedStorageItem(LS_WIDGETS_BASE, user?.id);
         if (localWidgetsRaw) {
           try {
             setHomescreenWidgets({ ...DEFAULT_HOMESCREEN_WIDGETS, ...JSON.parse(localWidgetsRaw), showNavWidget: false });
           } catch {}
         }
+      } else {
+        setHomescreenWidgets({ ...DEFAULT_HOMESCREEN_WIDGETS });
+        setScopedStorageItem(LS_WIDGETS_BASE, JSON.stringify({ ...DEFAULT_HOMESCREEN_WIDGETS }), user?.id);
       }
 
       if (hs?.homescreenWidgetSizes && typeof hs.homescreenWidgetSizes === 'object') {
         setHomescreenWidgetSizes(hs.homescreenWidgetSizes);
         setScopedStorageItem(LS_WIDGET_SIZES_BASE, JSON.stringify(hs.homescreenWidgetSizes), user?.id);
-      } else {
+      } else if (!hasRemoteHomescreenState) {
         const localSizesRaw = getScopedStorageItem(LS_WIDGET_SIZES_BASE, user?.id);
         if (localSizesRaw) {
           try {
             setHomescreenWidgetSizes(JSON.parse(localSizesRaw));
           } catch {}
         }
+      } else {
+        setHomescreenWidgetSizes({});
+        removeScopedStorageItem(LS_WIDGET_SIZES_BASE, user?.id);
       }
 
       if (Array.isArray(hs?.dockIds)) {
         const nextDock = sanitizeDockIds(hs.dockIds);
         setHomescreenDockIds(nextDock);
         setScopedStorageItem(LS_DOCK_BASE, JSON.stringify(nextDock), user?.id);
-      } else {
+      } else if (!hasRemoteHomescreenState) {
         const localDockRaw = getScopedStorageItem(LS_DOCK_BASE, user?.id);
         if (localDockRaw) {
           try {
             setHomescreenDockIds(sanitizeDockIds(JSON.parse(localDockRaw)));
           } catch {}
         }
+      } else {
+        setHomescreenDockIds(DEFAULT_HOMESCREEN_DOCK);
+        setScopedStorageItem(LS_DOCK_BASE, JSON.stringify(DEFAULT_HOMESCREEN_DOCK), user?.id);
       }
 
       if (s?.homescreenBg) {
@@ -254,6 +298,14 @@ export default function Settings() {
         if (typeof bg.angle === 'number') setHsBgAngle(bg.angle);
         if (typeof bg.glow === 'boolean') setHsGlow(bg.glow);
         setScopedStorageItem(LS_HSBG_BASE, JSON.stringify(bg), user?.id);
+      } else if (hasRemoteHomescreenState) {
+        setHsBgMode('solid');
+        setHsBgColor1('#0c0f14');
+        setHsBgColor2('#1a1040');
+        setHsBgColor3('');
+        setHsBgAngle(180);
+        setHsGlow(true);
+        removeScopedStorageItem(LS_HSBG_BASE, user?.id);
       }
 
       const localBgChoice = getScopedStorageItem(LS_BG_CHOICE_BASE, user?.id);
@@ -265,15 +317,14 @@ export default function Settings() {
       const localWallpaper = typeof localBgImage === 'string' && localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
       const remoteChoice = isBgChoiceValue(hs?.bgChoice) ? hs.bgChoice : null;
       const remoteWallpaper = typeof hs?.bgImage === 'string' && hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
-      const hasRemoteBgState = remoteChoice !== null || !!remoteWallpaper || typeof hs?.bgPositionY === 'number' || !!s?.homescreenBg;
-      const resolvedChoice = hasRemoteBgState
+      const resolvedChoice = hasRemoteHomescreenState
         ? (remoteChoice || (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'))
         : (localChoice || (localWallpaper ? 'wallpaper' : 'default'));
       setHomescreenBgChoice(resolvedChoice);
       setScopedStorageItem(LS_BG_CHOICE_BASE, resolvedChoice, user?.id);
       setScopedStorageItem(LS_HSBG_ACTIVE_BASE, String(resolvedChoice === 'style'), user?.id);
       if (resolvedChoice === 'wallpaper') {
-        const resolvedWallpaper = hasRemoteBgState ? remoteWallpaper : localWallpaper;
+        const resolvedWallpaper = hasRemoteHomescreenState ? remoteWallpaper : localWallpaper;
         if (resolvedWallpaper) {
           setHomescreenBgImage(resolvedWallpaper);
           setScopedStorageItem(LS_BG_BASE, resolvedWallpaper, user?.id);
@@ -284,7 +335,7 @@ export default function Settings() {
       const resolvedBgPosition = resolvedChoice === 'wallpaper'
         ? (typeof hs?.bgPositionY === 'number'
             ? Math.max(0, Math.min(100, hs.bgPositionY))
-            : !hasRemoteBgState && localChoice === 'wallpaper'
+            : !hasRemoteHomescreenState && localChoice === 'wallpaper'
               ? localBgPosition
               : 50)
         : 50;
@@ -294,15 +345,21 @@ export default function Settings() {
       if (typeof hs?.headerColor === 'string') {
         setHomescreenHeaderColor(hs.headerColor);
         if (hs.headerColor) setScopedStorageItem(LS_HEADER_COLOR_BASE, hs.headerColor, user?.id);
-      } else {
+      } else if (!hasRemoteHomescreenState) {
         setHomescreenHeaderColor(getScopedStorageItem(LS_HEADER_COLOR_BASE, user?.id) || '');
+      } else {
+        setHomescreenHeaderColor('');
+        removeScopedStorageItem(LS_HEADER_COLOR_BASE, user?.id);
       }
 
       if (typeof hs?.dockColor === 'string') {
         setHomescreenDockColor(hs.dockColor);
         if (hs.dockColor) setScopedStorageItem(LS_DOCK_COLOR_BASE, hs.dockColor, user?.id);
-      } else {
+      } else if (!hasRemoteHomescreenState) {
         setHomescreenDockColor(getScopedStorageItem(LS_DOCK_COLOR_BASE, user?.id) || '');
+      } else {
+        setHomescreenDockColor('');
+        removeScopedStorageItem(LS_DOCK_COLOR_BASE, user?.id);
       }
 
       // Load dashboard look preference
@@ -334,8 +391,7 @@ export default function Settings() {
   };
 
   const updateHomescreenSettings = async (homescreenPatch: Record<string, any> = {}, rootPatch: Record<string, any> = {}, showToast = true) => {
-    const currentSettings = (cachedProfile?.settings as any) || {};
-    const nextSettings = {
+    await updateProfileSettings((currentSettings) => ({
       ...currentSettings,
       ...rootPatch,
       ...(homescreenPatch.homescreenWidgets ? { homescreenWidgets: homescreenPatch.homescreenWidgets } : {}),
@@ -343,8 +399,7 @@ export default function Settings() {
         ...(currentSettings.homescreen || {}),
         ...homescreenPatch,
       },
-    };
-    await supabase.from('profiles').update({ settings: nextSettings }).eq('id', user?.id);
+    }));
     if (showToast) showSuccess(t("settingsUpdated", language));
     refetchProfile();
   };
@@ -363,17 +418,11 @@ export default function Settings() {
         setScopedStorageItem(LS_WIDGETS_BASE, JSON.stringify(newSettings), user?.id);
         await updateHomescreenSettings({ homescreenWidgets: newSettings }, {}, false);
       } else {
-        const currentSettings = (cachedProfile?.settings as any) || {};
-        await supabase
-          .from('profiles')
-          .update({
-            settings: {
-              ...currentSettings,
-              dashboardWidgets: newSettings,
-              widgets: newSettings,
-            }
-          })
-          .eq('id', user?.id);
+        await updateProfileSettings((currentSettings) => ({
+          ...currentSettings,
+          dashboardWidgets: newSettings,
+          widgets: newSettings,
+        }));
       }
 
       showSuccess(t("settingsUpdated", language));
@@ -393,17 +442,10 @@ export default function Settings() {
       setDashboardLook(look);
       setScopedStorageItem('wakti_dashboard_look', look, user?.id);
 
-      const currentSettings = (cachedProfile?.settings as any) || {};
-
-      await supabase
-        .from('profiles')
-        .update({ 
-          settings: {
-            ...currentSettings,
-            dashboardLook: look
-          }
-        })
-        .eq('id', user?.id);
+      await updateProfileSettings((currentSettings) => ({
+        ...currentSettings,
+        dashboardLook: look,
+      }));
 
       showSuccess(t("settingsUpdated", language));
       refetchProfile();
@@ -597,23 +639,17 @@ export default function Settings() {
           .update({ auto_approve_contacts: value })
           .eq('id', user?.id);
       } else {
-        const currentSettings = (cachedProfile?.settings as any) || {};
-        const privacySettings = currentSettings.privacy || {};
-
-        const updatedPrivacy = {
-          ...privacySettings,
-          [key === 'profileVisibility' ? 'profileVisibility' : 'activityStatus']: value
-        };
-
-        await supabase
-          .from('profiles')
-          .update({ 
-            settings: {
-              ...currentSettings,
-              privacy: updatedPrivacy
-            }
-          })
-          .eq('id', user?.id);
+        await updateProfileSettings((currentSettings) => {
+          const privacySettings = currentSettings.privacy || {};
+          const updatedPrivacy = {
+            ...privacySettings,
+            [key === 'profileVisibility' ? 'profileVisibility' : 'activityStatus']: value
+          };
+          return {
+            ...currentSettings,
+            privacy: updatedPrivacy,
+          };
+        });
       }
 
       showSuccess(language === 'ar' ? 'تم تحديث إعدادات الخصوصية' : 'Privacy settings updated');

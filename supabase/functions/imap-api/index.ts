@@ -150,19 +150,19 @@ class ImapClient {
     return boxes;
   }
 
-  async fetchHeaders(page: number, pageSize: number, exists: number): Promise<{ seq: number; headers: string; isUnread: boolean }[]> {
+  async fetchHeaders(page: number, pageSize: number, exists: number): Promise<{ uid: number; headers: string; isUnread: boolean }[]> {
     if (exists === 0) return [];
     const end = Math.max(1, exists - (page - 1) * pageSize);
     const start = Math.max(1, end - pageSize + 1);
     const tag = this.nextTag();
-    await this.send(`${tag} FETCH ${start}:${end} (UID FLAGS BODY[HEADER.FIELDS (FROM TO SUBJECT DATE)])`);
+    await this.send(`${tag} FETCH ${start}:${end} (UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])`);
     const lines = await this.readUntilTagged(tag, 20000);
     return this.parseHeaders(lines);
   }
 
-  private parseHeaders(lines: string[]): { seq: number; headers: string; isUnread: boolean }[] {
-    const results: { seq: number; headers: string; isUnread: boolean }[] = [];
-    let currentSeq = 0;
+  private parseHeaders(lines: string[]): { uid: number; headers: string; isUnread: boolean }[] {
+    const results: { uid: number; headers: string; isUnread: boolean }[] = [];
+    let currentUid = 0;
     let collecting = false;
     let headerBuf = "";
     let currentIsUnread = false;
@@ -170,10 +170,11 @@ class ImapClient {
     for (const line of lines) {
       const fetchMatch = line.match(/^\* (\d+) FETCH/);
       if (fetchMatch) {
-        if (currentSeq > 0 && headerBuf.trim()) {
-          results.push({ seq: currentSeq, headers: headerBuf.trim(), isUnread: currentIsUnread });
+        if (currentUid > 0 && headerBuf.trim()) {
+          results.push({ uid: currentUid, headers: headerBuf.trim(), isUnread: currentIsUnread });
         }
-        currentSeq = parseInt(fetchMatch[1], 10);
+        const uidMatch = line.match(/UID (\d+)/i);
+        currentUid = uidMatch ? parseInt(uidMatch[1], 10) : 0;
         collecting = line.includes("BODY[HEADER");
         headerBuf = "";
         const flagsMatch = line.match(/FLAGS \(([^)]*)\)/i);
@@ -190,16 +191,16 @@ class ImapClient {
       }
     }
 
-    if (currentSeq > 0 && headerBuf.trim()) {
-      results.push({ seq: currentSeq, headers: headerBuf.trim(), isUnread: currentIsUnread });
+    if (currentUid > 0 && headerBuf.trim()) {
+      results.push({ uid: currentUid, headers: headerBuf.trim(), isUnread: currentIsUnread });
     }
 
-    return results.sort((a, b) => b.seq - a.seq);
+    return results.sort((a, b) => b.uid - a.uid);
   }
 
-  async fetchBody(seq: number): Promise<string> {
+  async fetchBody(uid: number): Promise<string> {
     const tag = this.nextTag();
-    await this.send(`${tag} FETCH ${seq} (BODY[])`);
+    await this.send(`${tag} UID FETCH ${uid} (BODY.PEEK[])`);
     const lines = await this.readUntilTagged(tag, 30000);
     let collecting = false;
     let body = "";
@@ -216,20 +217,61 @@ class ImapClient {
     return body;
   }
 
-  async copy(seq: number, mailbox: string): Promise<void> {
+  async copy(uid: number, mailbox: string): Promise<void> {
     const tag = this.nextTag();
-    await this.send(`${tag} COPY ${seq} "${mailbox.replace(/"/g, '\\"')}"`);
+    await this.send(`${tag} UID COPY ${uid} "${mailbox.replace(/"/g, '\\"')}"`);
     const lines = await this.readUntilTagged(tag, 20000);
     const last = lines[lines.length - 1] || "";
     if (!last.includes("OK")) throw new Error(`COPY to "${mailbox}" failed: ${last}`);
   }
 
-  async addFlags(seq: number, flags: string[]): Promise<void> {
+  async addFlags(uid: number, flags: string[]): Promise<void> {
     const tag = this.nextTag();
-    await this.send(`${tag} STORE ${seq} +FLAGS.SILENT (${flags.join(" ")})`);
+    await this.send(`${tag} UID STORE ${uid} +FLAGS.SILENT (${flags.join(" ")})`);
     const lines = await this.readUntilTagged(tag, 20000);
     const last = lines[lines.length - 1] || "";
     if (!last.includes("OK")) throw new Error(`STORE flags failed: ${last}`);
+  }
+
+  private async readUntilContinuationOrTagged(tag: string, timeoutMs = 15000): Promise<{ lines: string[]; continuation: boolean }> {
+    const lines: string[] = [];
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const chunk = await this.readBytes(3000);
+      if (chunk) this.buffer += chunk;
+      const parts = this.buffer.split("\r\n");
+      this.buffer = parts.pop() ?? "";
+      for (const line of parts) {
+        lines.push(line);
+        if (line.startsWith("+")) {
+          return { lines, continuation: true };
+        }
+        if (line.startsWith(tag + " ")) {
+          return { lines, continuation: false };
+        }
+      }
+      if (!chunk) await new Promise((r) => setTimeout(r, 50));
+    }
+    throw new Error(`IMAP timeout waiting for ${tag}`);
+  }
+
+  async append(mailbox: string, message: string, flags: string[] = []): Promise<void> {
+    if (!this.conn) throw new Error("Not connected");
+    const normalized = message.replace(/\r?\n/g, "\r\n");
+    const bytes = this.encoder.encode(normalized);
+    const tag = this.nextTag();
+    const flagPart = flags.length > 0 ? ` (${flags.join(" ")})` : "";
+    await this.send(`${tag} APPEND "${mailbox.replace(/"/g, '\\"')}"${flagPart} {${bytes.length}}`);
+    const ready = await this.readUntilContinuationOrTagged(tag, 20000);
+    if (!ready.continuation) {
+      const last = ready.lines[ready.lines.length - 1] || "";
+      if (!last.includes("OK")) throw new Error(`APPEND to "${mailbox}" failed: ${last}`);
+    }
+    await this.conn.write(bytes);
+    await this.conn.write(this.encoder.encode("\r\n"));
+    const lines = await this.readUntilTagged(tag, 45000);
+    const last = lines[lines.length - 1] || "";
+    if (!last.includes("OK")) throw new Error(`APPEND to "${mailbox}" failed: ${last}`);
   }
 
   async expunge(): Promise<void> {
@@ -365,16 +407,17 @@ function wrapBase64(value: string): string {
   return clean.match(/.{1,76}/g)?.join("\r\n") || "";
 }
 
-function buildSmtpMessage(params: {
+function buildOutgoingMessage(params: {
   from: string;
   to: string[];
   cc: string[];
   subject: string;
   body: string;
   attachments: DraftAttachment[];
-}): string {
+}): { rawMessage: string; messageId: string } {
   const { from, to, cc, subject, body, attachments } = params;
   const boundary = `----WaktiMail${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+  const messageId = `<wakti-${crypto.randomUUID()}@mail.wakti.qa>`;
 
   let msg = "";
   msg += `MIME-Version: 1.0\r\n`;
@@ -385,6 +428,7 @@ function buildSmtpMessage(params: {
   }
   msg += `Subject: ${sanitizeHeaderValue(subject)}\r\n`;
   msg += `Date: ${new Date().toUTCString()}\r\n`;
+  msg += `Message-ID: ${messageId}\r\n`;
 
   if (attachments.length > 0) {
     msg += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
@@ -402,13 +446,13 @@ function buildSmtpMessage(params: {
     }
 
     msg += `--${boundary}--`;
-    return msg;
+    return { rawMessage: msg, messageId };
   }
 
   msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
   msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
   msg += body;
-  return msg;
+  return { rawMessage: msg, messageId };
 }
 
 class SmtpClient {
@@ -500,7 +544,7 @@ class SmtpClient {
     await this.expectCode(235);
   }
 
-  async send(from: string, to: string[], cc: string[], subject: string, body: string, attachments: DraftAttachment[]): Promise<void> {
+  async send(from: string, to: string[], cc: string[], rawMessage: string, hasAttachments: boolean): Promise<void> {
     await this.write(`MAIL FROM:<${from}>\r\n`);
     await this.expectCode(250);
     for (const r of Array.from(new Set([...to, ...cc]))) {
@@ -509,9 +553,8 @@ class SmtpClient {
     }
     await this.write(`DATA\r\n`);
     await this.expectCode(354);
-    const msg = buildSmtpMessage({ from, to, cc, subject, body, attachments });
-    await this.write(msg + "\r\n.\r\n");
-    await this.expectCode(250, attachments.length > 0 ? 45000 : 15000);
+    await this.write(rawMessage + "\r\n.\r\n");
+    await this.expectCode(250, hasAttachments ? 45000 : 15000);
   }
 
   async quit(): Promise<void> {
@@ -589,7 +632,7 @@ async function detectTrashFolder(imap: ImapClient): Promise<string | null> {
   return fuzzy || null;
 }
 
-async function openMailbox(conn: Record<string, unknown>, requestedFolder: string, requiredSeq?: number): Promise<MailboxSession> {
+async function openMailbox(conn: Record<string, unknown>, requestedFolder: string): Promise<MailboxSession> {
   const candidates = getLoginCandidates(conn);
   let lastError: Error | null = null;
   let bestSession: MailboxSession | null = null;
@@ -600,13 +643,8 @@ async function openMailbox(conn: Record<string, unknown>, requestedFolder: strin
       await imap.login();
       const selectedFolder = requestedFolder === "SENT" ? await detectSentFolder(imap) : requestedFolder || "INBOX";
       const { exists } = await imap.select(selectedFolder);
-      if (typeof requiredSeq === "number" && requiredSeq > 0 && exists < requiredSeq) {
-        console.log("[imap-api] mailbox too small", { login, requestedFolder, selectedFolder, exists, requiredSeq });
-        await imap.logout();
-        continue;
-      }
       const currentSession = { imap, login, selectedFolder, exists };
-      console.log("[imap-api] mailbox opened", { login, requestedFolder, selectedFolder, exists, requiredSeq });
+      console.log("[imap-api] mailbox opened", { login, requestedFolder, selectedFolder, exists });
       if (!bestSession) {
         bestSession = currentSession;
         continue;
@@ -626,7 +664,6 @@ async function openMailbox(conn: Record<string, unknown>, requestedFolder: strin
   if (bestSession) {
     console.log("[imap-api] chosen mailbox", {
       requestedFolder,
-      requiredSeq,
       login: bestSession.login,
       selectedFolder: bestSession.selectedFolder,
       exists: bestSession.exists,
@@ -661,9 +698,8 @@ async function sendViaBestSmtpLogin(
   conn: Record<string, unknown>,
   recipients: string[],
   ccRecipients: string[],
-  subject: string,
-  body: string,
-  attachments: DraftAttachment[]
+  rawMessage: string,
+  hasAttachments: boolean
 ): Promise<void> {
   const candidates = getLoginCandidates(conn);
   let lastError: Error | null = null;
@@ -682,9 +718,9 @@ async function sendViaBestSmtpLogin(
         try { await smtp.startTls(); } catch {}
       }
       await smtp.auth();
-      await smtp.send(String(conn.email_address || login), recipients, ccRecipients, subject, body, attachments);
+      await smtp.send(String(conn.email_address || login), recipients, ccRecipients, rawMessage, hasAttachments);
       await smtp.quit();
-      console.log("[imap-api] smtp sent", { login, recipientsCount: recipients.length + ccRecipients.length, attachmentsCount: attachments.length });
+      console.log("[imap-api] smtp sent", { login, recipientsCount: recipients.length + ccRecipients.length, hasAttachments });
       return;
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -732,7 +768,7 @@ async function validateConnection(conn: Record<string, unknown>): Promise<Connec
 }
 
 async function deleteMessage(conn: Record<string, unknown>, folder: string, uid: number): Promise<{ success: true; targetFolder: string }> {
-  const session = await openMailbox(conn, folder, uid);
+  const session = await openMailbox(conn, folder);
   try {
     const trashFolder = await detectTrashFolder(session.imap);
     if (trashFolder && trashFolder.toLowerCase() !== session.selectedFolder.toLowerCase()) {
@@ -756,6 +792,29 @@ async function deleteMessage(conn: Record<string, unknown>, folder: string, uid:
     };
   } finally {
     await session.imap.logout();
+  }
+}
+
+async function ensureSentCopy(conn: Record<string, unknown>, rawMessage: string, messageId: string): Promise<{ saved: boolean; skipped: boolean; folder: string | null }> {
+  try {
+    const session = await openMailbox(conn, "SENT");
+    try {
+      const recentHeaders = await session.imap.fetchHeaders(1, 10, session.exists);
+      const alreadySaved = recentHeaders.some((header) => parseHeader(header.headers, "Message-ID") === messageId);
+      if (alreadySaved) {
+        return { saved: false, skipped: true, folder: session.selectedFolder };
+      }
+      await session.imap.append(session.selectedFolder, rawMessage, ["\\Seen"]);
+      return { saved: true, skipped: false, folder: session.selectedFolder };
+    } finally {
+      await session.imap.logout();
+    }
+  } catch (error) {
+    console.log("[imap-api] save sent copy failed", {
+      error: error instanceof Error ? error.message : String(error),
+      messageId,
+    });
+    return { saved: false, skipped: false, folder: null };
   }
 }
 
@@ -804,7 +863,7 @@ Deno.serve(async (req: Request) => {
       try {
         const headers = await session.imap.fetchHeaders(page, pageSize, session.exists);
         const messages = headers.map((h) => ({
-          uid: h.seq,
+          uid: h.uid,
           subject: parseHeader(h.headers, "Subject") || "(no subject)",
           from: parseHeader(h.headers, "From"),
           to: parseHeader(h.headers, "To"),
@@ -831,7 +890,7 @@ Deno.serve(async (req: Request) => {
       const uid = Number(body.uid || 0);
       const folder = String(body.folder || "INBOX");
       if (!uid) return jsonResponse({ error: "uid required" }, 400);
-      const session = await openMailbox(conn, folder, uid);
+      const session = await openMailbox(conn, folder);
       try {
         if (folder.toUpperCase() === "INBOX") {
           try {
@@ -870,8 +929,23 @@ Deno.serve(async (req: Request) => {
       if (recipients.length === 0 || !subject || !emailBody) {
         return jsonResponse({ error: "to, subject, body required" }, 400);
       }
-      await sendViaBestSmtpLogin(conn, recipients, ccRecipients, subject, emailBody, attachments);
-      return jsonResponse({ success: true });
+      const senderAddress = String(conn.email_address || conn.username || "").trim();
+      const outgoing = buildOutgoingMessage({
+        from: senderAddress,
+        to: recipients,
+        cc: ccRecipients,
+        subject,
+        body: emailBody,
+        attachments,
+      });
+      await sendViaBestSmtpLogin(conn, recipients, ccRecipients, outgoing.rawMessage, attachments.length > 0);
+      const sentCopy = await ensureSentCopy(conn, outgoing.rawMessage, outgoing.messageId);
+      return jsonResponse({
+        success: true,
+        savedToSent: sentCopy.saved || sentCopy.skipped,
+        savedToSentByAppend: sentCopy.saved,
+        sentFolder: sentCopy.folder,
+      });
     }
 
     if (action === "delete_message") {

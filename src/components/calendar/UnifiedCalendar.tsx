@@ -278,6 +278,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
 
   // touch gesture handlers
   const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.defaultPrevented) return;
     if (e.touches.length === 1) {
       // Single touch - track for double tap
       const now = Date.now();
@@ -309,6 +310,7 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.defaultPrevented) return;
     if (e.touches.length === 2 && pinchStartDistance !== null) {
       const currentDistance = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,

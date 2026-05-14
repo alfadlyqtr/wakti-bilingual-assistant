@@ -63,6 +63,7 @@ export const renderSlideImage = (
     return (
       <div
         className={`${frameClassName} ${args?.enableDrag ? 'touch-none select-none' : ''}`}
+        data-native-gesture={args?.enableDrag ? 'allow' : undefined}
         onPointerDown={args?.onPointerDown}
         onPointerMove={args?.onPointerMove}
         onPointerUp={args?.onPointerUp}

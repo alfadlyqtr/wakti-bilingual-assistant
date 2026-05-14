@@ -196,8 +196,6 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
         setProfile(cached.data);
         setLoading(false);
       }
-      // If fresh, skip the network round-trip entirely
-      if (!cached.stale) return;
     }
     // ─────────────────────────────────────────────────────────────────────
 

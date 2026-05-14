@@ -369,6 +369,7 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
           >
             <div
               ref={lightboxContainerRef}
+              data-native-gesture="allow"
               className="w-full max-w-5xl max-h-[66vh] overflow-visible rounded-2xl touch-none overscroll-none select-none"
             >
               <div className="flex items-center justify-center min-h-[34vh] pt-3 pb-1">

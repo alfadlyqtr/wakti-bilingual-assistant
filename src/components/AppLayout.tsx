@@ -16,6 +16,7 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { setupNotificationClickHandler } from "@/integrations/natively/notificationsBridge";
 import { onEvent } from "@/utils/eventBus";
 import { toast } from "sonner";
+import { useNativeInteractionPolicy } from "@/hooks/useNativeInteractionPolicy";
 
 const CustomPaywallModal = lazy(() => import("@/components/paywall/CustomPaywallModal"));
 const AnnouncementRunner = lazy(() => import("@/components/announcements/AnnouncementRunner").then((m) => ({ default: m.AnnouncementRunner })));
@@ -98,6 +99,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
   const { isMobile } = useIsMobile();
   const { isTablet } = useIsTablet();
   const { isDesktop } = useIsDesktop();
+  useNativeInteractionPolicy(isMobile || isTablet);
   const location = useLocation();
 
   // LIGHTWEIGHT CLEANUP - preserves styling
