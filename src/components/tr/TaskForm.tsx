@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { SubtaskManager } from '@/components/tr/SubtaskManager';
 import { supabase } from '@/integrations/supabase/client';
 import { buildSharedTaskUrl } from '@/utils/taskShare';
+import { TRTaskPrefillDraft } from '@/utils/trPrefill';
 
 // PHASE 2 FIX: Updated schema to make due_date truly optional
 const taskSchema = z.object({
@@ -39,10 +40,11 @@ interface TaskFormProps {
   isOpen: boolean;
   onClose: () => void;
   task?: TRTask | null;
+  prefill?: TRTaskPrefillDraft | null;
   onTaskSaved: () => void;
 }
 
-export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) {
+export function TaskForm({ isOpen, onClose, task, prefill, onTaskSaved }: TaskFormProps) {
   const { language } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   type SubtaskDraft = { title: string; due_date?: string | null; due_time?: string | null };
@@ -81,6 +83,12 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
   const watchedIsShared = watch('is_shared');
 
   useEffect(() => {
+    if (!isOpen) return;
+
+    setNewSubtask('');
+    setBulkInput('');
+    setGeneratorPrompt('');
+
     if (task) {
       reset({
         title: task.title,
@@ -91,6 +99,22 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
         task_type: task.task_type,
         is_shared: task.is_shared,
       });
+      setSubtasks([]);
+    } else if (prefill) {
+      reset({
+        title: prefill.title || '',
+        description: prefill.description || '',
+        due_date: prefill.due_date || null,
+        due_time: prefill.due_time || null,
+        priority: prefill.priority || 'normal',
+        task_type: prefill.task_type || 'one-time',
+        is_shared: prefill.is_shared ?? false,
+      });
+      setSubtasks((prefill.subtasks || []).map((subtask) => ({
+        title: subtask.title,
+        due_date: subtask.due_date || null,
+        due_time: subtask.due_time || null,
+      })));
     } else {
       reset({
         title: '',
@@ -103,7 +127,7 @@ export function TaskForm({ isOpen, onClose, task, onTaskSaved }: TaskFormProps) 
       });
       setSubtasks([]);
     }
-  }, [task, reset]);
+  }, [isOpen, prefill, reset, task]);
 
   useEffect(() => {
     if (!isOpen) {

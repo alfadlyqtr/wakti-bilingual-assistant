@@ -420,10 +420,33 @@ function _getHeaderBlock(
       const location = String(formState.location ?? "").trim();
       const website = String(formState.website ?? "").trim();
       const linkedin = String(formState.linkedin ?? "").trim();
-      const contactBits = [email, phone, location, website, linkedin].filter(Boolean).join(" | ");
+      const instagram = String(formState.instagram ?? "").trim();
+      const whatsapp = String(formState.whatsapp ?? "").trim();
       const summary = String(formState.summary ?? "").trim();
-      void summary;
-      return `Header: professional resume masthead.${logoClause ? ` ${logoClause}` : ""} Large candidate name "${fullName}" at top.${role ? ` Role subtitle directly beneath: "${role}".` : ""}${contactBits ? ` Compact contact row below: "${contactBits}".` : ""}`;
+      const experience = String(formState.experience ?? "").trim();
+      const education = String(formState.education ?? "").trim();
+      const projects = String(formState.projects ?? "").trim();
+      const activities = String(formState.extracurricular_activities ?? "").trim();
+      const skills = String(formState.skills ?? "").trim();
+      const certifications = String(formState.certifications ?? "").trim();
+      const languages = String(formState.languages ?? "").trim();
+      const contactBits = [email, phone, location, website, linkedin, instagram, whatsapp].filter(Boolean).join(" | ");
+      const sectionPriority = [
+        summary ? "Summary" : "",
+        experience ? "Experience" : "",
+        education ? "Education" : "",
+        projects ? "Projects" : "",
+        skills ? "Skills" : "",
+        certifications ? "Certifications" : "",
+        languages ? "Languages" : "",
+        activities ? "Activities" : "",
+      ].filter(Boolean).join(" → ");
+      const visualMode = experience
+        ? "Use an employer-ready executive resume treatment with stronger experience emphasis."
+        : education && projects
+          ? "Use a polished early-career resume treatment that makes education and projects feel strong and credible."
+          : "Use a clean, premium starter resume treatment with balanced emphasis across the available sections.";
+      return `Header: premium resume masthead.${logoClause ? ` ${logoClause}` : ""} Large candidate name "${fullName}" at top.${role ? ` Role subtitle directly beneath: "${role}".` : ""}${contactBits ? ` Compact contact row below: "${contactBits}".` : ""}${summary ? ` Include a concise professional-summary block near the top.` : ""} ${visualMode} Prefer a polished two-column or asymmetric editorial resume structure when it improves readability. Keep hierarchy elegant and recruiter-friendly, never noisy. Prioritize sections in this order when present: ${sectionPriority || "Summary → Experience → Education → Skills"}. Activities or extracurriculars must appear as a real resume section when provided, not be dropped. Education must be rendered clearly whenever provided, even for professional CVs. Show only sections with actual content.`;
     }
     case "clean_minimal": {
       const title = String(formState.title ?? formState.event_name ?? formState.subject ?? "").trim();
@@ -434,6 +457,7 @@ function _getHeaderBlock(
     default:
       return logoClause;
   }
+
 }
 
 function resolveAspectRatio(theme: A4Theme, orientation?: A4Orientation): string {

@@ -1762,6 +1762,22 @@ const A4Tab: React.FC = () => {
   }, [theme, visibleSchema, formState, inputMode, expandedContent]);
 
   const isPurposeMissing = needsPurpose && !purposeId;
+  const validationMessage = useMemo(() => {
+    if (isPurposeMissing) {
+      return t(
+        "Choose what this document is for before generating.",
+        "اختر الغرض من هذا المستند قبل التوليد.",
+      );
+    }
+    if (missingRequired.length > 0) {
+      const labels = missingRequired.map((f) => (lang === "ar" ? f.label_ar : f.label_en)).join(lang === "ar" ? "، " : ", ");
+      return t(
+        `Complete these fields first: ${labels}`,
+        `أكمل هذه الحقول أولاً: ${labels}`,
+      );
+    }
+    return null;
+  }, [isPurposeMissing, missingRequired, lang, t]);
 
   // --- Submit -----------------------------------------------------------------
   const handleGenerate = useCallback(async () => {
@@ -2320,9 +2336,9 @@ const A4Tab: React.FC = () => {
                   <div>
                     <textarea
                       value={userWishes}
-                      onChange={(e) => setUserWishes(e.target.value.slice(0, 2000))}
+                      onChange={(e) => setUserWishes(e.target.value.slice(0, 2500))}
                       rows={3}
-                      maxLength={2000}
+                      maxLength={2500}
                       aria-label={t("What I want", "ما أريده")}
                       title={t("What I want", "ما أريده")}
                       placeholder={t(
@@ -2332,7 +2348,7 @@ const A4Tab: React.FC = () => {
                       className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
                     />
                     <div className="mt-1 flex justify-end text-[10px] text-muted-foreground">
-                      {userWishes.length}/2000
+                      {userWishes.length}/2500
                     </div>
                   </div>
 
@@ -2525,12 +2541,17 @@ const A4Tab: React.FC = () => {
 
           {/* Generate button */}
           {canShowForm && (
-            <div className="mt-5 flex justify-end">
+            <div className="mt-5 flex flex-col items-end gap-2">
+              {validationMessage && (
+                <div className="max-w-full text-right text-xs text-destructive">
+                  {validationMessage}
+                </div>
+              )}
               <button
                 onClick={handleGenerate}
-                disabled={isSubmitting || missingRequired.length > 0 || isPurposeMissing}
+                disabled={isSubmitting}
                 className={`px-5 py-2.5 rounded-full text-sm font-medium shadow-md bg-primary text-primary-foreground hover:opacity-90 transition-all active:scale-95 ${
-                  isSubmitting || missingRequired.length > 0 || isPurposeMissing ? "opacity-60 cursor-not-allowed" : ""
+                  isSubmitting ? "opacity-60 cursor-not-allowed" : ""
                 }`}
               >
                 {isSubmitting ? (

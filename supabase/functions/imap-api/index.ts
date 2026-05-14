@@ -337,45 +337,98 @@ function decodeBody(body: string, encoding: string): string {
   return body;
 }
 
+function normalizeTextContent(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
 function stripHtml(html: string): string {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return normalizeTextContent(
+    decodeHtmlEntities(
+      html
+        .replace(/<\s*br\s*\/?>/gi, "\n")
+        .replace(/<\s*\/\s*(p|div|section|article|header|footer|h[1-6]|blockquote|pre|table|tr|ul|ol)\s*>/gi, "\n\n")
+        .replace(/<\s*li[^>]*>/gi, "\n- ")
+        .replace(/<[^>]+>/g, " ")
+    )
+  );
+}
+
+function splitMimeHeadersAndBody(raw: string): { headers: string; body: string } {
+  const normalized = raw.replace(/\r\n?/g, "\n");
+  const bodyStart = normalized.indexOf("\n\n");
+  if (bodyStart === -1) {
+    return { headers: normalized, body: "" };
+  }
+  return {
+    headers: normalized.slice(0, bodyStart),
+    body: normalized.slice(bodyStart + 2),
+  };
+}
+
+function extractMimeBoundary(headers: string): string | null {
+  const boundaryMatch = headers.match(/boundary=["']?([^"'\r\n;]+)["']?/im);
+  return boundaryMatch ? boundaryMatch[1].trim() : null;
+}
+
+function parseMimeNode(rawPart: string): { text: string; html: string } {
+  const { headers, body } = splitMimeHeadersAndBody(rawPart);
+  const contentTypeMatch = headers.match(/^Content-Type:\s*([^\r\n;]+)/im);
+  const contentType = contentTypeMatch ? contentTypeMatch[1].trim().toLowerCase() : "text/plain";
+  const transferEncodingMatch = headers.match(/^Content-Transfer-Encoding:\s*(\S+)/im);
+  const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : "";
+  const boundary = extractMimeBoundary(headers);
+
+  if (boundary) {
+    const escapedBoundary = boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const parts = body
+      .split(new RegExp(`--${escapedBoundary}(?:--)?`, "g"))
+      .map((part) => part.trim())
+      .filter((part) => part && part !== "--");
+
+    let text = "";
+    let html = "";
+
+    for (const part of parts) {
+      const parsed = parseMimeNode(part);
+      if (!text && parsed.text) text = parsed.text;
+      if (!html && parsed.html) html = parsed.html;
+      if (text && html) break;
+    }
+
+    return { text, html };
+  }
+
+  const decoded = decodeBody(body, transferEncoding);
+  if (contentType.includes("text/html")) {
+    return { text: "", html: decoded };
+  }
+  if (contentType.includes("text/plain")) {
+    return { text: normalizeTextContent(decoded), html: "" };
+  }
+  return { text: "", html: "" };
 }
 
 function extractBodyParts(raw: string): { text: string; html: string; snippet: string } {
-  const contentTypeMatch = raw.match(/^Content-Type:\s*([^\r\n;]+)/im);
-  const topContentType = contentTypeMatch ? contentTypeMatch[1].trim().toLowerCase() : "text/plain";
-  const bodyStart = raw.indexOf("\n\n");
-  const bodyRaw = bodyStart >= 0 ? raw.slice(bodyStart + 2) : raw;
-
-  const boundaryMatch = raw.match(/boundary=["']?([^"'\r\n;]+)["']?/im);
-  if (boundaryMatch) {
-    const boundary = boundaryMatch[1].trim();
-    const parts = bodyRaw.split(new RegExp(`--${boundary.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "g"));
-    let text = "";
-    let html = "";
-    for (const part of parts) {
-      if (!part.trim() || part.trim() === "--") continue;
-      const ctMatch = part.match(/^Content-Type:\s*([^\r\n;]+)/im);
-      const ct = ctMatch ? ctMatch[1].trim().toLowerCase() : "";
-      const teMatch = part.match(/^Content-Transfer-Encoding:\s*(\S+)/im);
-      const te = teMatch ? teMatch[1].trim().toLowerCase() : "";
-      const pBodyStart = part.indexOf("\n\n");
-      const pBody = pBodyStart >= 0 ? part.slice(pBodyStart + 2) : "";
-      const decoded = decodeBody(pBody, te);
-      if (ct.includes("text/html")) html = decoded;
-      else if (ct.includes("text/plain")) text = decoded;
-    }
-    const snippet = (text || stripHtml(html)).slice(0, 160).trim();
-    return { text, html, snippet };
-  }
-
-  const teMatch = raw.match(/^Content-Transfer-Encoding:\s*(\S+)/im);
-  const te = teMatch ? teMatch[1].trim().toLowerCase() : "";
-  const decoded = decodeBody(bodyRaw, te);
-  if (topContentType.includes("text/html")) {
-    return { text: "", html: decoded, snippet: stripHtml(decoded).slice(0, 160).trim() };
-  }
-  return { text: decoded, html: "", snippet: decoded.slice(0, 160).trim() };
+  const normalizedRaw = raw.replace(/\r\n?/g, "\n");
+  const parsed = parseMimeNode(normalizedRaw);
+  const text = normalizeTextContent(parsed.text || stripHtml(parsed.html));
+  const html = parsed.html || "";
+  return { text, html, snippet: text.slice(0, 160).trim() };
 }
 
 type DraftAttachment = {

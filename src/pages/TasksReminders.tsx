@@ -19,6 +19,7 @@ import { PageTitle } from '@/components/PageTitle';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { consumeTRPrefill, TRReminderPrefillDraft, TRTaskPrefillDraft } from '@/utils/trPrefill';
 
 export default function TasksReminders() {
   const { language } = useTheme();
@@ -65,23 +66,41 @@ export default function TasksReminders() {
   const [reminderFormOpen, setReminderFormOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TRTask | null>(null);
   const [editingReminder, setEditingReminder] = useState<TRReminder | null>(null);
+  const [taskPrefill, setTaskPrefill] = useState<TRTaskPrefillDraft | null>(null);
+  const [reminderPrefill, setReminderPrefill] = useState<TRReminderPrefillDraft | null>(null);
 
-  const handleCreateTask = () => {
+  const openTaskCreate = (prefill: TRTaskPrefillDraft | null = null) => {
     setEditingTask(null);
+    setTaskPrefill(prefill);
+    setReminderPrefill(null);
+    setActiveTab('tasks');
     setTaskFormOpen(true);
   };
 
+  const openReminderCreate = (prefill: TRReminderPrefillDraft | null = null) => {
+    setEditingReminder(null);
+    setReminderPrefill(prefill);
+    setTaskPrefill(null);
+    setActiveTab('reminders');
+    setReminderFormOpen(true);
+  };
+
+  const handleCreateTask = () => {
+    openTaskCreate();
+  };
+
   const handleEditTask = (task: TRTask) => {
+    setTaskPrefill(null);
     setEditingTask(task);
     setTaskFormOpen(true);
   };
 
   const handleCreateReminder = () => {
-    setEditingReminder(null);
-    setReminderFormOpen(true);
+    openReminderCreate();
   };
 
   const handleEditReminder = (reminder: TRReminder) => {
+    setReminderPrefill(null);
     setEditingReminder(reminder);
     setReminderFormOpen(true);
   };
@@ -89,12 +108,42 @@ export default function TasksReminders() {
   const handleTaskFormClose = () => {
     setTaskFormOpen(false);
     setEditingTask(null);
+    setTaskPrefill(null);
   };
 
   const handleReminderFormClose = () => {
     setReminderFormOpen(false);
     setEditingReminder(null);
+    setReminderPrefill(null);
   };
+
+  useEffect(() => {
+    const intentParam = (searchParams.get('intent') || '').toLowerCase();
+    const tabParam = (searchParams.get('tab') || '').toLowerCase();
+
+    if (intentParam === 'create') {
+      const prefill = consumeTRPrefill();
+      if (!prefill) return;
+
+      if (prefill.kind === 'task') {
+        openTaskCreate(prefill.draft);
+      } else {
+        openReminderCreate(prefill.draft);
+      }
+
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('intent');
+      if (prefill.openTab) {
+        nextParams.set('tab', prefill.openTab);
+      }
+      setSearchParams(nextParams, { replace: true });
+      return;
+    }
+
+    if (!incomingShareLink && (tabParam === 'activity_main' || tabParam === 'tasks' || tabParam === 'activity' || tabParam === 'reminders')) {
+      setActiveTab(tabParam);
+    }
+  }, [incomingShareLink, searchParams, setSearchParams]);
 
   const handleDataChanged = () => {
     console.log('T&R Page - Data changed, refreshing...');
@@ -338,12 +387,14 @@ export default function TasksReminders() {
           isOpen={taskFormOpen}
           onClose={handleTaskFormClose}
           task={editingTask}
+          prefill={taskPrefill}
           onTaskSaved={handleDataChanged}
         />
         <ReminderForm
           isOpen={reminderFormOpen}
           onClose={handleReminderFormClose}
           reminder={editingReminder}
+          prefill={reminderPrefill}
           onReminderSaved={handleDataChanged}
         />
       </div>

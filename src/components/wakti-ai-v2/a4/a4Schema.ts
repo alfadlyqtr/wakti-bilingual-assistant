@@ -222,6 +222,8 @@ const BASIC_FIELD_KEYS_BY_THEME: Record<string, string[]> = {
     "summary",
     "education",
     "experience",
+    "projects",
+    "extracurricular_activities",
     "skills",
     "languages",
     "certifications",

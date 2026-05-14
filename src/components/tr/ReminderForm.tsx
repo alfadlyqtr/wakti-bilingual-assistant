@@ -17,6 +17,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
 import { TRService, TRReminder } from '@/services/trService';
 import { toast } from 'sonner';
+import { TRReminderPrefillDraft } from '@/utils/trPrefill';
 
 const reminderSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -33,10 +34,11 @@ interface ReminderFormProps {
   isOpen: boolean;
   onClose: () => void;
   reminder?: TRReminder | null;
+  prefill?: TRReminderPrefillDraft | null;
   onReminderSaved: () => void;
 }
 
-export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: ReminderFormProps) {
+export function ReminderForm({ isOpen, onClose, reminder, prefill, onReminderSaved }: ReminderFormProps) {
   const { language } = useTheme();
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState<string>('');
@@ -77,6 +79,14 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
           due_date: reminder.due_date || '',
           due_time: reminder.due_time || '',
         });
+      } else if (prefill) {
+        console.log('ReminderForm - Populating form with incoming prefill data');
+        reset({
+          title: prefill.title || '',
+          description: prefill.description || '',
+          due_date: prefill.due_date || '',
+          due_time: prefill.due_time || '',
+        });
       } else {
         console.log('ReminderForm - Resetting form for new reminder');
         reset({
@@ -87,7 +97,7 @@ export function ReminderForm({ isOpen, onClose, reminder, onReminderSaved }: Rem
         });
       }
     }
-  }, [reminder, reset, isOpen]);
+  }, [isOpen, prefill, reminder, reset]);
 
   // Safe date parsing helper
   const parseDate = (dateString: string) => {

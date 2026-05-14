@@ -6,13 +6,14 @@
   color: inherit;
   font-size: 0.95rem;
   line-height: 1.65;
-  text-align: left;
+  text-align: left !important;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
 
 .email-message-html * {
   max-width: 100%;
+  text-align: inherit !important;
 }
 
 .email-message-html img {
@@ -26,11 +27,12 @@
   overflow-wrap: anywhere;
   font-size: 0.95rem;
   line-height: 1.7;
+  text-align: left !important;
 }
 
 .rtl .email-message-html,
 .rtl .email-message-plain {
-  text-align: right;
+  text-align: right !important;
 }
 
 /* Widget text glow — applied to the content wrapper inside every widget shell */

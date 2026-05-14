@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Paperclip, Loader2, Send, X } from 'lucide-react';
 
@@ -139,6 +139,12 @@ export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody 
   const [sending, setSending] = useState(false);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [attachments, setAttachments] = useState<MailComposerAttachment[]>([]);
+
+  useEffect(() => {
+    setTo(replyTo?.to || '');
+    setSubject(replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : '');
+    setBody(initialBody);
+  }, [initialBody, replyTo]);
 
   const canSend = useMemo(() => {
     return splitRecipients(to).length > 0 && subject.trim().length > 0 && body.trim().length > 0 && !loadingAttachments;

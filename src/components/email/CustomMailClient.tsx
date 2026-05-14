@@ -93,6 +93,50 @@ interface MessageViewProps {
   aiPanel?: React.ReactNode;
 }
 
+function formatPlainEmailBody(body: string, subject: string): string {
+  const normalized = body
+    .replace(/\r\n?/g, '\n')
+    .replace(/\u00a0/g, ' ')
+    .trim();
+
+  if (!normalized) return '';
+
+  let cleaned = normalized;
+  const trimmedSubject = subject.trim();
+  if (trimmedSubject) {
+    const escapedSubject = trimmedSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    cleaned = cleaned.replace(new RegExp(`^${escapedSubject}(?:\\s*[-:;,.–—]+\\s*|\\s+)`, 'i'), '').trim();
+  }
+
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  if (/\n\s*\n/.test(cleaned)) {
+    return cleaned;
+  }
+
+  const flattened = cleaned
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  const sentences = flattened
+    .split(/(?<=[.!?؟])\s+(?=[A-Z0-9\u0600-\u06FF])/)
+    .map((sentence) => sentence.trim())
+    .filter(Boolean);
+
+  if (sentences.length >= 4) {
+    const paragraphs: string[] = [];
+    for (let index = 0; index < sentences.length; index += 2) {
+      paragraphs.push(sentences.slice(index, index + 2).join(' '));
+    }
+    return paragraphs.join('\n\n');
+  }
+
+  return flattened;
+}
+
 function MessageView({ message, onBack, onReply, onDelete, deleting, language = 'en', canReply = true, aiPanel }: MessageViewProps) {
   const senderName = extractName(message.from) || message.from || '—';
   const senderEmail = extractEmailAddress(message.from) || message.from || '—';
@@ -103,17 +147,18 @@ function MessageView({ message, onBack, onReply, onDelete, deleting, language = 
   const toLabel = language === 'ar' ? 'إلى' : 'To';
   const dateLabel = language === 'ar' ? 'التاريخ' : 'Date';
   const bodyHtml = message.body?.html || '';
-  const bodyText = message.body?.text || message.snippet || '(empty message)';
+  const bodyText = formatPlainEmailBody(message.body?.text || message.snippet || '(empty message)', message.subject || '');
 
   return (
     <div className="flex flex-col h-full">
       <div className="border-b border-[#060541]/10 pb-4 dark:border-border/40">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button type="button" variant="outline" onClick={onBack} className="gap-2 rounded-xl border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.05)] hover:bg-[#eef2ff] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))]">
             <ChevronLeft className="h-4 w-4" />
             {backLabel}
           </Button>
-          <div className="flex items-center gap-2">
+          {aiPanel ? <div className="shrink-0">{aiPanel}</div> : null}
+          <div className="ml-auto flex items-center gap-2">
             {canReply ? (
               <Button type="button" variant="outline" onClick={onReply} className="gap-2 rounded-xl border-blue-500/20 bg-blue-50 text-blue-600 shadow-[0_4px_12px_rgba(59,130,246,0.08)] hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:shadow-none dark:hover:bg-blue-500/20">
                 <Reply className="h-4 w-4" />
@@ -151,11 +196,6 @@ function MessageView({ message, onBack, onReply, onDelete, deleting, language = 
       </div>
       <div className="flex-1 min-h-0">
         <div className="h-full overflow-y-auto pt-4 pr-1">
-          {aiPanel ? (
-            <div className="pointer-events-none sticky top-4 z-20 -mb-16 flex h-0 justify-end pr-2">
-              <div className="pointer-events-auto">{aiPanel}</div>
-            </div>
-          ) : null}
           {bodyHtml ? (
             <div
               className="email-message-html text-sm text-foreground"
@@ -256,6 +296,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
     : typeof activeHealth?.proof?.inboxCount === 'number'
       ? activeHealth.proof.inboxCount
       : null;
+  const currentFolderRequest = imap.activeFolder === 'SENT' ? 'SENT' : (realFolderName || 'INBOX');
   const normalizedSearch = searchQuery.trim().toLowerCase();
   const hasInboxCache = imap.hasCachedFolder('INBOX');
   const surfaceCardClass = 'space-y-3 rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] p-3 text-[#060541] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 sm:p-4 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(16,20,29,0.98),rgba(10,12,18,0.96))] dark:text-card-foreground dark:shadow-[0_18px_36px_rgba(0,0,0,0.4)] dark:ring-1 dark:ring-white/5';
@@ -315,7 +356,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
   const handleOpenMessage = async (msg: ImapMessage) => {
     setLoadingMessage(true);
     setSelectedMessage(null);
-    const full = await imap.fetchMessage(msg.uid, realFolderName);
+    const full = await imap.fetchMessage(msg.uid, currentFolderRequest);
     setLoadingMessage(false);
     if (full) {
       if (imap.activeFolder === 'INBOX' && msg.isUnread) {
@@ -391,7 +432,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
   const handleDeleteMessage = async () => {
     if (!selectedMessage) return;
     setDeletingMessage(true);
-    const deleted = await imap.deleteMessage(selectedMessage.uid, realFolderName);
+    const deleted = await imap.deleteMessage(selectedMessage.uid, currentFolderRequest);
     if (deleted) {
       setSelectedMessage(null);
       const result = await imap.fetchMessages(imap.activeFolder, 1, { forceRefresh: true });
@@ -402,7 +443,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
 
   const handleDeleteFromList = async (message: ImapMessage) => {
     setDeletingRowUid(message.uid);
-    await imap.deleteMessage(message.uid, realFolderName);
+    await imap.deleteMessage(message.uid, currentFolderRequest);
     setDeletingRowUid(null);
   };
 
@@ -422,7 +463,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
     const recent = imap.messages.slice(0, 5);
     const resolved = await Promise.all(recent.map(async (message) => {
       try {
-        const full = await imap.fetchMessage(message.uid, realFolderName);
+        const full = await imap.fetchMessage(message.uid, currentFolderRequest);
         return {
           subject: message.subject,
           from: message.from,
@@ -443,7 +484,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
       }
     }));
     return resolved;
-  }, [imap.fetchMessage, imap.messages, realFolderName]);
+  }, [currentFolderRequest, imap.fetchMessage, imap.messages]);
 
   if (connections.length === 0) {
     return (

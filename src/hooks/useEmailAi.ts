@@ -2,8 +2,8 @@ import { useCallback, useState } from 'react';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '@/integrations/supabase/client';
 
 export type EmailAiAction = 'summarize_email' | 'extract_tasks' | 'extract_deadlines' | 'draft_reply' | 'brief_recent';
-export type EmailAiTone = 'professional' | 'friendly' | 'warm' | 'firm';
-export type EmailAiLength = 'short' | 'medium' | 'detailed';
+export type EmailAiTone = 'professional' | 'friendly' | 'warm' | 'firm' | 'diplomatic' | 'confident' | 'empathetic' | 'concise';
+export type EmailAiLength = 'very_short' | 'short' | 'medium' | 'detailed' | 'comprehensive';
 
 export interface EmailAiSourceMessage {
   subject: string;
@@ -34,12 +34,18 @@ const toneMap: Record<EmailAiTone, string> = {
   friendly: 'friendly',
   warm: 'empathetic',
   firm: 'confident',
+  diplomatic: 'diplomatic',
+  confident: 'assertive',
+  empathetic: 'empathetic',
+  concise: 'concise',
 };
 
 const lengthMap: Record<EmailAiLength, 'short' | 'medium' | 'long'> = {
+  very_short: 'short',
   short: 'short',
   medium: 'medium',
   detailed: 'long',
+  comprehensive: 'long',
 };
 
 const actionTitles = {
@@ -100,9 +106,12 @@ function buildPrompt({ action, messages, language, tone, length, note }: RunEmai
         'لا تضف أي شرح أو عناوين أو ملاحظات خارج نص الرد نفسه.',
         'لا تخترع حقائق أو وعود أو مواعيد أو أسعار أو التزامات غير موجودة في البريد.',
         'إذا كانت هناك معلومة ناقصة، اكتب الرد بشكل مهني واطلب التوضيح بلطف.',
+        'تعليمات المستخدم أدناه إلزامية ويجب تطبيق كل نقطة فيها ما دامت لا تتعارض مع البريد نفسه.',
+        'إذا طلب المستخدم تغيير يوم أو تاريخ أو وقت أو موعد اجتماع أو مهلة، فيجب أن يذكر الرد النهائي كل تغيير مطلوب بشكل صريح وواضح.',
+        'راجع بصمت قبل الإخراج أن كل تعليمات المستخدم قد ظهرت فعلاً داخل الرد النهائي.',
         `النبرة المطلوبة: ${toneLine}`,
         `الطول المطلوب: ${lengthLine}`,
-        noteLine ? `تعليمات المستخدم التي يجب مراعاتها: ${noteLine}` : '',
+        noteLine ? `تعليمات المستخدم الإلزامية: ${noteLine}` : '',
         'هذه هي الرسالة التي سيتم الرد عليها:',
         context,
       ].filter(Boolean).join('\n\n');
@@ -171,9 +180,12 @@ function buildPrompt({ action, messages, language, tone, length, note }: RunEmai
       'Do not add notes, labels, or explanation outside the reply itself.',
       'Do not invent facts, promises, dates, prices, or commitments that are not in the email.',
       'If key information is missing, keep the reply professional and politely ask for clarification.',
+      'The user instructions below are mandatory and every requested change must be applied unless it directly conflicts with the email facts.',
+      'If the user asks to change a day, date, time, meeting slot, or deadline, the final reply must clearly include each requested new day, date, or time.',
+      'Before writing, silently verify that every user instruction is reflected in the final reply.',
       `Requested tone: ${toneLine}`,
       `Requested length: ${lengthLine}`,
-      noteLine ? `User instructions that must be respected: ${noteLine}` : '',
+      noteLine ? `Mandatory user instructions: ${noteLine}` : '',
       'Here is the email to reply to:',
       context,
     ].filter(Boolean).join('\n\n');

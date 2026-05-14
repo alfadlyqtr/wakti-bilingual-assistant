@@ -908,6 +908,8 @@ const FIELD_RAW_CONTENT = (label_en: string, label_ar: string, required = true):
     form_schema_by_purpose: {
       student_cv: [
         { key: "education", label_en: "Education", label_ar: "التعليم", type: "textarea", required: false },
+        { key: "projects", label_en: "Projects", label_ar: "المشاريع", type: "textarea", required: false },
+        { key: "extracurricular_activities", label_en: "Activities / Extracurriculars", label_ar: "الأنشطة / اللامنهجية", type: "textarea", required: false },
         { key: "skills", label_en: "Skills", label_ar: "المهارات", type: "textarea", required: false },
         { key: "languages", label_en: "Languages", label_ar: "اللغات", type: "textarea", required: false },
         { key: "certifications", label_en: "Certifications", label_ar: "الشهادات", type: "textarea", required: false },
@@ -918,6 +920,8 @@ const FIELD_RAW_CONTENT = (label_en: string, label_ar: string, required = true):
       graduate_cv: [
         { key: "education", label_en: "Education", label_ar: "التعليم", type: "textarea", required: false },
         { key: "experience", label_en: "Experience", label_ar: "الخبرة", type: "textarea", required: false },
+        { key: "projects", label_en: "Projects", label_ar: "المشاريع", type: "textarea", required: false },
+        { key: "extracurricular_activities", label_en: "Activities / Extracurriculars", label_ar: "الأنشطة / اللامنهجية", type: "textarea", required: false },
         { key: "skills", label_en: "Skills", label_ar: "المهارات", type: "textarea", required: false },
         { key: "languages", label_en: "Languages", label_ar: "اللغات", type: "textarea", required: false },
         { key: "certifications", label_en: "Certifications", label_ar: "الشهادات", type: "textarea", required: false },
@@ -927,18 +931,21 @@ const FIELD_RAW_CONTENT = (label_en: string, label_ar: string, required = true):
       ],
       professional_cv: [
         { key: "experience", label_en: "Experience", label_ar: "الخبرة", type: "textarea", required: false },
+        { key: "education", label_en: "Education", label_ar: "التعليم", type: "textarea", required: false },
+        { key: "projects", label_en: "Projects", label_ar: "المشاريع", type: "textarea", required: false },
+        { key: "extracurricular_activities", label_en: "Activities / Extracurriculars", label_ar: "الأنشطة / اللامنهجية", type: "textarea", required: false },
         { key: "skills", label_en: "Skills", label_ar: "المهارات", type: "textarea", required: false },
         { key: "languages", label_en: "Languages", label_ar: "اللغات", type: "textarea", required: false },
         { key: "certifications", label_en: "Certifications", label_ar: "الشهادات", type: "textarea", required: false },
         { key: "awards", label_en: "Awards", label_ar: "الجوائز", type: "textarea", required: false },
         { key: "hobbies", label_en: "Hobbies & Interests", label_ar: "الهوايات والاهتمامات", type: "textarea", required: false },
-        FIELD_RAW_CONTENT("Paste achievements, responsibilities, and extra details", "الصق الإنجازات والمسؤوليات والتفاصيل الإضافية", false),
+        FIELD_RAW_CONTENT("Paste achievements, responsibilities, leadership, and extra details", "الصق الإنجازات والمسؤوليات والقيادة والتفاصيل الإضافية", false),
       ],
     },
     style_block:
-      "Recruiter-grade modern resume aesthetic. Clean typography, restrained accent highlights, consistent section rules, elegant spacing. Feels serious, modern, employer-ready.",
+      "Premium recruiter-grade modern resume aesthetic. Strong hierarchy, elegant accent structure, subtle section cards, polished whitespace, and ATS-friendly readability. Beautiful and employer-ready without looking cluttered or overly decorative.",
     layout_blueprint:
-      "Top zone: large candidate name rendered as a masthead. Role or desired-job-title subtitle directly beneath. Compact contact row in smaller type — email, phone, location, website, LinkedIn — separated by thin vertical dividers, only provided fields appear. Body: distinct section blocks in this order — Summary, Experience, Education, Skills, Certifications. Each section starts with a bold heading and a thin accent underline rule. Experience and education items follow a consistent pattern: role or title on the left, dates right-aligned, followed by company or institution and a short description beneath. Consistent gap between sections. Layout is recruiter-readable at a glance.",
+      "Top zone: strong candidate masthead with large name, role subtitle, and an optional clean portrait block when a portrait image is provided. Contact details appear in a compact premium row or slim side rail using only supplied fields. Body: elegant modern resume with balanced two-column hierarchy when content allows — main column prioritizes Summary, Experience, Education, and Projects; secondary column supports Skills, Certifications, Languages, Awards, Activities, and Interests. Every section uses consistent headings, thin accent rules, disciplined spacing, and clean micro-dividers. Experience, education, and project entries follow a recruiter-friendly pattern: title or role on one line, organization on the next, dates aligned cleanly, and short bullets beneath. Show only sections with real content. The page must feel premium, structured, and highly readable at a glance.",
     search_aliases: ["resume", "cv", "career", "job", "employment", "student cv", "graduate", "سيرة", "وظيفة"],
   },
  ];
