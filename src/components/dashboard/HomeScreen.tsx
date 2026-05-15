@@ -3850,6 +3850,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
             </div>
           </div>
 
+          {/* DEBUG: mobile glass detection indicator — REMOVE after confirming */}
+          <div style={{ position: 'fixed', top: 4, right: 4, zIndex: 99999, padding: '2px 6px', borderRadius: 6, fontSize: 9, fontWeight: 900, color: '#fff', background: isMobileGlass ? '#ef4444' : '#3b82f6' }}>
+            {isMobileGlass ? 'MOB' : 'DSK'} | w={typeof window !== 'undefined' ? window.innerWidth : '?'}
+          </div>
+
           {/* ── Unified iPhone-style grid: 3 big rows × 2 big cols = 6 rows × 4 cols ── */}
           <div
             ref={pageViewportRef}
