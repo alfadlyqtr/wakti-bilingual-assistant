@@ -1687,6 +1687,34 @@ function VoicesTab({
     });
   };
 
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel('music-voices-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'user_music_voices', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const row = payload.new as any;
+          if (!row?.id) return;
+          const voice = normalizeMusicVoiceShell(row);
+          if (!voice) return;
+          upsertVoice(voice);
+          if (payload.eventType === 'UPDATE') {
+            if (voice.status === 'phrase_ready') {
+              toast.success(isAr ? 'جملة التحقق جاهزة' : 'Verification phrase is ready');
+            } else if (voice.status === 'ready' && voice.isAvailable) {
+              toast.success(isAr ? 'صوتك أصبح جاهزاً' : 'Your voice is now ready');
+            } else if (voice.status === 'failed') {
+              toast.error(voice.errorMessage || (isAr ? 'فشل تجهيز الصوت' : 'Voice setup failed'));
+            }
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
+
   const resetCreateState = () => {
     setDraftName('');
     setDraftType('custom');
@@ -6332,8 +6360,10 @@ function VoicesTab({
       return;
     }
     if (vocalType === 'custom') {
-      toast.error(isAr ? 'خيار الصوت المخصص غير جاهز للتوليد بعد' : 'Custom voice generation is not ready yet');
-      return;
+      if (!selectedMusicVoice || selectedMusicVoice.status !== 'ready' || !selectedMusicVoice.kieVoiceId) {
+        toast.error(isAr ? 'الصوت المخصص غير جاهز بعد. افتح تبويب الأصوات وتحقق من الحالة.' : 'Custom voice is not ready yet. Open the Voices tab and check its status.');
+        return;
+      }
     }
     // ── Capacity check (vocal tracks only) ──
     // Compare user's stanza count vs the duration's stanza capacity. Two paths:
@@ -6737,7 +6767,12 @@ function VoicesTab({
       };
 
       if (!instrumental) invokeBody.prompt = structuredPrompt;
-      if (vocalGender) invokeBody.vocalGender = vocalGender;
+      if (vocalType === 'custom' && selectedMusicVoice?.kieVoiceId) {
+        invokeBody.personaId = selectedMusicVoice.kieVoiceId;
+        invokeBody.personaModel = 'voice_persona';
+      } else {
+        if (vocalGender) invokeBody.vocalGender = vocalGender;
+      }
 
       const { data: genData, error: genError } = await supabase.functions.invoke('music-generate', {
         body: invokeBody,
@@ -7103,18 +7138,19 @@ function VoicesTab({
   );
 
   const cardCls = "rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4";
-  const customVoiceBlocked = vocalType === 'custom';
+  const customVoiceReady = vocalType === 'custom' && !!selectedMusicVoice && selectedMusicVoice.status === 'ready' && !!selectedMusicVoice.kieVoiceId;
+  const customVoiceBlocked = vocalType === 'custom' && !customVoiceReady;
   const customVoiceNotice = (() => {
     if (!selectedMusicVoice) {
-      return isAr ? 'اختر صوتاً أولاً من القائمة أو افتح إدارة الأصوات.' : 'Pick a voice first from the list, or open Manage Voices.';
-    }
-    if (selectedMusicVoice.status === 'ready' && selectedMusicVoice.isAvailable) {
-      return isAr ? 'الصوت جاهز، لكن التوليد بهذا الخيار لم يتم تفعيله بعد.' : 'The voice is ready, but generation with this option is not enabled yet.';
+      return isAr ? 'اختر صوتاً من تبويب الأصوات أولاً.' : 'Select a voice from the Voices tab first.';
     }
     if (selectedMusicVoice.status === 'failed') {
       return selectedMusicVoice.errorMessage || (isAr ? 'هذا الصوت فشل في التجهيز. افتح تبويب الأصوات لإعادة المحاولة.' : 'This voice failed to prepare. Open the Voices tab to try again.');
     }
-    return isAr ? 'هذا الصوت ما زال قيد التجهيز. افتح تبويب الأصوات لتحديث الحالة أو رفع التحقق.' : 'This voice is still being prepared. Open the Voices tab to refresh it or upload verification.';
+    if (selectedMusicVoice.status === 'phrase_ready') {
+      return isAr ? 'الصوت بانتظار تسجيل التحقق. افتح تبويب الأصوات وأرسل التسجيل.' : 'Voice is waiting for your verification recording. Open the Voices tab and send it.';
+    }
+    return isAr ? 'الصوت ما زال قيد التجهيز. افتح تبويب الأصوات لتحديث الحالة.' : 'Voice is still being prepared. Open the Voices tab to refresh its status.';
   })();
 
   return (
