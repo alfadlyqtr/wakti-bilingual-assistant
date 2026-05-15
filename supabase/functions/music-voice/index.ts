@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -99,7 +99,7 @@ function buildVoiceStyle(row: Pick<MusicVoiceRow, "voice_type" | "accent_note">)
   return parts.join(", ");
 }
 
-async function requireUser(req: Request, supabase: ReturnType<typeof createClient>) {
+async function requireUser(req: Request, supabase: SupabaseClient) {
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) throw new Error("Missing authorization header");
   const token = authHeader.replace("Bearer ", "");
@@ -109,7 +109,7 @@ async function requireUser(req: Request, supabase: ReturnType<typeof createClien
 }
 
 async function uploadAudio(params: {
-  supabaseService: ReturnType<typeof createClient>;
+  supabaseService: SupabaseClient;
   userId: string;
   voiceRecordId: string;
   kind: "source" | "verify";
@@ -130,7 +130,7 @@ async function uploadAudio(params: {
   return { storagePath, publicUrl, mime };
 }
 
-async function getVoiceRowOrThrow(supabaseService: ReturnType<typeof createClient>, userId: string, voiceRecordId: string): Promise<MusicVoiceRow> {
+async function getVoiceRowOrThrow(supabaseService: SupabaseClient, userId: string, voiceRecordId: string): Promise<MusicVoiceRow> {
   const { data, error } = await supabaseService
     .from("user_music_voices")
     .select("*")
@@ -141,7 +141,7 @@ async function getVoiceRowOrThrow(supabaseService: ReturnType<typeof createClien
   return data as MusicVoiceRow;
 }
 
-async function updateVoiceRow(supabaseService: ReturnType<typeof createClient>, voiceRecordId: string, patch: Record<string, unknown>): Promise<MusicVoiceRow> {
+async function updateVoiceRow(supabaseService: SupabaseClient, voiceRecordId: string, patch: Record<string, unknown>): Promise<MusicVoiceRow> {
   const { data, error } = await supabaseService
     .from("user_music_voices")
     .update(patch)
@@ -185,7 +185,7 @@ async function checkVoiceAvailability(kieApiKey: string, taskId: string) {
 }
 
 async function refreshVoiceStatus(params: {
-  supabaseService: ReturnType<typeof createClient>;
+  supabaseService: SupabaseClient;
   kieApiKey: string;
   row: MusicVoiceRow;
 }): Promise<MusicVoiceRow> {

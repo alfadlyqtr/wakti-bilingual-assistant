@@ -179,6 +179,7 @@ const handleDownload = async (url: string, filename: string) => {
 
  type MusicVoiceShellType = 'male' | 'female' | 'custom';
  type MusicVoiceShellSource = 'record' | 'upload';
+ type MusicVoiceShellStatus = 'local_only' | 'phrase_pending' | 'phrase_ready' | 'voice_pending' | 'ready' | 'failed';
 
  interface MusicVoiceShell {
    id: string;
@@ -187,12 +188,101 @@ const handleDownload = async (url: string, filename: string) => {
    accentNote: string;
    sourceKind: MusicVoiceShellSource;
    clipLabel: string;
+   sourceAudioUrl?: string;
+   sourceDurationSeconds?: number | null;
+   validateTaskId?: string;
+   validatePhrase?: string;
+   validateLanguage?: string;
+   verifyAudioUrl?: string;
+   generationTaskId?: string;
+   kieVoiceId?: string;
+   status: MusicVoiceShellStatus;
+   statusDetail?: string;
+   errorMessage?: string;
+   isAvailable: boolean;
    createdAt: number;
    updatedAt: number;
  }
 
  const MUSIC_VOICE_SHELLS_STORAGE_KEY = 'wakti-music-voice-shells-v1';
  const MUSIC_VOICE_SELECTED_STORAGE_KEY = 'wakti-music-voice-selected-v1';
+
+ const blobToDataUrl = (blob: Blob) => new Promise<string>((resolve, reject) => {
+   const reader = new FileReader();
+   reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+   reader.onerror = () => reject(reader.error || new Error('Failed to read blob'));
+   reader.readAsDataURL(blob);
+ });
+
+ const normalizeMusicVoiceShell = (entry: any): MusicVoiceShell | null => {
+   if (!entry || typeof entry !== 'object') return null;
+
+   const rawId = entry.id;
+   const rawName = entry.name;
+   if (typeof rawId !== 'string' || typeof rawName !== 'string') return null;
+
+   const createdAtRaw = entry.createdAt ?? entry.created_at;
+   const updatedAtRaw = entry.updatedAt ?? entry.updated_at;
+   const createdAt = typeof createdAtRaw === 'number'
+     ? createdAtRaw
+     : typeof createdAtRaw === 'string'
+       ? new Date(createdAtRaw).getTime()
+       : Date.now();
+   const updatedAt = typeof updatedAtRaw === 'number'
+     ? updatedAtRaw
+     : typeof updatedAtRaw === 'string'
+       ? new Date(updatedAtRaw).getTime()
+       : createdAt;
+
+   const status = (() => {
+     const rawStatus = entry.status;
+     if (rawStatus === 'phrase_pending' || rawStatus === 'phrase_ready' || rawStatus === 'voice_pending' || rawStatus === 'ready' || rawStatus === 'failed' || rawStatus === 'local_only') {
+       return rawStatus;
+     }
+     return (entry.validate_task_id || entry.validateTaskId || entry.generation_task_id || entry.generationTaskId || entry.kie_voice_id || entry.kieVoiceId) ? 'phrase_pending' : 'local_only';
+   })();
+
+   return {
+     id: rawId,
+     name: rawName,
+     voiceType: entry.voiceType === 'male' || entry.voiceType === 'female'
+       ? entry.voiceType
+       : entry.voice_type === 'male' || entry.voice_type === 'female'
+         ? entry.voice_type
+         : 'custom',
+     accentNote: typeof entry.accentNote === 'string' ? entry.accentNote : typeof entry.accent_note === 'string' ? entry.accent_note : '',
+     sourceKind: entry.sourceKind === 'upload' || entry.source_kind === 'upload' ? 'upload' : 'record',
+     clipLabel: typeof entry.clipLabel === 'string' ? entry.clipLabel : typeof entry.clip_label === 'string' ? entry.clip_label : '',
+     sourceAudioUrl: typeof entry.sourceAudioUrl === 'string' ? entry.sourceAudioUrl : typeof entry.source_audio_url === 'string' ? entry.source_audio_url : undefined,
+     sourceDurationSeconds: typeof entry.sourceDurationSeconds === 'number' ? entry.sourceDurationSeconds : typeof entry.source_duration_seconds === 'number' ? entry.source_duration_seconds : null,
+     validateTaskId: typeof entry.validateTaskId === 'string' ? entry.validateTaskId : typeof entry.validate_task_id === 'string' ? entry.validate_task_id : undefined,
+     validatePhrase: typeof entry.validatePhrase === 'string' ? entry.validatePhrase : typeof entry.validate_phrase === 'string' ? entry.validate_phrase : undefined,
+     validateLanguage: typeof entry.validateLanguage === 'string' ? entry.validateLanguage : typeof entry.validate_language === 'string' ? entry.validate_language : undefined,
+     verifyAudioUrl: typeof entry.verifyAudioUrl === 'string' ? entry.verifyAudioUrl : typeof entry.verify_audio_url === 'string' ? entry.verify_audio_url : undefined,
+     generationTaskId: typeof entry.generationTaskId === 'string' ? entry.generationTaskId : typeof entry.generation_task_id === 'string' ? entry.generation_task_id : undefined,
+     kieVoiceId: typeof entry.kieVoiceId === 'string' ? entry.kieVoiceId : typeof entry.kie_voice_id === 'string' ? entry.kie_voice_id : undefined,
+     status,
+     statusDetail: typeof entry.statusDetail === 'string' ? entry.statusDetail : typeof entry.status_detail === 'string' ? entry.status_detail : undefined,
+     errorMessage: typeof entry.errorMessage === 'string' ? entry.errorMessage : typeof entry.error_message === 'string' ? entry.error_message : undefined,
+     isAvailable: Boolean(entry.isAvailable ?? entry.is_available ?? status === 'ready'),
+     createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
+     updatedAt: Number.isFinite(updatedAt) ? updatedAt : Date.now(),
+   };
+ };
+
+ const mergeMusicVoiceShells = (remoteVoices: MusicVoiceShell[], localVoices: MusicVoiceShell[]) => {
+   const byId = new Map(remoteVoices.map((voice) => [voice.id, voice]));
+   localVoices.forEach((voice) => {
+     if (!byId.has(voice.id)) {
+       byId.set(voice.id, {
+         ...voice,
+         status: voice.status || 'local_only',
+         isAvailable: voice.isAvailable ?? false,
+       });
+     }
+   });
+   return Array.from(byId.values()).sort((a, b) => b.updatedAt - a.updatedAt);
+ };
 
  const readMusicVoiceShells = (): MusicVoiceShell[] => {
    if (typeof window === 'undefined') return [];
@@ -202,17 +292,8 @@ const handleDownload = async (url: string, filename: string) => {
      const parsed = JSON.parse(raw);
      if (!Array.isArray(parsed)) return [];
      return parsed
-       .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string' && typeof entry.name === 'string')
-       .map((entry) => ({
-         id: String(entry.id),
-         name: String(entry.name),
-         voiceType: entry.voiceType === 'male' || entry.voiceType === 'female' ? entry.voiceType : 'custom',
-         accentNote: typeof entry.accentNote === 'string' ? entry.accentNote : '',
-         sourceKind: entry.sourceKind === 'upload' ? 'upload' : 'record',
-         clipLabel: typeof entry.clipLabel === 'string' ? entry.clipLabel : '',
-         createdAt: typeof entry.createdAt === 'number' ? entry.createdAt : Date.now(),
-         updatedAt: typeof entry.updatedAt === 'number' ? entry.updatedAt : Date.now(),
-       }))
+       .map((entry) => normalizeMusicVoiceShell(entry))
+       .filter((entry): entry is MusicVoiceShell => Boolean(entry))
        .sort((a, b) => b.updatedAt - a.updatedAt);
    } catch {
      return [];
@@ -1037,6 +1118,46 @@ export default function MusicStudio() {
     setSelectedMusicVoiceId(musicVoiceShells[0]?.id || '');
   }, [musicVoiceShells, selectedMusicVoiceId]);
 
+  useEffect(() => {
+    if (!authUser) return;
+    let cancelled = false;
+
+    const loadMusicVoices = async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('user_music_voices')
+          .select('*')
+          .eq('user_id', authUser.id)
+          .order('updated_at', { ascending: false });
+
+        if (error) throw error;
+        if (cancelled) return;
+
+        const remoteVoices = (data || [])
+          .map((entry: any) => normalizeMusicVoiceShell(entry))
+          .filter((entry: MusicVoiceShell | null): entry is MusicVoiceShell => Boolean(entry));
+
+        setMusicVoiceShells((prev) => mergeMusicVoiceShells(remoteVoices, prev.filter((voice) => voice.status === 'local_only')));
+      } catch (error) {
+        console.error('Failed to load music voices:', error);
+      }
+    };
+
+    loadMusicVoices();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadMusicVoices();
+      }
+    };
+
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [authUser]);
+
   // Always load quota when music tab is open, regardless of compose/saved sub-tab
   useEffect(() => {
     if (mainTab !== 'music' || !authUser) return;
@@ -1501,7 +1622,7 @@ export default function MusicStudio() {
       )}
     </div>
   );
- }
+}
 
 function VoicesTab({
   voices,
@@ -1517,6 +1638,7 @@ function VoicesTab({
   onUseVoice: (voiceId: string) => void;
 }) {
   const { language } = useTheme();
+  const { user } = useAuth();
   const isAr = language === 'ar';
   const [createOpen, setCreateOpen] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -1526,8 +1648,17 @@ function VoicesTab({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [recordedClipLabel, setRecordedClipLabel] = useState('');
+  const [recordedClipBlob, setRecordedClipBlob] = useState<Blob | null>(null);
   const [uploadedClipLabel, setUploadedClipLabel] = useState('');
+  const [uploadedClipFile, setUploadedClipFile] = useState<File | null>(null);
   const [pendingDeleteVoice, setPendingDeleteVoice] = useState<MusicVoiceShell | null>(null);
+  const [verificationVoice, setVerificationVoice] = useState<MusicVoiceShell | null>(null);
+  const [verificationFile, setVerificationFile] = useState<File | null>(null);
+  const [verificationLabel, setVerificationLabel] = useState('');
+  const [creatingVoice, setCreatingVoice] = useState(false);
+  const [submittingVerification, setSubmittingVerification] = useState(false);
+  const [refreshingVoiceId, setRefreshingVoiceId] = useState('');
+  const [deletingVoiceId, setDeletingVoiceId] = useState('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1539,6 +1670,13 @@ function VoicesTab({
     streamRef.current = null;
   };
 
+  const upsertVoice = (nextVoice: MusicVoiceShell) => {
+    onVoicesChange((prev) => {
+      const remaining = prev.filter((voice) => voice.id !== nextVoice.id);
+      return [nextVoice, ...remaining].sort((a, b) => b.updatedAt - a.updatedAt);
+    });
+  };
+
   const resetCreateState = () => {
     setDraftName('');
     setDraftType('custom');
@@ -1547,7 +1685,9 @@ function VoicesTab({
     setIsRecording(false);
     setRecordingSeconds(0);
     setRecordedClipLabel('');
+    setRecordedClipBlob(null);
     setUploadedClipLabel('');
+    setUploadedClipFile(null);
     durationRef.current = 0;
     chunksRef.current = [];
     if (timerRef.current) {
@@ -1565,6 +1705,25 @@ function VoicesTab({
       resetCreateState();
     };
   }, []);
+
+  const getVoiceStatusLabel = (voice: MusicVoiceShell) => {
+    if (voice.status === 'ready' && voice.isAvailable) return isAr ? 'جاهز' : 'Ready';
+    if (voice.status === 'phrase_ready') return isAr ? 'بانتظار التحقق' : 'Verification needed';
+    if (voice.status === 'voice_pending') return isAr ? 'جارٍ إنشاء الصوت' : 'Creating voice';
+    if (voice.status === 'failed') return isAr ? 'فشل' : 'Failed';
+    if (voice.status === 'local_only') return isAr ? 'محلي فقط' : 'Local only';
+    return isAr ? 'جارٍ تجهيز الجملة' : 'Preparing phrase';
+  };
+
+  const getVoiceStatusTone = (voice: MusicVoiceShell) => {
+    if (voice.status === 'ready' && voice.isAvailable) {
+      return 'border-emerald-300/40 dark:border-emerald-400/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-200';
+    }
+    if (voice.status === 'failed') {
+      return 'border-red-300/40 dark:border-red-400/30 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-200';
+    }
+    return 'border-amber-300/40 dark:border-amber-400/25 bg-amber-50/80 dark:bg-amber-500/10 text-amber-700 dark:text-amber-200';
+  };
 
   const startRecording = async () => {
     try {
@@ -1586,7 +1745,9 @@ function VoicesTab({
       durationRef.current = 0;
       setRecordingSeconds(0);
       setRecordedClipLabel('');
+      setRecordedClipBlob(null);
       setUploadedClipLabel('');
+      setUploadedClipFile(null);
 
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) chunksRef.current.push(event.data);
@@ -1594,6 +1755,8 @@ function VoicesTab({
 
       recorder.onstop = () => {
         const seconds = Math.max(1, durationRef.current);
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        setRecordedClipBlob(blob.size > 0 ? blob : null);
         setRecordedClipLabel(isAr ? `تسجيل ${seconds}ث` : `Recorded clip · ${seconds}s`);
         stopStream();
       };
@@ -1605,7 +1768,7 @@ function VoicesTab({
         setRecordingSeconds(durationRef.current);
       }, 1000);
     } catch (error) {
-      console.error('Music voice shell recorder failed:', error);
+      console.error('Music voice recorder failed:', error);
       toast.error(isAr ? 'تعذر الوصول إلى الميكروفون' : 'Unable to access the microphone');
     }
   };
@@ -1623,41 +1786,148 @@ function VoicesTab({
     stopStream();
   };
 
-  const createVoiceShell = () => {
+  const createVoiceShell = async () => {
     const clipLabel = draftSourceKind === 'record' ? recordedClipLabel : uploadedClipLabel;
+    const sourceBlob = draftSourceKind === 'record' ? recordedClipBlob : uploadedClipFile;
+
+    if (!user) {
+      toast.error(isAr ? 'سجل الدخول أولاً' : 'Please sign in first');
+      return;
+    }
     if (!draftName.trim()) {
       toast.error(isAr ? 'اكتب اسم الصوت أولاً' : 'Please enter a voice name first');
       return;
     }
-    if (!clipLabel) {
+    if (!clipLabel || !sourceBlob) {
       toast.error(isAr ? 'أضف مقطع الصوت أولاً' : 'Please add a voice clip first');
       return;
     }
 
-    const now = Date.now();
-    const nextVoice: MusicVoiceShell = {
-      id: buildMusicVoiceShellId(),
-      name: draftName.trim(),
-      voiceType: draftType,
-      accentNote: draftAccent.trim(),
-      sourceKind: draftSourceKind,
-      clipLabel,
-      createdAt: now,
-      updatedAt: now,
-    };
+    try {
+      setCreatingVoice(true);
+      const audioDataUrl = await blobToDataUrl(sourceBlob);
+      const { data, error } = await supabase.functions.invoke('music-voice', {
+        body: {
+          action: 'create-validation',
+          name: draftName.trim(),
+          voiceType: draftType,
+          accentNote: draftAccent.trim(),
+          sourceKind: draftSourceKind,
+          clipLabel,
+          audioDataUrl,
+          sourceDurationSeconds: draftSourceKind === 'record' ? Math.max(1, durationRef.current) : null,
+          validateLanguage: 'en',
+        },
+      });
+      if (error) throw error;
 
-    onVoicesChange((prev) => [nextVoice, ...prev]);
-    onSelectVoice(nextVoice.id);
-    setCreateOpen(false);
-    resetCreateState();
-    toast.success(isAr ? 'تم حفظ صوتك في الاستوديو' : 'Your voice shell was saved in Music Studio');
+      const nextVoice = normalizeMusicVoiceShell(data?.voice);
+      if (!nextVoice) throw new Error(isAr ? 'تعذر حفظ الصوت' : 'Could not save the voice');
+
+      upsertVoice(nextVoice);
+      onSelectVoice(nextVoice.id);
+      setCreateOpen(false);
+      resetCreateState();
+      toast.success(isAr ? 'تم إرسال الصوت لبدء جملة التحقق' : 'Your voice was sent to start the verification phrase');
+    } catch (error: any) {
+      console.error('Create music voice failed:', error);
+      toast.error((isAr ? 'فشل إنشاء الصوت: ' : 'Voice creation failed: ') + (error?.message || 'Unknown error'));
+    } finally {
+      setCreatingVoice(false);
+    }
   };
 
-  const deleteVoiceShell = () => {
+  const refreshVoice = async (voice: MusicVoiceShell) => {
+    if (!voice.id || voice.status === 'local_only') return;
+    try {
+      setRefreshingVoiceId(voice.id);
+      const { data, error } = await supabase.functions.invoke('music-voice', {
+        body: {
+          action: 'refresh',
+          voiceRecordId: voice.id,
+        },
+      });
+      if (error) throw error;
+
+      const nextVoice = normalizeMusicVoiceShell(data?.voice);
+      if (!nextVoice) throw new Error(isAr ? 'تعذر تحديث الصوت' : 'Could not refresh the voice');
+
+      upsertVoice(nextVoice);
+      if (nextVoice.status === 'phrase_ready') {
+        toast.success(isAr ? 'جملة التحقق جاهزة الآن' : 'Your verification phrase is ready');
+      } else if (nextVoice.status === 'ready' && nextVoice.isAvailable) {
+        toast.success(isAr ? 'صوتك أصبح جاهزاً' : 'Your voice is now ready');
+      } else if (nextVoice.status === 'failed') {
+        toast.error(nextVoice.errorMessage || (isAr ? 'فشل تجهيز الصوت' : 'Voice setup failed'));
+      } else {
+        toast.success(isAr ? 'تم تحديث الحالة' : 'Status refreshed');
+      }
+    } catch (error: any) {
+      console.error('Refresh music voice failed:', error);
+      toast.error((isAr ? 'فشل تحديث الحالة: ' : 'Refresh failed: ') + (error?.message || 'Unknown error'));
+    } finally {
+      setRefreshingVoiceId('');
+    }
+  };
+
+  const submitVerification = async () => {
+    if (!verificationVoice || !verificationFile) {
+      toast.error(isAr ? 'أضف ملف التحقق أولاً' : 'Please add the verification recording first');
+      return;
+    }
+
+    try {
+      setSubmittingVerification(true);
+      const verifyAudioDataUrl = await blobToDataUrl(verificationFile);
+      const { data, error } = await supabase.functions.invoke('music-voice', {
+        body: {
+          action: 'create-voice',
+          voiceRecordId: verificationVoice.id,
+          verifyAudioDataUrl,
+        },
+      });
+      if (error) throw error;
+
+      const nextVoice = normalizeMusicVoiceShell(data?.voice);
+      if (!nextVoice) throw new Error(isAr ? 'تعذر إرسال التحقق' : 'Could not submit verification');
+
+      upsertVoice(nextVoice);
+      setVerificationVoice(null);
+      setVerificationFile(null);
+      setVerificationLabel('');
+      toast.success(isAr ? 'تم إرسال تسجيل التحقق' : 'Verification recording sent');
+    } catch (error: any) {
+      console.error('Submit verification failed:', error);
+      toast.error((isAr ? 'فشل إرسال التحقق: ' : 'Verification failed: ') + (error?.message || 'Unknown error'));
+    } finally {
+      setSubmittingVerification(false);
+    }
+  };
+
+  const deleteVoiceShell = async () => {
     if (!pendingDeleteVoice) return;
-    onVoicesChange((prev) => prev.filter((voice) => voice.id !== pendingDeleteVoice.id));
-    toast.success(isAr ? 'تم حذف الصوت' : 'Voice removed');
-    setPendingDeleteVoice(null);
+
+    try {
+      setDeletingVoiceId(pendingDeleteVoice.id);
+      if (pendingDeleteVoice.status !== 'local_only') {
+        const { error } = await supabase.functions.invoke('music-voice', {
+          body: {
+            action: 'delete',
+            voiceRecordId: pendingDeleteVoice.id,
+          },
+        });
+        if (error) throw error;
+      }
+
+      onVoicesChange((prev) => prev.filter((voice) => voice.id !== pendingDeleteVoice.id));
+      toast.success(isAr ? 'تم حذف الصوت' : 'Voice removed');
+      setPendingDeleteVoice(null);
+    } catch (error: any) {
+      console.error('Delete music voice failed:', error);
+      toast.error((isAr ? 'فشل حذف الصوت: ' : 'Delete failed: ') + (error?.message || 'Unknown error'));
+    } finally {
+      setDeletingVoiceId('');
+    }
   };
 
   return (
@@ -1667,7 +1937,7 @@ function VoicesTab({
           <div className="space-y-1">
             <div className="text-lg font-bold text-[#060541] dark:text-white">{isAr ? 'أصوات الموسيقى' : 'Music Voices'}</div>
             <div className="text-sm text-[#606062] dark:text-white/65">
-              {isAr ? 'أنشئ أصواتك واحفظها هنا لاستخدامها لاحقاً داخل الاستوديو.' : 'Create and save your voices here to use later in Music Studio.'}
+              {isAr ? 'أنشئ الصوت، انتظر جملة التحقق، ثم ارفع تسجيل القراءة حتى يصبح جاهزاً.' : 'Create the voice, wait for the verification phrase, then upload your read-back recording until it becomes ready.'}
             </div>
           </div>
           <button
@@ -1681,7 +1951,7 @@ function VoicesTab({
         </div>
 
         <div className="rounded-2xl border border-[#e9ceb0]/70 dark:border-[#606062]/50 bg-[#e9ceb0]/35 dark:bg-[#606062]/20 px-4 py-3 text-sm text-[#060541] dark:text-[#f2f2f2]">
-          {isAr ? 'سمِّ كل صوت بالطريقة التي تناسبك ثم اختره بسهولة وقت الإنشاء.' : 'Name each voice your way, then pick it easily while composing.'}
+          {isAr ? 'جملة التحقق متاحة بالإنجليزية حالياً من الخدمة، لذلك ستظهر لك بالإنجليزية داخل الخطوة التالية.' : 'The verification phrase is currently available in English from the service, so you will see it in English in the next step.'}
         </div>
 
         {voices.length === 0 ? (
@@ -1690,20 +1960,24 @@ function VoicesTab({
               <Mic className="h-5 w-5" />
             </div>
             <div className="text-base font-semibold text-[#060541] dark:text-white">{isAr ? 'ابدأ بأول صوت موسيقي' : 'Create your first music voice'}</div>
-            <div className="text-sm text-[#606062] dark:text-white/60">{isAr ? 'سمِّ صوتك، أضف التسجيل أو الملف، ثم اختره لاحقاً من الإنشاء.' : 'Name your voice, attach a recording or file, then choose it later from Compose.'}</div>
+            <div className="text-sm text-[#606062] dark:text-white/60">{isAr ? 'أضف العينة الأولى الآن لبدء التحقق الحقيقي مع الخدمة.' : 'Add your first sample now to start the real verification flow.'}</div>
           </div>
         ) : (
           <div className="space-y-3">
             {voices.map((voice) => {
               const isSelected = selectedVoiceId === voice.id;
+              const isRefreshing = refreshingVoiceId === voice.id;
               return (
                 <div key={voice.id} className={`rounded-2xl border px-4 py-4 transition-all ${isSelected ? 'border-[#e9ceb0] dark:border-[#858384] bg-[#e9ceb0]/30 dark:bg-[#606062]/20 shadow-[0_8px_24px_rgba(6,5,65,0.10)] dark:shadow-[0_2px_20px_hsla(0,0%,0%,0.45)]' : 'border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03]'}`}>
                   <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-2 min-w-0">
+                    <div className="space-y-3 min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="text-sm font-bold text-[#060541] dark:text-white truncate">{voice.name}</div>
                         <span className="inline-flex items-center rounded-full border border-[#e9ceb0]/80 dark:border-[#858384]/40 bg-[#fcfefd] dark:bg-white/[0.05] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">
                           {voice.voiceType === 'male' ? (isAr ? 'ذكوري' : 'Male') : voice.voiceType === 'female' ? (isAr ? 'أنثوي' : 'Female') : (isAr ? 'مخصص' : 'Custom')}
+                        </span>
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getVoiceStatusTone(voice)}`}>
+                          {getVoiceStatusLabel(voice)}
                         </span>
                         {isSelected && (
                           <span className="inline-flex items-center rounded-full border border-emerald-300/40 dark:border-emerald-400/30 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
@@ -1711,9 +1985,11 @@ function VoicesTab({
                           </span>
                         )}
                       </div>
+
                       <div className="text-xs text-[#606062] dark:text-white/60">
                         {voice.accentNote || (isAr ? 'بدون ملاحظة لهجة' : 'No accent note')}
                       </div>
+
                       <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#606062] dark:text-white/55">
                         <span>{voice.sourceKind === 'record' ? (isAr ? 'تسجيل' : 'Recorded') : (isAr ? 'رفع ملف' : 'Uploaded')}</span>
                         <span>•</span>
@@ -1721,8 +1997,25 @@ function VoicesTab({
                         <span>•</span>
                         <span>{formatMusicVoiceDate(voice.createdAt, isAr ? 'ar' : 'en')}</span>
                       </div>
+
+                      {voice.status === 'phrase_ready' && voice.validatePhrase && (
+                        <div className="rounded-2xl border border-[#e9ceb0]/80 dark:border-[#858384]/35 bg-white/80 dark:bg-white/[0.04] px-4 py-3 space-y-2">
+                          <div className="text-[11px] font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">{isAr ? 'جملة التحقق' : 'Verification phrase'}</div>
+                          <div className="text-sm font-semibold text-[#060541] dark:text-white break-words">{voice.validatePhrase}</div>
+                          <div className="text-[11px] text-[#606062] dark:text-white/60">
+                            {isAr ? 'سجل نفسك وأنت تقرأ هذه الجملة ثم ارفع التسجيل في الخطوة التالية.' : 'Record yourself reading this line, then upload that recording in the next step.'}
+                          </div>
+                        </div>
+                      )}
+
+                      {voice.status === 'failed' && (
+                        <div className="rounded-xl border border-red-300/40 dark:border-red-400/25 bg-red-50/80 dark:bg-red-500/10 px-3 py-2 text-[11px] text-red-700 dark:text-red-200">
+                          {voice.errorMessage || (isAr ? 'تعذر تجهيز هذا الصوت' : 'This voice could not be prepared')}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex flex-col gap-2 shrink-0">
+
+                    <div className="flex flex-col gap-2 shrink-0 w-[144px]">
                       <button
                         type="button"
                         onClick={() => onUseVoice(voice.id)}
@@ -1730,12 +2023,39 @@ function VoicesTab({
                       >
                         {isAr ? 'استخدمه في الإنشاء' : 'Use in Compose'}
                       </button>
+
+                      {voice.status !== 'local_only' && voice.status !== 'ready' && (
+                        <button
+                          type="button"
+                          disabled={isRefreshing}
+                          onClick={() => refreshVoice(voice)}
+                          className="h-9 px-3 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-white/80 dark:bg-white/[0.06] text-[#060541] dark:text-white text-xs font-bold active:scale-95 transition-all disabled:opacity-60"
+                        >
+                          {isRefreshing ? (isAr ? 'جارٍ التحديث...' : 'Refreshing...') : (isAr ? 'تحديث الحالة' : 'Refresh status')}
+                        </button>
+                      )}
+
+                      {voice.status === 'phrase_ready' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setVerificationVoice(voice);
+                            setVerificationFile(null);
+                            setVerificationLabel('');
+                          }}
+                          className="h-9 px-3 rounded-xl border border-[#e9ceb0] dark:border-[#858384] bg-[#e9ceb0]/35 dark:bg-[#606062]/35 text-[#060541] dark:text-white text-xs font-bold active:scale-95 transition-all"
+                        >
+                          {isAr ? 'رفع التحقق' : 'Upload verification'}
+                        </button>
+                      )}
+
                       <button
                         type="button"
+                        disabled={deletingVoiceId === voice.id}
                         onClick={() => setPendingDeleteVoice(voice)}
-                        className="h-9 px-3 rounded-xl border border-red-300/40 dark:border-red-400/30 bg-red-50/70 dark:bg-red-500/10 text-red-600 dark:text-red-300 text-xs font-bold active:scale-95 transition-all"
+                        className="h-9 px-3 rounded-xl border border-red-300/40 dark:border-red-400/30 bg-red-50/70 dark:bg-red-500/10 text-red-600 dark:text-red-300 text-xs font-bold active:scale-95 transition-all disabled:opacity-60"
                       >
-                        {isAr ? 'حذف' : 'Delete'}
+                        {deletingVoiceId === voice.id ? (isAr ? 'جارٍ الحذف...' : 'Deleting...') : (isAr ? 'حذف' : 'Delete')}
                       </button>
                     </div>
                   </div>
@@ -1752,7 +2072,7 @@ function VoicesTab({
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#d9dde7] dark:border-white/10">
               <div>
                 <div className="text-base font-bold text-[#060541] dark:text-white">{isAr ? 'إنشاء صوت موسيقي' : 'Create Music Voice'}</div>
-                <div className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'أضف اسماً ومقطعاً للصوت ليظهر لك داخل الاستوديو.' : 'Add a name and a voice clip so it appears inside Music Studio.'}</div>
+                <div className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'أرسل عينة الصوت أولاً حتى نحصل على جملة التحقق.' : 'Send the source clip first so we can get the verification phrase.'}</div>
               </div>
               <button type="button" onClick={() => { setCreateOpen(false); resetCreateState(); }} aria-label={isAr ? 'إغلاق' : 'Close'} title={isAr ? 'إغلاق' : 'Close'} className="h-9 w-9 rounded-full border border-[#d9dde7] dark:border-white/10 flex items-center justify-center text-[#606062] dark:text-white/70 active:scale-95 transition-all">
                 <X className="h-4 w-4" />
@@ -1797,7 +2117,7 @@ function VoicesTab({
                   ] as const).map((option) => {
                     const isActive = draftSourceKind === option.key;
                     return (
-                      <button key={option.key} type="button" onClick={() => { setDraftSourceKind(option.key); setRecordedClipLabel(''); setUploadedClipLabel(''); }} className={`px-3 py-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 ${isActive ? 'bg-[#060541] text-white border-[#060541] dark:border-[#858384]' : 'bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#374151] dark:text-white/85'}`}>
+                      <button key={option.key} type="button" onClick={() => { setDraftSourceKind(option.key); setRecordedClipLabel(''); setRecordedClipBlob(null); setUploadedClipLabel(''); setUploadedClipFile(null); }} className={`px-3 py-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 ${isActive ? 'bg-[#060541] text-white border-[#060541] dark:border-[#858384]' : 'bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#374151] dark:text-white/85'}`}>
                         {isAr ? option.labelAr : option.labelEn}
                       </button>
                     );
@@ -1810,7 +2130,7 @@ function VoicesTab({
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-bold text-[#060541] dark:text-white">{isAr ? 'سجل مقطعك' : 'Record your clip'}</div>
-                      <div className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'سجّل عينة قصيرة لتمييز هذا الصوت.' : 'Record a short sample to identify this voice.'}</div>
+                      <div className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'استخدم عينة واضحة وقصيرة للصوت الأساسي.' : 'Use a clear, short sample for the source voice.'}</div>
                     </div>
                     {isRecording ? (
                       <button type="button" onClick={stopRecording} className="h-10 px-4 rounded-2xl bg-red-500 text-white text-sm font-bold active:scale-95 transition-all">
@@ -1835,9 +2155,11 @@ function VoicesTab({
                     title={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'}
                     aria-label={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'}
                     onChange={(e) => {
-                      const file = e.target.files?.[0];
+                      const file = e.target.files?.[0] || null;
+                      setUploadedClipFile(file);
                       setUploadedClipLabel(file ? file.name : '');
                       setRecordedClipLabel('');
+                      setRecordedClipBlob(null);
                     }}
                     className="block w-full text-sm text-[#374151] dark:text-white/80 file:mr-3 file:rounded-xl file:border-0 file:bg-[#e9ceb0]/45 dark:file:bg-[#606062]/35 file:px-3 file:py-2 file:text-sm file:font-bold file:text-[#060541] dark:file:text-[#f2f2f2]"
                   />
@@ -1850,8 +2172,58 @@ function VoicesTab({
               <button type="button" onClick={() => { setCreateOpen(false); resetCreateState(); }} className="h-10 px-4 rounded-2xl border border-[#d9dde7] dark:border-white/10 text-sm font-bold text-[#606062] dark:text-white/75 active:scale-95 transition-all">
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button type="button" onClick={createVoiceShell} className="h-10 px-4 rounded-2xl bg-[#060541] text-white text-sm font-bold shadow-[0_8px_20px_rgba(6,5,65,0.18)] active:scale-95 transition-all">
-                {isAr ? 'حفظ الصوت' : 'Save Voice'}
+              <button type="button" disabled={creatingVoice} onClick={createVoiceShell} className="h-10 px-4 rounded-2xl bg-[#060541] text-white text-sm font-bold shadow-[0_8px_20px_rgba(6,5,65,0.18)] active:scale-95 transition-all disabled:opacity-60">
+                {creatingVoice ? (isAr ? 'جارٍ الإرسال...' : 'Sending...') : (isAr ? 'ابدأ التحقق' : 'Start verification')}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {verificationVoice && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4" onClick={() => { setVerificationVoice(null); setVerificationFile(null); setVerificationLabel(''); }}>
+          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-[#0c0f14] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#d9dde7] dark:border-white/10">
+              <div>
+                <div className="text-base font-bold text-[#060541] dark:text-white">{isAr ? 'رفع تسجيل التحقق' : 'Upload verification recording'}</div>
+                <div className="text-xs text-[#606062] dark:text-white/60">{verificationVoice.name}</div>
+              </div>
+              <button type="button" onClick={() => { setVerificationVoice(null); setVerificationFile(null); setVerificationLabel(''); }} aria-label={isAr ? 'إغلاق' : 'Close'} title={isAr ? 'إغلاق' : 'Close'} className="h-9 w-9 rounded-full border border-[#d9dde7] dark:border-white/10 flex items-center justify-center text-[#606062] dark:text-white/70 active:scale-95 transition-all">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="rounded-2xl border border-[#e9ceb0]/80 dark:border-[#858384]/35 bg-[#e9ceb0]/20 dark:bg-[#606062]/20 px-4 py-3 space-y-2">
+                <div className="text-[11px] font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">{isAr ? 'اقرأ هذه الجملة' : 'Read this phrase'}</div>
+                <div className="text-sm font-semibold text-[#060541] dark:text-white break-words">{verificationVoice.validatePhrase || (isAr ? 'لا توجد جملة متاحة' : 'No phrase available')}</div>
+              </div>
+
+              <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 space-y-3">
+                <div className="text-sm font-bold text-[#060541] dark:text-white">{isAr ? 'ارفع تسجيل القراءة' : 'Upload your read-back recording'}</div>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  title={isAr ? 'اختر ملف التحقق' : 'Choose the verification file'}
+                  aria-label={isAr ? 'اختر ملف التحقق' : 'Choose the verification file'}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setVerificationFile(file);
+                    setVerificationLabel(file ? file.name : '');
+                  }}
+                  className="block w-full text-sm text-[#374151] dark:text-white/80 file:mr-3 file:rounded-xl file:border-0 file:bg-[#e9ceb0]/45 dark:file:bg-[#606062]/35 file:px-3 file:py-2 file:text-sm file:font-bold file:text-[#060541] dark:file:text-[#f2f2f2]"
+                />
+                <div className="text-xs text-[#606062] dark:text-white/60">{verificationLabel || (isAr ? 'لم يتم اختيار ملف بعد' : 'No file selected yet')}</div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-[#d9dde7] dark:border-white/10 bg-[#f7f8fb] dark:bg-white/[0.02]">
+              <button type="button" onClick={() => { setVerificationVoice(null); setVerificationFile(null); setVerificationLabel(''); }} className="h-10 px-4 rounded-2xl border border-[#d9dde7] dark:border-white/10 text-sm font-bold text-[#606062] dark:text-white/75 active:scale-95 transition-all">
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button type="button" disabled={submittingVerification} onClick={submitVerification} className="h-10 px-4 rounded-2xl bg-[#060541] text-white text-sm font-bold shadow-[0_8px_20px_rgba(6,5,65,0.18)] active:scale-95 transition-all disabled:opacity-60">
+                {submittingVerification ? (isAr ? 'جارٍ الإرسال...' : 'Sending...') : (isAr ? 'إرسال التحقق' : 'Send verification')}
               </button>
             </div>
           </div>
@@ -1864,7 +2236,7 @@ function VoicesTab({
           <AlertDialogHeader>
             <AlertDialogTitle>{isAr ? 'حذف الصوت؟' : 'Delete voice?'}</AlertDialogTitle>
             <AlertDialogDescription>
-              {isAr ? `سيتم حذف "${pendingDeleteVoice?.name || ''}" من غلاف الموسيقى.` : `This removes "${pendingDeleteVoice?.name || ''}" from the music voice shell.`}
+              {isAr ? `سيتم حذف "${pendingDeleteVoice?.name || ''}" من الاستوديو.` : `This removes "${pendingDeleteVoice?.name || ''}" from Music Studio.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1879,9 +2251,9 @@ function VoicesTab({
   );
 }
 
-function ComposeTab({
-  onSaved,
-  onQuotaChange,
+ function ComposeTab({
+   onSaved,
+   onQuotaChange,
   musicVoiceShells,
   selectedMusicVoiceId,
   onSelectMusicVoice,
@@ -2251,6 +2623,22 @@ function ComposeTab({
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastNotice, setLastNotice] = useState<string | null>(null);
   const selectedMusicVoice = useMemo(() => musicVoiceShells.find((voice) => voice.id === selectedMusicVoiceId) || null, [musicVoiceShells, selectedMusicVoiceId]);
+  const getComposeVoiceStatusLabel = (voice: MusicVoiceShell) => {
+    if (voice.status === 'ready' && voice.isAvailable) return isAr ? 'جاهز' : 'Ready';
+    if (voice.status === 'phrase_ready') return isAr ? 'بانتظار التحقق' : 'Verification needed';
+    if (voice.status === 'voice_pending') return isAr ? 'جارٍ إنشاء الصوت' : 'Creating voice';
+    if (voice.status === 'failed') return isAr ? 'فشل' : 'Failed';
+    return isAr ? 'جارٍ التجهيز' : 'Preparing';
+  };
+  const getComposeVoiceStatusTone = (voice: MusicVoiceShell) => {
+    if (voice.status === 'ready' && voice.isAvailable) {
+      return 'border-emerald-300/40 dark:border-emerald-400/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-200';
+    }
+    if (voice.status === 'failed') {
+      return 'border-red-300/40 dark:border-red-400/30 bg-red-50 dark:bg-red-500/10 text-red-700 dark:text-red-200';
+    }
+    return 'border-amber-300/40 dark:border-amber-400/25 bg-amber-50/80 dark:bg-amber-500/10 text-amber-700 dark:text-amber-200';
+  };
 
   // ── Canonical GCC style catalog (single source of truth for GCC detection) ──
   // Used by isGccStyleSelected, formatLyricsWithStructure (per-stanza Khaleeji language tags),
@@ -6635,6 +7023,18 @@ function ComposeTab({
 
   const cardCls = "rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4";
   const customVoiceBlocked = vocalType === 'custom';
+  const customVoiceNotice = (() => {
+    if (!selectedMusicVoice) {
+      return isAr ? 'اختر صوتاً أولاً من القائمة أو افتح إدارة الأصوات.' : 'Pick a voice first from the list, or open Manage Voices.';
+    }
+    if (selectedMusicVoice.status === 'ready' && selectedMusicVoice.isAvailable) {
+      return isAr ? 'الصوت جاهز، لكن التوليد بهذا الخيار لم يتم تفعيله بعد.' : 'The voice is ready, but generation with this option is not enabled yet.';
+    }
+    if (selectedMusicVoice.status === 'failed') {
+      return selectedMusicVoice.errorMessage || (isAr ? 'هذا الصوت فشل في التجهيز. افتح تبويب الأصوات لإعادة المحاولة.' : 'This voice failed to prepare. Open the Voices tab to try again.');
+    }
+    return isAr ? 'هذا الصوت ما زال قيد التجهيز. افتح تبويب الأصوات لتحديث الحالة أو رفع التحقق.' : 'This voice is still being prepared. Open the Voices tab to refresh it or upload verification.';
+  })();
 
   return (
     <div className="space-y-4">
@@ -7172,7 +7572,12 @@ function ComposeTab({
                   {selectedMusicVoice && (
                     <div className="rounded-2xl border border-[#e9ceb0] dark:border-[#858384] bg-white/80 dark:bg-white/[0.05] px-4 py-3 space-y-1">
                       <div className="text-xs font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">{isAr ? 'المحدد الآن' : 'Currently selected'}</div>
-                      <div className="text-sm font-bold text-[#060541] dark:text-white">{selectedMusicVoice.name}</div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-bold text-[#060541] dark:text-white">{selectedMusicVoice.name}</div>
+                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getComposeVoiceStatusTone(selectedMusicVoice)}`}>
+                          {getComposeVoiceStatusLabel(selectedMusicVoice)}
+                        </span>
+                      </div>
                       <div className="text-xs text-[#606062] dark:text-white/60">{selectedMusicVoice.accentNote || (isAr ? 'بدون ملاحظة لهجة' : 'No accent note')}</div>
                     </div>
                   )}
@@ -7186,7 +7591,12 @@ function ComposeTab({
                           onClick={() => onSelectMusicVoice(voice.id)}
                           className={`rounded-2xl border px-3 py-3 text-left transition-all active:scale-95 ${isSelected ? 'border-[#e9ceb0] dark:border-[#858384] bg-[#fcfefd] dark:bg-white/[0.08] shadow-[0_6px_18px_rgba(6,5,65,0.10)]' : 'border-[#d9dde7] dark:border-white/10 bg-white/80 dark:bg-white/[0.04] hover:border-[#e9ceb0] dark:hover:border-[#858384]'}`}
                         >
-                          <div className="text-sm font-bold text-[#060541] dark:text-white truncate">{voice.name}</div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-bold text-[#060541] dark:text-white truncate">{voice.name}</div>
+                            <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getComposeVoiceStatusTone(voice)}`}>
+                              {getComposeVoiceStatusLabel(voice)}
+                            </span>
+                          </div>
                           <div className="text-[11px] text-[#606062] dark:text-white/60 truncate">{voice.accentNote || (isAr ? 'بدون ملاحظة لهجة' : 'No accent note')}</div>
                         </button>
                       );
@@ -7590,7 +8000,7 @@ function ComposeTab({
             </div>
             {customVoiceBlocked && (
               <div className="rounded-xl border border-amber-300/40 dark:border-amber-400/25 bg-amber-50/80 dark:bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-200">
-                {isAr ? 'يمكنك حفظ الأصوات الآن، لكن التوليد بهذا الخيار غير متاح بعد.' : 'You can save voices now, but generation with this option is not available yet.'}
+                {customVoiceNotice}
               </div>
             )}
           </div>
