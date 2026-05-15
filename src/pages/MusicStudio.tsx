@@ -1659,11 +1659,21 @@ function VoicesTab({
   const [submittingVerification, setSubmittingVerification] = useState(false);
   const [refreshingVoiceId, setRefreshingVoiceId] = useState('');
   const [deletingVoiceId, setDeletingVoiceId] = useState('');
+  const [verifySourceMode, setVerifySourceMode] = useState<'record' | 'upload'>('record');
+  const [isVerifyRecording, setIsVerifyRecording] = useState(false);
+  const [verifyRecordingSeconds, setVerifyRecordingSeconds] = useState(0);
+  const [verifyRecordedBlob, setVerifyRecordedBlob] = useState<Blob | null>(null);
+  const [verifyRecordedLabel, setVerifyRecordedLabel] = useState('');
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const durationRef = useRef(0);
+  const verifyRecorderRef = useRef<MediaRecorder | null>(null);
+  const verifyStreamRef = useRef<MediaStream | null>(null);
+  const verifyTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const verifyChunksRef = useRef<BlobPart[]>([]);
+  const verifyDurationRef = useRef(0);
 
   const stopStream = () => {
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -1930,37 +1940,85 @@ function VoicesTab({
     }
   };
 
+  const closeVerifyModal = () => {
+    if (verifyTimerRef.current) clearInterval(verifyTimerRef.current);
+    verifyTimerRef.current = null;
+    if (verifyRecorderRef.current?.state === 'recording') verifyRecorderRef.current.stop();
+    verifyStreamRef.current?.getTracks().forEach((t) => t.stop());
+    verifyStreamRef.current = null;
+    verifyRecorderRef.current = null;
+    verifyChunksRef.current = [];
+    verifyDurationRef.current = 0;
+    setIsVerifyRecording(false);
+    setVerifyRecordingSeconds(0);
+    setVerifyRecordedBlob(null);
+    setVerifyRecordedLabel('');
+    setVerifySourceMode('record');
+    setVerificationVoice(null);
+    setVerificationFile(null);
+    setVerificationLabel('');
+  };
+
+  const startVerifyRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      verifyStreamRef.current = stream;
+      verifyRecorderRef.current = recorder;
+      verifyChunksRef.current = [];
+      verifyDurationRef.current = 0;
+      setVerifyRecordingSeconds(0);
+      setVerifyRecordedBlob(null);
+      setVerifyRecordedLabel('');
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) verifyChunksRef.current.push(e.data); };
+      recorder.onstop = () => {
+        const secs = Math.max(1, verifyDurationRef.current);
+        const blob = new Blob(verifyChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        setVerifyRecordedBlob(blob.size > 0 ? blob : null);
+        setVerifyRecordedLabel(isAr ? `تسجيل ${secs}ث` : `Recording · ${secs}s`);
+        verifyStreamRef.current?.getTracks().forEach((t) => t.stop());
+        verifyStreamRef.current = null;
+      };
+      recorder.start(1000);
+      setIsVerifyRecording(true);
+      verifyTimerRef.current = setInterval(() => {
+        verifyDurationRef.current += 1;
+        setVerifyRecordingSeconds(verifyDurationRef.current);
+      }, 1000);
+    } catch {
+      toast.error(isAr ? 'تعذر الوصول إلى الميكروفون' : 'Unable to access the microphone');
+    }
+  };
+
+  const stopVerifyRecording = () => {
+    if (verifyTimerRef.current) { clearInterval(verifyTimerRef.current); verifyTimerRef.current = null; }
+    setIsVerifyRecording(false);
+    if (verifyRecorderRef.current?.state === 'recording') verifyRecorderRef.current.stop();
+  };
+
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4">
-        <div className="flex items-start justify-between gap-3">
-          <div className="space-y-1">
-            <div className="text-lg font-bold text-[#060541] dark:text-white">{isAr ? 'أصوات الموسيقى' : 'Music Voices'}</div>
-            <div className="text-sm text-[#606062] dark:text-white/65">
-              {isAr ? 'أنشئ الصوت، انتظر جملة التحقق، ثم ارفع تسجيل القراءة حتى يصبح جاهزاً.' : 'Create the voice, wait for the verification phrase, then upload your read-back recording until it becomes ready.'}
-            </div>
-          </div>
+      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-base font-bold text-[#060541] dark:text-white">{isAr ? 'أصوات الموسيقى' : 'Music Voices'}</div>
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#060541] text-white text-sm font-bold shadow-[0_8px_24px_rgba(6,5,65,0.24)] active:scale-95 transition-all"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-[#060541] text-white text-xs font-bold shadow-[0_6px_18px_rgba(6,5,65,0.22)] active:scale-95 transition-all"
           >
-            <Plus className="h-4 w-4" />
-            <span>{isAr ? 'إنشاء صوت' : 'Create Voice'}</span>
+            <Plus className="h-3.5 w-3.5" />
+            <span>{isAr ? 'إنشاء صوت' : 'New Voice'}</span>
           </button>
         </div>
 
-        <div className="rounded-2xl border border-[#e9ceb0]/70 dark:border-[#606062]/50 bg-[#e9ceb0]/35 dark:bg-[#606062]/20 px-4 py-3 text-sm text-[#060541] dark:text-[#f2f2f2]">
-          {isAr ? 'جملة التحقق متاحة بالإنجليزية حالياً من الخدمة، لذلك ستظهر لك بالإنجليزية داخل الخطوة التالية.' : 'The verification phrase is currently available in English from the service, so you will see it in English in the next step.'}
-        </div>
-
         {voices.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#d9dde7] dark:border-white/10 px-5 py-8 text-center space-y-2">
-            <div className="mx-auto h-12 w-12 rounded-full bg-gradient-to-br from-[#e9ceb0]/60 to-[#fcfefd] dark:from-[#606062]/45 dark:to-[#858384]/25 text-[#060541] dark:text-[#f2f2f2] flex items-center justify-center">
-              <Mic className="h-5 w-5" />
+          <div className="rounded-2xl border border-dashed border-[#d9dde7] dark:border-white/10 px-5 py-10 text-center space-y-2">
+            <div className="mx-auto h-12 w-12 rounded-full bg-[#e9ceb0]/40 dark:bg-[#606062]/30 flex items-center justify-center">
+              <Mic className="h-5 w-5 text-[#060541] dark:text-[#f2f2f2]" />
             </div>
-            <div className="text-base font-semibold text-[#060541] dark:text-white">{isAr ? 'ابدأ بأول صوت موسيقي' : 'Create your first music voice'}</div>
-            <div className="text-sm text-[#606062] dark:text-white/60">{isAr ? 'أضف العينة الأولى الآن لبدء التحقق الحقيقي مع الخدمة.' : 'Add your first sample now to start the real verification flow.'}</div>
+            <div className="text-sm font-semibold text-[#060541] dark:text-white">{isAr ? 'ابدأ بأول صوت' : 'Create your first voice'}</div>
+            <div className="text-xs text-[#606062] dark:text-white/55">{isAr ? 'سجّل عينة صوتية أو ارفع ملفاً.' : 'Record a sample or upload a file.'}</div>
           </div>
         ) : (
           <div className="space-y-3">
@@ -1968,96 +2026,95 @@ function VoicesTab({
               const isSelected = selectedVoiceId === voice.id;
               const isRefreshing = refreshingVoiceId === voice.id;
               return (
-                <div key={voice.id} className={`rounded-2xl border px-4 py-4 transition-all ${isSelected ? 'border-[#e9ceb0] dark:border-[#858384] bg-[#e9ceb0]/30 dark:bg-[#606062]/20 shadow-[0_8px_24px_rgba(6,5,65,0.10)] dark:shadow-[0_2px_20px_hsla(0,0%,0%,0.45)]' : 'border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03]'}`}>
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-3 min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <div className="text-sm font-bold text-[#060541] dark:text-white truncate">{voice.name}</div>
-                        <span className="inline-flex items-center rounded-full border border-[#e9ceb0]/80 dark:border-[#858384]/40 bg-[#fcfefd] dark:bg-white/[0.05] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">
-                          {voice.voiceType === 'male' ? (isAr ? 'ذكوري' : 'Male') : voice.voiceType === 'female' ? (isAr ? 'أنثوي' : 'Female') : (isAr ? 'مخصص' : 'Custom')}
+                <div
+                  key={voice.id}
+                  className={`rounded-2xl border transition-all ${isSelected ? 'border-[#e9ceb0] dark:border-[#858384]/60 bg-[#e9ceb0]/20 dark:bg-[#606062]/15' : 'border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02]'}`}
+                >
+                  <div className="px-4 pt-4 pb-3 space-y-2">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-bold text-[#060541] dark:text-white leading-tight">{voice.name}</span>
+                      <span className="inline-flex items-center rounded-full border border-[#d9dde7] dark:border-white/10 bg-[#f7f8fb] dark:bg-white/[0.05] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#606062] dark:text-white/60">
+                        {voice.voiceType === 'male' ? (isAr ? 'ذكوري' : 'Male') : voice.voiceType === 'female' ? (isAr ? 'أنثوي' : 'Female') : (isAr ? 'مخصص' : 'Custom')}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getVoiceStatusTone(voice)}`}>
+                        {getVoiceStatusLabel(voice)}
+                      </span>
+                      {isSelected && (
+                        <span className="inline-flex items-center rounded-full border border-[#e9ceb0] dark:border-[#858384]/50 bg-[#e9ceb0]/40 dark:bg-[#606062]/30 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">
+                          {isAr ? 'مختار' : 'Active'}
                         </span>
-                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${getVoiceStatusTone(voice)}`}>
-                          {getVoiceStatusLabel(voice)}
-                        </span>
-                        {isSelected && (
-                          <span className="inline-flex items-center rounded-full border border-emerald-300/40 dark:border-emerald-400/30 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
-                            {isAr ? 'المختار الآن' : 'Selected'}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="text-xs text-[#606062] dark:text-white/60">
-                        {voice.accentNote || (isAr ? 'بدون ملاحظة لهجة' : 'No accent note')}
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#606062] dark:text-white/55">
-                        <span>{voice.sourceKind === 'record' ? (isAr ? 'تسجيل' : 'Recorded') : (isAr ? 'رفع ملف' : 'Uploaded')}</span>
-                        <span>•</span>
-                        <span>{voice.clipLabel}</span>
-                        <span>•</span>
-                        <span>{formatMusicVoiceDate(voice.createdAt, isAr ? 'ar' : 'en')}</span>
-                      </div>
-
-                      {voice.status === 'phrase_ready' && voice.validatePhrase && (
-                        <div className="rounded-2xl border border-[#e9ceb0]/80 dark:border-[#858384]/35 bg-white/80 dark:bg-white/[0.04] px-4 py-3 space-y-2">
-                          <div className="text-[11px] font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">{isAr ? 'جملة التحقق' : 'Verification phrase'}</div>
-                          <div className="text-sm font-semibold text-[#060541] dark:text-white break-words">{voice.validatePhrase}</div>
-                          <div className="text-[11px] text-[#606062] dark:text-white/60">
-                            {isAr ? 'سجل نفسك وأنت تقرأ هذه الجملة ثم ارفع التسجيل في الخطوة التالية.' : 'Record yourself reading this line, then upload that recording in the next step.'}
-                          </div>
-                        </div>
-                      )}
-
-                      {voice.status === 'failed' && (
-                        <div className="rounded-xl border border-red-300/40 dark:border-red-400/25 bg-red-50/80 dark:bg-red-500/10 px-3 py-2 text-[11px] text-red-700 dark:text-red-200">
-                          {voice.errorMessage || (isAr ? 'تعذر تجهيز هذا الصوت' : 'This voice could not be prepared')}
-                        </div>
                       )}
                     </div>
 
-                    <div className="flex flex-col gap-2 shrink-0 w-[144px]">
-                      <button
-                        type="button"
-                        onClick={() => onUseVoice(voice.id)}
-                        className="h-9 px-3 rounded-xl bg-[#060541] text-white text-xs font-bold active:scale-95 transition-all shadow-[0_8px_18px_rgba(6,5,65,0.16)]"
-                      >
-                        {isAr ? 'استخدمه في الإنشاء' : 'Use in Compose'}
-                      </button>
+                    {voice.accentNote ? (
+                      <div className="text-xs text-[#606062] dark:text-white/55">{voice.accentNote}</div>
+                    ) : null}
 
-                      {voice.status !== 'local_only' && voice.status !== 'ready' && (
-                        <button
-                          type="button"
-                          disabled={isRefreshing}
-                          onClick={() => refreshVoice(voice)}
-                          className="h-9 px-3 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-white/80 dark:bg-white/[0.06] text-[#060541] dark:text-white text-xs font-bold active:scale-95 transition-all disabled:opacity-60"
-                        >
-                          {isRefreshing ? (isAr ? 'جارٍ التحديث...' : 'Refreshing...') : (isAr ? 'تحديث الحالة' : 'Refresh status')}
-                        </button>
-                      )}
-
-                      {voice.status === 'phrase_ready' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setVerificationVoice(voice);
-                            setVerificationFile(null);
-                            setVerificationLabel('');
-                          }}
-                          className="h-9 px-3 rounded-xl border border-[#e9ceb0] dark:border-[#858384] bg-[#e9ceb0]/35 dark:bg-[#606062]/35 text-[#060541] dark:text-white text-xs font-bold active:scale-95 transition-all"
-                        >
-                          {isAr ? 'رفع التحقق' : 'Upload verification'}
-                        </button>
-                      )}
-
-                      <button
-                        type="button"
-                        disabled={deletingVoiceId === voice.id}
-                        onClick={() => setPendingDeleteVoice(voice)}
-                        className="h-9 px-3 rounded-xl border border-red-300/40 dark:border-red-400/30 bg-red-50/70 dark:bg-red-500/10 text-red-600 dark:text-red-300 text-xs font-bold active:scale-95 transition-all disabled:opacity-60"
-                      >
-                        {deletingVoiceId === voice.id ? (isAr ? 'جارٍ الحذف...' : 'Deleting...') : (isAr ? 'حذف' : 'Delete')}
-                      </button>
+                    <div className="flex items-center gap-1.5 text-[11px] text-[#858384] dark:text-white/40">
+                      <span>{voice.sourceKind === 'record' ? (isAr ? 'مسجّل' : 'Recorded') : (isAr ? 'مرفوع' : 'Uploaded')}</span>
+                      <span>·</span>
+                      <span>{formatMusicVoiceDate(voice.createdAt, isAr ? 'ar' : 'en')}</span>
                     </div>
+
+                    {voice.status === 'phrase_ready' && voice.validatePhrase && (
+                      <div className="mt-1 rounded-xl border border-[#e9ceb0]/70 dark:border-[#858384]/30 bg-[#e9ceb0]/15 dark:bg-[#606062]/15 px-3 py-2.5 space-y-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-[#060541]/60 dark:text-white/40">{isAr ? 'جملة التحقق — اقرأها بصوت واضح' : 'Verification phrase — read this aloud'}</div>
+                        <div className="text-sm font-semibold text-[#060541] dark:text-white break-words leading-snug">{voice.validatePhrase}</div>
+                      </div>
+                    )}
+
+                    {voice.status === 'failed' && (
+                      <div className="mt-1 rounded-xl border border-red-200/60 dark:border-red-400/20 bg-red-50/70 dark:bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-300">
+                        {voice.errorMessage || (isAr ? 'تعذر تجهيز هذا الصوت' : 'This voice could not be prepared')}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="px-4 pb-4 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onUseVoice(voice.id)}
+                      className="flex-1 min-w-[100px] h-9 rounded-xl bg-[#060541] dark:bg-white/10 text-white text-xs font-bold active:scale-95 transition-all"
+                    >
+                      {isAr ? 'استخدم في الإنشاء' : 'Use in Compose'}
+                    </button>
+
+                    {voice.status === 'phrase_ready' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setVerificationVoice(voice);
+                          setVerificationFile(null);
+                          setVerificationLabel('');
+                          setVerifySourceMode('record');
+                          setVerifyRecordedBlob(null);
+                          setVerifyRecordedLabel('');
+                        }}
+                        className="flex-1 min-w-[100px] h-9 rounded-xl border border-[#060541]/20 dark:border-white/15 bg-[#060541]/[0.06] dark:bg-white/[0.06] text-[#060541] dark:text-white text-xs font-bold active:scale-95 transition-all"
+                      >
+                        {isAr ? 'إرسال التحقق' : 'Send verification'}
+                      </button>
+                    )}
+
+                    {voice.status !== 'local_only' && voice.status !== 'ready' && (
+                      <button
+                        type="button"
+                        disabled={isRefreshing}
+                        onClick={() => refreshVoice(voice)}
+                        className="h-9 px-3 rounded-xl border border-[#d9dde7] dark:border-white/10 bg-white/80 dark:bg-white/[0.04] text-[#606062] dark:text-white/70 text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                      >
+                        {isRefreshing ? '...' : (isAr ? 'تحديث' : 'Refresh')}
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      disabled={deletingVoiceId === voice.id}
+                      onClick={() => setPendingDeleteVoice(voice)}
+                      className="h-9 px-3 rounded-xl border border-red-200/60 dark:border-red-400/20 bg-red-50/60 dark:bg-red-500/10 text-red-500 dark:text-red-400 text-xs font-semibold active:scale-95 transition-all disabled:opacity-50"
+                    >
+                      {deletingVoiceId === voice.id ? '...' : (isAr ? 'حذف' : 'Delete')}
+                    </button>
                   </div>
                 </div>
               );
@@ -2067,113 +2124,85 @@ function VoicesTab({
       </div>
 
       {createOpen && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4" onClick={() => { setCreateOpen(false); resetCreateState(); }}>
-          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-[#0c0f14] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4" onClick={() => { setCreateOpen(false); resetCreateState(); }}>
+          <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-[#0c0f14] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#d9dde7] dark:border-white/10">
-              <div>
-                <div className="text-base font-bold text-[#060541] dark:text-white">{isAr ? 'إنشاء صوت موسيقي' : 'Create Music Voice'}</div>
-                <div className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'أرسل عينة الصوت أولاً حتى نحصل على جملة التحقق.' : 'Send the source clip first so we can get the verification phrase.'}</div>
-              </div>
-              <button type="button" onClick={() => { setCreateOpen(false); resetCreateState(); }} aria-label={isAr ? 'إغلاق' : 'Close'} title={isAr ? 'إغلاق' : 'Close'} className="h-9 w-9 rounded-full border border-[#d9dde7] dark:border-white/10 flex items-center justify-center text-[#606062] dark:text-white/70 active:scale-95 transition-all">
+              <div className="text-base font-bold text-[#060541] dark:text-white">{isAr ? 'إنشاء صوت جديد' : 'New Voice'}</div>
+              <button type="button" onClick={() => { setCreateOpen(false); resetCreateState(); }} aria-label={isAr ? 'إغلاق' : 'Close'} className="h-8 w-8 rounded-full border border-[#d9dde7] dark:border-white/10 flex items-center justify-center text-[#606062] dark:text-white/60 active:scale-95 transition-all">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
-              <div className="space-y-2">
-                <div className="text-xs font-bold text-[#060541] dark:text-white/85">{isAr ? 'اسم الصوت' : 'Voice name'}</div>
-                <Input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder={isAr ? 'مثال: صوتي الكويتي' : 'Example: My Kuwaiti Voice'} maxLength={60} />
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+              <div className="space-y-1.5">
+                <div className="text-xs font-bold text-[#060541] dark:text-white/80">{isAr ? 'الاسم' : 'Name'}</div>
+                <Input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder={isAr ? 'مثال: صوتي الخليجي' : 'e.g. My Gulf Voice'} maxLength={60} className="h-11 rounded-xl" />
               </div>
 
-              <div className="space-y-2">
-                <div className="text-xs font-bold text-[#060541] dark:text-white/85">{isAr ? 'النوع' : 'Type'}</div>
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    { key: 'male', labelEn: 'Male', labelAr: 'ذكوري' },
-                    { key: 'female', labelEn: 'Female', labelAr: 'أنثوي' },
-                    { key: 'custom', labelEn: 'Custom', labelAr: 'مخصص' },
-                  ] as const).map((option) => {
-                    const isActive = draftType === option.key;
-                    return (
-                      <button key={option.key} type="button" onClick={() => setDraftType(option.key)} className={`px-3 py-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 ${isActive ? 'bg-[#060541] text-white border-[#060541] dark:border-[#858384]' : 'bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#374151] dark:text-white/85'}`}>
-                        {isAr ? option.labelAr : option.labelEn}
-                      </button>
-                    );
-                  })}
+              <div className="space-y-1.5">
+                <div className="text-xs font-bold text-[#060541] dark:text-white/80">{isAr ? 'النوع' : 'Type'}</div>
+                <div className="flex gap-2">
+                  {([{ key: 'male', en: 'Male', ar: 'ذكوري' }, { key: 'female', en: 'Female', ar: 'أنثوي' }, { key: 'custom', en: 'Custom', ar: 'مخصص' }] as const).map((opt) => (
+                    <button key={opt.key} type="button" onClick={() => setDraftType(opt.key)} className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all active:scale-95 ${draftType === opt.key ? 'bg-[#060541] text-white border-[#060541]' : 'bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#374151] dark:text-white/80'}`}>
+                      {isAr ? opt.ar : opt.en}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <div className="text-xs font-bold text-[#060541] dark:text-white/85">{isAr ? 'ملاحظة اللهجة' : 'Accent note'}</div>
-                <Input value={draftAccent} onChange={(e) => setDraftAccent(e.target.value)} placeholder={isAr ? 'مثال: خليجي، كويتي، عربي' : 'Example: Khaleeji, Kuwaiti, Arabic'} maxLength={80} />
+              <div className="space-y-1.5">
+                <div className="text-xs font-bold text-[#060541] dark:text-white/80">{isAr ? 'ملاحظة اللهجة (اختياري)' : 'Accent note (optional)'}</div>
+                <Input value={draftAccent} onChange={(e) => setDraftAccent(e.target.value)} placeholder={isAr ? 'مثال: خليجي، كويتي' : 'e.g. Khaleeji, Kuwaiti'} maxLength={80} className="h-11 rounded-xl" />
               </div>
 
               <div className="space-y-2">
-                <div className="text-xs font-bold text-[#060541] dark:text-white/85">{isAr ? 'مصدر المقطع' : 'Clip source'}</div>
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    { key: 'record', labelEn: 'Record', labelAr: 'تسجيل' },
-                    { key: 'upload', labelEn: 'Upload', labelAr: 'رفع' },
-                  ] as const).map((option) => {
-                    const isActive = draftSourceKind === option.key;
-                    return (
-                      <button key={option.key} type="button" onClick={() => { setDraftSourceKind(option.key); setRecordedClipLabel(''); setRecordedClipBlob(null); setUploadedClipLabel(''); setUploadedClipFile(null); }} className={`px-3 py-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 ${isActive ? 'bg-[#060541] text-white border-[#060541] dark:border-[#858384]' : 'bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#374151] dark:text-white/85'}`}>
-                        {isAr ? option.labelAr : option.labelEn}
-                      </button>
-                    );
-                  })}
+                <div className="text-xs font-bold text-[#060541] dark:text-white/80">{isAr ? 'عينة الصوت' : 'Voice sample'}</div>
+                <div className="flex gap-2 p-1 rounded-xl bg-[#f0f1f5] dark:bg-white/[0.05]">
+                  {([{ key: 'record', en: 'Record', ar: 'تسجيل' }, { key: 'upload', en: 'Upload file', ar: 'رفع ملف' }] as const).map((opt) => (
+                    <button key={opt.key} type="button" onClick={() => { setDraftSourceKind(opt.key); setRecordedClipLabel(''); setRecordedClipBlob(null); setUploadedClipLabel(''); setUploadedClipFile(null); }} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 ${draftSourceKind === opt.key ? 'bg-white dark:bg-[#1a1f2e] shadow text-[#060541] dark:text-white' : 'text-[#606062] dark:text-white/50'}`}>
+                      {isAr ? opt.ar : opt.en}
+                    </button>
+                  ))}
                 </div>
-              </div>
 
-              {draftSourceKind === 'record' ? (
-                <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-sm font-bold text-[#060541] dark:text-white">{isAr ? 'سجل مقطعك' : 'Record your clip'}</div>
-                      <div className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'استخدم عينة واضحة وقصيرة للصوت الأساسي.' : 'Use a clear, short sample for the source voice.'}</div>
+                {draftSourceKind === 'record' ? (
+                  <div className="rounded-xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex-1 h-10 rounded-xl flex items-center justify-center text-xs font-semibold ${isRecording ? 'bg-red-50 dark:bg-red-500/10 text-red-500 border border-red-200/60 dark:border-red-400/20' : 'bg-[#f7f8fb] dark:bg-white/[0.04] text-[#606062] dark:text-white/50 border border-[#e4e6ed] dark:border-white/8'}`}>
+                        {isRecording ? (isAr ? `● ${recordingSeconds}ث` : `● ${recordingSeconds}s`) : (recordedClipLabel || (isAr ? 'لم يُسجَّل بعد' : 'Nothing recorded'))}
+                      </div>
+                      {isRecording ? (
+                        <button type="button" onClick={stopRecording} className="h-10 px-4 rounded-xl bg-red-500 text-white text-xs font-bold active:scale-95 transition-all shrink-0">
+                          {isAr ? 'إيقاف' : 'Stop'}
+                        </button>
+                      ) : (
+                        <button type="button" onClick={startRecording} className="h-10 px-4 rounded-xl bg-[#060541] text-white text-xs font-bold active:scale-95 transition-all shrink-0">
+                          {isAr ? 'تسجيل' : 'Record'}
+                        </button>
+                      )}
                     </div>
-                    {isRecording ? (
-                      <button type="button" onClick={stopRecording} className="h-10 px-4 rounded-2xl bg-red-500 text-white text-sm font-bold active:scale-95 transition-all">
-                        {isAr ? 'إيقاف' : 'Stop'}
-                      </button>
-                    ) : (
-                      <button type="button" onClick={startRecording} className="h-10 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-bold active:scale-95 transition-all">
-                        {isAr ? 'ابدأ التسجيل' : 'Start recording'}
-                      </button>
-                    )}
                   </div>
-                  <div className="text-xs text-[#606062] dark:text-white/60">
-                    {isRecording ? (isAr ? `جارٍ التسجيل: ${recordingSeconds}ث` : `Recording: ${recordingSeconds}s`) : (recordedClipLabel || (isAr ? 'لم يتم إضافة تسجيل بعد' : 'No recording attached yet'))}
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 space-y-3">
-                  <div className="text-sm font-bold text-[#060541] dark:text-white">{isAr ? 'ارفع ملف الصوت' : 'Upload audio clip'}</div>
-                  <input
-                    type="file"
-                    accept="audio/*"
-                    title={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'}
-                    aria-label={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null;
-                      setUploadedClipFile(file);
-                      setUploadedClipLabel(file ? file.name : '');
-                      setRecordedClipLabel('');
-                      setRecordedClipBlob(null);
-                    }}
-                    className="block w-full text-sm text-[#374151] dark:text-white/80 file:mr-3 file:rounded-xl file:border-0 file:bg-[#e9ceb0]/45 dark:file:bg-[#606062]/35 file:px-3 file:py-2 file:text-sm file:font-bold file:text-[#060541] dark:file:text-[#f2f2f2]"
-                  />
-                  <div className="text-xs text-[#606062] dark:text-white/60">{uploadedClipLabel || (isAr ? 'لم يتم اختيار ملف بعد' : 'No file selected yet')}</div>
-                </div>
-              )}
+                ) : (
+                  <label className="flex items-center gap-3 rounded-xl border border-dashed border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] px-4 py-4 cursor-pointer active:scale-[0.98] transition-all">
+                    <div className="h-9 w-9 rounded-xl bg-[#e9ceb0]/40 dark:bg-[#606062]/30 flex items-center justify-center shrink-0">
+                      <Mic className="h-4 w-4 text-[#060541] dark:text-[#f2f2f2]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-[#060541] dark:text-white">{uploadedClipLabel || (isAr ? 'اختر ملفاً صوتياً' : 'Choose audio file')}</div>
+                      <div className="text-[10px] text-[#858384] dark:text-white/40">{isAr ? 'MP3، WAV، M4A' : 'MP3, WAV, M4A'}</div>
+                    </div>
+                    <input type="file" accept="audio/*" className="hidden" title={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'} aria-label={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'} onChange={(e) => { const f = e.target.files?.[0] || null; setUploadedClipFile(f); setUploadedClipLabel(f ? f.name : ''); setRecordedClipLabel(''); setRecordedClipBlob(null); }} />
+                  </label>
+                )}
+              </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-[#d9dde7] dark:border-white/10 bg-[#f7f8fb] dark:bg-white/[0.02]">
-              <button type="button" onClick={() => { setCreateOpen(false); resetCreateState(); }} className="h-10 px-4 rounded-2xl border border-[#d9dde7] dark:border-white/10 text-sm font-bold text-[#606062] dark:text-white/75 active:scale-95 transition-all">
+            <div className="flex items-center gap-3 px-5 py-4 border-t border-[#d9dde7] dark:border-white/10">
+              <button type="button" onClick={() => { setCreateOpen(false); resetCreateState(); }} className="flex-1 h-11 rounded-xl border border-[#d9dde7] dark:border-white/10 text-sm font-bold text-[#606062] dark:text-white/70 active:scale-95 transition-all">
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button type="button" disabled={creatingVoice} onClick={createVoiceShell} className="h-10 px-4 rounded-2xl bg-[#060541] text-white text-sm font-bold shadow-[0_8px_20px_rgba(6,5,65,0.18)] active:scale-95 transition-all disabled:opacity-60">
-                {creatingVoice ? (isAr ? 'جارٍ الإرسال...' : 'Sending...') : (isAr ? 'ابدأ التحقق' : 'Start verification')}
+              <button type="button" disabled={creatingVoice} onClick={createVoiceShell} className="flex-1 h-11 rounded-xl bg-[#060541] text-white text-sm font-bold shadow-[0_6px_18px_rgba(6,5,65,0.20)] active:scale-95 transition-all disabled:opacity-60">
+                {creatingVoice ? (isAr ? 'جارٍ الإرسال...' : 'Sending...') : (isAr ? 'إرسال' : 'Submit')}
               </button>
             </div>
           </div>
@@ -2182,48 +2211,100 @@ function VoicesTab({
       )}
 
       {verificationVoice && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4" onClick={() => { setVerificationVoice(null); setVerificationFile(null); setVerificationLabel(''); }}>
-          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-[#0c0f14] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-4" onClick={closeVerifyModal}>
+          <div className="w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-[#0c0f14] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#d9dde7] dark:border-white/10">
               <div>
-                <div className="text-base font-bold text-[#060541] dark:text-white">{isAr ? 'رفع تسجيل التحقق' : 'Upload verification recording'}</div>
-                <div className="text-xs text-[#606062] dark:text-white/60">{verificationVoice.name}</div>
+                <div className="text-base font-bold text-[#060541] dark:text-white">{isAr ? 'إرسال تسجيل التحقق' : 'Send verification'}</div>
+                <div className="text-xs text-[#606062] dark:text-white/55">{verificationVoice.name}</div>
               </div>
-              <button type="button" onClick={() => { setVerificationVoice(null); setVerificationFile(null); setVerificationLabel(''); }} aria-label={isAr ? 'إغلاق' : 'Close'} title={isAr ? 'إغلاق' : 'Close'} className="h-9 w-9 rounded-full border border-[#d9dde7] dark:border-white/10 flex items-center justify-center text-[#606062] dark:text-white/70 active:scale-95 transition-all">
+              <button type="button" onClick={closeVerifyModal} aria-label={isAr ? 'إغلاق' : 'Close'} className="h-8 w-8 rounded-full border border-[#d9dde7] dark:border-white/10 flex items-center justify-center text-[#606062] dark:text-white/60 active:scale-95 transition-all">
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="rounded-2xl border border-[#e9ceb0]/80 dark:border-[#858384]/35 bg-[#e9ceb0]/20 dark:bg-[#606062]/20 px-4 py-3 space-y-2">
-                <div className="text-[11px] font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">{isAr ? 'اقرأ هذه الجملة' : 'Read this phrase'}</div>
-                <div className="text-sm font-semibold text-[#060541] dark:text-white break-words">{verificationVoice.validatePhrase || (isAr ? 'لا توجد جملة متاحة' : 'No phrase available')}</div>
+              <div className="rounded-xl border border-[#e9ceb0]/70 dark:border-[#858384]/30 bg-[#e9ceb0]/15 dark:bg-[#606062]/15 px-4 py-3 space-y-1">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-[#060541]/55 dark:text-white/40">{isAr ? 'اقرأ هذه الجملة بصوت واضح' : 'Read this phrase out loud'}</div>
+                <div className="text-sm font-semibold text-[#060541] dark:text-white break-words leading-snug">{verificationVoice.validatePhrase || ''}</div>
               </div>
 
-              <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 space-y-3">
-                <div className="text-sm font-bold text-[#060541] dark:text-white">{isAr ? 'ارفع تسجيل القراءة' : 'Upload your read-back recording'}</div>
-                <input
-                  type="file"
-                  accept="audio/*"
-                  title={isAr ? 'اختر ملف التحقق' : 'Choose the verification file'}
-                  aria-label={isAr ? 'اختر ملف التحقق' : 'Choose the verification file'}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setVerificationFile(file);
-                    setVerificationLabel(file ? file.name : '');
-                  }}
-                  className="block w-full text-sm text-[#374151] dark:text-white/80 file:mr-3 file:rounded-xl file:border-0 file:bg-[#e9ceb0]/45 dark:file:bg-[#606062]/35 file:px-3 file:py-2 file:text-sm file:font-bold file:text-[#060541] dark:file:text-[#f2f2f2]"
-                />
-                <div className="text-xs text-[#606062] dark:text-white/60">{verificationLabel || (isAr ? 'لم يتم اختيار ملف بعد' : 'No file selected yet')}</div>
+              <div className="space-y-2">
+                <div className="flex gap-2 p-1 rounded-xl bg-[#f0f1f5] dark:bg-white/[0.05]">
+                  {([{ key: 'record', en: 'Record', ar: 'تسجيل' }, { key: 'upload', en: 'Upload file', ar: 'رفع ملف' }] as const).map((opt) => (
+                    <button key={opt.key} type="button" onClick={() => { setVerifySourceMode(opt.key); setVerifyRecordedBlob(null); setVerifyRecordedLabel(''); setVerificationFile(null); setVerificationLabel(''); }} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 ${verifySourceMode === opt.key ? 'bg-white dark:bg-[#1a1f2e] shadow text-[#060541] dark:text-white' : 'text-[#606062] dark:text-white/50'}`}>
+                      {isAr ? opt.ar : opt.en}
+                    </button>
+                  ))}
+                </div>
+
+                {verifySourceMode === 'record' ? (
+                  <div className="rounded-xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] p-4">
+                    <div className="flex items-center gap-3">
+                      <div className={`flex-1 h-10 rounded-xl flex items-center justify-center text-xs font-semibold ${isVerifyRecording ? 'bg-red-50 dark:bg-red-500/10 text-red-500 border border-red-200/60 dark:border-red-400/20' : 'bg-[#f7f8fb] dark:bg-white/[0.04] text-[#606062] dark:text-white/50 border border-[#e4e6ed] dark:border-white/8'}`}>
+                        {isVerifyRecording ? (isAr ? `● ${verifyRecordingSeconds}ث` : `● ${verifyRecordingSeconds}s`) : (verifyRecordedLabel || (isAr ? 'لم يُسجَّل بعد' : 'Nothing recorded'))}
+                      </div>
+                      {isVerifyRecording ? (
+                        <button type="button" onClick={stopVerifyRecording} className="h-10 px-4 rounded-xl bg-red-500 text-white text-xs font-bold active:scale-95 transition-all shrink-0">
+                          {isAr ? 'إيقاف' : 'Stop'}
+                        </button>
+                      ) : (
+                        <button type="button" onClick={startVerifyRecording} className="h-10 px-4 rounded-xl bg-[#060541] text-white text-xs font-bold active:scale-95 transition-all shrink-0">
+                          {isAr ? 'تسجيل' : 'Record'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <label className="flex items-center gap-3 rounded-xl border border-dashed border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] px-4 py-4 cursor-pointer active:scale-[0.98] transition-all">
+                    <div className="h-9 w-9 rounded-xl bg-[#e9ceb0]/40 dark:bg-[#606062]/30 flex items-center justify-center shrink-0">
+                      <Mic className="h-4 w-4 text-[#060541] dark:text-[#f2f2f2]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-bold text-[#060541] dark:text-white">{verificationLabel || (isAr ? 'اختر ملف التحقق' : 'Choose verification file')}</div>
+                      <div className="text-[10px] text-[#858384] dark:text-white/40">{isAr ? 'MP3، WAV، M4A' : 'MP3, WAV, M4A'}</div>
+                    </div>
+                    <input type="file" accept="audio/*" className="hidden" title={isAr ? 'اختر ملف التحقق' : 'Choose verification file'} aria-label={isAr ? 'اختر ملف التحقق' : 'Choose verification file'} onChange={(e) => { const f = e.target.files?.[0] || null; setVerificationFile(f); setVerificationLabel(f ? f.name : ''); }} />
+                  </label>
+                )}
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-[#d9dde7] dark:border-white/10 bg-[#f7f8fb] dark:bg-white/[0.02]">
-              <button type="button" onClick={() => { setVerificationVoice(null); setVerificationFile(null); setVerificationLabel(''); }} className="h-10 px-4 rounded-2xl border border-[#d9dde7] dark:border-white/10 text-sm font-bold text-[#606062] dark:text-white/75 active:scale-95 transition-all">
+            <div className="flex items-center gap-3 px-5 py-4 border-t border-[#d9dde7] dark:border-white/10">
+              <button type="button" onClick={closeVerifyModal} className="flex-1 h-11 rounded-xl border border-[#d9dde7] dark:border-white/10 text-sm font-bold text-[#606062] dark:text-white/70 active:scale-95 transition-all">
                 {isAr ? 'إلغاء' : 'Cancel'}
               </button>
-              <button type="button" disabled={submittingVerification} onClick={submitVerification} className="h-10 px-4 rounded-2xl bg-[#060541] text-white text-sm font-bold shadow-[0_8px_20px_rgba(6,5,65,0.18)] active:scale-95 transition-all disabled:opacity-60">
-                {submittingVerification ? (isAr ? 'جارٍ الإرسال...' : 'Sending...') : (isAr ? 'إرسال التحقق' : 'Send verification')}
+              <button
+                type="button"
+                disabled={submittingVerification || (verifySourceMode === 'record' ? !verifyRecordedBlob : !verificationFile)}
+                onClick={async () => {
+                  let fileToSubmit = verificationFile;
+                  if (verifySourceMode === 'record' && verifyRecordedBlob) {
+                    fileToSubmit = new File([verifyRecordedBlob], 'verification.webm', { type: verifyRecordedBlob.type });
+                    setVerificationFile(fileToSubmit);
+                  }
+                  if (!verificationVoice || !fileToSubmit) return;
+                  try {
+                    setSubmittingVerification(true);
+                    const verifyAudioDataUrl = await blobToDataUrl(fileToSubmit);
+                    const { data, error } = await supabase.functions.invoke('music-voice', {
+                      body: { action: 'create-voice', voiceRecordId: verificationVoice.id, verifyAudioDataUrl },
+                    });
+                    if (error) throw error;
+                    const nextVoice = normalizeMusicVoiceShell(data?.voice);
+                    if (!nextVoice) throw new Error(isAr ? 'تعذر إرسال التحقق' : 'Could not submit verification');
+                    upsertVoice(nextVoice);
+                    toast.success(isAr ? 'تم إرسال تسجيل التحقق' : 'Verification recording sent');
+                    closeVerifyModal();
+                  } catch (err: any) {
+                    toast.error((isAr ? 'فشل إرسال التحقق: ' : 'Verification failed: ') + (err?.message || 'Unknown error'));
+                  } finally {
+                    setSubmittingVerification(false);
+                  }
+                }}
+                className="flex-1 h-11 rounded-xl bg-[#060541] text-white text-sm font-bold shadow-[0_6px_18px_rgba(6,5,65,0.20)] active:scale-95 transition-all disabled:opacity-50"
+              >
+                {submittingVerification ? (isAr ? 'جارٍ الإرسال...' : 'Sending...') : (isAr ? 'إرسال' : 'Submit')}
               </button>
             </div>
           </div>
