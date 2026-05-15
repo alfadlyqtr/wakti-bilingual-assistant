@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useEmailConnections, ImapConnectionHealth } from '@/hooks/useEmailConnections';
 import { EmailConnectionModal } from '@/components/email/EmailConnectionModal';
@@ -8,11 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Mail, Settings2, XCircle, Plug, RefreshCw, Trash2, Star, Loader2, Search, Sparkles, Save } from 'lucide-react';
+import { Mail, Settings2, XCircle, Plug, RefreshCw, Trash2, Star, Loader2, Search, Sparkles, Save, ImagePlus, Code2 } from 'lucide-react';
 import { GmailClient } from '@/components/email/GmailClient';
 import { CustomMailClient } from '@/components/email/CustomMailClient';
 import { toast } from 'sonner';
-import { buildSignatureHtml, generateEmailSignatureHtml, readEmailSignatureSettings, saveEmailSignatureSettings } from '@/utils/emailSignature';
+import { buildSignatureHtml, generateEmailSignatureHtml, prepareEmailSignatureImage, readEmailSignatureSettings, saveEmailSignatureSettings } from '@/utils/emailSignature';
 
 type EmailTab = 'settings' | 'gmail' | 'apple' | 'mail';
 
@@ -31,14 +31,20 @@ export default function Email() {
   const { language } = useTheme();
   const emailConn = useEmailConnections();
   const storedSignatureSettings = useMemo(() => readEmailSignatureSettings(), []);
+  const signatureImageInputRef = useRef<HTMLInputElement | null>(null);
   const [activeTab, setActiveTab] = useState<EmailTab>('settings');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [signatureEnabled, setSignatureEnabled] = useState(storedSignatureSettings.enabled);
   const [signatureHtmlDraft, setSignatureHtmlDraft] = useState(storedSignatureSettings.html);
   const [showWaktiAiFooter, setShowWaktiAiFooter] = useState(storedSignatureSettings.showWaktiAiFooter);
-  const [signaturePrompt, setSignaturePrompt] = useState('');
+  const [signaturePrompt, setSignaturePrompt] = useState(storedSignatureSettings.prompt);
+  const [signatureImageDataUrl, setSignatureImageDataUrl] = useState(storedSignatureSettings.imageDataUrl);
+  const [signatureImageAlt, setSignatureImageAlt] = useState(storedSignatureSettings.imageAlt);
+  const [signatureUpdatedAt, setSignatureUpdatedAt] = useState(storedSignatureSettings.updatedAt);
   const [generatingSignature, setGeneratingSignature] = useState(false);
+  const [processingSignatureImage, setProcessingSignatureImage] = useState(false);
+  const [showAdvancedHtml, setShowAdvancedHtml] = useState(() => Boolean(storedSignatureSettings.html));
   const pageCardClass = 'rounded-[26px] border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,250,255,0.98))] shadow-[0_18px_48px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(12,15,20,0.98),rgba(18,22,31,0.96))] dark:shadow-[0_20px_48px_rgba(0,0,0,0.45)] dark:ring-1 dark:ring-white/5';
   const panelClass = 'rounded-[22px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] shadow-[0_10px_28px_rgba(6,5,65,0.07)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(15,18,26,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_12px_30px_rgba(0,0,0,0.36)] dark:ring-1 dark:ring-white/5';
   const outlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.34)] dark:hover:!bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]';
@@ -92,28 +98,56 @@ export default function Email() {
     searchPlaceholder: language === 'ar' ? 'ابحث في المرسل أو الموضوع' : 'Search sender or subject',
     appleSearchHint: language === 'ar' ? 'سيعمل البحث هنا عندما يصبح Apple Mail متاحًا.' : 'Search will work here once Apple Mail is available.',
     signatureTitle: language === 'ar' ? 'توقيع البريد' : 'Email Signature',
-    signatureSubtitle: language === 'ar' ? 'أنشئ توقيع HTML صغيراً وأنيقاً لبريدك.' : 'Create a small, elegant HTML signature for your emails.',
+    signatureSubtitle: language === 'ar' ? 'صف التوقيع الذي تريده واترك الذكاء الاصطناعي يبنيه ويحفظه لك.' : 'Describe the signature you want and let AI build and save it for you.',
     signatureEnabled: language === 'ar' ? 'تفعيل التوقيع' : 'Enable signature',
     aiFooter: language === 'ar' ? 'إظهار Wakti AI في الأسفل' : 'Show Wakti AI at the bottom',
-    signaturePromptLabel: language === 'ar' ? 'وصف التوقيع للذكاء الاصطناعي' : 'AI signature prompt',
-    signaturePromptPlaceholder: language === 'ar' ? 'مثال: توقيع فاخر باسم Ahmed، وظيفة Founder، شركة Wakti، رقم هاتف، وموقع إلكتروني.' : 'Example: premium signature with Ahmed, Founder, Wakti, phone number, and website.',
-    generateSignature: language === 'ar' ? 'توليد بالذكاء الاصطناعي' : 'Generate with AI',
+    signaturePromptLabel: language === 'ar' ? 'صف الشكل والإحساس الذي تريده' : 'Describe the look and feel you want',
+    signaturePromptPlaceholder: language === 'ar' ? 'مثال: أريد توقيعاً فاخراً جداً بلون أنيق، فيه اسمي، منصبي، الشركة، المدينة، رقم الهاتف، الموقع، وإنستغرام. اجعله صغيراً ومرتباً جداً ومناسباً للبريد.' : 'Example: I want a very premium signature with a calm luxury feel, my name, title, company, city, phone, website, and Instagram. Keep it compact, elegant, and perfect for email.',
+    generateSignature: language === 'ar' ? 'أنشئ واحفظ التوقيع' : 'Generate and save signature',
     generatingSignature: language === 'ar' ? 'جارٍ التوليد...' : 'Generating...',
     signatureHtmlLabel: language === 'ar' ? 'كود التوقيع HTML' : 'Signature HTML',
     signatureHtmlPlaceholder: language === 'ar' ? 'ألصق أو عدّل كود HTML المصغر هنا.' : 'Paste or edit your small HTML snippet here.',
     saveSignature: language === 'ar' ? 'حفظ التوقيع' : 'Save signature',
     signaturePreview: language === 'ar' ? 'معاينة التوقيع' : 'Signature preview',
     signatureSaved: language === 'ar' ? 'تم حفظ التوقيع' : 'Signature saved',
-    signatureGenerated: language === 'ar' ? 'تم توليد التوقيع' : 'Signature generated',
+    signatureGenerated: language === 'ar' ? 'تم إنشاء التوقيع وحفظه' : 'Signature generated and saved',
     signatureHelp: language === 'ar' ? 'سيظهر Wakti AI تلقائياً أسفل التوقيع بشكل افتراضي ويمكنك إيقافه.' : 'Wakti AI shows at the bottom by default and you can turn it off.',
+    signaturePromptHelp: language === 'ar' ? 'اكتب فقط ما تريد أن يشعر به التوقيع وما الذي يجب أن يظهر فيه.' : 'Just describe the vibe you want and what details should appear in the signature.',
+    signatureImageTitle: language === 'ar' ? 'صورة أو شعار اختياري' : 'Optional image or logo',
+    signatureImageHelp: language === 'ar' ? 'يمكنك رفع شعار الشركة أو صورة شخصية، ثم اطلب من الذكاء الاصطناعي أين يضعها.' : 'You can upload a company logo or headshot, then tell the AI where to place it.',
+    uploadSignatureImage: language === 'ar' ? 'رفع صورة أو شعار' : 'Upload image or logo',
+    changeSignatureImage: language === 'ar' ? 'تغيير الصورة' : 'Change image',
+    removeSignatureImage: language === 'ar' ? 'إزالة الصورة' : 'Remove image',
+    processingSignatureImage: language === 'ar' ? 'جارٍ تجهيز الصورة...' : 'Preparing image...',
+    advancedHtml: language === 'ar' ? 'تحرير HTML المتقدم' : 'Advanced HTML editor',
+    advancedHtmlHelp: language === 'ar' ? 'هذا اختياري فقط إذا أردت تعديل الكود بنفسك.' : 'This is optional only if you want to tweak the code yourself.',
+    signatureReadyHelp: language === 'ar' ? 'الخطوة الطبيعية: صف التوقيع، ارفع صورة إن أردت، ثم اضغط أنشئ واحفظ.' : 'Normal flow: describe the signature, add an image if you want, then press generate and save.',
+    promptIdeasTitle: language === 'ar' ? 'أفكار سريعة' : 'Quick ideas',
   }), [language]);
+
+  const signaturePromptIdeas = useMemo(() => (
+    language === 'ar'
+      ? [
+          'فاخر جداً، هادئ، مرتب، باسم الشخص ومنصبه والشركة ورقم الهاتف والموقع.',
+          'ستايل عصري ناعم مع عمودين وصورة شعار صغيرة وروابط الموقع وإنستغرام.',
+          'توقيع تنفيذي بسيط جداً، أبيض ونظيف، بدون زحمة، مع مدينة الدولة ووسائل التواصل.',
+        ]
+      : [
+          'Very premium and clean, with my name, title, company, phone, and website.',
+          'Modern two-column layout with a small logo and website plus Instagram on the side.',
+          'Minimal executive style, elegant and compact, with location and key contact links.',
+        ]
+  ), [language]);
 
   const signaturePreviewHtml = useMemo(() => buildSignatureHtml({
     enabled: signatureEnabled,
     html: signatureHtmlDraft,
     showWaktiAiFooter,
-    updatedAt: storedSignatureSettings.updatedAt,
-  }), [showWaktiAiFooter, signatureEnabled, signatureHtmlDraft, storedSignatureSettings.updatedAt]);
+    prompt: signaturePrompt,
+    imageDataUrl: signatureImageDataUrl,
+    imageAlt: signatureImageAlt,
+    updatedAt: signatureUpdatedAt,
+  }), [showWaktiAiFooter, signatureEnabled, signatureHtmlDraft, signatureImageAlt, signatureImageDataUrl, signaturePrompt, signatureUpdatedAt]);
 
   const getHealthBadge = (health?: ImapConnectionHealth) => {
     if (!health || health.status === 'unknown') {
@@ -172,30 +206,77 @@ export default function Email() {
     }
   };
 
-  const handleSaveSignature = () => {
-    const saved = saveEmailSignatureSettings({
-      enabled: signatureEnabled,
-      html: signatureHtmlDraft,
-      showWaktiAiFooter,
+  const persistSignature = (overrides: Partial<ReturnType<typeof readEmailSignatureSettings>> = {}, showToast = true) => {
+    const nextSettings: ReturnType<typeof readEmailSignatureSettings> = {
+      enabled: overrides?.enabled ?? signatureEnabled,
+      html: overrides?.html ?? signatureHtmlDraft,
+      showWaktiAiFooter: overrides?.showWaktiAiFooter ?? showWaktiAiFooter,
+      prompt: overrides?.prompt ?? signaturePrompt,
+      imageDataUrl: overrides?.imageDataUrl ?? signatureImageDataUrl,
+      imageAlt: overrides?.imageAlt ?? signatureImageAlt,
       updatedAt: new Date().toISOString(),
-    });
+    };
+    const saved = saveEmailSignatureSettings(nextSettings);
     setSignatureEnabled(saved.enabled);
     setSignatureHtmlDraft(saved.html);
     setShowWaktiAiFooter(saved.showWaktiAiFooter);
-    toast.success(t.signatureSaved);
+    setSignaturePrompt(saved.prompt);
+    setSignatureImageDataUrl(saved.imageDataUrl);
+    setSignatureImageAlt(saved.imageAlt);
+    setSignatureUpdatedAt(saved.updatedAt);
+    if (showToast) {
+      toast.success(t.signatureSaved);
+    }
+    return saved;
+  };
+
+  const handleSaveSignature = () => {
+    persistSignature();
   };
 
   const handleGenerateSignature = async () => {
     setGeneratingSignature(true);
     try {
-      const generatedHtml = await generateEmailSignatureHtml(signaturePrompt, language === 'ar' ? 'ar' : 'en');
-      setSignatureHtmlDraft(generatedHtml);
+      const generatedHtml = await generateEmailSignatureHtml({
+        prompt: signaturePrompt,
+        language: language === 'ar' ? 'ar' : 'en',
+        imageDataUrl: signatureImageDataUrl,
+        imageAlt: signatureImageAlt,
+      });
+      setShowAdvancedHtml(false);
+      persistSignature({ html: generatedHtml }, false);
       toast.success(t.signatureGenerated);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to generate signature');
     } finally {
       setGeneratingSignature(false);
     }
+  };
+
+  const handleSignatureImagePick = () => {
+    signatureImageInputRef.current?.click();
+  };
+
+  const handleSignatureImageChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    setProcessingSignatureImage(true);
+    try {
+      const prepared = await prepareEmailSignatureImage(file);
+      setSignatureImageDataUrl(prepared.dataUrl);
+      setSignatureImageAlt(prepared.alt);
+      toast.success(t.signatureSaved);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to prepare image');
+    } finally {
+      setProcessingSignatureImage(false);
+    }
+  };
+
+  const handleRemoveSignatureImage = () => {
+    setSignatureImageDataUrl('');
+    setSignatureImageAlt('');
   };
 
   const renderSettingsTab = () => (
@@ -359,6 +440,16 @@ export default function Email() {
           <CardDescription>{t.signatureSubtitle}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <input
+            ref={signatureImageInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            onChange={handleSignatureImageChange}
+            aria-label={t.uploadSignatureImage}
+            title={t.uploadSignatureImage}
+            className="hidden"
+          />
+
           <div className="grid gap-3 md:grid-cols-2">
             <div className="rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] px-4 py-3 shadow-[0_8px_20px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
               <div className="flex items-center justify-between gap-3">
@@ -381,14 +472,61 @@ export default function Email() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-dashed border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,249,255,0.95))] p-4 shadow-[0_8px_20px_rgba(6,5,65,0.04)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.92),rgba(11,14,21,0.9))]">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-foreground">{t.signatureImageTitle}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{t.signatureImageHelp}</div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" variant="outline" onClick={handleSignatureImagePick} disabled={processingSignatureImage} className={outlineButtonClass}>
+                  {processingSignatureImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                  {processingSignatureImage ? t.processingSignatureImage : (signatureImageDataUrl ? t.changeSignatureImage : t.uploadSignatureImage)}
+                </Button>
+                {signatureImageDataUrl ? (
+                  <Button type="button" variant="outline" onClick={handleRemoveSignatureImage} className={outlineButtonClass}>
+                    <Trash2 className="h-4 w-4" />
+                    {t.removeSignatureImage}
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
+            {signatureImageDataUrl ? (
+              <div className="mt-4 flex items-center gap-3 rounded-2xl border border-[#060541]/10 bg-white/90 p-3 dark:border-white/10 dark:bg-background/70">
+                <img src={signatureImageDataUrl} alt={signatureImageAlt || 'signature preview'} className="h-14 w-14 rounded-xl object-cover ring-1 ring-[#060541]/10 dark:ring-white/10" />
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium text-foreground">{signatureImageAlt || 'Image ready'}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{t.signatureReadyHelp}</div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           <div className="rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-4 shadow-[0_8px_20px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
             <div className="text-sm font-medium text-foreground">{t.signaturePromptLabel}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{t.signaturePromptHelp}</div>
             <Textarea
               value={signaturePrompt}
               onChange={(event) => setSignaturePrompt(event.target.value)}
               placeholder={t.signaturePromptPlaceholder}
-              className="mt-3 min-h-[110px] rounded-2xl border border-[#060541]/12 bg-white text-sm text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-white/10 dark:bg-background/70 dark:text-foreground"
+              className="mt-3 min-h-[140px] rounded-2xl border border-[#060541]/12 bg-white text-sm text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-white/10 dark:bg-background/70 dark:text-foreground"
             />
+            <div className="mt-3">
+              <div className="text-xs font-medium text-muted-foreground">{t.promptIdeasTitle}</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {signaturePromptIdeas.map((idea) => (
+                  <button
+                    key={idea}
+                    type="button"
+                    onClick={() => setSignaturePrompt(idea)}
+                    className="rounded-full border border-[#060541]/12 bg-white px-3 py-1.5 text-left text-xs text-[#060541] transition-colors hover:bg-[#f3f5ff] dark:border-white/10 dark:bg-background/70 dark:text-foreground dark:hover:bg-background"
+                  >
+                    {idea}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button type="button" onClick={handleGenerateSignature} disabled={generatingSignature} className="gap-2 rounded-xl bg-[#060541] text-white hover:bg-[#0a0a5c]">
                 {generatingSignature ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
@@ -402,25 +540,35 @@ export default function Email() {
           </div>
 
           <div className="rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-4 shadow-[0_8px_20px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
-            <div className="text-sm font-medium text-foreground">{t.signatureHtmlLabel}</div>
-            <Textarea
-              value={signatureHtmlDraft}
-              onChange={(event) => setSignatureHtmlDraft(event.target.value)}
-              placeholder={t.signatureHtmlPlaceholder}
-              className="mt-3 min-h-[180px] rounded-2xl border border-[#060541]/12 bg-white font-mono text-xs text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-white/10 dark:bg-background/70 dark:text-foreground"
-            />
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium text-foreground">{t.advancedHtml}</div>
+                <div className="mt-1 text-xs text-muted-foreground">{t.advancedHtmlHelp}</div>
+              </div>
+              <Button type="button" variant="outline" onClick={() => setShowAdvancedHtml((value) => !value)} className={outlineButtonClass}>
+                <Code2 className="h-4 w-4" />
+                {t.advancedHtml}
+              </Button>
+            </div>
+
+            {showAdvancedHtml ? (
+              <>
+                <div className="mt-4 text-sm font-medium text-foreground">{t.signatureHtmlLabel}</div>
+                <Textarea
+                  value={signatureHtmlDraft}
+                  onChange={(event) => setSignatureHtmlDraft(event.target.value)}
+                  placeholder={t.signatureHtmlPlaceholder}
+                  className="mt-3 min-h-[180px] rounded-2xl border border-[#060541]/12 bg-white font-mono text-xs text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-white/10 dark:bg-background/70 dark:text-foreground"
+                />
+              </>
+            ) : null}
           </div>
 
           {signaturePreviewHtml ? (
             <div className="rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-4 shadow-[0_8px_20px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
               <div className="text-sm font-medium text-foreground">{t.signaturePreview}</div>
               <div className="mt-3 overflow-hidden rounded-2xl border border-[#060541]/12 bg-white shadow-[inset_0_1px_2px_rgba(6,5,65,0.04)]">
-                <iframe
-                  title="Email signature settings preview"
-                  sandbox=""
-                  srcDoc={`<div style="padding:16px;background:#ffffff;">${signaturePreviewHtml}</div>`}
-                  className="h-40 w-full bg-white"
-                />
+                <div className="min-h-[160px] bg-white p-4" dangerouslySetInnerHTML={{ __html: signaturePreviewHtml }} />
               </div>
             </div>
           ) : null}

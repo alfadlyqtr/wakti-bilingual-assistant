@@ -5,11 +5,16 @@ export interface EmailSignatureSettings {
   enabled: boolean;
   html: string;
   showWaktiAiFooter: boolean;
+  prompt: string;
+  imageDataUrl: string;
+  imageAlt: string;
   updatedAt: string;
 }
 
 const EMAIL_SIGNATURE_STORAGE_KEY = 'wakti_email_signature_v1';
 const EMAIL_SIGNATURE_LEGACY_KEY = 'wakti_email_signature';
+const SIGNATURE_IMAGE_MAX_DIMENSION = 240;
+const SIGNATURE_IMAGE_MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 const ALLOWED_TAGS = new Set(['div', 'table', 'tbody', 'tr', 'td', 'p', 'span', 'strong', 'em', 'b', 'i', 'a', 'br', 'img']);
 const REMOVE_ENTIRELY_TAGS = new Set(['script', 'style', 'iframe', 'object', 'embed', 'link', 'meta', 'base', 'form', 'input', 'button', 'textarea', 'select', 'option', 'video', 'audio', 'svg', 'canvas']);
@@ -55,6 +60,9 @@ export function getDefaultEmailSignatureSettings(): EmailSignatureSettings {
     enabled: true,
     html: '',
     showWaktiAiFooter: true,
+    prompt: '',
+    imageDataUrl: '',
+    imageAlt: '',
     updatedAt: '',
   };
 }
@@ -70,6 +78,9 @@ export function readEmailSignatureSettings(explicitUid?: string | null): EmailSi
       enabled: parsed.enabled ?? true,
       html: typeof parsed.html === 'string' ? parsed.html : '',
       showWaktiAiFooter: parsed.showWaktiAiFooter ?? true,
+      prompt: typeof parsed.prompt === 'string' ? parsed.prompt : '',
+      imageDataUrl: typeof parsed.imageDataUrl === 'string' ? parsed.imageDataUrl : '',
+      imageAlt: typeof parsed.imageAlt === 'string' ? parsed.imageAlt : '',
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : '',
     };
   } catch {
@@ -78,10 +89,14 @@ export function readEmailSignatureSettings(explicitUid?: string | null): EmailSi
 }
 
 export function saveEmailSignatureSettings(settings: EmailSignatureSettings, explicitUid?: string | null) {
+  const safeImageDataUrl = settings.imageDataUrl ? sanitizeUrl(settings.imageDataUrl, 'src') : '';
   const next: EmailSignatureSettings = {
     enabled: Boolean(settings.enabled),
     html: sanitizeEmailSignatureHtml(settings.html || ''),
     showWaktiAiFooter: Boolean(settings.showWaktiAiFooter),
+    prompt: typeof settings.prompt === 'string' ? settings.prompt.trim() : '',
+    imageDataUrl: safeImageDataUrl,
+    imageAlt: typeof settings.imageAlt === 'string' ? settings.imageAlt.replace(/[\r\n]+/g, ' ').trim() : '',
     updatedAt: settings.updatedAt || new Date().toISOString(),
   };
 
@@ -107,10 +122,71 @@ function sanitizeUrl(value: string, kind: 'href' | 'src'): string {
   if (lower.startsWith('http://') || lower.startsWith('https://')) {
     return trimmed;
   }
-  if (lower.startsWith('data:image/')) {
+  if (/^data:image\/(png|jpeg|jpg|gif|webp);/i.test(lower)) {
     return trimmed;
   }
   return '';
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onerror = () => reject(reader.error || new Error('Failed to read image'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageElement(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Failed to load image'));
+    image.src = src;
+  });
+}
+
+export async function prepareEmailSignatureImage(file: File): Promise<{ dataUrl: string; alt: string }> {
+  if (typeof window === 'undefined') {
+    throw new Error('Image upload is only available in the browser');
+  }
+
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Please upload an image file');
+  }
+
+  if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+    throw new Error('Use JPG, PNG, WEBP, or GIF for the signature image');
+  }
+
+  if (file.size > SIGNATURE_IMAGE_MAX_FILE_SIZE) {
+    throw new Error('Signature image must be smaller than 5MB');
+  }
+
+  const sourceDataUrl = await readFileAsDataUrl(file);
+  const image = await loadImageElement(sourceDataUrl);
+  const scale = Math.min(1, SIGNATURE_IMAGE_MAX_DIMENSION / Math.max(image.width || 1, image.height || 1));
+  const width = Math.max(1, Math.round((image.width || 1) * scale));
+  const height = Math.max(1, Math.round((image.height || 1) * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Failed to prepare the signature image');
+  }
+  context.drawImage(image, 0, 0, width, height);
+  const outputType = file.type === 'image/png' || file.type === 'image/gif' ? 'image/png' : file.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
+  const dataUrl = canvas.toDataURL(outputType, outputType === 'image/png' ? undefined : 0.86);
+  const safeDataUrl = sanitizeUrl(dataUrl, 'src');
+  if (!safeDataUrl) {
+    throw new Error('Failed to prepare a safe signature image');
+  }
+
+  return {
+    dataUrl: safeDataUrl,
+    alt: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || 'signature image',
+  };
 }
 
 function sanitizeStyleAttribute(value: string): string {
@@ -281,11 +357,19 @@ export function buildComposedEmailBodies(body: string, settings: EmailSignatureS
   };
 }
 
-export async function generateEmailSignatureHtml(prompt: string, language: 'en' | 'ar') {
-  const trimmedPrompt = prompt.trim();
+export async function generateEmailSignatureHtml(options: {
+  prompt: string;
+  language: 'en' | 'ar';
+  imageDataUrl?: string;
+  imageAlt?: string;
+}) {
+  const trimmedPrompt = options.prompt.trim();
   if (!trimmedPrompt) {
-    throw new Error(language === 'ar' ? 'اكتب وصفاً للتوقيع أولاً' : 'Write a signature prompt first');
+    throw new Error(options.language === 'ar' ? 'اكتب وصفاً للتوقيع أولاً' : 'Write a signature prompt first');
   }
+
+  const safeImageDataUrl = options.imageDataUrl ? sanitizeUrl(options.imageDataUrl, 'src') : '';
+  const safeImageAlt = options.imageAlt ? options.imageAlt.replace(/[\r\n]+/g, ' ').trim() : 'signature image';
 
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
@@ -298,17 +382,24 @@ export async function generateEmailSignatureHtml(prompt: string, language: 'en' 
     },
     body: JSON.stringify({
       prompt: [
-        language === 'ar' ? 'أنت مصمم تواقيع بريد إلكتروني في Wakti.' : 'You are a Wakti email signature designer.',
-        language === 'ar' ? 'أعد فقط كود HTML صغير لتوقيع بريد إلكتروني.' : 'Return only a small HTML snippet for an email signature.',
-        language === 'ar' ? 'استخدم فقط أنماطاً داخلية inline styles.' : 'Use inline styles only.',
-        language === 'ar' ? 'لا ترجع html أو body أو head أو script أو style.' : 'Do not return html, body, head, script, or style tags.',
-        language === 'ar' ? 'حافظ على الشكل أنيقاً ومميزاً وصغيراً ومهنياً.' : 'Keep it elegant, sexy, compact, and professional.',
-        language === 'ar' ? 'لا تخترع بيانات غير موجودة.' : 'Do not invent information that was not requested.',
-        language === 'ar' ? 'المسموح: div, table, tbody, tr, td, p, span, strong, em, a, br, img.' : 'Allowed tags: div, table, tbody, tr, td, p, span, strong, em, a, br, img.',
-        `${language === 'ar' ? 'طلب المستخدم' : 'User request'}: ${trimmedPrompt}`,
+        options.language === 'ar' ? 'أنت مصمم تواقيع بريد إلكتروني فاخر في Wakti.' : 'You are a premium Wakti email signature designer.',
+        options.language === 'ar' ? 'أعد فقط كود HTML جاهز للإرسال كتوقيع بريد إلكتروني.' : 'Return only production-ready HTML for an email signature.',
+        options.language === 'ar' ? 'اجعل النتيجة سهلة وغير تقنية للمستخدم النهائي.' : 'Make the result feel polished, premium, and effortless for the end user.',
+        options.language === 'ar' ? 'استخدم فقط أنماطاً داخلية inline styles.' : 'Use inline styles only.',
+        options.language === 'ar' ? 'لا ترجع markdown أو ``` أو html أو body أو head أو script أو style.' : 'Do not return markdown, ``` fences, html, body, head, script, or style tags.',
+        options.language === 'ar' ? 'اجعل التوقيع صغيراً ومضغوطاً ومتوافقاً مع البريد، ويفضل هيكل table أو div بسيط.' : 'Keep the signature compact, email-friendly, and preferably use a simple table or div layout.',
+        options.language === 'ar' ? 'لا تخترع بيانات أو روابط أو صور غير مذكورة.' : 'Do not invent any personal details, links, or images that were not requested.',
+        options.language === 'ar' ? 'المسموح: div, table, tbody, tr, td, p, span, strong, em, a, br, img.' : 'Allowed tags: div, table, tbody, tr, td, p, span, strong, em, a, br, img.',
+        safeImageDataUrl
+          ? `${options.language === 'ar' ? 'إذا استخدمت الصورة، فاستخدم هذا src حرفياً بدون تعديل' : 'If you use the image, use this exact src without changing it'}: ${safeImageDataUrl}`
+          : options.language === 'ar' ? 'لا توجد صورة مرفقة. لا تخترع صورة.' : 'No image source was provided. Do not invent one.',
+        safeImageDataUrl
+          ? `${options.language === 'ar' ? 'النص البديل للصورة' : 'Image alt text'}: ${safeImageAlt}`
+          : '',
+        `${options.language === 'ar' ? 'طلب المستخدم' : 'User request'}: ${trimmedPrompt}`,
       ].join('\n\n'),
       mode: 'compose',
-      language,
+      language: options.language,
       contentType: 'email',
       tone: 'professional',
       length: 'short',
@@ -366,7 +457,7 @@ export async function generateEmailSignatureHtml(prompt: string, language: 'en' 
 
   const sanitized = sanitizeEmailSignatureHtml(generatedText.trim());
   if (!sanitized) {
-    throw new Error(language === 'ar' ? 'تعذر إنشاء توقيع صالح' : 'Failed to generate a valid signature');
+    throw new Error(options.language === 'ar' ? 'تعذر إنشاء توقيع صالح' : 'Failed to generate a valid signature');
   }
   return sanitized;
 }

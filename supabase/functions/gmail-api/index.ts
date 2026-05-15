@@ -115,18 +115,108 @@ type DraftAttachment = {
   content: string;
 };
 
-function normalizeRecipients(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map(String).map((item) => item.trim()).filter(Boolean);
+type MailRecipient = {
+  address: string;
+  headerValue: string;
+};
+
+function splitRecipientList(value: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let angleDepth = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const previousChar = index > 0 ? value[index - 1] : "";
+
+    if (char === '"' && previousChar !== "\\") {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && char === "<") {
+      angleDepth += 1;
+    } else if (!inQuotes && char === ">") {
+      angleDepth = Math.max(0, angleDepth - 1);
+    }
+
+    if (!inQuotes && angleDepth === 0 && (char === "," || char === ";")) {
+      const token = current.trim();
+      if (token) tokens.push(token);
+      current = "";
+      continue;
+    }
+
+    current += char;
   }
-  if (typeof value === "string") {
-    return value.split(/[,;]+/).map((item) => item.trim()).filter(Boolean);
-  }
-  return [];
+
+  const finalToken = current.trim();
+  if (finalToken) tokens.push(finalToken);
+  return tokens;
 }
 
 function sanitizeHeaderValue(value: string): string {
   return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function extractEmailAddress(value: string): string {
+  const match = sanitizeHeaderValue(value).match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0] : "";
+}
+
+function sanitizeDisplayName(value: string): string {
+  return sanitizeHeaderValue(value)
+    .replace(/^"+|"+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatRecipientHeader(name: string, address: string): string {
+  const cleanName = sanitizeDisplayName(name);
+  if (!cleanName) return address;
+  const escaped = cleanName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `"${escaped}" <${address}>`;
+}
+
+function parseRecipientToken(token: string): MailRecipient | null {
+  const cleaned = sanitizeHeaderValue(token);
+  if (!cleaned) return null;
+
+  const angleMatch = cleaned.match(/^(.*)<([^<>]+)>\s*$/);
+  if (angleMatch) {
+    const address = extractEmailAddress(angleMatch[2] || "");
+    if (!address) return null;
+    return {
+      address,
+      headerValue: formatRecipientHeader(angleMatch[1] || "", address),
+    };
+  }
+
+  const address = extractEmailAddress(cleaned);
+  if (!address) return null;
+  if (cleaned === address) {
+    return { address, headerValue: address };
+  }
+
+  return {
+    address,
+    headerValue: formatRecipientHeader(cleaned.replace(address, "").trim(), address),
+  };
+}
+
+function normalizeRecipients(value: unknown): MailRecipient[] {
+  const rawItems = Array.isArray(value)
+    ? value.map(String)
+    : typeof value === "string"
+      ? [value]
+      : [];
+
+  const parsed: MailRecipient[] = [];
+  for (const item of rawItems) {
+    for (const token of splitRecipientList(item)) {
+      const recipient = parseRecipientToken(token);
+      if (recipient) parsed.push(recipient);
+    }
+  }
+  return parsed;
 }
 
 function sanitizeAttachmentName(value: string): string {
@@ -152,8 +242,8 @@ function encodeBase64Url(input: string): string {
 
 function buildRawEmailMessage(params: {
   from: string;
-  to: string[];
-  cc: string[];
+  to: MailRecipient[];
+  cc: MailRecipient[];
   subject: string;
   body: string;
   htmlBody?: string;
@@ -165,9 +255,9 @@ function buildRawEmailMessage(params: {
 
   let raw = "";
   raw += `From: ${sanitizeHeaderValue(from)}\r\n`;
-  raw += `To: ${to.map(sanitizeHeaderValue).join(", ")}\r\n`;
+  raw += `To: ${to.map((recipient) => sanitizeHeaderValue(recipient.headerValue)).join(", ")}\r\n`;
   if (cc.length > 0) {
-    raw += `Cc: ${cc.map(sanitizeHeaderValue).join(", ")}\r\n`;
+    raw += `Cc: ${cc.map((recipient) => sanitizeHeaderValue(recipient.headerValue)).join(", ")}\r\n`;
   }
   raw += `Subject: ${sanitizeHeaderValue(subject)}\r\n`;
   raw += `MIME-Version: 1.0\r\n`;

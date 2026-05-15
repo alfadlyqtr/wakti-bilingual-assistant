@@ -41,11 +41,41 @@ const MAX_ATTACHMENT_DIMENSION = 1920;
 const IMAGE_COMPRESSION_QUALITY = 0.82;
 const MIN_IMAGE_SIZE_FOR_COMPRESSION = 350 * 1024;
 
+function splitRecipientList(value: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  let angleDepth = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const previousChar = index > 0 ? value[index - 1] : '';
+
+    if (char === '"' && previousChar !== '\\') {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && char === '<') {
+      angleDepth += 1;
+    } else if (!inQuotes && char === '>') {
+      angleDepth = Math.max(0, angleDepth - 1);
+    }
+
+    if (!inQuotes && angleDepth === 0 && (char === ',' || char === ';')) {
+      const token = current.trim();
+      if (token) tokens.push(token);
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  const lastToken = current.trim();
+  if (lastToken) tokens.push(lastToken);
+  return tokens;
+}
+
 function splitRecipients(value: string): string[] {
-  return value
-    .split(/[,;]+/)
-    .map(item => item.trim())
-    .filter(Boolean);
+  return splitRecipientList(value);
 }
 
 async function fileToAttachment(file: Blob, name: string, contentType?: string): Promise<MailComposerAttachment> {
@@ -319,7 +349,7 @@ export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody 
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4">
-        <div className="w-full max-w-2xl overflow-hidden rounded-[22px] border border-border bg-card text-card-foreground shadow-2xl">
+        <div className="flex max-h-[calc(100dvh-0.75rem)] w-full max-w-2xl flex-col overflow-hidden rounded-[22px] border border-border bg-card text-card-foreground shadow-2xl sm:max-h-[calc(100dvh-2rem)]">
           <div className="border-b border-border bg-muted/30 px-4 py-3 sm:px-5">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
@@ -332,7 +362,8 @@ export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody 
             </div>
           </div>
 
-          <div className="space-y-3 p-4 sm:p-5">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+            <div className="space-y-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:p-5">
             <div className="grid gap-3">
               <div className="rounded-2xl border border-border bg-background/80 px-3 py-2.5">
                 <label htmlFor="mail-composer-to" className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">To</label>
@@ -402,7 +433,7 @@ export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody 
                 onChange={event => setBody(event.target.value)}
                 placeholder="Write your message..."
                 rows={10}
-                className="min-h-[220px] w-full resize-none border-0 bg-transparent p-0 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground/70"
+                className="min-h-[180px] w-full resize-none border-0 bg-transparent p-0 text-sm leading-6 text-foreground outline-none placeholder:text-muted-foreground/70 sm:min-h-[220px]"
               />
             </div>
 
@@ -420,11 +451,9 @@ export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody 
 
               {includeSignature && signaturePreviewHtml ? (
                 <div className="mt-3 overflow-hidden rounded-2xl border border-border bg-white">
-                  <iframe
-                    title="Email signature preview"
-                    sandbox=""
-                    srcDoc={`<div style="padding:16px;background:#ffffff;">${signaturePreviewHtml}</div>`}
-                    className="h-36 w-full bg-white"
+                  <div
+                    className="min-h-[144px] w-full bg-white p-4"
+                    dangerouslySetInnerHTML={{ __html: signaturePreviewHtml }}
                   />
                 </div>
               ) : null}
@@ -448,6 +477,7 @@ export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody 
                 ))}
               </div>
             ) : null}
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3 sm:px-5">

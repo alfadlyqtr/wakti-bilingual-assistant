@@ -29,6 +29,11 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
+type MailRecipient = {
+  address: string;
+  headerValue: string;
+};
+
 function jsonResponse(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -44,6 +49,100 @@ async function verifyUser(req: Request): Promise<string | null> {
   const { data: { user }, error } = await supabase.auth.getUser(token);
   if (error || !user) return null;
   return user.id;
+}
+
+function sanitizeHeaderValue(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function splitRecipientList(value: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let angleDepth = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const previousChar = index > 0 ? value[index - 1] : "";
+
+    if (char === '"' && previousChar !== "\\") {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && char === "<") {
+      angleDepth += 1;
+    } else if (!inQuotes && char === ">") {
+      angleDepth = Math.max(0, angleDepth - 1);
+    }
+
+    if (!inQuotes && angleDepth === 0 && (char === "," || char === ";")) {
+      const token = current.trim();
+      if (token) tokens.push(token);
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  const finalToken = current.trim();
+  if (finalToken) tokens.push(finalToken);
+  return tokens;
+}
+
+function extractEmailAddress(value: string): string {
+  const match = sanitizeHeaderValue(value).match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0] : "";
+}
+
+function sanitizeDisplayName(value: string): string {
+  return sanitizeHeaderValue(value)
+    .replace(/^"+|"+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatRecipientHeader(name: string, address: string): string {
+  const cleanName = sanitizeDisplayName(name);
+  if (!cleanName) return address;
+  const escaped = cleanName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `"${escaped}" <${address}>`;
+}
+
+function parseRecipientToken(token: string): MailRecipient | null {
+  const cleaned = sanitizeHeaderValue(token);
+  if (!cleaned) return null;
+
+  const angleMatch = cleaned.match(/^(.*)<([^<>]+)>\s*$/);
+  if (angleMatch) {
+    const address = extractEmailAddress(angleMatch[2] || "");
+    if (!address) return null;
+    return {
+      address,
+      headerValue: formatRecipientHeader(angleMatch[1] || "", address),
+    };
+  }
+
+  const address = extractEmailAddress(cleaned);
+  if (!address) return null;
+  if (cleaned === address) {
+    return { address, headerValue: address };
+  }
+
+  return {
+    address,
+    headerValue: formatRecipientHeader(cleaned.replace(address, "").trim(), address),
+  };
+}
+
+function normalizeRecipients(value: string | string[]): MailRecipient[] {
+  const rawItems = Array.isArray(value) ? value.map(String) : [String(value || "")];
+  const parsed: MailRecipient[] = [];
+  for (const item of rawItems) {
+    for (const token of splitRecipientList(item)) {
+      const recipient = parseRecipientToken(token);
+      if (recipient) parsed.push(recipient);
+    }
+  }
+  return parsed;
 }
 
 /**
@@ -150,7 +249,7 @@ class SmtpClient {
     await this.expectCode(250);
   }
 
-  async data(subject: string, from: string, toList: string[], body: string, html?: string): Promise<void> {
+  async data(subject: string, from: string, toList: MailRecipient[], body: string, html?: string): Promise<void> {
     await this.write(`DATA\r\n`);
     await this.expectCode(354);
 
@@ -160,7 +259,7 @@ class SmtpClient {
     let msg = "";
     msg += `MIME-Version: 1.0\r\n`;
     msg += `From: ${from}\r\n`;
-    msg += `To: ${toList.join(", ")}\r\n`;
+    msg += `To: ${toList.map((recipient) => sanitizeHeaderValue(recipient.headerValue)).join(", ")}\r\n`;
     msg += `Subject: ${subject}\r\n`;
     msg += `Date: ${new Date().toUTCString()}\r\n`;
 
@@ -242,12 +341,13 @@ async function sendViaSmtp(
   username: string,
   password: string,
   from: string,
-  to: string[],
+  to: MailRecipient[],
   subject: string,
   body: string,
   html?: string
 ): Promise<void> {
   const client = new SmtpClient(smtpHost, smtpPort, smtpSecure, username, password);
+  const envelopeFrom = extractEmailAddress(from) || sanitizeHeaderValue(from);
   try {
     await client.connect();
     await client.ehlo();
@@ -263,9 +363,9 @@ async function sendViaSmtp(
     }
 
     await client.authLogin();
-    await client.mailFrom(from);
+    await client.mailFrom(envelopeFrom);
     for (const recipient of to) {
-      await client.rcptTo(recipient);
+      await client.rcptTo(recipient.address);
     }
     await client.data(subject, from, to, body, html);
     await client.quit();
@@ -278,7 +378,7 @@ async function sendViaSmtp(
 async function sendViaGmailApi(
   accessToken: string,
   from: string,
-  to: string[],
+  to: MailRecipient[],
   subject: string,
   body: string,
   html?: string
@@ -289,7 +389,7 @@ async function sendViaGmailApi(
 
   let rawMsg = `MIME-Version: 1.0\r\n`;
   rawMsg += `From: ${from}\r\n`;
-  rawMsg += `To: ${to.join(", ")}\r\n`;
+  rawMsg += `To: ${to.map((recipient) => sanitizeHeaderValue(recipient.headerValue)).join(", ")}\r\n`;
   rawMsg += `Subject: ${subject}\r\n`;
   rawMsg += `Date: ${new Date().toUTCString()}\r\n`;
 
@@ -365,7 +465,10 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: "Missing required fields: to, subject, body" }, 400);
     }
 
-    const recipients = Array.isArray(to) ? to : [to];
+    const recipients = normalizeRecipients(to);
+    if (recipients.length === 0) {
+      return jsonResponse({ error: "Missing required fields: to, subject, body" }, 400);
+    }
 
     // 1. If connection_id specified, use that specific connection
     if (connection_id) {

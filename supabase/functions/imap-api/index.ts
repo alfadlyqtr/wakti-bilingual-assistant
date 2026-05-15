@@ -437,18 +437,108 @@ type DraftAttachment = {
   content: string;
 };
 
-function normalizeRecipients(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.map(String).map((item) => item.trim()).filter(Boolean);
+type MailRecipient = {
+  address: string;
+  headerValue: string;
+};
+
+function splitRecipientList(value: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let angleDepth = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const previousChar = index > 0 ? value[index - 1] : "";
+
+    if (char === '"' && previousChar !== "\\") {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && char === "<") {
+      angleDepth += 1;
+    } else if (!inQuotes && char === ">") {
+      angleDepth = Math.max(0, angleDepth - 1);
+    }
+
+    if (!inQuotes && angleDepth === 0 && (char === "," || char === ";")) {
+      const token = current.trim();
+      if (token) tokens.push(token);
+      current = "";
+      continue;
+    }
+
+    current += char;
   }
-  if (typeof value === "string") {
-    return value.split(/[,;]+/).map((item) => item.trim()).filter(Boolean);
-  }
-  return [];
+
+  const finalToken = current.trim();
+  if (finalToken) tokens.push(finalToken);
+  return tokens;
 }
 
 function sanitizeHeaderValue(value: string): string {
   return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function extractEmailAddress(value: string): string {
+  const match = sanitizeHeaderValue(value).match(/[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  return match ? match[0] : "";
+}
+
+function sanitizeDisplayName(value: string): string {
+  return sanitizeHeaderValue(value)
+    .replace(/^"+|"+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function formatRecipientHeader(name: string, address: string): string {
+  const cleanName = sanitizeDisplayName(name);
+  if (!cleanName) return address;
+  const escaped = cleanName.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+  return `"${escaped}" <${address}>`;
+}
+
+function parseRecipientToken(token: string): MailRecipient | null {
+  const cleaned = sanitizeHeaderValue(token);
+  if (!cleaned) return null;
+
+  const angleMatch = cleaned.match(/^(.*)<([^<>]+)>\s*$/);
+  if (angleMatch) {
+    const address = extractEmailAddress(angleMatch[2] || "");
+    if (!address) return null;
+    return {
+      address,
+      headerValue: formatRecipientHeader(angleMatch[1] || "", address),
+    };
+  }
+
+  const address = extractEmailAddress(cleaned);
+  if (!address) return null;
+  if (cleaned === address) {
+    return { address, headerValue: address };
+  }
+
+  return {
+    address,
+    headerValue: formatRecipientHeader(cleaned.replace(address, "").trim(), address),
+  };
+}
+
+function normalizeRecipients(value: unknown): MailRecipient[] {
+  const rawItems = Array.isArray(value)
+    ? value.map(String)
+    : typeof value === "string"
+      ? [value]
+      : [];
+
+  const parsed: MailRecipient[] = [];
+  for (const item of rawItems) {
+    for (const token of splitRecipientList(item)) {
+      const recipient = parseRecipientToken(token);
+      if (recipient) parsed.push(recipient);
+    }
+  }
+  return parsed;
 }
 
 function sanitizeAttachmentName(value: string): string {
@@ -462,8 +552,8 @@ function wrapBase64(value: string): string {
 
 function buildOutgoingMessage(params: {
   from: string;
-  to: string[];
-  cc: string[];
+  to: MailRecipient[];
+  cc: MailRecipient[];
   subject: string;
   body: string;
   htmlBody?: string;
@@ -477,9 +567,9 @@ function buildOutgoingMessage(params: {
   let msg = "";
   msg += `MIME-Version: 1.0\r\n`;
   msg += `From: ${sanitizeHeaderValue(from)}\r\n`;
-  msg += `To: ${to.map(sanitizeHeaderValue).join(", ")}\r\n`;
+  msg += `To: ${to.map((recipient) => sanitizeHeaderValue(recipient.headerValue)).join(", ")}\r\n`;
   if (cc.length > 0) {
-    msg += `Cc: ${cc.map(sanitizeHeaderValue).join(", ")}\r\n`;
+    msg += `Cc: ${cc.map((recipient) => sanitizeHeaderValue(recipient.headerValue)).join(", ")}\r\n`;
   }
   msg += `Subject: ${sanitizeHeaderValue(subject)}\r\n`;
   msg += `Date: ${new Date().toUTCString()}\r\n`;
@@ -565,18 +655,24 @@ class SmtpClient {
       const result = await Promise.race([this.reader.read(), timer]);
       if (!result) continue;
       const r = result as ReadableStreamReadResult<Uint8Array>;
-      if (r.done) break;
+      if (r.done) {
+        const trailing = this.buffer.trim();
+        this.buffer = "";
+        if (trailing) return trailing;
+        throw new Error("SMTP connection closed");
+      }
       if (r.value) this.buffer += new TextDecoder().decode(r.value, { stream: true });
     }
     throw new Error("SMTP read timeout");
   }
 
-  private async expectCode(expected: number, timeoutMs = 10000): Promise<string> {
+  private async expectCode(expected: number | number[], timeoutMs = 10000): Promise<string> {
+    const expectedCodes = Array.isArray(expected) ? expected : [expected];
     while (true) {
       const line = await this.readLine(timeoutMs);
       if (!line.slice(3, 4).match(/[-]/)) {
         const code = parseInt(line.slice(0, 3), 10);
-        if (code !== expected) throw new Error(`SMTP ${code}: ${line}`);
+        if (!expectedCodes.includes(code)) throw new Error(`SMTP ${code}: ${line}`);
         return line;
       }
     }
@@ -631,12 +727,20 @@ class SmtpClient {
     await this.expectCode(250);
     for (const r of Array.from(new Set([...to, ...cc]))) {
       await this.write(`RCPT TO:<${r}>\r\n`);
-      await this.expectCode(250);
+      await this.expectCode([250, 251]);
     }
     await this.write(`DATA\r\n`);
     await this.expectCode(354);
     await this.write(rawMessage + "\r\n.\r\n");
-    await this.expectCode(250, hasAttachments ? 45000 : 15000);
+    try {
+      await this.expectCode(250, hasAttachments ? 90000 : 60000);
+    } catch (error) {
+      if (error instanceof Error && error.message === "SMTP read timeout") {
+        await this.expectCode(250, hasAttachments ? 90000 : 60000);
+        return;
+      }
+      throw error;
+    }
   }
 
   async quit(): Promise<void> {
@@ -778,8 +882,8 @@ async function listFoldersWithFallback(conn: Record<string, unknown>): Promise<s
 
 async function sendViaBestSmtpLogin(
   conn: Record<string, unknown>,
-  recipients: string[],
-  ccRecipients: string[],
+  recipients: MailRecipient[],
+  ccRecipients: MailRecipient[],
   rawMessage: string,
   hasAttachments: boolean
 ): Promise<void> {
@@ -800,7 +904,13 @@ async function sendViaBestSmtpLogin(
         try { await smtp.startTls(); } catch {}
       }
       await smtp.auth();
-      await smtp.send(String(conn.email_address || login), recipients, ccRecipients, rawMessage, hasAttachments);
+      await smtp.send(
+        String(conn.email_address || login),
+        recipients.map((recipient) => recipient.address),
+        ccRecipients.map((recipient) => recipient.address),
+        rawMessage,
+        hasAttachments
+      );
       await smtp.quit();
       console.log("[imap-api] smtp sent", { login, recipientsCount: recipients.length + ccRecipients.length, hasAttachments });
       return;
