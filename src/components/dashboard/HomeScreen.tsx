@@ -119,6 +119,7 @@ const LS_HSBG_BASE         = "homescreen_bg_style_v1";
 const LS_HSBG_ACTIVE_BASE  = "homescreen_bg_style_active";
 const LS_BG_CHOICE_BASE    = "homescreen_bg_choice_v1";
 const LS_DOCK_COLOR_BASE   = "homescreen_dock_color";
+const LS_SNAPSHOT_BASE     = "homescreen_snapshot_v1";
 
 // Read the currently-cached user ID (set on login) so useState initialisers can
 // immediately read the correct user-scoped key before useEffect fires.
@@ -135,6 +136,7 @@ const LS_WIDGETS_KEY      = () => lsKey(_cachedUid(), LS_WIDGETS_BASE);
 const LS_WIDGET_SIZES_KEY = () => lsKey(_cachedUid(), LS_WIDGET_SIZES_BASE);
 const LS_HSBG_KEY         = () => lsKey(_cachedUid(), LS_HSBG_BASE);
 const LS_BG_CHOICE_KEY    = () => lsKey(_cachedUid(), LS_BG_CHOICE_BASE);
+const LS_SNAPSHOT_KEY     = () => lsKey(_cachedUid(), LS_SNAPSHOT_BASE);
 
 // Widget IDs used in the unified grid
 const WIDGET_IDS = ['showTRWidget','showCalendarWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget'] as const;
@@ -304,6 +306,57 @@ type HomescreenPageData = {
   gridPositions: Map<string, string>;
   itemMap: Map<string, HomescreenLayoutItem>;
 };
+
+type HomescreenSnapshot = {
+  dockIds: string[];
+  iconOrder: string[];
+  showQuote: boolean;
+  bgImage: string;
+  bgPositionY: number;
+  headerColor: string;
+  bgChoice: BgChoice;
+  hsBgActive: boolean;
+  hsBg: { mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean };
+  dockColor: string;
+  bgGradLeft: string;
+  bgGradRight: string;
+  hsWidgets: Record<string, boolean>;
+  hsWidgetSizes: Record<string, 'big' | 'small'>;
+  unifiedGrid: string[];
+  homescreenLayout: HomescreenLayoutItem[];
+};
+
+function createDefaultHomescreenSnapshot(themeMode: string): HomescreenSnapshot {
+  const dockIds = sanitizeDock(DEFAULT_DOCK, MAX_DOCK_DESKTOP);
+  const iconOrder = sanitizeOrder(DEFAULT_ORDER);
+  const hsWidgets = { ...DEFAULT_HS_WIDGETS };
+  const hsWidgetSizes: Record<string, 'big' | 'small'> = {};
+  const unifiedGrid = buildDefaultUnifiedGrid(hsWidgets, dockIds);
+  const homescreenLayout = normalizeHomescreenLayout(
+    buildLayoutFromLegacy(unifiedGrid, hsWidgets, hsWidgetSizes, dockIds),
+    hsWidgets,
+    hsWidgetSizes,
+    dockIds,
+  );
+  return {
+    dockIds,
+    iconOrder,
+    showQuote: true,
+    bgImage: themeMode === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK,
+    bgPositionY: 50,
+    headerColor: '',
+    bgChoice: 'default',
+    hsBgActive: false,
+    hsBg: { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false },
+    dockColor: '',
+    bgGradLeft: '',
+    bgGradRight: '',
+    hsWidgets,
+    hsWidgetSizes,
+    unifiedGrid,
+    homescreenLayout,
+  };
+}
 
 function getItemFootprint(id: string, widgetSizes: Record<string, 'big' | 'small'> = {}) {
   if (id.startsWith('widget::')) {
@@ -2391,6 +2444,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const { profile } = useUserProfile();
   const LS_AVATAR_CACHE = user?.id ? `wakti_avatar_${user.id}` : null;
+  const defaultHomescreenState = useMemo(() => createDefaultHomescreenSnapshot(theme), [theme]);
   const getLocalHomescreenState = (explicitUid?: string | null) => {
     const read = (base: string) => getScopedStorageItem(base, explicitUid ?? user?.id ?? null);
     const readJson = <T,>(base: string): T | null => {
@@ -2402,6 +2456,69 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
         return null;
       }
     };
+    const rawSnapshot = readJson<Partial<HomescreenSnapshot>>(LS_SNAPSHOT_BASE);
+    if (rawSnapshot && typeof rawSnapshot === 'object') {
+      const nextDockIds = Array.isArray(rawSnapshot.dockIds)
+        ? sanitizeDock(rawSnapshot.dockIds, MAX_DOCK_DESKTOP)
+        : defaultHomescreenState.dockIds;
+      const nextIconOrder = Array.isArray(rawSnapshot.iconOrder)
+        ? sanitizeOrder(rawSnapshot.iconOrder)
+        : defaultHomescreenState.iconOrder;
+      const nextWidgets = rawSnapshot.hsWidgets && typeof rawSnapshot.hsWidgets === 'object'
+        ? { ...DEFAULT_HS_WIDGETS, ...rawSnapshot.hsWidgets }
+        : { ...defaultHomescreenState.hsWidgets };
+      const nextWidgetSizes = rawSnapshot.hsWidgetSizes && typeof rawSnapshot.hsWidgetSizes === 'object'
+        ? rawSnapshot.hsWidgetSizes
+        : { ...defaultHomescreenState.hsWidgetSizes };
+      const nextUnifiedGrid = Array.isArray(rawSnapshot.unifiedGrid) && rawSnapshot.unifiedGrid.length > 0
+        ? rawSnapshot.unifiedGrid
+        : buildDefaultUnifiedGrid(nextWidgets, nextDockIds);
+      const nextLayout = normalizeHomescreenLayout(
+        Array.isArray(rawSnapshot.homescreenLayout) && rawSnapshot.homescreenLayout.length > 0
+          ? rawSnapshot.homescreenLayout
+          : buildLayoutFromLegacy(nextUnifiedGrid, nextWidgets, nextWidgetSizes, nextDockIds),
+        nextWidgets,
+        nextWidgetSizes,
+        nextDockIds,
+      );
+      const nextBgChoice: BgChoice = isBgChoiceValue(rawSnapshot.bgChoice)
+        ? rawSnapshot.bgChoice
+        : defaultHomescreenState.bgChoice;
+      const nextBgImage = nextBgChoice === 'wallpaper' && typeof rawSnapshot.bgImage === 'string' && rawSnapshot.bgImage && !isDefaultBgAsset(rawSnapshot.bgImage)
+        ? rawSnapshot.bgImage
+        : nextBgChoice === 'style'
+          ? ''
+          : (theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
+      return {
+        dockIds: nextDockIds,
+        iconOrder: nextIconOrder,
+        showQuote: typeof rawSnapshot.showQuote === 'boolean' ? rawSnapshot.showQuote : defaultHomescreenState.showQuote,
+        bgImage: nextBgImage,
+        bgPositionY: nextBgChoice === 'wallpaper' && typeof rawSnapshot.bgPositionY === 'number'
+          ? Math.max(0, Math.min(100, rawSnapshot.bgPositionY))
+          : 50,
+        headerColor: typeof rawSnapshot.headerColor === 'string' ? rawSnapshot.headerColor : defaultHomescreenState.headerColor,
+        bgChoice: nextBgChoice,
+        hsBgActive: nextBgChoice === 'style',
+        hsBg: rawSnapshot.hsBg && typeof rawSnapshot.hsBg === 'object'
+          ? {
+              mode: rawSnapshot.hsBg.mode || 'solid',
+              color1: rawSnapshot.hsBg.color1 || '',
+              color2: rawSnapshot.hsBg.color2 || '',
+              color3: rawSnapshot.hsBg.color3 || '',
+              angle: typeof rawSnapshot.hsBg.angle === 'number' ? rawSnapshot.hsBg.angle : 180,
+              glow: typeof rawSnapshot.hsBg.glow === 'boolean' ? rawSnapshot.hsBg.glow : false,
+            }
+          : defaultHomescreenState.hsBg,
+        dockColor: typeof rawSnapshot.dockColor === 'string' ? rawSnapshot.dockColor : defaultHomescreenState.dockColor,
+        bgGradLeft: typeof rawSnapshot.bgGradLeft === 'string' ? rawSnapshot.bgGradLeft : defaultHomescreenState.bgGradLeft,
+        bgGradRight: typeof rawSnapshot.bgGradRight === 'string' ? rawSnapshot.bgGradRight : defaultHomescreenState.bgGradRight,
+        hsWidgets: nextWidgets,
+        hsWidgetSizes: nextWidgetSizes,
+        unifiedGrid: layoutToUnifiedGrid(nextLayout),
+        homescreenLayout: nextLayout,
+      };
+    }
 
     const rawDock = readJson<string[]>(LS_DOCK_BASE);
     const rawOrder = readJson<string[]>(LS_ORDER_BASE);
@@ -2428,10 +2545,22 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const resolvedBgImage = resolvedBgChoice === 'wallpaper' && savedBg && !isDefaultBgAsset(savedBg)
       ? savedBg
       : (resolvedTheme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK);
+    const nextDockIds = Array.isArray(rawDock) ? sanitizeDock(rawDock, MAX_DOCK_DESKTOP) : defaultHomescreenState.dockIds;
+    const nextWidgets = rawWidgets && typeof rawWidgets === 'object' ? { ...DEFAULT_HS_WIDGETS, ...rawWidgets } : { ...defaultHomescreenState.hsWidgets };
+    const nextWidgetSizes = rawWidgetSizes && typeof rawWidgetSizes === 'object' ? rawWidgetSizes : {};
+    const nextUnifiedGrid = Array.isArray(rawUnifiedGrid) && rawUnifiedGrid.length > 0 ? rawUnifiedGrid : buildDefaultUnifiedGrid(nextWidgets, nextDockIds);
+    const nextLayout = normalizeHomescreenLayout(
+      Array.isArray(rawLayout) && rawLayout.length > 0
+        ? rawLayout
+        : buildLayoutFromLegacy(nextUnifiedGrid, nextWidgets, nextWidgetSizes, nextDockIds),
+      nextWidgets,
+      nextWidgetSizes,
+      nextDockIds,
+    );
 
     return {
-      dockIds: Array.isArray(rawDock) ? sanitizeDock(rawDock) : sanitizeDock(DEFAULT_DOCK),
-      iconOrder: sanitizeOrder(Array.isArray(rawOrder) ? rawOrder : DEFAULT_ORDER),
+      dockIds: nextDockIds,
+      iconOrder: sanitizeOrder(Array.isArray(rawOrder) ? rawOrder : defaultHomescreenState.iconOrder),
       showQuote: read(LS_QUOTE_BASE) !== 'false',
       bgImage: resolvedBgChoice === 'style' ? '' : resolvedBgImage,
       bgPositionY: resolvedBgPosition,
@@ -2455,13 +2584,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       dockColor: read(LS_DOCK_COLOR_BASE) || '',
       bgGradLeft: read('hs_grad_left') || '',
       bgGradRight: read('hs_grad_right') || '',
-      hsWidgets: rawWidgets && typeof rawWidgets === 'object' ? { ...DEFAULT_HS_WIDGETS, ...rawWidgets } : { ...DEFAULT_HS_WIDGETS },
-      hsWidgetSizes: rawWidgetSizes && typeof rawWidgetSizes === 'object' ? rawWidgetSizes : {},
-      unifiedGrid: Array.isArray(rawUnifiedGrid) && rawUnifiedGrid.length > 0 ? rawUnifiedGrid : [],
-      homescreenLayout: Array.isArray(rawLayout) ? rawLayout : [],
+      hsWidgets: nextWidgets,
+      hsWidgetSizes: nextWidgetSizes,
+      unifiedGrid: layoutToUnifiedGrid(nextLayout),
+      homescreenLayout: nextLayout,
     };
   };
-  const initialLocalState = useMemo(() => getLocalHomescreenState(user?.id), [theme, user?.id]);
   const [avatarUrl, setAvatarUrl] = useState<string>(() => {
     if (!user?.id) return '';
     return localStorage.getItem(`wakti_avatar_${user.id}`) || '';
@@ -2493,28 +2621,28 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   }, [user?.id]);
   const [editMode,        setEditMode]        = useState(false);
   const [dockIds,         setDockIds]         = useState<string[]>(() => {
-    return initialLocalState.dockIds;
+    return defaultHomescreenState.dockIds;
   });
   const [iconOrder,       setIconOrder]       = useState<string[]>(() => {
-    return initialLocalState.iconOrder;
+    return defaultHomescreenState.iconOrder;
   });
-  const [showQuote,       setShowQuote]       = useState<boolean>(() => initialLocalState.showQuote);
+  const [showQuote,       setShowQuote]       = useState<boolean>(() => defaultHomescreenState.showQuote);
   const [bgImage,         setBgImage]         = useState<string>(() => {
-    return initialLocalState.bgImage;
+    return defaultHomescreenState.bgImage;
   });
   const [bgPositionY,     setBgPositionY]     = useState<number>(() => {
-    return initialLocalState.bgPositionY;
+    return defaultHomescreenState.bgPositionY;
   });
-  const [headerColor,     setHeaderColor]     = useState<string>(() => initialLocalState.headerColor);
+  const [headerColor,     setHeaderColor]     = useState<string>(() => defaultHomescreenState.headerColor);
   const [bgChoice,        setBgChoice]        = useState<BgChoice>(() => {
-    return initialLocalState.bgChoice;
+    return defaultHomescreenState.bgChoice;
   });
 
   const [hsBgActive, setHsBgActive] = useState<boolean>(() => {
-    return initialLocalState.hsBgActive;
+    return defaultHomescreenState.hsBgActive;
   });
   const [hsBg, setHsBg] = useState<{ mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean }>(() => {
-    return initialLocalState.hsBg;
+    return defaultHomescreenState.hsBg;
   });
   const [quote,           setQuote]           = useState<any>(null);
   const [quoteExpanded,   setQuoteExpanded]   = useState(false);
@@ -2526,11 +2654,11 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   });
   const [activeId,        setActiveId]        = useState<string | null>(null);
   const [dockPickerOpen,  setDockPickerOpen]  = useState(false);
-  const [dockColor,       setDockColor]       = useState<string>(() => initialLocalState.dockColor);
+  const [dockColor,       setDockColor]       = useState<string>(() => defaultHomescreenState.dockColor);
   const [bgPanelOpen,     setBgPanelOpen]     = useState(false);
   const [bgGradPicker,    setBgGradPicker]    = useState(false);
-  const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => initialLocalState.bgGradLeft);
-  const [bgGradRight,     setBgGradRight]     = useState<string>(() => initialLocalState.bgGradRight);
+  const [bgGradLeft,      setBgGradLeft]      = useState<string>(() => defaultHomescreenState.bgGradLeft);
+  const [bgGradRight,     setBgGradRight]     = useState<string>(() => defaultHomescreenState.bgGradRight);
   const [currentPage,     setCurrentPage]     = useState(0);
   const [dragPages,       setDragPages]       = useState<string[][] | null>(null);
   const [contextMenu,     setContextMenu]     = useState<{ itemId: string } | null>(null);
@@ -2562,26 +2690,21 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   }).length;
 
   const [hsWidgets, setHsWidgets] = useState(() => {
-    return initialLocalState.hsWidgets;
+    return defaultHomescreenState.hsWidgets;
   });
   const [hsWidgetSizes, setHsWidgetSizes] = useState<Record<string, 'big' | 'small'>>(() => {
-    return initialLocalState.hsWidgetSizes;
+    return defaultHomescreenState.hsWidgetSizes;
   });
 
   const [unifiedGrid, setUnifiedGrid] = useState<string[]>(() => {
-    return initialLocalState.unifiedGrid;
+    return defaultHomescreenState.unifiedGrid;
   });
   const [homescreenLayout, setHomescreenLayout] = useState<HomescreenLayoutItem[]>(() => {
-    return normalizeHomescreenLayout(
-      initialLocalState.homescreenLayout?.length
-        ? initialLocalState.homescreenLayout
-        : buildLayoutFromLegacy(initialLocalState.unifiedGrid, initialLocalState.hsWidgets, initialLocalState.hsWidgetSizes, initialLocalState.dockIds),
-      initialLocalState.hsWidgets,
-      initialLocalState.hsWidgetSizes,
-      initialLocalState.dockIds,
-    );
+    return defaultHomescreenState.homescreenLayout;
   });
   const homescreenDirtyRef = useRef(false);
+  const [homescreenReady, setHomescreenReady] = useState(false);
+  const [homescreenBootstrapSource, setHomescreenBootstrapSource] = useState<'loading' | 'remote' | 'cache' | 'default'>('loading');
 
   useEffect(() => {
     const h = new Date().getHours();
@@ -2593,37 +2716,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     if (!user?.id) return;
     setActiveScopedUserId(user.id);
     migrateLegacyScopedStorage('vitality_widget_tab', user.id, 'vitality_widget_tab');
-    const nextLocalState = getLocalHomescreenState(user.id);
-    setDockIds(nextLocalState.dockIds);
-    setIconOrder(nextLocalState.iconOrder);
-    setShowQuote(nextLocalState.showQuote);
-    setBgImage(nextLocalState.bgImage);
-    setBgPositionY(nextLocalState.bgPositionY);
-    setHeaderColor(nextLocalState.headerColor);
-    setBgChoice(nextLocalState.bgChoice);
-    setHsBg(nextLocalState.hsBg);
-    setHsBgActive(nextLocalState.hsBgActive);
-    setDockColor(nextLocalState.dockColor);
-    setBgGradLeft(nextLocalState.bgGradLeft);
-    setBgGradRight(nextLocalState.bgGradRight);
-    setHsWidgets(nextLocalState.hsWidgets);
-    setHsWidgetSizes(nextLocalState.hsWidgetSizes);
-    setUnifiedGrid(nextLocalState.unifiedGrid);
-    setHomescreenLayout(normalizeHomescreenLayout(
-      nextLocalState.homescreenLayout?.length
-        ? nextLocalState.homescreenLayout
-        : buildLayoutFromLegacy(nextLocalState.unifiedGrid, nextLocalState.hsWidgets, nextLocalState.hsWidgetSizes, nextLocalState.dockIds),
-      nextLocalState.hsWidgets,
-      nextLocalState.hsWidgetSizes,
-      nextLocalState.dockIds,
-    ));
     homescreenDirtyRef.current = false;
     setDragPages(null);
     setSamePageMoveState(null);
     setSamePageSwapState(null);
     setBulkMoveSelection(null);
     setCurrentPage(0);
-  }, [theme, user?.id]);
+  }, [user?.id]);
 
   useEffect(() => { setQuote(getQuoteForDisplay()); }, []);
   useEffect(() => { if (user?.id) localStorage.setItem(LS_ORDER_KEY(), JSON.stringify(iconOrder)); }, [iconOrder, user?.id]);
@@ -2681,7 +2780,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   useEffect(() => {
     return () => clearDragPageSwitchTimer();
   }, [clearDragPageSwitchTimer]);
-
+ 
   const setBgChoiceState = useCallback((nextChoice: BgChoice) => {
     setBgChoice(nextChoice);
     setHsBgActive(nextChoice === 'style');
@@ -2726,6 +2825,164 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     }
     return result;
   };
+ 
+  function applyHomescreenSnapshot(snapshot: HomescreenSnapshot) {
+    const nextLayout = normalizeHomescreenLayout(
+      snapshot.homescreenLayout?.length
+        ? snapshot.homescreenLayout
+        : buildLayoutFromLegacy(snapshot.unifiedGrid, snapshot.hsWidgets, snapshot.hsWidgetSizes, snapshot.dockIds),
+      snapshot.hsWidgets,
+      snapshot.hsWidgetSizes,
+      snapshot.dockIds,
+    );
+    const nextUnified = layoutToUnifiedGrid(nextLayout);
+    setDockIds(snapshot.dockIds);
+    setIconOrder(snapshot.iconOrder);
+    setShowQuote(snapshot.showQuote);
+    setBgImage(snapshot.bgChoice === 'style' ? '' : snapshot.bgImage);
+    setBgPositionY(snapshot.bgPositionY);
+    setHeaderColor(snapshot.headerColor);
+    setBgChoice(snapshot.bgChoice);
+    setHsBgActive(snapshot.hsBgActive);
+    setHsBg(snapshot.hsBg);
+    setDockColor(snapshot.dockColor);
+    setBgGradLeft(snapshot.bgGradLeft);
+    setBgGradRight(snapshot.bgGradRight);
+    setHsWidgets(snapshot.hsWidgets);
+    setHsWidgetSizes(snapshot.hsWidgetSizes);
+    setUnifiedGrid(nextUnified);
+    setHomescreenLayout(nextLayout);
+    setCurrentPage(0);
+  }
+ 
+  function buildHomescreenSnapshotFromSettings(settings: any, fallbackSnapshot?: HomescreenSnapshot | null) {
+    const s = settings || {};
+    const hs = s?.homescreen || {};
+    const VALID_WIDGET_KEYS = new Set(['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
+    const strippedWidgets: Record<string, boolean> = {};
+    const rawWidgets = hs?.homescreenWidgets || s?.homescreenWidgets;
+    if (rawWidgets && typeof rawWidgets === 'object') {
+      for (const [k, v] of Object.entries(rawWidgets)) {
+        if (VALID_WIDGET_KEYS.has(k)) strippedWidgets[k] = !!v;
+      }
+    }
+    const nextWidgets = clampHsWidgets({ ...DEFAULT_HS_WIDGETS, ...strippedWidgets });
+    const nextSizes = hs?.homescreenWidgetSizes && typeof hs.homescreenWidgetSizes === 'object'
+      ? hs.homescreenWidgetSizes as Record<string, 'big' | 'small'>
+      : (fallbackSnapshot?.hsWidgetSizes || {});
+    const nextDockIds = Array.isArray(hs?.dockIds)
+      ? sanitizeDock(hs.dockIds, MAX_DOCK_DESKTOP)
+      : (fallbackSnapshot?.dockIds || sanitizeDock(DEFAULT_DOCK, MAX_DOCK_DESKTOP));
+    const nextIconOrder = Array.isArray(hs?.iconOrder)
+      ? sanitizeOrder(hs.iconOrder)
+      : (fallbackSnapshot?.iconOrder || sanitizeOrder(DEFAULT_ORDER));
+    const remoteUnifiedGrid = Array.isArray(hs?.unifiedGrid)
+      ? hs.unifiedGrid as string[]
+      : (fallbackSnapshot?.unifiedGrid || buildDefaultUnifiedGrid(nextWidgets, nextDockIds));
+    const remoteLayout = Array.isArray(hs?.homescreenLayout)
+      ? hs.homescreenLayout as HomescreenLayoutItem[]
+      : (fallbackSnapshot?.homescreenLayout || []);
+    const nextLayout = normalizeHomescreenLayout(
+      remoteLayout.length > 0 ? remoteLayout : buildLayoutFromLegacy(remoteUnifiedGrid, nextWidgets, nextSizes, nextDockIds),
+      nextWidgets,
+      nextSizes,
+      nextDockIds,
+    );
+    const nextUnified = layoutToUnifiedGrid(nextLayout);
+    const nextBgChoice: BgChoice = isBgChoiceValue(hs?.bgChoice)
+      ? hs.bgChoice
+      : (typeof hs?.bgImage === 'string' && hs.bgImage && !isDefaultBgAsset(hs.bgImage)
+          ? 'wallpaper'
+          : s?.homescreenBg
+            ? 'style'
+            : 'default');
+    const nextWallpaper = typeof hs?.bgImage === 'string' && hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
+    const nextHsBg = s?.homescreenBg
+      ? {
+          mode: s.homescreenBg.mode === 'gradient' ? 'gradient' as 'solid'|'gradient' : 'solid' as 'solid'|'gradient',
+          color1: s.homescreenBg.color1 || '',
+          color2: s.homescreenBg.color2 || '',
+          color3: s.homescreenBg.color3 || '',
+          angle: typeof s.homescreenBg.angle === 'number' ? s.homescreenBg.angle : 180,
+          glow: typeof s.homescreenBg.glow === 'boolean' ? s.homescreenBg.glow : false,
+        }
+      : { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false };
+    return {
+      dockIds: nextDockIds,
+      iconOrder: nextIconOrder,
+      showQuote: typeof hs?.showQuote === 'boolean' ? hs.showQuote : true,
+      bgImage: nextBgChoice === 'wallpaper' && nextWallpaper
+        ? nextWallpaper
+        : nextBgChoice === 'style'
+          ? ''
+          : (theme === 'light' ? DEFAULT_BG_LIGHT : DEFAULT_BG_DARK),
+      bgPositionY: nextBgChoice === 'wallpaper' && typeof hs?.bgPositionY === 'number'
+        ? Math.max(0, Math.min(100, hs.bgPositionY))
+        : 50,
+      headerColor: typeof hs?.headerColor === 'string' ? hs.headerColor : '',
+      bgChoice: nextBgChoice,
+      hsBgActive: nextBgChoice === 'style',
+      hsBg: nextHsBg,
+      dockColor: typeof hs?.dockColor === 'string' ? hs.dockColor : '',
+      bgGradLeft: fallbackSnapshot?.bgGradLeft || '',
+      bgGradRight: fallbackSnapshot?.bgGradRight || '',
+      hsWidgets: nextWidgets,
+      hsWidgetSizes: nextSizes,
+      unifiedGrid: nextUnified,
+      homescreenLayout: nextLayout,
+    } as HomescreenSnapshot;
+  }
+
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    const fallbackSnapshot = getLocalHomescreenState(user.id);
+    setHomescreenReady(false);
+    setHomescreenBootstrapSource('loading');
+    setActiveScopedUserId(user.id);
+    migrateLegacyScopedStorage('vitality_widget_tab', user.id, 'vitality_widget_tab');
+    setDragPages(null);
+    setSamePageMoveState(null);
+    setSamePageSwapState(null);
+    setBulkMoveSelection(null);
+    setCurrentPage(0);
+    const finishBootstrap = (snapshot: HomescreenSnapshot, source: 'remote' | 'cache' | 'default') => {
+      if (cancelled) return;
+      applyHomescreenSnapshot(snapshot);
+      homescreenDirtyRef.current = false;
+      setHomescreenBootstrapSource(source);
+      setHomescreenReady(true);
+    };
+    const runBootstrap = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('settings')
+          .eq('id', user.id)
+          .single();
+        if (cancelled) return;
+        if (error) {
+          if (error.code === 'PGRST116') {
+            finishBootstrap(defaultHomescreenState, 'default');
+            return;
+          }
+          throw error;
+        }
+        finishBootstrap(buildHomescreenSnapshotFromSettings(data?.settings, fallbackSnapshot), 'remote');
+      } catch (error) {
+        console.error('Homescreen bootstrap failed:', error);
+        if (fallbackSnapshot) {
+          finishBootstrap(fallbackSnapshot, 'cache');
+          return;
+        }
+        finishBootstrap(defaultHomescreenState, 'default');
+      }
+    };
+    void runBootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const persistSavedPages = useCallback((nextPages: string[][], nextPageIndex?: number) => {
     const flat = flattenUnifiedPages(nextPages);
@@ -2783,7 +3040,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   }, [clearDragPageSwitchTimer, dockIds, hsWidgetSizes, hsWidgets, syncToSupabase]);
 
   useEffect(() => {
-    if (!user?.id || !profile) return;
+    if (!homescreenReady || !user?.id || !profile) return;
     const s = (profile.settings as any) || {};
     const hs = s?.homescreen || {};
     const VALID_WIDGET_KEYS = new Set(['showCalendarWidget','showTRWidget','showMaw3dWidget','showVitalityWidget','showJournalWidget','showQuoteWidget','showNavWidget']);
@@ -2863,20 +3120,19 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       else removeScopedStorageItem(LS_DOCK_COLOR_BASE, user.id);
     }
 
-    const localBgImage = getScopedStorageItem(LS_BG_BASE, user.id);
-    const localBgChoice = getScopedStorageItem(LS_BG_CHOICE_BASE, user.id);
-    const localBgPositionRaw = getScopedStorageItem(LS_BG_POS_Y_BASE, user.id);
+    const allowLocalBgFallback = homescreenBootstrapSource === 'cache' && !hasRemoteBgState;
+    const localBgImage = allowLocalBgFallback ? getScopedStorageItem(LS_BG_BASE, user.id) : null;
+    const localBgChoice = allowLocalBgFallback ? getScopedStorageItem(LS_BG_CHOICE_BASE, user.id) : null;
+    const localBgPositionRaw = allowLocalBgFallback ? getScopedStorageItem(LS_BG_POS_Y_BASE, user.id) : null;
     const parsedLocalBgPosition = localBgPositionRaw === null ? NaN : Number(localBgPositionRaw);
     const localBgPosition = Number.isFinite(parsedLocalBgPosition) ? Math.max(0, Math.min(100, parsedLocalBgPosition)) : 50;
     const localChoice = isBgChoiceValue(localBgChoice) ? localBgChoice : null;
-    const localWallpaper = typeof localBgImage === 'string' && !!localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
+    const localWallpaper = allowLocalBgFallback && typeof localBgImage === 'string' && !!localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
     const remoteWallpaper = typeof hs.bgImage === 'string' && !!hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
     const remoteChoice = isBgChoiceValue(hs.bgChoice) ? hs.bgChoice : null;
-    const useRemoteBgState = hasRemoteHomescreenState;
-    const inferredChoice: BgChoice = useRemoteBgState
-      ? (remoteChoice ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'))
-      : (localChoice ?? (localWallpaper ? 'wallpaper' : remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'));
-    const resolvedChoice: BgChoice = inferredChoice === 'wallpaper' && !(remoteWallpaper || (!useRemoteBgState && localWallpaper))
+    const inferredChoice: BgChoice = remoteChoice
+      ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : allowLocalBgFallback ? (localChoice ?? (localWallpaper ? 'wallpaper' : 'default')) : 'default');
+    const resolvedChoice: BgChoice = inferredChoice === 'wallpaper' && !(remoteWallpaper || (allowLocalBgFallback && localWallpaper))
       ? 'default'
       : inferredChoice;
 
@@ -2901,7 +3157,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     const nextBgPosition = resolvedChoice === 'wallpaper'
       ? (typeof hs.bgPositionY === 'number'
           ? Math.max(0, Math.min(100, hs.bgPositionY))
-          : !useRemoteBgState && localChoice === 'wallpaper'
+          : allowLocalBgFallback && localChoice === 'wallpaper'
             ? localBgPosition
             : 50)
       : 50;
@@ -2909,7 +3165,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setScopedStorageItem(LS_BG_POS_Y_BASE, String(nextBgPosition), user.id);
 
     if (resolvedChoice === 'wallpaper') {
-      const resolvedBgImage = remoteWallpaper || (!useRemoteBgState && localChoice === 'wallpaper' ? localWallpaper : '');
+      const resolvedBgImage = remoteWallpaper || (allowLocalBgFallback && localChoice === 'wallpaper' ? localWallpaper : '');
       if (resolvedBgImage) {
         setBgImage(prev => prev === resolvedBgImage ? prev : resolvedBgImage);
         setScopedStorageItem(LS_BG_BASE, resolvedBgImage, user.id);
@@ -2919,7 +3175,29 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       setBgImage(prev => prev === nextDefaultBg ? prev : nextDefaultBg);
       removeScopedStorageItem(LS_BG_BASE, user.id);
     }
-  }, [profile, setBgChoiceState, theme, user?.id]);
+  }, [homescreenBootstrapSource, homescreenReady, profile, setBgChoiceState, theme, user?.id]);
+ 
+  useEffect(() => {
+    if (!homescreenReady || !user?.id) return;
+    setScopedStorageItem(LS_SNAPSHOT_BASE, JSON.stringify({
+      dockIds,
+      iconOrder,
+      showQuote,
+      bgImage: bgChoice === 'style' ? '' : bgImage,
+      bgPositionY,
+      headerColor,
+      bgChoice,
+      hsBgActive,
+      hsBg,
+      dockColor,
+      bgGradLeft,
+      bgGradRight,
+      hsWidgets,
+      hsWidgetSizes,
+      unifiedGrid,
+      homescreenLayout,
+    } as HomescreenSnapshot), user.id);
+  }, [bgChoice, bgGradLeft, bgGradRight, bgImage, bgPositionY, dockColor, dockIds, headerColor, homescreenLayout, homescreenReady, hsBg, hsBgActive, hsWidgetSizes, hsWidgets, iconOrder, showQuote, unifiedGrid, user?.id]);
 
   // Live update from Settings page widget toggle events
   useEffect(() => {
@@ -3463,6 +3741,37 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // ── BG input id for label linkage ──
   const bgInputId = "hs-bg-input";
+ 
+  if (!homescreenReady) {
+    return (
+      <div className="relative min-h-screen w-full overflow-hidden bg-[linear-gradient(135deg,#0c0f14_0%,#11151d_45%,#0c0f14_100%)] text-white">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(96,96,98,0.22),transparent_38%),radial-gradient(circle_at_bottom_right,rgba(133,131,132,0.14),transparent_32%)]" />
+        <div className="relative z-10 flex h-full min-h-screen flex-col px-4 pt-4 pb-8">
+          <div className="mb-4 flex items-center gap-3 rounded-[20px] border border-white/10 bg-white/5 px-4 py-3 backdrop-blur-xl">
+            <div className="h-11 w-11 animate-pulse rounded-2xl bg-white/10" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 w-32 animate-pulse rounded-full bg-white/10" />
+              <div className="h-3 w-48 animate-pulse rounded-full bg-white/5" />
+            </div>
+          </div>
+          <div className="mb-4 h-12 w-48 animate-pulse rounded-2xl border border-white/10 bg-white/5 backdrop-blur-xl" />
+          <div className="mb-5 grid grid-cols-2 gap-3">
+            <div className="h-40 animate-pulse rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-xl" />
+            <div className="h-40 animate-pulse rounded-[28px] border border-white/10 bg-white/5 backdrop-blur-xl" />
+          </div>
+          <div className="grid flex-1 grid-cols-4 gap-x-3 gap-y-5 px-2 pt-2">
+            {Array.from({ length: 12 }).map((_, index) => (
+              <div key={index} className="flex flex-col items-center gap-2">
+                <div className="h-16 w-16 animate-pulse rounded-[22px] border border-white/10 bg-white/5 backdrop-blur-xl" />
+                <div className="h-3 w-14 animate-pulse rounded-full bg-white/10" />
+              </div>
+            ))}
+          </div>
+          <div className="mt-6 h-24 animate-pulse rounded-[32px] border border-white/10 bg-white/5 backdrop-blur-xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <DndContext
