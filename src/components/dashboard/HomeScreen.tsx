@@ -240,6 +240,10 @@ function isLargeSurfaceMobileDevice() {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent || '');
 }
 
+ function isHomescreenGlassMobileDevice() {
+   return isLargeSurfaceMobileDevice();
+ }
+
 // Calculate explicit grid positions ("parking spots") for each item as area strings
 // Handles widget::, app::, and empty:: items
 function calcGridPositions(items: string[]) {
@@ -924,8 +928,8 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
   const isGridVariant = variant === "grid";
   const isDockVariant = variant === "dock";
   const shellRadius = isGridVariant ? '27%' : '30%';
-  const iconScale = app.isAvatarIcon ? 1 : isGridVariant ? (isAppleMobileDevice() ? 0.42 : 0.46) : (isAppleMobileDevice() ? 0.44 : 0.48);
-  const isAppleMobile = isAppleMobileDevice();
+  const isAppleMobile = isHomescreenGlassMobileDevice();
+  const iconScale = app.isAvatarIcon ? 1 : isGridVariant ? (isAppleMobile ? 0.42 : 0.46) : (isAppleMobile ? 0.44 : 0.48);
   const iconInset = app.isAvatarIcon ? '0%' : isGridVariant ? (isAppleMobile ? '10%' : '8%') : (isAppleMobile ? '12%' : '10%');
   const mixHexWithWhite = (hex: string, whiteRatio = 0.82) => {
     const normalized = hex.replace('#', '');
@@ -2085,8 +2089,8 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
   const recovery = whoopData?.recovery ?? null;
   const strain   = whoopData?.strain ?? null;
   const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
-  const isMobileGlass = isLargeSurfaceMobileDevice();
-  const isAppleLargeSurface = isMobileGlass && isAppleMobileDevice();
+  const isMobileGlass = isHomescreenGlassMobileDevice();
+  const isAppleLargeSurface = isMobileGlass;
 
   const shell = (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => (
     <div
@@ -2191,8 +2195,12 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
     return <JournalWidget shell={shell} navigate={navigate} language={language} journalData={journalData} />;
   }
 
+  const quoteWidgetBg = isMobileGlass
+    ? 'linear-gradient(145deg,rgba(99,102,241,0.24) 0%,rgba(79,70,229,0.14) 40%,rgba(30,41,70,0.08) 100%)'
+    : 'linear-gradient(145deg,rgba(15,23,42,0.97) 0%,rgba(22,32,56,0.97) 40%,rgba(30,41,70,0.97) 100%)';
+
   if (wKey === 'showQuoteWidget') return shell(
-    'linear-gradient(145deg,rgba(15,23,42,0.97) 0%,rgba(22,32,56,0.97) 40%,rgba(30,41,70,0.97) 100%)',
+    quoteWidgetBg,
     '#6366f1',
     () => { if (onExpandQuote) onExpandQuote(); },
     <div className="p-2.5 flex flex-col h-full justify-between" key={`${quoteText}-${quoteAuthor}`}>
@@ -3642,9 +3650,9 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const hasCustomBg = bgChoice === 'style';
   const hasAnyBg = hasBg || hasCustomBg;
   const wallpaperTranslateY = `${(bgPositionY - 50) * 1.2}%`;
-  const isAppleMobile = isAppleMobileDevice();
-  const isMobileGlass = isLargeSurfaceMobileDevice();
-  const isAppleLargeSurface = isMobileGlass && isAppleMobile;
+  const isMobileGlass = isHomescreenGlassMobileDevice();
+  const isAppleMobile = isMobileGlass;
+  const isAppleLargeSurface = isMobileGlass;
   const effectiveDockColor = dockColor || (isDark ? '#0c0f14' : '#060541');
   const dockTintIsDark = dockColor ? getHexLuminance(effectiveDockColor) < 0.32 : isDark;
   const dockTrayBackground = dockColor
