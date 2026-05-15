@@ -937,22 +937,22 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
     return `rgb(${mixChannel(toChannel(0))}, ${mixChannel(toChannel(2))}, ${mixChannel(toChannel(4))})`;
   };
   const iconWhiteRatio = isAppleMobile
-    ? isGridVariant ? 0.12 : 0.16
+    ? isGridVariant ? 0.18 : 0.22
     : isGridVariant ? 0.18 : 0.22;
   const iconTint = mixHexWithWhite(app.glow, iconWhiteRatio);
   const iconFilter = isGridVariant
-    ? `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.008' : '0.015'})) drop-shadow(0 4px 8px rgba(0,0,0,${isAppleMobile ? '0.28' : '0.24'})) drop-shadow(0 0 ${isAppleMobile ? '6px' : '7px'} ${app.glow}${isAppleMobile ? '14' : '18'})`
-    : `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.006' : '0.012'})) drop-shadow(0 3px 7px rgba(0,0,0,${isAppleMobile ? '0.26' : '0.22'})) drop-shadow(0 0 ${isAppleMobile ? '5px' : '6px'} ${app.glow}${isAppleMobile ? '11' : '14'})`;
+    ? `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.014' : '0.015'})) drop-shadow(0 4px 8px rgba(0,0,0,${isAppleMobile ? '0.2' : '0.24'})) drop-shadow(0 0 ${isAppleMobile ? '6px' : '7px'} ${app.glow}${isAppleMobile ? '18' : '18'})`
+    : `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.01' : '0.012'})) drop-shadow(0 3px 7px rgba(0,0,0,${isAppleMobile ? '0.18' : '0.22'})) drop-shadow(0 0 ${isAppleMobile ? '5px' : '6px'} ${app.glow}${isAppleMobile ? '14' : '14'})`;
   const glassShadow = glowEnabled
     ? isGridVariant
-      ? `0 24px 46px -18px rgba(4,10,24,${isAppleMobile ? '0.62' : '0.76'}), 0 10px 22px rgba(0,0,0,${isAppleMobile ? '0.24' : '0.32'}), 0 0 ${isAppleMobile ? '14px' : '18px'} ${app.glow}${isAppleMobile ? '1b' : '28'}, inset 0 1.5px 0 rgba(255,255,255,${isAppleMobile ? '0.1' : '0.18'}), inset 0 -16px 24px rgba(255,255,255,${isAppleMobile ? '0.01' : '0.025'})`
-      : `0 10px 24px -16px rgba(4,10,24,${isAppleMobile ? '0.42' : '0.54'}), 0 4px 12px rgba(0,0,0,${isAppleMobile ? '0.12' : '0.16'}), 0 0 ${isAppleMobile ? '7px' : '10px'} ${app.glow}${isAppleMobile ? '0f' : '16'}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.08' : '0.16'}), inset 0 -14px 22px rgba(255,255,255,${isAppleMobile ? '0.009' : '0.02'})`
+      ? `0 24px 46px -18px rgba(4,10,24,${isAppleMobile ? '0.42' : '0.76'}), 0 10px 22px rgba(0,0,0,${isAppleMobile ? '0.14' : '0.32'}), 0 0 ${isAppleMobile ? '16px' : '18px'} ${app.glow}${isAppleMobile ? '24' : '28'}, inset 0 1.5px 0 rgba(255,255,255,${isAppleMobile ? '0.16' : '0.18'}), inset 0 -16px 24px rgba(255,255,255,${isAppleMobile ? '0.018' : '0.025'})`
+      : `0 10px 24px -16px rgba(4,10,24,${isAppleMobile ? '0.28' : '0.54'}), 0 4px 12px rgba(0,0,0,${isAppleMobile ? '0.08' : '0.16'}), 0 0 ${isAppleMobile ? '8px' : '10px'} ${app.glow}${isAppleMobile ? '14' : '16'}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.14' : '0.16'}), inset 0 -14px 22px rgba(255,255,255,${isAppleMobile ? '0.016' : '0.02'})`
     : isGridVariant
-      ? `0 22px 42px -18px rgba(4,10,24,${isAppleMobile ? '0.56' : '0.7'}), 0 8px 20px rgba(0,0,0,${isAppleMobile ? '0.2' : '0.28'}), 0 0 ${isAppleMobile ? '8px' : '12px'} ${app.glow}${isAppleMobile ? '0f' : '16'}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.085' : '0.16'}), inset 0 -16px 22px rgba(255,255,255,${isAppleMobile ? '0.01' : '0.025'})`
-      : `0 8px 18px -14px rgba(4,10,24,${isAppleMobile ? '0.34' : '0.44'}), 0 3px 10px rgba(0,0,0,${isAppleMobile ? '0.1' : '0.14'}), 0 0 ${isAppleMobile ? '4px' : '6px'} ${app.glow}${isAppleMobile ? '0a' : '0e'}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.075' : '0.14'}), inset 0 -12px 18px rgba(255,255,255,${isAppleMobile ? '0.008' : '0.02'})`;
+      ? `0 22px 42px -18px rgba(4,10,24,${isAppleMobile ? '0.38' : '0.7'}), 0 8px 20px rgba(0,0,0,${isAppleMobile ? '0.12' : '0.28'}), 0 0 ${isAppleMobile ? '10px' : '12px'} ${app.glow}${isAppleMobile ? '12' : '16'}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.14' : '0.16'}), inset 0 -16px 22px rgba(255,255,255,${isAppleMobile ? '0.016' : '0.025'})`
+      : `0 8px 18px -14px rgba(4,10,24,${isAppleMobile ? '0.22' : '0.44'}), 0 3px 10px rgba(0,0,0,${isAppleMobile ? '0.06' : '0.14'}), 0 0 ${isAppleMobile ? '5px' : '6px'} ${app.glow}${isAppleMobile ? '0e' : '0e'}, inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.12' : '0.14'}), inset 0 -12px 18px rgba(255,255,255,${isAppleMobile ? '0.014' : '0.02'})`;
   const shellFill = isGridVariant
-    ? `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.095' : '0.15'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.032' : '0.055'}) 18%, rgba(255,255,255,${isAppleMobile ? '0.01' : '0.02'}) 100%), linear-gradient(135deg, ${app.glow}${isAppleMobile ? '10' : '16'} 0%, rgba(255,255,255,${isAppleMobile ? '0.012' : '0.02'}) 58%, rgba(255,255,255,${isAppleMobile ? '0.003' : '0.006'}) 100%), rgba(255,255,255,${isAppleMobile ? '0.02' : '0.035'})`
-    : `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.12' : '0.18'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.04' : '0.07'}) 24%, rgba(255,255,255,${isAppleMobile ? '0.013' : '0.025'}) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,${isAppleMobile ? '0.055' : '0.1'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.013' : '0.025'}) 34%, transparent 62%), linear-gradient(135deg, ${app.glow}${isAppleMobile ? '0c' : '10'} 0%, rgba(255,255,255,${isAppleMobile ? '0.012' : '0.02'}) 56%, rgba(255,255,255,${isAppleMobile ? '0.004' : '0.008'}) 100%), rgba(255,255,255,${isAppleMobile ? '0.024' : '0.045'})`;
+    ? `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.125' : '0.15'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.04' : '0.055'}) 18%, rgba(255,255,255,${isAppleMobile ? '0.012' : '0.02'}) 100%), linear-gradient(135deg, ${app.glow}${isAppleMobile ? '0c' : '16'} 0%, rgba(255,255,255,${isAppleMobile ? '0.018' : '0.02'}) 58%, rgba(255,255,255,${isAppleMobile ? '0.005' : '0.006'}) 100%), rgba(255,255,255,${isAppleMobile ? '0.014' : '0.035'})`
+    : `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.15' : '0.18'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.05' : '0.07'}) 24%, rgba(255,255,255,${isAppleMobile ? '0.016' : '0.025'}) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,${isAppleMobile ? '0.075' : '0.1'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.018' : '0.025'}) 34%, transparent 62%), linear-gradient(135deg, ${app.glow}${isAppleMobile ? '0f' : '10'} 0%, rgba(255,255,255,${isAppleMobile ? '0.016' : '0.02'}) 56%, rgba(255,255,255,${isAppleMobile ? '0.006' : '0.008'}) 100%), rgba(255,255,255,${isAppleMobile ? '0.018' : '0.045'})`;
   return (
     <div
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
@@ -964,21 +964,20 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
         style={{
           borderRadius: shellRadius,
           background: shellFill,
-          backdropFilter: isGridVariant ? `blur(${isAppleMobile ? '22px' : '30px'}) saturate(${isAppleMobile ? '155%' : '190%'})` : `blur(${isAppleMobile ? '22px' : '30px'}) saturate(${isAppleMobile ? '142%' : '170%'})`,
-          WebkitBackdropFilter: isGridVariant ? `blur(${isAppleMobile ? '22px' : '30px'}) saturate(${isAppleMobile ? '155%' : '190%'})` : `blur(${isAppleMobile ? '22px' : '30px'}) saturate(${isAppleMobile ? '142%' : '170%'})`,
+          backdropFilter: isGridVariant ? `blur(${isAppleMobile ? '28px' : '30px'}) saturate(${isAppleMobile ? '180%' : '190%'})` : `blur(${isAppleMobile ? '28px' : '30px'}) saturate(${isAppleMobile ? '170%' : '170%'})`,
+          WebkitBackdropFilter: isGridVariant ? `blur(${isAppleMobile ? '28px' : '30px'}) saturate(${isAppleMobile ? '180%' : '190%'})` : `blur(${isAppleMobile ? '28px' : '30px'}) saturate(${isAppleMobile ? '170%' : '170%'})`,
           boxShadow: glassShadow,
-          border: isGridVariant ? `1px solid rgba(255,255,255,${isAppleMobile ? '0.08' : '0.16'})` : `1px solid rgba(255,255,255,${isAppleMobile ? '0.09' : '0.18'})`,
+          border: isGridVariant ? `1px solid rgba(255,255,255,${isAppleMobile ? '0.12' : '0.16'})` : `1px solid rgba(255,255,255,${isAppleMobile ? '0.13' : '0.18'})`,
         }}
       />
-      {/* Liquid glass highlight */}
       <div
         className="absolute pointer-events-none"
         style={{
           inset: 0,
           borderRadius: shellRadius,
           background: isGridVariant
-            ? `linear-gradient(165deg, rgba(255,255,255,${isAppleMobile ? '0.14' : '0.24'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.04' : '0.08'}) 16%, rgba(255,255,255,${isAppleMobile ? '0.014' : '0.03'}) 34%, rgba(255,255,255,${isAppleMobile ? '0.004' : '0.01'}) 52%, transparent 70%)`
-            : `linear-gradient(160deg, rgba(255,255,255,${isAppleMobile ? '0.16' : '0.28'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.045' : '0.09'}) 20%, rgba(255,255,255,${isAppleMobile ? '0.014' : '0.03'}) 44%, transparent 74%)`,
+            ? `linear-gradient(165deg, rgba(255,255,255,${isAppleMobile ? '0.2' : '0.24'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.06' : '0.08'}) 16%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.03'}) 34%, rgba(255,255,255,${isAppleMobile ? '0.008' : '0.01'}) 52%, transparent 70%)`
+            : `linear-gradient(160deg, rgba(255,255,255,${isAppleMobile ? '0.22' : '0.28'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.06' : '0.09'}) 20%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.03'}) 44%, transparent 74%)`,
           mixBlendMode: 'screen',
         }}
       />
@@ -990,7 +989,7 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             borderRadius: '999px',
             background: `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.1' : '0.14'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.03'}) 100%)`,
             filter: 'blur(4px)',
-            opacity: isAppleMobile ? 0.28 : 0.36,
+            opacity: isAppleMobile ? 0.38 : 0.36,
           }}
         />
       )}
@@ -1005,10 +1004,11 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             borderRadius: '999px',
             background: `radial-gradient(circle at 50% 50%, rgba(255,255,255,${isAppleMobile ? '0.055' : '0.08'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.012' : '0.02'}) 54%, transparent 100%)`,
             filter: 'blur(10px)',
-            opacity: isAppleMobile ? 0.24 : 0.34,
+            opacity: isAppleMobile ? 0.32 : 0.34,
           }}
         />
       )}
+
       {isGridVariant && (
         <div
           className="absolute pointer-events-none"
@@ -1017,7 +1017,7 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             borderRadius: '999px',
             background: `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.11' : '0.16'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.025' : '0.04'}) 100%)`,
             filter: 'blur(3px)',
-            opacity: isAppleMobile ? 0.32 : 0.44,
+            opacity: isAppleMobile ? 0.42 : 0.44,
           }}
         />
       )}
@@ -1032,12 +1032,13 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             borderRadius: '999px',
             background: `linear-gradient(90deg, rgba(255,255,255,${isAppleMobile ? '0.045' : '0.06'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.012' : '0.018'}) 35%, rgba(255,255,255,${isAppleMobile ? '0.035' : '0.05'}) 100%)`,
             filter: 'blur(10px)',
-            opacity: isAppleMobile ? 0.24 : 0.34,
+            opacity: isAppleMobile ? 0.32 : 0.34,
           }}
         />
       )}
-      {/* Icon */}
-      <div className="absolute inset-0 flex items-center justify-center" style={{ borderRadius: shellRadius, overflow: app.isAvatarIcon ? 'hidden' : 'visible' }}>
+
+      <div className="absolute inset-0 flex items-center justify-center"
+        style={{ borderRadius: shellRadius, overflow: app.isAvatarIcon ? 'hidden' : 'visible' }}>
         {app.isAvatarIcon && avatarUrl
           ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" style={{ transform: isGridVariant ? 'scale(1.03)' : undefined }} />
           : app.isWaktiIcon
@@ -2094,41 +2095,41 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
       style={{
         background: hasBg
           ? isAppleLargeSurface
-            ? 'linear-gradient(180deg, rgba(8,12,20,0.24) 0%, rgba(8,12,20,0.16) 100%), linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.01) 100%)'
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.16) 0%, rgba(8,12,20,0.09) 100%), linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.018) 100%)'
             : isMobileGlass
-            ? 'linear-gradient(180deg, rgba(8,12,20,0.38) 0%, rgba(8,12,20,0.3) 100%), linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%)'
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.24) 0%, rgba(8,12,20,0.16) 100%), linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
             : 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 100%)'
           : isAppleLargeSurface
-            ? 'linear-gradient(180deg, rgba(8,12,20,0.18) 0%, rgba(8,12,20,0.12) 100%), linear-gradient(180deg, rgba(255,255,255,0.034) 0%, rgba(255,255,255,0.012) 100%)'
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.11) 0%, rgba(8,12,20,0.06) 100%), linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
             : isMobileGlass
-            ? 'linear-gradient(180deg, rgba(8,12,20,0.3) 0%, rgba(8,12,20,0.22) 100%), linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.18) 0%, rgba(8,12,20,0.11) 100%), linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 100%)'
             : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 100%)',
         backdropFilter: hasBg
-          ? `blur(${isAppleLargeSurface ? '17px' : isMobileGlass ? '18px' : '30px'}) saturate(${isAppleLargeSurface ? '118%' : isMobileGlass ? '125%' : '170%'})`
-          : `blur(${isAppleLargeSurface ? '16px' : isMobileGlass ? '16px' : '24px'}) saturate(${isAppleLargeSurface ? '114%' : isMobileGlass ? '118%' : '155%'})`,
+          ? `blur(${isAppleLargeSurface ? '24px' : isMobileGlass ? '22px' : '30px'}) saturate(${isAppleLargeSurface ? '145%' : isMobileGlass ? '138%' : '170%'})`
+          : `blur(${isAppleLargeSurface ? '22px' : isMobileGlass ? '20px' : '24px'}) saturate(${isAppleLargeSurface ? '138%' : isMobileGlass ? '130%' : '155%'})`,
         WebkitBackdropFilter: hasBg
-          ? `blur(${isAppleLargeSurface ? '17px' : isMobileGlass ? '18px' : '30px'}) saturate(${isAppleLargeSurface ? '118%' : isMobileGlass ? '125%' : '170%'})`
-          : `blur(${isAppleLargeSurface ? '16px' : isMobileGlass ? '16px' : '24px'}) saturate(${isAppleLargeSurface ? '114%' : isMobileGlass ? '118%' : '155%'})`,
+          ? `blur(${isAppleLargeSurface ? '24px' : isMobileGlass ? '22px' : '30px'}) saturate(${isAppleLargeSurface ? '145%' : isMobileGlass ? '138%' : '170%'})`
+          : `blur(${isAppleLargeSurface ? '22px' : isMobileGlass ? '20px' : '24px'}) saturate(${isAppleLargeSurface ? '138%' : isMobileGlass ? '130%' : '155%'})`,
         boxShadow: hasBg
           ? isAppleLargeSurface
-            ? `0 14px 28px rgba(0,0,0,0.24), 0 5px 14px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -14px 22px rgba(255,255,255,0.008)`
+            ? `0 14px 28px rgba(0,0,0,0.16), 0 5px 14px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -14px 22px rgba(255,255,255,0.018)`
             : isMobileGlass
-            ? `0 18px 42px rgba(0,0,0,0.4), 0 8px 20px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -18px 28px rgba(255,255,255,0.01)`
+            ? `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.11), inset 0 -18px 28px rgba(255,255,255,0.016)`
             : `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -18px 28px rgba(255,255,255,0.04)`
           : isAppleLargeSurface
-            ? `0 12px 24px rgba(0,0,0,0.2), 0 0 10px ${glow}0a, inset 0 1px 0 rgba(255,255,255,0.055), inset 0 -14px 22px rgba(255,255,255,0.008)`
+            ? `0 12px 24px rgba(0,0,0,0.14), 0 0 12px ${glow}12, inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -14px 22px rgba(255,255,255,0.016)`
             : isMobileGlass
-            ? `0 16px 38px rgba(0,0,0,0.34), 0 0 12px ${glow}0d, inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -16px 24px rgba(255,255,255,0.01)`
+            ? `0 16px 38px rgba(0,0,0,0.24), 0 0 14px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.11), inset 0 -16px 24px rgba(255,255,255,0.016)`
             : `0 16px 38px rgba(0,0,0,0.22), 0 0 20px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.04)`,
         border: hasBg
-          ? `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.065' : isMobileGlass ? '0.08' : '0.24'})`
-          : `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.06' : isMobileGlass ? '0.08' : '0.18'})`,
+          ? `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.11' : isMobileGlass ? '0.1' : '0.24'})`
+          : `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.1' : isMobileGlass ? '0.1' : '0.18'})`,
       }}
     >
-      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isAppleLargeSurface ? '0.16' : isMobileGlass ? '0.3' : '0.14'})` }} />}
-      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? (isAppleLargeSurface ? 0.09 : isMobileGlass ? 0.08 : 0.16) : (isAppleLargeSurface ? 0.11 : isMobileGlass ? 0.1 : 0.22), mixBlendMode: 'screen', filter: `saturate(${isAppleLargeSurface ? '0.74' : isMobileGlass ? '0.72' : '0.9'})` }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? '0.065' : isMobileGlass ? '0.08' : '0.32'}) 0%, rgba(255,255,255,${isAppleLargeSurface ? '0.024' : isMobileGlass ? '0.028' : '0.1'}) 22%, rgba(255,255,255,${isAppleLargeSurface ? '0.006' : isMobileGlass ? '0.008' : '0.03'}) 56%, transparent 100%)` }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isAppleLargeSurface ? '0.055' : isMobileGlass ? '0.07' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isAppleLargeSurface ? '0.022' : isMobileGlass ? '0.03' : '0.12'}) 0%, transparent 26%)` }} />
+      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isAppleLargeSurface ? '0.08' : isMobileGlass ? '0.16' : '0.14'})` }} />}
+      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? (isAppleLargeSurface ? 0.13 : isMobileGlass ? 0.12 : 0.16) : (isAppleLargeSurface ? 0.15 : isMobileGlass ? 0.14 : 0.22), mixBlendMode: 'screen', filter: `saturate(${isAppleLargeSurface ? '0.9' : isMobileGlass ? '0.82' : '0.9'})` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? '0.12' : isMobileGlass ? '0.11' : '0.32'}) 0%, rgba(255,255,255,${isAppleLargeSurface ? '0.04' : isMobileGlass ? '0.038' : '0.1'}) 22%, rgba(255,255,255,${isAppleLargeSurface ? '0.012' : isMobileGlass ? '0.012' : '0.03'}) 56%, transparent 100%)` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isAppleLargeSurface ? '0.095' : isMobileGlass ? '0.08' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isAppleLargeSurface ? '0.04' : isMobileGlass ? '0.034' : '0.12'}) 0%, transparent 26%)` }} />
       <div className="relative z-10 w-full h-full">{children}</div>
       {bulkSelectionActive && (
         <button
@@ -3648,26 +3649,26 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const dockTintIsDark = dockColor ? getHexLuminance(effectiveDockColor) < 0.32 : isDark;
   const dockTrayBackground = dockColor
     ? `linear-gradient(180deg, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.42 : 0.92)} 0%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.3 : 0.84)} 100%)`
-    : `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? 0.14 : isMobileGlass ? 0.26 : isAppleMobile ? 0.42 : 0.66}) 0%, rgba(255,255,255,${isAppleLargeSurface ? 0.05 : isMobileGlass ? 0.12 : isAppleMobile ? 0.2 : 0.34}) 24%, rgba(255,255,255,${isAppleLargeSurface ? 0.016 : isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.16}) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,${isAppleLargeSurface ? 0.07 : isMobileGlass ? 0.14 : isAppleMobile ? 0.24 : 0.42}) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,${isAppleLargeSurface ? 0.035 : isMobileGlass ? 0.07 : isAppleMobile ? 0.12 : 0.22}) 0%, rgba(255,255,255,${isAppleLargeSurface ? 0.01 : isMobileGlass ? 0.02 : isAppleMobile ? 0.04 : 0.08}) 46%, rgba(255,255,255,${isAppleLargeSurface ? 0.02 : isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.14}) 100%)`;
+    : `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? 0.18 : isMobileGlass ? 0.26 : isAppleMobile ? 0.42 : 0.66}) 0%, rgba(255,255,255,${isAppleLargeSurface ? 0.08 : isMobileGlass ? 0.12 : isAppleMobile ? 0.2 : 0.34}) 24%, rgba(255,255,255,${isAppleLargeSurface ? 0.024 : isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.16}) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,${isAppleLargeSurface ? 0.11 : isMobileGlass ? 0.14 : isAppleMobile ? 0.24 : 0.42}) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,${isAppleLargeSurface ? 0.05 : isMobileGlass ? 0.07 : isAppleMobile ? 0.12 : 0.22}) 0%, rgba(255,255,255,${isAppleLargeSurface ? 0.016 : isMobileGlass ? 0.02 : isAppleMobile ? 0.04 : 0.08}) 46%, rgba(255,255,255,${isAppleLargeSurface ? 0.03 : isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.14}) 100%)`;
   const dockTrayBorder = dockColor
     ? `1px solid rgba(255,255,255,${isAppleLargeSurface ? (dockTintIsDark ? 0.08 : 0.13) : isMobileGlass ? (dockTintIsDark ? 0.12 : 0.18) : isAppleMobile ? (dockTintIsDark ? 0.2 : 0.3) : (dockTintIsDark ? 0.28 : 0.42)})`
-    : `1px solid rgba(255,255,255,${isAppleLargeSurface ? 0.11 : isMobileGlass ? 0.16 : isAppleMobile ? 0.28 : 0.42})`;
+    : `1px solid rgba(255,255,255,${isAppleLargeSurface ? 0.15 : isMobileGlass ? 0.16 : isAppleMobile ? 0.28 : 0.42})`;
   const dockTrayOutline = dockColor
     ? `1px solid rgba(255,255,255,${isAppleLargeSurface ? (dockTintIsDark ? 0.02 : 0.04) : isMobileGlass ? (dockTintIsDark ? 0.03 : 0.06) : isAppleMobile ? (dockTintIsDark ? 0.06 : 0.1) : (dockTintIsDark ? 0.1 : 0.16)})`
-    : `1px solid rgba(255,255,255,${isAppleLargeSurface ? 0.025 : isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.12})`;
+    : `1px solid rgba(255,255,255,${isAppleLargeSurface ? 0.04 : isMobileGlass ? 0.04 : isAppleMobile ? 0.08 : 0.12})`;
   const dockTrayShadow = dockColor
     ? `0 18px 36px rgba(0,0,0,${isAppleLargeSurface ? '0.34' : isMobileGlass ? '0.42' : '0.26'}), inset 0 1px 0 rgba(255,255,255,${isAppleLargeSurface ? '0.05' : isMobileGlass ? '0.08' : '0.16'})`
     : isAppleLargeSurface
-      ? '0 14px 24px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.04)'
+      ? '0 14px 24px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.08)'
       : isMobileGlass
-      ? '0 18px 38px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.06)'
+      ? '0 18px 38px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)'
       : `0 22px 48px rgba(0,0,0,${isAppleMobile ? '0.3' : '0.24'}), inset 0 1px 0 rgba(255,255,255,${isAppleMobile ? '0.12' : '0.18'})`;
   const dockTopSheen = dockColor
     ? `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? (dockTintIsDark ? 0.05 : 0.12) : isMobileGlass ? (dockTintIsDark ? 0.08 : 0.18) : dockTintIsDark ? 0.12 : 0.24}) 0%, rgba(255,255,255,${isAppleLargeSurface ? (dockTintIsDark ? 0.012 : 0.035) : isMobileGlass ? (dockTintIsDark ? 0.02 : 0.06) : dockTintIsDark ? 0.04 : 0.12}) 42%, transparent 100%)`
-    : `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? 0.055 : isMobileGlass ? 0.08 : isAppleMobile ? 0.18 : 0.26}) 0%, rgba(255,255,255,${isAppleLargeSurface ? 0.012 : isMobileGlass ? 0.02 : isAppleMobile ? 0.06 : 0.12}) 42%, transparent 100%)`;
+    : `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? 0.1 : isMobileGlass ? 0.08 : isAppleMobile ? 0.18 : 0.26}) 0%, rgba(255,255,255,${isAppleLargeSurface ? 0.03 : isMobileGlass ? 0.02 : isAppleMobile ? 0.06 : 0.12}) 42%, transparent 100%)`;
   const dockBottomTint = dockColor
     ? `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isAppleLargeSurface ? (dockTintIsDark ? 0.12 : 0.06) : isMobileGlass ? (dockTintIsDark ? 0.16 : 0.08) : dockTintIsDark ? 0.24 : 0.12}) 100%)`
-    : `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isAppleLargeSurface ? 0.1 : isMobileGlass ? 0.2 : isAppleMobile ? 0.14 : 0.1}) 100%)`;
+    : `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isAppleLargeSurface ? 0.05 : isMobileGlass ? 0.12 : isAppleMobile ? 0.14 : 0.1}) 100%)`;
 
   const headColor = headerColor || (hasAnyBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541");
   const subColor  = headerColor ? `${headerColor}b3` : (hasAnyBg ? "rgba(255,255,255,0.72)" : isDark ? "rgba(242,242,242,0.55)" : "rgba(6,5,65,0.55)");
@@ -3675,15 +3676,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // Stat card surface — frosted glass with dark tint so white text is always readable
   const statCardBase = hasAnyBg
     ? isAppleLargeSurface
-      ? "bg-black/28 backdrop-blur-lg border border-white/[0.06] shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+      ? "bg-black/18 backdrop-blur-xl border border-white/[0.1] shadow-[0_10px_24px_rgba(0,0,0,0.12)]"
       : isMobileGlass
-      ? "bg-black/52 backdrop-blur-lg border border-white/[0.08] shadow-[0_10px_24px_rgba(0,0,0,0.34)]"
+      ? "bg-black/34 backdrop-blur-xl border border-white/[0.1] shadow-[0_10px_24px_rgba(0,0,0,0.22)]"
       : "bg-black/30 backdrop-blur-xl border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.2)]"
     : isDark
       ? isAppleLargeSurface
-        ? "bg-black/[0.16] backdrop-blur-lg border border-white/[0.055] shadow-[0_10px_24px_rgba(0,0,0,0.16)]"
+        ? "bg-black/[0.1] backdrop-blur-xl border border-white/[0.085] shadow-[0_10px_24px_rgba(0,0,0,0.1)]"
         : isMobileGlass
-        ? "bg-black/[0.3] backdrop-blur-lg border border-white/[0.06] shadow-[0_10px_24px_rgba(0,0,0,0.3)]"
+        ? "bg-black/[0.18] backdrop-blur-xl border border-white/[0.085] shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
         : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-white backdrop-blur-xl border border-[#060541]/10 shadow-[0_2px_12px_rgba(6,5,65,0.08)]";
 
