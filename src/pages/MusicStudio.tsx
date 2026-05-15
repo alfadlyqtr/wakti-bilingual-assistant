@@ -6770,6 +6770,11 @@ function VoicesTab({
       if (vocalType === 'custom' && selectedMusicVoice?.kieVoiceId) {
         invokeBody.personaId = selectedMusicVoice.kieVoiceId;
         invokeBody.personaModel = 'voice_persona';
+        if (selectedMusicVoice.voiceType === 'female') {
+          invokeBody.vocalGender = 'f';
+        } else {
+          invokeBody.vocalGender = 'm';
+        }
       } else {
         if (vocalGender) invokeBody.vocalGender = vocalGender;
       }
