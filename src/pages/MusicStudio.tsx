@@ -177,6 +177,64 @@ const handleDownload = async (url: string, filename: string) => {
   }
  };
 
+ type MusicVoiceShellType = 'male' | 'female' | 'custom';
+ type MusicVoiceShellSource = 'record' | 'upload';
+
+ interface MusicVoiceShell {
+   id: string;
+   name: string;
+   voiceType: MusicVoiceShellType;
+   accentNote: string;
+   sourceKind: MusicVoiceShellSource;
+   clipLabel: string;
+   createdAt: number;
+   updatedAt: number;
+ }
+
+ const MUSIC_VOICE_SHELLS_STORAGE_KEY = 'wakti-music-voice-shells-v1';
+ const MUSIC_VOICE_SELECTED_STORAGE_KEY = 'wakti-music-voice-selected-v1';
+
+ const readMusicVoiceShells = (): MusicVoiceShell[] => {
+   if (typeof window === 'undefined') return [];
+   try {
+     const raw = window.localStorage.getItem(MUSIC_VOICE_SHELLS_STORAGE_KEY);
+     if (!raw) return [];
+     const parsed = JSON.parse(raw);
+     if (!Array.isArray(parsed)) return [];
+     return parsed
+       .filter((entry) => entry && typeof entry === 'object' && typeof entry.id === 'string' && typeof entry.name === 'string')
+       .map((entry) => ({
+         id: String(entry.id),
+         name: String(entry.name),
+         voiceType: entry.voiceType === 'male' || entry.voiceType === 'female' ? entry.voiceType : 'custom',
+         accentNote: typeof entry.accentNote === 'string' ? entry.accentNote : '',
+         sourceKind: entry.sourceKind === 'upload' ? 'upload' : 'record',
+         clipLabel: typeof entry.clipLabel === 'string' ? entry.clipLabel : '',
+         createdAt: typeof entry.createdAt === 'number' ? entry.createdAt : Date.now(),
+         updatedAt: typeof entry.updatedAt === 'number' ? entry.updatedAt : Date.now(),
+       }))
+       .sort((a, b) => b.updatedAt - a.updatedAt);
+   } catch {
+     return [];
+   }
+ };
+
+ const buildMusicVoiceShellId = () => {
+   const randomId = globalThis.crypto?.randomUUID?.();
+   return randomId || `voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+ };
+
+ const formatMusicVoiceDate = (timestamp: number, language: 'ar' | 'en') => {
+   try {
+     return new Intl.DateTimeFormat(language === 'ar' ? 'ar-QA' : 'en-US', {
+       month: 'short',
+       day: 'numeric',
+     }).format(new Date(timestamp));
+   } catch {
+     return new Date(timestamp).toLocaleDateString();
+   }
+ };
+
  interface SavedVideo {
   id: string;
   title: string | null;
@@ -884,13 +942,21 @@ export default function MusicStudio() {
   const [mainTab, setMainTab] = useState<'studio' | 'music' | 'video' | 'image' | 'qrcode'>(() => {
     try { return sessionStorage.getItem(PL_BG_KEY) === '1' ? 'music' : 'studio'; } catch { return 'studio'; }
   });
-  const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor'>(() => {
+  const [musicSubTab, setMusicSubTab] = useState<'compose' | 'editor' | 'voices'>(() => {
     try { return sessionStorage.getItem(PL_BG_KEY) === '1' ? 'editor' : 'compose'; } catch { return 'compose'; }
   });
   const [videoMode, setVideoMode] = useState<'ai' | 'saved'>('ai');
   const [imageMode, setImageMode] = useState<'create' | 'saved'>('create');
   const [savedImagesRefreshKey, setSavedImagesRefreshKey] = useState(0);
   const [musicQuotaHeader, setMusicQuotaHeader] = useState<{ remaining: number; limit: number; used: number } | null>(null);
+  const [musicVoiceShells, setMusicVoiceShells] = useState<MusicVoiceShell[]>(() => readMusicVoiceShells());
+  const [selectedMusicVoiceId, setSelectedMusicVoiceId] = useState<string>(() => {
+    try {
+      return localStorage.getItem(MUSIC_VOICE_SELECTED_STORAGE_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
   const [editorEverVisited, setEditorEverVisited] = useState(() => {
     try { return sessionStorage.getItem(PL_BG_KEY) === '1'; } catch { return false; }
   });
@@ -944,7 +1010,32 @@ export default function MusicStudio() {
       setMainTab('music');
       setMusicSubTab('editor');
     }
+    if (searchParams.get('subtab') === 'voices') {
+      setMainTab('music');
+      setMusicSubTab('voices');
+    }
   }, [searchParams]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(MUSIC_VOICE_SHELLS_STORAGE_KEY, JSON.stringify(musicVoiceShells));
+    } catch {}
+  }, [musicVoiceShells]);
+
+  useEffect(() => {
+    try {
+      if (selectedMusicVoiceId) {
+        window.localStorage.setItem(MUSIC_VOICE_SELECTED_STORAGE_KEY, selectedMusicVoiceId);
+      } else {
+        window.localStorage.removeItem(MUSIC_VOICE_SELECTED_STORAGE_KEY);
+      }
+    } catch {}
+  }, [selectedMusicVoiceId]);
+
+  useEffect(() => {
+    if (selectedMusicVoiceId && musicVoiceShells.some((voice) => voice.id === selectedMusicVoiceId)) return;
+    setSelectedMusicVoiceId(musicVoiceShells[0]?.id || '');
+  }, [musicVoiceShells, selectedMusicVoiceId]);
 
   // Always load quota when music tab is open, regardless of compose/saved sub-tab
   useEffect(() => {
@@ -1286,6 +1377,7 @@ export default function MusicStudio() {
             {[
               { key: 'compose' as const, labelEn: 'Compose', labelAr: 'إنشاء' },
               { key: 'editor' as const, labelEn: 'Saved', labelAr: 'المحفوظات' },
+              { key: 'voices' as const, labelEn: 'Voices', labelAr: 'الأصوات' },
             ].map((t) => {
               const isActive = musicSubTab === t.key;
               return (
@@ -1308,6 +1400,10 @@ export default function MusicStudio() {
             <ComposeTab
               onSaved={()=>{ setEditorEverVisited(true); setMusicSubTab('editor'); }}
               onQuotaChange={setMusicQuotaHeader}
+              musicVoiceShells={musicVoiceShells}
+              selectedMusicVoiceId={selectedMusicVoiceId}
+              onSelectMusicVoice={setSelectedMusicVoiceId}
+              onOpenVoices={() => setMusicSubTab('voices')}
             />
           </div>
           {editorEverVisited && (
@@ -1315,6 +1411,18 @@ export default function MusicStudio() {
               <EditorTab />
             </div>
           )}
+          <div className={musicSubTab === 'voices' ? undefined : 'hidden'}>
+            <VoicesTab
+              voices={musicVoiceShells}
+              selectedVoiceId={selectedMusicVoiceId}
+              onVoicesChange={setMusicVoiceShells}
+              onSelectVoice={setSelectedMusicVoiceId}
+              onUseVoice={(voiceId) => {
+                setSelectedMusicVoiceId(voiceId);
+                setMusicSubTab('compose');
+              }}
+            />
+          </div>
         </>
       )}
 
@@ -1395,7 +1503,397 @@ export default function MusicStudio() {
   );
  }
 
-function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaChange?: (quota: { remaining: number; limit: number; used: number }) => void }) {
+function VoicesTab({
+  voices,
+  selectedVoiceId,
+  onVoicesChange,
+  onSelectVoice,
+  onUseVoice,
+}: {
+  voices: MusicVoiceShell[];
+  selectedVoiceId: string;
+  onVoicesChange: React.Dispatch<React.SetStateAction<MusicVoiceShell[]>>;
+  onSelectVoice: (voiceId: string) => void;
+  onUseVoice: (voiceId: string) => void;
+}) {
+  const { language } = useTheme();
+  const isAr = language === 'ar';
+  const [createOpen, setCreateOpen] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [draftType, setDraftType] = useState<MusicVoiceShellType>('custom');
+  const [draftAccent, setDraftAccent] = useState('');
+  const [draftSourceKind, setDraftSourceKind] = useState<MusicVoiceShellSource>('record');
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingSeconds, setRecordingSeconds] = useState(0);
+  const [recordedClipLabel, setRecordedClipLabel] = useState('');
+  const [uploadedClipLabel, setUploadedClipLabel] = useState('');
+  const [pendingDeleteVoice, setPendingDeleteVoice] = useState<MusicVoiceShell | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const durationRef = useRef(0);
+
+  const stopStream = () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  };
+
+  const resetCreateState = () => {
+    setDraftName('');
+    setDraftType('custom');
+    setDraftAccent('');
+    setDraftSourceKind('record');
+    setIsRecording(false);
+    setRecordingSeconds(0);
+    setRecordedClipLabel('');
+    setUploadedClipLabel('');
+    durationRef.current = 0;
+    chunksRef.current = [];
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
+    stopStream();
+  };
+
+  useEffect(() => {
+    return () => {
+      resetCreateState();
+    };
+  }, []);
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+        },
+      });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/mp4')
+          ? 'audio/mp4'
+          : 'audio/webm';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      streamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
+      durationRef.current = 0;
+      setRecordingSeconds(0);
+      setRecordedClipLabel('');
+      setUploadedClipLabel('');
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) chunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = () => {
+        const seconds = Math.max(1, durationRef.current);
+        setRecordedClipLabel(isAr ? `تسجيل ${seconds}ث` : `Recorded clip · ${seconds}s`);
+        stopStream();
+      };
+
+      recorder.start(1000);
+      setIsRecording(true);
+      timerRef.current = setInterval(() => {
+        durationRef.current += 1;
+        setRecordingSeconds(durationRef.current);
+      }, 1000);
+    } catch (error) {
+      console.error('Music voice shell recorder failed:', error);
+      toast.error(isAr ? 'تعذر الوصول إلى الميكروفون' : 'Unable to access the microphone');
+    }
+  };
+
+  const stopRecording = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsRecording(false);
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      return;
+    }
+    stopStream();
+  };
+
+  const createVoiceShell = () => {
+    const clipLabel = draftSourceKind === 'record' ? recordedClipLabel : uploadedClipLabel;
+    if (!draftName.trim()) {
+      toast.error(isAr ? 'اكتب اسم الصوت أولاً' : 'Please enter a voice name first');
+      return;
+    }
+    if (!clipLabel) {
+      toast.error(isAr ? 'أضف مقطع الصوت أولاً' : 'Please add a voice clip first');
+      return;
+    }
+
+    const now = Date.now();
+    const nextVoice: MusicVoiceShell = {
+      id: buildMusicVoiceShellId(),
+      name: draftName.trim(),
+      voiceType: draftType,
+      accentNote: draftAccent.trim(),
+      sourceKind: draftSourceKind,
+      clipLabel,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    onVoicesChange((prev) => [nextVoice, ...prev]);
+    onSelectVoice(nextVoice.id);
+    setCreateOpen(false);
+    resetCreateState();
+    toast.success(isAr ? 'تم حفظ صوتك في الاستوديو' : 'Your voice shell was saved in Music Studio');
+  };
+
+  const deleteVoiceShell = () => {
+    if (!pendingDeleteVoice) return;
+    onVoicesChange((prev) => prev.filter((voice) => voice.id !== pendingDeleteVoice.id));
+    toast.success(isAr ? 'تم حذف الصوت' : 'Voice removed');
+    setPendingDeleteVoice(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <div className="text-lg font-bold text-[#060541] dark:text-white">{isAr ? 'أصوات الموسيقى' : 'Music Voices'}</div>
+            <div className="text-sm text-[#606062] dark:text-white/65">
+              {isAr ? 'أنشئ أصواتك واحفظها هنا لاستخدامها لاحقاً داخل الاستوديو.' : 'Create and save your voices here to use later in Music Studio.'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setCreateOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-[#060541] text-white text-sm font-bold shadow-[0_8px_24px_rgba(6,5,65,0.24)] active:scale-95 transition-all"
+          >
+            <Plus className="h-4 w-4" />
+            <span>{isAr ? 'إنشاء صوت' : 'Create Voice'}</span>
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-[#e9ceb0]/70 dark:border-[#606062]/50 bg-[#e9ceb0]/35 dark:bg-[#606062]/20 px-4 py-3 text-sm text-[#060541] dark:text-[#f2f2f2]">
+          {isAr ? 'سمِّ كل صوت بالطريقة التي تناسبك ثم اختره بسهولة وقت الإنشاء.' : 'Name each voice your way, then pick it easily while composing.'}
+        </div>
+
+        {voices.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-[#d9dde7] dark:border-white/10 px-5 py-8 text-center space-y-2">
+            <div className="mx-auto h-12 w-12 rounded-full bg-gradient-to-br from-[#e9ceb0]/60 to-[#fcfefd] dark:from-[#606062]/45 dark:to-[#858384]/25 text-[#060541] dark:text-[#f2f2f2] flex items-center justify-center">
+              <Mic className="h-5 w-5" />
+            </div>
+            <div className="text-base font-semibold text-[#060541] dark:text-white">{isAr ? 'ابدأ بأول صوت موسيقي' : 'Create your first music voice'}</div>
+            <div className="text-sm text-[#606062] dark:text-white/60">{isAr ? 'سمِّ صوتك، أضف التسجيل أو الملف، ثم اختره لاحقاً من الإنشاء.' : 'Name your voice, attach a recording or file, then choose it later from Compose.'}</div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {voices.map((voice) => {
+              const isSelected = selectedVoiceId === voice.id;
+              return (
+                <div key={voice.id} className={`rounded-2xl border px-4 py-4 transition-all ${isSelected ? 'border-[#e9ceb0] dark:border-[#858384] bg-[#e9ceb0]/30 dark:bg-[#606062]/20 shadow-[0_8px_24px_rgba(6,5,65,0.10)] dark:shadow-[0_2px_20px_hsla(0,0%,0%,0.45)]' : 'border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03]'}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-2 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-bold text-[#060541] dark:text-white truncate">{voice.name}</div>
+                        <span className="inline-flex items-center rounded-full border border-[#e9ceb0]/80 dark:border-[#858384]/40 bg-[#fcfefd] dark:bg-white/[0.05] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">
+                          {voice.voiceType === 'male' ? (isAr ? 'ذكوري' : 'Male') : voice.voiceType === 'female' ? (isAr ? 'أنثوي' : 'Female') : (isAr ? 'مخصص' : 'Custom')}
+                        </span>
+                        {isSelected && (
+                          <span className="inline-flex items-center rounded-full border border-emerald-300/40 dark:border-emerald-400/30 bg-emerald-50 dark:bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-200">
+                            {isAr ? 'المختار الآن' : 'Selected'}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-[#606062] dark:text-white/60">
+                        {voice.accentNote || (isAr ? 'بدون ملاحظة لهجة' : 'No accent note')}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-[#606062] dark:text-white/55">
+                        <span>{voice.sourceKind === 'record' ? (isAr ? 'تسجيل' : 'Recorded') : (isAr ? 'رفع ملف' : 'Uploaded')}</span>
+                        <span>•</span>
+                        <span>{voice.clipLabel}</span>
+                        <span>•</span>
+                        <span>{formatMusicVoiceDate(voice.createdAt, isAr ? 'ar' : 'en')}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => onUseVoice(voice.id)}
+                        className="h-9 px-3 rounded-xl bg-[#060541] text-white text-xs font-bold active:scale-95 transition-all shadow-[0_8px_18px_rgba(6,5,65,0.16)]"
+                      >
+                        {isAr ? 'استخدمه في الإنشاء' : 'Use in Compose'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPendingDeleteVoice(voice)}
+                        className="h-9 px-3 rounded-xl border border-red-300/40 dark:border-red-400/30 bg-red-50/70 dark:bg-red-500/10 text-red-600 dark:text-red-300 text-xs font-bold active:scale-95 transition-all"
+                      >
+                        {isAr ? 'حذف' : 'Delete'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {createOpen && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-0 sm:p-4" onClick={() => { setCreateOpen(false); resetCreateState(); }}>
+          <div className="w-full max-w-lg rounded-t-3xl sm:rounded-3xl border border-[#d9dde7] dark:border-white/10 bg-[#fcfefd] dark:bg-[#0c0f14] shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-[#d9dde7] dark:border-white/10">
+              <div>
+                <div className="text-base font-bold text-[#060541] dark:text-white">{isAr ? 'إنشاء صوت موسيقي' : 'Create Music Voice'}</div>
+                <div className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'أضف اسماً ومقطعاً للصوت ليظهر لك داخل الاستوديو.' : 'Add a name and a voice clip so it appears inside Music Studio.'}</div>
+              </div>
+              <button type="button" onClick={() => { setCreateOpen(false); resetCreateState(); }} aria-label={isAr ? 'إغلاق' : 'Close'} title={isAr ? 'إغلاق' : 'Close'} className="h-9 w-9 rounded-full border border-[#d9dde7] dark:border-white/10 flex items-center justify-center text-[#606062] dark:text-white/70 active:scale-95 transition-all">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="space-y-2">
+                <div className="text-xs font-bold text-[#060541] dark:text-white/85">{isAr ? 'اسم الصوت' : 'Voice name'}</div>
+                <Input value={draftName} onChange={(e) => setDraftName(e.target.value)} placeholder={isAr ? 'مثال: صوتي الكويتي' : 'Example: My Kuwaiti Voice'} maxLength={60} />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-bold text-[#060541] dark:text-white/85">{isAr ? 'النوع' : 'Type'}</div>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { key: 'male', labelEn: 'Male', labelAr: 'ذكوري' },
+                    { key: 'female', labelEn: 'Female', labelAr: 'أنثوي' },
+                    { key: 'custom', labelEn: 'Custom', labelAr: 'مخصص' },
+                  ] as const).map((option) => {
+                    const isActive = draftType === option.key;
+                    return (
+                      <button key={option.key} type="button" onClick={() => setDraftType(option.key)} className={`px-3 py-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 ${isActive ? 'bg-[#060541] text-white border-[#060541] dark:border-[#858384]' : 'bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#374151] dark:text-white/85'}`}>
+                        {isAr ? option.labelAr : option.labelEn}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-bold text-[#060541] dark:text-white/85">{isAr ? 'ملاحظة اللهجة' : 'Accent note'}</div>
+                <Input value={draftAccent} onChange={(e) => setDraftAccent(e.target.value)} placeholder={isAr ? 'مثال: خليجي، كويتي، عربي' : 'Example: Khaleeji, Kuwaiti, Arabic'} maxLength={80} />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-xs font-bold text-[#060541] dark:text-white/85">{isAr ? 'مصدر المقطع' : 'Clip source'}</div>
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    { key: 'record', labelEn: 'Record', labelAr: 'تسجيل' },
+                    { key: 'upload', labelEn: 'Upload', labelAr: 'رفع' },
+                  ] as const).map((option) => {
+                    const isActive = draftSourceKind === option.key;
+                    return (
+                      <button key={option.key} type="button" onClick={() => { setDraftSourceKind(option.key); setRecordedClipLabel(''); setUploadedClipLabel(''); }} className={`px-3 py-2 rounded-2xl text-xs font-bold border transition-all active:scale-95 ${isActive ? 'bg-[#060541] text-white border-[#060541] dark:border-[#858384]' : 'bg-white dark:bg-white/[0.04] border-[#d9dde7] dark:border-white/10 text-[#374151] dark:text-white/85'}`}>
+                        {isAr ? option.labelAr : option.labelEn}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {draftSourceKind === 'record' ? (
+                <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-bold text-[#060541] dark:text-white">{isAr ? 'سجل مقطعك' : 'Record your clip'}</div>
+                      <div className="text-xs text-[#606062] dark:text-white/60">{isAr ? 'سجّل عينة قصيرة لتمييز هذا الصوت.' : 'Record a short sample to identify this voice.'}</div>
+                    </div>
+                    {isRecording ? (
+                      <button type="button" onClick={stopRecording} className="h-10 px-4 rounded-2xl bg-red-500 text-white text-sm font-bold active:scale-95 transition-all">
+                        {isAr ? 'إيقاف' : 'Stop'}
+                      </button>
+                    ) : (
+                      <button type="button" onClick={startRecording} className="h-10 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-bold active:scale-95 transition-all">
+                        {isAr ? 'ابدأ التسجيل' : 'Start recording'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="text-xs text-[#606062] dark:text-white/60">
+                    {isRecording ? (isAr ? `جارٍ التسجيل: ${recordingSeconds}ث` : `Recording: ${recordingSeconds}s`) : (recordedClipLabel || (isAr ? 'لم يتم إضافة تسجيل بعد' : 'No recording attached yet'))}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.03] p-4 space-y-3">
+                  <div className="text-sm font-bold text-[#060541] dark:text-white">{isAr ? 'ارفع ملف الصوت' : 'Upload audio clip'}</div>
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    title={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'}
+                    aria-label={isAr ? 'اختر ملفاً صوتياً' : 'Choose an audio file'}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      setUploadedClipLabel(file ? file.name : '');
+                      setRecordedClipLabel('');
+                    }}
+                    className="block w-full text-sm text-[#374151] dark:text-white/80 file:mr-3 file:rounded-xl file:border-0 file:bg-[#e9ceb0]/45 dark:file:bg-[#606062]/35 file:px-3 file:py-2 file:text-sm file:font-bold file:text-[#060541] dark:file:text-[#f2f2f2]"
+                  />
+                  <div className="text-xs text-[#606062] dark:text-white/60">{uploadedClipLabel || (isAr ? 'لم يتم اختيار ملف بعد' : 'No file selected yet')}</div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 px-5 py-4 border-t border-[#d9dde7] dark:border-white/10 bg-[#f7f8fb] dark:bg-white/[0.02]">
+              <button type="button" onClick={() => { setCreateOpen(false); resetCreateState(); }} className="h-10 px-4 rounded-2xl border border-[#d9dde7] dark:border-white/10 text-sm font-bold text-[#606062] dark:text-white/75 active:scale-95 transition-all">
+                {isAr ? 'إلغاء' : 'Cancel'}
+              </button>
+              <button type="button" onClick={createVoiceShell} className="h-10 px-4 rounded-2xl bg-[#060541] text-white text-sm font-bold shadow-[0_8px_20px_rgba(6,5,65,0.18)] active:scale-95 transition-all">
+                {isAr ? 'حفظ الصوت' : 'Save Voice'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      <AlertDialog open={!!pendingDeleteVoice} onOpenChange={(open) => !open && setPendingDeleteVoice(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{isAr ? 'حذف الصوت؟' : 'Delete voice?'}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {isAr ? `سيتم حذف "${pendingDeleteVoice?.name || ''}" من غلاف الموسيقى.` : `This removes "${pendingDeleteVoice?.name || ''}" from the music voice shell.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{isAr ? 'إلغاء' : 'Cancel'}</AlertDialogCancel>
+            <AlertDialogAction onClick={deleteVoiceShell} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isAr ? 'حذف' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+function ComposeTab({
+  onSaved,
+  onQuotaChange,
+  musicVoiceShells,
+  selectedMusicVoiceId,
+  onSelectMusicVoice,
+  onOpenVoices,
+}: {
+  onSaved?: ()=>void;
+  onQuotaChange?: (quota: { remaining: number; limit: number; used: number }) => void;
+  musicVoiceShells: MusicVoiceShell[];
+  selectedMusicVoiceId: string;
+  onSelectMusicVoice: (voiceId: string) => void;
+  onOpenVoices: () => void;
+}) {
   const { language } = useTheme();
   const { user } = useAuth();
   const isAr = language === 'ar';
@@ -1745,13 +2243,14 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   const [lyricsKey, setLyricsKey] = useState(0);
   const [lyricsDisplayMode, setLyricsDisplayMode] = useState(false);
   const [gccOriginalLyrics, setGccOriginalLyrics] = useState('');
-  const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'>('auto');
+  const [vocalType, setVocalType] = useState<'auto'|'none'|'female'|'male'|'custom'>('auto');
   const [khaleejiDialect, setKhaleejiDialect] = useState<'kuwaiti'|'qatari'|'saudi'|'emirati'|'bahraini'|'omani'>('kuwaiti');
   const [vocalsOpen, setVocalsOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [audios, setAudios] = useState<Array<{ url: string; mime: string; meta?: any; createdAt: number; saved?: boolean }>>([]);
   const [lastError, setLastError] = useState<string | null>(null);
   const [lastNotice, setLastNotice] = useState<string | null>(null);
+  const selectedMusicVoice = useMemo(() => musicVoiceShells.find((voice) => voice.id === selectedMusicVoiceId) || null, [musicVoiceShells, selectedMusicVoiceId]);
 
   // ── Canonical GCC style catalog (single source of truth for GCC detection) ──
   // Used by isGccStyleSelected, formatLyricsWithStructure (per-stanza Khaleeji language tags),
@@ -3542,7 +4041,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
     setInstrumentsOpen(true);
   }
 
-  function handleVocalSelect(v: 'auto'|'none'|'female'|'male') {
+  function handleVocalSelect(v: 'auto'|'none'|'female'|'male'|'custom') {
     setVocalType(v);
     setVocalsOpen(false);
     setLyricsOpen(true);
@@ -5363,6 +5862,10 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
       setLyricsOpen(true);
       return;
     }
+    if (vocalType === 'custom') {
+      toast.error(isAr ? 'خيار الصوت المخصص غير جاهز للتوليد بعد' : 'Custom voice generation is not ready yet');
+      return;
+    }
     // ── Capacity check (vocal tracks only) ──
     // Compare user's stanza count vs the duration's stanza capacity. Two paths:
     //  • autoLabelLyrics ON  → silently bump duration to fit, notify user.
@@ -6131,6 +6634,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
   );
 
   const cardCls = "rounded-2xl border border-[#d9dde7] dark:border-white/10 bg-white dark:bg-white/[0.02] shadow-[0_10px_30px_rgba(6,5,65,0.08)] dark:shadow-none p-5 sm:p-4";
+  const customVoiceBlocked = vocalType === 'custom';
 
   return (
     <div className="space-y-4">
@@ -6622,10 +7126,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
           />
           <TrackChip />
           <div className="flex flex-wrap gap-2">
-            {(['auto', 'none', 'female', 'male'] as const).map((v) => {
+            {(['auto', 'none', 'female', 'male', 'custom'] as const).map((v) => {
               const labels: Record<string, { en: string; ar: string }> = {
                 auto: { en: 'Auto', ar: 'تلقائي' }, none: { en: 'Instrumental', ar: 'موسيقى فقط' },
                 female: { en: 'Female', ar: 'أنثوي' }, male: { en: 'Male', ar: 'ذكوري' },
+                custom: { en: 'Custom Voice', ar: 'صوت مخصص' },
               };
               const isActive = vocalType === v;
               return (
@@ -6641,6 +7146,56 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               );
             })}
           </div>
+          {vocalType === 'custom' && (
+            <div className="space-y-3 rounded-2xl border border-[#e9ceb0]/70 dark:border-[#606062]/50 bg-[#e9ceb0]/35 dark:bg-[#606062]/20 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-bold text-[#060541] dark:text-white">{isAr ? 'اختيار صوتك المخصص' : 'Choose your custom voice'}</div>
+                  <div className="text-xs text-[#606062] dark:text-white/60">
+                    {isAr ? 'اختر أحد الأصوات التي حفظتها هنا لاستخدامه لاحقاً.' : 'Choose one of your saved voices here to use later.'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={onOpenVoices}
+                  className="h-9 px-3 rounded-xl border border-[#060541]/15 dark:border-[#858384]/30 bg-white/80 dark:bg-white/[0.08] text-[#060541] dark:text-[#f2f2f2] text-xs font-bold active:scale-95 transition-all"
+                >
+                  {isAr ? 'إدارة الأصوات' : 'Manage Voices'}
+                </button>
+              </div>
+              {musicVoiceShells.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[#e9ceb0]/80 dark:border-[#858384]/35 bg-white/70 dark:bg-white/[0.04] px-4 py-5 text-center text-sm text-[#606062] dark:text-white/65">
+                  {isAr ? 'لا يوجد صوت محفوظ بعد. افتح تبويب الأصوات وأنشئ أول صوت.' : 'No saved voice yet. Open the Voices tab and create your first one.'}
+                </div>
+              ) : (
+                <>
+                  {selectedMusicVoice && (
+                    <div className="rounded-2xl border border-[#e9ceb0] dark:border-[#858384] bg-white/80 dark:bg-white/[0.05] px-4 py-3 space-y-1">
+                      <div className="text-xs font-bold uppercase tracking-wide text-[#060541] dark:text-[#f2f2f2]">{isAr ? 'المحدد الآن' : 'Currently selected'}</div>
+                      <div className="text-sm font-bold text-[#060541] dark:text-white">{selectedMusicVoice.name}</div>
+                      <div className="text-xs text-[#606062] dark:text-white/60">{selectedMusicVoice.accentNote || (isAr ? 'بدون ملاحظة لهجة' : 'No accent note')}</div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {musicVoiceShells.map((voice) => {
+                      const isSelected = selectedMusicVoiceId === voice.id;
+                      return (
+                        <button
+                          key={voice.id}
+                          type="button"
+                          onClick={() => onSelectMusicVoice(voice.id)}
+                          className={`rounded-2xl border px-3 py-3 text-left transition-all active:scale-95 ${isSelected ? 'border-[#e9ceb0] dark:border-[#858384] bg-[#fcfefd] dark:bg-white/[0.08] shadow-[0_6px_18px_rgba(6,5,65,0.10)]' : 'border-[#d9dde7] dark:border-white/10 bg-white/80 dark:bg-white/[0.04] hover:border-[#e9ceb0] dark:hover:border-[#858384]'}`}
+                        >
+                          <div className="text-sm font-bold text-[#060541] dark:text-white truncate">{voice.name}</div>
+                          <div className="text-[11px] text-[#606062] dark:text-white/60 truncate">{voice.accentNote || (isAr ? 'بدون ملاحظة لهجة' : 'No accent note')}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
           {khaleejiDialectActive && vocalType !== 'none' && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
@@ -7015,7 +7570,7 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
               </select>
               <button
                 type="button"
-                disabled={overLimit || submitting || !title.trim() || (vocalType !== 'none' && !lyricsText.trim())}
+                disabled={overLimit || submitting || !title.trim() || (vocalType !== 'none' && !lyricsText.trim()) || customVoiceBlocked}
                 onClick={handleGenerate}
                 className="flex-1 relative overflow-hidden h-12 rounded-2xl font-bold text-sm tracking-wide transition-all duration-200 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r from-sky-500 via-blue-600 to-purple-600 text-white shadow-[0_4px_24px_hsla(210,100%,65%,0.4)]"
               >
@@ -7033,6 +7588,11 @@ function ComposeTab({ onSaved, onQuotaChange }: { onSaved?: ()=>void; onQuotaCha
                 <span className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
               </button>
             </div>
+            {customVoiceBlocked && (
+              <div className="rounded-xl border border-amber-300/40 dark:border-amber-400/25 bg-amber-50/80 dark:bg-amber-500/10 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-200">
+                {isAr ? 'يمكنك حفظ الأصوات الآن، لكن التوليد بهذا الخيار غير متاح بعد.' : 'You can save voices now, but generation with this option is not available yet.'}
+              </div>
+            )}
           </div>
 
         {showPayloadPreview && createPortal(

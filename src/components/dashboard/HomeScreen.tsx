@@ -2095,41 +2095,41 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
       style={{
         background: hasBg
           ? isAppleLargeSurface
-            ? 'linear-gradient(180deg, rgba(8,12,20,0.16) 0%, rgba(8,12,20,0.09) 100%), linear-gradient(180deg, rgba(255,255,255,0.045) 0%, rgba(255,255,255,0.018) 100%)'
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.09) 0%, rgba(8,12,20,0.04) 100%), linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.026) 100%)'
             : isMobileGlass
-            ? 'linear-gradient(180deg, rgba(8,12,20,0.24) 0%, rgba(8,12,20,0.16) 100%), linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.14) 0%, rgba(8,12,20,0.08) 100%), linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 100%)'
             : 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 100%)'
           : isAppleLargeSurface
-            ? 'linear-gradient(180deg, rgba(8,12,20,0.11) 0%, rgba(8,12,20,0.06) 100%), linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)'
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.06) 0%, rgba(8,12,20,0.025) 100%), linear-gradient(180deg, rgba(255,255,255,0.075) 0%, rgba(255,255,255,0.03) 100%)'
             : isMobileGlass
-            ? 'linear-gradient(180deg, rgba(8,12,20,0.18) 0%, rgba(8,12,20,0.11) 100%), linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 100%)'
+            ? 'linear-gradient(180deg, rgba(8,12,20,0.1) 0%, rgba(8,12,20,0.055) 100%), linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.05) 100%)'
             : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 100%)',
         backdropFilter: hasBg
-          ? `blur(${isAppleLargeSurface ? '24px' : isMobileGlass ? '22px' : '30px'}) saturate(${isAppleLargeSurface ? '145%' : isMobileGlass ? '138%' : '170%'})`
-          : `blur(${isAppleLargeSurface ? '22px' : isMobileGlass ? '20px' : '24px'}) saturate(${isAppleLargeSurface ? '138%' : isMobileGlass ? '130%' : '155%'})`,
+          ? `blur(${isAppleLargeSurface ? '28px' : isMobileGlass ? '26px' : '30px'}) saturate(${isAppleLargeSurface ? '165%' : isMobileGlass ? '150%' : '170%'})`
+          : `blur(${isAppleLargeSurface ? '26px' : isMobileGlass ? '24px' : '24px'}) saturate(${isAppleLargeSurface ? '155%' : isMobileGlass ? '145%' : '155%'})`,
         WebkitBackdropFilter: hasBg
-          ? `blur(${isAppleLargeSurface ? '24px' : isMobileGlass ? '22px' : '30px'}) saturate(${isAppleLargeSurface ? '145%' : isMobileGlass ? '138%' : '170%'})`
-          : `blur(${isAppleLargeSurface ? '22px' : isMobileGlass ? '20px' : '24px'}) saturate(${isAppleLargeSurface ? '138%' : isMobileGlass ? '130%' : '155%'})`,
+          ? `blur(${isAppleLargeSurface ? '28px' : isMobileGlass ? '26px' : '30px'}) saturate(${isAppleLargeSurface ? '165%' : isMobileGlass ? '150%' : '170%'})`
+          : `blur(${isAppleLargeSurface ? '26px' : isMobileGlass ? '24px' : '24px'}) saturate(${isAppleLargeSurface ? '155%' : isMobileGlass ? '145%' : '155%'})`,
         boxShadow: hasBg
           ? isAppleLargeSurface
-            ? `0 14px 28px rgba(0,0,0,0.16), 0 5px 14px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -14px 22px rgba(255,255,255,0.018)`
+            ? `0 14px 28px rgba(0,0,0,0.1), 0 5px 14px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -14px 22px rgba(255,255,255,0.022)`
             : isMobileGlass
-            ? `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.11), inset 0 -18px 28px rgba(255,255,255,0.016)`
+            ? `0 18px 42px rgba(0,0,0,0.18), 0 8px 20px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -18px 28px rgba(255,255,255,0.022)`
             : `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -18px 28px rgba(255,255,255,0.04)`
           : isAppleLargeSurface
-            ? `0 12px 24px rgba(0,0,0,0.14), 0 0 12px ${glow}12, inset 0 1px 0 rgba(255,255,255,0.1), inset 0 -14px 22px rgba(255,255,255,0.016)`
+            ? `0 12px 24px rgba(0,0,0,0.08), 0 0 14px ${glow}18, inset 0 1px 0 rgba(255,255,255,0.13), inset 0 -14px 22px rgba(255,255,255,0.022)`
             : isMobileGlass
-            ? `0 16px 38px rgba(0,0,0,0.24), 0 0 14px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.11), inset 0 -16px 24px rgba(255,255,255,0.016)`
+            ? `0 16px 38px rgba(0,0,0,0.16), 0 0 16px ${glow}18, inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -16px 24px rgba(255,255,255,0.022)`
             : `0 16px 38px rgba(0,0,0,0.22), 0 0 20px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.04)`,
         border: hasBg
-          ? `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.11' : isMobileGlass ? '0.1' : '0.24'})`
-          : `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.1' : isMobileGlass ? '0.1' : '0.18'})`,
+          ? `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.14' : isMobileGlass ? '0.12' : '0.24'})`
+          : `1px solid rgba(255,255,255,${isAppleLargeSurface ? '0.13' : isMobileGlass ? '0.12' : '0.18'})`,
       }}
     >
-      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isAppleLargeSurface ? '0.08' : isMobileGlass ? '0.16' : '0.14'})` }} />}
-      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? (isAppleLargeSurface ? 0.13 : isMobileGlass ? 0.12 : 0.16) : (isAppleLargeSurface ? 0.15 : isMobileGlass ? 0.14 : 0.22), mixBlendMode: 'screen', filter: `saturate(${isAppleLargeSurface ? '0.9' : isMobileGlass ? '0.82' : '0.9'})` }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? '0.12' : isMobileGlass ? '0.11' : '0.32'}) 0%, rgba(255,255,255,${isAppleLargeSurface ? '0.04' : isMobileGlass ? '0.038' : '0.1'}) 22%, rgba(255,255,255,${isAppleLargeSurface ? '0.012' : isMobileGlass ? '0.012' : '0.03'}) 56%, transparent 100%)` }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isAppleLargeSurface ? '0.095' : isMobileGlass ? '0.08' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isAppleLargeSurface ? '0.04' : isMobileGlass ? '0.034' : '0.12'}) 0%, transparent 26%)` }} />
+      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isAppleLargeSurface ? '0.03' : isMobileGlass ? '0.08' : '0.14'})` }} />}
+      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? (isAppleLargeSurface ? 0.18 : isMobileGlass ? 0.16 : 0.16) : (isAppleLargeSurface ? 0.2 : isMobileGlass ? 0.18 : 0.22), mixBlendMode: 'screen', filter: `saturate(${isAppleLargeSurface ? '1' : isMobileGlass ? '0.92' : '0.9'})` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isAppleLargeSurface ? '0.16' : isMobileGlass ? '0.13' : '0.32'}) 0%, rgba(255,255,255,${isAppleLargeSurface ? '0.06' : isMobileGlass ? '0.05' : '0.1'}) 22%, rgba(255,255,255,${isAppleLargeSurface ? '0.018' : isMobileGlass ? '0.016' : '0.03'}) 56%, transparent 100%)` }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isAppleLargeSurface ? '0.12' : isMobileGlass ? '0.095' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isAppleLargeSurface ? '0.05' : isMobileGlass ? '0.04' : '0.12'}) 0%, transparent 26%)` }} />
       <div className="relative z-10 w-full h-full">{children}</div>
       {bulkSelectionActive && (
         <button
@@ -3676,15 +3676,15 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // Stat card surface — frosted glass with dark tint so white text is always readable
   const statCardBase = hasAnyBg
     ? isAppleLargeSurface
-      ? "bg-black/18 backdrop-blur-xl border border-white/[0.1] shadow-[0_10px_24px_rgba(0,0,0,0.12)]"
+      ? "bg-black/10 backdrop-blur-2xl border border-white/[0.13] shadow-[0_10px_24px_rgba(0,0,0,0.07)]"
       : isMobileGlass
-      ? "bg-black/34 backdrop-blur-xl border border-white/[0.1] shadow-[0_10px_24px_rgba(0,0,0,0.22)]"
+      ? "bg-black/18 backdrop-blur-2xl border border-white/[0.12] shadow-[0_10px_24px_rgba(0,0,0,0.12)]"
       : "bg-black/30 backdrop-blur-xl border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.2)]"
     : isDark
       ? isAppleLargeSurface
-        ? "bg-black/[0.1] backdrop-blur-xl border border-white/[0.085] shadow-[0_10px_24px_rgba(0,0,0,0.1)]"
+        ? "bg-black/[0.06] backdrop-blur-2xl border border-white/[0.11] shadow-[0_10px_24px_rgba(0,0,0,0.06)]"
         : isMobileGlass
-        ? "bg-black/[0.18] backdrop-blur-xl border border-white/[0.085] shadow-[0_10px_24px_rgba(0,0,0,0.18)]"
+        ? "bg-black/[0.1] backdrop-blur-2xl border border-white/[0.11] shadow-[0_10px_24px_rgba(0,0,0,0.1)]"
         : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-white backdrop-blur-xl border border-[#060541]/10 shadow-[0_2px_12px_rgba(6,5,65,0.08)]";
 
@@ -3694,22 +3694,22 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   // Dock glass
   const dockGlass = hasAnyBg
     ? isMobileGlass
-      ? "bg-black/55 backdrop-blur-xl border border-white/[0.08] shadow-[0_12px_30px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.06)]"
+      ? "bg-black/20 backdrop-blur-2xl border border-white/[0.12] shadow-[0_12px_30px_rgba(0,0,0,0.16),inset_0_1px_0_rgba(255,255,255,0.12)]"
       : "bg-black/40 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.15)]"
     : isDark
       ? isMobileGlass
-        ? "bg-black/[0.34] backdrop-blur-xl border border-white/[0.06] shadow-[0_12px_30px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.06)]"
+        ? "bg-black/[0.12] backdrop-blur-2xl border border-white/[0.1] shadow-[0_12px_30px_rgba(0,0,0,0.18),inset_0_1px_0_rgba(255,255,255,0.1)]"
         : "bg-white/[0.08] backdrop-blur-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]"
       : "bg-[#060541]/90 backdrop-blur-2xl border border-[#060541]/20 shadow-[0_8px_32px_rgba(6,5,65,0.25),inset_0_1px_0_rgba(255,255,255,0.15)]";
 
   // Quote glass
   const quoteGlass = hasAnyBg
     ? isMobileGlass
-      ? "bg-black/48 backdrop-blur-lg border border-white/[0.08]"
+      ? "bg-black/14 backdrop-blur-2xl border border-white/[0.11]"
       : "bg-black/30 backdrop-blur-xl border border-white/15"
     : isDark
       ? isMobileGlass
-        ? "bg-black/[0.3] backdrop-blur-lg border border-white/[0.06]"
+        ? "bg-black/[0.1] backdrop-blur-2xl border border-white/[0.1]"
         : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
       : "bg-[#060541]/[0.06] backdrop-blur-xl border border-[#060541]/10 shadow-sm";
   const quoteTextColor   = hasAnyBg || isDark ? "rgba(255,255,255,0.9)" : "#060541";
