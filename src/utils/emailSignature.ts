@@ -6,10 +6,19 @@ export interface EmailSignatureSettings {
   html: string;
   showWaktiAiFooter: boolean;
   prompt: string;
+  stylePreset: string;
   imageDataUrl: string;
   imageAlt: string;
   updatedAt: string;
 }
+
+export type EmailSignatureStylePreset =
+  | 'luxe-card'
+  | 'executive-dark'
+  | 'modern-split'
+  | 'soft-blush'
+  | 'bold-stripe'
+  | 'minimal-frame';
 
 const EMAIL_SIGNATURE_STORAGE_KEY = 'wakti_email_signature_v1';
 const EMAIL_SIGNATURE_LEGACY_KEY = 'wakti_email_signature';
@@ -50,10 +59,49 @@ const ALLOWED_STYLE_PROPERTIES = new Set([
   'border-radius',
   'display',
   'width',
+  'min-width',
   'max-width',
   'height',
   'vertical-align',
+  'border-collapse',
+  'border-spacing',
+  'box-shadow',
 ]);
+
+const SIGNATURE_STYLE_DIRECTIONS: Record<EmailSignatureStylePreset, { en: string; ar: string }> = {
+  'luxe-card': {
+    en: 'Design a luxury signature card with elegant spacing, refined typography, a premium cream or gold-accent feel, and a polished business-card look.',
+    ar: 'صمّم توقيعاً فاخراً جداً بأسلوب بطاقة أعمال راقية مع مسافات أنيقة وخطوط مرتبة ولمسات كريمية أو ذهبية وإحساس premium واضح.',
+  },
+  'executive-dark': {
+    en: 'Design a dark executive signature with a bold premium presence, strong contrast, thin luxury dividers, and a confident leadership feel.',
+    ar: 'صمّم توقيعاً تنفيذياً داكناً بحضور قوي وتباين واضح وفواصل رفيعة فاخرة وإحساس قيادي وراقي.',
+  },
+  'modern-split': {
+    en: 'Design a modern two-column signature with smart hierarchy, clean geometry, elegant alignment, and a polished corporate-tech feel.',
+    ar: 'صمّم توقيعاً حديثاً بعمودين مع تسلسل بصري ذكي ومحاذاة نظيفة وهندسة مرتبة وإحساس تقني راقٍ.',
+  },
+  'soft-blush': {
+    en: 'Design a soft premium signature with warm editorial styling, delicate color work, graceful spacing, and a feminine luxury feel.',
+    ar: 'صمّم توقيعاً ناعماً وفاخراً بأسلوب تحريري دافئ وألوان رقيقة ومسافات جميلة وإحساس أنثوي راقٍ.',
+  },
+  'bold-stripe': {
+    en: 'Design a bold signature with a strong color block or stripe, sharp hierarchy, premium edge, and a memorable personal-brand feel.',
+    ar: 'صمّم توقيعاً جريئاً مع شريط أو كتلة لونية واضحة وتسلسل بصري قوي وطابع شخصي فاخر ولافت.',
+  },
+  'minimal-frame': {
+    en: 'Design a minimal premium signature with a clean frame, airy spacing, subtle lines, and elegant understated sophistication.',
+    ar: 'صمّم توقيعاً بسيطاً وفاخراً بإطار نظيف ومسافات مريحة وخطوط خفيفة وأناقة هادئة جداً.',
+  },
+};
+
+function resolveSignatureStylePreset(value?: string): EmailSignatureStylePreset | null {
+  if (!value) return null;
+  if (value in SIGNATURE_STYLE_DIRECTIONS) {
+    return value as EmailSignatureStylePreset;
+  }
+  return null;
+}
 
 export function getDefaultEmailSignatureSettings(): EmailSignatureSettings {
   return {
@@ -61,6 +109,7 @@ export function getDefaultEmailSignatureSettings(): EmailSignatureSettings {
     html: '',
     showWaktiAiFooter: true,
     prompt: '',
+    stylePreset: '',
     imageDataUrl: '',
     imageAlt: '',
     updatedAt: '',
@@ -79,6 +128,7 @@ export function readEmailSignatureSettings(explicitUid?: string | null): EmailSi
       html: typeof parsed.html === 'string' ? parsed.html : '',
       showWaktiAiFooter: parsed.showWaktiAiFooter ?? true,
       prompt: typeof parsed.prompt === 'string' ? parsed.prompt : '',
+      stylePreset: resolveSignatureStylePreset(typeof parsed.stylePreset === 'string' ? parsed.stylePreset : '') || '',
       imageDataUrl: typeof parsed.imageDataUrl === 'string' ? parsed.imageDataUrl : '',
       imageAlt: typeof parsed.imageAlt === 'string' ? parsed.imageAlt : '',
       updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : '',
@@ -95,6 +145,7 @@ export function saveEmailSignatureSettings(settings: EmailSignatureSettings, exp
     html: sanitizeEmailSignatureHtml(settings.html || ''),
     showWaktiAiFooter: Boolean(settings.showWaktiAiFooter),
     prompt: typeof settings.prompt === 'string' ? settings.prompt.trim() : '',
+    stylePreset: resolveSignatureStylePreset(settings.stylePreset) || '',
     imageDataUrl: safeImageDataUrl,
     imageAlt: typeof settings.imageAlt === 'string' ? settings.imageAlt.replace(/[\r\n]+/g, ' ').trim() : '',
     updatedAt: settings.updatedAt || new Date().toISOString(),
@@ -292,6 +343,81 @@ export function sanitizeEmailSignatureHtml(rawHtml: string): string {
   return wrapper.innerHTML.trim();
 }
 
+function decodeHtmlEntities(rawValue: string): string {
+  if (!rawValue || typeof window === 'undefined') return rawValue;
+  const textarea = document.createElement('textarea');
+  textarea.innerHTML = rawValue;
+  return textarea.value;
+}
+
+function normalizeGeneratedSignatureHtml(rawValue: string): string {
+  let normalized = (rawValue || '').trim();
+  if (!normalized) return '';
+
+  normalized = normalized
+    .replace(/^```(?:html)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
+
+  const bodyMatch = normalized.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+  if (bodyMatch?.[1]) {
+    normalized = bodyMatch[1].trim();
+  }
+
+  normalized = normalized
+    .replace(/<!doctype[^>]*>/gi, '')
+    .replace(/<\/?html[^>]*>/gi, '')
+    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
+    .trim();
+
+  if (!/<(table|div|p|span|strong|em|a|br|img|tbody|tr|td)\b/i.test(normalized) && /&lt;|&#60;|&amp;lt;/i.test(normalized)) {
+    normalized = decodeHtmlEntities(normalized)
+      .replace(/^```(?:html)?\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+  }
+
+  const firstAllowedTagIndex = normalized.search(/<(table|div|p|span|strong|em|a|br|img|tbody|tr|td)\b/i);
+  if (firstAllowedTagIndex > 0) {
+    normalized = normalized.slice(firstAllowedTagIndex).trim();
+  }
+
+  return normalized;
+}
+
+function hasRenderableSignatureContent(html: string): boolean {
+  const normalized = (html || '').trim();
+  if (!normalized) return false;
+  const plainText = htmlToPlainText(normalized);
+  const meaningfulText = plainText.replace(/\s+/g, ' ').trim();
+  const hasImage = /<img\b/i.test(normalized);
+  const looksLikeRawCode = /&lt;(table|div|p|span|a|img|tbody|tr|td)\b/i.test(normalized)
+    || /(^|\s)<(table|div|p|span|a|img|tbody|tr|td)\b/i.test(meaningfulText);
+  return !looksLikeRawCode && (meaningfulText.length >= 8 || hasImage);
+}
+
+function buildPlainTextSignatureFallback(rawValue: string): string {
+  const lines = rawValue
+    .replace(/^```(?:html)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 8);
+
+  if (!lines.length) return '';
+
+  const [nameLine, ...restLines] = lines;
+  return [
+    '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;color:#111827;font-size:14px;line-height:1.6;">',
+    `<div style="font-size:18px;font-weight:700;line-height:1.3;color:#060541;">${escapeHtml(nameLine)}</div>`,
+    ...restLines.map((line, index) => (
+      `<div style="margin-top:${index === 0 ? '4px' : '2px'};${index === 0 ? 'font-weight:600;color:#374151;' : 'color:#4b5563;'}">${escapeHtml(line)}</div>`
+    )),
+    '</div>',
+  ].join('');
+}
+
 export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -360,6 +486,7 @@ export function buildComposedEmailBodies(body: string, settings: EmailSignatureS
 export async function generateEmailSignatureHtml(options: {
   prompt: string;
   language: 'en' | 'ar';
+  stylePreset?: string;
   imageDataUrl?: string;
   imageAlt?: string;
 }) {
@@ -368,8 +495,10 @@ export async function generateEmailSignatureHtml(options: {
     throw new Error(options.language === 'ar' ? 'اكتب وصفاً للتوقيع أولاً' : 'Write a signature prompt first');
   }
 
+  const resolvedStylePreset = resolveSignatureStylePreset(options.stylePreset);
   const safeImageDataUrl = options.imageDataUrl ? sanitizeUrl(options.imageDataUrl, 'src') : '';
   const safeImageAlt = options.imageAlt ? options.imageAlt.replace(/[\r\n]+/g, ' ').trim() : 'signature image';
+  const styleDirection = resolvedStylePreset ? SIGNATURE_STYLE_DIRECTIONS[resolvedStylePreset][options.language] : '';
 
   const { data: sessionData } = await supabase.auth.getSession();
   const accessToken = sessionData?.session?.access_token;
@@ -382,14 +511,24 @@ export async function generateEmailSignatureHtml(options: {
     },
     body: JSON.stringify({
       prompt: [
-        options.language === 'ar' ? 'أنت مصمم تواقيع بريد إلكتروني فاخر في Wakti.' : 'You are a premium Wakti email signature designer.',
-        options.language === 'ar' ? 'أعد فقط كود HTML جاهز للإرسال كتوقيع بريد إلكتروني.' : 'Return only production-ready HTML for an email signature.',
-        options.language === 'ar' ? 'اجعل النتيجة سهلة وغير تقنية للمستخدم النهائي.' : 'Make the result feel polished, premium, and effortless for the end user.',
+        options.language === 'ar' ? 'أنت أفضل AI coder لتواقيع البريد في Wakti.' : 'You are the best AI coder for email signatures inside Wakti.',
+        options.language === 'ar' ? 'أعد فقط كود HTML جاهز للإرسال كتوقيع بريد إلكتروني جميل وعملي.' : 'Return only production-ready HTML for a beautiful, practical email signature.',
+        options.language === 'ar' ? 'المطلوب بسيط: المستخدم يصف التوقيع، وأنت تبني التوقيع النهائي مباشرة.' : 'The task is simple: the user describes the signature, and you build the final signature directly.',
+        options.language === 'ar' ? 'أنشئ توقيع بريد حقيقياً ومضغوطاً يظهر بشكل واضح داخل البريد، وليس بطاقة كبيرة أو بلوك فارغ.' : 'Build a real compact email signature that displays clearly inside an email, not a large card or empty block.',
+        options.language === 'ar' ? 'اجعل النتيجة ممتازة بصرياً لكن نظيفة وواضحة وصالحة للبريد.' : 'Make the result visually excellent but still clean, clear, and email-safe.',
+        options.language === 'ar' ? 'لا تعرض الكود كنص، ولا ترجع HTML escaped مثل &lt;div&gt;.' : 'Do not display the code as text, and do not return escaped HTML like &lt;div&gt;.',
         options.language === 'ar' ? 'استخدم فقط أنماطاً داخلية inline styles.' : 'Use inline styles only.',
         options.language === 'ar' ? 'لا ترجع markdown أو ``` أو html أو body أو head أو script أو style.' : 'Do not return markdown, ``` fences, html, body, head, script, or style tags.',
-        options.language === 'ar' ? 'اجعل التوقيع صغيراً ومضغوطاً ومتوافقاً مع البريد، ويفضل هيكل table أو div بسيط.' : 'Keep the signature compact, email-friendly, and preferably use a simple table or div layout.',
+        options.language === 'ar' ? 'استخدم بنية بريد آمنة: يفضّل table أو div واضح مع محاذاة جيدة.' : 'Use email-safe structure: prefer a clean table or div layout with good alignment.',
+        options.language === 'ar' ? 'اجعل التوقيع بحجم طبيعي يناسب نهاية رسالة بريد، وليس عرضاً كاملاً أو حاوية ضخمة. تجنب width:100% و min-height والمساحات الفارغة الكبيرة.' : 'Keep the signature naturally sized for the end of an email, not full-width or oversized. Avoid width:100%, min-height, and large empty padding.',
+        options.language === 'ar' ? 'اجعل العرض مناسباً للبريد، مع تسلسل بصري قوي واسم واضح وتفاصيل مرتبة.' : 'Keep the signature email-friendly, with strong hierarchy, a clear name treatment, and tidy details.',
+        options.language === 'ar' ? 'اجعل النص واضحاً جداً. إذا استخدمت خلفية فاتحة أو كريمية أو بيضاء، فاجعل النص داكناً وواضحاً.' : 'Keep the text clearly visible. If you use a light, cream, or white background, use dark readable text.',
+        options.language === 'ar' ? 'إذا أعطاك المستخدم اسماً أو منصباً أو شركة أو روابط أو موقعاً أو مدينة أو هاتفاً فاستخدمها بذكاء داخل التصميم.' : 'If the user gives a name, title, company, links, website, city, or phone, use them intelligently inside the design.',
+        options.language === 'ar' ? 'يمكنك جعلها حديثة أو فاخرة أو تنفيذية حسب الطلب، لكن بدون عناصر زائدة أو شرح.' : 'You can make it modern, premium, or executive depending on the request, but do not add fluff or explanation.',
+        options.language === 'ar' ? 'لا تستخدم أي CSS غير مناسب للبريد مثل position absolute أو external assets غير مطلوبة أو class names.' : 'Do not use email-unfriendly CSS like position absolute, external assets that were not provided, or class names.',
         options.language === 'ar' ? 'لا تخترع بيانات أو روابط أو صور غير مذكورة.' : 'Do not invent any personal details, links, or images that were not requested.',
         options.language === 'ar' ? 'المسموح: div, table, tbody, tr, td, p, span, strong, em, a, br, img.' : 'Allowed tags: div, table, tbody, tr, td, p, span, strong, em, a, br, img.',
+        ...(styleDirection ? [`${options.language === 'ar' ? 'اتجاه التصميم المختار' : 'Selected design direction'}: ${styleDirection}`] : []),
         safeImageDataUrl
           ? `${options.language === 'ar' ? 'إذا استخدمت الصورة، فاستخدم هذا src حرفياً بدون تعديل' : 'If you use the image, use this exact src without changing it'}: ${safeImageDataUrl}`
           : options.language === 'ar' ? 'لا توجد صورة مرفقة. لا تخترع صورة.' : 'No image source was provided. Do not invent one.',
@@ -403,7 +542,7 @@ export async function generateEmailSignatureHtml(options: {
       contentType: 'email',
       tone: 'professional',
       length: 'short',
-      temperature: 0.7,
+      temperature: 0.85,
     }),
   });
 
@@ -440,22 +579,37 @@ export async function generateEmailSignatureHtml(options: {
           .filter(Boolean);
 
         for (const dataLine of dataLines) {
-          const event = JSON.parse(dataLine);
-          if (event?.type === 'chunk' && typeof event.text === 'string') {
-            generatedText += event.text;
-          }
-          if (event?.type === 'complete' && typeof event.generatedText === 'string') {
-            generatedText = event.generatedText;
-          }
-          if (event?.type === 'error') {
-            throw new Error(event?.error || 'Failed to generate signature');
+          try {
+            const event = JSON.parse(dataLine);
+            if (event?.type === 'chunk' && typeof event.text === 'string') {
+              generatedText += event.text;
+            }
+            if (event?.type === 'complete' && typeof event.generatedText === 'string') {
+              generatedText = event.generatedText;
+            }
+            if (event?.type === 'error') {
+              throw new Error(event?.error || 'Failed to generate signature');
+            }
+          } catch (streamError) {
+            if (streamError instanceof Error) throw streamError;
           }
         }
       }
     }
   }
 
-  const sanitized = sanitizeEmailSignatureHtml(generatedText.trim());
+  const normalizedGeneratedHtml = normalizeGeneratedSignatureHtml(generatedText);
+  const sanitized = sanitizeEmailSignatureHtml(normalizedGeneratedHtml);
+  if (sanitized && hasRenderableSignatureContent(sanitized)) {
+    return sanitized;
+  }
+
+  const fallbackHtml = buildPlainTextSignatureFallback(generatedText.trim());
+  const sanitizedFallback = sanitizeEmailSignatureHtml(fallbackHtml);
+  if (sanitizedFallback && hasRenderableSignatureContent(sanitizedFallback)) {
+    return sanitizedFallback;
+  }
+
   if (!sanitized) {
     throw new Error(options.language === 'ar' ? 'تعذر إنشاء توقيع صالح' : 'Failed to generate a valid signature');
   }
