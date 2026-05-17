@@ -36,6 +36,7 @@ const WEB_SEARCH_ALLOWED_CONTENT_TYPES = new Set([
 const contentConfig = {
   // Short form content types (emails, messages, etc.)
   email: { baseTokens: 1024, model: 'gpt-4.1-mini', temperature: 0.7 },
+  email_signature: { baseTokens: 1400, model: 'gpt-4o', temperature: 0.45 },
   text_message: { baseTokens: 512, model: 'gpt-4.1-mini', temperature: 0.7 },
   message: { baseTokens: 768, model: 'gpt-4.1-mini', temperature: 0.7 },
   
@@ -113,17 +114,31 @@ const toneAdjustments = {
   humorous: { tempAdj: +0.3, tokenAdj: 1.0 },
   inspirational: { tempAdj: +0.1, tokenAdj: 1.1 },
   motivational: { tempAdj: +0.1, tokenAdj: 1.1 },
+  dramatic: { tempAdj: +0.18, tokenAdj: 1.1 },
+  suspenseful: { tempAdj: +0.18, tokenAdj: 1.05 },
   
   // Professional tones
   professional: { tempAdj: -0.1, tokenAdj: 1.0 },
   formal: { tempAdj: -0.2, tokenAdj: 1.0 },
   serious: { tempAdj: -0.2, tokenAdj: 1.0 },
   authoritative: { tempAdj: -0.1, tokenAdj: 1.0 },
+  educational: { tempAdj: -0.05, tokenAdj: 1.1 },
+  informative: { tempAdj: -0.05, tokenAdj: 1.1 },
+  concise: { tempAdj: -0.08, tokenAdj: 0.8 },
+  confident: { tempAdj: -0.03, tokenAdj: 1.0 },
+  persuasive: { tempAdj: +0.05, tokenAdj: 1.1 },
+  sales: { tempAdj: +0.08, tokenAdj: 1.1 },
+  apologetic: { tempAdj: -0.06, tokenAdj: 1.0 },
+  sincere: { tempAdj: -0.02, tokenAdj: 1.0 },
   
   // Neutral tones
   neutral: { tempAdj: 0, tokenAdj: 1.0 },
+  casual: { tempAdj: +0.08, tokenAdj: 1.0 },
   friendly: { tempAdj: +0.1, tokenAdj: 1.0 },
   empathetic: { tempAdj: +0.1, tokenAdj: 1.0 },
+  sympathetic: { tempAdj: +0.08, tokenAdj: 1.0 },
+  human: { tempAdj: +0.04, tokenAdj: 1.0 },
+  urgent: { tempAdj: -0.02, tokenAdj: 0.95 },
   
   // Default fallback
   default: { tempAdj: 0, tokenAdj: 1.0 }
@@ -1015,7 +1030,7 @@ ${finalPrompt}`;
     }
 
     // ── Primary: Claude Haiku (non-web-search) ──
-    if (ANTHROPIC_API_KEY && !generatedText) {
+    if (ANTHROPIC_API_KEY && !generatedText && !(contentType === 'email_signature' && OPENAI_API_KEY)) {
       try {
         console.log(`🎯 Text Generator: PRIMARY - Claude (${CLAUDE_MODEL})`);
         return await streamClaudeResponse({
@@ -1044,7 +1059,8 @@ ${finalPrompt}`;
     // ── Fallback 1: OpenAI gpt-4.1-mini ──
     if (OPENAI_API_KEY && !generatedText) {
       try {
-        console.log("🎯 Text Generator: FALLBACK 1 - OpenAI gpt-4.1-mini");
+        const openAiModel = genParams.model || 'gpt-4.1-mini';
+        console.log(`🎯 Text Generator: FALLBACK 1 - OpenAI ${openAiModel}`);
         const startOpenai = Date.now();
         const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
@@ -1053,7 +1069,7 @@ ${finalPrompt}`;
             "Authorization": `Bearer ${OPENAI_API_KEY}`,
           },
           body: JSON.stringify({
-            model: 'gpt-4.1-mini',
+            model: openAiModel,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: finalPrompt }
@@ -1080,7 +1096,7 @@ ${finalPrompt}`;
             await logAIFromRequest(req, {
               functionName: "text-generator",
               provider: "openai",
-              model: "gpt-4.1-mini",
+              model: openAiModel,
               inputText: prompt,
               outputText: generatedText,
               durationMs: openaiDuration,
@@ -1097,7 +1113,7 @@ ${finalPrompt}`;
                 generatedText,
                 mode,
                 language,
-                modelUsed: 'gpt-4.1-mini',
+                modelUsed: openAiModel,
                 temperatureUsed: genParams.temperature,
                 contentType: contentType || null,
                 trial: trialPayload,
@@ -1353,14 +1369,23 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
   const { tone, register, languageVariant, emojis, contentType, length, wordCount, captionPlatform } = fields;
 
   // ── Base identity ──
-  const basePrompt = isArabic
-    ? 'أنت كاتب محترف متخصص في إنشاء النصوص. مهمتك هي إنشاء محتوى بناءً على طلب المستخدم مع الالتزام الصارم بكل الإعدادات أدناه.'
-    : "You are a professional writer. Your job is to generate text content following the user's request while strictly obeying EVERY setting below.";
+  const isEmailSignature = contentType === 'email_signature';
+  const basePrompt = isEmailSignature
+    ? (isArabic
+      ? 'أنت مطور HTML محترف متخصص فقط في إنشاء تواقيع بريد إلكتروني جاهزة للإرسال. مهمتك هي إعادة HTML صالح كتوقيع بريد فقط، وليس رسالة بريد أو شرحاً أو ملاحظات.'
+      : "You are an expert HTML coder specialized only in production-ready email signatures. Your job is to return valid email-signature HTML only, not an email message, explanation, or notes.")
+    : (isArabic
+      ? 'أنت كاتب محترف متخصص في إنشاء النصوص. مهمتك هي إنشاء محتوى بناءً على طلب المستخدم مع الالتزام الصارم بكل الإعدادات أدناه.'
+      : "You are a professional writer. Your job is to generate text content following the user's request while strictly obeying EVERY setting below.");
 
   // ── Hard formatting rules ──
-  const formatRules = isArabic
-    ? `\n\n⚠️ قواعد التنسيق (إلزامية، لا استثناءات):\n- اكتب نصاً واضحاً ومباشراً\n- تجنب استخدام النجوم (*) للتنسيق\n- ممنوع منعاً باتاً استخدام شرطة إم (—) أو شرطة إن (–). لا تستخدمها أبداً. استخدم الفاصلة أو النقطة بدلاً منها.\n- ركز على إنشاء النص فقط\n- ممنوع البدء بعبارات تمهيدية مثل "إليك الرد:" أو "هذا رد مسودة:" أو أي مقدمة مشابهة. ابدأ مباشرة بالمحتوى المطلوب.\n- ممنوع إضافة ملاحظات أو تعليقات أو شرح عما تم تغييره. اكتب النص المطلوب فقط، لا شيء آخر.`
-    : `\n\n⚠️ Formatting rules (MANDATORY, zero exceptions):\n- Write clear and direct text\n- Do not use asterisks (*) for formatting\n- ABSOLUTELY NEVER use em-dashes (—) or en-dashes (–). Not even once. Use commas, periods, or semicolons instead.\n- Focus only on text generation\n- NEVER start with intro lines like "Here's a draft reply:", "Here's a cleaned-up response:", "Here's a professional version:", or any similar preamble. Jump straight into the actual content.\n- NEVER add notes, explanations, or commentary about what you changed or improved. Output ONLY the requested text, nothing else.`;
+  const formatRules = isEmailSignature
+    ? (isArabic
+      ? `\n\n⚠️ قواعد التوقيع (إلزامية، لا استثناءات):\n- أعد HTML فقط، بدون أي شرح أو ملاحظات أو مقدمة\n- لا تعرض الكود كنص، ولا ترجع HTML escaped مثل &lt;div&gt;\n- لا ترجع markdown أو code fences أو وسوم html أو body أو head أو style أو script\n- استخدم inline styles فقط\n- أنشئ توقيعاً حقيقياً ومضغوطاً مناسباً لنهاية رسالة بريد، وليس بطاقة ضخمة أو حاوية بعرض كامل\n- اجعل النص واضحاً جداً وقابلاً للقراءة\n- استخدم فقط العناصر الآمنة للبريد: div, table, tbody, tr, td, p, span, strong, em, a, br, img\n- ممنوع اختراع أي بيانات شخصية أو روابط أو صور غير موجودة في طلب المستخدم\n- الناتج النهائي يجب أن يكون كتلة توقيع بريد واحدة جاهزة للحفظ والاستخدام مباشرة.`
+      : `\n\n⚠️ Email signature rules (MANDATORY, zero exceptions):\n- Return HTML only, with no explanation, notes, or intro text\n- Do not display code as text, and do not return escaped HTML like &lt;div&gt;\n- Do not return markdown, code fences, or html, body, head, style, or script tags\n- Use inline styles only\n- Build a real compact email signature sized for the end of an email, not a giant card or full-width container\n- Keep all text clearly visible and readable\n- Use only email-safe elements: div, table, tbody, tr, td, p, span, strong, em, a, br, img\n- Never invent personal details, links, or images that the user did not provide\n- The final output must be one ready-to-save email signature block.`)
+    : (isArabic
+      ? `\n\n⚠️ قواعد التنسيق (إلزامية، لا استثناءات):\n- اكتب نصاً واضحاً ومباشراً\n- تجنب استخدام النجوم (*) للتنسيق\n- ممنوع منعاً باتاً استخدام شرطة إم (—) أو شرطة إن (–). لا تستخدمها أبداً. استخدم الفاصلة أو النقطة بدلاً منها.\n- ركز على إنشاء النص فقط\n- ممنوع البدء بعبارات تمهيدية مثل "إليك الرد:" أو "هذا رد مسودة:" أو أي مقدمة مشابهة. ابدأ مباشرة بالمحتوى المطلوب.\n- ممنوع إضافة ملاحظات أو تعليقات أو شرح عما تم تغييره. اكتب النص المطلوب فقط، لا شيء آخر.` 
+      : `\n\n⚠️ Formatting rules (MANDATORY, zero exceptions):\n- Write clear and direct text\n- Do not use asterisks (*) for formatting\n- ABSOLUTELY NEVER use em-dashes (—) or en-dashes (–). Not even once. Use commas, periods, or semicolons instead.\n- Focus only on text generation\n- NEVER start with intro lines like "Here's a draft reply:", "Here's a cleaned-up response:", "Here's a professional version:", or any similar preamble. Jump straight into the actual content.\n- NEVER add notes, explanations, or commentary about what you changed or improved. Output ONLY the requested text, nothing else.`);
 
   // ── Structured constraints block (from dropdown selections) ──
   const constraints: string[] = [];
@@ -1373,11 +1398,25 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
     constraints.push(isArabic ? `📄 نوع المحتوى: ${ctName}. التزم ببنية هذا النوع من المحتوى.` : `📄 Content type: ${ctName}. Follow the structure and conventions of this content type.`);
   }
 
+  if (contentType === 'email_signature') {
+    constraints.push(isArabic
+      ? '📧 توقيع بريد: المطلوب توقيع بريد HTML فقط. استخدم التفاصيل التي يذكرها المستخدم مثل الاسم، المسمى الوظيفي، الشركة، الهاتف، الموقع، العنوان، والشعار أو الصورة إن وُجدت. اجعل النتيجة أنيقة ومضغوطة وقابلة للحفظ مباشرة.'
+      : '📧 Email signature: The output must be HTML email-signature code only. Use the user details provided such as name, title, company, phone, website, address, and logo or image if available. Make the result polished, compact, and ready to save directly.'
+    );
+  }
+
   if (contentType === 'captions') {
     const platformLabel = captionPlatform && captionPlatform !== 'auto' ? captionPlatform.replace(/_/g, ' ') : (isArabic ? 'غير محدد' : 'unspecified');
     constraints.push(isArabic
       ? `📸 محتوى كابتشن: اكتب كابتشن قصير وجذاب مناسب لمنصة ${platformLabel}. اجعله موجزاً، لافتاً، وسهل القراءة. يمكن إضافة هاشتاقات مناسبة فقط إذا لزم.`
       : `📸 Captions: Write short, catchy captions tailored for ${platformLabel}. Keep it concise, attention-grabbing, and easy to read. Add hashtags only if needed.`
+    );
+  }
+
+  if (contentType === 'email') {
+    constraints.push(isArabic
+      ? '📧 بريد إلكتروني: اكتب نص بريد حقيقي جاهز للإرسال. يجب أن يظهر تأثير النبرة والأسلوب والطول ونوع اللغة بشكل واضح داخل التحية والصياغة وبنية الفقرات والخاتمة.'
+      : '📧 Email: Write a real email body ready to send. The selected tone, register, length, and language variant must be clearly visible in the greeting, wording, paragraph structure, and closing.'
     );
   }
 
@@ -1574,6 +1613,13 @@ function buildSystemPrompt(language: string, fields: StructuredFields): string {
     if (ri) {
       constraints.push(isArabic ? ri.ar : ri.en);
     }
+  }
+
+  if (tone && register) {
+    constraints.push(isArabic
+      ? '🎯 دمج النبرة والأسلوب (صارم): طبّق النبرة والأسلوب معاً. النبرة تحدد الإحساس والموقف، والأسلوب يحدد صياغة الجمل ومستوى الرسمية أو العفوية. لا تتجاهل أحدهما لصالح الآخر.'
+      : '🎯 Tone + register merge (STRICT): Apply both together. Tone controls attitude and emotional feel, while register controls wording style and formality level. Do not ignore one in favor of the other.'
+    );
   }
 
   // ────────────────────────────────────────────────────

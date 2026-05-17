@@ -22,6 +22,7 @@ export type EmailSignatureStylePreset =
 
 const EMAIL_SIGNATURE_STORAGE_KEY = 'wakti_email_signature_v1';
 const EMAIL_SIGNATURE_LEGACY_KEY = 'wakti_email_signature';
+export const EMAIL_SIGNATURE_UPDATED_EVENT = 'wakti:email-signature-updated';
 const SIGNATURE_IMAGE_MAX_DIMENSION = 240;
 const SIGNATURE_IMAGE_MAX_FILE_SIZE = 5 * 1024 * 1024;
 
@@ -152,6 +153,9 @@ export function saveEmailSignatureSettings(settings: EmailSignatureSettings, exp
   };
 
   setScopedStorageItem(EMAIL_SIGNATURE_STORAGE_KEY, JSON.stringify(next), explicitUid);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(EMAIL_SIGNATURE_UPDATED_EVENT, { detail: next }));
+  }
   return next;
 }
 
@@ -453,15 +457,191 @@ export function buildWaktiAiFooterText() {
   return 'Wakti AI';
 }
 
-export function buildSignatureHtml(settings: EmailSignatureSettings): string {
+function cleanPromptValue(value: string) {
+  return (value || '')
+    .replace(/[\r\n]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,.;:|\-]+|[\s,.;:|\-]+$/g, '')
+    .trim();
+}
+
+function normalizeComparableText(value: string) {
+  return cleanPromptValue(value).toLowerCase();
+}
+
+function normalizeDigits(value: string) {
+  return (value || '').replace(/\D+/g, '');
+}
+
+function normalizeWebsiteValue(value: string) {
+  return cleanPromptValue(value)
+    .replace(/^https?:\/\//i, '')
+    .replace(/^www\./i, '')
+    .replace(/\/+$/g, '')
+    .toLowerCase();
+}
+
+function formatNonBreakingText(value: string) {
+  return escapeHtml(cleanPromptValue(value)).replace(/\s+/g, '&nbsp;');
+}
+
+function toWebsiteHref(value: string) {
+  const cleaned = cleanPromptValue(value);
+  if (!cleaned) return '';
+  return /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
+}
+
+function toWhatsappHref(value: string) {
+  const digits = normalizeDigits(value);
+  return digits ? `https://wa.me/${digits}` : '';
+}
+
+function toPhoneHref(value: string) {
+  const digits = normalizeDigits(value);
+  return digits ? `tel:${digits}` : '';
+}
+
+function extractPromptSignatureDetails(prompt: string) {
+  const normalizedPrompt = prompt || '';
+  const details = {
+    name: '',
+    title: '',
+    company: '',
+    phone: '',
+    website: '',
+    whatsapp: '',
+    instagramUrl: '',
+  };
+
+  const combinedMatch = normalizedPrompt.match(/for\s+([^,.\n]+),\s*([^,.\n]+?)\s+(?:at|of)\s+([^.!\n]+?)(?=[.!\n]|$)/i);
+  if (combinedMatch) {
+    details.name = cleanPromptValue(combinedMatch[1]);
+    details.title = cleanPromptValue(combinedMatch[2]);
+    details.company = cleanPromptValue(combinedMatch[3]);
+  }
+
+  if (!details.name) {
+    const nameMatch = normalizedPrompt.match(/my name is\s+([^,.\n]+?)(?=[,.\n]|\s+i\s+am|\s+i'?m|$)/i);
+    if (nameMatch) details.name = cleanPromptValue(nameMatch[1]);
+  }
+
+  if (!details.title || !details.company) {
+    const roleMatch = normalizedPrompt.match(/(?:i am|i'm)\s+(?:the\s+)?([^,.\n]+?)\s+(?:at|of)\s+([^.!\n]+?)(?=[.!\n]|$)/i);
+    if (roleMatch) {
+      if (!details.title) details.title = cleanPromptValue(roleMatch[1]);
+      if (!details.company) details.company = cleanPromptValue(roleMatch[2]);
+    }
+  }
+
+  const lines = normalizedPrompt.split(/\r?\n/).map(cleanPromptValue).filter(Boolean);
+  const plainLines = lines.filter((line) => !/^(make me|i want|please|use |add |put |keep |also |instagram|whatsapp|website|phone|logo|my )/i.test(line));
+  if (!details.name && plainLines[0]) details.name = plainLines[0];
+  if (!details.title && plainLines[1]) details.title = plainLines[1];
+  if (!details.company && plainLines[2]) details.company = plainLines[2];
+
+  const phoneMatch = normalizedPrompt.match(/(?:phone(?:\s+number)?|mobile|tel)\s*(?:is|number)?\s*[:\-]?\s*(\+?[\d][\d\s\-]{5,}\d)/i);
+  if (phoneMatch) details.phone = cleanPromptValue(phoneMatch[1]);
+
+  const whatsappMatch = normalizedPrompt.match(/whats?app(?:\s+number)?\s*(?:is|number)?\s*[:\-]?\s*(\+?[\d][\d\s\-]{5,}\d)/i);
+  if (whatsappMatch) details.whatsapp = cleanPromptValue(whatsappMatch[1]);
+
+  const instagramMatch = normalizedPrompt.match(/https?:\/\/(?:www\.)?instagram\.com\/[^\s)]+/i);
+  if (instagramMatch) details.instagramUrl = cleanPromptValue(instagramMatch[0]);
+
+  const websiteMatch = normalizedPrompt.match(/(?:website|site|web)\s*(?:is)?\s*[:\-]?\s*((?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s,)]*)?)/i);
+  if (websiteMatch) details.website = cleanPromptValue(websiteMatch[1]);
+
+  if (!details.website) {
+    const domainMatches = normalizedPrompt.match(/(?:https?:\/\/)?(?:www\.)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[^\s,)]*)?/gi) || [];
+    const fallbackDomain = domainMatches.find((entry) => !/instagram\.com/i.test(entry));
+    if (fallbackDomain) details.website = cleanPromptValue(fallbackDomain);
+  }
+
+  return details;
+}
+
+function signatureContainsKeyDetails(html: string, prompt: string) {
+  const details = extractPromptSignatureDetails(prompt);
+  const plainText = htmlToPlainText(html);
+  const normalizedPlainText = normalizeComparableText(plainText);
+  const normalizedHtml = (html || '').toLowerCase();
+  const checks = [
+    details.name ? normalizedPlainText.includes(normalizeComparableText(details.name)) : true,
+    details.title ? normalizedPlainText.includes(normalizeComparableText(details.title)) : true,
+    details.company ? normalizedPlainText.includes(normalizeComparableText(details.company)) : true,
+    details.phone ? normalizeDigits(plainText).includes(normalizeDigits(details.phone)) : true,
+    details.website ? (normalizedPlainText.includes(normalizeWebsiteValue(details.website)) || normalizedHtml.includes(normalizeWebsiteValue(details.website))) : true,
+    details.whatsapp ? normalizeDigits(plainText).includes(normalizeDigits(details.whatsapp)) : true,
+    details.instagramUrl ? normalizedHtml.includes(details.instagramUrl.toLowerCase()) : true,
+  ];
+
+  return checks.every(Boolean);
+}
+
+function buildStructuredSignatureFromPrompt(prompt: string, imageDataUrl?: string, imageAlt?: string) {
+  const details = extractPromptSignatureDetails(prompt);
+  const safeImageDataUrl = imageDataUrl ? sanitizeUrl(imageDataUrl, 'src') : '';
+  const safeAlt = escapeHtml((imageAlt || 'signature image').replace(/[\r\n]+/g, ' ').trim() || 'signature image');
+  const websiteHref = sanitizeUrl(toWebsiteHref(details.website), 'href');
+  const instagramHref = sanitizeUrl(details.instagramUrl, 'href');
+  const whatsappHref = sanitizeUrl(toWhatsappHref(details.whatsapp), 'href');
+  const phoneHref = sanitizeUrl(toPhoneHref(details.phone), 'href');
+
+  if (!details.name && !details.title && !details.company && !details.phone && !details.website && !details.whatsapp && !instagramHref) {
+    return '';
+  }
+
+  const infoRows = [
+    details.phone ? `<tr><td style="padding: 0 10px 8px 0; color: #060541; font-size: 13px; font-weight: 700; vertical-align: top;">M</td><td style="padding: 0 0 8px 0; color: #1f2937; font-size: 14px; line-height: 1.5; vertical-align: top;">${phoneHref ? `<a href="${phoneHref}" style="color: #1f2937; text-decoration: none;">${escapeHtml(details.phone)}</a>` : escapeHtml(details.phone)}</td></tr>` : '',
+    details.website ? `<tr><td style="padding: 0 10px 8px 0; color: #060541; font-size: 13px; font-weight: 700; vertical-align: top;">W</td><td style="padding: 0 0 8px 0; color: #1f2937; font-size: 14px; line-height: 1.5; vertical-align: top;">${websiteHref ? `<a href="${websiteHref}" style="color: #1f2937; text-decoration: none;">${escapeHtml(normalizeWebsiteValue(details.website))}</a>` : escapeHtml(details.website)}</td></tr>` : '',
+    details.whatsapp ? `<tr><td style="padding: 0 10px 0 0; color: #060541; font-size: 13px; font-weight: 700; vertical-align: top;">WA</td><td style="padding: 0; color: #1f2937; font-size: 14px; line-height: 1.5; vertical-align: top;">${whatsappHref ? `<a href="${whatsappHref}" style="color: #1f2937; text-decoration: none;">${escapeHtml(details.whatsapp)}</a>` : escapeHtml(details.whatsapp)}</td></tr>` : '',
+  ].filter(Boolean).join('');
+
+  const socialBlock = instagramHref
+    ? `<div style="margin-top: 14px;"><a href="${instagramHref}" style="display: inline-block; padding: 6px 11px; border: 1px solid #d8dfec; border-radius: 999px; background-color: #f7f2ea; color: #060541; font-size: 12px; font-weight: 700; text-decoration: none; letter-spacing: 0.2px;">Instagram</a></div>`
+    : '';
+
+  const html = [
+    '<div style="display: inline-block; max-width: 560px; padding: 16px 18px; border: 1px solid #dbe3f2; border-radius: 20px; background-color: #fffdf9; box-shadow: 0 8px 24px rgba(6,5,65,0.08);">',
+    '<table cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; width: 100%;">',
+    '<tbody>',
+    '<tr>',
+    safeImageDataUrl ? `<td style="width: 92px; vertical-align: top; padding-right: 16px;"><div style="padding: 6px; border: 1px solid #dde4f0; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 12px rgba(6,5,65,0.05);"><img src="${safeImageDataUrl}" alt="${safeAlt}" width="72" height="72" style="display: block; width: 72px; height: 72px; border-radius: 12px; background-color: #ffffff;" /></div></td>` : '',
+    `<td style="vertical-align: top;${safeImageDataUrl ? ' padding-left: 16px; border-left: 4px solid #060541;' : ''}">`,
+    '<div style="font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Arial, sans-serif; color: #111827;">',
+    details.name ? `<div style="font-size: 19px; line-height: 1.08; font-weight: 800; color: #060541; letter-spacing: 0.05px; text-align: left;">${formatNonBreakingText(details.name)}</div>` : '',
+    details.title ? `<div style="margin-top: 5px; font-size: 12px; line-height: 1.35; color: #6b7280; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px; text-align: left;">${escapeHtml(details.title)}</div>` : '',
+    details.company ? `<div style="margin-top: 4px; font-size: 16px; line-height: 1.3; color: #111827; font-weight: 700; text-align: left;">${escapeHtml(details.company)}</div>` : '',
+    infoRows ? `<table cellpadding="0" cellspacing="0" border="0" style="margin-top: 12px; border-collapse: collapse;"><tbody>${infoRows}</tbody></table>` : '',
+    socialBlock,
+    '</div>',
+    '</td>',
+    '</tr>',
+    '</tbody>',
+    '</table>',
+    '</div>',
+  ].filter(Boolean).join('');
+
+  return sanitizeEmailSignatureHtml(html);
+}
+
+function resolveSignatureCoreHtml(settings: Pick<EmailSignatureSettings, 'html' | 'prompt' | 'imageDataUrl' | 'imageAlt'>) {
   const sanitized = sanitizeEmailSignatureHtml(settings.html || '');
+  const structuredFallback = buildStructuredSignatureFromPrompt(settings.prompt || '', settings.imageDataUrl, settings.imageAlt);
+  return sanitized && signatureContainsKeyDetails(sanitized, settings.prompt || '')
+    ? sanitized
+    : (structuredFallback || sanitized);
+}
+
+export function buildSignatureHtml(settings: EmailSignatureSettings): string {
+  const resolvedHtml = resolveSignatureCoreHtml(settings);
   const footerHtml = settings.showWaktiAiFooter ? buildWaktiAiFooterHtml() : '';
-  if (!sanitized && !footerHtml) return '';
-  return `${sanitized}${footerHtml}`.trim();
+  if (!resolvedHtml && !footerHtml) return '';
+  return `${resolvedHtml}${footerHtml}`.trim();
 }
 
 export function buildSignatureText(settings: EmailSignatureSettings): string {
-  const pieces = [htmlToPlainText(settings.html || ''), settings.showWaktiAiFooter ? buildWaktiAiFooterText() : '']
+  const pieces = [htmlToPlainText(resolveSignatureCoreHtml(settings) || ''), settings.showWaktiAiFooter ? buildWaktiAiFooterText() : '']
     .map((value) => value.trim())
     .filter(Boolean);
   return pieces.join('\n');
@@ -539,7 +719,7 @@ export async function generateEmailSignatureHtml(options: {
       ].join('\n\n'),
       mode: 'compose',
       language: options.language,
-      contentType: 'email',
+      contentType: 'email_signature',
       tone: 'professional',
       length: 'short',
       temperature: 0.85,
@@ -600,18 +780,21 @@ export async function generateEmailSignatureHtml(options: {
 
   const normalizedGeneratedHtml = normalizeGeneratedSignatureHtml(generatedText);
   const sanitized = sanitizeEmailSignatureHtml(normalizedGeneratedHtml);
+  const structuredGeneratedFallback = buildStructuredSignatureFromPrompt(trimmedPrompt, safeImageDataUrl, safeImageAlt);
   if (sanitized && hasRenderableSignatureContent(sanitized)) {
-    return sanitized;
+    return signatureContainsKeyDetails(sanitized, trimmedPrompt)
+      ? sanitized
+      : (structuredGeneratedFallback || sanitized);
   }
 
   const fallbackHtml = buildPlainTextSignatureFallback(generatedText.trim());
   const sanitizedFallback = sanitizeEmailSignatureHtml(fallbackHtml);
   if (sanitizedFallback && hasRenderableSignatureContent(sanitizedFallback)) {
-    return sanitizedFallback;
+    return structuredGeneratedFallback || sanitizedFallback;
   }
 
   if (!sanitized) {
     throw new Error(options.language === 'ar' ? 'تعذر إنشاء توقيع صالح' : 'Failed to generate a valid signature');
   }
-  return sanitized;
+  return structuredGeneratedFallback || sanitized;
 }

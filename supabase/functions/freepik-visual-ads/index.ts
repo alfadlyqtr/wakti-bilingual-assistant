@@ -247,6 +247,282 @@ function getDeviceMockupLabel(device: string | null | undefined): string {
   }
 }
 
+function buildCampaignDirectives(spec: VisualAdsSpec): string[] {
+  const campaignId = (spec.campaign?.main_message_id || "").toLowerCase();
+  const detailId = (spec.campaign?.main_message_detail_id || "").toLowerCase();
+  const lines: string[] = [];
+
+  switch (campaignId) {
+    case "new-launch":
+      lines.push("CAMPAIGN MODE / NEW LAUNCH: Treat the poster like a debut reveal with one clear hero moment. Avoid bargain energy, clutter, or noisy discount styling.");
+      break;
+    case "limited-offer":
+      lines.push("CAMPAIGN MODE / LIMITED OFFER: Make urgency obvious, premium, and time-sensitive without making the ad feel cheap or overcrowded.");
+      break;
+    case "app-download":
+      lines.push("CAMPAIGN MODE / APP DOWNLOAD: Make the app experience instantly understandable. If a screenshot exists, it should read immediately as a core subject of the ad.");
+      break;
+    case "save-time":
+      lines.push("CAMPAIGN MODE / SAVE TIME: The value should feel like relief, speed, reduced friction, and mental clarity. Keep the communication easy to scan.");
+      break;
+    case "premium":
+      lines.push("CAMPAIGN MODE / PREMIUM: Push craftsmanship, exclusivity, and elevated brand perception. Avoid mass-market sale styling.");
+      break;
+    case "social-proof":
+      lines.push("CAMPAIGN MODE / CUSTOMER LOVE: Communicate trust and popularity through tasteful proof markers and approved short phrases only. Do not invent testimonials or ratings.");
+      break;
+    case "features":
+      lines.push("CAMPAIGN MODE / SHOW FEATURES: Organize the layout around a clear hero plus concise supporting feature callouts using only the approved short phrases.");
+      break;
+    case "sale":
+      lines.push("CAMPAIGN MODE / SALE: The offer should feel immediate and visible, but still premium. Do not invent discount percentages, prices, coupon codes, or fake deadlines.");
+      break;
+  }
+
+  switch (detailId) {
+    case "hero-reveal":
+      lines.push("MESSAGE DETAIL / HERO REVEAL: Build around one dominant reveal centerpiece with dramatic visual focus.");
+      break;
+    case "future-wave":
+      lines.push("MESSAGE DETAIL / FUTURE WAVE: Make the execution feel forward-looking, visionary, and ahead of its category.");
+      break;
+    case "founder-proud":
+      lines.push("MESSAGE DETAIL / PROUD DEBUT: Make the launch feel confident, polished, and worthy of anticipation.");
+      break;
+    case "vip-window":
+      lines.push("MESSAGE DETAIL / VIP WINDOW: Make the offer feel exclusive and insider-led rather than mass discount.");
+      break;
+    case "countdown-pressure":
+      lines.push("MESSAGE DETAIL / COUNTDOWN PRESSURE: The composition should signal limited time and strong urgency at first glance.");
+      break;
+    case "clean-urgency":
+      lines.push("MESSAGE DETAIL / CLEAN URGENCY: Keep urgency strong, but visually polished and uncluttered.");
+      break;
+    case "phone-first":
+      lines.push("MESSAGE DETAIL / PHONE-FIRST HERO: Make the phone or device experience the central hero read of the poster.");
+      break;
+    case "smart-lifestyle":
+      lines.push("MESSAGE DETAIL / SMART LIFESTYLE: Show the product or app feeling naturally embedded in an aspirational daily routine.");
+      break;
+    case "store-ready":
+      lines.push("MESSAGE DETAIL / LAUNCH READY: Make the result feel polished, app-store-ready, and instantly downloadable.");
+      break;
+    case "calm-efficiency":
+      lines.push("MESSAGE DETAIL / CALM EFFICIENCY: Communicate order, ease, and low-friction clarity rather than chaos.");
+      break;
+    case "instant-relief":
+      lines.push("MESSAGE DETAIL / INSTANT RELIEF: The visual should feel like immediate relief from stress, wasted time, or friction.");
+      break;
+    case "smooth-routine":
+      lines.push("MESSAGE DETAIL / SMOOTH ROUTINE: Present the product as making daily life feel clean, easy, and beautifully organized.");
+      break;
+    case "crafted-luxury":
+      lines.push("MESSAGE DETAIL / CRAFTED LUXURY: Emphasize craftsmanship, premium detail, and refined finishing quality.");
+      break;
+    case "quiet-wealth":
+      lines.push("MESSAGE DETAIL / QUIET WEALTH: Make the result feel expensive and elevated without loud sales energy.");
+      break;
+    case "flagship-energy":
+      lines.push("MESSAGE DETAIL / FLAGSHIP ENERGY: Present the offer like the category-leading flagship product or service.");
+      break;
+    case "testimonial-cards":
+      lines.push("MESSAGE DETAIL / TESTIMONIAL CARDS: Use approved phrases as clean trust cards or proof labels only. Do not invent quotes.");
+      break;
+    case "community-love":
+      lines.push("MESSAGE DETAIL / COMMUNITY LOVE: Make the poster feel warmly loved by a real audience without fake review language.");
+      break;
+    case "trust-signals":
+      lines.push("MESSAGE DETAIL / TRUST SIGNALS: Lean into premium proof markers, badges, and confidence cues using only approved content.");
+      break;
+    case "feature-callouts":
+      lines.push("MESSAGE DETAIL / FEATURE CALLOUTS: Arrange approved points as clean callouts attached to the hero subject or interface.");
+      break;
+    case "hero-plus-benefits":
+      lines.push("MESSAGE DETAIL / HERO PLUS BENEFITS: Keep one strong hero subject with concise benefit labels supporting it.");
+      break;
+    case "smart-breakdown":
+      lines.push("MESSAGE DETAIL / SMART BREAKDOWN: Organize the visual like a premium, intelligent breakdown of capabilities.");
+      break;
+    case "price-drop":
+      lines.push("MESSAGE DETAIL / PRICE DROP HERO: Make the deal instantly legible while keeping the design premium.");
+      break;
+    case "vip-deal":
+      lines.push("MESSAGE DETAIL / VIP DEAL: Position the sale as an insider premium deal, not a bargain-bin promotion.");
+      break;
+    case "high-energy-flash":
+      lines.push("MESSAGE DETAIL / FLASH ENERGY: Bring fast, high-energy sale momentum with bold hierarchy and urgency.");
+      break;
+  }
+
+  return lines;
+}
+
+function buildStyleDirectives(spec: VisualAdsSpec): string[] {
+  const styleId = (spec.style?.primary_style_id || "").toLowerCase();
+  const detailId = (spec.style?.style_detail_id || "").toLowerCase();
+  const lines: string[] = [];
+
+  switch (styleId) {
+    case "premium-dark":
+      lines.push("STYLE MODE / SLEEK & DARK: Use dark premium contrast, controlled highlights, polished glow, and a luxury-tech finish.");
+      break;
+    case "bright-clean":
+      lines.push("STYLE MODE / BRIGHT & CLEAN: Use bright airy space, clean surfaces, crisp hierarchy, and fresh premium simplicity.");
+      break;
+    case "bold-modern":
+      lines.push("STYLE MODE / BOLD & PUNCHY: Use strong contrast, energetic framing, and punchy modern advertising presence.");
+      break;
+    case "lifestyle":
+      lines.push("STYLE MODE / REAL & HUMAN: Keep the result believable, human, and grounded rather than glossy fantasy.");
+      break;
+    case "luxury-minimal":
+      lines.push("STYLE MODE / LUXURY MINIMAL: Use restraint, space, quiet confidence, and a sparse premium layout.");
+      break;
+    case "ugc":
+      lines.push("STYLE MODE / NATURAL / UGC: Keep it native, authentic, social-first, and less over-produced while still polished enough for a premium brand.");
+      break;
+  }
+
+  switch (detailId) {
+    case "luxury-noir":
+      lines.push("STYLE DETAIL / LUXURY NOIR: Add deep shadows and refined dark contrast.");
+      break;
+    case "cinematic-glow":
+      lines.push("STYLE DETAIL / CINEMATIC GLOW: Use cinematic atmosphere with controlled polished glow accents.");
+      break;
+    case "elite-tech":
+      lines.push("STYLE DETAIL / ELITE TECH: Keep the finish sleek, premium, and technology-forward.");
+      break;
+    case "airy-minimal":
+      lines.push("STYLE DETAIL / AIRY MINIMAL: Preserve generous breathing room and soft premium lightness.");
+      break;
+    case "sunlit-premium":
+      lines.push("STYLE DETAIL / SUNLIT PREMIUM: Use bright clean lighting that still feels expensive and controlled.");
+      break;
+    case "gallery-clean":
+      lines.push("STYLE DETAIL / GALLERY CLEAN: Make the composition feel like a premium showroom or design gallery.");
+      break;
+    case "neon-energy":
+      lines.push("STYLE DETAIL / NEON ENERGY: Push boldness with vibrant accents, motion cues, and energetic contrast.");
+      break;
+    case "editorial-hype":
+      lines.push("STYLE DETAIL / EDITORIAL HYPE: Make it feel like a modern editorial campaign with strong hierarchy and premium impact.");
+      break;
+    case "tech-pop":
+      lines.push("STYLE DETAIL / TECH POP: Blend energetic graphics with playful premium tech cues.");
+      break;
+    case "warm-documentary":
+      lines.push("STYLE DETAIL / WARM DOCUMENTARY: Keep it honest, grounded, warm, and naturally observed.");
+      break;
+    case "golden-hour":
+      lines.push("STYLE DETAIL / GOLDEN HOUR: Use warm realistic light and emotional atmosphere.");
+      break;
+    case "everyday-premium":
+      lines.push("STYLE DETAIL / EVERYDAY PREMIUM: Keep it relatable and real, but clearly polished and premium.");
+      break;
+    case "silent-wealth":
+      lines.push("STYLE DETAIL / SILENT WEALTH: Strip the composition down to quiet premium confidence and elegant restraint.");
+      break;
+    case "museum-piece":
+      lines.push("STYLE DETAIL / MUSEUM PIECE: Present the hero subject like a carefully displayed premium object of value.");
+      break;
+    case "monochrome-premium":
+      lines.push("STYLE DETAIL / MONOCHROME PREMIUM: Use restrained tones and minimalist luxury polish.");
+      break;
+    case "phone-capture":
+      lines.push("STYLE DETAIL / PHONE CAPTURE: Keep the framing authentic and naturally captured, not studio-perfect.");
+      break;
+    case "creator-post":
+      lines.push("STYLE DETAIL / CREATOR POST: Make it feel native to a credible creator feed with believable framing.");
+      break;
+    case "real-feed":
+      lines.push("STYLE DETAIL / REAL FEED: Keep it spontaneous, social-native, and naturally at home in a real feed.");
+      break;
+  }
+
+  return lines;
+}
+
+function buildCompositionDirectives(spec: VisualAdsSpec): string[] {
+  const lines: string[] = [];
+  const ratio = (spec.aspect_ratio || "1:1").toLowerCase();
+  const layoutType = (spec.composition?.layout_type || "").toLowerCase();
+  const primarySubjects = spec.composition?.primary_subjects || [];
+  const secondarySubjects = spec.composition?.secondary_subjects || [];
+
+  if (layoutType === "screenshot-led-poster") {
+    lines.push("LAYOUT MODE / SCREENSHOT-LED: The screenshot or device must be one of the first things the viewer reads. Supporting assets must frame it, not overpower it.");
+  } else if (layoutType === "hero-poster") {
+    lines.push("LAYOUT MODE / HERO POSTER: Use one dominant hero subject with clear supporting elements and strong visual hierarchy.");
+  }
+
+  if (ratio === "9:16") {
+    lines.push("RATIO RULE / 9:16: Compose vertically with strong top-to-bottom hierarchy and safe breathing room at the top and bottom edges.");
+  } else if (ratio === "16:9") {
+    lines.push("RATIO RULE / 16:9: Compose with clear horizontal balance and wide-screen readability.");
+  } else {
+    lines.push("RATIO RULE / 1:1: Keep the composition balanced, centered, and immediately readable in a square feed.");
+  }
+
+  if (primarySubjects.length > 0) {
+    lines.push(`PRIMARY SUBJECT RULE: ${primarySubjects.join(", ")} must hold the dominant visual weight.`);
+  }
+  if (secondarySubjects.length > 0) {
+    lines.push(`SECONDARY SUBJECT RULE: ${secondarySubjects.join(", ")} must stay supportive and must not overpower the primary subjects.`);
+  }
+  if (spec.composition?.logo_source) {
+    lines.push(`LOGO PLACEMENT RULE: ${spec.composition.logo_source} should sit in a clean brand-safe placement, typically near a top or bottom edge, fully visible.`);
+  }
+  if (spec.composition?.face_must_remain_visible) {
+    lines.push("FACE VISIBILITY RULE: Any important face must remain readable, unobstructed, and clearly recognizable.");
+  }
+  if (spec.composition?.device_must_not_block_face) {
+    lines.push("DEVICE-AND-FACE RULE: A screenshot or device mockup must never block or hide the face.");
+  }
+  if (spec.composition?.must_feel_unified) {
+    lines.push("UNITY RULE: The final poster must feel like one coherent campaign visual, not a collage of unrelated uploads.");
+  }
+
+  return lines;
+}
+
+function buildCtaDirectives(spec: VisualAdsSpec): string[] {
+  const ctaId = (spec.campaign?.cta_id || "").toLowerCase();
+  const ctaText = (spec.campaign?.cta_text || "").trim();
+  if (!ctaText) return [];
+
+  const lines = [`CTA MODE: Treat "${ctaText}" as the single main action and give it clear high-contrast emphasis.`];
+
+  switch (ctaId) {
+    case "download-now":
+    case "get-started":
+    case "start-free":
+      lines.push("CTA BEHAVIOR: Present the action like a strong conversion-focused onboarding or app-start button.");
+      break;
+    case "shop-now":
+      lines.push("CTA BEHAVIOR: Present the action like a commerce-ready purchase invitation.");
+      break;
+    case "learn-more":
+      lines.push("CTA BEHAVIOR: Present the action like a softer information-first invitation rather than a hard sale.");
+      break;
+    case "book-now":
+      lines.push("CTA BEHAVIOR: Present the action like a booking or reservation trigger with service-oriented clarity.");
+      break;
+    case "try-today":
+      lines.push("CTA BEHAVIOR: Present the action as low-friction and immediately approachable.");
+      break;
+    case "join-now":
+      lines.push("CTA BEHAVIOR: Present the action like a membership or community entry point.");
+      break;
+    case "subscribe":
+      lines.push("CTA BEHAVIOR: Present the action like an ongoing membership or subscription conversion point.");
+      break;
+  }
+
+  return lines;
+}
+
+
 function _normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
   const record = asRecord(raw) || {};
   const assetsRaw = Array.isArray(record.assets) ? record.assets : [];
@@ -337,6 +613,8 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   if (!assets.length && legacyPrompt.trim()) return legacyPrompt.trim();
 
   const ratio = spec.aspect_ratio || "1:1";
+  const objective = (spec.objective || "").trim();
+  const campaignId = (spec.campaign?.main_message_id || "").toLowerCase();
   const campaignText = (spec.campaign?.main_message_custom_text || spec.campaign?.main_message_prompt || "").trim();
   const campaignDetail = (spec.campaign?.main_message_detail_prompt || "").trim();
   const featureChips = (spec.campaign?.feature_chips || []).filter(Boolean);
@@ -350,6 +628,13 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   const hasExactPerson = assets.some((asset) => (asset.role || "").toLowerCase() === "person" && (asset.person_mode || "exact").toLowerCase() !== "reference");
   const hasReferencePerson = assets.some((asset) => (asset.role || "").toLowerCase() === "person" && (asset.person_mode || "exact").toLowerCase() === "reference");
   const hasNewPosePerson = assets.some((asset) => (asset.role || "").toLowerCase() === "person" && (asset.person_mode || "exact").toLowerCase() !== "reference" && (asset.pose_mode || "same-pose").toLowerCase() === "adapted-pose");
+  const hasIllustration = assets.some((asset) => (asset.role || "").toLowerCase() === "illustration");
+  const hasMascot = assets.some((asset) => (asset.role || "").toLowerCase() === "mascot");
+  const hasProduct = assets.some((asset) => (asset.role || "").toLowerCase() === "product");
+  const hasIcon = assets.some((asset) => (asset.role || "").toLowerCase() === "icon");
+  const hasProp = assets.some((asset) => (asset.role || "").toLowerCase() === "prop");
+  const hasTexture = assets.some((asset) => (asset.role || "").toLowerCase() === "texture");
+  const hasCustomRole = assets.some((asset) => Boolean((asset.custom_role || "").trim()));
   const mustPreserveReferencePersonAnchor = spec.hard_constraints?.must_preserve_reference_person_anchor === true || hasReferencePerson;
   const mustPreserveReferencePersonSilhouette = spec.hard_constraints?.must_preserve_reference_person_silhouette === true || hasReferencePerson;
   const mustPreserveReferencePersonStyling = spec.hard_constraints?.must_preserve_reference_person_styling === true || hasReferencePerson;
@@ -360,11 +645,28 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     `Create a high-end ${ratio} premium advertising poster with a unified, cinematic composition.`,
   ];
 
+  if (objective) {
+    lines.push(`Optimize the poster for this outcome: ${objective.replace(/[.!?]+$/g, "")}.`);
+  }
   if (campaignText) {
     lines.push(`Build the poster around this campaign direction: ${campaignText.replace(/[.!?]+$/g, "")}.`);
   }
   if (campaignDetail) {
     lines.push(campaignDetail);
+  }
+  const campaignDirectives = buildCampaignDirectives(spec);
+  if (campaignDirectives.length > 0) {
+    lines.push("");
+    lines.push("Campaign System:");
+    lines.push("");
+    lines.push(...campaignDirectives);
+  }
+  const compositionDirectives = buildCompositionDirectives(spec);
+  if (compositionDirectives.length > 0) {
+    lines.push("");
+    lines.push("Layout System:");
+    lines.push("");
+    lines.push(...compositionDirectives);
   }
   lines.push("");
   lines.push("Use the provided images with strict role assignment:");
@@ -384,26 +686,31 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     const asset = assets[i];
     const sourceKey = getSourceKey(asset, i);
     const role = (asset.role || "").toLowerCase();
+    const isPrimarySubject = (spec.composition?.primary_subjects || []).includes(sourceKey);
 
     if (role === "background") {
-      lines.push(`Use ${sourceKey} as the actual full-scene background foundation of the final poster, preserving its identity while enhancing it with cinematic color grading, depth of field, and soft lighting.`);
-      lines.push(`Composite the other uploaded assets into ${sourceKey}. Do not let any non-background upload replace this scene or become the main backdrop.`);
+      lines.push(`WORLD FOUNDATION: Use ${sourceKey} as the actual full-scene background foundation of the final poster.`);
+      lines.push(`Maintain the geography, architecture, scene identity, and environmental layout from ${sourceKey} exactly.`);
+      lines.push(`Only enhance the mood, atmosphere, color grade, and lighting. Do not let any non-background upload replace this world or become the main backdrop.`);
       continue;
     }
 
     if (role === "screenshot") {
-      lines.push(`Place the app screenshot (${sourceKey}) inside a ${getDeviceMockupLabel(asset.screenshot_device)}, centered or slightly dominant in the frame.`);
-      lines.push("The screenshot must remain 100% unchanged and readable with no UI edits, no distortion, and no fake redesign.");
+      lines.push(`UI ASSET / CLEAN MOCKUP: Place the inner app content from ${sourceKey} inside a ${getDeviceMockupLabel(asset.screenshot_device)}, centered or slightly dominant in the frame.`);
+      lines.push(`This upload may contain raw UI artifacts, uploader boxes, red X buttons, drag-and-drop frames, browser chrome, or Image 1/2 labels around the real app screen.`);
+      lines.push(`Ignore and remove all of those outer artifacts. Extract only the central application content and show only that inner app content inside the device mockup.`);
+      lines.push("NO RECURSIVE INTERFACES. Do not show the uploader, editor chrome, or a screenshot-inside-a-screenshot effect.");
       continue;
     }
 
     if (role === "logo") {
       if ((asset.logo_mode || "").toLowerCase() === "transparent") {
-        lines.push(`Integrate the logo (${sourceKey}) as a clean transparent flat logo overlay, preserving its exact shape and original colors.`);
-        lines.push(`Keep the logo fully visible, uncropped, flat, and 2D with no background, no box, no card, no badge, no drop shadow, and no halo around it.`);
+        lines.push(`BRAND OVERLAY: Integrate the logo (${sourceKey}) as a clean transparent flat logo overlay with high-contrast vector sharpness.`);
+        lines.push(`Keep the logo fully visible, uncropped, flat, and 2D with a clean alpha channel and zero opacity bleed from the background.`);
         lines.push(`Treat the logo as a protected brand mark, not as a decorative object, scenic prop, sticker, sculpture, or 3D design element.`);
       } else {
-        lines.push(`Integrate the logo (${sourceKey}) naturally into the composition, preferably in a clean top or bottom placement, keeping it exactly as provided with no redesign, no recolor, and no distortion.`);
+        lines.push(`BRAND OVERLAY: Integrate the logo (${sourceKey}) naturally into the composition, preferably in a clean top or bottom placement, keeping it exactly as provided.`);
+        lines.push(`Preserve it as a solid asset with sharp high-fidelity edges, high contrast, zero opacity bleed, no redesign, no recolor, and no distortion.`);
         lines.push(`Keep the logo fully visible and uncropped. Do not transform it into an icon tile, prop, badge, product object, or scenic element.`);
       }
       continue;
@@ -413,43 +720,83 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
       const personMode = (asset.person_mode || "exact").toLowerCase();
       if (personMode === "reference") {
         if ((asset.reference_style || "realistic").toLowerCase() === "character") {
-          lines.push(`Use the person in ${sourceKey} as the source anchor for a styled character.`);
-          lines.push(`The final character must be clearly derived from that uploaded person: preserve the face direction, hair direction, outfit language, accessories, silhouette, and pose direction from ${sourceKey}.`);
-          lines.push(`Do not replace ${sourceKey} with a random new woman or generic different person. Stylize the uploaded person into a character; do not recast them.`);
+          lines.push(`REFERENCE: Create a stylized digital character based on the identity anchor in ${sourceKey}.`);
+          lines.push(`Preserve the face direction, hair direction, outfit language, accessories, silhouette, and pose direction from ${sourceKey}.`);
+          lines.push(`Stylize the uploaded identity; do not replace ${sourceKey} with a random different character or a generic new person.`);
         } else {
-          lines.push(`Use the person in ${sourceKey} as the identity reference for a realistic human subject in the final composition.`);
+          lines.push(`REFERENCE: Create a photorealistic human based on the identity anchor in ${sourceKey}.`);
           lines.push(`Preserve the source anchor from ${sourceKey}, including face direction, hair direction, outfit language, accessories, silhouette, and pose direction. Do not drift into a different-looking person.`);
         }
       } else {
         const pose = (asset.pose_mode || "same-pose").toLowerCase();
+        lines.push(`IDENTITY LOCK: ${sourceKey} is a fixed identity asset. Use the exact face and exact art style from the upload.`);
+        lines.push(`Do not change the art style. If the input is a 2D illustration, cartoon, vector, or stylized drawing, it must remain 2D and stylized.`);
+        lines.push(`Do not apply 3D skin textures, realistic pores, or real-world lighting to a cartoon or stylized face.`);
         if (pose === "upper-body") {
-          lines.push(`Use the exact same real individual from ${sourceKey} in a clear upper-body framing so the face stays large, readable, and unmistakable. Do not change the facial identity or swap them for a different-looking person.`);
+          lines.push(`Frame the same identity as an upper-body hero shot only. Keep the identity and art style locked.`);
         } else if (pose === "adapted-pose") {
-          lines.push(`Use the exact same real individual from ${sourceKey}, preserving face, skin tone, body type, hair, and overall identity exactly.`);
-          lines.push(`This is an explicit new-pose request for ${sourceKey}: create a clearly different natural pose for the final poster while keeping the exact same real person. Change the pose only, never the identity.`);
+          lines.push(`Adapt the body pose only. Keep the face, identity, and art style locked.`);
         } else {
-          lines.push(`Use the exact same real individual from ${sourceKey}, not a similar-looking or upgraded version. Keep the closest possible pose and framing to the original. Do not reinterpret, beautify, or substitute the face.`);
+          lines.push(`Keep the pose and framing as close to 1:1 as possible.`);
         }
       }
       continue;
     }
 
+    if (role === "illustration" || role === "mascot") {
+      lines.push(`ART ASSET / VECTOR PRESERVATION: Treat ${sourceKey} as a protected ${role}.`);
+      lines.push(`Preserve the hand-drawn or vector aesthetic, flat colors, clean lines, and 2D nature.`);
+      lines.push(`Match the scene mood without turning it into a real-world object. Do not add 3D realism, realistic skin, sculpted depth, or real-world material textures.`);
+      continue;
+    }
+
     if (role === "product") {
-      lines.push(hasScreenshot
-        ? `Place ${sourceKey} as a complementary product element supporting the screenshot.`
-        : `Make ${sourceKey} the hero product element with premium scale, clean lighting, and polished presentation.`);
+      if (hasScreenshot && !isPrimarySubject) {
+        lines.push(`SUPPORTING PRODUCT LOCK: Place ${sourceKey} as a premium supporting product element near the screenshot without overpowering the screenshot-led hierarchy.`);
+      } else {
+        lines.push(`HERO PRODUCT LOCK: Use ${sourceKey} as the actual product hero with premium scale, clean lighting, and polished presentation.`);
+      }
+      lines.push(`Preserve the exact product silhouette, package shape, materials, surface finish, recognizable details, and brand geometry from ${sourceKey}.`);
+      lines.push(`Do not redesign, melt, replace, over-stylize, or swap ${sourceKey} for a different product.`);
+      continue;
+    }
+
+    if (role === "icon") {
+      lines.push(`ICON LOCK: Use ${sourceKey} as a crisp supporting icon or symbolic graphic element only.`);
+      lines.push(`Keep it sharp, flat, clean, and secondary in hierarchy. Do not inflate it into a 3D object, toy, floating sculpture, sticker sheet, or hero subject.`);
+      continue;
+    }
+
+    if (role === "prop") {
+      lines.push(`PROP CONTROL: Use ${sourceKey} as a supporting prop that helps the story of the poster without becoming the main hero.`);
+      lines.push(`Preserve the recognizable shape and material class of ${sourceKey}. Keep it subordinate to the primary subjects.`);
+      continue;
+    }
+
+    if (role === "texture") {
+      lines.push(`TEXTURE CONTROL: Use ${sourceKey} only as a subtle surface, overlay, or atmosphere texture layer.`);
+      lines.push(`Keep it low in hierarchy and non-literal. Do not turn it into a product, logo, prop, character, or replacement scene.`);
       continue;
     }
 
     if (asset.custom_role) {
-      lines.push(`Use ${sourceKey} as a ${asset.custom_role} element integrated naturally into the composition.`);
+      lines.push(`CUSTOM ROLE LOCK: Treat ${sourceKey} specifically as ${asset.custom_role}. Preserve its native visual class and let it serve only that job.`);
+      lines.push(`Do not reinterpret ${sourceKey} into a different asset category. If it is graphic, keep it graphic. If it is a real object, keep it a real object.`);
     } else {
       lines.push(`Use ${sourceKey} as a supporting element integrated naturally into the composition.`);
     }
   }
 
   if (featureChips.length > 0) {
-    lines.push("Add subtle floating testimonial-style quote bubbles or premium feature cards around the main subject to create a sense of social proof.");
+    if (campaignId == "social-proof") {
+      lines.push("Use the approved key points as tasteful proof markers, trust labels, or premium endorsement chips without inventing quotes or reviews.");
+    } else if (campaignId == "features") {
+      lines.push("Use the approved key points as concise feature callouts or benefit labels connected clearly to the hero subject or interface.");
+    } else if (campaignId == "sale") {
+      lines.push("Use the approved key points as compact supporting offer or benefit chips while keeping the hierarchy clean and premium.");
+    } else {
+      lines.push("Use the approved key points as concise premium support labels or callout chips around the main subject.");
+    }
   }
 
   lines.push("");
@@ -460,6 +807,9 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     for (const item of allowedText) lines.push(`\"${item}\"`);
   } else {
     lines.push("No extra on-poster text beyond what is already approved in the brief.");
+  }
+  if (hasScreenshot || hasAnyLogo || hasProduct) {
+    lines.push("Existing text already embedded inside a protected uploaded screenshot, logo, or product package may remain exactly as it appears in that asset.");
   }
 
   lines.push("");
@@ -479,12 +829,17 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     lines.push("Clean visual hierarchy");
     lines.push("Luxury-level production finish");
   }
+  const styleDirectives = buildStyleDirectives(spec);
+  if (styleDirectives.length > 0) {
+    lines.push(...styleDirectives);
+  }
 
   if (ctaText) {
     lines.push("");
     lines.push("Call to Action:");
     lines.push("");
     lines.push(`Display \"${ctaText}\" clearly and prominently as the main call to action (button or highlighted text).`);
+    lines.push(...buildCtaDirectives(spec));
   }
 
   lines.push("");
@@ -493,7 +848,8 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   lines.push("Do NOT add any extra text beyond the allowed phrases listed above.");
   lines.push("Do NOT invent names, headlines, taglines, or brand copy.");
   lines.push("Do NOT invent testimonials, ratings, reviews, or social proof copy.");
-  if (hasScreenshot) lines.push("Do NOT modify the screenshot UI.");
+  if (hasScreenshot || hasAnyLogo || hasProduct) lines.push("Do NOT erase, rewrite, or hallucinate text that already exists inside a protected uploaded screenshot, logo, or product package.");
+  if (hasScreenshot) lines.push("Do NOT show uploader chrome, Image 1/2 boxes, red X icons, browser chrome, or recursive interfaces around any screenshot.");
   if (hasAnyLogo) lines.push("Do NOT crop, cut off, restyle, reinterpret, or transform any uploaded logo into an object, badge, sticker, prop, sculpture, or scenic element.");
   if (hasTransparentLogo) {
     lines.push("Do NOT place the logo inside a background box, card, frame, or shape — it must stay transparent and flat.");
@@ -511,9 +867,15 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   if (mustPreserveReferencePoseDirection) lines.push("For any person tagged as reference, preserve the source pose direction and framing intent even when stylizing.");
   if (hasNewPosePerson) lines.push("For any person tagged as New pose, you must create a clearly new pose while preserving the exact same real person. Do NOT keep the original pose if the brief asks for a new one.");
   if (mustKeepLogoFlatAndFullyVisible) lines.push("Any transparent logo must remain a flat 2D overlay, fully visible and uncropped.");
+  if (hasProduct) lines.push("Do NOT redesign, replace, deform, or rebrand any uploaded product. Preserve its recognizable shape, materials, packaging language, and key details.");
+  if (hasIcon) lines.push("Do NOT turn any uploaded icon into a 3D object, toy, sculpture, or oversized hero element. Keep icons crisp and graphic.");
+  if (hasProp) lines.push("Do NOT let supporting props overpower the hero subject or become the main product unless explicitly tagged as a primary subject.");
+  if (hasTexture) lines.push("Do NOT turn any uploaded texture into a literal object, logo, character, or replacement scene. Keep textures subtle and subordinate.");
+  if (hasIllustration || hasMascot) lines.push("Do NOT convert any illustration or mascot into a 3D real-world object. Preserve flat/vector/hand-drawn character.");
+  if (hasCustomRole) lines.push("Do NOT repurpose any custom-role asset into a different asset category. Respect the uploaded job label exactly.");
   if (featureChips.length > 0) lines.push("Use the approved key points exactly as written without renaming, paraphrasing, or substituting them.");
   if (hasExactPerson && hasScreenshot) lines.push("Keep the face clearly visible. The device mockup must not block the face.");
-  lines.push("Keep everything sharp, high-resolution, realistic, and production-ready.");
+  lines.push("Keep everything sharp, high-resolution, cohesive, and production-ready while preserving 2D assets as 2D assets and real-world assets as real-world assets.");
 
   lines.push("");
   lines.push("Output:");
@@ -524,6 +886,7 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
 
   return lines.join("\n").trim();
 }
+
 
 function buildVisualAdsStructuredAppendix(spec: VisualAdsSpec): string {
   const sections: string[] = [];
@@ -539,7 +902,7 @@ function buildVisualAdsStructuredAppendix(spec: VisualAdsSpec): string {
 
   addSection("STRUCTURED_INPUT_APPENDIX", [
     "- purpose: Supporting structured summary of the approved Poster Ads inputs.",
-    "- precedence: If anything here appears to conflict with the frontend compiled brief, the frontend compiled brief wins.",
+    "- precedence: Structured asset, campaign, style, composition, text, and hard-constraint inputs are authoritative. If any generic frontend brief conflicts with them, the structured input wins.",
     spec.objective ? `- objective: ${spec.objective}` : null,
     spec.language ? `- language: ${spec.language}` : null,
     spec.aspect_ratio ? `- aspect_ratio: ${spec.aspect_ratio}` : null,
@@ -624,12 +987,26 @@ function buildVisualAdsStructuredAppendix(spec: VisualAdsSpec): string {
 function buildVisualAdsPriorityReinforcement(spec: VisualAdsSpec): string {
   const lines: string[] = [];
   const hard = spec.hard_constraints;
+  const assets = spec.assets || [];
+  const hasIllustrationOrMascot = assets.some((asset) => {
+    const role = (asset.role || "").toLowerCase();
+    return role === "illustration" || role === "mascot";
+  });
+  const hasScreenshot = assets.some((asset) => (asset.role || "").toLowerCase() === "screenshot");
+  const hasProduct = assets.some((asset) => (asset.role || "").toLowerCase() === "product");
+  const hasIcon = assets.some((asset) => (asset.role || "").toLowerCase() === "icon");
+  const hasTexture = assets.some((asset) => (asset.role || "").toLowerCase() === "texture");
+  const layoutType = (spec.composition?.layout_type || "").toLowerCase();
+  const campaignId = (spec.campaign?.main_message_id || "").toLowerCase();
 
   if (hard?.must_preserve_exact_person_identity) {
-    lines.push("- exact_person_identity: Any person tagged as exact must remain the exact same real person with no face swap, no beautification drift, and no replacement identity.");
+    lines.push("- exact_person_identity: Any person tagged as exact is a fixed identity asset. Preserve the exact face and the exact original art style with no face swap, no replacement identity, and no style conversion.");
   }
   if (hard?.must_preserve_reference_person_anchor || hard?.must_preserve_reference_person_silhouette || hard?.must_preserve_reference_person_styling || hard?.must_preserve_reference_pose_direction) {
     lines.push("- reference_person_anchor: Any person tagged as reference must stay clearly anchored to the uploaded source. Preserve the source face direction, silhouette, styling, accessories, and pose direction. Do not replace them with a generic different person.");
+  }
+  if (hasScreenshot) {
+    lines.push("- screenshot_cleanup: Remove uploader chrome, Image 1/2 boxes, red X icons, browser chrome, and recursive interface artifacts. Only the inner app content may appear inside the selected device mockup.");
   }
   if (hard?.must_preserve_logo_fidelity || hard?.must_keep_logo_flat_and_fully_visible) {
     lines.push("- logo_fidelity: Any uploaded logo must remain a flat protected brand mark, fully visible, uncropped, and not transformed into an object, prop, badge, sticker, sculpture, or scenic design element.");
@@ -640,11 +1017,45 @@ function buildVisualAdsPriorityReinforcement(spec: VisualAdsSpec): string {
   if (hard?.must_preserve_background_identity) {
     lines.push("- background_identity: Any uploaded background must remain the real base scene and must not be swapped for a different environment.");
   }
+  if (hasIllustrationOrMascot) {
+    lines.push("- vector_preservation: Any illustration or mascot must preserve its flat/vector/hand-drawn 2D nature and must not be transformed into a 3D real-world object.");
+  }
+  if (layoutType === "screenshot-led-poster") {
+    lines.push("- screenshot_led_hierarchy: In screenshot-led layouts, the screenshot or device must remain one of the dominant first-read subjects and supporting assets must not overpower it.");
+  }
+  if (hasProduct) {
+    lines.push("- product_fidelity: Any uploaded product must preserve its exact package shape, materials, silhouette, and recognizable branded form with no redesign or substitution.");
+  }
+  if (hasIcon) {
+    lines.push("- icon_flatness: Any uploaded icon must remain crisp, flat, and supportive rather than being inflated into a 3D object or dominant hero.");
+  }
+  if (hasTexture) {
+    lines.push("- texture_subordination: Any uploaded texture must remain a subtle supporting texture layer and must not become a literal object or replacement backdrop.");
+  }
+  if (campaignId === "features" && (spec.campaign?.feature_chips || []).length > 0) {
+    lines.push("- feature_layout: Approved feature chips should appear as concise feature callouts or benefit labels, not invented long-form copy.");
+  }
+  if (campaignId === "sale" || campaignId === "limited-offer") {
+    lines.push("- offer_hierarchy: Keep urgency and CTA visually clear without inventing prices, discount percentages, coupon codes, or extra offer text.");
+  }
 
   return lines.join("\n").trim();
 }
 
+
 function _compileVisualAdsPrompt(spec: VisualAdsSpec, frontendCompiledPrompt: string): string {
+  const hasStructuredAssets = (spec.assets || []).length > 0;
+  if (hasStructuredAssets) {
+    const sections = [
+      compileVisualAdsFallbackPrompt(spec, ""),
+      buildVisualAdsPriorityReinforcement(spec)
+        ? ["Priority Reinforcement:", "", buildVisualAdsPriorityReinforcement(spec)].join("\n")
+        : "",
+      buildVisualAdsStructuredAppendix(spec),
+    ].filter((section) => section.trim().length > 0);
+    return sections.join("\n\n").trim();
+  }
+
   const authoritativePrompt = (frontendCompiledPrompt || spec.legacy_prompt || "").trim();
   if (!authoritativePrompt) {
     return compileVisualAdsFallbackPrompt(spec, frontendCompiledPrompt);
@@ -652,6 +1063,7 @@ function _compileVisualAdsPrompt(spec: VisualAdsSpec, frontendCompiledPrompt: st
 
   return authoritativePrompt;
 }
+
 
 function sanitizeImageUrl(url: string): string {
   let cleaned = url.trim();
@@ -914,9 +1326,11 @@ serve(async (req) => {
       }
     }
 
-    const finalPrompt = typeof body?.prompt === "string"
+    const spec = _normalizeVisualAdsSpec(body);
+    const frontendCompiledPrompt = typeof body?.prompt === "string"
       ? sanitizeUserInput(body.prompt, 20000)
       : "";
+    const finalPrompt = _compileVisualAdsPrompt(spec, frontendCompiledPrompt);
     if (!finalPrompt) {
       return new Response(JSON.stringify({ error: "Missing prompt for visual ads" }), {
         status: 400,

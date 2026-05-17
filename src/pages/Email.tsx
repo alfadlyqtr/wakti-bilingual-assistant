@@ -97,7 +97,7 @@ export default function Email() {
     signatureTitle: language === 'ar' ? 'توقيع البريد' : 'Email Signature',
     signatureSubtitle: language === 'ar' ? 'اكتب طلبك فقط، ويمكنك رفع صورة إذا احتجت.' : 'Just write your prompt, and add an image only if you need one.',
     signaturePromptLabel: language === 'ar' ? 'صف الشكل والإحساس الذي تريده' : 'Describe the look and feel you want',
-    signaturePromptPlaceholder: language === 'ar' ? 'مثال: ابنِ لي توقيع بريد حديثاً ومرتباً جداً. استخدم اسمي عبدالله الفاضلي، CEO، wakti.ai، Doha, Qatar، مع الهاتف والموقع، وضع الشعار على اليسار واجعل الشكل راقياً وواضحاً.' : 'Example: Build me a clean modern email signature. Use my name Abdullah Alfadly, CEO, wakti.ai, Doha, Qatar, with my phone and website, put the logo on the left, and make it polished and clear.',
+    signaturePromptPlaceholder: language === 'ar' ? 'مثال: ابنِ لي توقيع بريد حديثاً ومرتباً جداً. استخدم اسم العنود الفضلي، CEO، wakti.ai، Doha, Qatar، مع الهاتف والموقع، وضع الشعار على اليسار واجعل الشكل راقياً وواضحاً.' : 'Example: Build me a clean modern email signature. Use the name Alanoud Alfadly, CEO, wakti.ai, Doha, Qatar, with phone and website, put the logo on the left, and make it polished and clear.',
     generateSignature: language === 'ar' ? 'أنشئ واحفظ التوقيع' : 'Generate and save signature',
     generatingSignature: language === 'ar' ? 'جارٍ التوليد...' : 'Generating...',
     signaturePreview: language === 'ar' ? 'معاينة التوقيع' : 'Signature preview',

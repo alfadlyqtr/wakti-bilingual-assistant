@@ -1402,11 +1402,63 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             const selectedStyleVariant = visualState.creativeSoul.style && visualState.creativeSoul.style !== 'custom' && visualState.creativeSoul.styleVariant
               ? (styleVariantMap[visualState.creativeSoul.style] || []).find((variant) => variant.id === visualState.creativeSoul.styleVariant) || null
               : null;
+            const resolveVisualAdsValue = (selectedValue?: string | null, customValue?: string | null) => (
+              selectedValue === 'custom'
+                ? normalizeShortValue(customValue)
+                : normalizeShortValue(selectedValue)
+            );
+            const getImageMetaType = (asset: NonNullable<VisualAdsState['assets']>[number]) => {
+              if (asset.type === 'logo') return 'Logo';
+              if (asset.type === 'product') return 'Product';
+              if (asset.type === 'screenshot') return 'Screenshot';
+              if (asset.type === 'person') return 'Person';
+              if (asset.type === 'background') return 'Background';
+              if (asset.type === 'icon') return 'Icon';
+              if (asset.type === 'prop') return 'Prop';
+              if (asset.type === 'mascot') return 'Mascot';
+              if (asset.type === 'texture') return 'Texture';
+              if (asset.type === 'illustration') return 'Illustration';
+              return 'Asset';
+            };
+            const getScreenshotMetaSubType = (asset: NonNullable<VisualAdsState['assets']>[number]) => {
+              const device = getScreenshotDevice(asset);
+              if (device === 'samsung') return 'Samsung';
+              if (device === 'laptop') return 'Laptop';
+              if (device === 'tablet') return 'Tablet';
+              if (device === 'monitor-tv') return 'Monitor-TV';
+              if (device === 'billboard') return 'Billboard';
+              return 'iPhone';
+            };
+            const getImageMetaSubType = (asset: NonNullable<VisualAdsState['assets']>[number]) => {
+              if (asset.type === 'logo') {
+                return (asset.logoMode || 'transparent') === 'as-is' ? 'As-is' : 'Transparent';
+              }
+              if (asset.type === 'person') {
+                if ((asset.personMode || 'exact') === 'exact') return 'Exact';
+                if (asset.referenceStyle === 'character') return 'Character';
+                if (asset.referenceStyle === 'realistic') return 'Realistic';
+                return 'Reference';
+              }
+              if (asset.type === 'screenshot') {
+                return getScreenshotMetaSubType(asset);
+              }
+              return undefined;
+            };
+            const resolvedMainMessage = resolveVisualAdsValue(visualState.creativeSoul.mainMessage, visualState.creativeSoul.customMainMessage) || null;
+            const resolvedVisualStyle = resolveVisualAdsValue(visualState.creativeSoul.style, visualState.creativeSoul.customStyle) || null;
+            const resolvedVisualStyleDetail = visualState.creativeSoul.style === 'custom'
+              ? null
+              : (normalizeShortValue(visualState.creativeSoul.styleVariant) || null);
+            const resolvedCallToAction = visualState.creativeSoul.cta === 'custom'
+              ? (customCta || null)
+              : (normalizeShortValue(selectedCtaChip?.labelEn) || normalizeShortValue(visualState.creativeSoul.cta) || null);
 
             const MAX_VISUAL_AD_IMAGES = 14;
             const assetEntries = (visualState.assets || [])
               .filter((asset) => asset.image)
               .slice(0, 6) as Array<NonNullable<VisualAdsState['assets']>[number]>;
+            const firstScreenshotAsset = assetEntries.find((asset) => asset.type === 'screenshot') || null;
+            const firstScreenshotDevice = firstScreenshotAsset ? getScreenshotDevice(firstScreenshotAsset) : null;
 
             if (!assetEntries.length) {
               toast.error(language === 'ar' ? 'الرجاء رفع صورة واحدة على الأقل' : 'Please upload at least one image');
@@ -1644,6 +1696,33 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               const hasExactPerson = taggedAssets.some((item) => item.types.includes('person') && (item.asset.personMode || 'exact') === 'exact');
               const hasReferencePerson = taggedAssets.some((item) => item.types.includes('person') && item.asset.personMode === 'reference');
               const hasTransparentLogo = taggedAssets.some((item) => item.types.includes('logo') && (item.asset.logoMode || 'transparent') === 'transparent');
+              const imagesMeta = sentAssets.map((item) => {
+                const metaType = getImageMetaType(item.asset);
+                const metaSubType = getImageMetaSubType(item.asset);
+                return metaSubType ? { type: metaType, subType: metaSubType } : { type: metaType };
+              });
+              const backgroundSourceId = sentAssets.findIndex((item) => item.asset.type === 'background');
+              const logoSourceId = sentAssets.findIndex((item) => item.asset.type === 'logo');
+              const primarySubjects = sentAssets
+                .map((item, index) => ((item.asset.type === 'screenshot' || item.asset.type === 'person' || item.asset.type === 'product') ? getSourceId(index) : null))
+                .filter((value): value is string => Boolean(value));
+              const secondarySubjects = sentAssets
+                .map((item, index) => ((item.asset.type === 'logo' || item.asset.type === 'icon' || item.asset.type === 'prop' || item.asset.type === 'mascot' || item.asset.type === 'texture' || item.asset.type === 'illustration') ? getSourceId(index) : null))
+                .filter((value): value is string => Boolean(value));
+              const structuredAssets = sentAssets.map((item, index) => ({
+                source_id: getSourceId(index),
+                role: getAssetLabel(item.asset),
+                custom_role: normalizeShortValue(item.asset.customType || item.asset.customTypeDraft) || null,
+                person_mode: item.asset.type === 'person' ? (item.asset.personMode || 'exact') : null,
+                pose_mode: item.asset.type === 'person' && (item.asset.personMode || 'exact') === 'exact'
+                  ? (item.asset.exactPersonStyle || 'same-pose')
+                  : null,
+                reference_style: item.asset.type === 'person' && item.asset.personMode === 'reference'
+                  ? (item.asset.referenceStyle || 'realistic')
+                  : null,
+                logo_mode: item.asset.type === 'logo' ? (item.asset.logoMode || 'transparent') : null,
+                screenshot_device: item.asset.type === 'screenshot' ? getScreenshotDevice(item.asset) : null,
+              }));
 
               const allowedText = visualState.creativeSoul.cta === 'custom'
                 ? (customCta ? [customCta] : [])
@@ -1667,157 +1746,17 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 ...allowedText,
               ];
 
-              promptLines.push(`Create one premium ${ratio} advertising poster using the ${taggedAssets.length} uploaded images in this exact order.`);
-              promptLines.push(`Use every uploaded image exactly as instructed below.`);
-              promptLines.push(``);
-
-              taggedAssets.forEach((item, index) => {
-                const num = index + 1;
-                const type = item.asset.type;
-                if (type === 'screenshot') {
-                  const device = getScreenshotDevice(item.asset);
-                  const deviceLabel = device === 'samsung' ? 'Samsung Galaxy phone' : device === 'laptop' ? 'laptop' : device === 'tablet' ? 'tablet' : device === 'monitor-tv' ? 'monitor' : device === 'billboard' ? 'billboard' : 'iPhone';
-                  promptLines.push(`Image ${num} is the app screenshot.`);
-                  promptLines.push(`Place this exact screenshot inside a realistic ${deviceLabel} mockup.`);
-                  promptLines.push(`Keep the screenshot UI 100% unchanged.`);
-                  promptLines.push(`Do not redesign it, simplify it, restyle it, crop important parts, translate it, or invent anything inside the screen.`);
-                  promptLines.push(``);
-                  return;
-                }
-
-                if (type === 'background') {
-                  promptLines.push(`Image ${num} is the background.`);
-                  promptLines.push(`Use this exact image as the actual base scene of the final poster.`);
-                  promptLines.push(`Build the ad on top of this scene.`);
-                  promptLines.push(`You may enhance lighting, polish, and depth, but keep the same environment, scene identity, and overall visual structure.`);
-                  promptLines.push(``);
-                  return;
-                }
-
-                if (type === 'person') {
-                  const mode = item.asset.personMode || 'exact';
-                  if (mode === 'reference') {
-                    const style = item.asset.referenceStyle || 'realistic';
-                    if (style === 'character') {
-                      promptLines.push(`Image ${num} is the person reference for the ad character.`);
-                      promptLines.push(`Use this image as a reference to create a stylized character, while keeping the same face direction, facial structure, hair, outfit language, expression energy, and overall silhouette.`);
-                      promptLines.push(`The result should feel like a designed character inspired by the original person, not a direct or realistic reproduction.`);
-                    } else {
-                      promptLines.push(`Image ${num} is a person reference.`);
-                      promptLines.push(`Use this image as the reference for the final person.`);
-                      promptLines.push(`Keep the same face direction, facial structure, hair, outfit, expression energy, and overall silhouette.`);
-                      promptLines.push(`Do not replace them with a different person.`);
-                    }
-                  } else {
-                    const pose = item.asset.exactPersonStyle || 'same-pose';
-                    promptLines.push(`Image ${num} is the real person for this ad.`);
-                    promptLines.push(`Use this exact same person.`);
-                    if (pose === 'upper-body') {
-                      promptLines.push(`Keep the same face, skin tone, outfit, identity, and overall look, but frame them as an upper-body hero shot.`);
-                    } else if (pose === 'adapted-pose') {
-                      promptLines.push(`Keep the same face, skin tone, outfit, identity, and overall look. You may change only the pose.`);
-                    } else {
-                      promptLines.push(`Keep the same face, skin tone, outfit, identity, and overall look. Match the original pose and framing as closely as possible.`);
-                    }
-                    promptLines.push(`Do not replace or recast them.`);
-                  }
-                  promptLines.push(``);
-                  return;
-                }
-
-                if (type === 'logo') {
-                  const logoMode = item.asset.logoMode || 'transparent';
-                  if (logoMode === 'transparent') {
-                    promptLines.push(`Image ${num} is a transparent logo.`);
-                    promptLines.push(`Place it as a clean flat overlay.`);
-                    promptLines.push(`Keep it fully visible, uncropped, and unchanged.`);
-                    promptLines.push(`Do not put it inside a box, badge, or card.`);
-                  } else {
-                    promptLines.push(`Image ${num} is the logo.`);
-                    promptLines.push(`Place it cleanly in the composition and keep it exactly as provided.`);
-                    promptLines.push(`Do not redesign, recolor, distort, or crop it.`);
-                  }
-                  promptLines.push(``);
-                  return;
-                }
-
-                if (type === 'product') {
-                  promptLines.push(`Image ${num} is the hero product.`);
-                  promptLines.push(`Feature it prominently with premium lighting and keep it unchanged.`);
-                  promptLines.push(``);
-                  return;
-                }
-
-                if (type === 'icon') {
-                  promptLines.push(`Image ${num} is a supporting icon.`);
-                  promptLines.push(`Use it as a small supporting graphic accent.`);
-                  promptLines.push(``);
-                  return;
-                }
-
-                if (type === 'prop') {
-                  promptLines.push(`Image ${num} is a supporting prop.`);
-                  promptLines.push(`Integrate it naturally without letting it overpower the main subjects.`);
-                  promptLines.push(``);
-                  return;
-                }
-
-                if (type === 'mascot') {
-                  promptLines.push(`Image ${num} is the brand mascot.`);
-                  promptLines.push(`Keep it recognizable and do not redesign it.`);
-                  promptLines.push(``);
-                  return;
-                }
-
-                if (type === 'texture') {
-                  promptLines.push(`Image ${num} is a texture or surface reference.`);
-                  promptLines.push(`Use it as a supporting texture without overpowering the main subjects.`);
-                  promptLines.push(``);
-                  return;
-                }
-
-                if (type === 'illustration') {
-                  promptLines.push(`Image ${num} is a supporting illustration.`);
-                  promptLines.push(`Use it as a supporting graphic element.`);
-                  promptLines.push(``);
-                  return;
-                }
-
-                promptLines.push(`Image ${num} is a supporting element.`);
-                promptLines.push(`Integrate it naturally into the final poster.`);
-                promptLines.push(``);
-              });
+              promptLines.push(`Create one premium ${ratio} advertising poster using the provided uploaded images.`);
+              promptLines.push(`Use the structured metadata in this request as the source of truth for image roles, style direction, and composition.`);
 
               if (exactPosterText.length) {
+                promptLines.push(``);
                 promptLines.push(`Use only this exact text in the poster:`);
                 exactPosterText.forEach((textLine) => promptLines.push(textLine));
                 promptLines.push(`Do not add any other text, headline, tagline, review, app store badge, or extra copy.`);
-                promptLines.push(``);
               }
 
-              const hasStyle = visualState.creativeSoul.style && visualState.creativeSoul.style !== 'none';
-              if (hasStyle) {
-                promptLines.push(`Visual style:`);
-                if (visualState.creativeSoul.style === 'custom' && customStyle) {
-                  promptLines.push(customStyle);
-                } else if (selectedStyleVariant?.prompt) {
-                  promptLines.push(selectedStyleVariant.prompt);
-                } else if (selectedStyleChip?.prompt) {
-                  promptLines.push(selectedStyleChip.prompt);
-                }
-                promptLines.push(`Style may affect only lighting, polish, color energy, and composition quality.`);
-                promptLines.push(`Style must not change the screenshot UI, the person, the background, or the logo.`);
-                promptLines.push(``);
-              }
-
-              promptLines.push(`Hard rules:`);
-              if (hasExactPerson) promptLines.push(`Do not change the person's face, skin tone, outfit, or identity.`);
-              if (hasReferencePerson) promptLines.push(`Do not replace the reference person.`);
-              if (hasScreenshot) promptLines.push(`Do not redesign the screenshot.`);
-              if (hasBackground) promptLines.push(`Do not replace the background.`);
-              if (hasLogo) promptLines.push(`Do not redesign the logo.`);
-              if (hasTransparentLogo) promptLines.push(`Do not place the transparent logo inside any box, badge, or card.`);
-              promptLines.push(`Do not invent extra text.`);
+              promptLines.push(``);
               promptLines.push(`Output one final ${ratio} poster only.`);
 
               const finalPromptForKie = promptLines.join('\n');
@@ -1835,6 +1774,86 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 },
                 body: JSON.stringify({
                   images: validImages,
+                  images_meta: imagesMeta,
+                  visual_style: resolvedVisualStyle,
+                  visual_style_detail: resolvedVisualStyleDetail,
+                  device_type: firstScreenshotDevice,
+                  main_message: resolvedMainMessage,
+                  call_to_action: resolvedCallToAction,
+                  language,
+                  objective: normalizeShortValue(visualState.campaignDNA.objective) || null,
+                  legacy_prompt: finalPromptForKie,
+                  assets: structuredAssets,
+                  campaign: {
+                    main_message_id: visualState.creativeSoul.mainMessage !== 'custom'
+                      ? (topicLabels[visualState.creativeSoul.mainMessage] || visualState.creativeSoul.mainMessage || null)
+                      : null,
+                    main_message_prompt: selectedTopicChip?.prompt || null,
+                    main_message_custom_text: visualState.creativeSoul.mainMessage === 'custom' ? (customTopic || null) : null,
+                    main_message_detail_id: visualState.creativeSoul.mainMessage !== 'custom' && visualState.creativeSoul.mainMessageVariant
+                      ? (topicVariantLabels[visualState.creativeSoul.mainMessage]?.[visualState.creativeSoul.mainMessageVariant] || visualState.creativeSoul.mainMessageVariant)
+                      : null,
+                    main_message_detail_prompt: selectedTopicVariant?.prompt || null,
+                    feature_chips: featureChips,
+                    require_exact_feature_chips: featureChips.length > 0,
+                    cta_id: visualState.creativeSoul.cta !== 'custom' ? (visualState.creativeSoul.cta || null) : null,
+                    cta_text: resolvedCallToAction,
+                    cta_prompt: resolvedCallToAction,
+                  },
+                  style: {
+                    primary_style_id: visualState.creativeSoul.style !== 'custom'
+                      ? (styleLabels[visualState.creativeSoul.style] || visualState.creativeSoul.style || null)
+                      : null,
+                    primary_style_prompt: selectedStyleChip?.prompt || null,
+                    primary_style_custom_text: visualState.creativeSoul.style === 'custom' ? (customStyle || null) : null,
+                    style_detail_id: visualState.creativeSoul.style !== 'custom' && visualState.creativeSoul.styleVariant
+                      ? (styleVariantLabels[visualState.creativeSoul.style]?.[visualState.creativeSoul.styleVariant] || visualState.creativeSoul.styleVariant)
+                      : null,
+                    style_detail_prompt: selectedStyleVariant?.prompt || null,
+                  },
+                  composition: {
+                    layout_type: hasScreenshot ? 'screenshot-led-poster' : 'hero-poster',
+                    primary_subjects: primarySubjects,
+                    secondary_subjects: secondarySubjects,
+                    background_source: backgroundSourceId >= 0 ? getSourceId(backgroundSourceId) : null,
+                    logo_source: logoSourceId >= 0 ? getSourceId(logoSourceId) : null,
+                    face_must_remain_visible: hasExactPerson || hasReferencePerson,
+                    device_must_not_block_face: hasScreenshot && (hasExactPerson || hasReferencePerson),
+                    must_feel_unified: true,
+                  },
+                  text_policy: {
+                    allowed_text: exactPosterText,
+                    allowed_feature_labels: featureChips,
+                    allow_generated_headline: false,
+                    allow_generated_tagline: false,
+                    allow_generated_social_proof_copy: false,
+                    allow_generated_testimonials: false,
+                  },
+                  hard_constraints: {
+                    must_follow_tagged_roles: true,
+                    must_preserve_exact_person_identity: hasExactPerson,
+                    must_preserve_reference_person_anchor: hasReferencePerson,
+                    must_preserve_reference_person_silhouette: hasReferencePerson,
+                    must_preserve_reference_person_styling: hasReferencePerson,
+                    must_preserve_reference_pose_direction: hasReferencePerson,
+                    must_preserve_logo_fidelity: hasLogo,
+                    must_keep_logo_flat_and_fully_visible: hasTransparentLogo,
+                    must_preserve_screenshot_fidelity: hasScreenshot,
+                    must_preserve_background_identity: hasBackground,
+                    allow_invented_text: false,
+                    allow_invented_names: false,
+                    allow_invented_testimonials: false,
+                    hard_constraints_override_style: true,
+                    priority_order: [
+                      'tagged_roles',
+                      'exact_person_identity',
+                      'reference_person_anchor',
+                      'logo_fidelity',
+                      'screenshot_fidelity',
+                      'background_identity',
+                      'allowed_text',
+                    ],
+                  },
                   prompt: finalPromptForKie,
                   aspect_ratio: visualState.campaignDNA.platform,
                 }),
