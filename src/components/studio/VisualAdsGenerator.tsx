@@ -42,6 +42,8 @@ export interface VisualAdsState {
     style: string;
     customStyle: string;
     styleVariant: string;
+    textPresence: 'quiet' | 'balanced' | 'strong-cta';
+    textColorStyle: 'auto-contrast' | 'brand-accent' | 'minimal-monochrome';
   };
 }
 
@@ -205,6 +207,18 @@ export const adStyleChips: PosterAdsChip[] = [
   { id: 'ugc', labelEn: '🎥 Natural / UGC', labelAr: '🎥 طبيعي / محتوى مستخدمين', prompt: 'organic UGC style, native social feed look' },
 ];
 
+export const textPresenceChips: PosterAdsChip[] = [
+  { id: 'quiet', labelEn: '🤍 Quiet', labelAr: '🤍 هادئ', prompt: 'Keep all poster text restrained, elegant, and never oversized. If a headline appears, keep it compact. Keep the CTA visible but calm. Feature chips must stay very small and secondary.' },
+  { id: 'balanced', labelEn: '⚖️ Balanced', labelAr: '⚖️ متوازن', prompt: 'Keep a premium balanced text hierarchy. The main message should read clearly without becoming large. The CTA should be clear but controlled. Feature chips stay compact and supportive.' },
+  { id: 'strong-cta', labelEn: '🎯 Strong CTA', labelAr: '🎯 دعوة أقوى', prompt: 'Keep the headline controlled, but give the CTA slightly stronger emphasis than usual. Never use giant text. Feature chips must remain small supporting labels.' },
+];
+
+export const textColorStyleChips: PosterAdsChip[] = [
+  { id: 'auto-contrast', labelEn: '⚖️ Auto Contrast', labelAr: '⚖️ تباين تلقائي', prompt: 'Choose text colors automatically for clean contrast against the scene. Prioritize readability and premium restraint over decorative color.' },
+  { id: 'brand-accent', labelEn: '✨ Brand Accent', labelAr: '✨ لمسة علامة', prompt: 'Keep most text neutral and readable. Use brand-like accent color only as restrained emphasis for the CTA or tiny highlights, not for every text block.' },
+  { id: 'minimal-monochrome', labelEn: '◻️ Minimal Mono', labelAr: '◻️ أحادي بسيط', prompt: 'Keep text mostly monochrome using white, black, or premium neutral tones with elegant contrast. Avoid loud color variety.' },
+];
+
 const getLocalizedChipLabel = (chip?: PosterAdsChip | null, language?: 'ar' | 'en') => {
   if (!chip) return '';
   return language === 'ar' ? chip.labelAr : chip.labelEn;
@@ -213,6 +227,8 @@ const getLocalizedChipLabel = (chip?: PosterAdsChip | null, language?: 'ar' | 'e
 const getTopicChipById = (id?: string) => adTopicChips.find((chip) => chip.id === id) || null;
 const getCtaChipById = (id?: string) => ctaChips.find((chip) => chip.id === id) || null;
 const getStyleChipById = (id?: string) => adStyleChips.find((chip) => chip.id === id) || null;
+const getTextPresenceChipById = (id?: string) => textPresenceChips.find((chip) => chip.id === id) || null;
+const getTextColorStyleChipById = (id?: string) => textColorStyleChips.find((chip) => chip.id === id) || null;
 
 export const styleVariantMap: Record<string, Array<{ id: string; labelEn: string; labelAr: string; prompt: string }>> = {
   'premium-dark': [
@@ -392,7 +408,19 @@ export default function VisualAdsGenerator({
   const [state, setState] = useState<VisualAdsState>({
     brandAsset: { image: null, type: null },
     campaignDNA: { platform: null, objective: '' },
-    creativeSoul: { mainMessage: '', customMainMessage: '', mainMessageVariant: '', featureChips: [], cta: '', customCta: '', style: '', customStyle: '', styleVariant: '' },
+    creativeSoul: {
+      mainMessage: '',
+      customMainMessage: '',
+      mainMessageVariant: '',
+      featureChips: [],
+      cta: '',
+      customCta: '',
+      style: '',
+      customStyle: '',
+      styleVariant: '',
+      textPresence: 'balanced',
+      textColorStyle: 'auto-contrast',
+    },
     assets: [],
   });
 
@@ -414,6 +442,10 @@ export default function VisualAdsGenerator({
   const hasMoreThanThreeWords = useCallback((value: string) => {
     const normalized = normalizeWordLimitedValue(value);
     return normalized.length > 0 && normalized.split(' ').length > 3;
+  }, [normalizeWordLimitedValue]);
+  const hasMoreThanFiveWords = useCallback((value: string) => {
+    const normalized = normalizeWordLimitedValue(value);
+    return normalized.length > 0 && normalized.split(' ').length > 5;
   }, [normalizeWordLimitedValue]);
   const hasMoreThanFourWords = useCallback((value: string) => {
     const normalized = normalizeWordLimitedValue(value);
@@ -482,6 +514,20 @@ export default function VisualAdsGenerator({
   const selectedTopicVariantMeta = getSelectedTopicVariantMeta();
   const selectedStyleMeta = getSelectedStyleMeta();
   const selectedStyleVariantMeta = getSelectedStyleVariantMeta();
+  const selectedTextPresenceMeta = useMemo(() => {
+    const selected = getTextPresenceChipById(state.creativeSoul.textPresence);
+    return {
+      label: getLocalizedChipLabel(selected, language),
+      prompt: selected?.prompt || '',
+    };
+  }, [language, state.creativeSoul.textPresence]);
+  const selectedTextColorStyleMeta = useMemo(() => {
+    const selected = getTextColorStyleChipById(state.creativeSoul.textColorStyle);
+    return {
+      label: getLocalizedChipLabel(selected, language),
+      prompt: selected?.prompt || '',
+    };
+  }, [language, state.creativeSoul.textColorStyle]);
   const normalizedFeatureChipDraft = normalizeWordLimitedValue(featureChipDraft);
   const hasMainMessageDetail = state.creativeSoul.mainMessage === 'custom'
     ? Boolean(normalizeWordLimitedValue(state.creativeSoul.customMainMessage || ''))
@@ -598,26 +644,38 @@ export default function VisualAdsGenerator({
       selectedCtaLabel
         ? (language === 'ar' ? `الدعوة للإجراء: ${selectedCtaLabel}` : `CTA: ${selectedCtaLabel}`)
         : null,
+      selectedTextPresenceMeta.label
+        ? (language === 'ar' ? `حضور النص: ${selectedTextPresenceMeta.label}` : `Text presence: ${selectedTextPresenceMeta.label}`)
+        : null,
+      selectedTextColorStyleMeta.label
+        ? (language === 'ar' ? `ألوان النص: ${selectedTextColorStyleMeta.label}` : `Text color: ${selectedTextColorStyleMeta.label}`)
+        : null,
     ].filter((line): line is string => Boolean(line));
 
     return { assetLines, campaignLines };
-  }, [state.assets, state.campaignDNA.platform, assetTypeOptions, language, getScreenshotDeviceLabel, selectedTopicMeta.label, selectedTopicVariantMeta.label, selectedStyleMeta.label, selectedStyleVariantMeta.label, selectedCtaLabel]);
+  }, [state.assets, state.campaignDNA.platform, assetTypeOptions, language, getScreenshotDeviceLabel, selectedTopicMeta.label, selectedTopicVariantMeta.label, selectedStyleMeta.label, selectedStyleVariantMeta.label, selectedCtaLabel, selectedTextPresenceMeta.label, selectedTextColorStyleMeta.label]);
   const customFieldToastShownRef = useRef<Record<'customMainMessage' | 'customCta' | 'customStyle', boolean>>({
     customMainMessage: false,
     customCta: false,
     customStyle: false,
   });
   const handleCustomCreativeSoulChange = useCallback((field: 'customMainMessage' | 'customCta' | 'customStyle', value: string) => {
-    if (hasMoreThanThreeWords(value)) {
+    const usesFiveWordLimit = field === 'customMainMessage' || field === 'customCta';
+    const exceedsWordLimit = usesFiveWordLimit ? hasMoreThanFiveWords(value) : hasMoreThanThreeWords(value);
+    if (exceedsWordLimit) {
       if (!customFieldToastShownRef.current[field]) {
-        toast.error(language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى' : 'Use 1 to 3 words maximum');
+        toast.error(
+          usesFiveWordLimit
+            ? (language === 'ar' ? 'اكتب من كلمة إلى ٥ كلمات كحد أقصى' : 'Use 1 to 5 words maximum')
+            : (language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى' : 'Use 1 to 3 words maximum')
+        );
         customFieldToastShownRef.current[field] = true;
       }
       return;
     }
     customFieldToastShownRef.current[field] = false;
     updateCreativeSoul({ [field]: value } as Partial<VisualAdsState['creativeSoul']>);
-  }, [hasMoreThanThreeWords, language, updateCreativeSoul]);
+  }, [hasMoreThanFiveWords, hasMoreThanThreeWords, language, updateCreativeSoul]);
   const addFeatureChip = useCallback(() => {
     const normalized = normalizeWordLimitedValue(featureChipDraft);
     if (!normalized) return;
@@ -1662,7 +1720,7 @@ export default function VisualAdsGenerator({
                                 className="w-full rounded-xl bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-400/60"
                               />
                               <p className="text-[11px] text-[#858384]">
-                                {language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى.' : 'Write 1 to 3 words maximum.'}
+                                {language === 'ar' ? 'اكتب من كلمة إلى ٥ كلمات كحد أقصى.' : 'Write 1 to 5 words maximum.'}
                               </p>
                             </div>
                           )}
@@ -1713,7 +1771,7 @@ export default function VisualAdsGenerator({
                                 className="w-full rounded-xl bg-[#0f131a] border border-[#606062]/20 dark:border-[#858384]/30 px-3 py-2.5 text-sm text-white focus:outline-none focus:border-orange-400/60"
                               />
                               <p className="text-[11px] text-[#858384]">
-                                {language === 'ar' ? 'اكتب من كلمة إلى ٣ كلمات كحد أقصى.' : 'Write 1 to 3 words maximum.'}
+                                {language === 'ar' ? 'اكتب من كلمة إلى ٥ كلمات كحد أقصى.' : 'Write 1 to 5 words maximum.'}
                               </p>
                             </div>
                           )}
@@ -1789,6 +1847,57 @@ export default function VisualAdsGenerator({
                               </p>
                             </div>
                           )}
+                        </div>
+
+                        <div className="space-y-3 rounded-xl border border-[#606062]/15 bg-white/20 p-3 dark:border-[#858384]/20 dark:bg-white/[0.03]">
+                          <div className="space-y-2">
+                            <div>
+                              <p className="text-xs font-semibold text-foreground">{language === 'ar' ? 'نظام النص' : 'Text system'}</p>
+                              <p className="text-[11px] text-[#858384]">{language === 'ar' ? 'تحكم ذكي في حضور النص وألوانه داخل البوستر بدون أحجام ضخمة أو ألوان مزعجة.' : 'Smart control for poster text presence and color without giant text or loud color clashes.'}</p>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'حضور النص' : 'Text presence'}</p>
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                {textPresenceChips.map((chip) => (
+                                  <button
+                                    key={chip.id}
+                                    type="button"
+                                    onClick={() => updateCreativeSoul({ textPresence: chip.id as VisualAdsState['creativeSoul']['textPresence'] })}
+                                    className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium text-left leading-tight transition-all ${
+                                      state.creativeSoul.textPresence === chip.id
+                                        ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
+                                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {getLocalizedChipLabel(chip, language)}
+                                  </button>
+                                ))}
+                              </div>
+                              <p className="text-[10px] text-[#858384]">{selectedTextPresenceMeta.prompt}</p>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <p className="text-[11px] font-medium text-foreground/90">{language === 'ar' ? 'أسلوب ألوان النص' : 'Text color style'}</p>
+                              <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+                                {textColorStyleChips.map((chip) => (
+                                  <button
+                                    key={chip.id}
+                                    type="button"
+                                    onClick={() => updateCreativeSoul({ textColorStyle: chip.id as VisualAdsState['creativeSoul']['textColorStyle'] })}
+                                    className={`px-2.5 py-2 rounded-lg border text-[11px] font-medium text-left leading-tight transition-all ${
+                                      state.creativeSoul.textColorStyle === chip.id
+                                        ? 'bg-gradient-to-r from-orange-400 to-amber-400 text-[#060541] border-orange-300 shadow-[0_4px_14px_rgba(251,146,60,0.35)]'
+                                        : 'bg-white/50 dark:bg-white/5 border-[#606062]/20 dark:border-[#858384]/30 text-foreground hover:bg-white/80 dark:hover:bg-white/10'
+                                    }`}
+                                  >
+                                    {getLocalizedChipLabel(chip, language)}
+                                  </button>
+                                ))}
+                              </div>
+                              <p className="text-[10px] text-[#858384]">{selectedTextColorStyleMeta.prompt}</p>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>

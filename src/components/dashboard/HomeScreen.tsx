@@ -928,7 +928,7 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
   const isGridVariant = variant === "grid";
   const isDockVariant = variant === "dock";
   const shellRadius = isGridVariant ? '27%' : '30%';
-  const isAppleMobile = isHomescreenGlassMobileDevice();
+  const isAppleMobile = isAppleMobileDevice();
   const iconScale = app.isAvatarIcon ? 1 : isGridVariant ? (isAppleMobile ? 0.42 : 0.46) : (isAppleMobile ? 0.44 : 0.48);
   const iconInset = app.isAvatarIcon ? '0%' : isGridVariant ? (isAppleMobile ? '10%' : '8%') : (isAppleMobile ? '12%' : '10%');
   const mixHexWithWhite = (hex: string, whiteRatio = 0.82) => {
@@ -942,11 +942,11 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
   };
   const iconWhiteRatio = isAppleMobile
     ? isGridVariant ? 0.18 : 0.22
-    : isGridVariant ? 0.18 : 0.22;
+    : isGridVariant ? 0.03 : 0.05;
   const iconTint = mixHexWithWhite(app.glow, iconWhiteRatio);
   const iconFilter = isGridVariant
-    ? `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.014' : '0.015'})) drop-shadow(0 4px 8px rgba(0,0,0,${isAppleMobile ? '0.2' : '0.24'})) drop-shadow(0 0 ${isAppleMobile ? '6px' : '7px'} ${app.glow}${isAppleMobile ? '18' : '18'})`
-    : `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.01' : '0.012'})) drop-shadow(0 3px 7px rgba(0,0,0,${isAppleMobile ? '0.18' : '0.22'})) drop-shadow(0 0 ${isAppleMobile ? '5px' : '6px'} ${app.glow}${isAppleMobile ? '14' : '14'})`;
+    ? `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.014' : '0.008'})) drop-shadow(0 5px 10px rgba(0,0,0,${isAppleMobile ? '0.2' : '0.3'})) drop-shadow(0 0 ${isAppleMobile ? '6px' : '6px'} ${app.glow}${isAppleMobile ? '18' : '12'})`
+    : `drop-shadow(0 1px 2px rgba(255,255,255,${isAppleMobile ? '0.01' : '0.006'})) drop-shadow(0 4px 8px rgba(0,0,0,${isAppleMobile ? '0.18' : '0.24'})) drop-shadow(0 0 ${isAppleMobile ? '5px' : '5px'} ${app.glow}${isAppleMobile ? '14' : '10'})`;
   const glassShadow = glowEnabled
     ? isGridVariant
       ? `0 24px 46px -18px rgba(4,10,24,${isAppleMobile ? '0.42' : '0.76'}), 0 10px 22px rgba(0,0,0,${isAppleMobile ? '0.14' : '0.32'}), 0 0 ${isAppleMobile ? '16px' : '18px'} ${app.glow}${isAppleMobile ? '24' : '28'}, inset 0 1.5px 0 rgba(255,255,255,${isAppleMobile ? '0.16' : '0.18'}), inset 0 -16px 24px rgba(255,255,255,${isAppleMobile ? '0.018' : '0.025'})`
@@ -957,6 +957,18 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
   const shellFill = isGridVariant
     ? `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.06' : '0.15'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.055'}) 18%, rgba(255,255,255,${isAppleMobile ? '0.005' : '0.02'}) 100%), linear-gradient(135deg, ${app.glow}${isAppleMobile ? '06' : '16'} 0%, rgba(255,255,255,${isAppleMobile ? '0.008' : '0.02'}) 58%, rgba(255,255,255,${isAppleMobile ? '0.002' : '0.006'}) 100%), rgba(255,255,255,${isAppleMobile ? '0.006' : '0.035'})`
     : `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.07' : '0.18'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.025' : '0.07'}) 24%, rgba(255,255,255,${isAppleMobile ? '0.008' : '0.025'}) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,${isAppleMobile ? '0.035' : '0.1'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.008' : '0.025'}) 34%, transparent 62%), linear-gradient(135deg, ${app.glow}${isAppleMobile ? '06' : '10'} 0%, rgba(255,255,255,${isAppleMobile ? '0.006' : '0.02'}) 56%, rgba(255,255,255,${isAppleMobile ? '0.002' : '0.008'}) 100%), rgba(255,255,255,${isAppleMobile ? '0.008' : '0.045'})`;
+  const resolvedGlassShadow = isAppleMobile
+    ? glassShadow
+    : glowEnabled
+      ? isGridVariant
+        ? `0 28px 54px -18px rgba(4,10,24,0.88), 0 14px 28px rgba(0,0,0,0.42), 0 0 14px ${app.glow}16, inset 0 1.5px 0 rgba(255,255,255,0.14), inset 0 -20px 28px rgba(255,255,255,0.016)`
+        : `0 14px 28px -16px rgba(4,10,24,0.68), 0 6px 16px rgba(0,0,0,0.26), 0 0 8px ${app.glow}10, inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -14px 22px rgba(255,255,255,0.014)`
+      : isGridVariant
+        ? `0 26px 50px -18px rgba(4,10,24,0.84), 0 12px 24px rgba(0,0,0,0.36), 0 0 8px ${app.glow}0e, inset 0 1px 0 rgba(255,255,255,0.13), inset 0 -18px 26px rgba(255,255,255,0.016)`
+        : `0 12px 22px -14px rgba(4,10,24,0.58), 0 5px 14px rgba(0,0,0,0.2), 0 0 4px ${app.glow}08, inset 0 1px 0 rgba(255,255,255,0.13), inset 0 -12px 18px rgba(255,255,255,0.014)`;
+  const resolvedShellFill = isGridVariant
+    ? `linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.11) 18%, rgba(255,255,255,0.02) 100%), rgba(30,33,42,0.18)`
+    : `linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 22%, rgba(255,255,255,0.02) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,0.2) 0%, transparent 44%), rgba(30,33,42,0.18)`;
   return (
     <div
       className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
@@ -967,11 +979,11 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
         className="absolute inset-0"
         style={{
           borderRadius: shellRadius,
-          background: shellFill,
-          backdropFilter: isGridVariant ? `blur(${isAppleMobile ? '28px' : '30px'}) saturate(${isAppleMobile ? '180%' : '190%'})` : `blur(${isAppleMobile ? '28px' : '30px'}) saturate(${isAppleMobile ? '170%' : '170%'})`,
-          WebkitBackdropFilter: isGridVariant ? `blur(${isAppleMobile ? '28px' : '30px'}) saturate(${isAppleMobile ? '180%' : '190%'})` : `blur(${isAppleMobile ? '28px' : '30px'}) saturate(${isAppleMobile ? '170%' : '170%'})`,
-          boxShadow: glassShadow,
-          border: isGridVariant ? `1px solid rgba(255,255,255,${isAppleMobile ? '0.12' : '0.16'})` : `1px solid rgba(255,255,255,${isAppleMobile ? '0.13' : '0.18'})`,
+          background: resolvedShellFill,
+          backdropFilter: isGridVariant ? 'blur(56px) saturate(220%)' : 'blur(52px) saturate(210%)',
+          WebkitBackdropFilter: isGridVariant ? 'blur(56px) saturate(220%)' : 'blur(52px) saturate(210%)',
+          boxShadow: resolvedGlassShadow,
+          border: isGridVariant ? `1px solid rgba(255,255,255,${isAppleMobile ? '0.12' : '0.14'})` : `1px solid rgba(255,255,255,${isAppleMobile ? '0.13' : '0.16'})`,
         }}
       />
       <div
@@ -980,9 +992,8 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           inset: 0,
           borderRadius: shellRadius,
           background: isGridVariant
-            ? `linear-gradient(165deg, rgba(255,255,255,${isAppleMobile ? '0.2' : '0.24'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.06' : '0.08'}) 16%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.03'}) 34%, rgba(255,255,255,${isAppleMobile ? '0.008' : '0.01'}) 52%, transparent 70%)`
-            : `linear-gradient(160deg, rgba(255,255,255,${isAppleMobile ? '0.22' : '0.28'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.06' : '0.09'}) 20%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.03'}) 44%, transparent 74%)`,
-          mixBlendMode: 'screen',
+            ? `linear-gradient(165deg, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.14) 16%, rgba(255,255,255,0.04) 34%, transparent 60%)`
+            : `linear-gradient(160deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.14) 20%, rgba(255,255,255,0.04) 44%, transparent 70%)`,
         }}
       />
       {isDockVariant && (
@@ -991,9 +1002,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           style={{
             inset: '8% 10% 50% 10%',
             borderRadius: '999px',
-            background: `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.1' : '0.14'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.02' : '0.03'}) 100%)`,
+            background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.045) 100%)`,
             filter: 'blur(4px)',
-            opacity: isAppleMobile ? 0.38 : 0.36,
+            opacity: 0.58,
           }}
         />
       )}
@@ -1006,9 +1017,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             bottom: '8%',
             height: '24%',
             borderRadius: '999px',
-            background: `radial-gradient(circle at 50% 50%, rgba(255,255,255,${isAppleMobile ? '0.055' : '0.08'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.012' : '0.02'}) 54%, transparent 100%)`,
+            background: `radial-gradient(circle at 50% 50%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.028) 54%, transparent 100%)`,
             filter: 'blur(10px)',
-            opacity: isAppleMobile ? 0.32 : 0.34,
+            opacity: 0.52,
           }}
         />
       )}
@@ -1019,9 +1030,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
           style={{
             inset: '7% 11% 52% 11%',
             borderRadius: '999px',
-            background: `linear-gradient(180deg, rgba(255,255,255,${isAppleMobile ? '0.11' : '0.16'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.025' : '0.04'}) 100%)`,
+            background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.048) 100%)`,
             filter: 'blur(3px)',
-            opacity: isAppleMobile ? 0.42 : 0.44,
+            opacity: 0.58,
           }}
         />
       )}
@@ -1034,9 +1045,9 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
             bottom: '10%',
             height: '22%',
             borderRadius: '999px',
-            background: `linear-gradient(90deg, rgba(255,255,255,${isAppleMobile ? '0.045' : '0.06'}) 0%, rgba(255,255,255,${isAppleMobile ? '0.012' : '0.018'}) 35%, rgba(255,255,255,${isAppleMobile ? '0.035' : '0.05'}) 100%)`,
+            background: `linear-gradient(90deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.024) 35%, rgba(255,255,255,0.07) 100%)`,
             filter: 'blur(10px)',
-            opacity: isAppleMobile ? 0.32 : 0.34,
+            opacity: 0.44,
           }}
         />
       )}
@@ -1101,11 +1112,13 @@ function GridIcon({ app, language, editMode, onTap, isDark, glowEnabled = false,
       <span
         className="text-[11px] font-bold text-center leading-tight text-white px-2 py-0.5 rounded-md"
         style={{
-          background: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.16) 100%)',
-          backdropFilter: 'blur(18px) saturate(175%)',
-          WebkitBackdropFilter: 'blur(18px) saturate(175%)',
-          border: '1px solid rgba(255,255,255,0.2)',
-          boxShadow: '0 12px 24px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.24)',
+          background: isAppleMobileDevice()
+            ? 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.16) 100%)'
+            : 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(14,18,30,0.26) 42%, rgba(10,14,24,0.54) 100%)',
+          backdropFilter: isAppleMobileDevice() ? 'blur(18px) saturate(175%)' : 'blur(22px) saturate(190%)',
+          WebkitBackdropFilter: isAppleMobileDevice() ? 'blur(18px) saturate(175%)' : 'blur(22px) saturate(190%)',
+          border: isAppleMobileDevice() ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.13)',
+          boxShadow: isAppleMobileDevice() ? '0 12px 24px rgba(0,0,0,0.24), inset 0 1px 0 rgba(255,255,255,0.24)' : '0 16px 30px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.1)',
           textShadow: '0 1px 3px rgba(0,0,0,0.8)',
           maxWidth: 76,
           overflow: "hidden",
@@ -2089,7 +2102,7 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
   const recovery = whoopData?.recovery ?? null;
   const strain   = whoopData?.strain ?? null;
   const recColor = recovery ? (recovery >= 67 ? '#22c55e' : recovery >= 34 ? '#f59e0b' : '#ef4444') : '#ef4444';
-  const isMobileGlass = isHomescreenGlassMobileDevice();
+  const isMobileGlass = isAppleMobileDevice();
 
   const shell = (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => (
     <div
@@ -2097,30 +2110,25 @@ function WidgetContent({ wKey, editMode, language, theme, hasBg, statCardBase, s
       className="rounded-3xl overflow-hidden w-full h-full cursor-pointer active:scale-95 transition-all select-none relative"
       style={{
         background: hasBg
-          ? isMobileGlass
-            ? 'linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)'
-            : 'linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.08) 100%)'
-          : isMobileGlass
-            ? 'linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.04) 100%)'
-            : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 100%)',
-        backdropFilter: `blur(${isMobileGlass ? '40px' : '30px'}) saturate(${isMobileGlass ? '180%' : '170%'})`,
-        WebkitBackdropFilter: `blur(${isMobileGlass ? '40px' : '30px'}) saturate(${isMobileGlass ? '180%' : '170%'})`,
+          ? 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 22%, rgba(255,255,255,0.02) 100%), rgba(30,33,42,0.18)'
+          : 'linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 22%, rgba(255,255,255,0.02) 100%), rgba(30,33,42,0.18)',
+        backdropFilter: 'blur(64px) saturate(220%)',
+        WebkitBackdropFilter: 'blur(64px) saturate(220%)',
         boxShadow: hasBg
           ? isMobileGlass
             ? `0 18px 42px rgba(0,0,0,0.1), 0 8px 20px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.2), inset 0 -18px 28px rgba(255,255,255,0.02)`
-            : `0 18px 42px rgba(0,0,0,0.26), 0 8px 20px rgba(0,0,0,0.16), inset 0 1px 0 rgba(255,255,255,0.28), inset 0 -18px 28px rgba(255,255,255,0.04)`
+            : `0 26px 56px rgba(0,0,0,0.44), 0 12px 26px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -18px 28px rgba(255,255,255,0.014)`
           : isMobileGlass
             ? `0 16px 38px rgba(0,0,0,0.1), 0 0 20px ${glow}0a, inset 0 1px 0 rgba(255,255,255,0.16), inset 0 -16px 24px rgba(255,255,255,0.02)`
-            : `0 16px 38px rgba(0,0,0,0.22), 0 0 20px ${glow}14, inset 0 1px 0 rgba(255,255,255,0.24), inset 0 -16px 24px rgba(255,255,255,0.04)`,
+            : `0 24px 52px rgba(0,0,0,0.4), 0 0 10px ${glow}08, inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -16px 24px rgba(255,255,255,0.014)`,
         border: hasBg
           ? `1px solid rgba(255,255,255,${isMobileGlass ? '0.12' : '0.24'})`
-          : `1px solid rgba(255,255,255,${isMobileGlass ? '0.1' : '0.18'})`,
+          : `1px solid rgba(255,255,255,${isMobileGlass ? '0.1' : '0.14'})`,
       }}
     >
-      {hasBg && <div className="absolute inset-0" style={{ background: `rgba(10,14,24,${isMobileGlass ? '0.04' : '0.14'})` }} />}
-      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? 0.16 : (isMobileGlass ? 0.08 : 0.22), mixBlendMode: 'screen', filter: 'saturate(0.9)' }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? '0.12' : '0.32'}) 0%, rgba(255,255,255,${isMobileGlass ? '0.03' : '0.1'}) 22%, rgba(255,255,255,${isMobileGlass ? '0.01' : '0.03'}) 56%, transparent 100%)` }} />
-      <div className="absolute inset-0 pointer-events-none" style={{ background: `radial-gradient(circle at 15% 10%, rgba(255,255,255,${isMobileGlass ? '0.08' : '0.24'}) 0%, transparent 30%), radial-gradient(circle at 85% 92%, rgba(255,255,255,${isMobileGlass ? '0.04' : '0.12'}) 0%, transparent 26%)` }} />
+      {hasBg && <div className="absolute inset-0" style={{ background: 'rgba(10,14,24,0.01)' }} />}
+      <div className="absolute inset-0" style={{ background: bg, opacity: hasBg ? 0.3 : 0.18, mixBlendMode: 'screen', filter: 'saturate(0.8)' }} />
+      <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, rgba(255,255,255,0.055) 22%, transparent 60%)' }} />
       <div className="relative z-10 w-full h-full">{children}</div>
       {bulkSelectionActive && (
         <button
@@ -2397,7 +2405,7 @@ function UnifiedAppCell({ id, app, editMode, language, isDark, glowEnabled, navi
       <LiquidIcon app={app} size={iconSize} editMode={editMode} glowEnabled={glowEnabled} avatarUrl={avatarUrl} badgeCount={badgeCount} />
       <span
         className={`font-bold text-center leading-tight text-white px-2 rounded-md ${compact ? 'text-[10px] mt-0.5 py-0' : 'text-[11px] mt-1 py-0.5'}`}
-        style={{ background: 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.14) 100%)', backdropFilter: 'blur(18px) saturate(175%)', WebkitBackdropFilter: 'blur(18px) saturate(175%)', border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.22)', textShadow: '0 1px 3px rgba(0,0,0,0.8)', maxWidth: compact ? 64 : 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
+        style={{ background: isAppleMobileDevice() ? 'linear-gradient(180deg, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.14) 100%)' : 'linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(14,18,30,0.26) 42%, rgba(10,14,24,0.5) 100%)', backdropFilter: isAppleMobileDevice() ? 'blur(18px) saturate(175%)' : 'blur(22px) saturate(190%)', WebkitBackdropFilter: isAppleMobileDevice() ? 'blur(18px) saturate(175%)' : 'blur(22px) saturate(190%)', border: isAppleMobileDevice() ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.13)', boxShadow: isAppleMobileDevice() ? '0 12px 24px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.22)' : '0 16px 30px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.1)', textShadow: '0 1px 3px rgba(0,0,0,0.8)', maxWidth: compact ? 64 : 68, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}
       >
         {name}
       </span>
@@ -3637,40 +3645,36 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const hasCustomBg = bgChoice === 'style';
   const hasAnyBg = hasBg || hasCustomBg;
   const wallpaperTranslateY = `${(bgPositionY - 50) * 1.2}%`;
-  const isMobileGlass = isHomescreenGlassMobileDevice();
+  const isMobileGlass = isAppleMobileDevice();
   const effectiveDockColor = dockColor || (isDark ? '#0c0f14' : '#060541');
   const dockTintIsDark = dockColor ? getHexLuminance(effectiveDockColor) < 0.32 : isDark;
   const dockTrayBackground = dockColor
     ? `linear-gradient(180deg, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.42 : 0.92)} 0%, ${rgbaFromHex(effectiveDockColor, dockTintIsDark ? 0.3 : 0.84)} 100%)`
-    : `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? 0.12 : 0.66}) 0%, rgba(255,255,255,${isMobileGlass ? 0.06 : 0.34}) 24%, rgba(255,255,255,${isMobileGlass ? 0.03 : 0.16}) 100%), radial-gradient(circle at 50% -12%, rgba(255,255,255,${isMobileGlass ? 0.08 : 0.42}) 0%, transparent 46%), linear-gradient(135deg, rgba(255,255,255,${isMobileGlass ? 0.04 : 0.22}) 0%, rgba(255,255,255,${isMobileGlass ? 0.015 : 0.08}) 46%, rgba(255,255,255,${isMobileGlass ? 0.025 : 0.14}) 100%)`;
+    : `linear-gradient(180deg, rgba(255,255,255,0.24) 0%, rgba(255,255,255,0.1) 24%, rgba(255,255,255,0.02) 100%), rgba(30,33,42,0.18)`;
   const dockTrayBorder = dockColor
     ? `1px solid rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.25 : 0.38) : (dockTintIsDark ? 0.28 : 0.42)})`
-    : `1px solid rgba(255,255,255,${isMobileGlass ? 0.38 : 0.42})`;
+    : `1px solid rgba(255,255,255,${isMobileGlass ? 0.38 : 0.14})`;
   const dockTrayOutline = dockColor
     ? `1px solid rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.08 : 0.14) : (dockTintIsDark ? 0.1 : 0.16)})`
-    : `1px solid rgba(255,255,255,${isMobileGlass ? 0.1 : 0.12})`;
+    : `1px solid rgba(255,255,255,${isMobileGlass ? 0.1 : 0.06})`;
   const dockTrayShadow = dockColor
     ? `0 18px 36px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,${isMobileGlass ? '0.14' : '0.16'})`
-    : `0 22px 48px rgba(0,0,0,${isMobileGlass ? '0.22' : '0.24'}), inset 0 1px 0 rgba(255,255,255,${isMobileGlass ? '0.16' : '0.18'})`;
+    : `0 26px 58px rgba(0,0,0,${isMobileGlass ? '0.22' : '0.42'}), inset 0 1px 0 rgba(255,255,255,${isMobileGlass ? '0.16' : '0.1'})`;
   const dockTopSheen = dockColor
     ? `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.1 : 0.22) : dockTintIsDark ? 0.12 : 0.24}) 0%, rgba(255,255,255,${isMobileGlass ? (dockTintIsDark ? 0.03 : 0.1) : dockTintIsDark ? 0.04 : 0.12}) 42%, transparent 100%)`
-    : `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? 0.24 : 0.26}) 0%, rgba(255,255,255,${isMobileGlass ? 0.1 : 0.12}) 42%, transparent 100%)`;
+    : `linear-gradient(180deg, rgba(255,255,255,${isMobileGlass ? 0.24 : 0.08}) 0%, rgba(255,255,255,${isMobileGlass ? 0.1 : 0.02}) 42%, transparent 100%)`;
   const dockBottomTint = dockColor
     ? `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isMobileGlass ? (dockTintIsDark ? 0.22 : 0.1) : dockTintIsDark ? 0.24 : 0.12}) 100%)`
-    : `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isMobileGlass ? 0.08 : 0.1}) 100%)`;
+    : `linear-gradient(180deg, transparent 38%, rgba(0,0,0,${isMobileGlass ? 0.08 : 0.28}) 100%)`;
 
   const headColor = headerColor || (hasAnyBg ? "#ffffff" : isDark ? "#f2f2f2" : "#060541");
   const subColor  = headerColor ? `${headerColor}b3` : (hasAnyBg ? "rgba(255,255,255,0.72)" : isDark ? "rgba(242,242,242,0.55)" : "rgba(6,5,65,0.55)");
 
   // Stat card surface — frosted glass with dark tint so white text is always readable
   const statCardBase = hasAnyBg
-    ? isMobileGlass
-      ? "bg-black/10 backdrop-blur-2xl border border-white/[0.1] shadow-[0_10px_24px_rgba(0,0,0,0.08)]"
-      : "bg-black/30 backdrop-blur-xl border border-white/20 shadow-[0_2px_12px_rgba(0,0,0,0.2)]"
+    ? "bg-[rgba(30,33,42,0.18)] backdrop-blur-2xl border border-white/[0.12] shadow-[0_8px_24px_rgba(0,0,0,0.35)]"
     : isDark
-      ? isMobileGlass
-        ? "bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] shadow-[0_10px_24px_rgba(0,0,0,0.05)]"
-        : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
+      ? "bg-[rgba(30,33,42,0.18)] backdrop-blur-xl border border-white/[0.1] shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
       : "bg-white backdrop-blur-xl border border-[#060541]/10 shadow-[0_2px_12px_rgba(6,5,65,0.08)]";
 
   const statNumBase = hasAnyBg || isDark ? "" : "!text-[#060541]";
@@ -3678,25 +3682,17 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   // Dock glass
   const dockGlass = hasAnyBg
-    ? isMobileGlass
-      ? "bg-black/12 backdrop-blur-2xl border border-white/[0.1] shadow-[0_12px_30px_rgba(0,0,0,0.12),inset_0_1px_0_rgba(255,255,255,0.1)]"
-      : "bg-black/40 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.15)]"
+    ? "bg-[rgba(30,33,42,0.18)] backdrop-blur-2xl border border-white/[0.14] shadow-[0_12px_32px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.1)]"
     : isDark
-      ? isMobileGlass
-        ? "bg-white/[0.03] backdrop-blur-2xl border border-white/[0.08] shadow-[0_12px_30px_rgba(0,0,0,0.2),inset_0_1px_0_rgba(255,255,255,0.06)]"
-        : "bg-white/[0.08] backdrop-blur-2xl border border-white/15 shadow-[0_8px_32px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]"
+      ? "bg-[rgba(30,33,42,0.18)] backdrop-blur-2xl border border-white/[0.1] shadow-[0_8px_32px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.08)]"
       : "bg-[#060541]/90 backdrop-blur-2xl border border-[#060541]/20 shadow-[0_8px_32px_rgba(6,5,65,0.25),inset_0_1px_0_rgba(255,255,255,0.15)]";
 
   // Quote glass
   const quoteGlass = hasAnyBg
-    ? isMobileGlass
-      ? "bg-black/10 backdrop-blur-2xl border border-white/[0.08]"
-      : "bg-black/30 backdrop-blur-xl border border-white/15"
+    ? "bg-[rgba(30,33,42,0.18)] backdrop-blur-2xl border border-white/[0.1]"
     : isDark
-      ? isMobileGlass
-        ? "bg-white/[0.03] backdrop-blur-2xl border border-white/[0.06]"
-        : "bg-white/[0.06] backdrop-blur-xl border border-white/10"
-      : "bg-[#060541]/[0.06] backdrop-blur-xl border border-[#060541]/10 shadow-sm";
+      ? "bg-[rgba(30,33,42,0.18)] backdrop-blur-xl border border-white/[0.08]"
+      : "bg-white/80 backdrop-blur-xl border border-[#060541]/10";
   const quoteTextColor   = hasAnyBg || isDark ? "rgba(255,255,255,0.9)" : "#060541";
   const quoteAuthorColor = hasAnyBg || isDark ? "rgba(255,255,255,0.45)" : "rgba(6,5,65,0.5)";
 
@@ -3992,8 +3988,8 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               className="relative flex items-center justify-around w-full rounded-[2.75rem] px-5 overflow-visible"
               style={{
                 background: dockTrayBackground,
-                backdropFilter: `blur(${isMobileGlass ? '34px' : '38px'}) saturate(${isMobileGlass ? '160%' : '170%'})`,
-                WebkitBackdropFilter: `blur(${isMobileGlass ? '34px' : '38px'}) saturate(${isMobileGlass ? '160%' : '170%'})`,
+                backdropFilter: `blur(${isMobileGlass ? '34px' : '44px'}) saturate(${isMobileGlass ? '160%' : '190%'})`,
+                WebkitBackdropFilter: `blur(${isMobileGlass ? '34px' : '44px'}) saturate(${isMobileGlass ? '160%' : '190%'})`,
                 border: dockTrayBorder,
                 outline: dockTrayOutline,
                 boxShadow: dockTrayShadow,

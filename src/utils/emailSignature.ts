@@ -633,11 +633,45 @@ function resolveSignatureCoreHtml(settings: Pick<EmailSignatureSettings, 'html' 
     : (structuredFallback || sanitized);
 }
 
-export function buildSignatureHtml(settings: EmailSignatureSettings): string {
-  const resolvedHtml = resolveSignatureCoreHtml(settings);
+function isInlineDataImageUrl(value: string) {
+  return /^data:image\//i.test((value || '').trim());
+}
+
+function removeInlineDataImagesFromHtml(html: string) {
+  const input = (html || '').trim();
+  if (!input) return '';
+
+  if (typeof window === 'undefined') {
+    return input.replace(/<img\b[^>]*\bsrc=["']data:image\/[^"']*["'][^>]*>/gi, '').trim();
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(`<div>${input}</div>`, 'text/html');
+  const wrapper = doc.body.firstElementChild;
+  if (!wrapper) return '';
+  wrapper.querySelectorAll('img').forEach((image) => {
+    const src = image.getAttribute('src') || '';
+    if (isInlineDataImageUrl(src)) {
+      image.remove();
+    }
+  });
+  return wrapper.innerHTML.trim();
+}
+
+type BuildSignatureHtmlOptions = {
+  includeInlineDataImages?: boolean;
+};
+
+export function buildSignatureHtml(settings: EmailSignatureSettings, options: BuildSignatureHtmlOptions = {}): string {
+  const includeInlineDataImages = options.includeInlineDataImages ?? true;
+  const resolvedHtml = resolveSignatureCoreHtml({
+    ...settings,
+    imageDataUrl: includeInlineDataImages ? settings.imageDataUrl : '',
+  });
+  const finalHtml = includeInlineDataImages ? resolvedHtml : removeInlineDataImagesFromHtml(resolvedHtml);
   const footerHtml = settings.showWaktiAiFooter ? buildWaktiAiFooterHtml() : '';
-  if (!resolvedHtml && !footerHtml) return '';
-  return `${resolvedHtml}${footerHtml}`.trim();
+  if (!finalHtml && !footerHtml) return '';
+  return `${finalHtml}${footerHtml}`.trim();
 }
 
 export function buildSignatureText(settings: EmailSignatureSettings): string {
@@ -649,7 +683,9 @@ export function buildSignatureText(settings: EmailSignatureSettings): string {
 
 export function buildComposedEmailBodies(body: string, settings: EmailSignatureSettings, includeSignature: boolean) {
   const normalizedBody = (body || '').replace(/\r\n?/g, '\n').trimEnd();
-  const signatureHtml = includeSignature && settings.enabled ? buildSignatureHtml(settings) : '';
+  const signatureHtml = includeSignature && settings.enabled
+    ? buildSignatureHtml(settings, { includeInlineDataImages: false })
+    : '';
   const signatureText = includeSignature && settings.enabled ? buildSignatureText(settings) : '';
   const htmlBody = [
     `<div style="white-space:pre-wrap;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Arial,sans-serif;color:#111827;font-size:14px;line-height:1.65;">${escapeHtml(normalizedBody).replace(/\n/g, '<br/>')}</div>`,

@@ -16,6 +16,13 @@
   text-align: inherit !important;
 }
 
+.dark .email-message-html,
+.dark .email-message-html *,
+.dark .email-message-plain {
+  color: rgba(242, 242, 242, 0.9) !important;
+  background-color: transparent !important;
+}
+
 .email-message-html img {
   display: block;
   height: auto;

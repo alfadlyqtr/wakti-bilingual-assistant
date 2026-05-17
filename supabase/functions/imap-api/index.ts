@@ -550,6 +550,37 @@ function wrapBase64(value: string): string {
   return clean.match(/.{1,76}/g)?.join("\r\n") || "";
 }
 
+function encodeQuotedPrintable(value: string): string {
+  const encoder = new TextEncoder();
+  const normalized = value.replace(/\r\n?/g, "\n");
+  const lines = normalized.split("\n");
+
+  return lines.map((line) => {
+    const bytes = encoder.encode(line);
+    let encodedLine = "";
+    let currentLength = 0;
+
+    const appendChunk = (chunk: string) => {
+      if (currentLength + chunk.length > 75) {
+        encodedLine += "=\r\n";
+        currentLength = 0;
+      }
+      encodedLine += chunk;
+      currentLength += chunk.length;
+    };
+
+    for (const byte of bytes) {
+      const isPlainAscii = (byte >= 33 && byte <= 60) || (byte >= 62 && byte <= 126);
+      const chunk = isPlainAscii
+        ? String.fromCharCode(byte)
+        : `=${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+      appendChunk(chunk);
+    }
+
+    return encodedLine;
+  }).join("\r\n");
+}
+
 function buildOutgoingMessage(params: {
   from: string;
   to: MailRecipient[];
@@ -582,17 +613,17 @@ function buildOutgoingMessage(params: {
       msg += `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"\r\n\r\n`;
       msg += `--${alternativeBoundary}\r\n`;
       msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
-      msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-      msg += `${body}\r\n`;
+      msg += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+      msg += `${encodeQuotedPrintable(body)}\r\n`;
       msg += `--${alternativeBoundary}\r\n`;
       msg += `Content-Type: text/html; charset=UTF-8\r\n`;
-      msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-      msg += `${htmlBody}\r\n`;
+      msg += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+      msg += `${encodeQuotedPrintable(htmlBody)}\r\n`;
       msg += `--${alternativeBoundary}--\r\n`;
     } else {
       msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
-      msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-      msg += `${body}\r\n`;
+      msg += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+      msg += `${encodeQuotedPrintable(body)}\r\n`;
     }
 
     for (const attachment of attachments) {
@@ -611,19 +642,19 @@ function buildOutgoingMessage(params: {
     msg += `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"\r\n\r\n`;
     msg += `--${alternativeBoundary}\r\n`;
     msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
-    msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-    msg += `${body}\r\n`;
+    msg += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+    msg += `${encodeQuotedPrintable(body)}\r\n`;
     msg += `--${alternativeBoundary}\r\n`;
     msg += `Content-Type: text/html; charset=UTF-8\r\n`;
-    msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-    msg += `${htmlBody}\r\n`;
+    msg += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+    msg += `${encodeQuotedPrintable(htmlBody)}\r\n`;
     msg += `--${alternativeBoundary}--`;
     return { rawMessage: msg, messageId };
   }
 
   msg += `Content-Type: text/plain; charset=UTF-8\r\n`;
-  msg += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-  msg += body;
+  msg += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+  msg += encodeQuotedPrintable(body);
   return { rawMessage: msg, messageId };
 }
 

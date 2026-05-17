@@ -105,12 +105,14 @@ export default function Email() {
     signatureGenerated: language === 'ar' ? 'تم إنشاء التوقيع وحفظه' : 'Signature generated and saved',
     signaturePromptHelp: language === 'ar' ? 'اكتب ما الذي يجب أن يظهر في التوقيع.' : 'Write what should appear in the signature.',
     signatureImageTitle: language === 'ar' ? 'صورة أو شعار اختياري' : 'Optional image or logo',
-    signatureImageHelp: language === 'ar' ? 'اختياري فقط.' : 'Optional only.',
+    signatureImageHelp: language === 'ar' ? 'اختياري فقط. بعد تجهيز الصورة، أنشئ التوقيع واحفظه ليتم استخدامه في الإرسال.' : 'Optional only. After preparing the image, generate and save the signature to use it in outgoing email.',
     uploadSignatureImage: language === 'ar' ? 'رفع صورة أو شعار' : 'Upload image or logo',
     changeSignatureImage: language === 'ar' ? 'تغيير الصورة' : 'Change image',
     removeSignatureImage: language === 'ar' ? 'إزالة الصورة' : 'Remove image',
     processingSignatureImage: language === 'ar' ? 'جارٍ تجهيز الصورة...' : 'Preparing image...',
-    signatureReadyHelp: language === 'ar' ? 'الصورة جاهزة.' : 'Image ready.',
+    signatureReadyHelp: language === 'ar' ? 'الصورة جاهزة كمسودة. أنشئ التوقيع واحفظه لتطبيقها.' : 'Image ready as a draft. Generate and save the signature to apply it.',
+    signatureImagePrepared: language === 'ar' ? 'تم تجهيز الصورة. أنشئ التوقيع واحفظه لتطبيقها.' : 'Image prepared. Generate and save the signature to apply it.',
+    signatureImageRemovedDraft: language === 'ar' ? 'تمت إزالة الصورة من المسودة. أنشئ التوقيع واحفظه لتطبيق التغيير.' : 'Image removed from the draft. Generate and save the signature to apply the change.',
   }), [language]);
 
   const signaturePreviewHtml = useMemo(() => buildSignatureHtml({
@@ -235,7 +237,7 @@ export default function Email() {
       const prepared = await prepareEmailSignatureImage(file);
       setSignatureImageDataUrl(prepared.dataUrl);
       setSignatureImageAlt(prepared.alt);
-      toast.success(t.signatureSaved);
+      toast.success(t.signatureImagePrepared);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'Failed to prepare image');
     } finally {
@@ -246,6 +248,7 @@ export default function Email() {
   const handleRemoveSignatureImage = () => {
     setSignatureImageDataUrl('');
     setSignatureImageAlt('');
+    toast.success(t.signatureImageRemovedDraft);
   };
 
   const renderSettingsTab = () => (

@@ -240,6 +240,45 @@ function encodeBase64Url(input: string): string {
     .replace(/=+$/, "");
 }
 
+function toBase64Url(value: string): string {
+  const binary = new TextEncoder().encode(value).reduce((acc, byte) => acc + String.fromCharCode(byte), "");
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+function encodeQuotedPrintable(value: string): string {
+  const encoder = new TextEncoder();
+  const normalized = value.replace(/\r\n?/g, "\n");
+  const lines = normalized.split("\n");
+
+  return lines.map((line) => {
+    const bytes = encoder.encode(line);
+    let encodedLine = "";
+    let currentLength = 0;
+
+    const appendChunk = (chunk: string) => {
+      if (currentLength + chunk.length > 75) {
+        encodedLine += "=\r\n";
+        currentLength = 0;
+      }
+      encodedLine += chunk;
+      currentLength += chunk.length;
+    };
+
+    for (const byte of bytes) {
+      const isPlainAscii = (byte >= 33 && byte <= 60) || (byte >= 62 && byte <= 126);
+      const chunk = isPlainAscii
+        ? String.fromCharCode(byte)
+        : `=${byte.toString(16).toUpperCase().padStart(2, "0")}`;
+      appendChunk(chunk);
+    }
+
+    return encodedLine;
+  }).join("\r\n");
+}
+
 function buildRawEmailMessage(params: {
   from: string;
   to: MailRecipient[];
@@ -270,17 +309,17 @@ function buildRawEmailMessage(params: {
       raw += `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"\r\n\r\n`;
       raw += `--${alternativeBoundary}\r\n`;
       raw += `Content-Type: text/plain; charset="UTF-8"\r\n`;
-      raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-      raw += `${body}\r\n`;
+      raw += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+      raw += `${encodeQuotedPrintable(body)}\r\n`;
       raw += `--${alternativeBoundary}\r\n`;
       raw += `Content-Type: text/html; charset="UTF-8"\r\n`;
-      raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-      raw += `${htmlBody}\r\n`;
+      raw += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+      raw += `${encodeQuotedPrintable(htmlBody)}\r\n`;
       raw += `--${alternativeBoundary}--\r\n`;
     } else {
       raw += `Content-Type: text/plain; charset="UTF-8"\r\n`;
-      raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-      raw += `${body}\r\n`;
+      raw += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+      raw += `${encodeQuotedPrintable(body)}\r\n`;
     }
 
     for (const attachment of attachments) {
@@ -299,19 +338,19 @@ function buildRawEmailMessage(params: {
     raw += `Content-Type: multipart/alternative; boundary="${alternativeBoundary}"\r\n\r\n`;
     raw += `--${alternativeBoundary}\r\n`;
     raw += `Content-Type: text/plain; charset="UTF-8"\r\n`;
-    raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-    raw += `${body}\r\n`;
+    raw += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+    raw += `${encodeQuotedPrintable(body)}\r\n`;
     raw += `--${alternativeBoundary}\r\n`;
     raw += `Content-Type: text/html; charset="UTF-8"\r\n`;
-    raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-    raw += `${htmlBody}\r\n`;
+    raw += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+    raw += `${encodeQuotedPrintable(htmlBody)}\r\n`;
     raw += `--${alternativeBoundary}--\r\n`;
     return raw;
   }
 
   raw += `Content-Type: text/plain; charset="UTF-8"\r\n`;
-  raw += `Content-Transfer-Encoding: 8bit\r\n\r\n`;
-  raw += `${body}\r\n`;
+  raw += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
+  raw += `${encodeQuotedPrintable(body)}\r\n`;
   return raw;
 }
 

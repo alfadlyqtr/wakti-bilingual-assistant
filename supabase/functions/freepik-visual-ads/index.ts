@@ -89,6 +89,10 @@ type VisualAdsSpec = {
   text_policy?: {
     allowed_text?: string[] | null;
     allowed_feature_labels?: string[] | null;
+    text_presence_id?: string | null;
+    text_presence_prompt?: string | null;
+    text_color_style_id?: string | null;
+    text_color_style_prompt?: string | null;
     allow_generated_headline?: boolean | null;
     allow_generated_tagline?: boolean | null;
     allow_generated_social_proof_copy?: boolean | null;
@@ -522,6 +526,37 @@ function buildCtaDirectives(spec: VisualAdsSpec): string[] {
   return lines;
 }
 
+function buildTextSystemDirectives(spec: VisualAdsSpec): string[] {
+  const textPresenceId = (spec.text_policy?.text_presence_id || "").toLowerCase();
+  const textColorStyleId = (spec.text_policy?.text_color_style_id || "").toLowerCase();
+  const lines: string[] = [];
+
+  switch (textPresenceId) {
+    case "quiet":
+      lines.push("TEXT PRESENCE / QUIET: Reserve a compact clean text-safe zone near the lower center for restrained external overlay text. Keep the safe area elegant, unobtrusive, and free from busy objects or strong texture.");
+      break;
+    case "balanced":
+      lines.push("TEXT PRESENCE / BALANCED: Reserve a moderate lower-center text-safe zone for external overlay text with clear premium hierarchy. Keep enough negative space for a CTA plus compact supporting chips.");
+      break;
+    case "strong-cta":
+      lines.push("TEXT PRESENCE / STRONG CTA: Reserve a wider stronger lower-center text-safe zone for an externally composited CTA with small supporting chips above it. Keep this area clean, readable, and protected from visual clutter.");
+      break;
+  }
+
+  switch (textColorStyleId) {
+    case "auto-contrast":
+      lines.push("TEXT COLOR / AUTO CONTRAST: Keep the reserved text-safe zone tonally stable and readable so external overlay text can achieve clean contrast without loud decorative color behind it.");
+      break;
+    case "brand-accent":
+      lines.push("TEXT COLOR / BRAND ACCENT: Keep the reserved text-safe zone neutral and premium so a restrained brand-accent CTA can be composited later without clashing with the background.");
+      break;
+    case "minimal-monochrome":
+      lines.push("TEXT COLOR / MINIMAL MONOCHROME: Keep the reserved text-safe zone clean and elegant so monochrome external overlay text will remain crisp and premium.");
+      break;
+  }
+
+  return lines;
+}
 
 function _normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
   const record = asRecord(raw) || {};
@@ -583,6 +618,10 @@ function _normalizeVisualAdsSpec(raw: unknown): VisualAdsSpec {
     text_policy: textPolicy ? {
       allowed_text: asStringArray(textPolicy.allowed_text, 120),
       allowed_feature_labels: asStringArray(textPolicy.allowed_feature_labels, 120),
+      text_presence_id: asString(textPolicy.text_presence_id, 80) || null,
+      text_presence_prompt: asString(textPolicy.text_presence_prompt, 320) || null,
+      text_color_style_id: asString(textPolicy.text_color_style_id, 80) || null,
+      text_color_style_prompt: asString(textPolicy.text_color_style_prompt, 320) || null,
       allow_generated_headline: asBoolean(textPolicy.allow_generated_headline),
       allow_generated_tagline: asBoolean(textPolicy.allow_generated_tagline),
       allow_generated_social_proof_copy: asBoolean(textPolicy.allow_generated_social_proof_copy),
@@ -804,6 +843,7 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   lines.push("");
   const allowedText = ctaText ? [ctaText, ...featureChips.filter((chip) => chip !== ctaText)] : featureChips;
   if (allowedText.length) {
+    lines.push("The following approved short text will be composited later in a controlled overlay layer:");
     for (const item of allowedText) lines.push(`\"${item}\"`);
   } else {
     lines.push("No extra on-poster text beyond what is already approved in the brief.");
@@ -834,18 +874,27 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     lines.push(...styleDirectives);
   }
 
+  const textSystemDirectives = buildTextSystemDirectives(spec);
+  if (textSystemDirectives.length > 0) {
+    lines.push("");
+    lines.push("Text System:");
+    lines.push("");
+    lines.push(...textSystemDirectives);
+  }
+
   if (ctaText) {
     lines.push("");
-    lines.push("Call to Action:");
+    lines.push("CTA Overlay Guidance:");
     lines.push("");
-    lines.push(`Display \"${ctaText}\" clearly and prominently as the main call to action (button or highlighted text).`);
-    lines.push(...buildCtaDirectives(spec));
+    lines.push(`Reserve clean lower-center space for external rendering of \"${ctaText}\" as the main call to action.`);
+    lines.push("Do not typeset, paint, or invent the CTA inside the base poster image unless it already exists inside a protected uploaded asset.");
   }
 
   lines.push("");
   lines.push("Strict Rules:");
   lines.push("");
   lines.push("Do NOT add any extra text beyond the allowed phrases listed above.");
+  lines.push("Do NOT typeset the approved overlay text directly into the base poster image. Leave clean negative space for the controlled overlay layer.");
   lines.push("Do NOT invent names, headlines, taglines, or brand copy.");
   lines.push("Do NOT invent testimonials, ratings, reviews, or social proof copy.");
   if (hasScreenshot || hasAnyLogo || hasProduct) lines.push("Do NOT erase, rewrite, or hallucinate text that already exists inside a protected uploaded screenshot, logo, or product package.");
@@ -957,6 +1006,10 @@ function buildVisualAdsStructuredAppendix(spec: VisualAdsSpec): string {
   addSection("TEXT_POLICY_SUMMARY", [
     allowedText.length ? `- allowed_text: ${allowedText.join(", ")}` : null,
     allowedFeatureLabels.length ? `- allowed_feature_labels: ${allowedFeatureLabels.join(", ")}` : null,
+    spec.text_policy?.text_presence_id ? `- text_presence_id: ${spec.text_policy.text_presence_id}` : null,
+    spec.text_policy?.text_presence_prompt ? `- text_presence_prompt: ${spec.text_policy.text_presence_prompt}` : null,
+    spec.text_policy?.text_color_style_id ? `- text_color_style_id: ${spec.text_policy.text_color_style_id}` : null,
+    spec.text_policy?.text_color_style_prompt ? `- text_color_style_prompt: ${spec.text_policy.text_color_style_prompt}` : null,
     spec.text_policy?.allow_generated_headline != null ? `- allow_generated_headline: ${spec.text_policy.allow_generated_headline}` : null,
     spec.text_policy?.allow_generated_tagline != null ? `- allow_generated_tagline: ${spec.text_policy.allow_generated_tagline}` : null,
     spec.text_policy?.allow_generated_social_proof_copy != null ? `- allow_generated_social_proof_copy: ${spec.text_policy.allow_generated_social_proof_copy}` : null,
@@ -1345,6 +1398,7 @@ serve(async (req) => {
       input: {
         prompt: finalPrompt,
         input_urls: imageUrls,
+        image_urls: imageUrls,
         aspect_ratio: aspectRatio,
         resolution: "1K",
       },
@@ -1365,21 +1419,31 @@ serve(async (req) => {
       body: JSON.stringify(requestBody),
     });
 
+    const createText = await createRes.text();
+    console.log(`[freepik-visual-ads] KIE create response ${createRes.status}: ${createText.slice(0, 1000)}`);
+
     if (!createRes.ok) {
-      const errorText = await createRes.text();
-      throw new Error(`Visual ads generation service error ${createRes.status}: ${errorText}`);
+      throw new Error(`Visual ads generation service error ${createRes.status}: ${createText}`);
     }
 
-    const createData: KieCreateResponse = await createRes.json();
+    let createData: KieCreateResponse;
+    try {
+      createData = JSON.parse(createText) as KieCreateResponse;
+    } catch {
+      throw new Error(`Visual ads generation service returned an invalid response: ${createText.slice(0, 300)}`);
+    }
     if (createData.code !== 200 || !createData.data?.taskId) {
       throw new Error(sanitizeError(createData.msg || createData.message || "Failed to create task"));
     }
 
-    await serviceDb.from("visual_ads_jobs").insert({
+    const { error: insertErr } = await serviceDb.from("visual_ads_jobs").insert({
       user_id: user.id,
       task_id: createData.data.taskId,
       status: "waiting",
     });
+    if (insertErr) {
+      throw new Error(`Failed to register visual ads job: ${insertErr.message || "insert failed"}`);
+    }
 
     return new Response(JSON.stringify({
       ok: true,
@@ -1389,7 +1453,17 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    const rawMsg = error instanceof Error ? error.message : "Unknown error";
+    const rawMsg = error instanceof Error
+      ? error.message
+      : typeof error === "string"
+      ? error
+      : (() => {
+        try {
+          return JSON.stringify(error);
+        } catch {
+          return "Unknown error";
+        }
+      })();
     console.error("[freepik-visual-ads] Error:", rawMsg);
     return new Response(JSON.stringify({ error: sanitizeError(rawMsg) }), {
       status: 500,

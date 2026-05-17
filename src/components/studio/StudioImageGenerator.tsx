@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { composeVisualAdsPoster, type VisualAdsPosterTextSpec } from '@/components/studio/visualAdsPosterComposer';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { emitEvent } from '@/utils/eventBus';
 import { toast } from 'sonner';
@@ -32,6 +33,8 @@ import VisualAdsGenerator, {
   adTopicChips,
   ctaChips,
   mainMessageVariantMap,
+  textColorStyleChips,
+  textPresenceChips,
   styleVariantMap,
   type VisualAdsState,
 } from '@/components/studio/VisualAdsGenerator';
@@ -40,6 +43,7 @@ type ImageSubmode = 'text2image' | 'image2image' | 'background-removal' | 'draw'
 
 const SUPABASE_URL = ((import.meta as any).env?.VITE_SUPABASE_URL || 'https://hxauxozopvpzpdygoqwf.supabase.co').trim();
 const MAX_STUDIO_IMAGE_UPLOAD_BYTES = 10 * 1024 * 1024;
+const VISUAL_ADS_MODEL = 'gpt-image-2-image-to-image';
 
 /** Strip stray spaces / %20 from a storage URL before persisting it. */
 const sanitizeImageUrl = (url: string): string =>
@@ -583,25 +587,137 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     }
   }, [user?.id, submode, importExternalImageToStorage]);
 
+  const storeGeneratedImageBlob = useCallback(async (
+    blob: Blob,
+    filenamePrefix: string,
+  ): Promise<{ url: string; storagePath: string }> => {
+    if (!user?.id) throw new Error('Authentication required');
+
+    const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
+    const randomId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const fileName = `${user.id}/${filenamePrefix}-${Date.now()}-${randomId}.${ext}`;
+    const { error: uploadErr } = await supabase.storage
+      .from('generated-images')
+      .upload(fileName, blob, { contentType: blob.type || 'image/png', upsert: false });
+    if (uploadErr) throw uploadErr;
+
+    const { data: urlData } = supabase.storage
+      .from('generated-images')
+      .getPublicUrl(fileName);
+    const bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
+    if (!bucketUrl) throw new Error('Failed to get public URL');
+    return { url: bucketUrl, storagePath: fileName };
+  }, [user?.id]);
+
+  const syncVisualAdsGalleryResult = useCallback(async (
+    taskId: string,
+    resultIndex: number,
+    finalUrl: string,
+    storagePath: string,
+    sourceUrl: string,
+  ) => {
+    if (!user?.id) return null as string | null;
+
+    const metaPatch = {
+      storage_path: storagePath,
+      visual_ads_task_id: taskId,
+      visual_ads_result_index: resultIndex,
+      visual_ads_source_url: sourceUrl,
+      visual_ads_composed: true,
+    };
+
+    const { data: existingRow, error: existingErr } = await (supabase as any)
+      .from('user_generated_images')
+      .select('id, meta')
+      .eq('user_id', user.id)
+      .contains('meta', { visual_ads_task_id: taskId, visual_ads_result_index: resultIndex })
+      .maybeSingle();
+    if (existingErr) throw existingErr;
+
+    if (existingRow?.id) {
+      const mergedMeta = {
+        ...(((existingRow.meta as Record<string, unknown> | null) || {})),
+        ...metaPatch,
+      };
+      const { error: updateErr } = await (supabase as any)
+        .from('user_generated_images')
+        .update({
+          image_url: finalUrl,
+          quality: VISUAL_ADS_MODEL,
+          meta: mergedMeta,
+        })
+        .eq('id', existingRow.id)
+        .eq('user_id', user.id);
+      if (updateErr) throw updateErr;
+      return existingRow.id as string;
+    }
+
+    const { data: insertedRow, error: insertErr } = await (supabase as any)
+      .from('user_generated_images')
+      .insert({
+        user_id: user.id,
+        image_url: finalUrl,
+        prompt: prompt || null,
+        submode: 'visual-ads',
+        quality: VISUAL_ADS_MODEL,
+        meta: metaPatch,
+      })
+      .select('id')
+      .single();
+    if (insertErr) throw insertErr;
+    return insertedRow?.id || null;
+  }, [user?.id, prompt]);
+
   const finalizeVisualAdsResult = useCallback(async (
     rawUrls: string[],
+    textSpec: VisualAdsPosterTextSpec,
     taskId?: string | null,
-    assumePersisted = false,
   ) => {
-    void taskId;
-    const finalUrls = rawUrls;
-    const finalUrl = finalUrls[0];
-    if (!finalUrl) throw new Error('Generation completed but no image URL returned');
+    const sanitizedRawUrls = rawUrls.filter((url): url is string => typeof url === 'string' && url.length > 0);
+    const firstRawUrl = sanitizedRawUrls[0];
+    if (!firstRawUrl) throw new Error('Generation completed but no image URL returned');
+
+    const composedResults = await Promise.all(
+      sanitizedRawUrls.map(async (rawUrl, index) => {
+        const composedBlob = await composeVisualAdsPoster(rawUrl, textSpec);
+        const stored = await storeGeneratedImageBlob(composedBlob, `visual-ads-composed-${index + 1}`);
+        const imageId = taskId
+          ? await syncVisualAdsGalleryResult(taskId, index, stored.url, stored.storagePath, rawUrl)
+          : null;
+        return {
+          rawUrl,
+          finalUrl: stored.url,
+          imageId,
+        };
+      })
+    );
+
+    const finalUrls = composedResults.map((item) => item.finalUrl);
+    const firstResult = composedResults[0];
+    if (!firstResult?.finalUrl) throw new Error('Failed to prepare the final poster image');
+
+    if (taskId) {
+      await (supabase as any)
+        .from('visual_ads_jobs')
+        .update({
+          result_urls: finalUrls,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('task_id', taskId)
+        .eq('user_id', user?.id);
+    }
 
     stopProgress();
-    setResultImageUrl(finalUrl);
+    setResultImageUrl(firstResult.finalUrl);
     setResultUrls(finalUrls);
-    setIsSaved(assumePersisted);
-    setSavedImageId(null);
-    setSavedBucketUrl(assumePersisted ? finalUrl : null);
-    setSavedSourceUrl(finalUrl);
-    return finalUrl;
-  }, [stopProgress]);
+    setIsSaved(Boolean(firstResult.imageId));
+    setSavedImageId(firstResult.imageId || null);
+    setSavedBucketUrl(firstResult.finalUrl);
+    setSavedSourceUrl(firstResult.finalUrl);
+    return firstResult.finalUrl;
+  }, [composeVisualAdsPoster, stopProgress, storeGeneratedImageBlob, syncVisualAdsGalleryResult, user?.id]);
 
   const persistGeneratedImage = useCallback(async (
     imageUrl: string,
@@ -1402,6 +1518,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             const selectedStyleVariant = visualState.creativeSoul.style && visualState.creativeSoul.style !== 'custom' && visualState.creativeSoul.styleVariant
               ? (styleVariantMap[visualState.creativeSoul.style] || []).find((variant) => variant.id === visualState.creativeSoul.styleVariant) || null
               : null;
+            const selectedTextPresenceChip = textPresenceChips.find((chip) => chip.id === visualState.creativeSoul.textPresence) || null;
+            const selectedTextColorStyleChip = textColorStyleChips.find((chip) => chip.id === visualState.creativeSoul.textColorStyle) || null;
             const resolveVisualAdsValue = (selectedValue?: string | null, customValue?: string | null) => (
               selectedValue === 'custom'
                 ? normalizeShortValue(customValue)
@@ -1745,15 +1863,26 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 ...(canUseFeatureChips ? featureChips : []),
                 ...allowedText,
               ];
+              const visualAdsTextSpec: VisualAdsPosterTextSpec = {
+                aspectRatio: visualState.campaignDNA.platform,
+                ctaText: resolvedCallToAction,
+                featureChips: canUseFeatureChips ? featureChips : [],
+                textPresence: visualState.creativeSoul.textPresence,
+                textColorStyle: visualState.creativeSoul.textColorStyle,
+                language,
+              };
 
-              promptLines.push(`Create one premium ${ratio} advertising poster using the provided uploaded images.`);
+              promptLines.push(`Create one premium ${ratio} advertising poster base using the provided uploaded images.`);
               promptLines.push(`Use the structured metadata in this request as the source of truth for image roles, style direction, and composition.`);
+              promptLines.push(`Keep the lower central area clean and uncluttered so approved poster text can be overlaid later in a controlled premium layout.`);
+              promptLines.push(`Do not render new CTA text, feature chips, headlines, or extra poster copy yourself unless that text already exists inside a protected uploaded asset.`);
 
               if (exactPosterText.length) {
                 promptLines.push(``);
-                promptLines.push(`Use only this exact text in the poster:`);
+                promptLines.push(`Approved external overlay text:`);
                 exactPosterText.forEach((textLine) => promptLines.push(textLine));
                 promptLines.push(`Do not add any other text, headline, tagline, review, app store badge, or extra copy.`);
+                promptLines.push(`Reserve clean negative space for this overlay text instead of typesetting it into the base image.`);
               }
 
               promptLines.push(``);
@@ -1824,6 +1953,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                   text_policy: {
                     allowed_text: exactPosterText,
                     allowed_feature_labels: featureChips,
+                    text_presence_id: visualState.creativeSoul.textPresence,
+                    text_presence_prompt: selectedTextPresenceChip?.prompt || null,
+                    text_color_style_id: visualState.creativeSoul.textColorStyle,
+                    text_color_style_prompt: selectedTextColorStyleChip?.prompt || null,
                     allow_generated_headline: false,
                     allow_generated_tagline: false,
                     allow_generated_social_proof_copy: false,
@@ -1896,7 +2029,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                         settle(() => {
                           void (async () => {
                             try {
-                              await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], taskId, true);
+                              await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], visualAdsTextSpec, taskId);
                               resolve();
                             } catch (error) {
                               reject(error instanceof Error ? error : new Error('Ad generation failed'));
@@ -1956,7 +2089,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                           settle(() => {
                             void (async () => {
                               try {
-                                await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], taskId, false);
+                                await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], visualAdsTextSpec, taskId);
                                 resolve();
                               } catch (error) {
                                 reject(error instanceof Error ? error : new Error('Ad generation failed'));
