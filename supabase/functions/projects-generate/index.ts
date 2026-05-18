@@ -104,8 +104,8 @@ import {
 // ============================================================================
 // WAKTI PROJECTS-GENERATE V2 - OPTIMIZED ENGINE
 // ============================================================================
-// SMART MODEL SELECTION: Flash-Lite for simple, Flash for medium, Pro for complex
-// REDUCED ITERATIONS: 4 instead of 8 for agent mode
+// SMART MODEL SELECTION: dynamic Flash/Pro routing with model fallbacks
+// TOOL-FIRST EXECUTION: agent and execute now share Morph-aware edit tracking
 // CREDIT TRACKING: Log model used, tokens, and estimated cost
 // Modes: plan (propose changes) | execute (write code) | create | chat | agent
 // ============================================================================
@@ -585,7 +585,7 @@ interface UploadedAsset {
 
 interface BackendContext {
   enabled: boolean;
-  collections: Array<{ name: string; itemCount: number; schema?: any }>;
+  collections: Array<{ name: string; itemCount: number; schema?: Record<string, unknown> }>;
   formSubmissionsCount: number;
   uploadsCount: number;
   siteUsersCount: number;
@@ -608,7 +608,7 @@ interface BackendContext {
   customerDataCount?: number;
   reviews?: Array<{ rating: number; text: string; productId?: string }>;
   forms?: Array<{ id: string; name: string; fields: Array<{ name: string; type: string }> }>;
-  customerData?: Array<{ userId: string; preferences: Record<string, any> }>;
+  customerData?: Array<{ userId: string; preferences: Record<string, unknown> }>;
 }
 
 // Debug context from the AI Coder debug system
@@ -758,7 +758,7 @@ function assertNoHtml(path: string, value: string): void {
 }
 
 // ============================================================================
-// GEMINI 2.5 PRO - FULL REWRITE ENGINE (NO PATCHES)
+// FULL REWRITE ENGINE (NO PATCHES)
 // ============================================================================
 
 // ============================================================================
@@ -992,9 +992,9 @@ CRITICAL: Return ONLY the PRIMARY section's text. If you see multiple sections, 
   }
 }
 
-// GEMINI 2.5 PRO WITH IMAGES - Vision-capable for screenshots/PDFs
+// GEMINI VISION EDIT CALLER - Vision-capable for screenshots/PDFs
 // ============================================================================
-async function callGemini25ProWithImages(
+async function callGeminiVisionWithFiles(
   systemPrompt: string,
   userPrompt: string,
   images?: string[],
@@ -1007,7 +1007,7 @@ async function callGemini25ProWithImages(
   // to the system prompt. Idempotent — no-op if already applied.
   systemPrompt = withUserInputGuard(systemPrompt);
 
-  // Use Gemini 2.5 Pro (vision-capable)
+  // Use the configured Gemini vision model
   const model = GEMINI_MODEL_VISION;
   
   // Build content parts - text + optional images
@@ -1227,6 +1227,24 @@ Return JSON only.`;
   return { plan, modelSelection };
 }
 
+function getFoundationBricks(): string[] {
+  return [
+    'products',
+    'categories',
+    'orders',
+    'cart_items',
+    'services',
+    'bookings',
+    'messages',
+    'comments',
+    'reviews',
+    'forms',
+    'customer_data',
+    'users',
+    'items'
+  ];
+}
+
 // EXECUTE MODE: AI writes full file rewrites based on a plan
 // Now with SMART MODEL SELECTION + ULTRA-OPTIMIZED CONTEXT (only plan-specified files)
 async function callGeminiExecuteMode(
@@ -1272,7 +1290,7 @@ ${relevantContext}`;
   // Smart model selection for execute mode
   const modelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
 
-  const systemPrompt = buildGeminiExecuteSystemPrompt(FOUNDATION_BRICKS)
+  const systemPrompt = buildGeminiExecuteSystemPrompt(getFoundationBricks())
     .replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt());
 
   const userMessage = `CURRENT CODEBASE:
@@ -1327,7 +1345,7 @@ async function callGeminiFullRewriteEdit(
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
     .join("\n\n");
 
-  const systemPrompt = buildGeminiExecuteSystemPrompt(FOUNDATION_BRICKS)
+  const systemPrompt = buildGeminiExecuteSystemPrompt(getFoundationBricks())
     .replace("{{ALLOWED_PACKAGES_LIST}}", formatPackagesForPrompt());
 
   // Build image context if provided
@@ -1497,7 +1515,7 @@ Think of this like building with Lego:
 - **RELIABILITY:** The backend is already connected. Just use it. No API keys, no config.
 
 === 📦 YOUR BUILDING BLOCKS (Always Available) ===
-These collections are pre-installed and ready: ${FOUNDATION_BRICKS.join(', ')}
+These collections are pre-installed and ready: ${getFoundationBricks().join(', ')}
 - Use them directly: { projectId, action: 'collection/[name]' }
 - Need something custom? Create it: { projectId, action: 'collection/my_custom_thing', data: {...} }
 
@@ -1602,8 +1620,8 @@ ${userInstructions ? `ADDITIONAL INSTRUCTIONS:\n${userInstructions}\n\n` : ""}
 Implement this request. Return the FULL content of every file that needs to be modified or created.
 Return ONLY a valid JSON object with the structure shown in the system prompt.`;
 
-  // Use vision-capable model if images are provided
-  const text = await callGemini25ProWithImages(systemPrompt, userMessage, images, true);
+  // Full rewrite edits run through the configured Gemini vision-capable model
+  const text = await callGeminiVisionWithFiles(systemPrompt, userMessage, images, true);
   
   let parsed: unknown;
   try {
@@ -1922,8 +1940,219 @@ async function upsertProjectFiles(supabase: SupabaseAdminClient, projectId: stri
   if (error) throw new Error(`DB_FILES_UPSERT_FAILED: ${error.message}`);
 }
 
+type ToolCallPayload = Record<string, unknown>;
+type ToolCallResult = Record<string, unknown>;
+type ClaudeToolDefinition = {
+  name: string;
+  description: string;
+  parameters?: {
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
+};
+type ClaudeToolCall = { id: string; name: string; input: Record<string, unknown> };
+type ProjectUploadRow = {
+  bucket_id: string | null;
+  storage_path: string;
+  filename: string;
+  file_type: string | null;
+};
+type GeminiToolMessage = {
+  text?: string;
+  functionCall?: { name: string; args?: Record<string, unknown> };
+  functionResponse?: { name: string; response: unknown };
+};
+type GeminiFunctionResponseMessage = { functionResponse: { name: string; response: unknown } };
+type GeminiTextPart = GeminiToolMessage & { text: string };
+type GeminiFunctionCallPart = GeminiToolMessage & { functionCall: { name: string; args?: Record<string, unknown> } };
+type ToolCallLogEntry = { tool: string; args: ToolCallPayload; result: ToolCallResult };
+
+const PRIMARY_EXISTING_FILE_EDIT_TOOL = 'morph_edit';
+const EDIT_TOOL_NAMES = new Set(['morph_edit', 'search_replace', 'write_file', 'insert_code']);
+
+function extractVerificationSnippet(source: unknown): string {
+  if (typeof source !== 'string') return '';
+  return source
+    .split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0 && line !== '// ... existing code ...')
+    .slice(0, 6)
+    .join('\n');
+}
+
+function getLoggedToolPath(entry: ToolCallLogEntry): string | null {
+  const rawPath = entry.result?.path || entry.result?.filepath || entry.result?.deletedPath || entry.args?.path;
+  if (typeof rawPath !== 'string' || rawPath.length === 0) return null;
+  return normalizeFilePath(rawPath);
+}
+
+function getSuccessfulEditToolCalls(toolCallsLog: ToolCallLogEntry[]): ToolCallLogEntry[] {
+  return toolCallsLog.filter(entry => EDIT_TOOL_NAMES.has(entry.tool) && entry.result?.success === true);
+}
+
+function collectFilesChangedFromToolCalls(toolCallsLog: ToolCallLogEntry[]): string[] {
+  const filesChanged: string[] = [];
+  for (const entry of toolCallsLog) {
+    if (entry.tool === 'delete_file' && entry.result?.success && entry.result?.deletedPath) {
+      filesChanged.push(`(deleted) ${normalizeFilePath(entry.result.deletedPath)}`);
+      continue;
+    }
+
+    if (!EDIT_TOOL_NAMES.has(entry.tool) || entry.result?.success !== true) continue;
+    const loggedPath = getLoggedToolPath(entry);
+    if (loggedPath) filesChanged.push(loggedPath);
+  }
+  return filesChanged;
+}
+
+function getExpectedVerificationContent(entry: ToolCallLogEntry): string {
+  if (entry.tool === 'morph_edit') {
+    return extractVerificationSnippet(entry.args?.code_edit);
+  }
+  if (entry.tool === 'search_replace') {
+    if (entry.result?.method === 'morph') {
+      return extractVerificationSnippet(entry.args?.replace);
+    }
+    return typeof entry.args?.replace === 'string' ? entry.args.replace : '';
+  }
+  if (entry.tool === 'insert_code') {
+    return typeof entry.args?.code === 'string' ? entry.args.code : '';
+  }
+  if (entry.tool === 'write_file') {
+    return extractVerificationSnippet(entry.args?.content);
+  }
+  return '';
+}
+
+function toStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function normalizeToolCallArgs(value: Record<string, unknown> | undefined): ToolCallPayload {
+  return value ?? {};
+}
+
+function toGeminiParts(value: unknown): GeminiToolMessage[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is GeminiToolMessage => typeof item === 'object' && item !== null);
+}
+
+function isGeminiTextPart(part: GeminiToolMessage): part is GeminiTextPart {
+  return typeof part.text === 'string';
+}
+
+function isGeminiFunctionCallPart(part: GeminiToolMessage): part is GeminiFunctionCallPart {
+  return typeof part.functionCall?.name === 'string';
+}
+
+function toGrepMatches(value: unknown): Array<{ file: string; content?: string; line?: number }> {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is { file: string; content?: string; line?: number } => {
+    return typeof item === 'object' && item !== null && typeof (item as { file?: unknown }).file === 'string';
+  });
+}
+
+function toStrictGrepMatches(value: unknown): Array<{ file: string; line: number; content: string }> {
+  return toGrepMatches(value).map((match) => ({
+    file: match.file,
+    line: typeof match.line === 'number' ? match.line : 0,
+    content: typeof match.content === 'string' ? match.content : ''
+  }));
+}
+
+function getToolResultContent(result: ToolCallResult): string | null {
+  return typeof result.content === 'string' ? result.content : null;
+}
+
+async function readProjectFileContent(
+  supabase: SupabaseAdminClient,
+  projectId: string,
+  path: string
+): Promise<string | null> {
+  const normalizedPath = normalizeFilePath(path);
+  const { data } = await supabase
+    .from('project_files')
+    .select('content')
+    .eq('project_id', projectId)
+    .eq('path', normalizedPath)
+    .maybeSingle();
+
+  return typeof data?.content === 'string' ? data.content : null;
+}
+
+async function enforceEditToolPolicy(params: {
+  toolName: string;
+  args?: ToolCallPayload;
+  projectId: string;
+  supabase: SupabaseAdminClient;
+  knownFiles: Set<string>;
+  filesRead: Set<string>;
+  fileContentCache: Map<string, string>;
+  allFilesCache?: Record<string, string>;
+}): Promise<{ targetPath: string | null; blockResult?: Record<string, unknown> }> {
+  const { toolName, args, projectId, supabase, knownFiles, filesRead, fileContentCache, allFilesCache } = params;
+  const targetPath = typeof args?.path === 'string' ? normalizeFilePath(args.path) : null;
+
+  if (!targetPath || !EDIT_TOOL_NAMES.has(toolName)) {
+    return { targetPath };
+  }
+
+  const isNewFileCreation = toolName === 'write_file' && !knownFiles.has(targetPath);
+
+  if (!knownFiles.has(targetPath) && toolName !== 'write_file') {
+    return {
+      targetPath,
+      blockResult: {
+        success: false,
+        error: `BLOCKED: File "${targetPath}" does not exist in this project. You can only edit files that exist.`,
+        hint: 'Use list_files to see all project files, then edit one of those.',
+        availableFiles: [...knownFiles].slice(0, 10)
+      }
+    };
+  }
+
+  if (isNewFileCreation) {
+    knownFiles.add(targetPath);
+    return { targetPath };
+  }
+
+  let targetContent = fileContentCache.get(targetPath) || null;
+  if (!targetContent) {
+    targetContent = await readProjectFileContent(supabase, projectId, targetPath);
+    if (targetContent) {
+      fileContentCache.set(targetPath, targetContent);
+      allFilesCache && (allFilesCache[targetPath] = targetContent);
+    }
+  }
+
+  const hasReadAnyFile = filesRead.size > 0;
+  const requiresStrictRead = !hasReadAnyFile && (toolName === 'morph_edit' || toolName === 'search_replace' || toolName === 'insert_code');
+
+  if (requiresStrictRead && targetContent) {
+    filesRead.add(targetPath);
+  } else if (hasReadAnyFile && !filesRead.has(targetPath) && targetContent) {
+    filesRead.add(targetPath);
+  }
+
+  if (toolName === 'write_file' && targetContent) {
+    const existingLineCount = targetContent.split('\n').length;
+    if (existingLineCount < 500) {
+      return {
+        targetPath,
+        blockResult: {
+          success: false,
+          error: `BLOCKED: write_file cannot overwrite existing file "${targetPath}" because it has ${existingLineCount} lines. Existing files under 500 lines must use ${PRIMARY_EXISTING_FILE_EDIT_TOOL}.`,
+          hint: `Read the file, then use ${PRIMARY_EXISTING_FILE_EDIT_TOOL} for surgical edits. Use search_replace only if Morph fails.`
+        }
+      };
+    }
+  }
+
+  return { targetPath };
+}
+
 // Pre-fetch images from Freepik and store them in project storage
-const FREEPIK_API_KEY = Deno.env.get('FREEPIK_API_KEY') || 'FPSX97f81d1b76ea19976ac068b75e93ea9d';
+const FREEPIK_API_KEY = Deno.env.get('FREEPIK_API_KEY');
 
 interface PreFetchedImage {
   query: string;
@@ -1940,6 +2169,11 @@ async function preFetchAndStoreImages(
   queries: string[]
 ): Promise<PreFetchedImage[]> {
   const storedImages: PreFetchedImage[] = [];
+
+  if (!FREEPIK_API_KEY) {
+    console.warn('[Freepik] FREEPIK_API_KEY missing, skipping image prefetch');
+    return storedImages;
+  }
   
   for (const query of queries) {
     try {
@@ -2588,30 +2822,6 @@ function extractThemeFromPrompt(prompt: string): string {
 // Layer 2 (MANIFEST): short capability menu
 // Layer 3 (DOCS): injected via {{CAPABILITY_DOCS}} — only when detected
 
-// Foundation bricks: pre-configured backend building blocks (not limiting templates)
-const FOUNDATION_BRICKS = [
-  // E-commerce core
-  'products',
-  'categories',
-  'orders',
-  'cart_items',
-
-  // Services core
-  'services',
-  'bookings',
-
-  // Customer engagement
-  'messages',
-  'comments',
-  'reviews',        // NEW: Social proof, ratings, testimonials
-  'forms',          // NEW: Contact forms, quote requests
-  'customer_data',  // NEW: Preferences, notes, history
-
-  // Infrastructure
-  'users',
-  'items'
-];
-
 // ============================================================================
 // SYSTEM PROMPTS
 // ============================================================================
@@ -2843,8 +3053,8 @@ async function callGPT4oMini(systemPrompt: string, userPrompt: string): Promise<
 async function callClaudeOpus4Fixer(
   systemPrompt: string, 
   userPrompt: string,
-  tools: any[]
-): Promise<{ content: string; toolCalls?: any[] }> {
+  tools: ClaudeToolDefinition[]
+): Promise<{ content: string; toolCalls?: ClaudeToolCall[] }> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY missing");
 
@@ -2892,8 +3102,8 @@ async function callClaudeOpus4Fixer(
 
   const decoder = new TextDecoder();
   let fullContent = "";
-  let toolCalls: any[] = [];
-  let currentToolUse: any = null;
+  const toolCalls: ClaudeToolCall[] = [];
+  let currentToolUse: ClaudeToolCall | null = null;
   let toolInputJson = "";
 
   while (true) {
@@ -3053,7 +3263,7 @@ serve(async (req: Request) => {
 
   const userId = getUserIdFromRequest(req);
   if (!userId) {
-    const createResponseEarly = (data: any, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const createResponseEarly = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     return createResponseEarly({ ok: false, error: "Unauthorized" }, 401);
   }
 
@@ -3067,7 +3277,7 @@ serve(async (req: Request) => {
     const supabase = getAdminClient(userAuthHeader);
 
     // Helper to create consistent responses
-    const createResponse = (data: any, status = 200) => {
+    const createResponse = (data: unknown, status = 200) => {
       return new Response(JSON.stringify(data), { 
         status,
         headers: { 
@@ -3228,9 +3438,9 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
         } else if (dbUploads && dbUploads.length > 0) {
           // Clear client-provided assets — replace with server-side signed URLs
           uploadedAssets.length = 0;
-          for (const upload of dbUploads) {
-            const bucket = (upload as any).bucket_id || 'project-assets';
-            const storagePath = (upload as any).storage_path;
+          for (const upload of dbUploads as ProjectUploadRow[]) {
+            const bucket = upload.bucket_id || 'project-assets';
+            const storagePath = upload.storage_path;
             // Use signed URL (works even for private buckets, 1 hour expiry)
             const { data: signedData, error: signErr } = await supabase.storage
               .from(bucket)
@@ -3239,17 +3449,17 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
             if (signErr || !signedData?.signedUrl) {
               // Fallback to public URL
               const { data: pubData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-              console.warn(`[Assets] Signed URL failed for ${(upload as any).filename}, using public: ${signErr?.message}`);
+              console.warn(`[Assets] Signed URL failed for ${upload.filename}, using public: ${signErr?.message}`);
               uploadedAssets.push({
-                filename: (upload as any).filename,
+                filename: upload.filename,
                 url: pubData.publicUrl,
-                file_type: (upload as any).file_type
+                file_type: upload.file_type
               });
             } else {
               uploadedAssets.push({
-                filename: (upload as any).filename,
+                filename: upload.filename,
                 url: signedData.signedUrl,
-                file_type: (upload as any).file_type
+                file_type: upload.file_type
               });
             }
           }
@@ -3353,7 +3563,7 @@ The backend is **ENABLED** for this project. Here's what's available:
 - 👥 **Site Users:** ${backendContext.siteUsersCount} registered
 
 **FOUNDATION BRICKS (ALWAYS AVAILABLE):**
-- Collections you can use anytime: ${FOUNDATION_BRICKS.join(', ')}
+- Collections you can use anytime: ${getFoundationBricks().join(', ')}
 - You may create new collections if the user asks for something else
 
 ${backendContext.hasShopSetup ? `**=== E-COMMERCE (ACTIVE) ===**
@@ -3812,7 +4022,7 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       const fullPrompt = pdfTextContent ? `${prompt}${pdfTextContent}` : prompt;
       contentParts.push({ text: fullPrompt });
 
-      // Use smart model selection - Flash-Lite for simple Q&A, Flash for code changes, Pro for vision
+      // Use smart model selection for chat based on prompt complexity and attachments
       const selectedChatModel = chatModelSelection.model;
       
       // Retry logic for chat mode - up to 2 attempts with increased timeout
@@ -4084,11 +4294,11 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
           const toolsArray = geminiTools.functionDeclarations || [];
           
           // Run The Fixer with tool calling loop
-          let fixerMessages: Array<{ role: string; content: any }> = [
+          const fixerMessages: Array<{ role: string; content: string }> = [
             { role: "user", content: fixerUserPrompt }
           ];
           let fixerTaskComplete: { summary: string; filesChanged: string[] } | null = null;
-          const fixerToolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
+          const fixerToolCallsLog: ToolCallLogEntry[] = [];
           const fixerMaxIterations = 6; // Fixer gets 6 iterations max
           
           for (let fixerIter = 0; fixerIter < fixerMaxIterations; fixerIter++) {
@@ -4121,14 +4331,14 @@ REMEMBER: You have ONE SHOT. Read first, then fix correctly.`;
                   userId
                 );
                 
-                fixerToolCallsLog.push({ tool: toolCall.name, args: toolCall.input, result });
+                fixerToolCallsLog.push({ tool: toolCall.name, args: normalizeToolCallArgs(toolCall.input), result });
                 toolResults.push(`Tool: ${toolCall.name}\nResult: ${JSON.stringify(result).substring(0, 1000)}`);
                 
                 // Check for task_complete
                 if (toolCall.name === 'task_complete') {
                   fixerTaskComplete = {
-                    summary: toolCall.input.summary || 'Fix applied by The Fixer',
-                    filesChanged: toolCall.input.filesChanged || []
+                    summary: typeof toolCall.input.summary === 'string' ? toolCall.input.summary : 'Fix applied by The Fixer',
+                    filesChanged: toStringArray(toolCall.input.filesChanged)
                   };
                   break;
                 }
@@ -4245,7 +4455,7 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       // CONTEXT OPTIMIZATION: Send only file NAMES, not full content
       // Agent uses read_file tool to fetch what it needs (80% token reduction!)
       // ========================================================================
-      let currentFiles = body.currentFiles || {};
+      const currentFiles = body.currentFiles || {};
       let fileList = Object.keys(currentFiles).join('\n');
       let fileCount = Object.keys(currentFiles).length;
       
@@ -4554,7 +4764,7 @@ Update the relevant content/data files with this REAL information.`;
       }
       
       // Agent conversation loop
-      const messages: Array<{ role: string; parts: Array<{ text?: string; functionCall?: any; functionResponse?: any }> }> = [
+      const messages: Array<{ role: string; parts: GeminiToolMessage[] }> = [
         { role: "user", parts: [{ text: userMessageContent }] }
       ];
       
@@ -4571,7 +4781,7 @@ Update the relevant content/data files with this REAL information.`;
         knownFiles.add(normalized);
       });
       // 🔒 NEW: RENDER PATH TRACKING - Know which files are actually used
-      let allFilesCache: Record<string, string> = {};
+      const allFilesCache: Record<string, string> = {};
       let activeRenderPath: Set<string> = new Set();
       let renderPathComputed = false;
       
@@ -4618,7 +4828,7 @@ Update the relevant content/data files with this REAL information.`;
       
       // Increased iterations to allow for proper read-edit-verify workflow
       const maxIterations = 12; // Increased to give stamina for site-wide features
-      const toolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
+      const toolCallsLog: ToolCallLogEntry[] = [];
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
       
       // 🔒 HARDENING: Inject mandatory exploration prompt with SMART SUGGESTIONS
@@ -4655,7 +4865,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       const agentModelSelection = selectOptimalModel(prompt, hasVisionInput, 'agent', fileCount);
       
       // Track total input for cost estimation
-      let totalInputText = systemPromptWithProjectId + userMessageContent;
+      const totalInputText = systemPromptWithProjectId + userMessageContent;
       let totalOutputText = '';
       
       // Hard wall-clock budget guard — edge functions die ~150s. Leave headroom to return gracefully.
@@ -4748,18 +4958,19 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         }
         
         // Track output for cost estimation
-        const textParts = content.parts?.filter((p: any) => p.text) || [];
-        textParts.forEach((p: any) => { totalOutputText += p.text || ''; });
+        const contentParts = toGeminiParts(content.parts);
+        const textParts = contentParts.filter(isGeminiTextPart);
+        textParts.forEach((p) => { totalOutputText += p.text; });
         
         // Add model response to messages
-        messages.push({ role: "model", parts: content.parts });
+        messages.push({ role: "model", parts: contentParts });
         
         // Check for function calls
-        const functionCalls = content.parts?.filter((p: any) => p.functionCall);
+        const functionCalls = contentParts.filter(isGeminiFunctionCallPart);
         
         if (!functionCalls || functionCalls.length === 0) {
           // No function calls, check if we got a text response
-          const textPart = content.parts?.find((p: any) => p.text);
+          const textPart = contentParts.find(isGeminiTextPart);
           if (textPart) {
             // 🚀 MORPH FAST APPLY: Check for <edit> blocks in the response
             const morphEdits = parseMorphEdits(textPart.text);
@@ -4842,7 +5053,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             }
             
             // Step 3: Run automatic grep search
-            let autoSearchResults: Array<{ file: string; line: number; content: string }> = [];
+            const autoSearchResults: Array<{ file: string; line: number; content: string }> = [];
             let bestMatchFile: string | null = null;
             let bestMatchContent: string | null = null;
             
@@ -4928,7 +5139,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         }
         
         // Execute function calls
-        const functionResponses: Array<{ functionResponse: { name: string; response: any } }> = [];
+        const functionResponses: GeminiFunctionResponseMessage[] = [];
         
         for (const fc of functionCalls) {
           const { name, args } = fc.functionCall;
@@ -4936,7 +5147,17 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           // ========================================================================
           // 🔒 ENFORCEMENT: Read-before-edit check (like Cascade)
           // ========================================================================
-          const targetPath = args?.path ? (args.path.startsWith('/') ? args.path : `/${args.path}`) : null;
+          const policy = await enforceEditToolPolicy({
+            toolName: name,
+            args,
+            projectId,
+            supabase,
+            knownFiles,
+            filesRead,
+            fileContentCache,
+            allFilesCache
+          });
+          const targetPath = policy.targetPath;
           
           // ========================================================================
           // 🚀 MORPH DOCS WORKFLOW ENFORCEMENT: Search → Read → Edit → Verify
@@ -4945,89 +5166,13 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           const isEditTool = name === 'morph_edit' || name === 'search_replace' || name === 'write_file' || name === 'insert_code';
           
           if (isEditTool && targetPath) {
-            // 🔒 HARD BLOCK: Reject edits to files that don't exist in the project (unless write_file for new file)
-            const isNewFileCreation = name === 'write_file' && !knownFiles.has(targetPath);
-            
-            if (!knownFiles.has(targetPath) && name !== 'write_file') {
-              console.error(`[Agent Mode] 🚫 BLOCKED: Attempted ${name} on "${targetPath}" which does NOT exist in project!`);
-              console.error(`[Agent Mode] Known files: ${[...knownFiles].join(', ')}`);
-              
-              // Return error instead of executing
-              const blockResult = {
-                success: false,
-                error: `BLOCKED: File "${targetPath}" does not exist in this project. ` +
-                  `You can only edit files that exist. Available files: ${[...knownFiles].slice(0, 5).join(', ')}${knownFiles.size > 5 ? '...' : ''}`,
-                hint: `Use list_files to see all project files, then edit one of those.`,
-                availableFiles: [...knownFiles].slice(0, 10)
-              };
-              
-              toolCallsLog.push({ tool: name, args, result: blockResult });
+            if (policy.blockResult) {
+              console.error(`[Agent Mode] 🚫 BLOCKED: ${policy.blockResult.error}`);
+              toolCallsLog.push({ tool: name, args: normalizeToolCallArgs(args), result: policy.blockResult });
               functionResponses.push({
-                functionResponse: { name, response: blockResult }
+                functionResponse: { name, response: policy.blockResult }
               });
-              continue; // Skip to next function call
-            }
-            
-            // If creating a new file, add it to knownFiles
-            if (isNewFileCreation) {
-              knownFiles.add(targetPath);
-            }
-            
-            // 🔒 RELAXED MORPH DOCS ENFORCEMENT: Allow multi-file edits if ANY file was read
-            // Per Morph docs: "Always read files before editing to understand the structure"
-            // RELAXED: If agent has read at least one file, allow edits to other files in same session
-            // This enables multi-file edits without requiring individual reads for each file
-            const hasReadAnyFile = filesRead.size > 0;
-            const requiresStrictRead = !hasReadAnyFile && !isNewFileCreation && (name === 'morph_edit' || name === 'search_replace' || name === 'insert_code');
-            
-            if (requiresStrictRead) {
-              console.warn(`[Agent Mode] ⚠️ SOFT BLOCK: ${name} on ${targetPath} - no files read yet. Auto-reading...`);
-              
-              // 🚀 AUTO-READ: Instead of blocking, automatically read the target file
-              const { data: autoReadData } = await supabase
-                .from('project_files')
-                .select('content')
-                .eq('project_id', projectId)
-                .eq('path', targetPath)
-                .maybeSingle();
-              
-              if (autoReadData?.content) {
-                // Auto-read successful - add to filesRead and cache
-                filesRead.add(targetPath);
-                fileContentCache.set(targetPath, autoReadData.content);
-              } else {
-                // File doesn't exist - block only if not a new file creation
-                console.error(`[Agent Mode] 🚫 BLOCKED: ${name} on ${targetPath} - file not found and no files read`);
-                
-                const blockResult = {
-                  error: `File "${targetPath}" not found. Use list_files to see available files.`,
-                  hint: `Available files: ${[...knownFiles].slice(0, 5).join(', ')}`,
-                  blocked: true
-                };
-                
-                toolCallsLog.push({ tool: name, args, result: blockResult });
-                functionResponses.push({
-                  functionResponse: { name, response: blockResult }
-                });
-                continue;
-              }
-            } else if (!filesRead.has(targetPath) && !isNewFileCreation && hasReadAnyFile) {
-              const { data: autoReadData } = await supabase
-                .from('project_files')
-                .select('content')
-                .eq('project_id', projectId)
-                .eq('path', targetPath)
-                .maybeSingle();
-              
-              if (autoReadData?.content) {
-                filesRead.add(targetPath);
-                fileContentCache.set(targetPath, autoReadData.content);
-              }
-            }
-            
-            // Soft warning for write_file on existing files without reading
-            if (!filesRead.has(targetPath) && !isNewFileCreation && name === 'write_file') {
-              console.warn(`[Agent Mode] ⚠️ WARNING: write_file on existing ${targetPath} without reading first - may overwrite important code!`);
+              continue;
             }
             
             // 🚀 SOFT VALIDATION REDIRECT: If search string not in target file, find the right file automatically
@@ -5089,19 +5234,21 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           // ========================================================================
           // 🔒 TRACKING: Update read/edit tracking sets + ENHANCED ENFORCEMENT
           // ========================================================================
-          if (name === 'read_file' && targetPath && result.content) {
+          const resultContent = getToolResultContent(result);
+          if (name === 'read_file' && targetPath && resultContent) {
             filesRead.add(targetPath);
             // Cache file content for render path computation AND search_replace validation
-            allFilesCache[targetPath] = result.content;
-            fileContentCache.set(targetPath, result.content);
+            allFilesCache[targetPath] = resultContent;
+            fileContentCache.set(targetPath, resultContent);
           }
           
           
-          if (name === 'grep_search' && result.matches && result.matches.length > 0) {
+          const grepMatches = toGrepMatches(result.matches);
+          if (name === 'grep_search' && grepMatches.length > 0) {
             // Mark all files found in grep as "read" (agent knows about them)
-            result.matches.forEach((m: { file: string }) => filesRead.add(m.file));
+            grepMatches.forEach((m) => filesRead.add(m.file));
             // 🔒 NEW: AMBIGUITY DETECTION
-            const ambiguity = detectAmbiguity(result.matches);
+            const ambiguity = detectAmbiguity(toStrictGrepMatches(result.matches));
             if (ambiguity.isAmbiguous) {
               grepAmbiguityDetected = true;
               grepCandidateFiles = ambiguity.candidateFiles;
@@ -5245,7 +5392,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             }
           }
           
-          toolCallsLog.push({ tool: name, args, result });
+          toolCallsLog.push({ tool: name, args: normalizeToolCallArgs(args), result });
           functionResponses.push({
             functionResponse: { name, response: result }
           });
@@ -5260,10 +5407,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             );
             
             // Count successful edits (moved up to fix "used before declaration" error)
-            const successfulEdits = toolCallsLog.filter(tc => 
-              (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
-              tc.result?.success === true
-            );
+            const successfulEdits = getSuccessfulEditToolCalls(toolCallsLog);
             
             if (explorationCalls.length === 0) {
               console.error(`[Agent Mode] 🚫 BLOCKED task_complete: NO exploration tools called!`);
@@ -5302,8 +5446,8 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               console.error(`[Agent Mode] isEditRequest=${isEditRequest}, isImplicitEdit=${isImplicitEdit}`);
               functionResponses[functionResponses.length - 1].functionResponse.response = {
                 acknowledged: false,
-                error: 'BLOCKED: You claimed to complete an edit task but made NO successful edits. You MUST: 1) Use grep_search to find the code, 2) Use read_file to see the exact code, 3) Use search_replace to make the change. Try again!',
-                hint: 'Use grep_search first to find where the code is, then read_file, then search_replace.'
+                error: 'BLOCKED: You claimed to complete an edit task but made NO successful edits. You MUST: 1) Use grep_search to find the code, 2) Use read_file to see the exact code, 3) Use morph_edit to make the change. Use search_replace only as backup. Try again!',
+                hint: 'Use grep_search first to find where the code is, then read_file, then morph_edit.'
               };
               continue;
             }
@@ -5410,14 +5554,14 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             
             // 🔒 CHECK 6: POST-EDIT VERIFICATION - Confirm changes exist after editing
             if (filesEdited.size > 0 && editVerificationPending) {
-              let verificationIssues: string[] = [];
+              const verificationIssues: string[] = [];
               
               for (const editedFile of filesEdited) {
                 // Find the last successful edit to this file
-                const lastEdit = [...toolCallsLog].reverse().find(tc => 
-                  (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
-                  tc.result?.path === editedFile && tc.result?.success
-                );
+                const lastEdit = [...toolCallsLog].reverse().find(tc => {
+                  if (!EDIT_TOOL_NAMES.has(tc.tool) || tc.result?.success !== true) return false;
+                  return getLoggedToolPath(tc) === editedFile;
+                });
                 
                 if (lastEdit) {
                   // Verify the edit by checking if file was re-read after edit
@@ -5429,9 +5573,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                   if (!verifyRead) {
                     console.warn(`[Agent Mode] ⚠️ VERIFICATION: ${editedFile} was not re-read after edit`);
                     // Perform async verification
+                    const expectedContent = getExpectedVerificationContent(lastEdit);
                     const verification = await verifyEdit(
                       editedFile, 
-                      lastEdit.args?.replace || '', 
+                      expectedContent,
                       allFilesCache, 
                       supabase, 
                       projectId
@@ -5468,8 +5613,8 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               if (filesEdited.size > filesVerified.size) warnings.push('Some edits were not verified');
               
               taskCompleteResult = {
-                summary: result.summary || 'Task completed',
-                filesChanged: result.filesChanged || [...filesEdited],
+                summary: typeof result.summary === 'string' ? result.summary : 'Task completed',
+                filesChanged: toStringArray(result.filesChanged).length > 0 ? toStringArray(result.filesChanged) : [...filesEdited],
                 ...(warnings.length > 0 ? { warnings } : {})
               };
             }
@@ -5511,10 +5656,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       // ========================================================================
       if (grepAmbiguityDetected && grepCandidateFiles.length > 1) {
         // Check if the agent made any edits despite ambiguity
-        const successfulEditsCheck = toolCallsLog.filter(tc => 
-          (tc.tool === 'search_replace' || tc.tool === 'write_file' || tc.tool === 'insert_code') && 
-          tc.result?.success === true
-        );
+        const successfulEditsCheck = getSuccessfulEditToolCalls(toolCallsLog);
         
         // If no successful edits and ambiguity detected, return clarification card
         if (successfulEditsCheck.length === 0) {
@@ -5522,7 +5664,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           const candidateDetails: Array<{ file: string; preview: string; line?: number }> = [];
           for (const tc of toolCallsLog) {
             if (tc.tool === 'grep_search' && tc.result?.matches) {
-              for (const match of tc.result.matches) {
+              for (const match of toGrepMatches(tc.result.matches)) {
                 if (grepCandidateFiles.includes(match.file)) {
                   candidateDetails.push({
                     file: match.file,
@@ -5553,24 +5695,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       }
       
       // Collect all files that were written
-      const filesChanged: string[] = [];
-      toolCallsLog.forEach(tc => {
-        if (tc.tool === 'write_file' && tc.result?.success && tc.result?.path) {
-          filesChanged.push(tc.result.path);
-        }
-        if (tc.tool === 'search_replace' && tc.result?.success && tc.result?.path) {
-          filesChanged.push(tc.result.path);
-        }
-        if (tc.tool === 'morph_edit' && tc.result?.success && tc.result?.filepath) {
-          filesChanged.push(tc.result.filepath);
-        }
-        if (tc.tool === 'insert_code' && tc.result?.success && tc.result?.path) {
-          filesChanged.push(tc.result.path);
-        }
-        if (tc.tool === 'delete_file' && tc.result?.success && tc.result?.deletedPath) {
-          filesChanged.push(`(deleted) ${tc.result.deletedPath}`);
-        }
-      });
+      const filesChanged = collectFilesChangedFromToolCalls(toolCallsLog);
       
       // ========================================================================
       // SAFETY NET: Check for missing referenced files and auto-generate them
@@ -5738,9 +5863,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         const planCreditUsage = logCreditUsage('plan', planModelSelection, planInputText, plan, projectId);
         
         return createResponse({ ok: true, plan, mode: 'plan', creditUsage: planCreditUsage });
-      } catch (planError: any) {
-        console.error(`[Plan Mode] Error: ${planError.message}`);
-        return createResponse({ ok: false, error: planError.message }, 500);
+      } catch (planError) {
+        const planErrorMessage = planError instanceof Error ? planError.message : String(planError);
+        console.error(`[Plan Mode] Error: ${planErrorMessage}`);
+        return createResponse({ ok: false, error: planErrorMessage }, 500);
       }
     }
 
@@ -5775,6 +5901,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         // Extract paths the plan explicitly references and fetch their current content
         // so the agent has them in its first prompt. Saves ~2 tool calls per file.
         let preloadedFilesStr = '';
+        const preloadedFilesMap: Record<string, string> = {};
         try {
           const planPathMatches = Array.from(
             String(planToExecute).matchAll(/["'`\s](\/[A-Za-z0-9_./-]+\.(?:jsx?|tsx?|css|scss|html|json|md))\b/g)
@@ -5793,6 +5920,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               for (const row of planFileRows as Array<{ path: string; content: string }>) {
                 const content = typeof row.content === 'string' ? row.content : '';
                 if (content.length < 50_000) {
+                  preloadedFilesMap[normalizeFilePath(row.path)] = content;
                   preloadedFilesStr += `\n--- FILE: ${row.path} ---\n${content}\n---------------------------\n`;
                 }
               }
@@ -5837,18 +5965,25 @@ ${userInstructions ? `ADDITIONAL INSTRUCTIONS:\n${userInstructions}\n\n` : ''}
 Execute this plan step by step. Read files first (if not pre-loaded), then make changes using morph_edit.
 Call task_complete when finished.`;
         
-        // Agent loop for execute mode (max 3 iterations - execute is focused)
-        const execMessages: Array<{ role: string; parts: Array<{ text?: string; functionCall?: any; functionResponse?: any }> }> = [
+        // Agent loop for execute mode (shared tool mental model with higher iteration stamina)
+        const execMessages: Array<{ role: string; parts: GeminiToolMessage[] }> = [
           { role: "user", parts: [{ text: executeUserMessage }] }
         ];
         
         const execMaxIterations = 15; // Increased from 3 to 15 for site-wide execution stamina
-        const execToolCallsLog: Array<{ tool: string; args: any; result: any }> = [];
+        const execToolCallsLog: ToolCallLogEntry[] = [];
         let execTaskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
+        const execKnownFiles: Set<string> = new Set((existingRows || []).map((r: { path: string }) => normalizeFilePath(r.path)));
+        const execFilesRead: Set<string> = new Set(Object.keys(preloadedFilesMap));
+        const execFilesEdited = new Set<string>();
+        const execAllFilesCache: Record<string, string> = { ...preloadedFilesMap };
+        const execFileContentCache: Map<string, string> = new Map<string, string>(Object.entries(preloadedFilesMap));
+        const execFilesVerified = new Set<string>();
+        let execEditVerificationPending = false;
         
         // Model selection for execute mode
         const execModelSelection = selectOptimalModel(planToExecute, false, 'execute', fileCount);
-        let execTotalInputText = executeSystemPrompt + executeUserMessage;
+        const execTotalInputText = executeSystemPrompt + executeUserMessage;
         let execTotalOutputText = '';
         
         // Empty debug context for execute mode
@@ -5903,36 +6038,117 @@ Call task_complete when finished.`;
           }
           
           // Track output
-          const textParts = content.parts?.filter((p: any) => p.text) || [];
-          textParts.forEach((p: any) => { execTotalOutputText += p.text || ''; });
+          const contentParts = toGeminiParts(content.parts);
+          const textParts = contentParts.filter(isGeminiTextPart);
+          textParts.forEach((p) => { execTotalOutputText += p.text; });
           
-          execMessages.push({ role: "model", parts: content.parts });
+          execMessages.push({ role: "model", parts: contentParts });
           
           // Check for function calls
-          const functionCalls = content.parts?.filter((p: any) => p.functionCall);
+          const functionCalls = contentParts.filter(isGeminiFunctionCallPart);
           
           if (!functionCalls || functionCalls.length === 0) {
             break;
           }
           
           // Execute function calls
-          const functionResponses: Array<{ functionResponse: { name: string; response: any } }> = [];
+          const functionResponses: GeminiFunctionResponseMessage[] = [];
           
           for (const fc of functionCalls) {
             const { name, args } = fc.functionCall;
             
-            const result = await executeToolCall(projectId, { name, arguments: args || {} }, execDebugContext, supabase, userId);
+            const policy = await enforceEditToolPolicy({
+              toolName: name,
+              args,
+              projectId,
+              supabase,
+              knownFiles: execKnownFiles,
+              filesRead: execFilesRead,
+              fileContentCache: execFileContentCache,
+              allFilesCache: execAllFilesCache
+            });
+            const targetPath = policy.targetPath;
+
+            let result: ToolCallResult;
+            if (policy.blockResult) {
+              result = policy.blockResult;
+            } else {
+              result = await executeToolCall(projectId, { name, arguments: args || {} }, execDebugContext, supabase, userId) as ToolCallResult;
+            }
+
+            if (name === 'read_file' && targetPath && typeof result.content === 'string') {
+              execFilesRead.add(targetPath);
+              execAllFilesCache[targetPath] = result.content;
+              execFileContentCache.set(targetPath, result.content);
+            }
+
+            if (targetPath && EDIT_TOOL_NAMES.has(name) && result.success === true) {
+              execFilesEdited.add(targetPath);
+              execEditVerificationPending = true;
+            }
             
-            execToolCallsLog.push({ tool: name, args, result });
+            execToolCallsLog.push({ tool: name, args: normalizeToolCallArgs(args), result });
             functionResponses.push({
               functionResponse: { name, response: result }
             });
             
             // Check for task_complete
-            if (name === 'task_complete' && result.acknowledged) {
+            if (name === 'task_complete' && result.acknowledged === true) {
+              const successfulExecEdits = getSuccessfulEditToolCalls(execToolCallsLog);
+              if (successfulExecEdits.length === 0) {
+                execTaskCompleteResult = null;
+                functionResponses[functionResponses.length - 1].functionResponse.response = {
+                  acknowledged: false,
+                  error: 'BLOCKED: Execute mode completed without any successful edits. Read the target files and use morph_edit to execute the plan.',
+                  hint: 'Use morph_edit as the primary edit tool. Use search_replace only as backup.'
+                };
+                continue;
+              }
+
+              if (execFilesEdited.size > 0 && execEditVerificationPending) {
+                const verificationIssues: string[] = [];
+                for (const editedFile of execFilesEdited) {
+                  const lastEdit = [...execToolCallsLog].reverse().find(tc => {
+                    if (!EDIT_TOOL_NAMES.has(tc.tool) || tc.result?.success !== true) return false;
+                    return getLoggedToolPath(tc) === editedFile;
+                  });
+
+                  if (!lastEdit) continue;
+
+                  const expectedContent = getExpectedVerificationContent(lastEdit);
+                  const verification = await verifyEdit(
+                    editedFile,
+                    expectedContent,
+                    execAllFilesCache,
+                    supabase,
+                    projectId
+                  );
+
+                  if (!verification.verified) {
+                    verificationIssues.push(...verification.issues);
+                  }
+
+                  if (verification.fileInRenderPath) {
+                    execFilesVerified.add(editedFile);
+                  }
+                }
+
+                execEditVerificationPending = false;
+
+                if (verificationIssues.length > 0) {
+                  execTaskCompleteResult = null;
+                  functionResponses[functionResponses.length - 1].functionResponse.response = {
+                    acknowledged: false,
+                    error: `BLOCKED: Execute mode edits were not verified. ${verificationIssues[0]}`,
+                    issues: verificationIssues
+                  };
+                  continue;
+                }
+              }
+
               execTaskCompleteResult = {
-                summary: result.summary || 'Plan executed',
-                filesChanged: result.filesChanged || []
+                summary: typeof result.summary === 'string' ? result.summary : 'Plan executed',
+                filesChanged: toStringArray(result.filesChanged)
               };
             }
           }
@@ -5945,21 +6161,7 @@ Call task_complete when finished.`;
         }
         
         // Collect files changed
-        const execFilesChanged: string[] = [];
-        execToolCallsLog.forEach(tc => {
-          if (tc.tool === 'write_file' && tc.result?.success && tc.result?.path) {
-            execFilesChanged.push(tc.result.path);
-          }
-          if (tc.tool === 'search_replace' && tc.result?.success && tc.result?.path) {
-            execFilesChanged.push(tc.result.path);
-          }
-          if (tc.tool === 'morph_edit' && tc.result?.success && tc.result?.filepath) {
-            execFilesChanged.push(tc.result.filepath);
-          }
-          if (tc.tool === 'insert_code' && tc.result?.success && tc.result?.path) {
-            execFilesChanged.push(tc.result.path);
-          }
-        });
+        const execFilesChanged = collectFilesChangedFromToolCalls(execToolCallsLog);
         
         // Log credit usage
         const execCreditUsage = logCreditUsage('execute', execModelSelection, execTotalInputText, execTotalOutputText, projectId);
@@ -5976,7 +6178,7 @@ Call task_complete when finished.`;
           status: 'succeeded', 
           mode: 'execute-agent',
           filesChanged: [...new Set(execFilesChanged)],
-          summary: execTaskCompleteResult?.summary || 'Plan executed',
+          summary: execTaskCompleteResult ? execTaskCompleteResult.summary : 'Plan executed',
           toolCalls: execToolCallsLog.length,
           creditUsage: execCreditUsage 
         });
@@ -6237,7 +6439,7 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
           }
         }
 
-        // Use Gemini 2.5 Pro for creation
+        // Use the configured create model for project generation
         const createStartTime = Date.now();
         const shouldEnableGoogleSearch = shouldUseGoogleSearchGrounding(prompt);
         if (shouldEnableGoogleSearch) {
@@ -6314,7 +6516,7 @@ Return ONLY the JSON object. No explanation.`;
         // Inject project ID into backend API calls (catches multiple placeholder patterns)
         for (const [path, content] of Object.entries(files)) {
           // Replace all known placeholder patterns
-          let fixed = content.replace(/\{\{PROJECT_ID\}\}|PROJECT_ID_HERE/g, projectId);
+          const fixed = content.replace(/\{\{PROJECT_ID\}\}|PROJECT_ID_HERE/g, projectId);
           files[path] = fixed;
         }
         
@@ -6378,7 +6580,7 @@ Return ONLY the JSON object. No explanation.`;
       await logAIFromRequest(req, {
         functionName: "projects-generate",
         provider: "google",
-        model: images && images.length > 0 ? GEMINI_MODEL_VISION : GEMINI_MODEL_CREATE,
+        model: GEMINI_MODEL_VISION,
         inputText: userPrompt.substring(0, 1000),
         outputText: JSON.stringify(Object.keys(changedFiles)),
         durationMs: editDuration,
@@ -6428,7 +6630,7 @@ Return ONLY the JSON object. No explanation.`;
       // Inject project ID into backend API calls (catches multiple placeholder patterns)
       for (const [path, content] of Object.entries(finalFilesToUpsert)) {
         // Replace all known placeholder patterns
-        let fixed = content.replace(/\{\{PROJECT_ID\}\}|PROJECT_ID_HERE/g, projectId);
+        const fixed = content.replace(/\{\{PROJECT_ID\}\}|PROJECT_ID_HERE/g, projectId);
         finalFilesToUpsert[path] = fixed;
       }
       

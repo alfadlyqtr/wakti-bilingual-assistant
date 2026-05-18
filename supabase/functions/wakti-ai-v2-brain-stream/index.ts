@@ -371,6 +371,11 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
   }
 }
 
+function normalizeEmail(rawValue: unknown): string {
+  const normalized = toTrimmedString(rawValue).replace(/^mailto:/i, '').split('?')[0].trim().toLowerCase();
+  return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(normalized) ? normalized : '';
+}
+
 function buildContinuityContext(options: {
   conversationSummary?: string;
   stayHotSummary?: string;
@@ -1788,47 +1793,54 @@ async function streamGemini3WithSearch(
  5. Write fully in the selected language.
 
  LOCATION RULES:
- 1. For any near-me or location-dependent query, start by acknowledging the user's current location.
+ 1. For any near-me or location-dependent query, open with one short natural line that helps the user orient themselves. Do not force a scripted greeting.
  2. Never name a neighborhood, district, compound, tower, street, or sub-area as if it is the user's exact location.
  3. You may mention the city or country only if it exists in the location context above.
- 4. If exact area is uncertain, say "near your current coordinates" instead of guessing.
+ 4. If exact area is uncertain, say "near you right now" or "closest to you right now" instead of guessing. Never say "near your current coordinates".
  5. Keep recommendations tightly scoped to the user's current area.
 
  FORMAT:
  - Place or business queries: Return 4-6 results max and rank the closest grounded places first whenever current coordinates are available.
  - For near-me queries, use the grounded place/map results first. If the results are not clearly near the user's current location, say that clearly instead of pretending they are nearby.
  - For place queries, prefer concrete grounded place results over generic web listicles.
- - For business queries, use this exact output shape for EACH place when verified:
+ - For business queries, users should not need to separately ask for Google Maps, rating, review count, phone, verified email, website, or official social links. Treat them as default nearby-result fields and include each one whenever grounded or verified data exists.
+ - For business queries, if grounded Google Maps review snippets exist, the UI will show the latest 2 reviews automatically. In the answer text, still include rating and Google Reviews count whenever available.
+ - For business queries, when grounded place cards exist, keep the written intro to 1-2 short sentences max and let the structured place result carry the detailed links, reviews, and contact fields.
+ - For business queries, use this exact output shape for EACH place:
    1. **[Name] ([Area])**
       - **Reason:** [why it made the list]
       - **Vibe:** [2-4 keywords]
       - **Must-Try:** [best item / specialty / reason to go]
       - **Status:** [Open / Closed / hours only if verified]
-      - **Rating:** [only if verified]
-      - **Google Reviews:** [review count only if verified]
-      - **Google Maps:** [clickable Google Maps source link]
-      - **Phone:** [tel: link only if verified]
-      - **Website:** [official website only if verified]
-      - **Instagram:** [official Instagram only if verified]
-      - **WhatsApp:** [wa.me only if explicitly verified]
-  - Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps.
-  - Research queries: give a short executive summary, 2-4 key insights, and 2-3 high-quality sources.
-  - URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant.
+      - **Rating:** [4.4] (include whenever grounded)
+      - **Google Reviews:** [123 reviews] (include whenever grounded)
+      - **Google Maps:** [Open in Google Maps](https://...) (include whenever grounded)
+      - **Phone:** [+974xxxx](tel:+974xxxx) (only if verified)
+      - **Website:** [domain.com](https://domain.com) (official website only if verified)
+      - **Instagram:** [@handle](https://instagram.com/handle) (official Instagram only if verified)
+      - **WhatsApp:** [Chat](https://wa.me/<digits>) (only if explicitly verified)
+      - **Facebook:** [Page](https://facebook.com/...) (official Facebook only if verified)
+      - **TikTok:** [@handle](https://tiktok.com/@handle) (official TikTok only if verified)
+ - Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps.
+ - Research queries: give a short executive summary, 2-4 key insights, and 2-3 high-quality sources.
+ - URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant.
 
  OUTPUT RULES:
  - Keep place descriptions to 3 sentences max.
-  - All links must be clickable markdown.
-  - Phone numbers must use tel: links.
-  - WhatsApp must use wa.me only when explicitly verified.
-  - Never invent emails, social handles, hours, scores, prices, or sources.
-  - For place queries, never output a wide markdown table. Use compact bullets with one place per block.
-  - For business queries, keep the answer highly practical: proximity first, then quality, then useful links.
-  - For business queries, if a field is not verified, omit it instead of filling with placeholders.
-  - For business queries, do not collapse the answer into one sentence per place. Keep the named subfields so it reads like the older Wakti Maps-style result.
+ - All links must be clickable markdown.
+ - Phone numbers must use tel: links.
+ - WhatsApp must use wa.me only when explicitly verified.
+ - Never invent emails, social handles, hours, scores, prices, or sources.
+ - For place queries, never output a wide markdown table. Use compact bullets with one place per block.
+ - For business queries, keep the answer highly practical: proximity first, then quality, then useful links.
+ - For business queries, if a field is not verified, omit it instead of filling with placeholders.
+ - For business queries, do not make the user ask for Google Maps, Rating, Google Reviews, Email, Website, Instagram, WhatsApp, Facebook, or TikTok. If the data exists, include it by default.
+ - For business queries, do not output plain text URLs or plain text phone numbers. Always format them as clickable markdown links.
+ - For business queries, do not collapse the answer into one sentence per place. Keep the named subfields so it reads like the older Wakti Maps-style result.
+ - For business queries, never say "Greetings" or "I've pulled the latest for you". Sound like a sharp local guide, not a system announcement.
  ${isBusinessSearch ? '- This request is a business/place search. Follow the exact business output shape above.' : ''}
   - If space is tight, keep the most useful facts first and drop extras.`;
-    }
-
+} // Added the missing closing brace here
     // ─── LAZY-LOAD PROMPT BUILDING BLOCKS ───────────────────────────────────────
 
     function _promptPersonalSection(pt: Record<string, unknown>): string {
@@ -1911,7 +1923,7 @@ function _promptStudy(): string {
 
 // SEARCH EXTENSION (~800 chars): Only when useSearch===true in chat mode
 function _promptChatSearch(userNick: string, aiNick: string, currentDate: string): string {
-  return `\n\n🔍 LIVE DATA LOOKUP (CHAT MODE QUICK SEARCH)\n- You are doing a fast fact-check. Keep it concise — 2000 tokens max.\n- Only output numbers/facts from the retrieved web snippets. Do NOT invent data.\n- If sources conflict, prefer the most recent and note which one you used.\n- Format: short intro (1-2 sentences) + bullet points or compact table. No long paragraphs.\n- Greetings pattern: "${userNick || 'friend'} — ${aiNick || 'Wakti'} here. ${currentDate}. I've pulled the latest for you —"\n\n> 💡 *For deeper search results, try **Search Mode**.*`;
+  return `\n\n🔍 LIVE DATA LOOKUP (CHAT MODE QUICK SEARCH)\n- You are doing a fast fact-check. Keep it concise — 2000 tokens max.\n- Only output numbers/facts from the retrieved web snippets. Do NOT invent data.\n- If sources conflict, prefer the most recent and note which one you used.\n- Format: short intro (1-2 sentences) + bullet points or compact table. No long paragraphs.\n- If you open with a greeting, keep it short and natural. Never say "Greetings" or "I've pulled the latest for you". Good examples: "Here's the quick latest:" or "${userNick || 'Friend'}, here's the quick latest."\n\n> 💡 *For deeper search results, try **Search Mode**.*`;
 }
 
 // SEARCH MODE FULL EXTENSION: Only for activeTrigger === 'search'
@@ -2304,6 +2316,7 @@ type GroundedPlaceCard = {
   userRatingCount: number | null;
   websiteUrl: string;
   phone: string;
+  email?: string;
   openNow: boolean | null;
   businessStatus: string;
   editorialSummary: string;
@@ -2418,13 +2431,264 @@ function pickVerifiedBusinessLinks(results: Array<Record<string, unknown>>, plac
   return links;
 }
 
+function toTrimmedString(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeExternalUrl(rawUrl: string, baseUrl?: string): string {
+  const value = toTrimmedString(rawUrl);
+  if (!value) return '';
+  try {
+    const url = baseUrl ? new URL(value, baseUrl) : new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
+function mergeReviewSnippets(
+  primary: GroundedPlaceCard['reviewSnippets'],
+  secondary: GroundedPlaceCard['reviewSnippets'],
+): GroundedPlaceCard['reviewSnippets'] {
+  const merged: GroundedPlaceCard['reviewSnippets'] = [];
+  const seen = new Set<string>();
+  for (const review of [...(primary || []), ...(secondary || [])]) {
+    if (!review || typeof review !== 'object') continue;
+    const key = [
+      toTrimmedString(review.reviewId),
+      toTrimmedString(review.googleMapsUri),
+      toTrimmedString(review.uri),
+      toTrimmedString(review.snippet),
+      toTrimmedString(review.title),
+    ].find(Boolean);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    merged.push({
+      uri: toTrimmedString(review.uri),
+      googleMapsUri: toTrimmedString(review.googleMapsUri),
+      title: toTrimmedString(review.title),
+      reviewId: toTrimmedString(review.reviewId),
+      snippet: toTrimmedString(review.snippet),
+    });
+  }
+  return merged.slice(0, 4);
+}
+
+function mergeGroundedPlaceCard(base: GroundedPlaceCard, patch: Partial<GroundedPlaceCard>): GroundedPlaceCard {
+  return {
+    ...base,
+    name: base.name || toTrimmedString(patch.name),
+    address: base.address || toTrimmedString(patch.address),
+    latitude: base.latitude ?? (typeof patch.latitude === 'number' ? patch.latitude : null),
+    longitude: base.longitude ?? (typeof patch.longitude === 'number' ? patch.longitude : null),
+    rating: base.rating ?? (typeof patch.rating === 'number' ? patch.rating : null),
+    userRatingCount: base.userRatingCount ?? (typeof patch.userRatingCount === 'number' ? patch.userRatingCount : null),
+    websiteUrl: base.websiteUrl || toTrimmedString(patch.websiteUrl),
+    phone: base.phone || toTrimmedString(patch.phone),
+    email: normalizeEmail(base.email) || normalizeEmail(patch.email),
+    openNow: typeof base.openNow === 'boolean' ? base.openNow : (typeof patch.openNow === 'boolean' ? patch.openNow : null),
+    businessStatus: base.businessStatus || toTrimmedString(patch.businessStatus),
+    editorialSummary: base.editorialSummary || toTrimmedString(patch.editorialSummary),
+    reviewSnippets: mergeReviewSnippets(base.reviewSnippets, Array.isArray(patch.reviewSnippets) ? patch.reviewSnippets : []),
+    mapsUrl: base.mapsUrl || toTrimmedString(patch.mapsUrl),
+    instagramUrl: base.instagramUrl || toTrimmedString(patch.instagramUrl),
+    facebookUrl: base.facebookUrl || toTrimmedString(patch.facebookUrl),
+    tiktokUrl: base.tiktokUrl || toTrimmedString(patch.tiktokUrl),
+    whatsappUrl: base.whatsappUrl || toTrimmedString(patch.whatsappUrl),
+  };
+}
+
+async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partial<GroundedPlaceCard>> {
+  if (!GOOGLE_MAPS_API_KEY || !place.placeId) return {};
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1800);
+    const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(place.placeId)}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,googleMapsUri,websiteUri,internationalPhoneNumber,nationalPhoneNumber,rating,userRatingCount,businessStatus,currentOpeningHours,regularOpeningHours,reviews',
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) return {};
+
+    const data = await response.json().catch(() => null) as Record<string, unknown> | null;
+    if (!data || typeof data !== 'object') return {};
+
+    const displayName = data.displayName && typeof data.displayName === 'object' ? data.displayName as Record<string, unknown> : null;
+    const location = data.location && typeof data.location === 'object' ? data.location as Record<string, unknown> : null;
+    const currentOpeningHours = data.currentOpeningHours && typeof data.currentOpeningHours === 'object' ? data.currentOpeningHours as Record<string, unknown> : null;
+    const regularOpeningHours = data.regularOpeningHours && typeof data.regularOpeningHours === 'object' ? data.regularOpeningHours as Record<string, unknown> : null;
+
+    const mappedReviews = (Array.isArray(data.reviews) ? data.reviews : [])
+      .map((entry) => {
+        const review = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null;
+        if (!review) return null;
+        const authorAttribution = review.authorAttribution && typeof review.authorAttribution === 'object'
+          ? review.authorAttribution as Record<string, unknown>
+          : null;
+        const reviewText = review.text && typeof review.text === 'object' ? review.text as Record<string, unknown> : null;
+        const originalText = review.originalText && typeof review.originalText === 'object' ? review.originalText as Record<string, unknown> : null;
+        const authorName = toTrimmedString(authorAttribution?.displayName);
+        const relativeTime = toTrimmedString(review.relativePublishTimeDescription);
+        const rating = toFiniteNumber(review.rating);
+        const snippet = toTrimmedString(reviewText?.text) || toTrimmedString(originalText?.text);
+        const googleMapsUri = normalizeExternalUrl(toTrimmedString(review.googleMapsUri));
+        const titleParts = [
+          authorName,
+          typeof rating === 'number' ? `${rating.toFixed(1)}★` : '',
+          relativeTime,
+        ].filter(Boolean);
+        return {
+          publishedAt: Date.parse(toTrimmedString(review.publishTime)) || 0,
+          review: {
+            uri: googleMapsUri,
+            googleMapsUri,
+            title: titleParts.join(' · '),
+            reviewId: toTrimmedString(review.name),
+            snippet,
+          },
+        };
+      })
+      .filter((entry) => !!entry && (!!entry.review.snippet || !!entry.review.googleMapsUri || !!entry.review.uri));
+
+    const reviewSnippets: GroundedPlaceCard['reviewSnippets'] = [];
+    mappedReviews
+      .sort((a, b) => (b?.publishedAt || 0) - (a?.publishedAt || 0))
+      .forEach((entry) => {
+        if (!entry?.review || reviewSnippets.length >= 4) return;
+        reviewSnippets.push(entry.review);
+      });
+
+    return {
+      name: toTrimmedString(displayName?.text),
+      address: toTrimmedString(data.formattedAddress),
+      latitude: toFiniteNumber(location?.latitude),
+      longitude: toFiniteNumber(location?.longitude),
+      rating: toFiniteNumber(data.rating),
+      userRatingCount: toFiniteNumber(data.userRatingCount),
+      websiteUrl: normalizeExternalUrl(toTrimmedString(data.websiteUri)),
+      phone: toTrimmedString(data.internationalPhoneNumber) || toTrimmedString(data.nationalPhoneNumber),
+      openNow: typeof currentOpeningHours?.openNow === 'boolean'
+        ? currentOpeningHours.openNow as boolean
+        : (typeof regularOpeningHours?.openNow === 'boolean' ? regularOpeningHours.openNow as boolean : null),
+      businessStatus: toTrimmedString(data.businessStatus),
+      mapsUrl: normalizeExternalUrl(toTrimmedString(data.googleMapsUri)),
+      reviewSnippets,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function extractSocialLinksFromHtml(html: string, baseUrl: string): Partial<GroundedPlaceCard> {
+  const links: Partial<GroundedPlaceCard> = {};
+  const candidates = new Set<string>();
+  const emailCandidates = new Set<string>();
+  const hrefRegex = /href\s*=\s*(?:"([^"]+)"|'([^']+)')/gi;
+  let hrefMatch: RegExpExecArray | null;
+  while ((hrefMatch = hrefRegex.exec(html)) !== null) {
+    const href = hrefMatch[1] || hrefMatch[2] || '';
+    const normalized = normalizeExternalUrl(href, baseUrl);
+    if (normalized) candidates.add(normalized);
+  }
+  const mailtoRegex = /mailto:([^"'\s>]+)/gi;
+  let mailtoMatch: RegExpExecArray | null;
+  while ((mailtoMatch = mailtoRegex.exec(html)) !== null) {
+    const normalizedEmail = normalizeEmail(mailtoMatch[1]);
+    if (normalizedEmail) emailCandidates.add(normalizedEmail);
+  }
+  const visibleEmailMatches = html.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) || [];
+  for (const candidateEmail of visibleEmailMatches) {
+    const normalizedEmail = normalizeEmail(candidateEmail);
+    if (normalizedEmail) emailCandidates.add(normalizedEmail);
+  }
+  const absoluteUrlRegex = /https?:\/\/[^\s"'<>]+/gi;
+  const absoluteMatches = html.match(absoluteUrlRegex) || [];
+  for (const match of absoluteMatches) {
+    const normalized = normalizeExternalUrl(match);
+    if (normalized) candidates.add(normalized);
+  }
+
+  const blockedInstagramSegments = ['p', 'reel', 'reels', 'explore', 'stories', 'accounts', 'locations', 'hashtag'];
+  const blockedFacebookSegments = ['share', 'watch', 'photo', 'photos', 'events', 'groups', 'marketplace'];
+  const blockedTikTokSegments = ['tag', 'music', 'discover', 'foryou'];
+
+  for (const candidate of candidates) {
+    const host = getSafeHostname(candidate);
+    if (!host) continue;
+    const pathSegments = getSafePathSegments(candidate);
+    const firstSegment = pathSegments[0] || '';
+
+    if (!links.instagramUrl && hostMatchesAny(host, ['instagram.com']) && !blockedInstagramSegments.includes(firstSegment)) {
+      links.instagramUrl = candidate;
+      continue;
+    }
+    if (!links.facebookUrl && hostMatchesAny(host, ['facebook.com']) && !blockedFacebookSegments.includes(firstSegment)) {
+      links.facebookUrl = candidate;
+      continue;
+    }
+    if (!links.tiktokUrl && hostMatchesAny(host, ['tiktok.com']) && !blockedTikTokSegments.includes(firstSegment)) {
+      links.tiktokUrl = candidate;
+      continue;
+    }
+    if (!links.whatsappUrl && hostMatchesAny(host, ['wa.me', 'whatsapp.com']) && (candidate.includes('wa.me/') || candidate.includes('whatsapp.com/'))) {
+      links.whatsappUrl = candidate;
+    }
+  }
+
+  if (!links.email && emailCandidates.size > 0) {
+    links.email = Array.from(emailCandidates).sort((a, b) => a.length - b.length)[0] || '';
+  }
+
+  return links;
+}
+
+async function extractOfficialSocialLinksFromWebsite(websiteUrl: string): Promise<Partial<GroundedPlaceCard>> {
+  const normalizedWebsiteUrl = normalizeExternalUrl(websiteUrl);
+  if (!normalizedWebsiteUrl) return {};
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const response = await fetch(normalizedWebsiteUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'text/html,application/xhtml+xml' },
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) return {};
+    const contentType = (response.headers.get('content-type') || '').toLowerCase();
+    if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) return {};
+    const html = (await response.text()).slice(0, 120000);
+    return extractSocialLinksFromHtml(html, response.url || normalizedWebsiteUrl);
+  } catch {
+    return {};
+  }
+}
+
 async function executeBusinessLinkSearch(query: string): Promise<Array<Record<string, unknown>>> {
   const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
   if (!TAVILY_API_KEY) return [];
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const timeoutId = setTimeout(() => controller.abort(), 1800);
     const response = await fetch('https://api.tavily.com/search', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2435,7 +2699,7 @@ async function executeBusinessLinkSearch(query: string): Promise<Array<Record<st
         search_depth: 'basic',
         include_answer: false,
         include_raw_content: false,
-        max_results: 6,
+        max_results: 8,
       })
     });
     clearTimeout(timeoutId);
@@ -2451,19 +2715,21 @@ async function enrichGroundedPlacesWithOfficialLinks(places: GroundedPlaceCard[]
   if (!Array.isArray(places) || places.length === 0) return places;
 
   const enrichedTopPlaces = await Promise.allSettled(
-    places.slice(0, 3).map(async (place) => {
-      if (!place?.name) return place;
-      const results = await executeBusinessLinkSearch(`"${place.name}" ${place.address || ''} official website instagram facebook tiktok whatsapp`);
-      if (!Array.isArray(results) || results.length === 0) return place;
-      const verifiedLinks = pickVerifiedBusinessLinks(results, place);
-      return {
-        ...place,
-        websiteUrl: place.websiteUrl || verifiedLinks.websiteUrl || '',
-        instagramUrl: place.instagramUrl || verifiedLinks.instagramUrl || '',
-        facebookUrl: place.facebookUrl || verifiedLinks.facebookUrl || '',
-        tiktokUrl: place.tiktokUrl || verifiedLinks.tiktokUrl || '',
-        whatsappUrl: place.whatsappUrl || verifiedLinks.whatsappUrl || '',
-      };
+    places.slice(0, 6).map(async (place) => {
+      if (!place?.name && !place?.placeId) return place;
+
+      let enrichedPlace = mergeGroundedPlaceCard(place, await fetchGooglePlaceDetails(place));
+
+      if (enrichedPlace.websiteUrl) {
+        enrichedPlace = mergeGroundedPlaceCard(enrichedPlace, await extractOfficialSocialLinksFromWebsite(enrichedPlace.websiteUrl));
+      }
+
+      const missingOfficialLinks = !enrichedPlace.websiteUrl || !enrichedPlace.instagramUrl || !enrichedPlace.facebookUrl || !enrichedPlace.tiktokUrl || !enrichedPlace.whatsappUrl;
+      if (!missingOfficialLinks) return enrichedPlace;
+
+      const results = await executeBusinessLinkSearch(`"${enrichedPlace.name || place.name}" ${enrichedPlace.address || place.address || ''} official website instagram facebook tiktok whatsapp`);
+      if (!Array.isArray(results) || results.length === 0) return enrichedPlace;
+      return mergeGroundedPlaceCard(enrichedPlace, pickVerifiedBusinessLinks(results, enrichedPlace));
     })
   );
 
@@ -3448,7 +3714,7 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
    - (Arabic) "استناداً إلى موقعك الحالي…" / "حسب موقعك الآن…"
 2. NEVER name the user's neighborhood, district, compound, tower, street, or sub-area as if you just knew it (examples of forbidden phrasing: "you are positioned in Fox Hills district", "since you're in Lusail Marina", "as you are at West Bay"). Even if web search results contain a neighborhood name, DO NOT attribute it to the user.
 3. You MAY name the broad city or country in a neutral way (e.g. "here in <City>") ONLY after opener rule #1, and only if the city is present in LOCATION CONTEXT above. Do not invent one.
-4. If the user's exact area is uncertain, say "near your current coordinates" — never guess a neighborhood.
+4. If the user's exact area is uncertain, say "near you right now" or "closest to you right now" — never guess a neighborhood and never say "near your current coordinates".
 5. Keep all recommendations tightly scoped to this location. Do not list places from unrelated cities or countries.
 6. These rules override any tone/style preferences when they conflict.`;
             }
@@ -3673,14 +3939,9 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
 
             const eliteIntroRule = (() => {
               if (language === 'ar') {
-                const variants = [
-                  `ابدأ دائماً بتحية عربية رسمية بهذا النمط بالضبط:\n"تحياتي يا ${userNick || userDisplayName || 'صديقي'} — أنا ${aiNick || 'وقتي'}. ${localTime} (${userTimeZone}). جهّزت لك أحدث النتائج — [ثم أكمل]."`,
-                  `ابدأ دائماً بتحية عربية ودّية (خليجية) بهذا النمط بالضبط:\n"هلا ${userNick || userDisplayName || 'صديقي'} — أنا ${aiNick || 'وقتي'}. ${localTime} (${userTimeZone}). جبت لك أحدث النتائج — [ثم أكمل]."`,
-                ];
-                const pick = variants[Math.floor(Math.random() * variants.length)];
-                return pick;
+                return `ابدأ بسطر افتتاحي عربي قصير، دافئ، وجذاب. رحّب بالمستخدم بشكل طبيعي واذكر اسمه مرة واحدة إذا كان ذلك مناسباً. لا تستخدم تحية روبوتية محفوظة، ولا تقل "تحياتي" أو "جهّزت لك أحدث النتائج" أو أي إعلان عن عملية البحث. أمثلة جيدة: "هلا ${userNick || userDisplayName || 'صديقي'} — إذا ودك بغداء قوي الآن، هذه أفضل الأماكن الأقرب لك." أو "يا ${userNick || userDisplayName || 'صديقي'}، هذه أقوى الخيارات القريبة منك الآن."`;
               }
-              return `ALWAYS start with a personalized greeting using this EXACT pattern:\n"Greetings, ${userNick || userDisplayName || 'friend'} — ${aiNick || 'Wakti'} here. ${localTime} (${userTimeZone}). I've pulled the latest for you — [then continue]."`;
+              return `Open with one short warm engaging line. Greet the user naturally and mention their name once when it feels right. Do not use a scripted greeting. Never say "Greetings" or "I've pulled the latest for you" or announce your own search process. Good examples: "Hey ${userNick || userDisplayName || 'there'} — if you're after a strong lunch right now, these are the best spots nearest to you." or "${userNick || userDisplayName || 'Friend'}, here are the strongest nearby picks for you right now."`;
             })();
 
             // Intent detection is now built into the system prompt itself
@@ -3731,8 +3992,8 @@ Detect the user's need and apply the corresponding "Brain":
 
 A) PLACE / BUSINESS (The Concierge Brain):
 Restaurants, cafes, malls, hotels, salons, shops, services, "near me".
-→ Calculate travel distance and check for nearest Metro/Parking relative to ${locationContext}.
-→ Write like a luxury travel critic. Focus on exclusivity, quality, and the 'vibe'.
+→ Use grounded map/place results as the primary truth whenever they exist.
+→ Write like a sharp local guide: practical, warm, specific. No luxury-critic filler and no robotic system narration.
 
 B) LIVE DATA (The ESPN/Market Brain):
 Sports scores, schedules, standings. Stocks, crypto, exchange rates. Airport / flights.
@@ -3754,11 +4015,12 @@ If ambiguous, choose the closest intent and proceed without asking questions unl
 ============================================================
 ${eliteIntroRule}
 
-This greeting makes the user feel the response is crafted personally for them. Keep it warm but professional.
+Use one short opener only. Do not force a greeting if it sounds unnatural.
 
-After the greeting, write 1–2 sentences maximum for context.
-- Address ${userNick} naturally in the greeting (if provided).
-- Mention ONE real-time local detail based on location context (weather or a major local event).
+After the opener, write 1 sentence for context, 2 at the absolute maximum.
+- Address ${userNick} naturally only if it feels natural.
+- If grounded place cards exist, keep the prose compact and do not repeat the full links, reviews, socials, or contact fields in paragraph form.
+- Mention ONE real-time local detail based on location context only if it is confidently known and actually useful.
 - Do not overdo it. No long greetings after the intro line.
 
 SMART WEATHER / LOCAL DETAIL (IMPORTANT):
@@ -3776,6 +4038,9 @@ INTENT A: PLACE / BUSINESS
 -------------------------
 Return 4–6 results max.
 
+Users should not need to separately ask for Google Maps, rating, Google review count, phone, verified email, website, or official social links. If that data is grounded or clearly verified, include it by default.
+When grounded place cards are available, keep the prose compact and let the cards carry the detailed links, contact info, and review snippets.
+
 For EACH result use EXACTLY this structure:
 
 ## [Number]. [Name] ([Area])
@@ -3786,6 +4051,8 @@ Include cuisine/type, price ($/$$/$$$), and rating if available.]
 - **${language === 'ar' ? 'الأجواء' : 'Vibe'}:** [2–4 keywords]
 - **${language === 'ar' ? 'جرّب' : 'Must Try'}:** [specific dish/service]
 - **${language === 'ar' ? 'الذكاء' : 'Intelligence'}:** [Status (e.g., Open for another 2 hours / Closed Now) | Nearest Metro | Parking availability]
+- **${language === 'ar' ? 'التقييم' : 'Rating'}:** [4.4] (include whenever grounded)
+- **${language === 'ar' ? 'مراجعات Google' : 'Google Reviews'}:** [123 reviews] (include whenever grounded)
 - **${language === 'ar' ? 'المعلومات' : 'Info'}:**
   - **${language === 'ar' ? 'الساعات' : 'Hours'}:** [hours or Open now/Closed] (omit if unknown)
   - **${language === 'ar' ? 'الهاتف' : 'Phone'}:** [+974xxxx](tel:+974xxxx) (omit if unknown)
@@ -3799,6 +4066,7 @@ Include cuisine/type, price ($/$$/$$$), and rating if available.]
 
 Rules for Info block:
 - Do NOT put plain text phone numbers. Always use tel: links when phone is present.
+- Do NOT put plain text URLs. Website, Instagram, WhatsApp, Facebook, TikTok, and Google Maps must always be clickable markdown links.
 - Do NOT mix social platforms. If you have Instagram, label it "Instagram". Same for WhatsApp.
 - If you only have a handle (like @mallqatar) but no verified URL, still try to produce the correct platform URL ONLY if you're confident. Otherwise omit.
 - Never invent emails, social, or WhatsApp.
@@ -3975,31 +4243,45 @@ If you are running out of space, keep this order and drop the rest:
               try {
                 const gm = groundingMetadata as NonNullable<Gemini3SearchResult['groundingMetadata']>;
                 const mapsSourceByPlaceId = new Map<string, { uri?: string; title?: string; googleMapsUri?: string; reviewSnippets?: Array<{ uri?: string; googleMapsUri?: string; title?: string; reviewId?: string; snippet?: string }> }>();
+                const groundedWebResultsByPlaceId = new Map<string, Array<Record<string, unknown>>>();
                 for (const chunk of (gm.groundingChunks || [])) {
+                  const linkedPlaceId = toTrimmedString(chunk?.place?.placeId) || toTrimmedString(chunk?.maps?.placeId);
                   const maps = chunk?.maps;
-                  if (!maps?.placeId) continue;
-                  mapsSourceByPlaceId.set(maps.placeId, {
-                    uri: maps.uri,
-                    title: maps.title,
-                    googleMapsUri: maps.googleMapsUri,
-                    reviewSnippets: Array.isArray(maps.placeAnswerSources?.reviewSnippets) ? maps.placeAnswerSources?.reviewSnippets : [],
-                  });
+                  if (maps?.placeId) {
+                    mapsSourceByPlaceId.set(maps.placeId, {
+                      uri: maps.uri,
+                      title: maps.title,
+                      googleMapsUri: maps.googleMapsUri,
+                      reviewSnippets: Array.isArray(maps.placeAnswerSources?.reviewSnippets) ? maps.placeAnswerSources?.reviewSnippets : [],
+                    });
+                  }
+                  const webUrl = normalizeExternalUrl(typeof chunk?.web?.uri === 'string' ? chunk.web.uri : '');
+                  if (linkedPlaceId && webUrl) {
+                    const existingWebResults = groundedWebResultsByPlaceId.get(linkedPlaceId) || [];
+                    existingWebResults.push({
+                      url: webUrl,
+                      title: typeof chunk?.web?.title === 'string' ? chunk.web.title : (typeof maps?.title === 'string' ? maps.title : ''),
+                      content: typeof chunk?.web?.title === 'string' ? chunk.web.title : '',
+                    });
+                    groundedWebResultsByPlaceId.set(linkedPlaceId, existingWebResults);
+                  }
                 }
-                let groundedPlaces: GroundedPlaceCard[] = (gm.places || []).map((place) => {
+                const groundedPlaceById = new Map<string, GroundedPlaceCard>();
+                for (const place of (gm.places || [])) {
                   const label = place.displayName?.text || place.formattedAddress || 'Place';
                   const sourceMeta = place.placeId ? mapsSourceByPlaceId.get(place.placeId) : undefined;
                   const mapsUrl = (typeof place.googleMapsUri === 'string' && place.googleMapsUri)
-                    ? place.googleMapsUri
+                    ? normalizeExternalUrl(place.googleMapsUri)
                     : (typeof sourceMeta?.googleMapsUri === 'string' && sourceMeta.googleMapsUri)
-                    ? sourceMeta.googleMapsUri
+                    ? normalizeExternalUrl(sourceMeta.googleMapsUri)
                     : (typeof sourceMeta?.uri === 'string' && sourceMeta.uri)
-                    ? sourceMeta.uri
+                    ? normalizeExternalUrl(sourceMeta.uri)
                     : place.placeId
                     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}&query_place_id=${encodeURIComponent(place.placeId)}`
                     : (place.location?.latitude != null && place.location?.longitude != null
                         ? `https://www.google.com/maps/search/?api=1&query=${place.location.latitude},${place.location.longitude}`
                         : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}`);
-                  return {
+                  const initialPlace: GroundedPlaceCard = {
                     placeId: place.placeId || '',
                     name: place.displayName?.text || '',
                     address: place.formattedAddress || '',
@@ -4007,10 +4289,11 @@ If you are running out of space, keep this order and drop the rest:
                     longitude: place.location?.longitude ?? null,
                     rating: typeof place.rating === 'number' ? place.rating : null,
                     userRatingCount: typeof place.userRatingCount === 'number' ? place.userRatingCount : null,
-                    websiteUrl: typeof place.websiteUri === 'string' ? place.websiteUri : '',
+                    websiteUrl: typeof place.websiteUri === 'string' ? normalizeExternalUrl(place.websiteUri) : '',
                     phone: typeof place.internationalPhoneNumber === 'string'
                       ? place.internationalPhoneNumber
                       : (typeof place.nationalPhoneNumber === 'string' ? place.nationalPhoneNumber : ''),
+                    email: '',
                     openNow: typeof place.regularOpeningHours?.openNow === 'boolean' ? place.regularOpeningHours.openNow : null,
                     businessStatus: typeof place.businessStatus === 'string' ? place.businessStatus : '',
                     editorialSummary: typeof place.editorialSummary?.text === 'string' ? place.editorialSummary.text : '',
@@ -4021,7 +4304,55 @@ If you are running out of space, keep this order and drop the rest:
                     whatsappUrl: '',
                     mapsUrl,
                   };
-                });
+                  const groundedWebLinks = place.placeId
+                    ? pickVerifiedBusinessLinks(groundedWebResultsByPlaceId.get(place.placeId) || [], initialPlace)
+                    : {};
+                  groundedPlaceById.set(place.placeId || label, mergeGroundedPlaceCard(initialPlace, groundedWebLinks));
+                }
+
+                for (const [placeId, sourceMeta] of mapsSourceByPlaceId.entries()) {
+                  const sourceLabel = typeof sourceMeta.title === 'string' && sourceMeta.title.trim() ? sourceMeta.title.trim() : 'Place';
+                  const fallbackMapsUrl = normalizeExternalUrl(typeof sourceMeta.googleMapsUri === 'string' ? sourceMeta.googleMapsUri : '')
+                    || normalizeExternalUrl(typeof sourceMeta.uri === 'string' ? sourceMeta.uri : '')
+                    || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(sourceLabel)}&query_place_id=${encodeURIComponent(placeId)}`;
+
+                  if (!groundedPlaceById.has(placeId)) {
+                    const fallbackPlace: GroundedPlaceCard = {
+                      placeId,
+                      name: sourceLabel,
+                      address: '',
+                      latitude: null,
+                      longitude: null,
+                      rating: null,
+                      userRatingCount: null,
+                      websiteUrl: '',
+                      phone: '',
+                      email: '',
+                      openNow: null,
+                      businessStatus: '',
+                      editorialSummary: '',
+                      reviewSnippets: Array.isArray(sourceMeta.reviewSnippets) ? sourceMeta.reviewSnippets : [],
+                      instagramUrl: '',
+                      facebookUrl: '',
+                      tiktokUrl: '',
+                      whatsappUrl: '',
+                      mapsUrl: fallbackMapsUrl,
+                    };
+                    const groundedWebLinks = pickVerifiedBusinessLinks(groundedWebResultsByPlaceId.get(placeId) || [], fallbackPlace);
+                    groundedPlaceById.set(placeId, mergeGroundedPlaceCard(fallbackPlace, groundedWebLinks));
+                    continue;
+                  }
+
+                  const existing = groundedPlaceById.get(placeId);
+                  if (!existing) continue;
+                  groundedPlaceById.set(placeId, mergeGroundedPlaceCard(existing, {
+                    reviewSnippets: Array.isArray(sourceMeta.reviewSnippets) ? sourceMeta.reviewSnippets : [],
+                    mapsUrl: fallbackMapsUrl,
+                    ...pickVerifiedBusinessLinks(groundedWebResultsByPlaceId.get(placeId) || [], existing),
+                  }));
+                }
+
+                let groundedPlaces: GroundedPlaceCard[] = Array.from(groundedPlaceById.values());
                 groundedPlaces = await enrichGroundedPlacesWithOfficialLinks(groundedPlaces);
                 const metaPayload = {
                   metadata: {

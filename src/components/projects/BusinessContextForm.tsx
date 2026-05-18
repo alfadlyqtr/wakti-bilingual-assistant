@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Upload, FileText, Loader2, Sparkles, Building2 } from 'lucide-react';
+import { X, Upload, FileText, Sparkles, Building2, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface ContextField {
@@ -32,6 +32,7 @@ export default function BusinessContextForm({
 }: BusinessContextFormProps) {
   const [values, setValues] = useState<Record<string, string>>({});
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [showMoreFields, setShowMoreFields] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (id: string, value: string) => {
@@ -48,6 +49,16 @@ export default function BusinessContextForm({
   };
 
   const hasUpload = !!uploadedFile;
+  const primaryFields = fields.slice(0, 2);
+  const extraFields = fields.slice(2);
+  const introTitle = isRTL ? 'خلّينا نبني لك موقعًا جميلًا' : 'Let’s build your site beautifully';
+  const introDescription = isRTL
+    ? 'اكتب الأساسيات فقط، وسيتولى الذكاء الاصطناعي الباقي. ويمكنك أيضًا رفع ملف إذا كان أسهل لك.'
+    : 'Just share the basics and the AI will handle the rest. You can also upload a file if that is easier.';
+  const moreFieldsLabel = isRTL ? 'أضف تفاصيل أكثر (اختياري)' : 'Add more details (optional)';
+  const submitLabel = hasUpload
+    ? (isRTL ? 'ابنِ موقعي من الملف' : 'Build My Site From This')
+    : (isRTL ? 'ابدأ وابنِ موقعي' : 'Start Building My Site');
 
   return (
     <motion.div
@@ -55,7 +66,7 @@ export default function BusinessContextForm({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', left: 'var(--current-sidebar-width, 70px)' }}
+      style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -81,17 +92,17 @@ export default function BusinessContextForm({
               {siteType}
             </span>
           </div>
-          <h2 className="text-lg font-semibold text-white mt-2">{heading}</h2>
-          <p className="text-sm mt-1 text-white/50">
-            {isRTL
-              ? 'سيستخدم الذكاء الاصطناعي هذه المعلومات لبناء موقعك بمحتوى حقيقي'
-              : 'The AI will use this to build your site with real content'}
+          <h2 className="text-2xl font-semibold text-white mt-3 leading-tight">{introTitle}</h2>
+          <p className="text-sm mt-2 text-white/70 leading-6">
+            {introDescription}
+          </p>
+          <p className="text-xs mt-3 text-white/45 uppercase tracking-[0.18em]">
+            {heading}
           </p>
         </div>
 
-        {/* Fields */}
         <div className="px-6 py-4 space-y-3 max-h-[50vh] overflow-y-auto">
-          {!hasUpload && fields.map((field) => (
+          {!hasUpload && primaryFields.map((field) => (
             <div key={field.id}>
               <label className="block text-xs font-medium mb-1.5 text-white/70">
                 {field.label}
@@ -126,7 +137,65 @@ export default function BusinessContextForm({
             </div>
           ))}
 
-          {/* Upload section */}
+          {!hasUpload && extraFields.length > 0 && (
+            <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowMoreFields(prev => !prev)}
+                className="w-full flex items-center justify-between px-4 py-3 text-sm text-white/75 hover:bg-white/[0.04] transition-colors"
+              >
+                <span>{moreFieldsLabel}</span>
+                {showMoreFields ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              </button>
+              <AnimatePresence initial={false}>
+                {showMoreFields && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="px-4 pb-4 space-y-3"
+                  >
+                    {extraFields.map((field) => (
+                      <div key={field.id}>
+                        <label className="block text-xs font-medium mb-1.5 text-white/70">
+                          {field.label}
+                        </label>
+                        {field.type === 'textarea' ? (
+                          <textarea
+                            value={values[field.id] || ''}
+                            onChange={e => handleChange(field.id, e.target.value)}
+                            placeholder={field.placeholder}
+                            rows={3}
+                            className={cn(
+                              "w-full rounded-xl px-4 py-2.5 text-sm text-white resize-none",
+                              "border border-white/20 outline-none transition-all",
+                              "placeholder:text-white/35 focus:border-blue-400/60 focus:ring-1 focus:ring-blue-400/20"
+                            )}
+                            style={{ background: 'rgba(255,255,255,0.08)' }}
+                          />
+                        ) : (
+                          <input
+                            type={field.type}
+                            value={values[field.id] || ''}
+                            onChange={e => handleChange(field.id, e.target.value)}
+                            placeholder={field.placeholder}
+                            className={cn(
+                              "w-full rounded-xl px-4 py-2.5 text-sm text-white",
+                              "border border-white/20 outline-none transition-all",
+                              "placeholder:text-white/35 focus:border-blue-400/60 focus:ring-1 focus:ring-blue-400/20"
+                            )}
+                            style={{ background: 'rgba(255,255,255,0.08)' }}
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
           <div
             onClick={() => fileInputRef.current?.click()}
             className={cn(
@@ -157,11 +226,11 @@ export default function BusinessContextForm({
               ) : (
                 <>
                   <p className="text-sm font-medium text-white/70">
-                    {isRTL ? 'رفع ملف (اختياري)' : 'Upload a file (optional)'}
+                    {isRTL ? 'أو ارفع ملف بدل الكتابة' : 'Or upload a file instead'}
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: '#858384' }}>
                     {isRTL
-                      ? 'PDF، صورة، CV، قائمة طعام، بروشور...'
+                      ? 'PDF، صورة، CV، قائمة، بروشور...'
                       : 'PDF, image, CV, menu, brochure...'}
                   </p>
                 </>
@@ -185,7 +254,6 @@ export default function BusinessContextForm({
           />
         </div>
 
-        {/* Footer */}
         <div className="px-6 pb-6 pt-2">
           <button
             onClick={handleSubmit}
@@ -197,7 +265,7 @@ export default function BusinessContextForm({
           >
             <span className="flex items-center justify-center gap-2">
               <Sparkles size={16} />
-              {isRTL ? 'ابنِ موقعي' : 'Generate My Site'}
+              {submitLabel}
             </span>
           </button>
         </div>

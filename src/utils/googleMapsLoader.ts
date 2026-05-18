@@ -1,18 +1,20 @@
-let loadPromise: Promise<void> | null = null;
+const loadPromiseByVersion = new Map<string, Promise<void>>();
 
 /**
  * Loads the Google Maps JS SDK on demand.
  * Safe to call multiple times — only loads once.
  */
-export function loadGoogleMaps(): Promise<void> {
-  if (loadPromise) return loadPromise;
+export function loadGoogleMaps(version: 'alpha' | 'beta' = 'beta'): Promise<void> {
+  const existingPromise = loadPromiseByVersion.get(version);
+  if (existingPromise) return existingPromise;
 
   if (typeof window.google !== 'undefined' && window.google.maps) {
-    loadPromise = Promise.resolve();
-    return loadPromise;
+    const resolved = Promise.resolve();
+    loadPromiseByVersion.set(version, resolved);
+    return resolved;
   }
 
-  loadPromise = new Promise<void>((resolve, reject) => {
+  const loadPromise = new Promise<void>((resolve, reject) => {
     const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined;
     if (!key) {
       console.error('[Maps] VITE_GOOGLE_MAPS_API_KEY is missing');
@@ -29,7 +31,7 @@ export function loadGoogleMaps(): Promise<void> {
 
     const script = document.createElement('script');
     script.setAttribute('data-google-maps', 'true');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,marker&v=beta&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places,marker&v=${encodeURIComponent(version)}&loading=async`;
     script.async = true;
     script.defer = true;
     script.onload = () => resolve();
@@ -37,5 +39,6 @@ export function loadGoogleMaps(): Promise<void> {
     document.head.appendChild(script);
   });
 
+  loadPromiseByVersion.set(version, loadPromise);
   return loadPromise;
 }

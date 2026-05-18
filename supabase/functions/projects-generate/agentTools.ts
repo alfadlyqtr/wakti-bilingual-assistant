@@ -35,6 +35,19 @@ import { getCapabilityDoc, listCapabilityNames } from "./prompts/capabilities/in
 // 🧩 Template-token resolver (Phase A — Item A5) — replaces {{PROJECT_ID}} at DB save.
 import { resolveProjectPlaceholders } from "../_shared/projectFileTemplates.ts";
 
+type SupabaseClientLike = ReturnType<typeof createClient>;
+type ToolResult = Record<string, unknown>;
+type CollectionSchemaFields = { fields?: Array<{ name: string; type: string }> };
+type ProjectCollectionSchemaRow = {
+  collection_name: string;
+  display_name?: string | null;
+  schema?: CollectionSchemaFields | null;
+};
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 // ALLOWED TABLES - These are the ONLY tables the agent can access
 const ALLOWED_TABLES = [
   'project_files',
@@ -1039,7 +1052,19 @@ export async function smartSearchReplace(
   replace: string,
   instructions: string,
   supabase: ReturnType<typeof createClient>
-): Promise<{ success: boolean; method: 'exact' | 'morph'; error?: string; changes?: { linesAdded: number; linesRemoved: number } }> {
+): Promise<{
+  success: boolean;
+  method: 'exact' | 'morph';
+  path: string;
+  error?: string;
+  changes?: { linesAdded: number; linesRemoved: number };
+  occurrences?: number;
+  charsRemoved?: number;
+  charsAdded?: number;
+  netChange?: number;
+  model?: string;
+  tokensUsed?: number;
+}> {
   
   // First, try exact match (fast path)
   const { data, error: readError } = await supabase
@@ -1050,7 +1075,7 @@ export async function smartSearchReplace(
     .maybeSingle();
   
   if (readError || !data) {
-    return { success: false, method: 'exact', error: `File not found: ${path}` };
+    return { success: false, method: 'exact', path, error: `File not found: ${path}` };
   }
   
   const currentContent = data.content;
@@ -1058,20 +1083,39 @@ export async function smartSearchReplace(
   // Try exact match first
   if (currentContent.includes(search)) {
     const newContent = currentContent.replace(search, replace);
+    assertNoHtml(path, newContent);
+
+    const syntaxCheck = validateBasicSyntax(newContent, path);
+    if (!syntaxCheck.valid) {
+      return {
+        success: false,
+        method: 'exact',
+        path,
+        error: `BLOCKED: Your replacement code has a syntax error: ${syntaxCheck.error}. The edit was NOT applied.`
+      };
+    }
+
+    const resolvedNewContent = resolveProjectPlaceholders(newContent, projectId);
+    const occurrences = currentContent.split(search).length - 1;
     
     const { error: writeError } = await supabase
       .from('project_files')
-      .update({ content: newContent })
+      .update({ content: resolvedNewContent })
       .eq('project_id', projectId)
       .eq('path', path);
     
     if (writeError) {
-      return { success: false, method: 'exact', error: writeError.message };
+      return { success: false, method: 'exact', path, error: writeError.message };
     }
     
     return { 
       success: true, 
+      path,
       method: 'exact',
+      occurrences,
+      charsRemoved: search.length,
+      charsAdded: replace.length,
+      netChange: replace.length - search.length,
       changes: {
         linesAdded: replace.split('\n').length,
         linesRemoved: search.split('\n').length
@@ -1089,15 +1133,28 @@ export async function smartSearchReplace(
   const morphResult = await morphFastApply({
     originalCode: currentContent,
     codeEdit: codeEdit,
-    instructions: instructions || `Replace code in ${path}`,
+    instructions: instructions || `Replace the exact snippet in ${path}. Old code starts with: ${search.substring(0, 120)}`,
     filepath: path
   });
   
   if (!morphResult.success || !morphResult.mergedCode) {
     return { 
       success: false, 
+      path,
       method: 'morph', 
       error: morphResult.error || "Morph merge failed" 
+    };
+  }
+
+  assertNoHtml(path, morphResult.mergedCode);
+
+  const morphSyntaxCheck = validateBasicSyntax(morphResult.mergedCode, path);
+  if (!morphSyntaxCheck.valid) {
+    return {
+      success: false,
+      method: 'morph',
+      path,
+      error: `BLOCKED: Morph generated invalid syntax for ${path}: ${morphSyntaxCheck.error}`
     };
   }
   
@@ -1112,13 +1169,19 @@ export async function smartSearchReplace(
     .eq('path', path);
   
   if (writeError) {
-    return { success: false, method: 'morph', error: writeError.message };
+    return { success: false, method: 'morph', path, error: writeError.message };
   }
   
   return { 
     success: true, 
+    path,
     method: 'morph',
-    changes: morphResult.changes
+    changes: morphResult.changes,
+    charsRemoved: search.length,
+    charsAdded: replace.length,
+    netChange: replace.length - search.length,
+    model: morphResult.model,
+    tokensUsed: morphResult.tokensUsed
   };
 }
 
@@ -1923,7 +1986,7 @@ export async function verifyEdit(
   filePath: string,
   expectedContent: string, // Content that should exist after edit
   allFiles: Record<string, string>,
-  supabase: any,
+  supabase: Pick<SupabaseClientLike, 'from'>,
   projectId: string,
   options?: {
     isStyleChange?: boolean;
@@ -2202,7 +2265,7 @@ export const AGENT_TOOLS = [
   // 🚀 SEARCH AND REPLACE - Targeted edits like Lovable uses!
   {
     name: "search_replace",
-    description: "BACKUP edit tool. Exact string replacement - use ONLY when morph_edit fails or for very simple 1-line changes. Requires EXACT match including whitespace.",
+    description: "BACKUP edit tool. Tries exact string replacement first, then uses Morph-assisted fallback if the exact snippet drifted. Use ONLY when morph_edit is not a good fit or for tiny exact changes.",
     parameters: {
       type: "object",
       properties: {
@@ -2271,7 +2334,7 @@ export const AGENT_TOOLS = [
   },
   {
     name: "write_file",
-    description: "Create a NEW file or completely overwrite an existing file. Use this ONLY for: 1) Creating brand new files, 2) Complete rewrites when more than 50% of the file changes. For small changes, use search_replace instead!",
+    description: "Create a NEW file or completely overwrite an existing large file. Use this ONLY for: 1) Creating brand new files, 2) Large rewrites when more than 50% of a large file changes. Existing small files must use morph_edit.",
     parameters: {
       type: "object",
       properties: {
@@ -2546,7 +2609,7 @@ Before writing ANY frontend code for data-driven features, I MUST initialize the
 1. **Search → Read → Edit.** Never edit without reading first.
 2. **No orphan files.** If you create it, import and render it.
 3. **New pages = route + nav link.** Always. No hidden pages.
-4. **Small edits = search_replace.** Never write_file for small changes.
+4. **Small edits = morph_edit.** Use search_replace only as backup. Never use write_file for small existing-file changes.
 5. **Verify before "done".** If you can't prove it, don't claim it.
 6. **Questions = answer only.** No file edits for questions.
 7. **Check if component exists inline** before creating new file.
@@ -3211,7 +3274,7 @@ When you receive error context (runtime errors, build errors, etc.):
 
 1. **ALWAYS read_file FIRST** - See the current code before fixing
 2. **Understand the error** - Parse the error message, file, and line number
-3. **Make MINIMAL fix** - Use search_replace to fix just the broken part
+3. **Make MINIMAL fix** - Use morph_edit first for the smallest safe fix. Use search_replace only if Morph is not a good fit.
 4. **Common error patterns:**
 
 | Error | Likely Cause | Fix |
@@ -3235,7 +3298,7 @@ When you receive error context (runtime errors, build errors, etc.):
 1. Error: "useState is not defined" in /App.js line 5
 2. read_file /App.js
 3. See: import React from 'react'; (missing useState)
-4. search_replace: add useState to import
+4. morph_edit: add useState to the import line
 5. task_complete
 
 **POST-FIX VERIFY (MANDATORY):**
@@ -3265,7 +3328,7 @@ function assertNoHtml(path: string, value: string): void {
 // Tool call interface
 interface ToolCall {
   name: string;
-  arguments: Record<string, any>;
+  arguments: Record<string, unknown>;
 }
 
 // Security context for agent operations
@@ -3282,9 +3345,9 @@ export async function executeToolCall(
   projectId: string,
   toolCall: ToolCall,
   debugContext: AgentDebugContext,
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClientLike,
   userId?: string
-): Promise<any> {
+): Promise<ToolResult> {
   const { name, arguments: args } = toolCall;
   
   // ============================================================================
@@ -3599,91 +3662,29 @@ export async function executeToolCall(
         console.error(`[Agent] search_replace REJECTED: empty search string`);
         return { error: "search_replace: 'search' parameter is required" };
       }
-      
-      // Read current file content
-      const { data, error: readError } = await supabase
-        .from('project_files')
-        .select('content')
-        .eq('project_id', projectId)
-        .eq('path', path)
-        .maybeSingle();
-      
-      if (readError) {
-        console.error(`[Agent] search_replace read error:`, readError);
-        return { error: `Failed to read file: ${readError.message}` };
-      }
-      if (!data) {
-        console.error(`[Agent] search_replace FAILED: File not found: ${path}`);
-        return { error: `File not found: ${path}` };
-      }
-      
-      const currentContent = data.content;
-      console.log(`[Agent] search_replace: File ${path} has ${currentContent.length} chars`);
-      
-      // Check if search string exists in file
-      if (!currentContent.includes(search)) {
-        // Try to provide helpful feedback
-        const searchPreview = search.substring(0, 100);
-        console.error(`[Agent] search_replace FAILED: Search string not found in ${path}`);
-        console.error(`[Agent] Search preview: "${searchPreview}..."`);
-        return { 
-          error: `Search string not found in ${path}. Make sure you copied the exact code including whitespace. Search preview: "${searchPreview}..."`,
-          suggestion: "Use read_file to get the exact content, then copy-paste the search string exactly."
-        };
-      }
-      
-      // Count occurrences
-      const occurrences = currentContent.split(search).length - 1;
-      console.log(`[Agent] search_replace: Found ${occurrences} occurrence(s)`);
-      if (occurrences > 1) {
-        console.warn(`[Agent] search_replace: Found ${occurrences} occurrences, replacing first one`);
-      }
-      
-      // Perform the replacement
-      const newContent = currentContent.replace(search, replace);
-      
-      assertNoHtml(path, newContent);
-      
-      // 🔒 POST-EDIT SYNTAX VALIDATION - Catch broken code BEFORE saving
-      const syntaxCheck = validateBasicSyntax(newContent, path);
-      if (!syntaxCheck.valid) {
-        console.error(`[Agent] search_replace BLOCKED: Syntax error detected in ${path}`);
-        console.error(`[Agent] Syntax error: ${syntaxCheck.error}`);
-        return { 
-          error: `BLOCKED: Your replacement code has a syntax error: ${syntaxCheck.error}. ` +
-            `The edit was NOT applied. Please fix the syntax and try again.`,
-          syntaxError: syntaxCheck.error,
-          blocked: true,
-          hint: 'Check for missing brackets, unclosed tags, or malformed code in your replacement.'
+
+      const result = await smartSearchReplace(
+        projectId,
+        path,
+        search,
+        replace,
+        `Replace the requested code in ${path}. Prefer the exact snippet first and preserve all unrelated code.`,
+        supabase
+      );
+
+      if (!result.success) {
+        console.error(`[Agent] search_replace FAILED: ${result.error}`);
+        return {
+          error: result.error,
+          blocked: result.error?.startsWith('BLOCKED:') || undefined,
+          suggestion: result.method === 'morph'
+            ? 'Morph-assisted fallback also failed. Re-read the file and use morph_edit directly with clearer context.'
+            : 'Use read_file to get the exact content, then retry or switch to morph_edit.'
         };
       }
 
-      // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
-      const resolvedNewContent = resolveProjectPlaceholders(newContent, projectId);
-
-      // Write updated content
-      const { error: writeError } = await supabase
-        .from('project_files')
-        .update({ content: resolvedNewContent })
-        .eq('project_id', projectId)
-        .eq('path', path);
-      
-      if (writeError) {
-        console.error(`[Agent] search_replace write error:`, writeError);
-        return { error: `Failed to write file: ${writeError.message}` };
-      }
-      
-      const changeSize = replace.length - search.length;
-      console.log(`[Agent] search_replace success: ${path} (${changeSize > 0 ? '+' : ''}${changeSize} chars)`);
-      
-      return { 
-        success: true, 
-        path, 
-        occurrences,
-        charsRemoved: search.length,
-        charsAdded: replace.length,
-        netChange: changeSize
-      };
+      console.log(`[Agent] search_replace success: ${path} via ${result.method}`);
+      return result;
     }
     
     // 🚀 MORPH EDIT - Intelligent code merging powered by Morph LLM
@@ -3718,6 +3719,7 @@ export async function executeToolCall(
       return { 
         success: true, 
         path,
+        filepath: path,
         method: 'morph',
         model: result.model,
         changes: result.changes,
@@ -3851,8 +3853,8 @@ export async function executeToolCall(
         
         const data = await response.json();
         return { collection, data, count: Array.isArray(data) ? data.length : 0 };
-      } catch (err: any) {
-        return { error: `Failed to query collection: ${err.message}` };
+      } catch (err) {
+        return { error: `Failed to query collection: ${getErrorMessage(err)}` };
       }
     }
     
@@ -3904,8 +3906,8 @@ export async function executeToolCall(
         }
         
         return await response.json();
-      } catch (err: any) {
-        return { error: `Failed to query backend: ${err.message}` };
+      } catch (err) {
+        return { error: `Failed to query backend: ${getErrorMessage(err)}` };
       }
     }
 
@@ -3915,7 +3917,6 @@ export async function executeToolCall(
       const id = args.id as string | undefined;
       const data = args.data || {};
       const safeUserId = userId || projectId;
-      const supabaseClient = supabase as any;
 
       if (!command || !BACKEND_CLI_ACTIONS.has(command)) {
         return { error: `Invalid backend_cli command: ${command}` };
@@ -3961,14 +3962,14 @@ export async function executeToolCall(
 
       try {
         if (command === "listCollections") {
-          const { data: schemaRows, error: schemaError } = await supabaseClient
+          const { data: schemaRows, error: schemaError } = await supabase
             .from('project_collection_schemas')
             .select('collection_name, schema, display_name')
             .eq('project_id', projectId);
 
           if (schemaError) return { error: `Failed to list collections: ${schemaError.message}` };
 
-          const { data: collectionRows, error: collectionError } = await supabaseClient
+          const { data: collectionRows, error: collectionError } = await supabase
             .from('project_collections')
             .select('collection_name')
             .eq('project_id', projectId)
@@ -3993,7 +3994,7 @@ export async function executeToolCall(
 
         if (command === "describeCollection") {
           const collectionName = collection as string;
-          const { data: schemaRow, error: schemaError } = await supabaseClient
+          const { data: schemaRow, error: schemaError } = await supabase
             .from('project_collection_schemas')
             .select('collection_name, schema, display_name')
             .eq('project_id', projectId)
@@ -4002,7 +4003,7 @@ export async function executeToolCall(
 
           if (schemaError) return { error: `Failed to describe collection: ${schemaError.message}` };
 
-          const { data: sampleRows, error: sampleError } = await supabaseClient
+          const { data: sampleRows, error: sampleError } = await supabase
             .from('project_collections')
             .select('id, data, created_at')
             .eq('project_id', projectId)
@@ -4013,11 +4014,12 @@ export async function executeToolCall(
 
           if (sampleError) return { error: `Failed to fetch sample items: ${sampleError.message}` };
 
+          const typedSchemaRow = schemaRow as ProjectCollectionSchemaRow | null;
           return {
             collection: {
               name: collectionName,
-              displayName: (schemaRow as any)?.display_name || collectionName,
-              schema: schemaRow?.schema || { fields: [] },
+              displayName: typedSchemaRow?.display_name || collectionName,
+              schema: typedSchemaRow?.schema || { fields: [] },
               sampleItems: sampleRows || []
             }
           };
@@ -4030,7 +4032,7 @@ export async function executeToolCall(
             return { error: "createCollection requires data.fields (array of {name,type})" };
           }
 
-          const { data: existing } = await supabaseClient
+          const { data: existing } = await supabase
             .from('project_collection_schemas')
             .select('id')
             .eq('project_id', projectId)
@@ -4041,7 +4043,7 @@ export async function executeToolCall(
             return { error: `Collection already exists: ${collectionName}` };
           }
 
-          const { data: created, error: createError } = await supabaseClient
+          const { data: created, error: createError } = await supabase
             .from('project_collection_schemas')
             .insert({
               project_id: projectId,
@@ -4102,8 +4104,8 @@ export async function executeToolCall(
         }
 
         return await response.json();
-      } catch (err: any) {
-        return { error: `backend_cli failed: ${err.message}` };
+      } catch (err) {
+        return { error: `backend_cli failed: ${getErrorMessage(err)}` };
       }
     }
     
@@ -4216,8 +4218,8 @@ export async function executeToolCall(
             : 'No external packages detected'
         };
         
-      } catch (err: any) {
-        return { error: `Package detection failed: ${err.message}` };
+      } catch (err) {
+        return { error: `Package detection failed: ${getErrorMessage(err)}` };
       }
     }
     
