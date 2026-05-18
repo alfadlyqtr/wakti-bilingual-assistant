@@ -4665,8 +4665,10 @@ ${fixInstructions}
         // But skip all wizard detection below
       }
 
+      const shouldUseStructuredWizards = leftPanelMode === 'code';
+
       // Handle BUILD intents (show wizards)
-      if (intentResult.category === 'BUILD' && requiresWizard(intentResult)) {
+      if (shouldUseStructuredWizards && intentResult.category === 'BUILD' && requiresWizard(intentResult)) {
         const wizardType = getWizardType(intentResult);
         console.log('[ProjectDetail] Build request - showing wizard:', wizardType);
         
@@ -4714,7 +4716,7 @@ ${fixInstructions}
 
       // Skip old scattered pattern detection if IntentManager already handled it
       // For CUSTOMIZE requests, skip wizard detection and let AI handle
-      const skipLegacyWizardDetection = intentResult.category === 'CUSTOMIZE';
+      const skipLegacyWizardDetection = intentResult.category === 'CUSTOMIZE' || !shouldUseStructuredWizards;
 
       // ===== STEP 1: MULTI-FEATURE REQUEST ANALYSIS =====
       // If not a chat request, analyze it as a build/edit request

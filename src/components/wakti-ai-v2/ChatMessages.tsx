@@ -23,6 +23,7 @@ import { getSelectedVoices } from './TalkBackSettings';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { GroundedPlacesBlock, hasGroundedPlaces, resolveGroundedBrowsingData } from './GroundedPlacesBlock';
 
 type SearchSource = { url: string; title: string };
 
@@ -186,9 +187,9 @@ function SearchMessageCard({
   // Strip reminder blocks before displaying
   const cleanedContent = stripReminderBlocks(rawContent);
   const content = repairMarkdownTables(cleanedContent);
-  const geminiSearchMeta = (message as any)?.metadata?.geminiSearch;
-  const sources: SearchSource[] = Array.isArray(geminiSearchMeta?.sources) ? geminiSearchMeta.sources : [];
-  const query = (message as any)?.metadata?.searchQuery || '';
+  const resolvedBrowsingData = resolveGroundedBrowsingData(message as any);
+  const sources: SearchSource[] = Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : [];
+  const hasGroundedPlaceCards = hasGroundedPlaces(message as any);
 
   return (
     <div className="w-full space-y-4">
@@ -269,6 +270,10 @@ function SearchMessageCard({
           {content}
         </ReactMarkdown>
       </div>
+
+      {hasGroundedPlaceCards && (
+        <GroundedPlacesBlock message={message as any} language={language} />
+      )}
 
       {sources.length > 0 && (
         <details className="rounded-xl border border-border/40 bg-muted/10 dark:bg-white/5 p-3">

@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,7 @@ import { ImageModal } from './ImageModal';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
-import { loadGoogleMaps } from '@/utils/googleMapsLoader';
+import { GroundedPlacesBlock, hasGroundedPlaces, resolveGroundedBrowsingData } from './GroundedPlacesBlock';
 
 // Proxy image URLs through our Edge Function to avoid COEP/CORS blocking
 const SUPABASE_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co';
@@ -378,142 +377,10 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
 
   const hasSearchContext = !!(
     message.browsingUsed ||
-    message.browsingData ||
     message.metadata?.browsingUsed ||
-    message.metadata?.browsingData ||
-    message.metadata?.geminiSearch
+    resolveGroundedBrowsingData(message)
   );
-  const resolvedBrowsingData = message.browsingData || message.metadata?.browsingData || message.metadata?.geminiSearch || null;
-  const groundedPlaces = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
-  const googleMapsWidgetContextToken = typeof resolvedBrowsingData?.googleMapsWidgetContextToken === 'string'
-    ? resolvedBrowsingData.googleMapsWidgetContextToken.trim()
-    : '';
-  const searchEntryPointHtml = typeof resolvedBrowsingData?.searchEntryPointHtml === 'string'
-    ? resolvedBrowsingData.searchEntryPointHtml.trim()
-    : '';
-  const googleMapsSearchUrl = (() => {
-    const queries = Array.isArray(resolvedBrowsingData?.queries) ? resolvedBrowsingData.queries : [];
-    const query = queries.find((value: unknown) => typeof value === 'string' && value.trim()) as string | undefined;
-    if (query && query.trim()) {
-      return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query.trim())}`;
-    }
-    return typeof groundedPlaces[0]?.mapsUrl === 'string' ? groundedPlaces[0].mapsUrl : '';
-  })();
-  const googleMapsWidgetHostRef = useRef<HTMLDivElement | null>(null);
-  const [hasGoogleMapsWidget, setHasGoogleMapsWidget] = useState(false);
-  const [googleMapsWidgetFailed, setGoogleMapsWidgetFailed] = useState(false);
-  const normalizePhoneHref = (value?: string) => {
-    const raw = (value || '').trim();
-    if (!raw) return '';
-    const cleaned = raw.replace(/[^\d+]/g, '');
-    return cleaned ? `tel:${cleaned}` : '';
-  };
-  const normalizeEmailHref = (value?: string) => {
-    const raw = (value || '').trim().replace(/^mailto:/i, '');
-    if (!raw) return '';
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw) ? `mailto:${raw}` : '';
-  };
-  const formatReviewCount = (count?: number | null) => {
-    if (typeof count !== 'number' || !Number.isFinite(count)) return '';
-    return new Intl.NumberFormat(language === 'ar' ? 'ar-QA' : 'en-US').format(count);
-  };
-  const truncateReviewText = (value?: string) => {
-    const text = (value || '').trim();
-    if (!text) return '';
-    return text.length > 180 ? `${text.slice(0, 177)}...` : text;
-  };
-  const stripMarkdownToPlainText = (value: string) => {
-    return (value || '')
-      .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1')
-      .replace(/[*_`>#-]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  };
-  const getGroundedLeadText = (value: string) => {
-    const lines = (value || '')
-      .split(/\n+/)
-      .map((line) => stripMarkdownToPlainText(line))
-      .map((line) => line.trim())
-      .filter(Boolean);
-    const ignoredPrefixes = [
-      'Reason:', 'Vibe:', 'Must-Try:', 'Must Try:', 'Status:', 'Rating:', 'Google Reviews:', 'Google Maps:', 'Phone:', 'Email:', 'Website:', 'Instagram:', 'Facebook:', 'TikTok:', 'WhatsApp:', 'Info:', 'Hours:', 'Pro Tip:'
-    ];
-    const pickedLine = lines.find((line) => {
-      if (!line) return false;
-      if (/^(\d+\.|#+)/.test(line)) return false;
-      if (ignoredPrefixes.some((prefix) => line.startsWith(prefix))) return false;
-      if (/^Google Maps$/i.test(line)) return false;
-      return true;
-    }) || '';
-    return pickedLine.length > 180 ? `${pickedLine.slice(0, 177)}...` : pickedLine;
-  };
-  const hasGroundedPlaceCards = !isUser && groundedPlaces.length > 0;
-  const groundedLeadText = hasGroundedPlaceCards ? getGroundedLeadText(message.content || '') : '';
-  const shouldCondenseGroundedBody = hasGroundedPlaceCards;
-
-  useEffect(() => {
-    if (isUser || !googleMapsWidgetContextToken || !googleMapsWidgetHostRef.current) {
-      setHasGoogleMapsWidget(false);
-      setGoogleMapsWidgetFailed(false);
-      if (googleMapsWidgetHostRef.current) {
-        googleMapsWidgetHostRef.current.innerHTML = '';
-      }
-      return;
-    }
-
-    let cancelled = false;
-    setHasGoogleMapsWidget(false);
-    setGoogleMapsWidgetFailed(false);
-    googleMapsWidgetHostRef.current.innerHTML = '';
-
-    const renderGoogleMapsWidget = async () => {
-      try {
-        await loadGoogleMaps('alpha');
-        const googleAny = (window as any).google;
-        if (!googleAny?.maps?.importLibrary) throw new Error('Google Maps JS API is unavailable');
-
-        await googleAny.maps.importLibrary('places');
-        if (cancelled || !googleMapsWidgetHostRef.current) return;
-
-        const placesApi = googleAny.maps?.places;
-        const PlaceContextualElement = placesApi?.PlaceContextualElement;
-        const PlaceContextualListConfigElement = placesApi?.PlaceContextualListConfigElement;
-        const PlaceContextualListLayout = placesApi?.PlaceContextualListLayout;
-        if (typeof PlaceContextualElement !== 'function') throw new Error('Google Maps contextual widget is unavailable');
-
-        const host = googleMapsWidgetHostRef.current;
-        host.innerHTML = '';
-
-        if (typeof PlaceContextualListConfigElement === 'function' && PlaceContextualListLayout?.COMPACT) {
-          const configElement = new PlaceContextualListConfigElement({ layout: PlaceContextualListLayout.COMPACT });
-          host.appendChild(configElement);
-        }
-
-        const contextualElement = new PlaceContextualElement({ contextToken: googleMapsWidgetContextToken });
-        host.appendChild(contextualElement);
-
-        if (!cancelled) {
-          setHasGoogleMapsWidget(true);
-          setGoogleMapsWidgetFailed(false);
-        }
-      } catch (error) {
-        console.warn('[ChatBubble] Google Maps contextual widget failed', error);
-        if (!cancelled) {
-          setHasGoogleMapsWidget(false);
-          setGoogleMapsWidgetFailed(true);
-        }
-      }
-    };
-
-    renderGoogleMapsWidget();
-
-    return () => {
-      cancelled = true;
-      if (googleMapsWidgetHostRef.current) {
-        googleMapsWidgetHostRef.current.innerHTML = '';
-      }
-    };
-  }, [googleMapsWidgetContextToken, isUser]);
+  const hasGroundedPlaceCards = !isUser && hasGroundedPlaces(message);
 
   // FIXED: Get correct mode indicator icon based on actual message context
   const getModeIcon = () => {
@@ -659,169 +526,14 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 </div>
               )}
 
-              {hasGroundedPlaceCards && (
-                <div className="space-y-2 pt-1">
-                  <div className="text-[11px] text-muted-foreground" translate="no">
-                    Google Maps
-                  </div>
-                  {groundedLeadText && (
-                    <div className="text-sm text-foreground/90 leading-relaxed">
-                      {groundedLeadText}
-                    </div>
-                  )}
-                  {groundedPlaces.slice(0, 6).map((place: any, index: number) => {
-                    const phoneHref = normalizePhoneHref(place.phone);
-                    const emailHref = normalizeEmailHref(place.email);
-                    const reviewSnippets = Array.isArray(place.reviewSnippets) ? place.reviewSnippets.filter((item: any) => item?.snippet || item?.googleMapsUri || item?.uri) : [];
-                    const socialLinks = [
-                      place.instagramUrl ? { key: 'instagram', label: language === 'ar' ? 'إنستغرام' : 'Instagram', url: place.instagramUrl } : null,
-                      place.facebookUrl ? { key: 'facebook', label: language === 'ar' ? 'فيسبوك' : 'Facebook', url: place.facebookUrl } : null,
-                      place.tiktokUrl ? { key: 'tiktok', label: language === 'ar' ? 'تيك توك' : 'TikTok', url: place.tiktokUrl } : null,
-                      place.whatsappUrl ? { key: 'whatsapp', label: language === 'ar' ? 'واتساب' : 'WhatsApp', url: place.whatsappUrl } : null,
-                    ].filter(Boolean) as Array<{ key: string; label: string; url: string }>;
-                    return (
-                      <div key={`${place.placeId || place.name || 'place'}-${index}`} className="rounded-lg border border-border/60 p-2 space-y-1.5">
-                        <div className="font-medium text-sm">
-                          {place.name || (language === 'ar' ? 'مكان' : 'Place')}
-                        </div>
-                        {place.address && (
-                          <div className="text-xs text-muted-foreground">
-                            {place.address}
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                          {typeof place.rating === 'number' && (
-                            <span>
-                              {language === 'ar' ? 'التقييم' : 'Rating'}: {place.rating.toFixed(1)}
-                            </span>
-                          )}
-                          {typeof place.userRatingCount === 'number' && (
-                            <span>
-                              {language === 'ar' ? 'المراجعات' : 'Reviews'}: {formatReviewCount(place.userRatingCount)}
-                            </span>
-                          )}
-                          {typeof place.openNow === 'boolean' && (
-                            <span>
-                              {language === 'ar'
-                                ? (place.openNow ? 'مفتوح الآن' : 'مغلق الآن')
-                                : (place.openNow ? 'Open now' : 'Closed now')}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-3 text-xs">
-                          {place.mapsUrl && (
-                            <a href={place.mapsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 underline" translate="no">
-                              Google Maps
-                            </a>
-                          )}
-                          {phoneHref && (
-                            <a href={phoneHref} className="text-blue-500 hover:text-blue-700 underline">
-                              {language === 'ar' ? 'اتصال' : 'Call'}
-                            </a>
-                          )}
-                          {emailHref && (
-                            <a href={emailHref} className="text-blue-500 hover:text-blue-700 underline">
-                              {language === 'ar' ? 'البريد' : 'Email'}
-                            </a>
-                          )}
-                          {place.websiteUrl && (
-                            <a href={place.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 underline">
-                              {language === 'ar' ? 'الموقع' : 'Website'}
-                            </a>
-                          )}
-                          {socialLinks.map((social) => (
-                            <a key={`${place.placeId || place.name || 'place'}-${social.key}`} href={social.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 underline">
-                              {social.label}
-                            </a>
-                          ))}
-                        </div>
-                        {reviewSnippets.length > 0 && (
-                          <details className="rounded-md border border-border/40 px-2 py-1 text-xs">
-                            <summary className="cursor-pointer text-muted-foreground list-none">
-                              {language === 'ar' ? 'آخر مراجعتين من Google Maps' : 'Latest 2 Google Maps reviews'}
-                            </summary>
-                            <div className="mt-2 space-y-2">
-                              {reviewSnippets.slice(0, 2).map((review: any, reviewIndex: number) => (
-                                <div key={`${place.placeId || place.name || 'place'}-review-${reviewIndex}`} className="rounded-md border border-border/30 p-2 space-y-1">
-                                  <div className="text-foreground/90">
-                                    {truncateReviewText(review.snippet) || (language === 'ar' ? `مراجعة ${reviewIndex + 1}` : `Review ${reviewIndex + 1}`)}
-                                  </div>
-                                  {(review.googleMapsUri || review.uri) && (
-                                    <a
-                                      href={review.googleMapsUri || review.uri}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-blue-500 hover:text-blue-700 underline"
-                                      translate="no"
-                                    >
-                                      {review.title || `Google Maps ${language === 'ar' ? 'مصدر' : 'source'} ${reviewIndex + 1}`}
-                                    </a>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
-                      </div>
-                    );
-                  })}
-                  {(googleMapsWidgetContextToken || searchEntryPointHtml || googleMapsSearchUrl) && (
-                    <div className="rounded-lg border border-border/60 p-2.5 space-y-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs text-muted-foreground" translate="no">
-                          Google Maps
-                        </div>
-                        {googleMapsSearchUrl && (
-                          <a
-                            href={googleMapsSearchUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-500 hover:text-blue-700 underline"
-                            translate="no"
-                          >
-                            {language === 'ar' ? 'عرض كل الأماكن' : 'View all places'}
-                          </a>
-                        )}
-                      </div>
-
-                      {googleMapsWidgetContextToken && (
-                        <div
-                          ref={googleMapsWidgetHostRef}
-                          className={`min-h-[140px] rounded-md border border-border/40 bg-background/40 p-2 ${hasGoogleMapsWidget ? '' : 'hidden'}`}
-                        />
-                      )}
-
-                      {!hasGoogleMapsWidget && searchEntryPointHtml && (
-                        <iframe
-                          title="Google Maps search entry"
-                          srcDoc={searchEntryPointHtml}
-                          sandbox="allow-popups allow-popups-to-escape-sandbox"
-                          className="w-full h-[140px] rounded-md border border-border/40 bg-background"
-                        />
-                      )}
-
-                      {!hasGoogleMapsWidget && !searchEntryPointHtml && googleMapsSearchUrl && (
-                        <div className="rounded-md border border-border/40 bg-background/40 px-3 py-3 text-xs text-muted-foreground">
-                          <span>{language === 'ar' ? 'افتح Google Maps لرؤية كل الأماكن على الخريطة.' : 'Open Google Maps to view all places on the map.'}</span>
-                        </div>
-                      )}
-
-                      {googleMapsWidgetFailed && !searchEntryPointHtml && googleMapsSearchUrl && (
-                        <div className="text-[11px] text-muted-foreground">
-                          {language === 'ar' ? 'تعذر تحميل عنصر Google Maps التفاعلي، لكن الرابط الكامل جاهز.' : 'The interactive Google Maps block could not load here, but the full Google Maps view is ready.'}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* FIXED: Message content with proper alignment */}
-              {!shouldCondenseGroundedBody && (
-                <div 
-                  className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
-                  dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
-                />
+              <div 
+                className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
+                dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
+              />
+
+              {hasGroundedPlaceCards && (
+                <GroundedPlacesBlock message={message} language={language} />
               )}
 
               {/* Image display - STANDARDIZED for both user and AI messages */}

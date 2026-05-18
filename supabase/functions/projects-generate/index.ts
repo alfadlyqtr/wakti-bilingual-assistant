@@ -2624,7 +2624,7 @@ function extractFreepikUrls(content: string): string[] {
   if (matches) {
     urls.push(...matches);
   }
-  return [...new Set(urls)]; // Remove duplicates
+  return urls;
 }
 
 // Extract image search queries from user prompt
@@ -2632,7 +2632,7 @@ function extractImageQueries(prompt: string): string[] {
   const queries: string[] = [];
   
   // Extract key entities from prompt
-  const _lowerPrompt = prompt.toLowerCase(); // Used for future pattern matching
+  const lowerPrompt = prompt.toLowerCase();
   
   // Sports teams
   if (/qatar|qatari|القطري|قطر|العنابي/i.test(prompt)) {
@@ -2647,25 +2647,65 @@ function extractImageQueries(prompt: string): string[] {
     queries.push('barber shop interior', 'haircut styles men');
   }
   if (/restaurant|مطعم/i.test(prompt)) {
-    queries.push('restaurant interior', 'food dishes');
+    queries.push('restaurant interior elegant', 'food dish presentation gourmet', 'restaurant chef plating');
   }
   if (/gym|fitness|صالة/i.test(prompt)) {
-    queries.push('gym fitness equipment', 'personal training');
+    queries.push('gym fitness equipment', 'personal training', 'premium fitness lifestyle');
   }
   if (/salon|صالون/i.test(prompt)) {
-    queries.push('beauty salon interior', 'hair styling');
+    queries.push('beauty salon interior', 'hair styling', 'premium salon treatment');
+  }
+  if (/abaya|عباية|modest fashion|jalabiya|hijab fashion/i.test(prompt)) {
+    queries.push('elegant abaya fashion model', 'luxury abaya collection', 'modest fashion boutique interior');
+  }
+  if (/perfume|perfumes|oud|عطر|عطور/i.test(prompt)) {
+    queries.push('luxury perfume bottle oud', 'arabic oud perfume collection', 'premium fragrance editorial');
+  }
+  if (/jewelry|jewellery|مجوهرات|ذهب|diamond|ring|necklace/i.test(prompt)) {
+    queries.push('luxury gold jewelry display', 'diamond ring necklace close up', 'premium jewelry editorial');
+  }
+  if (/fashion|boutique|clothing|apparel|ملابس|بوتيك/i.test(prompt)) {
+    queries.push('fashion boutique interior luxury', 'premium clothing rack editorial', 'designer fashion campaign');
+  }
+  if (/cafe|coffee|مقهى|كوفي/i.test(prompt)) {
+    queries.push('cafe interior modern', 'specialty coffee presentation', 'coffee shop lifestyle');
+  }
+  if (/hotel|resort|فندق|منتجع/i.test(prompt)) {
+    queries.push('luxury hotel lobby', 'resort suite interior', 'premium hospitality lifestyle');
+  }
+  if (/real estate|property|properties|عقار|عقارات|apartment/i.test(prompt)) {
+    queries.push('luxury modern villa exterior', 'premium apartment interior', 'real estate living room staging');
+  }
+  if (/clinic|medical|doctor|dentist|عيادة|طبيب|أسنان/i.test(prompt)) {
+    queries.push('modern medical clinic interior', 'doctor patient consultation', 'premium dental clinic');
+  }
+  if (/spa|wellness|massage|سبا|عناية/i.test(prompt)) {
+    queries.push('luxury spa interior', 'wellness treatment room', 'premium self care editorial');
+  }
+  if (/agency|studio|creative|branding|marketing|وكالة|استوديو/i.test(prompt)) {
+    queries.push('creative studio workspace premium', 'branding presentation mockup', 'agency team collaboration modern');
+  }
+  if (/saas|software|app|dashboard|startup|تقنية|tech/i.test(prompt)) {
+    queries.push('software dashboard interface', 'technology abstract premium', 'startup team workspace modern');
   }
   
-  // Generic fallback based on keywords
   if (queries.length === 0) {
-    // Extract nouns from prompt (simplified)
-    const words = prompt.split(/\s+/).filter(w => w.length > 4);
-    if (words.length > 0) {
-      queries.push(words.slice(0, 3).join(' '));
+    const cleanedWords = lowerPrompt
+      .replace(/[^a-z0-9\s\u0600-\u06FF-]/g, ' ')
+      .split(/\s+/)
+      .filter((word) => word.length > 3)
+      .filter((word) => !['make', 'build', 'create', 'website', 'landing', 'page', 'site', 'brand', 'business', 'modern', 'premium', 'beautiful'].includes(word));
+
+    const subject = cleanedWords.slice(0, 3).join(' ').trim();
+ 
+    if (subject) {
+      queries.push(`${subject} editorial hero`, `${subject} premium product`, `${subject} interior lifestyle`);
+    } else {
+      queries.push('premium brand editorial', 'luxury product presentation');
     }
   }
-  
-  return queries.slice(0, 4); // Max 4 queries to avoid timeout
+ 
+  return Array.from(new Set(queries)).slice(0, 6);
 }
 
 // Entity facts database for grounding
@@ -2785,7 +2825,9 @@ function extractThemeFromPrompt(prompt: string): string {
 - Clean lines, minimal design
 - Background: Dark slate bg-[#0c0f14]
 - Accent: Indigo (#6366f1) and Purple (#8b5cf6)
-- Modern sans-serif fonts, subtle shadows`;
+- Modern sans-serif fonts, subtle shadows
+- Strong hierarchy, premium whitespace, and a polished first impression
+- Avoid generic starter layouts; use a confident, intentional composition`;
   }
   
   if (/elegant|أنيق|luxury|فاخر/i.test(prompt)) {
@@ -2793,7 +2835,9 @@ function extractThemeFromPrompt(prompt: string): string {
 - Sophisticated design with gold accents
 - Background: Deep dark bg-[#0c0f14]
 - Accent: Gold (#eab308) and Cream
-- Classic fonts, subtle animations`;
+- Classic fonts, subtle animations
+- Editorial composition, refined spacing, and premium product presentation
+- Avoid cheap gradients, weak hero text, or flat placeholder sections`;
   }
   
   if (/playful|fun|مرح/i.test(prompt)) {
@@ -2801,7 +2845,8 @@ function extractThemeFromPrompt(prompt: string): string {
 - Vibrant, energetic design
 - Background: Dark with colorful accents
 - Multiple bright colors: Pink, Orange, Cyan
-- Rounded corners, bouncy animations`;
+- Rounded corners, bouncy animations
+- Keep the layout polished and well-composed, not childish or cluttered`;
   }
   
   // Default fallback - let AI decide based on context
@@ -2812,7 +2857,10 @@ function extractThemeFromPrompt(prompt: string): string {
 - For tech/business: Professional blues and grays
 - For creative: Vibrant, artistic colors
 - Background: Dark slate bg-[#0c0f14] (MUST BE DARK)
-- NEVER use white/light backgrounds`;
+- NEVER use white/light backgrounds
+- Default to a premium, polished, brand-aware direction with strong hierarchy and wow-factor
+- Use a clear visual baseline such as elegant brand site, modern commerce, polished service business, editorial showcase, or premium landing page depending on context
+- If the prompt is vague, fill the gap with taste and strong composition, not generic filler or empty gray hero sections`;
 }
 
 // THEME_PRESETS moved to ./prompts/themes.ts (imported at top of file).

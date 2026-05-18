@@ -11,6 +11,7 @@ export const STOCK_IMAGES_CAPABILITY = `
 ### BANNED IMAGE SOURCES
 - ❌ picsum.photos, unsplash.com, via.placeholder.com, placeholder.com, placehold.it
 - ❌ Any hardcoded image URL, empty src=""
+- ❌ Generic bland placeholders as the main hero visual for a premium website draft
 
 ### MANDATORY FILE: /utils/stockImages.js
 Create this file FIRST in every project. It must export three helpers:
@@ -36,6 +37,22 @@ Response: { images: [{ url: string }, ...] }
 ### QUERY RULES (CRITICAL FOR RELEVANCE)
 Extract KEY ENTITIES from the user's prompt (product category, location, business type) and use them in every Freepik query.
 
+### HERO IMAGE QUALITY BAR (MANDATORY)
+- The hero image is part of the first impression. It must feel premium, clear, and strongly matched to the business.
+- Prefer hero visuals with clear subject focus, strong composition, and believable brand value.
+- For product businesses, prefer product-led or lifestyle product imagery over generic people.
+- For service businesses, prefer polished environment, team, or service-in-action imagery.
+- For luxury/elegant brands, prefer refined editorial, close-up detail, texture, premium interior, or styled product photography.
+- If a generic image would weaken the design, use a more specific query instead of settling.
+
+### SECTION-BY-SECTION IMAGE THINKING
+- Hero → strongest brand image, wide composition, premium first impression
+- About → founder, team, studio, workspace, boutique, or brand environment
+- Services → service-specific visuals, tools, materials, or process
+- Products / collections → real product close-ups, styled displays, fabric/details, shelves, packaging, or category-specific scenes
+- Testimonials / social proof → tasteful people or environment shots only if relevant
+- Contact / visit us → storefront, interior, location, map-related atmosphere
+
 ✅ "Abayas & Fashion" → hero: "elegant abaya fashion model", products: "luxury abaya collection", about: "modest fashion designer"
 ✅ "barber shop" → hero: "barber shop interior modern", services: "haircut barber chair", team: "professional barber"
 ✅ "perfumes & oud" → hero: "luxury perfume bottle oud", products: "arabic oud perfume collection"
@@ -45,6 +62,8 @@ Extract KEY ENTITIES from the user's prompt (product category, location, busines
 
 ❌ Generic "store", "products", "business", "people", "laptop", "technology" — NEVER use these for physical product stores
 ❌ NEVER use laptop/computer/phone images for fashion, food, or physical product sites
+❌ NEVER use unrelated office/team laptop imagery as the hero for a product, restaurant, salon, fashion, perfume, jewelry, or boutique brand
+❌ NEVER let the same weak image style repeat across hero, about, and product sections
 
 ### MODEST FASHION / ABAYA RULES (MANDATORY)
 - If the prompt mentions abaya, modest fashion, hijab fashion, jalabiya, or similar, the query MUST include the exact clothing category term (for example: "abaya").
@@ -62,7 +81,8 @@ Extract KEY ENTITIES from the user's prompt (product category, location, busines
 
 ### STRICT RULES
 1. ALWAYS create /utils/stockImages.js FIRST before any image-using component.
-2. ALWAYS import \`fetchStockImages\` / \`useStockImage\` / \`getStaticPlaceholder\` — do not inline fetch calls.
+2. ALWAYS import fetchStockImages / useStockImage / getStaticPlaceholder — do not inline fetch calls.
 3. Include specific prompt terms in the query; use different queries per section (hero, about, services, gallery).
-4. Rely on the placeholder fallback — no broken images ever.
+4. Placeholder fallback is emergency-only. Never design the main visual identity around placeholders if any better business-matched image path exists.
+5. If the business is premium, elegant, luxury, editorial, boutique, or high-end, the imagery must reflect that tone.
 `;
