@@ -1066,9 +1066,8 @@ function estimateTokens(text: string): number {
 // === COST CALCULATION ===
 // Prices per 1M tokens (as of Dec 2024)
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  'gemini-2.0-flash': { input: 0.075, output: 0.30 },
+  'gemini-3.1-flash-lite': { input: 0.25, output: 1.50 },
   'gemini-2.5-flash': { input: 0.075, output: 0.30 },
-  'gemini-3-flash-preview': { input: 0.075, output: 0.30 },
   'gemini-3.1-pro-preview': { input: 2.00, output: 8.00 },
   'gpt-4o-mini': { input: 0.15, output: 0.60 },
   'claude-3-5-sonnet-20241022': { input: 3.00, output: 15.00 },
@@ -1144,7 +1143,7 @@ async function classifySearchIntent(message: string, language: string): Promise<
   if (!message || !message.trim()) return fallback;
   try {
     const key = getGeminiApiKey();
-    const model = 'gemini-2.0-flash';
+    const model = 'gemini-3.1-flash-lite';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const prompt =
       `You are a routing classifier. Decide if the user request needs LIVE or time-sensitive data ` +
@@ -1295,6 +1294,22 @@ interface Gemini3SearchResult {
     groundingChunks?: Array<{ 
       web?: { uri: string; title: string };
       place?: { placeId: string; name?: string; address?: string };
+      maps?: {
+        uri?: string;
+        googleMapsUri?: string;
+        title?: string;
+        placeId?: string;
+        reviewId?: string;
+        placeAnswerSources?: {
+          reviewSnippets?: Array<{
+            uri?: string;
+            googleMapsUri?: string;
+            title?: string;
+            reviewId?: string;
+            snippet?: string;
+          }>;
+        };
+      };
     }>;
     groundingSupports?: Array<{
       segment: { startIndex: number; endIndex: number; text: string };
@@ -1308,6 +1323,18 @@ interface Gemini3SearchResult {
       displayName?: { text: string };
       formattedAddress?: string;
       location?: { latitude: number; longitude: number };
+      googleMapsUri?: string;
+      websiteUri?: string;
+      nationalPhoneNumber?: string;
+      internationalPhoneNumber?: string;
+      rating?: number;
+      userRatingCount?: number;
+      businessStatus?: string;
+      regularOpeningHours?: {
+        openNow?: boolean;
+        weekdayDescriptions?: string[];
+      };
+      editorialSummary?: { text: string };
     }>;
   };
 }
@@ -1579,7 +1606,7 @@ async function streamGemini3FlashChat(
   return fullText;
 }
 
-// Search mode: dynamic model (gemini-3.1-pro-preview for intelligence tier, gemini-3-flash-preview for speed)
+// Search mode: dynamic model (gemini-3.1-pro-preview for intelligence tier, gemini-3.1-flash-lite for speed)
 async function streamGemini3WithSearch(
   query: string,
   systemInstruction: string,
@@ -1588,10 +1615,12 @@ async function streamGemini3WithSearch(
   onToken: (token: string) => void,
   onGroundingMetadata: (meta: Gemini3SearchResult['groundingMetadata']) => void,
   userLocation?: { latitude: number; longitude: number; city?: string; country?: string } | null,
+  searchIntent: 'business' | 'news' | 'url' | 'general' = 'general',
   model: string = 'gemini-3.1-pro-preview'
 ): Promise<string> {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+  const useMapsGrounding = searchIntent === 'business';
 
   // Inject today's date into the query so Google Search grounding fetches current results
   const now = new Date();
@@ -1615,12 +1644,25 @@ async function streamGemini3WithSearch(
       locationHint = ` User is at coordinates [${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}]. Prioritize results near these coordinates for all "near me" and location queries.`;
     }
   }
-  const latestQuery = `${query} (as of ${todayStr}).${nhlHint}${locationHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: \"2023-24\"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
+  const latestQuery = `${query} (as of ${todayStr}).${nhlHint}${locationHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: "2023-24"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
+  const effectiveQuery = useMapsGrounding ? query : latestQuery;
 
   const body: Record<string, unknown> = {
-    contents: buildSearchFollowupContents(query, latestQuery, recentMessages),
-    tools: [{ google_search: {} }],
+    contents: buildSearchFollowupContents(query, effectiveQuery, recentMessages),
+    tools: useMapsGrounding
+      ? [{ googleMaps: { enableWidget: true } }]
+      : [{ google_search: {} }],
   };
+  if (useMapsGrounding && userLocation?.latitude && userLocation?.longitude) {
+    body.toolConfig = {
+      retrievalConfig: {
+        latLng: {
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+        }
+      }
+    };
+  }
   
   if (systemInstruction) {
     body.system_instruction = { parts: [{ text: systemInstruction }] };
@@ -1718,6 +1760,7 @@ async function streamGemini3WithSearch(
     customNote,
     introRule,
   } = params;
+  const isBusinessSearch = searchIntent === 'business';
 
   return `You are WAKTI AI Search. Use live grounded results first, then answer clearly and accurately.${personalSection}
 
@@ -1752,28 +1795,48 @@ async function streamGemini3WithSearch(
  5. Keep recommendations tightly scoped to the user's current area.
 
  FORMAT:
- - Place or business queries: return 4-6 best options max, each with name, area, short reason, vibe, must-try, open or closed if verified, verified contact details only, and a Google Maps link.
- - Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps.
- - Research queries: give a short executive summary, 2-4 key insights, and 2-3 high-quality sources.
- - URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant.
+ - Place or business queries: Return 4-6 results max and rank the closest grounded places first whenever current coordinates are available.
+ - For near-me queries, use the grounded place/map results first. If the results are not clearly near the user's current location, say that clearly instead of pretending they are nearby.
+ - For place queries, prefer concrete grounded place results over generic web listicles.
+ - For business queries, use this exact output shape for EACH place when verified:
+   1. **[Name] ([Area])**
+      - **Reason:** [why it made the list]
+      - **Vibe:** [2-4 keywords]
+      - **Must-Try:** [best item / specialty / reason to go]
+      - **Status:** [Open / Closed / hours only if verified]
+      - **Rating:** [only if verified]
+      - **Google Reviews:** [review count only if verified]
+      - **Google Maps:** [clickable Google Maps source link]
+      - **Phone:** [tel: link only if verified]
+      - **Website:** [official website only if verified]
+      - **Instagram:** [official Instagram only if verified]
+      - **WhatsApp:** [wa.me only if explicitly verified]
+  - Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps.
+  - Research queries: give a short executive summary, 2-4 key insights, and 2-3 high-quality sources.
+  - URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant.
 
  OUTPUT RULES:
  - Keep place descriptions to 3 sentences max.
- - All links must be clickable markdown.
- - Phone numbers must use tel: links.
- - WhatsApp must use wa.me only when explicitly verified.
- - Never invent emails, social handles, hours, scores, prices, or sources.
- - If space is tight, keep the most useful facts first and drop extras.`;
-}
+  - All links must be clickable markdown.
+  - Phone numbers must use tel: links.
+  - WhatsApp must use wa.me only when explicitly verified.
+  - Never invent emails, social handles, hours, scores, prices, or sources.
+  - For place queries, never output a wide markdown table. Use compact bullets with one place per block.
+  - For business queries, keep the answer highly practical: proximity first, then quality, then useful links.
+  - For business queries, if a field is not verified, omit it instead of filling with placeholders.
+  - For business queries, do not collapse the answer into one sentence per place. Keep the named subfields so it reads like the older Wakti Maps-style result.
+ ${isBusinessSearch ? '- This request is a business/place search. Follow the exact business output shape above.' : ''}
+  - If space is tight, keep the most useful facts first and drop extras.`;
+    }
 
-// ─── LAZY-LOAD PROMPT BUILDING BLOCKS ───────────────────────────────────────
+    // ─── LAZY-LOAD PROMPT BUILDING BLOCKS ───────────────────────────────────────
 
-function _promptPersonalSection(pt: Record<string, unknown>): string {
-  const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
-  const aiNick = ((pt.aiNickname as string | undefined) || (pt.ai_nickname as string | undefined) || '').toString().trim();
-  const tone = ((pt.tone as string | undefined) || '').toString().trim();
-  const styleRaw = ((pt.style as string | undefined) || '').toString().trim();
-  const instruction = ((pt.instruction as string | undefined) || '').toString().trim();
+    function _promptPersonalSection(pt: Record<string, unknown>): string {
+      const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
+      const aiNick = ((pt.aiNickname as string | undefined) || (pt.ai_nickname as string | undefined) || '').toString().trim();
+      const tone = ((pt.tone as string | undefined) || '').toString().trim();
+      const styleRaw = ((pt.style as string | undefined) || '').toString().trim();
+      const instruction = ((pt.instruction as string | undefined) || '').toString().trim();
 
   if (!userNick && !aiNick && !tone && !styleRaw && !instruction) return '';
 
@@ -2231,6 +2294,186 @@ async function executeRegularSearch(query: string, language = 'en') {
   }
 }
 
+type GroundedPlaceCard = {
+  placeId: string;
+  name: string;
+  address: string;
+  latitude: number | null;
+  longitude: number | null;
+  rating: number | null;
+  userRatingCount: number | null;
+  websiteUrl: string;
+  phone: string;
+  openNow: boolean | null;
+  businessStatus: string;
+  editorialSummary: string;
+  reviewSnippets: Array<{
+    uri?: string;
+    googleMapsUri?: string;
+    title?: string;
+    reviewId?: string;
+    snippet?: string;
+  }>;
+  mapsUrl: string;
+  instagramUrl?: string;
+  facebookUrl?: string;
+  tiktokUrl?: string;
+  whatsappUrl?: string;
+};
+
+const BUSINESS_LINK_STOPWORDS = new Set([
+  'the', 'and', 'for', 'cafe', 'cafes', 'coffee', 'restaurant', 'restaurants', 'shop', 'store', 'market', 'hospital', 'street', 'road', 'mall', 'center', 'centre', 'branch', 'official'
+]);
+
+function normalizeBusinessLookupText(value: string): string {
+  return (value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function getBusinessLookupTokens(value: string): string[] {
+  const tokens = normalizeBusinessLookupText(value)
+    .split(/\s+/)
+    .filter((token) => token.length >= 4 && !BUSINESS_LINK_STOPWORDS.has(token));
+  return [...new Set(tokens)].slice(0, 4);
+}
+
+function hostMatchesAny(host: string, domains: string[]): boolean {
+  return domains.some((domain) => host === domain || host.endsWith(`.${domain}`));
+}
+
+function getSafeHostname(rawUrl: string): string {
+  try {
+    return new URL(rawUrl).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function getSafePathSegments(rawUrl: string): string[] {
+  try {
+    return new URL(rawUrl).pathname.split('/').map((segment) => segment.trim().toLowerCase()).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function scoreBusinessLinkMatch(haystack: string, tokens: string[], exactName: string): number {
+  if (exactName && haystack.includes(exactName)) return 4;
+  let score = 0;
+  for (const token of tokens) {
+    if (haystack.includes(token)) score += 1;
+  }
+  return score;
+}
+
+function pickVerifiedBusinessLinks(results: Array<Record<string, unknown>>, place: GroundedPlaceCard): Partial<GroundedPlaceCard> {
+  const exactName = normalizeBusinessLookupText(place.name);
+  const tokens = getBusinessLookupTokens(`${place.name} ${place.address}`);
+  const links: Partial<GroundedPlaceCard> = {};
+  const blockedWebsiteDomains = [
+    'google.com', 'maps.google.com', 'instagram.com', 'facebook.com', 'm.facebook.com', 'tiktok.com', 'wa.me', 'whatsapp.com', 'tripadvisor.com', 'zomato.com', 'yelp.com', 'foursquare.com', 'talabat.com', 'deliveroo.com', 'ubereats.com', 'snoonu.com', 'timeoutdoha.com', 'iloveqatar.net'
+  ];
+  const blockedInstagramSegments = ['p', 'reel', 'reels', 'explore', 'stories', 'accounts', 'locations', 'hashtag'];
+  const blockedFacebookSegments = ['share', 'watch', 'photo', 'photos', 'events', 'groups', 'marketplace'];
+  const blockedTikTokSegments = ['tag', 'music', 'discover', 'foryou'];
+
+  for (const result of results) {
+    const url = typeof result.url === 'string' ? result.url.trim() : '';
+    if (!url) continue;
+    const host = getSafeHostname(url);
+    if (!host) continue;
+    const title = typeof result.title === 'string' ? result.title : '';
+    const content = typeof result.content === 'string' ? result.content : '';
+    const haystack = normalizeBusinessLookupText(`${title} ${content} ${url}`);
+    const score = scoreBusinessLinkMatch(haystack, tokens, exactName);
+    if (score < 2) continue;
+    const pathSegments = getSafePathSegments(url);
+    const firstSegment = pathSegments[0] || '';
+
+    if (!links.instagramUrl && hostMatchesAny(host, ['instagram.com']) && !blockedInstagramSegments.includes(firstSegment)) {
+      links.instagramUrl = url;
+      continue;
+    }
+    if (!links.facebookUrl && hostMatchesAny(host, ['facebook.com']) && !blockedFacebookSegments.includes(firstSegment)) {
+      links.facebookUrl = url;
+      continue;
+    }
+    if (!links.tiktokUrl && hostMatchesAny(host, ['tiktok.com']) && !blockedTikTokSegments.includes(firstSegment)) {
+      links.tiktokUrl = url;
+      continue;
+    }
+    if (!links.whatsappUrl && hostMatchesAny(host, ['wa.me', 'whatsapp.com']) && (url.includes('wa.me/') || url.includes('whatsapp.com/'))) {
+      links.whatsappUrl = url;
+      continue;
+    }
+    if (!links.websiteUrl && !hostMatchesAny(host, blockedWebsiteDomains)) {
+      links.websiteUrl = url;
+    }
+  }
+
+  return links;
+}
+
+async function executeBusinessLinkSearch(query: string): Promise<Array<Record<string, unknown>>> {
+  const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
+  if (!TAVILY_API_KEY) return [];
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const response = await fetch('https://api.tavily.com/search', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
+      body: JSON.stringify({
+        api_key: TAVILY_API_KEY,
+        query,
+        search_depth: 'basic',
+        include_answer: false,
+        include_raw_content: false,
+        max_results: 6,
+      })
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) return [];
+    const data = await response.json().catch(() => null) as Record<string, unknown> | null;
+    return Array.isArray(data?.results) ? (data.results as Array<Record<string, unknown>>) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function enrichGroundedPlacesWithOfficialLinks(places: GroundedPlaceCard[]): Promise<GroundedPlaceCard[]> {
+  if (!Array.isArray(places) || places.length === 0) return places;
+
+  const enrichedTopPlaces = await Promise.allSettled(
+    places.slice(0, 3).map(async (place) => {
+      if (!place?.name) return place;
+      const results = await executeBusinessLinkSearch(`"${place.name}" ${place.address || ''} official website instagram facebook tiktok whatsapp`);
+      if (!Array.isArray(results) || results.length === 0) return place;
+      const verifiedLinks = pickVerifiedBusinessLinks(results, place);
+      return {
+        ...place,
+        websiteUrl: place.websiteUrl || verifiedLinks.websiteUrl || '',
+        instagramUrl: place.instagramUrl || verifiedLinks.instagramUrl || '',
+        facebookUrl: place.facebookUrl || verifiedLinks.facebookUrl || '',
+        tiktokUrl: place.tiktokUrl || verifiedLinks.tiktokUrl || '',
+        whatsappUrl: place.whatsappUrl || verifiedLinks.whatsappUrl || '',
+      };
+    })
+  );
+
+  return places.map((place, index) => {
+    if (index >= enrichedTopPlaces.length) return place;
+    const settled = enrichedTopPlaces[index];
+    return settled.status === 'fulfilled' ? settled.value : place;
+  });
+}
+
 // === WOLFRAM UNIVERSAL KNOWLEDGE ENGINE ===
 
 // Strip conversational noise so Wolfram receives a clean subject string
@@ -2280,7 +2523,7 @@ function getCleanSubject(message: string): string {
 async function translateSubjectToEnglish(subject: string): Promise<string> {
   try {
     const key = getGeminiApiKey();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`;
     const body = {
       contents: [{ role: 'user', parts: [{ text: `Translate this academic topic to English. Return ONLY the translated term, nothing else, no explanation:\n${subject}` }] }],
       generationConfig: { temperature: 0, maxOutputTokens: 50 },
@@ -2533,8 +2776,8 @@ async function extractTextFromImageForStudy(
 ): Promise<StudyOCRResult> {
   try {
     const key = getGeminiApiKey();
-    // Use Gemini 2.0 Flash for fast, accurate OCR
-    const model = 'gemini-2.0-flash';
+    // Use Gemini 3.1 Flash-Lite for fast, accurate OCR
+    const model = 'gemini-3.1-flash-lite';
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
     const ocrPrompt = language === 'ar'
@@ -3171,13 +3414,13 @@ serve(async (req) => {
         // Device GPS only — no IP geo fallback for city/coordinates
         let fullLocationContext = '';
         {
-          let userCity = requestLocation?.city || '';
-          let userCountry = requestLocation?.country || '';
+          let userCity = requestLocation?.latitude && requestLocation?.longitude ? '' : (requestLocation?.city || '');
+          let userCountry = requestLocation?.latitude && requestLocation?.longitude ? '' : (requestLocation?.country || '');
           const userLat = requestLocation?.latitude;
           const userLng = requestLocation?.longitude;
           
           // Reverse geocode only on search path — chat doesn't need precise city/coords
-          if (userLat && userLng && !userCity && effectiveTrigger !== 'chat') {
+          if (userLat && userLng && effectiveTrigger !== 'chat') {
             try {
               const geocoded = await reverseGeocode(userLat, userLng);
               if (geocoded.city) userCity = geocoded.city;
@@ -3402,8 +3645,18 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
 
             // GPS ONLY: ignore client/profile city/country when coords exist
             // Always reverse-geocode from GPS to avoid Doha/profile anchoring.
-            const userCity = ((requestLocation?.city as string | undefined) || '').toString().trim();
-            const userCountry = ((requestLocation?.country as string | undefined) || '').toString().trim();
+            let userCity = '';
+            let userCountry = '';
+            if (requestLocation?.latitude && requestLocation?.longitude) {
+              try {
+                const geocoded = await reverseGeocode(requestLocation.latitude, requestLocation.longitude);
+                userCity = (geocoded.city || '').toString().trim();
+                userCountry = (geocoded.country || '').toString().trim();
+              } catch {}
+            } else {
+              userCity = ((requestLocation?.city as string | undefined) || '').toString().trim();
+              userCountry = ((requestLocation?.country as string | undefined) || '').toString().trim();
+            }
 
             // Build location context string (GPS-only)
             let locationContext = '';
@@ -3698,7 +3951,7 @@ If you are running out of space, keep this order and drop the rest:
               : null;
 
             // Stream tokens to client
-            const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3-flash-preview';
+            const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3.1-flash-lite';
 
             await streamGemini3WithSearch(
               message,
@@ -3713,6 +3966,7 @@ If you are running out of space, keep this order and drop the rest:
                 groundingMetadata = meta;
               },
               userLocationForSearch,
+              searchIntent,
               searchModel
             );
 
@@ -3720,15 +3974,67 @@ If you are running out of space, keep this order and drop the rest:
             if (groundingMetadata) {
               try {
                 const gm = groundingMetadata as NonNullable<Gemini3SearchResult['groundingMetadata']>;
+                const mapsSourceByPlaceId = new Map<string, { uri?: string; title?: string; googleMapsUri?: string; reviewSnippets?: Array<{ uri?: string; googleMapsUri?: string; title?: string; reviewId?: string; snippet?: string }> }>();
+                for (const chunk of (gm.groundingChunks || [])) {
+                  const maps = chunk?.maps;
+                  if (!maps?.placeId) continue;
+                  mapsSourceByPlaceId.set(maps.placeId, {
+                    uri: maps.uri,
+                    title: maps.title,
+                    googleMapsUri: maps.googleMapsUri,
+                    reviewSnippets: Array.isArray(maps.placeAnswerSources?.reviewSnippets) ? maps.placeAnswerSources?.reviewSnippets : [],
+                  });
+                }
+                let groundedPlaces: GroundedPlaceCard[] = (gm.places || []).map((place) => {
+                  const label = place.displayName?.text || place.formattedAddress || 'Place';
+                  const sourceMeta = place.placeId ? mapsSourceByPlaceId.get(place.placeId) : undefined;
+                  const mapsUrl = (typeof place.googleMapsUri === 'string' && place.googleMapsUri)
+                    ? place.googleMapsUri
+                    : (typeof sourceMeta?.googleMapsUri === 'string' && sourceMeta.googleMapsUri)
+                    ? sourceMeta.googleMapsUri
+                    : (typeof sourceMeta?.uri === 'string' && sourceMeta.uri)
+                    ? sourceMeta.uri
+                    : place.placeId
+                    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}&query_place_id=${encodeURIComponent(place.placeId)}`
+                    : (place.location?.latitude != null && place.location?.longitude != null
+                        ? `https://www.google.com/maps/search/?api=1&query=${place.location.latitude},${place.location.longitude}`
+                        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(label)}`);
+                  return {
+                    placeId: place.placeId || '',
+                    name: place.displayName?.text || '',
+                    address: place.formattedAddress || '',
+                    latitude: place.location?.latitude ?? null,
+                    longitude: place.location?.longitude ?? null,
+                    rating: typeof place.rating === 'number' ? place.rating : null,
+                    userRatingCount: typeof place.userRatingCount === 'number' ? place.userRatingCount : null,
+                    websiteUrl: typeof place.websiteUri === 'string' ? place.websiteUri : '',
+                    phone: typeof place.internationalPhoneNumber === 'string'
+                      ? place.internationalPhoneNumber
+                      : (typeof place.nationalPhoneNumber === 'string' ? place.nationalPhoneNumber : ''),
+                    openNow: typeof place.regularOpeningHours?.openNow === 'boolean' ? place.regularOpeningHours.openNow : null,
+                    businessStatus: typeof place.businessStatus === 'string' ? place.businessStatus : '',
+                    editorialSummary: typeof place.editorialSummary?.text === 'string' ? place.editorialSummary.text : '',
+                    reviewSnippets: Array.isArray(sourceMeta?.reviewSnippets) ? sourceMeta.reviewSnippets : [],
+                    instagramUrl: '',
+                    facebookUrl: '',
+                    tiktokUrl: '',
+                    whatsappUrl: '',
+                    mapsUrl,
+                  };
+                });
+                groundedPlaces = await enrichGroundedPlacesWithOfficialLinks(groundedPlaces);
                 const metaPayload = {
                   metadata: {
                     geminiSearch: {
                       queries: gm.webSearchQueries || [],
-                      sources: (gm.groundingChunks || []).map((c: { web?: { uri: string; title: string } }) => ({
-                        url: c.web?.uri || '',
-                        title: c.web?.title || ''
-                      })),
-                      supports: gm.groundingSupports || []
+                      sources: (gm.groundingChunks || []).map((c: { web?: { uri: string; title: string }; maps?: { uri?: string; googleMapsUri?: string; title?: string } }) => ({
+                        url: c.maps?.googleMapsUri || c.maps?.uri || c.web?.uri || '',
+                        title: c.maps?.title || c.web?.title || ''
+                      })).filter((item: { url: string; title: string }) => item.url),
+                      supports: gm.groundingSupports || [],
+                      places: groundedPlaces,
+                      googleMapsWidgetContextToken: gm.googleMapsWidgetContextToken || null,
+                      searchEntryPointHtml: gm.searchEntryPoint?.renderedContent || ''
                     }
                   }
                 };
@@ -3843,7 +4149,7 @@ If you are running out of space, keep this order and drop the rest:
 
             try {
               // Chat early-return path: respect engineTier for model selection
-              const chatModel = 'gemini-3-flash-preview';
+              const chatModel = 'gemini-3.1-flash-lite';
               const chatEngineLabel = engineTier === 'intelligence' ? 'Intelligence Engine (Flash)' : 'Speed Engine (Flash)';
               modelUsedOuter = chatEngineLabel;
               let fullResponseText = '';
@@ -4142,10 +4448,10 @@ If you are running out of space, keep this order and drop the rest:
           let selectedModel: string;
           let engineLabel: string;
           if (engineTier === 'intelligence') {
-            selectedModel = isDeepWork ? 'gemini-3.1-pro-preview' : 'gemini-3-flash-preview';
+            selectedModel = isDeepWork ? 'gemini-3.1-pro-preview' : 'gemini-3.1-flash-lite';
             engineLabel = isDeepWork ? 'Intelligence Engine (Pro)' : 'Intelligence Engine (Flash)';
           } else {
-            selectedModel = 'gemini-3-flash-preview';
+            selectedModel = 'gemini-3.1-flash-lite';
             engineLabel = isDeepWork ? 'Speed Engine (Flash/Deep)' : 'Speed Engine (Flash)';
           }
           modelUsed = engineLabel;

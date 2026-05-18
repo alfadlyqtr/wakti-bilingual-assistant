@@ -58,6 +58,7 @@ const BRIDGE_READY_TIMEOUT = 5000; // max ms to wait for native iOS/Android brid
 
 // In-flight Promise cache: prevents multiple simultaneous GPS hardware calls
 let pendingLocationPromise: Promise<NativeLocationResult | null> | null = null;
+let pendingFreshLocationPromise: Promise<NativeLocationResult | null> | null = null;
 
 /**
  * Wait for the Natively NATIVE BRIDGE to be connected (not just CDN script loaded).
@@ -422,10 +423,22 @@ export function getNativeLocation(options?: {
   fallbackToSettings?: boolean;
   skipCache?: boolean;
 }): Promise<NativeLocationResult | null> {
+  const skipCache = options?.skipCache === true;
+  if (skipCache) {
+    if (pendingFreshLocationPromise) {
+      return pendingFreshLocationPromise;
+    }
+    pendingFreshLocationPromise = _doGetNativeLocation(options).finally(() => {
+      pendingFreshLocationPromise = null;
+    });
+    return pendingFreshLocationPromise;
+  }
+
   // If a GPS request is already in-flight, return the same promise — no duplicate hardware calls
   if (pendingLocationPromise) {
     return pendingLocationPromise;
   }
+
   pendingLocationPromise = _doGetNativeLocation(options).finally(() => {
     pendingLocationPromise = null;
   });

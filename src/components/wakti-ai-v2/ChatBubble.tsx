@@ -375,10 +375,36 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     }
   };
 
+  const hasSearchContext = !!(
+    message.browsingUsed ||
+    message.browsingData ||
+    message.metadata?.browsingUsed ||
+    message.metadata?.browsingData ||
+    message.metadata?.geminiSearch
+  );
+  const resolvedBrowsingData = message.browsingData || message.metadata?.browsingData || message.metadata?.geminiSearch || null;
+  const groundedPlaces = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
+  const normalizePhoneHref = (value?: string) => {
+    const raw = (value || '').trim();
+    if (!raw) return '';
+    const cleaned = raw.replace(/[^\d+]/g, '');
+    return cleaned ? `tel:${cleaned}` : '';
+  };
+  const formatReviewCount = (count?: number | null) => {
+    if (typeof count !== 'number' || !Number.isFinite(count)) return '';
+    return new Intl.NumberFormat(language === 'ar' ? 'ar-QA' : 'en-US').format(count);
+  };
+  const truncateReviewText = (value?: string) => {
+    const text = (value || '').trim();
+    if (!text) return '';
+    return text.length > 180 ? `${text.slice(0, 177)}...` : text;
+  };
+  const hasGroundedPlaceCards = !isUser && groundedPlaces.length > 0;
+
   // FIXED: Get correct mode indicator icon based on actual message context
   const getModeIcon = () => {
     // Check if message has browsing data (search mode)
-    if (message.browsingUsed || message.browsingData) {
+    if (hasSearchContext) {
       return <Search className="w-3 h-3" />;
     }
     
@@ -394,7 +420,7 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
   // FIXED: Get correct mode name based on actual message context
   const getModeName = () => {
     // Check if message has browsing data (search mode)
-    if (message.browsingUsed || message.browsingData) {
+    if (hasSearchContext) {
       return language === 'ar' ? 'بحث' : 'Search';
     }
     
@@ -524,6 +550,102 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
                 className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
                 dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
               />
+
+              {hasGroundedPlaceCards && (
+                <div className="space-y-2 pt-1">
+                  <div className="text-[11px] text-muted-foreground" translate="no">
+                    Google Maps
+                  </div>
+                  {groundedPlaces.slice(0, 6).map((place: any, index: number) => {
+                    const phoneHref = normalizePhoneHref(place.phone);
+                    const reviewSnippets = Array.isArray(place.reviewSnippets) ? place.reviewSnippets.filter((item: any) => item?.googleMapsUri || item?.uri) : [];
+                    const socialLinks = [
+                      place.instagramUrl ? { key: 'instagram', label: language === 'ar' ? 'إنستغرام' : 'Instagram', url: place.instagramUrl } : null,
+                      place.facebookUrl ? { key: 'facebook', label: language === 'ar' ? 'فيسبوك' : 'Facebook', url: place.facebookUrl } : null,
+                      place.tiktokUrl ? { key: 'tiktok', label: language === 'ar' ? 'تيك توك' : 'TikTok', url: place.tiktokUrl } : null,
+                      place.whatsappUrl ? { key: 'whatsapp', label: language === 'ar' ? 'واتساب' : 'WhatsApp', url: place.whatsappUrl } : null,
+                    ].filter(Boolean) as Array<{ key: string; label: string; url: string }>;
+                    return (
+                      <div key={`${place.placeId || place.name || 'place'}-${index}`} className="rounded-lg border border-border/60 p-2 space-y-1.5">
+                        <div className="font-medium text-sm">
+                          {place.name || (language === 'ar' ? 'مكان' : 'Place')}
+                        </div>
+                        {place.address && (
+                          <div className="text-xs text-muted-foreground">
+                            {place.address}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                          {typeof place.rating === 'number' && (
+                            <span>
+                              {language === 'ar' ? 'التقييم' : 'Rating'}: {place.rating.toFixed(1)}
+                            </span>
+                          )}
+                          {typeof place.userRatingCount === 'number' && (
+                            <span>
+                              {language === 'ar' ? 'المراجعات' : 'Reviews'}: {formatReviewCount(place.userRatingCount)}
+                            </span>
+                          )}
+                          {typeof place.openNow === 'boolean' && (
+                            <span>
+                              {language === 'ar'
+                                ? (place.openNow ? 'مفتوح الآن' : 'مغلق الآن')
+                                : (place.openNow ? 'Open now' : 'Closed now')}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-3 text-xs">
+                          {place.mapsUrl && (
+                            <a href={place.mapsUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 underline" translate="no">
+                              Google Maps
+                            </a>
+                          )}
+                          {phoneHref && (
+                            <a href={phoneHref} className="text-blue-500 hover:text-blue-700 underline">
+                              {language === 'ar' ? 'اتصال' : 'Call'}
+                            </a>
+                          )}
+                          {place.websiteUrl && (
+                            <a href={place.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 underline">
+                              {language === 'ar' ? 'الموقع' : 'Website'}
+                            </a>
+                          )}
+                          {socialLinks.map((social) => (
+                            <a key={`${place.placeId || place.name || 'place'}-${social.key}`} href={social.url} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:text-blue-700 underline">
+                              {social.label}
+                            </a>
+                          ))}
+                        </div>
+                        {reviewSnippets.length > 0 && (
+                          <details className="rounded-md border border-border/40 px-2 py-1 text-xs">
+                            <summary className="cursor-pointer text-muted-foreground list-none">
+                              {language === 'ar' ? 'آخر مراجعتين من Google Maps' : 'Latest 2 Google Maps reviews'}
+                            </summary>
+                            <div className="mt-2 space-y-2">
+                              {reviewSnippets.slice(0, 2).map((review: any, reviewIndex: number) => (
+                                <div key={`${place.placeId || place.name || 'place'}-review-${reviewIndex}`} className="rounded-md border border-border/30 p-2 space-y-1">
+                                  <div className="text-foreground/90">
+                                    {truncateReviewText(review.snippet) || (language === 'ar' ? `مراجعة ${reviewIndex + 1}` : `Review ${reviewIndex + 1}`)}
+                                  </div>
+                                  <a
+                                    href={review.googleMapsUri || review.uri}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-500 hover:text-blue-700 underline"
+                                    translate="no"
+                                  >
+                                    {review.title || `Google Maps ${language === 'ar' ? 'مصدر' : 'source'} ${reviewIndex + 1}`}
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {/* Image display - STANDARDIZED for both user and AI messages */}
               {Array.isArray(message.attachedFiles) && message.attachedFiles.length > 0 && (

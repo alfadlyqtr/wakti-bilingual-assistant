@@ -26,6 +26,8 @@ interface DetectedForm {
   fields?: DetectedField[];
 }
 
+const CONTEXT_DETECT_MODEL = "gemini-3-flash-preview";
+
 const ROLE_MARKER_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
   { pattern: /<\|\s*im_(start|end|sep)\s*\|>/gi, replacement: "[marker]" },
   { pattern: /\n\n(Human|Assistant|System)\s*:/gi, replacement: "\n\n$1\u200b:" },
@@ -219,9 +221,10 @@ Field type options: "text", "textarea", "tel", "email", "url"
 Use "textarea" only for descriptions or bios. Max 1 textarea per form.`;
 
     const guardedSystemPrompt = withUserInputGuard(systemPrompt);
+    const contextDetectModel = Deno.env.get("GEMINI_MODEL_CONTEXT_DETECT") || Deno.env.get("GEMINI_MODEL_PLAN") || CONTEXT_DETECT_MODEL;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${contextDetectModel}:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

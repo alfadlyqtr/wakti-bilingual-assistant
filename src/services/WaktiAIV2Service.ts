@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
-import { getNativeLocation, queryNeedsFreshLocation, clearLocationCache } from '@/integrations/natively/locationBridge';
+import { getNativeLocation, queryNeedsFreshLocation, containsNearMePattern } from '@/integrations/natively/locationBridge';
 import { parseReminderFromResponse, createScheduledReminder, cancelRecentPendingReminders } from '@/services/ReminderService';
 import { emitEvent } from '@/utils/eventBus';
 
@@ -397,12 +397,10 @@ class WaktiAIV2ServiceClass {
 
   private async getUserLocation(userId: string, forceFresh: boolean = false): Promise<UserLocationContext> {
     const now = Date.now();
+    const previousCached = this.getCachedUserLocation(now);
 
     if (!forceFresh) {
-      const cached = this.getCachedUserLocation(now);
-      if (cached) return cached;
-    } else {
-      clearLocationCache();
+      if (previousCached) return previousCached;
     }
 
     const timezone = this.getClientTimezone();
@@ -438,6 +436,19 @@ class WaktiAIV2ServiceClass {
       }
     } catch (err) {
       console.warn('[WaktiAIV2Service] Native location error:', err);
+    }
+
+    if (forceFresh && !hasDeviceGPS && previousCached?.latitude && previousCached?.longitude) {
+      resolved = {
+        ...resolved,
+        latitude: previousCached.latitude,
+        longitude: previousCached.longitude,
+        accuracy: previousCached.accuracy ?? resolved.accuracy,
+        city: resolved.city || previousCached.city,
+        country: resolved.country || previousCached.country,
+        timezone: previousCached.timezone || timezone,
+        source: previousCached.source || resolved.source,
+      };
     }
 
     // Fetch from profiles as fallback for city/country text ONLY (not coordinates)
@@ -478,8 +489,13 @@ class WaktiAIV2ServiceClass {
 
     resolved.timezone = timezone;
     resolved.updatedAt = Date.now();
-    this.locationCache = resolved;
-    try { localStorage.setItem('wakti_user_location', JSON.stringify(resolved)); } catch {}
+    const hasPreciseCoords = typeof resolved.latitude === 'number' && typeof resolved.longitude === 'number';
+    if (hasPreciseCoords || !forceFresh || !previousCached?.latitude || !previousCached?.longitude) {
+      this.locationCache = resolved;
+      try { localStorage.setItem('wakti_user_location', JSON.stringify(resolved)); } catch {}
+    } else {
+      this.locationCache = previousCached;
+    }
     return resolved;
   }
 
@@ -1446,15 +1462,33 @@ class WaktiAIV2ServiceClass {
       //    Always use cached location for search — forceFresh only for explicit "near me" GPS queries.
       //    This eliminates the 30-second GPS wait on every search request.
       const needsLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
-      const forceFreshLocation = queryNeedsFreshLocation(message); // only true for "near me" type queries
+      const forceFreshLocation = containsNearMePattern(message);
       const cachedLocation = needsLocation ? this.getCachedUserLocation() : null;
+      const getBestSearchLocation = async (): Promise<UserLocationContext | null> => {
+        if (!forceFreshLocation) {
+          if (cachedLocation) return cachedLocation;
+          return await Promise.race([
+            this.getUserLocation(userId || '', false),
+            new Promise<null>(r => setTimeout(() => r(null), 900))
+          ]);
+        }
+
+        try {
+          const freshLocation = await Promise.race<UserLocationContext | null>([
+            this.getUserLocation(userId || '', true),
+            new Promise<null>(r => setTimeout(() => r(null), 4200))
+          ]);
+          if (freshLocation?.latitude && freshLocation?.longitude) return freshLocation;
+          if (cachedLocation?.latitude && cachedLocation?.longitude) return cachedLocation;
+          if (freshLocation?.city || freshLocation?.country) return freshLocation;
+        } catch {
+          // fall back below
+        }
+
+        return cachedLocation;
+      };
       const locationPromise: Promise<UserLocationContext | null> = needsLocation
-        ? (cachedLocation
-            ? Promise.resolve(cachedLocation)
-            : Promise.race([
-                this.getUserLocation(userId || '', forceFreshLocation),
-                new Promise<null>(r => setTimeout(() => r(null), forceFreshLocation ? 1600 : 900))
-              ]))
+        ? getBestSearchLocation()
         : Promise.resolve(null);
 
       if (needsLocation && userId) {
@@ -1526,6 +1560,32 @@ class WaktiAIV2ServiceClass {
       const attemptStream = async (primary: 'gemini-brain' | 'claude' | 'openai') => {
         const maxRetries = 2;
         let response;
+        const normalizeStreamMetadata = (incoming: any) => {
+          if (!incoming || typeof incoming !== 'object') return {};
+          const next = { ...incoming };
+          const geminiSearch = next.geminiSearch && typeof next.geminiSearch === 'object'
+            ? next.geminiSearch
+            : null;
+
+          if (geminiSearch) {
+            next.browsingUsed = true;
+            next.browsingData = {
+              provider: 'gemini-search',
+              queries: Array.isArray(geminiSearch.queries) ? geminiSearch.queries : [],
+              sources: Array.isArray(geminiSearch.sources) ? geminiSearch.sources : [],
+              supports: Array.isArray(geminiSearch.supports) ? geminiSearch.supports : [],
+              places: Array.isArray(geminiSearch.places) ? geminiSearch.places : [],
+              googleMapsWidgetContextToken: typeof geminiSearch.googleMapsWidgetContextToken === 'string'
+                ? geminiSearch.googleMapsWidgetContextToken
+                : undefined,
+              searchEntryPointHtml: typeof geminiSearch.searchEntryPointHtml === 'string'
+                ? geminiSearch.searchEntryPointHtml
+                : undefined,
+            };
+          }
+
+          return next;
+        };
 
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
@@ -1601,9 +1661,10 @@ class WaktiAIV2ServiceClass {
                   if (fallbackResp.ok) {
                     const json = await fallbackResp.json().catch(()=>({}));
                     const respText = (json?.response || json?.text || '').toString();
+                    const normalizedMetadata = normalizeStreamMetadata(json?.metadata || {});
                     onToken?.(respText);
-                    onComplete?.(json?.metadata || {});
-                    return { response: respText, metadata: json?.metadata || {} } as any;
+                    onComplete?.(normalizedMetadata);
+                    return { response: respText, metadata: normalizedMetadata } as any;
                   }
                 } catch {}
               }
@@ -1642,9 +1703,10 @@ class WaktiAIV2ServiceClass {
                   if (fallbackResp.ok) {
                     const json = await fallbackResp.json().catch(()=>({}));
                     const respText = (json?.response || json?.text || '').toString();
+                    const normalizedMetadata = normalizeStreamMetadata(json?.metadata || {});
                     onToken?.(respText);
-                    onComplete?.(json?.metadata || {});
-                    return { response: respText, metadata: json?.metadata || {} } as any;
+                    onComplete?.(normalizedMetadata);
+                    return { response: respText, metadata: normalizedMetadata } as any;
                   }
                 } catch {}
               }
@@ -1707,17 +1769,33 @@ class WaktiAIV2ServiceClass {
                           : (errObj?.message || errObj?.type || JSON.stringify(errObj));
                         encounteredError = errMsg;
                       } else {
-                        if (typeof parsed.token === 'string') { fullResponse += parsed.token; onToken?.(parsed.token); }
-                        else if (typeof parsed.response === 'string') { fullResponse += parsed.response; onToken?.(parsed.response); }
-                        else if (typeof parsed.content === 'string') { fullResponse += parsed.content; onToken?.(parsed.content); }
+                        if (typeof parsed.token === 'string') { 
+                          if (!firstTokenReceived) { firstTokenReceived = true; }
+                          fullResponse += parsed.token; 
+                          if (!fullResponse.includes('{"action"')) {
+                            onToken?.(parsed.token);
+                          }
+                        }
+                        else if (typeof parsed.response === 'string') { 
+                          if (!firstTokenReceived) { firstTokenReceived = true; }
+                          fullResponse += parsed.response; 
+                          onToken?.(parsed.response); 
+                        }
+                        else if (typeof parsed.content === 'string') { 
+                          if (!firstTokenReceived) { firstTokenReceived = true; }
+                          fullResponse += parsed.content; 
+                          onToken?.(parsed.content); 
+                        }
+
                         if (parsed.metadata && typeof parsed.metadata === 'object') {
-                          metadata = { ...metadata, ...parsed.metadata };
+                          metadata = { ...metadata, ...normalizeStreamMetadata(parsed.metadata) };
                         }
                         if (parsed.done === true) {
-                          if (!isCompleted) { onComplete?.(parsed.metadata || metadata); isCompleted = true; }
+                          if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
                         }
                       }
                     } catch {
+                      if (!firstTokenReceived) { firstTokenReceived = true; }
                       fullResponse += data;
                       onToken?.(data);
                     }
@@ -1813,10 +1891,10 @@ class WaktiAIV2ServiceClass {
                       remaining: trialQuotaFinished.remaining,
                     });
                   }
-                  metadata = { ...metadata, ...parsed.metadata };
+                  metadata = { ...metadata, ...normalizeStreamMetadata(parsed.metadata) };
                 }
                 if (parsed.done === true) {
-                  if (!isCompleted) { onComplete?.(parsed.metadata || metadata); isCompleted = true; }
+                  if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
                 }
               } catch {
                 if (!firstTokenReceived) { firstTokenReceived = true; }
@@ -2414,8 +2492,8 @@ class WaktiAIV2ServiceClass {
       } catch {}
 
       // Load user location (country, city) to include in metadata
-      // If query contains "near me", weather, traffic, or place patterns, force fresh location
-      const needsFreshLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
+      // Only explicit near-me requests should force a fresh GPS lookup.
+      const needsFreshLocation = containsNearMePattern(message);
       if (needsFreshLocation) {
         console.log(`📍 LOCATION (non-streaming): Query needs fresh location - "${message.substring(0, 50)}..."`);
       }

@@ -155,7 +155,7 @@ export function useProjectData({ projectId, userId }: UseProjectDataOptions): Us
     try {
       const { data, error } = await supabase
         .from('project_uploads')
-        .select('filename, storage_path, file_type')
+        .select('filename, storage_path, file_type, bucket_id')
         .eq('project_id', projectId);
 
       if (error) {
@@ -165,7 +165,8 @@ export function useProjectData({ projectId, userId }: UseProjectDataOptions): Us
 
       if (data && data.length > 0) {
         const assets = data.map((upload: any) => {
-          const { data: urlData } = supabase.storage.from('project-uploads').getPublicUrl(upload.storage_path);
+          const bucket = upload.bucket_id || 'project-assets';
+          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(upload.storage_path);
           return {
             filename: upload.filename,
             url: urlData.publicUrl,

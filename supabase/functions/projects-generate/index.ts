@@ -32,6 +32,10 @@ import {
 import {
   MODEL_PRICING,
   MODEL_FALLBACK,
+  GEMINI_MODEL_CREATE,
+  GEMINI_MODEL_PLAN,
+  GEMINI_MODEL_SIMPLE,
+  GEMINI_MODEL_VISION,
   selectOptimalModel,
   type ModelSelection,
 } from "./models/selection.ts";
@@ -130,7 +134,7 @@ function estimateTokens(text: string): number {
 }
 
 function calculateCost(model: string, inputTokens: number, outputTokens: number): number {
-  const pricing = MODEL_PRICING[model] || MODEL_PRICING['gemini-2.5-pro'];
+  const pricing = MODEL_PRICING[model] || MODEL_PRICING[GEMINI_MODEL_CREATE] || MODEL_PRICING['gemini-2.5-pro'];
   return ((inputTokens / 1000000) * pricing.input) + ((outputTokens / 1000000) * pricing.output);
 }
 
@@ -176,6 +180,10 @@ interface ProcessedAsset {
   visionAnalysis?: string; // For images
 }
 
+function getDocumentExtractionModel(): string {
+  return Deno.env.get('GEMINI_MODEL_DOCUMENT') || GEMINI_MODEL_PLAN;
+}
+
 /**
  * Extract text from a PDF using pdf-parse via fetch to a public API
  * For Deno Edge Functions, we use Gemini's native PDF understanding
@@ -201,7 +209,7 @@ async function extractTextFromPDF(url: string, apiKey: string): Promise<string> 
     
     // Use Gemini to extract text from PDF (it has native PDF understanding)
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${getDocumentExtractionModel()}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -277,7 +285,7 @@ async function extractTextFromDOCX(url: string, apiKey: string): Promise<string>
     
     // Use Gemini to extract text (it can handle DOCX as well)
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${getDocumentExtractionModel()}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -367,7 +375,7 @@ async function analyzeImageForInspiration(url: string, apiKey: string): Promise<
     
     // Use Gemini Vision to analyze the image
     const geminiResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_VISION}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -856,7 +864,7 @@ function callGemini25Pro(
   jsonMode: boolean = true,
   options: { enableGoogleSearch?: boolean } = {}
 ): Promise<string> {
-  return callGeminiWithModel('gemini-2.5-pro', systemPrompt, userPrompt, jsonMode, 3, options);
+  return callGeminiWithModel(GEMINI_MODEL_CREATE, systemPrompt, userPrompt, jsonMode, 3, options);
 }
 
 function shouldUseGoogleSearchGrounding(prompt: string): boolean {
@@ -891,7 +899,7 @@ async function analyzeScreenshotForAnchors(
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
 
-  const model = "gemini-2.5-pro";
+  const model = GEMINI_MODEL_VISION;
   
   // Build image parts
   const parts: Array<{text?: string; inlineData?: {mimeType: string; data: string}}> = [];
@@ -1000,7 +1008,7 @@ async function callGemini25ProWithImages(
   systemPrompt = withUserInputGuard(systemPrompt);
 
   // Use Gemini 2.5 Pro (vision-capable)
-  const model = "gemini-2.5-pro";
+  const model = GEMINI_MODEL_VISION;
   
   // Build content parts - text + optional images
   const parts: Array<{text?: string; inlineData?: {mimeType: string; data: string}}> = [];
@@ -1076,7 +1084,7 @@ async function callGemini25ProWithImages(
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`[Gemini 2.5 Pro Vision] HTTP ${response.status}: ${errorText}`);
+    console.error(`[Gemini Vision] HTTP ${response.status}: ${errorText}`);
     throw new Error(`Gemini API error: ${response.status}`);
   }
 
@@ -1378,7 +1386,7 @@ The user attached a screenshot. I analyzed it and found these text anchors:
               const pdfBase64 = pdfMatches[2];
               
               const extractResponse = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+                `https://generativelanguage.googleapis.com/v1beta/models/${getDocumentExtractionModel()}:generateContent`,
                 {
                   method: "POST",
                   headers: {
@@ -1627,7 +1635,7 @@ async function callGeminiMissingFiles(
   existingFiles: Record<string, string>,
   originalUserPrompt: string
 ): Promise<Record<string, string>> {
-  const model = 'gemini-2.0-flash'; // Optimized for speed/cost
+  const model = GEMINI_MODEL_SIMPLE;
 
   const MAX_FILE_CHARS = 4000;
   const contextFiles: Record<string, string> = {};
@@ -1686,7 +1694,7 @@ CONTEXT:\n${filesStr}\n\nORIGINAL REQUEST:\n${originalUserPrompt}`;
 }
 
 async function _callGeminiFlashLite(systemPrompt: string, userPrompt: string): Promise<string> {
-  return await callGeminiWithModel('gemini-2.5-flash-lite', systemPrompt, userPrompt, false);
+  return await callGeminiWithModel(GEMINI_MODEL_SIMPLE, systemPrompt, userPrompt, false);
 }
 
 function extractJsonObject(text: string): string {
@@ -3715,7 +3723,7 @@ ${filesStr}`;
                   
                   // Use Gemini to extract text from PDF
                   const extractResponse = await fetch(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/${getDocumentExtractionModel()}:generateContent`,
                     {
                       method: "POST",
                       headers: {
@@ -4414,7 +4422,7 @@ Match the className and innerText to find it in the code.
                   const pdfBase64 = pdfMatches[2];
                   
                   const extractResponse = await fetch(
-                    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+                    `https://generativelanguage.googleapis.com/v1beta/models/${getDocumentExtractionModel()}:generateContent`,
                     {
                       method: "POST",
                       headers: {
@@ -6162,7 +6170,7 @@ When user mentions "my photo", "my image", "uploaded image", use the appropriate
                     const pdfBase64 = pdfMatches[2];
                     
                     const extractResponse = await fetch(
-                      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent`,
+                      `https://generativelanguage.googleapis.com/v1beta/models/${getDocumentExtractionModel()}:generateContent`,
                       {
                         method: "POST",
                         headers: {
@@ -6243,7 +6251,7 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
         await logAIFromRequest(req, {
           functionName: "projects-generate",
           provider: "google",
-          model: "gemini-2.5-pro",
+          model: GEMINI_MODEL_CREATE,
           inputText: textPrompt.substring(0, 1000),
           outputText: aiText.substring(0, 500),
           durationMs: createDuration,
@@ -6370,7 +6378,7 @@ Return ONLY the JSON object. No explanation.`;
       await logAIFromRequest(req, {
         functionName: "projects-generate",
         provider: "google",
-        model: "gemini-2.5-pro",
+        model: images && images.length > 0 ? GEMINI_MODEL_VISION : GEMINI_MODEL_CREATE,
         inputText: userPrompt.substring(0, 1000),
         outputText: JSON.stringify(Object.keys(changedFiles)),
         durationMs: editDuration,

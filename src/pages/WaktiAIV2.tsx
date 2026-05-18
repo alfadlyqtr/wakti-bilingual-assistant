@@ -902,9 +902,12 @@ const WaktiAIV2 = () => {
         };
         
         const cleanedStreamed = stripTrailingActionJSON(streamed);
+        const resolvedBrowsingData = streamMeta?.browsingData || streamMeta?.geminiSearch || undefined;
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
           content: (streamedResp?.response || cleanedStreamed),
+          browsingUsed: streamMeta?.browsingUsed === true || trigger === 'search' || !!resolvedBrowsingData,
+          browsingData: resolvedBrowsingData,
           metadata: { 
             loading: false, 
             ...streamMeta,

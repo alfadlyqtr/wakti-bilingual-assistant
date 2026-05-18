@@ -74,6 +74,7 @@ import {
   useProjectData,
   useChatMessages,
   useVisualEditMode,
+  useAgentMode,
   useConversationMemory,
   useEditHistory
 } from './ProjectDetail/hooks';
@@ -391,6 +392,20 @@ export default function ProjectDetail() {
 
   // Visual Edit Mode undo/redo history
   const visualEditHistory = useEditHistory({ maxHistory: 30 });
+
+  const syncAgentFilesToEditor = useCallback((filesMap: Record<string, string>) => {
+    setGeneratedFiles(filesMap);
+    setCodeContent(filesMap['/App.js'] || Object.values(filesMap)[0] || '');
+  }, []);
+
+  const {
+    currentPlan: sharedAgentPlan,
+    runAgent: runSharedAgent,
+    cancel: cancelSharedAgent,
+  } = useAgentMode({
+    projectId: id || '',
+    onFilesChanged: syncAgentFilesToEditor,
+  });
 
   // Helper to build prompt with clarifying question answers
   const buildPromptWithAnswers = useCallback((basePrompt: string, answers: Record<string, string | string[]>) => {
@@ -3543,47 +3558,53 @@ ${convertToGlobalComponent(content, componentName)}
           ? 'missing-dependency'
           : 'runtime';
 
-        // Call the backend with fixerMode
-        const response = await supabase.functions.invoke('projects-generate', {
-          body: {
-            mode: 'agent',
-            projectId: id,
-            prompt: `Fix this error: ${error}`,
-            currentFiles: generatedFiles,
+        const latestFilesForFixer = { ...generatedFiles };
+        if (codeContent) {
+          latestFilesForFixer['/App.js'] = codeContent;
+        }
+
+        let fixerResponse: any = null;
+
+        try {
+          fixerResponse = (await runSharedAgent(`Fix this error: ${error}`, latestFilesForFixer, {
             fixerMode: true,
             fixerContext: {
               errorMessage: error,
               previousAttempts: attemptNumber - 1,
               recentEdits: [...(editedFilesTracking || [])].map(f => f.fileName),
               chatHistory: recentHistory,
-              // Structured hints — NEW (Item 9)
               missingPackage,
               errorType,
             }
+          })).rawResult;
+        } catch (sharedFixerErr: any) {
+          fixerResponse = sharedFixerErr?.agentResponse || null;
+          if (!fixerResponse) {
+            throw sharedFixerErr;
           }
-        });
+        }
         
         setFixerInProgress(false);
         
-        if (response.data?.ok) {
+        if (fixerResponse?.ok) {
           // Fixer succeeded!
-          console.log('[Auto-Fix] 🔧 THE FIXER succeeded!', response.data.result?.summary);
+          console.log('[Auto-Fix] 🔧 THE FIXER succeeded!', fixerResponse.result?.summary);
           
           setChatMessages(prev => [...prev, {
             id: `fixer-success-${Date.now()}`,
             role: 'assistant',
             content: isRTL
-              ? `✅ **المُصلح نجح!**\n\n${response.data.result?.summary || 'تم إصلاح الخطأ.'}`
-              : `✅ **THE FIXER succeeded!**\n\n${response.data.result?.summary || 'Error fixed.'}`
+              ? `✅ **المُصلح نجح!**\n\n${fixerResponse.result?.summary || 'تم إصلاح الخطأ.'}`
+              : `✅ **THE FIXER succeeded!**\n\n${fixerResponse.result?.summary || 'Error fixed.'}`
           }]);
           
           // Refresh files to show the fix
-          if (response.data.result?.filesChanged?.length > 0) {
+          if (fixerResponse.result?.filesChanged?.length > 0) {
             toast.success(isRTL ? 'تم إصلاح الخطأ بواسطة المُصلح!' : 'Error fixed by The Fixer!');
             // Trigger a refresh of the preview
             window.location.reload();
           }
-        } else if (response.data?.fixerFailed) {
+        } else if (fixerResponse?.fixerFailed) {
           // Fixer also failed - show recovery UI
           console.log('[Auto-Fix] 🔧 THE FIXER failed, showing recovery UI');
           setAutoFixExhausted(true);
@@ -3598,7 +3619,7 @@ ${convertToGlobalComponent(content, componentName)}
           }]);
         } else {
           // API error
-          console.error('[Auto-Fix] Fixer API error:', response.error);
+          console.error('[Auto-Fix] Fixer API error:', fixerResponse);
           setAutoFixExhausted(true);
           setCrashReport(error);
         }
@@ -5462,66 +5483,32 @@ ${fixInstructions}
         }
 
         // Using AGENT mode for targeted, intelligent edits (not full file rewrites)
-        // FIX: Send currentFiles so agent can see the file list (not content, just paths)
-        const startRes = await supabase.functions.invoke('projects-generate', {
-          body: {
-            action: 'start',
-            projectId: id,
-            mode: 'agent',
-            prompt: userMessage,
-            userInstructions: userInstructions,
-            images: codeImages, // NOW SENDING IMAGES TO AI
-            assetIntent: codeImages ? attachmentIntent : undefined,
-            uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
-            backendContext: backendContext || undefined,
-            debugContext: debugContext?.getDebugContextForAgent?.(),
-            currentFiles: generatedFiles, // CRITICAL: Send files so agent knows what exists
-          },
+        const latestFilesForAgent = { ...generatedFiles };
+        if (codeContent) {
+          latestFilesForAgent['/App.js'] = codeContent;
+        }
+
+        const agentPlan = await runSharedAgent(userMessage, latestFilesForAgent, {
+          userInstructions,
+          images: codeImages,
+          assetIntent: codeImages ? attachmentIntent : undefined,
+          uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
+          backendContext: backendContext || undefined,
+          debugContext: debugContext?.getDebugContextForAgent?.(),
         });
 
-        if (startRes.error) {
-          throw new Error(startRes.error.message || 'Failed to start agent');
-        }
+        const agentResult = agentPlan.rawResult;
 
-        // AGENT MODE: Returns results directly (no job polling needed!)
-        const agentResult = startRes.data;
-        
-        // 🔧 DEBUG: Log what we received from the edge function
         console.log('[AI Coder] Agent result received:', JSON.stringify({
-          ok: agentResult?.ok,
-          mode: agentResult?.mode,
+          resultType: agentPlan.resultType,
+          status: agentPlan.status,
+          filesChanged: agentPlan.filesChanged?.length || 0,
           hasResult: !!agentResult?.result,
-          resultSuccess: agentResult?.result?.success,
-          hasMessage: !!agentResult?.message,
+          hasMessage: !!agentPlan.responseMessage,
           hasJobId: !!agentResult?.jobId,
-          error: agentResult?.error
         }));
-        
-        // 🔧 FIX: Handle ok: false responses from the edge function
-        if (agentResult?.ok === false) {
-          if (agentResult.error === 'SUBSCRIPTION_REQUIRED') {
-            const friendlyMsg = isRTL
-              ? (agentResult.messageAr || 'هذه الميزة متاحة للمشتركين فقط. اشترك في وكتي للاستمتاع بمنشئ المواقع بالذكاء الاصطناعي 🚀')
-              : (agentResult.message || 'This feature is for subscribers only. Subscribe to Wakti to unlock the AI Website Builder 🚀');
-            setChatMessages(prev => [...prev, {
-              id: `sub-${Date.now()}`,
-              role: 'assistant',
-              content: friendlyMsg,
-              timestamp: new Date(),
-            }]);
-            return;
-          }
-          throw new Error(agentResult.error || 'Agent request failed');
-        }
-        
-        // 🔧 FIX: Handle result.success: false (agent explored but couldn't complete)
-        if (agentResult?.mode === 'agent' && agentResult?.result?.success === false) {
-          const errorMsg = agentResult.result.error || agentResult.result.summary || 'Agent could not complete the request';
-          throw new Error(errorMsg);
-        }
 
-        // 🔒 HARD-BLOCK: If smoke tests fail, auto-fix immediately (no bad output shown)
-        if (agentResult?.mode === 'agent' && agentResult?.result?.smokeTestResult && !agentResult.result.smokeTestResult.passed) {
+        if (agentResult?.result?.smokeTestResult && !agentResult.result.smokeTestResult.passed) {
           const criticalErrors = agentResult.result.smokeTestResult.criticalErrors || [];
           const smokeError = criticalErrors.length > 0
             ? `Smoke test failed: ${criticalErrors.join(' | ')}`
@@ -5531,9 +5518,16 @@ ${fixInstructions}
           triggerAutoFix(smokeError);
           return;
         }
-        
-        if (agentResult?.mode === 'agent' && agentResult?.result) {
-          // Agent mode completed synchronously - load updated files
+
+        if (agentPlan.resultType === 'direct_message' && agentPlan.responseMessage) {
+          assistantMsg = agentPlan.responseMessage;
+          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          await delay(250);
+        } else if (agentResult?.result?.type === 'clarification_needed') {
+          assistantMsg = JSON.stringify(agentResult.result);
+          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+          await delay(250);
+        } else {
           setGenerationSteps(prev => prev.map((s, i) => 
             i === 0 ? { ...s, status: 'completed' } : 
             i === 1 ? { ...s, status: 'completed' } : 
@@ -5548,10 +5542,7 @@ ${fixInstructions}
           setGeneratedFiles(newFiles);
           setCodeContent(newCode);
 
-          // Get files changed from agent result
-          const changedFilesList: string[] = agentResult.result.filesChanged || [];
-          
-          // If no files reported, compare with snapshot
+          const changedFilesList: string[] = [...(agentPlan.filesChanged || [])];
           if (changedFilesList.length === 0) {
             for (const [path, content] of Object.entries(newFiles)) {
               const oldContent = beforeSnapshot[path];
@@ -5560,27 +5551,21 @@ ${fixInstructions}
               }
             }
           }
-          
-          // Update edited files tracking for Lovable-style UI
+
           setEditedFilesTracking(changedFilesList.map((filePath, idx) => ({
             id: `file-${idx}-${Date.now()}`,
             fileName: filePath.replace(/^\//, ''),
             status: 'edited' as const
           })));
-          
-          const summaryText = agentResult.result.summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
-          
-          // Store as structured JSON so the UI can parse it properly
-          // FIX: Do NOT force /App.js when no files changed - be honest about changes
+
+          const summaryText = agentPlan.summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
           const actualChangedFiles = changedFilesList.length > 0 ? changedFilesList : [];
           const hasActualChanges = actualChangedFiles.length > 0;
-          
-          // Generate a friendly response message based on what was done
+
           const generateFriendlyResponse = (summary: string, files: string[], userMsg: string) => {
             const msgLower = userMsg.toLowerCase();
             if (files.length === 0) return isRTL ? 'لم أجد ما يمكن تغييره.' : "I couldn't find anything to change.";
-            
-            // Try to make it conversational based on the action
+
             if (msgLower.includes('remove') || msgLower.includes('delete') || msgLower.includes('احذف') || msgLower.includes('أزل')) {
               return isRTL ? `تم! أزلت ما طلبته من ${files.join(', ')}.` : `Done! I removed what you asked from ${files.join(', ')}.`;
             }
@@ -5593,10 +5578,9 @@ ${fixInstructions}
             if (msgLower.includes('fix') || msgLower.includes('أصلح')) {
               return isRTL ? `تم الإصلاح في ${files.join(', ')}.` : `Fixed! Changes made to ${files.join(', ')}.`;
             }
-            // Default
             return isRTL ? `تم تطبيق التغييرات على ${files.join(', ')}.` : `Changes applied to ${files.join(', ')}.`;
           };
-          
+
           assistantMsg = JSON.stringify({
             type: 'execution_result',
             title: hasActualChanges ? (isRTL ? 'تم التطبيق' : 'Applied') : (isRTL ? 'لم يتم التغيير' : 'No changes made'),
@@ -5605,12 +5589,11 @@ ${fixInstructions}
             files: actualChangedFiles,
             noChanges: !hasActualChanges
           });
-          
-          // 🎯 Generate dynamic suggestions for code mode too (not just chat mode)
+
           const generateCodeModeSuggestions = (files: string[], userMsg: string) => {
             const msgLower = userMsg.toLowerCase();
             const suggestions: string[] = [];
-            
+
             if (msgLower.includes('header') || msgLower.includes('nav') || msgLower.includes('رأس')) {
               suggestions.push(isRTL ? 'غيّر لون الهيدر' : 'Change header color');
               suggestions.push(isRTL ? 'أضف رابط جديد' : 'Add a new link');
@@ -5627,120 +5610,20 @@ ${fixInstructions}
               suggestions.push(isRTL ? 'أزل شيء آخر' : 'Remove something else');
               suggestions.push(isRTL ? 'تراجع عن التغيير' : 'Undo this change');
             } else {
-              // Default suggestions
               suggestions.push(isRTL ? 'أضف ميزة جديدة' : 'Add a new feature');
               suggestions.push(isRTL ? 'حسّن التصميم' : 'Improve the design');
             }
             return suggestions;
           };
-          
+
           if (hasActualChanges) {
             setDynamicSuggestions(generateCodeModeSuggestions(actualChangedFiles, userMessage));
           }
-          
-          // Update tool usage count for Lovable-style indicator
-          setToolsUsedCount(prev => prev + (changedFilesList.length || 1));
-          
+
+          setToolsUsedCount(prev => prev + ((agentResult?.result?.toolCalls?.length || changedFilesList.length) || 1));
+
           setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
           await delay(250);
-        } else if (agentResult?.message) {
-          // 🔧 FIX: Agent returned a chat response (question/info) instead of making edits
-          // This happens when user asks a question like "do we have a products page?"
-          assistantMsg = agentResult.message;
-          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-          await delay(250);
-          
-          // 🎯 Generate context-aware suggestions based on AI's RESPONSE, not user's message
-          const generateChatResponseSuggestions = (aiResponse: string, userMsg: string) => {
-            const responseLower = aiResponse.toLowerCase();
-            const msgLower = userMsg.toLowerCase();
-            const suggestions: string[] = [];
-            
-            // If AI confirmed something exists, suggest using/editing it
-            if (responseLower.includes('yes') || responseLower.includes('you have') || responseLower.includes('located at')) {
-              if (responseLower.includes('product') || msgLower.includes('product')) {
-                suggestions.push(isRTL ? 'افتح صفحة المنتجات' : 'Open the products page');
-                suggestions.push(isRTL ? 'عدّل صفحة المنتجات' : 'Edit the products page');
-              } else if (responseLower.includes('page') || responseLower.includes('.js')) {
-                suggestions.push(isRTL ? 'افتح هذه الصفحة' : 'Open this page');
-                suggestions.push(isRTL ? 'عدّل هذه الصفحة' : 'Edit this page');
-              }
-            }
-            // If AI said something doesn't exist, suggest creating it
-            else if (responseLower.includes('no') || responseLower.includes("don't have") || responseLower.includes('not found')) {
-              if (msgLower.includes('product')) {
-                suggestions.push(isRTL ? 'أنشئ صفحة منتجات' : 'Create a products page');
-              } else if (msgLower.includes('page')) {
-                suggestions.push(isRTL ? 'أنشئ هذه الصفحة' : 'Create this page');
-              }
-            }
-            
-            // Default follow-ups for informational responses
-            if (suggestions.length === 0) {
-              suggestions.push(isRTL ? 'أخبرني المزيد' : 'Tell me more');
-              suggestions.push(isRTL ? 'ساعدني في تعديله' : 'Help me edit it');
-            }
-            
-            return suggestions;
-          };
-          
-          setDynamicSuggestions(generateChatResponseSuggestions(agentResult.message, userMessage));
-        } else if (agentResult?.jobId) {
-          // Fallback: If there's a jobId, use the old polling method
-          const jobId = agentResult.jobId as string;
-
-          setGenerationSteps(prev => prev.map((s, i) => 
-            i === 0 ? { ...s, status: 'completed' } : 
-            i === 1 ? { ...s, status: 'completed' } : 
-            i === 2 ? { ...s, status: 'loading' } : s
-          ));
-          await delay(250);
-
-          const job = await pollJobUntilDone(jobId);
-          const newFiles = await loadFilesFromDb(id);
-          const newCode = newFiles["/App.js"] || Object.values(newFiles)[0] || "";
-
-          snapshotToSave = beforeSnapshot;
-          setGeneratedFiles(newFiles);
-          setCodeContent(newCode);
-
-          const changedFilesList: string[] = [];
-          for (const [path, content] of Object.entries(newFiles)) {
-            const oldContent = beforeSnapshot[path];
-            if (!oldContent || oldContent !== content) {
-              changedFilesList.push(path);
-            }
-          }
-          
-          // Update edited files tracking for Lovable-style UI
-          setEditedFilesTracking(changedFilesList.map((filePath, idx) => ({
-            id: `file-${idx}-${Date.now()}`,
-            fileName: filePath.replace(/^\//, ''),
-            status: 'edited' as const
-          })));
-          
-          const summaryText = job.result_summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
-          
-          // FIX: Same as above - be honest about changes
-          const actualChangedFilesJob = changedFilesList.length > 0 ? changedFilesList : [];
-          const hasActualChangesJob = actualChangedFilesJob.length > 0;
-          
-          assistantMsg = JSON.stringify({
-            type: 'execution_result',
-            title: hasActualChangesJob ? (isRTL ? 'تم التطبيق' : 'Applied') : (isRTL ? 'لم يتم التغيير' : 'No changes made'),
-            summary: hasActualChangesJob ? summaryText : (isRTL ? 'لم يتم إجراء تغييرات' : 'No changes were applied'),
-            files: actualChangedFilesJob,
-            noChanges: !hasActualChangesJob
-          });
-          
-          // Update tool usage count for Lovable-style indicator (polling path)
-          setToolsUsedCount(prev => prev + (changedFilesList.length || 1));
-          
-          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-          await delay(250);
-        } else {
-          // No result, no message, no jobId - this is a real error
-          throw new Error('Agent mode failed - no result returned');
         }
       }
 
@@ -6563,88 +6446,98 @@ ${fixInstructions}
                                     // Now trigger the chat/edit flow with the specific file
                                     setChatInput('');
                                     setAiEditing(true);
-                                    setThinkingStartTime(Date.now());
+                                    const thinkingStart = Date.now();
+                                    setThinkingStartTime(thinkingStart);
+                                    thinkingStartTimeRef.current = thinkingStart;
                                     setEditedFilesTracking([]);
+                                    setToolsUsedCount(0);
+                                    setLastThinkingDuration(null);
+                                    setAiError(null);
+                                    setGenerationSteps([
+                                      { label: isRTL ? 'فهم الملف المختار...' : 'Understanding selected asset...', status: 'loading' },
+                                      { label: isRTL ? 'تطبيق التعديل...' : 'Applying asset change...', status: 'pending' },
+                                      { label: isRTL ? 'تحديث الملفات...' : 'Refreshing files...', status: 'pending' },
+                                    ]);
                                     try {
-                                      // Using AGENT mode for targeted edits
-                                      const response = await supabase.functions.invoke('projects-generate', {
-                                        body: {
-                                          action: 'start',
-                                          projectId: id,
-                                          mode: 'agent',
-                                          prompt: selectionMsg,
-                                          currentFiles: generatedFiles,
-                                          uploadedAssets,
-                                          backendContext,
-                                        },
+                                      const latestFilesForAgent = { ...generatedFiles };
+                                      if (codeContent) {
+                                        latestFilesForAgent['/App.js'] = codeContent;
+                                      }
+
+                                      const agentPlan = await runSharedAgent(selectionMsg, latestFilesForAgent, {
+                                        lang: isRTL ? 'ar' : 'en',
+                                        uploadedAssets,
+                                        backendContext,
                                       });
-                                      
-                                      if (response.error) throw new Error(response.error.message);
-                                      
-                                      // AGENT MODE: Returns results directly
-                                      const agentResult = response.data;
-                                      
-                                      if (agentResult?.mode === 'agent' && agentResult?.result) {
-                                        // Agent completed synchronously
+
+                                      const agentResult = agentPlan.rawResult;
+                                      let assistantContent = '';
+
+                                      if (agentPlan.resultType === 'direct_message' && agentPlan.responseMessage) {
+                                        assistantContent = agentPlan.responseMessage;
+                                        setGenerationSteps(prev => prev.map(step => ({ ...step, status: 'completed' })));
+                                      } else if (agentResult?.result?.type === 'clarification_needed') {
+                                        assistantContent = JSON.stringify(agentResult.result);
+                                        setGenerationSteps(prev => prev.map(step => ({ ...step, status: 'completed' })));
+                                      } else {
+                                        setGenerationSteps(prev => prev.map((step, idx) =>
+                                          idx === 0 ? { ...step, status: 'completed' } :
+                                          idx === 1 ? { ...step, status: 'completed' } :
+                                          idx === 2 ? { ...step, status: 'loading' } : step
+                                        ));
+
                                         const newFiles = await loadFilesFromDb(id!);
-                                        
                                         setGeneratedFiles(newFiles);
-                                        setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
-                                        
-                                        // Add success message
-                                        const successMsg = isRTL 
+                                        setCodeContent(newFiles['/App.js'] || Object.values(newFiles)[0] || '');
+
+                                        const changedFilesList: string[] = [...(agentPlan.filesChanged || [])];
+                                        if (changedFilesList.length === 0) {
+                                          for (const [path, content] of Object.entries(newFiles)) {
+                                            const oldContent = beforeAssetSelectionSnapshot[path];
+                                            if (!oldContent || oldContent !== content) {
+                                              changedFilesList.push(path);
+                                            }
+                                          }
+                                        }
+
+                                        setEditedFilesTracking(changedFilesList.map((filePath, idx) => ({
+                                          id: `asset-file-${idx}-${Date.now()}`,
+                                          fileName: filePath.replace(/^\//, ''),
+                                          status: 'edited' as const,
+                                        })));
+                                        setToolsUsedCount((agentResult?.result?.toolCalls?.length || changedFilesList.length) || 1);
+
+                                        assistantContent = isRTL
                                           ? `✓ تم استخدام ${asset.filename} بنجاح!`
                                           : `✓ Successfully used ${asset.filename}!`;
-                                        
-                                        const { data: aiMsgData } = await supabase
-                                          .from('project_chat_messages' as any)
-                                          .insert({ 
-                                            project_id: id, 
-                                            role: 'assistant', 
-                                            content: successMsg,
-                                            snapshot: Object.keys(beforeAssetSelectionSnapshot).length > 0 ? beforeAssetSelectionSnapshot : null
-                                          } as any)
-                                          .select()
-                                          .single();
-                                        
-                                        if (aiMsgData) {
-                                          setChatMessages(prev => [...prev, aiMsgData as any]);
-                                        }
-                                        
+
+                                        setGenerationSteps(prev => prev.map(step => ({ ...step, status: 'completed' })));
                                         toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
-                                      } else if (agentResult?.jobId) {
-                                        // Fallback: job-based polling
-                                        const job = await pollJobUntilDone(agentResult.jobId);
-                                        const newFiles = await loadFilesFromDb(id!);
-                                        
-                                        setGeneratedFiles(newFiles);
-                                        setCodeContent(newFiles["/App.js"] || Object.values(newFiles)[0] || "");
-                                        
-                                        const successMsg = isRTL 
-                                          ? `✓ تم استخدام ${asset.filename} بنجاح!`
-                                          : `✓ Successfully used ${asset.filename}!`;
-                                        
-                                        const { data: aiMsgData } = await supabase
-                                          .from('project_chat_messages' as any)
-                                          .insert({ 
-                                            project_id: id, 
-                                            role: 'assistant', 
-                                            content: successMsg,
-                                            snapshot: Object.keys(beforeAssetSelectionSnapshot).length > 0 ? beforeAssetSelectionSnapshot : null
-                                          } as any)
-                                          .select()
-                                          .single();
-                                        
-                                        if (aiMsgData) {
-                                          setChatMessages(prev => [...prev, aiMsgData as any]);
-                                        }
-                                        
-                                        toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
+                                      }
+
+                                      const { data: aiMsgData } = await supabase
+                                        .from('project_chat_messages' as any)
+                                        .insert({ 
+                                          project_id: id, 
+                                          role: 'assistant', 
+                                          content: assistantContent,
+                                          snapshot: Object.keys(beforeAssetSelectionSnapshot).length > 0 ? beforeAssetSelectionSnapshot : null
+                                        } as any)
+                                        .select()
+                                        .single();
+
+                                      if (aiMsgData) {
+                                        setChatMessages(prev => [...prev, aiMsgData as any]);
                                       }
                                     } catch (err: any) {
                                       console.error('Asset selection error:', err);
                                       toast.error(isRTL ? 'فشل في تطبيق الصورة' : 'Failed to apply image');
                                     } finally {
+                                      const start = thinkingStartTimeRef.current;
+                                      if (start) {
+                                        setLastThinkingDuration(Math.floor((Date.now() - start) / 1000));
+                                      }
+                                      thinkingStartTimeRef.current = null;
                                       setAiEditing(false);
                                       setThinkingStartTime(null);
                                     }
@@ -8036,22 +7929,32 @@ ${fixInstructions}
                         )}
                         
                         {/* Tasks Panel - Lovable Dark Card Style */}
-                        {(isGenerating || aiEditing) && generationSteps.length > 0 && (
+                        {(isGenerating || aiEditing) && (generationSteps.length > 0 || ((sharedAgentPlan?.tasks?.length || 0) > 0)) && (
                           <AgentTaskPanel
-                            steps={generationSteps.map((step, idx) => ({
-                              id: `step-${idx}`,
-                              title: step.label,
-                              status: step.status === 'loading' ? 'in_progress' : 
-                                      step.status === 'error' ? 'failed' : 
-                                      step.status as 'pending' | 'completed',
-                              tool: idx === 0 ? 'read_file' : 
-                                    idx === 1 ? 'search_replace' : 
-                                    idx === 2 ? 'write_file' : undefined
-                            }))}
+                            steps={sharedAgentPlan?.tasks && sharedAgentPlan.tasks.length > 0
+                              ? sharedAgentPlan.tasks.map((step) => ({
+                                  id: step.id,
+                                  title: step.title,
+                                  description: step.description,
+                                  status: step.status,
+                                  tool: step.tool,
+                                  result: step.result,
+                                }))
+                              : generationSteps.map((step, idx) => ({
+                                  id: `step-${idx}`,
+                                  title: step.label,
+                                  status: step.status === 'loading' ? 'in_progress' : 
+                                          step.status === 'error' ? 'failed' : 
+                                          step.status as 'pending' | 'completed',
+                                  tool: idx === 0 ? 'read_file' : 
+                                        idx === 1 ? 'search_replace' : 
+                                        idx === 2 ? 'write_file' : undefined
+                                }))}
                             isActive={aiEditing || isGenerating}
-                            currentGoal={chatInput || undefined}
+                            currentGoal={sharedAgentPlan?.goal || chatInput || undefined}
                             isRTL={isRTL}
                             onCancel={() => {
+                              cancelSharedAgent();
                               setAiEditing(false);
                               setIsGenerating(false);
                               setGenerationSteps([]);
