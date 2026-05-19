@@ -45,6 +45,11 @@ async function refreshAccessToken(refreshToken: string): Promise<{ access_token:
   return data;
 }
 
+ function isReconnectRequiredError(error: unknown) {
+   const message = error instanceof Error ? error.message : String(error || "");
+   return /invalid_grant|expired or revoked|token has been expired or revoked|revoked/i.test(message);
+ }
+
 async function getValidAccessToken(supabase: ReturnType<typeof createClient>, userId: string): Promise<string> {
   const { data: tokenRow, error } = await supabase
     .from("gmail_tokens")
@@ -57,16 +62,35 @@ async function getValidAccessToken(supabase: ReturnType<typeof createClient>, us
   const expiresAt = tokenRow.expires_at ? new Date(tokenRow.expires_at).getTime() : 0;
   const needsRefresh = expiresAt - Date.now() < 60 * 1000;
 
-  if (needsRefresh && tokenRow.refresh_token) {
-    const refreshed = await refreshAccessToken(tokenRow.refresh_token);
-    await supabase
-      .from("gmail_tokens")
-      .update({
-        access_token: refreshed.access_token,
-        expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
-      })
-      .eq("user_id", userId);
-    return refreshed.access_token;
+  if (needsRefresh) {
+    if (!tokenRow.refresh_token) {
+      await supabase
+        .from("gmail_tokens")
+        .delete()
+        .eq("user_id", userId);
+      throw new Error("Gmail reconnect required");
+    }
+
+    try {
+      const refreshed = await refreshAccessToken(tokenRow.refresh_token);
+      await supabase
+        .from("gmail_tokens")
+        .update({
+          access_token: refreshed.access_token,
+          expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
+        })
+        .eq("user_id", userId);
+      return refreshed.access_token;
+    } catch (error) {
+      if (isReconnectRequiredError(error)) {
+        await supabase
+          .from("gmail_tokens")
+          .delete()
+          .eq("user_id", userId);
+        throw new Error("Gmail reconnect required");
+      }
+      throw error;
+    }
   }
 
   return tokenRow.access_token;

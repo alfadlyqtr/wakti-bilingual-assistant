@@ -102,6 +102,78 @@ async function refreshAccessToken(refreshToken: string) {
   return data as { access_token: string; expires_in: number };
 }
 
+function isReconnectRequiredError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  return /invalid_grant|expired or revoked|token has been expired or revoked|revoked/i.test(message);
+}
+
+async function clearGmailTokens(supabase: ReturnType<typeof createClient>, userId: string) {
+  await supabase
+    .from("gmail_tokens")
+    .delete()
+    .eq("user_id", userId);
+}
+
+async function validateGmailConnection(supabase: ReturnType<typeof createClient>, userId: string) {
+  const { data, error } = await supabase
+    .from("gmail_tokens")
+    .select("access_token, refresh_token, email_address, expires_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return { connected: false as const };
+  }
+
+  let activeToken = data.access_token;
+  const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
+  const needsRefresh = expiresAt - Date.now() < 5 * 60 * 1000;
+
+  if (needsRefresh) {
+    if (!data.refresh_token) {
+      await clearGmailTokens(supabase, userId);
+      return { connected: false as const, reconnect_required: true };
+    }
+
+    try {
+      const refreshed = await refreshAccessToken(data.refresh_token);
+      activeToken = refreshed.access_token;
+      await supabase
+        .from("gmail_tokens")
+        .update({
+          access_token: refreshed.access_token,
+          expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
+        })
+        .eq("user_id", userId);
+    } catch (refreshError) {
+      console.error("Silent refresh failed:", refreshError);
+      if (isReconnectRequiredError(refreshError)) {
+        await clearGmailTokens(supabase, userId);
+        return { connected: false as const, reconnect_required: true };
+      }
+      throw refreshError;
+    }
+  }
+
+  const liveEmail = await fetchUserEmail(activeToken);
+  if (!liveEmail) {
+    await clearGmailTokens(supabase, userId);
+    return { connected: false as const, reconnect_required: true };
+  }
+
+  if (liveEmail !== data.email_address) {
+    await supabase
+      .from("gmail_tokens")
+      .update({ email_address: liveEmail })
+      .eq("user_id", userId);
+  }
+
+  return {
+    connected: true as const,
+    email_address: liveEmail,
+  };
+}
+
 async function fetchUserEmail(accessToken: string) {
   const res = await fetch(
     "https://www.googleapis.com/oauth2/v2/userinfo",
@@ -124,45 +196,7 @@ Deno.serve(async (req: Request) => {
       if (!userId) return jsonResponse({ error: "Unauthorized" }, 401);
 
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-      const { data, error } = await supabase
-        .from("gmail_tokens")
-        .select("email_address, expires_at")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (error || !data) return jsonResponse({ connected: false });
-
-      // If token is about to expire (<5 min), try to refresh silently
-      const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
-      const needsRefresh = expiresAt - Date.now() < 5 * 60 * 1000;
-
-      if (needsRefresh) {
-        const { data: tokenRow } = await supabase
-          .from("gmail_tokens")
-          .select("refresh_token")
-          .eq("user_id", userId)
-          .single();
-
-        if (tokenRow?.refresh_token) {
-          try {
-            const refreshed = await refreshAccessToken(tokenRow.refresh_token);
-            await supabase
-              .from("gmail_tokens")
-              .update({
-                access_token: refreshed.access_token,
-                expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
-              })
-              .eq("user_id", userId);
-          } catch (e) {
-            console.error("Silent refresh failed:", e);
-          }
-        }
-      }
-
-      return jsonResponse({
-        connected: true,
-        email_address: data.email_address,
-      });
+      return jsonResponse(await validateGmailConnection(supabase, userId));
     }
 
     // ─── DELETE: remove connection ───
@@ -194,86 +228,7 @@ Deno.serve(async (req: Request) => {
 
       // ── check_connection ──
       if (action === "check_connection") {
-        const { data, error } = await supabase
-          .from("gmail_tokens")
-          .select("email_address, expires_at")
-          .eq("user_id", userId)
-          .maybeSingle();
-
-        if (error || !data) return jsonResponse({ connected: false });
-
-        // If token is about to expire (<5 min), try to refresh silently
-        const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
-        const needsRefresh = expiresAt - Date.now() < 5 * 60 * 1000;
-
-        if (needsRefresh) {
-          const { data: tokenRow } = await supabase
-            .from("gmail_tokens")
-            .select("refresh_token")
-            .eq("user_id", userId)
-            .single();
-
-          if (tokenRow?.refresh_token) {
-            try {
-              const refreshed = await refreshAccessToken(tokenRow.refresh_token);
-              await supabase
-                .from("gmail_tokens")
-                .update({
-                  access_token: refreshed.access_token,
-                  expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
-                })
-                .eq("user_id", userId);
-            } catch (e) {
-              console.error("Silent refresh failed:", e);
-            }
-          }
-        }
-
-        // If email_address missing, backfill it — refresh token first since access_token may be expired
-        let emailAddress = data.email_address;
-        if (!emailAddress) {
-          try {
-            const { data: tokenRow } = await supabase
-              .from("gmail_tokens")
-              .select("access_token, refresh_token")
-              .eq("user_id", userId)
-              .maybeSingle();
-            if (tokenRow) {
-              let activeToken = tokenRow.access_token;
-              // Always try to refresh first to ensure we have a valid token
-              if (tokenRow.refresh_token) {
-                try {
-                  const refreshed = await refreshAccessToken(tokenRow.refresh_token);
-                  activeToken = refreshed.access_token;
-                  await supabase
-                    .from("gmail_tokens")
-                    .update({
-                      access_token: refreshed.access_token,
-                      expires_at: new Date(Date.now() + refreshed.expires_in * 1000).toISOString(),
-                    })
-                    .eq("user_id", userId);
-                } catch (e) {
-                  console.error("[gmail] refresh for backfill failed:", e);
-                }
-              }
-              const fetched = await fetchUserEmail(activeToken);
-              if (fetched) {
-                await supabase
-                  .from("gmail_tokens")
-                  .update({ email_address: fetched })
-                  .eq("user_id", userId);
-                emailAddress = fetched;
-              }
-            }
-          } catch (e) {
-            console.error("[gmail] email backfill failed:", e);
-          }
-        }
-
-        return jsonResponse({
-          connected: true,
-          email_address: emailAddress,
-        });
+        return jsonResponse(await validateGmailConnection(supabase, userId));
       }
 
       // ── exchange_code ──

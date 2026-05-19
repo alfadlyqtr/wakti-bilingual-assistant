@@ -62,6 +62,17 @@ const SIMPLE_PATTERNS: RegExp[] = [
   /\bchange\s.*\s(to|into)\s/i,
 ];
 
+const DESIGN_HEAVY_PATTERNS: RegExp[] = [
+  /\b(hero|homepage|home page|landing page|above the fold|first impression)\b/i,
+  /\b(redesign|rebuild|rewrite|overhaul|reimagine|restyle)\b/i,
+  /\b(premium|luxury|elegant|editorial|high[-\s]?end|wow)\b/i,
+  /\b(layout|composition|hierarchy|typography|spacing|art direction|visual depth|brand feel)\b/i,
+  /\b(ui|ux|design)\b.*\b(improve|better|premium|luxury|elegant|clean|modern)\b/i,
+  /\b(improve|make|fix|update|change)\b.*\b(hero|homepage|landing|layout|design|branding)\b/i,
+  /\b(colors?|spacing|animation|animations|cta|button placement|image|imagery)\b.*\b(hero|homepage|landing|brand)\b/i,
+  /\b(hero|homepage|landing|brand)\b.*\b(colors?|spacing|animation|animations|cta|image|imagery)\b/i,
+];
+
 const COMPLEX_PATTERNS: RegExp[] = [
   /\b(refactor|restructure|redesign|rebuild|rewrite|architect)/i,
   /\b(create|build|implement|add)\s+(a\s+)?(new\s+)?(page|feature|system|module|component)/i,
@@ -70,6 +81,10 @@ const COMPLEX_PATTERNS: RegExp[] = [
   /\b(complex|advanced|sophisticated)/i,
   /\b(debug|fix\s+crash|runtime\s+error|broken)/i,
 ];
+
+export function isPremiumDesignRequest(prompt: string): boolean {
+  return DESIGN_HEAVY_PATTERNS.some((pattern) => pattern.test(prompt || ''));
+}
 
 export function selectOptimalModel(
   prompt: string,
@@ -80,6 +95,12 @@ export function selectOptimalModel(
   // PRO tier: Creation always uses the best Pro model
   if (mode === 'create') {
     return { model: GEMINI_MODEL_CREATE, reason: 'Project creation requires Pro (3.1)', tier: 'pro' };
+  }
+
+  const designHeavy = isPremiumDesignRequest(prompt);
+
+  if (designHeavy && (mode === 'agent' || mode === 'execute' || mode === 'plan')) {
+    return { model: GEMINI_MODEL_AGENT, reason: 'Premium design request requires Pro (3.1)', tier: 'pro' };
   }
 
   if (hasImages) {

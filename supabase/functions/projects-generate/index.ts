@@ -36,6 +36,7 @@ import {
   GEMINI_MODEL_PLAN,
   GEMINI_MODEL_SIMPLE,
   GEMINI_MODEL_VISION,
+  isPremiumDesignRequest,
   selectOptimalModel,
   type ModelSelection,
 } from "./models/selection.ts";
@@ -888,6 +889,126 @@ function buildGroundedFreshnessInstructions(prompt: string): string {
 - If a fact cannot be verified, render a clear unavailable/empty state instead of fake content.
 - News cards must open a real article detail view or expanded detail state.
 - If player headshots cannot be verified, use a neutral placeholder instead of random photos.`;
+}
+
+interface DesignCriticResult {
+  pass: boolean;
+  score: number;
+  verdict: string;
+  issues: string[];
+  requiredActions: string[];
+  reviewedFiles: string[];
+}
+
+async function loadFilesForDesignCritic(
+  supabase: SupabaseAdminClient,
+  projectId: string,
+  candidatePaths: string[],
+  cachedFiles: Record<string, string>,
+): Promise<Record<string, string>> {
+  const reviewedFiles = Array.from(new Set(candidatePaths.map(normalizeFilePath).filter(Boolean))).slice(0, 6);
+  const files: Record<string, string> = {};
+ 
+  if (reviewedFiles.length > 0) {
+    const { data } = await supabase
+      .from('project_files')
+      .select('path, content')
+      .eq('project_id', projectId)
+      .in('path', reviewedFiles);
+
+    for (const row of data || []) {
+      const normalizedPath = normalizeFilePath(row.path);
+      if (typeof row.content === 'string' && row.content.trim().length > 0) {
+        files[normalizedPath] = row.content;
+      }
+    }
+  }
+
+  for (const path of reviewedFiles) {
+    if (!files[path] && typeof cachedFiles[path] === 'string' && cachedFiles[path].trim().length > 0) {
+      files[path] = cachedFiles[path];
+    }
+  }
+
+  return files;
+}
+
+async function runDesignCritic(
+  userPrompt: string,
+  changeSummary: string,
+  changedFiles: Record<string, string>,
+): Promise<DesignCriticResult> {
+  const reviewedFiles = Object.keys(changedFiles);
+
+  if (reviewedFiles.length === 0) {
+    return {
+      pass: true,
+      score: 10,
+      verdict: 'No files supplied to design critic.',
+      issues: [],
+      requiredActions: [],
+      reviewedFiles: [],
+    };
+  }
+
+  const fileContext = reviewedFiles
+    .map((path) => `=== FILE: ${path} ===\n${(changedFiles[path] || '').slice(0, 12000)}`)
+    .join('\n\n');
+
+  const systemPrompt = `You are the Design Critic role for WAKTI AI Coder.
+
+Your job is to judge whether the changed code actually satisfies a premium design request.
+
+Be strict. Reject results that are still generic, flat, empty, poorly composed, awkward, overlapping, placeholder-like, or obviously below premium quality.
+
+Return ONLY valid JSON with this shape:
+{
+  "pass": true,
+  "score": 8,
+  "verdict": "Short verdict",
+  "issues": ["Issue 1"],
+  "requiredActions": ["Action 1"]
+}`;
+
+  const criticPrompt = `USER REQUEST:
+${userPrompt}
+
+CHANGE SUMMARY:
+${changeSummary || 'No summary provided.'}
+
+CHANGED FILES TO REVIEW:
+${fileContext}
+
+Judge whether this result is truly strong enough for a premium design request.`;
+
+  const criticModel = selectOptimalModel(userPrompt, false, 'agent', reviewedFiles.length).model;
+  const raw = await callGeminiWithModel(criticModel, systemPrompt, criticPrompt, true, 1);
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (parseErr) {
+    const recovered = recoverBrokenJson(raw);
+    if (!recovered) {
+      throw parseErr;
+    }
+    parsed = recovered;
+  }
+
+  const obj = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+  const issues = Array.isArray(obj.issues) ? obj.issues.filter((issue): issue is string => typeof issue === 'string') : [];
+  const requiredActions = Array.isArray(obj.requiredActions)
+    ? obj.requiredActions.filter((action): action is string => typeof action === 'string')
+    : [];
+
+  return {
+    pass: obj.pass === true,
+    score: typeof obj.score === 'number' ? obj.score : 0,
+    verdict: typeof obj.verdict === 'string' ? obj.verdict : 'Design critic review completed.',
+    issues,
+    requiredActions,
+    reviewedFiles,
+  };
 }
 
 // ============================================================================
@@ -4878,6 +4999,7 @@ Update the relevant content/data files with this REAL information.`;
       const maxIterations = 12; // Increased to give stamina for site-wide features
       const toolCallsLog: ToolCallLogEntry[] = [];
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
+      let designCriticResult: DesignCriticResult | null = null;
       
       // 🔒 HARDENING: Inject mandatory exploration prompt with SMART SUGGESTIONS
       // If intent parsing found good anchors, suggest them. If generic, warn.
@@ -4908,9 +5030,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         parts: [{ text: mandatoryExplorationPrompt }]
       });
       // Smart model selection for agent mode
-      const hasVisionInput = body.images && body.images.length > 0;
+      const hasVisionInput = Boolean(body.images && body.images.length > 0);
       // fileCount already defined above in context optimization section
       const agentModelSelection = selectOptimalModel(prompt, hasVisionInput, 'agent', fileCount);
+      const premiumDesignRequest = isPremiumDesignRequest(prompt);
       
       // Track total input for cost estimation
       const totalInputText = systemPromptWithProjectId + userMessageContent;
@@ -5655,6 +5778,34 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             
             // All checks passed - allow task_complete
             if (result.acknowledged) {
+              if (premiumDesignRequest && successfulEdits.length > 0) {
+                const criticCandidatePaths = toStringArray(result.filesChanged).length > 0
+                  ? toStringArray(result.filesChanged)
+                  : [...filesEdited];
+                const criticFiles = await loadFilesForDesignCritic(supabase, projectId, criticCandidatePaths, allFilesCache);
+
+                designCriticResult = await runDesignCritic(
+                  prompt,
+                  typeof result.summary === 'string' ? result.summary : 'Task completed',
+                  criticFiles,
+                );
+
+                if (!designCriticResult.pass) {
+                  console.warn(`[Agent Mode] 🚫 DESIGN CRITIC BLOCKED task_complete: ${designCriticResult.verdict}`);
+                  resultWarnings.push(...designCriticResult.issues.map((issue) => `Design critic: ${issue}`));
+                  functionResponses[functionResponses.length - 1].functionResponse.response = {
+                    acknowledged: false,
+                    error: `BLOCKED: Design critic rejected the result. ${designCriticResult.verdict}`,
+                    issues: designCriticResult.issues,
+                    requiredActions: designCriticResult.requiredActions,
+                    score: designCriticResult.score,
+                    reviewedFiles: designCriticResult.reviewedFiles,
+                    hint: 'Do a stronger rewrite of the target section. Improve hierarchy, spacing, composition, typography, CTA placement, and overall premium feel before calling task_complete again.'
+                  };
+                  continue;
+                }
+              }
+
               // Add any warnings from verification
               const warnings = [];
               if (grepAmbiguityDetected) warnings.push('Multiple file candidates were found');
@@ -5869,6 +6020,14 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           blockedReason: styleBlockReason || colorValidation.message || undefined
         },
         warnings: resultWarnings,
+        designCritic: designCriticResult ? {
+          pass: designCriticResult.pass,
+          score: designCriticResult.score,
+          verdict: designCriticResult.verdict,
+          issues: designCriticResult.issues,
+          requiredActions: designCriticResult.requiredActions,
+          reviewedFiles: designCriticResult.reviewedFiles,
+        } : undefined,
         // 🎯 NEW: Premium Upgrades
         changeReport,
         multiFileGuardrail,
