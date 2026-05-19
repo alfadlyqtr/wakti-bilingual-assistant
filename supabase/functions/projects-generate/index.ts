@@ -629,8 +629,15 @@ interface DebugContext {
     statusText: string;
     responseBody?: string;
   }>;
+  consoleLogs?: Array<{
+    level: 'log' | 'warn' | 'error' | 'info';
+    message: string;
+    timestamp: string;
+  }>;
   autoFixAttempt?: number;
   maxAutoFixAttempts?: number;
+  selectedElement?: AgentDebugContext['selectedElement'];
+  executionMode?: AgentExecutionMode;
 }
 
 interface RequestBody {
@@ -649,6 +656,7 @@ interface RequestBody {
   uploadedAssets?: UploadedAsset[];
   backendContext?: BackendContext;
   debugContext?: DebugContext;  // NEW: Debug context for error-aware editing
+  executionMode?: AgentExecutionMode;
   fixerMode?: boolean;  // NEW: Use "The Fixer" (premium model, internal impl) for final auto-fix attempt
   fixerContext?: {  // NEW: Extra context for The Fixer
     errorMessage: string;
@@ -756,6 +764,29 @@ function assertNoHtml(path: string, value: string): void {
   if (v.includes("<!doctype") || v.includes("<html")) {
     throw new Error("AI_RETURNED_HTML");
   }
+}
+
+const BANNED_IMAGE_HOST_PATTERN = /https?:\/\/[^"'`\s)]*(?:images\.unsplash\.com|source\.unsplash\.com|unsplash\.com|picsum\.photos|via\.placeholder\.com|placeholder\.com|placehold\.it)/gi;
+
+function replaceBannedImageHosts(content: string, replacementUrls: string[]): string {
+  if (!content || replacementUrls.length === 0) return content;
+  let replacementIndex = 0;
+  return content.replace(BANNED_IMAGE_HOST_PATTERN, () => {
+    const nextUrl = replacementUrls[replacementIndex] || replacementUrls[replacementUrls.length - 1];
+    replacementIndex += 1;
+    return nextUrl;
+  });
+}
+
+function replaceBannedImageHostsInFiles(files: Record<string, string>, replacementUrls: string[]): Record<string, string> {
+  if (replacementUrls.length === 0) return files;
+  const cleanedUrls = replacementUrls.filter((url) => typeof url === 'string' && url.trim().length > 0);
+  if (cleanedUrls.length === 0) return files;
+  const nextFiles: Record<string, string> = {};
+  for (const [path, content] of Object.entries(files)) {
+    nextFiles[path] = replaceBannedImageHosts(content, cleanedUrls);
+  }
+  return nextFiles;
 }
 
 // ============================================================================
@@ -955,11 +986,57 @@ async function runDesignCritic(
     .map((path) => `=== FILE: ${path} ===\n${(changedFiles[path] || '').slice(0, 12000)}`)
     .join('\n\n');
 
+  const combinedCode = reviewedFiles
+    .map((path) => changedFiles[path] || '')
+    .join('\n')
+    .toLowerCase();
+
+  const heuristicIssues: string[] = [];
+  const heuristicActions: string[] = [];
+  const focalVisualEvidence = /<img|backgroundimage|image_url|\.png|\.jpg|\.jpeg|\.webp|mockup|preview|hero-image|heroimage|freepik|object-cover/.test(combinedCode);
+  const ctaEvidence = /<button|<a\s|href=|onclick|shop now|explore|get started|learn more|book now|contact us/.test(combinedCode);
+  const headingEvidence = /<h1|text-5xl|text-6xl|text-7xl|text-\[clamp\(|font-serif/.test(combinedCode);
+  const contrastEvidence = /overlay|bg-black\/|from-black|via-black|to-black|text-white|backdrop-blur|bg-gradient|shadow-\[|linear-gradient/.test(combinedCode);
+
+  if (!focalVisualEvidence) {
+    heuristicIssues.push('No strong focal visual signal was found in the changed code.');
+    heuristicActions.push('Add a real hero visual, premium product image, editorial image treatment, or an equivalent high-impact focal asset.');
+  }
+
+  if (!ctaEvidence) {
+    heuristicIssues.push('No clear call-to-action signal was found in the changed code.');
+    heuristicActions.push('Add a clearly visible primary CTA with strong placement in the hero.');
+  }
+
+  if (!headingEvidence) {
+    heuristicIssues.push('No strong dominant heading signal was found in the changed code.');
+    heuristicActions.push('Add a clearly dominant hero heading with premium hierarchy.');
+  }
+
+  if (!contrastEvidence) {
+    heuristicIssues.push('No clear contrast or overlay strategy was found in the changed code.');
+    heuristicActions.push('Strengthen contrast with a proper overlay, text treatment, background separation, or clearer surface layering.');
+  }
+
   const systemPrompt = `You are the Design Critic role for WAKTI AI Coder.
 
 Your job is to judge whether the changed code actually satisfies a premium design request.
 
 Be strict. Reject results that are still generic, flat, empty, poorly composed, awkward, overlapping, placeholder-like, or obviously below premium quality.
+
+For design-heavy work, expect the result to visibly align with one strong premium starter system such as:
+- Luxury Fashion Hero
+- Premium SaaS Hero
+- Editorial Landing Page
+- Modern Service Brand Homepage
+
+Hard fail the result if ANY of these are true:
+- Text readability is bad.
+- Hero contrast is weak or washed out.
+- The focal visual is missing, broken, irrelevant, or too low-impact.
+- The main heading blends into the background or lacks clear dominance.
+- The CTA is hard to notice or visually lost.
+- The hero feels empty, generic, placeholder-like, or compositionally dead.
 
 Return ONLY valid JSON with this shape:
 {
@@ -979,7 +1056,10 @@ ${changeSummary || 'No summary provided.'}
 CHANGED FILES TO REVIEW:
 ${fileContext}
 
-Judge whether this result is truly strong enough for a premium design request.`;
+Heuristic review notes from the system:
+${heuristicIssues.length > 0 ? heuristicIssues.map((issue) => `- ${issue}`).join('\n') : '- No deterministic heuristic issues detected.'}
+
+Judge whether this result is truly strong enough for a premium design request. Use score 0-10, and only pass truly premium work.`;
 
   const criticModel = selectOptimalModel(userPrompt, false, 'agent', reviewedFiles.length).model;
   const raw = await callGeminiWithModel(criticModel, systemPrompt, criticPrompt, true, 1);
@@ -1000,13 +1080,16 @@ Judge whether this result is truly strong enough for a premium design request.`;
   const requiredActions = Array.isArray(obj.requiredActions)
     ? obj.requiredActions.filter((action): action is string => typeof action === 'string')
     : [];
+  const score = typeof obj.score === 'number' ? obj.score : 0;
+  const modelPass = obj.pass === true && score >= 8;
+  const heuristicPass = heuristicIssues.length === 0;
 
   return {
-    pass: obj.pass === true,
-    score: typeof obj.score === 'number' ? obj.score : 0,
+    pass: modelPass && heuristicPass,
+    score,
     verdict: typeof obj.verdict === 'string' ? obj.verdict : 'Design critic review completed.',
-    issues,
-    requiredActions,
+    issues: [...heuristicIssues, ...issues],
+    requiredActions: [...heuristicActions, ...requiredActions],
     reviewedFiles,
   };
 }
@@ -2088,8 +2171,91 @@ type GeminiTextPart = GeminiToolMessage & { text: string };
 type GeminiFunctionCallPart = GeminiToolMessage & { functionCall: { name: string; args?: Record<string, unknown> } };
 type ToolCallLogEntry = { tool: string; args: ToolCallPayload; result: ToolCallResult };
 
+type AgentExecutionMode = 'surgical_edit' | 'design_rebuild';
+
 const PRIMARY_EXISTING_FILE_EDIT_TOOL = 'morph_edit';
 const EDIT_TOOL_NAMES = new Set(['morph_edit', 'search_replace', 'write_file', 'insert_code']);
+
+function isAgentExecutionMode(value: unknown): value is AgentExecutionMode {
+  return value === 'surgical_edit' || value === 'design_rebuild';
+}
+
+function resolveAgentExecutionMode(promptText: string, requestedMode: unknown): AgentExecutionMode {
+  if (isAgentExecutionMode(requestedMode)) return requestedMode;
+  return isPremiumDesignRequest(promptText) ? 'design_rebuild' : 'surgical_edit';
+}
+
+function buildAgentExecutionModeInstructions(executionMode: AgentExecutionMode): string {
+  if (executionMode === 'design_rebuild') {
+    return `
+
+## EXECUTION MODE: DESIGN REBUILD
+
+You are in DESIGN REBUILD mode.
+
+- Visual outcome is the priority.
+- If the current hero, homepage, or target section is weak, you MUST rebuild the structure, not just patch classes.
+- You may use write_file on an existing target file after reading it when a proper section rewrite is the minimum correct solution.
+- Minimize unrelated edits, but do not stay artificially surgical when the layout itself is the problem.
+`;
+  }
+
+  return `
+
+## EXECUTION MODE: SURGICAL EDIT
+
+You are in SURGICAL EDIT mode.
+
+- Prefer morph_edit for existing files.
+- Keep the change tight and specific.
+- Do not rewrite large sections unless the request explicitly requires it.
+`;
+}
+
+function normalizeAgentSelectedElement(value: unknown): AgentDebugContext['selectedElement'] {
+  if (!value || typeof value !== 'object') return null;
+  const record = value as Record<string, unknown>;
+  const tagName = typeof record.tagName === 'string' ? record.tagName : null;
+  const className = typeof record.className === 'string' ? record.className : null;
+  const id = typeof record.id === 'string' ? record.id : null;
+  const innerText = typeof record.innerText === 'string' ? record.innerText : null;
+  const openingTag = typeof record.openingTag === 'string' ? record.openingTag : null;
+  if (!tagName || !className || !id || !innerText || !openingTag) {
+    return null;
+  }
+
+  const computedStyleValue = record.computedStyle;
+  const rectValue = record.rect;
+  let computedStyle: NonNullable<NonNullable<AgentDebugContext['selectedElement']>['computedStyle']> | undefined;
+  if (computedStyleValue && typeof computedStyleValue === 'object') {
+    const computedStyleRecord = computedStyleValue as Record<string, unknown>;
+    computedStyle = {
+      color: typeof computedStyleRecord.color === 'string' ? computedStyleRecord.color : '',
+      backgroundColor: typeof computedStyleRecord.backgroundColor === 'string' ? computedStyleRecord.backgroundColor : '',
+      fontSize: typeof computedStyleRecord.fontSize === 'string' ? computedStyleRecord.fontSize : '',
+    };
+  }
+  let rect: NonNullable<NonNullable<AgentDebugContext['selectedElement']>['rect']> | undefined;
+  if (rectValue && typeof rectValue === 'object') {
+    const rectRecord = rectValue as Record<string, unknown>;
+    rect = {
+      top: typeof rectRecord.top === 'number' ? rectRecord.top : 0,
+      left: typeof rectRecord.left === 'number' ? rectRecord.left : 0,
+      width: typeof rectRecord.width === 'number' ? rectRecord.width : 0,
+      height: typeof rectRecord.height === 'number' ? rectRecord.height : 0,
+    };
+  }
+
+  return {
+    tagName,
+    className,
+    id,
+    innerText,
+    openingTag,
+    ...(computedStyle ? { computedStyle } : {}),
+    ...(rect ? { rect } : {}),
+  };
+}
 
 function extractVerificationSnippet(source: unknown): string {
   if (typeof source !== 'string') return '';
@@ -2210,8 +2376,9 @@ async function enforceEditToolPolicy(params: {
   filesRead: Set<string>;
   fileContentCache: Map<string, string>;
   allFilesCache?: Record<string, string>;
+  executionMode: AgentExecutionMode;
 }): Promise<{ targetPath: string | null; blockResult?: Record<string, unknown> }> {
-  const { toolName, args, projectId, supabase, knownFiles, filesRead, fileContentCache, allFilesCache } = params;
+  const { toolName, args, projectId, supabase, knownFiles, filesRead, fileContentCache, allFilesCache, executionMode } = params;
   const targetPath = typeof args?.path === 'string' ? normalizeFilePath(args.path) : null;
 
   if (!targetPath || !EDIT_TOOL_NAMES.has(toolName)) {
@@ -2219,6 +2386,7 @@ async function enforceEditToolPolicy(params: {
   }
 
   const isNewFileCreation = toolName === 'write_file' && !knownFiles.has(targetPath);
+  const hadReadTargetFile = filesRead.has(targetPath);
 
   if (!knownFiles.has(targetPath) && toolName !== 'write_file') {
     return {
@@ -2258,6 +2426,20 @@ async function enforceEditToolPolicy(params: {
   if (toolName === 'write_file' && targetContent) {
     const existingLineCount = targetContent.split('\n').length;
     if (existingLineCount < 500) {
+      if (executionMode === 'design_rebuild') {
+        if (!hadReadTargetFile) {
+          return {
+            targetPath,
+            blockResult: {
+              success: false,
+              error: `BLOCKED: Design rebuild mode can only overwrite "${targetPath}" after you read that exact file first.`,
+              hint: 'Use read_file on the target file, confirm the current structure is weak, then rewrite it.'
+            }
+          };
+        }
+        return { targetPath };
+      }
+
       return {
         targetPath,
         blockResult: {
@@ -3563,6 +3745,7 @@ serve(async (req: Request) => {
     const uploadedAssets = Array.isArray(body.uploadedAssets) ? body.uploadedAssets : [];
     const backendContext = body.backendContext;
     const debugContext = body.debugContext;  // NEW: Captured errors from preview
+    const requestedExecutionMode = body.executionMode;
     const lang = (body.lang || 'en').toString(); // Language for content generation (ar/en)
     
     // Build debug context section for prompts (OPTION B: Smart Error Context)
@@ -4608,17 +4791,22 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         }
       }
       
+      const agentExecutionMode = resolveAgentExecutionMode(prompt, requestedExecutionMode ?? debugContext?.executionMode);
+      const selectedElement = normalizeAgentSelectedElement(debugContext?.selectedElement);
+
       // Build enhanced debug context for the agent
       const agentDebugContext: AgentDebugContext = {
         errors: debugContext?.errors || [],
         networkErrors: debugContext?.networkErrors || [],
         consoleLogs: debugContext?.consoleLogs || [],
         autoFixAttempt: debugContext?.autoFixAttempt,
-        maxAutoFixAttempts: debugContext?.maxAutoFixAttempts
+        maxAutoFixAttempts: debugContext?.maxAutoFixAttempts,
+        selectedElement,
+        executionMode: agentExecutionMode
       };
       
       // Build system prompt with project ID - replace placeholder with actual project ID
-      const systemPromptWithProjectId = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId);
+      const systemPromptWithProjectId = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId) + buildAgentExecutionModeInstructions(agentExecutionMode);
       
       // ========================================================================
       // CONTEXT OPTIMIZATION: Send only file NAMES, not full content
@@ -4683,7 +4871,18 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       
       // Extract inspect selection from debug context for precise element targeting
       let inspectSelectionContext = '';
-      if (agentDebugContext.consoleLogs && agentDebugContext.consoleLogs.length > 0) {
+      if (agentDebugContext.selectedElement) {
+        const selected = agentDebugContext.selectedElement;
+        inspectSelectionContext = `
+🎯 USER SELECTED ELEMENT:
+Tag: ${selected.tagName}
+Class: ${selected.className || '(none)'}
+ID: ${selected.id || '(none)'}
+Text: ${selected.innerText || '(empty)'}
+
+⚠️ CRITICAL: The user selected this exact element. Prioritize this payload over console-log guesses.
+`;
+      } else if (agentDebugContext.consoleLogs && agentDebugContext.consoleLogs.length > 0) {
         const inspectLogs = agentDebugContext.consoleLogs.filter(log => 
           log.message.includes('Element selected') || 
           log.message.includes('InspectablePreview') ||
@@ -4855,6 +5054,7 @@ Format the output clearly with sections. Do NOT summarize - extract the FULL tex
 ${fileList}
 ${criticalFilesContext}
 ${intentGuidance}
+⚙️ EXECUTION MODE: ${agentExecutionMode === 'design_rebuild' ? 'DESIGN REBUILD' : 'SURGICAL EDIT'}
 ⚠️ IMPORTANT: Use the read_file tool to view file contents before editing.
 Use list_files to see directory structure.
 Use morph_edit for intelligent code fixes (preferred), search_replace for simple replacements, or write_file for new files.
@@ -5033,7 +5233,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       const hasVisionInput = Boolean(body.images && body.images.length > 0);
       // fileCount already defined above in context optimization section
       const agentModelSelection = selectOptimalModel(prompt, hasVisionInput, 'agent', fileCount);
-      const premiumDesignRequest = isPremiumDesignRequest(prompt);
+      const premiumDesignRequest = agentExecutionMode === 'design_rebuild' || isPremiumDesignRequest(prompt);
       
       // Track total input for cost estimation
       const totalInputText = systemPromptWithProjectId + userMessageContent;
@@ -5326,7 +5526,8 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             knownFiles,
             filesRead,
             fileContentCache,
-            allFilesCache
+            allFilesCache,
+            executionMode: agentExecutionMode
           });
           const targetPath = policy.targetPath;
           
@@ -5778,7 +5979,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
             
             // All checks passed - allow task_complete
             if (result.acknowledged) {
-              if (premiumDesignRequest && successfulEdits.length > 0) {
+              if (agentExecutionMode === 'design_rebuild' && successfulEdits.length > 0) {
                 const criticCandidatePaths = toStringArray(result.filesChanged).length > 0
                   ? toStringArray(result.filesChanged)
                   : [...filesEdited];
@@ -6138,7 +6339,8 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         }
 
         // Prepare agent-style system prompt for execute mode
-        const executeSystemPrompt = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId) + `
+        const execExecutionMode = resolveAgentExecutionMode(`${planToExecute}\n${userInstructions || ''}`, requestedExecutionMode ?? debugContext?.executionMode);
+        const executeSystemPrompt = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId) + buildAgentExecutionModeInstructions(execExecutionMode) + `
 
 ## 🎯 EXECUTE MODE SPECIFIC INSTRUCTIONS
 
@@ -6148,7 +6350,7 @@ You are in EXECUTE MODE. A plan has already been created and approved. Your job 
 1. Read the plan carefully
 2. Use read_file to get file contents BEFORE editing (unless pre-loaded)
 3. You are powered by Morph AST Engine. You MUST use morph_edit for all code changes. Do not use search_replace unless morph_edit explicitly fails or it is a simple 1-line exact string match.
-4. Use write_file ONLY for new files
+4. Use write_file ONLY for new files unless DESIGN REBUILD mode requires a read-first rewrite of an existing target file.
 5. Execute ALL steps in the plan
 6. Call task_complete when done with a summary of what you changed
 
@@ -6163,6 +6365,7 @@ You are in EXECUTE MODE. A plan has already been created and approved. Your job 
 ${fileList}
 ${preloadedFilesStr}
 
+⚙️ EXECUTION MODE: ${execExecutionMode === 'design_rebuild' ? 'DESIGN REBUILD' : 'SURGICAL EDIT'}
 ⚠️ IMPORTANT: For files already pre-loaded above, you already have the content — go straight to morph_edit. Use read_file ONLY for files NOT pre-loaded.
 
 📋 PLAN TO EXECUTE:
@@ -6197,7 +6400,9 @@ Call task_complete when finished.`;
         const execDebugContext: AgentDebugContext = {
           errors: [],
           networkErrors: [],
-          consoleLogs: []
+          consoleLogs: [],
+          selectedElement: normalizeAgentSelectedElement(debugContext?.selectedElement),
+          executionMode: execExecutionMode
         };
         
         const GEMINI_API_KEY_EXEC = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
@@ -6272,7 +6477,8 @@ Call task_complete when finished.`;
               knownFiles: execKnownFiles,
               filesRead: execFilesRead,
               fileContentCache: execFileContentCache,
-              allFilesCache: execAllFilesCache
+              allFilesCache: execAllFilesCache,
+              executionMode: execExecutionMode
             });
             const targetPath = policy.targetPath;
 
@@ -6741,6 +6947,11 @@ Return ONLY the JSON object. No explanation.`;
           files[path] = fixedContent;
         }
 
+        files = replaceBannedImageHostsInFiles(
+          files,
+          preFetchedImages.map((img) => img.storedUrl).filter((url) => typeof url === 'string' && url.trim().length > 0)
+        );
+
         // Check if project uses backend API and auto-enable it
         const usesBackend = Object.values(files).some(content => 
           content.includes('project-backend-api')
@@ -6854,6 +7065,11 @@ Return ONLY the JSON object. No explanation.`;
         }
         finalFilesToUpsert[path] = fixedContent;
       }
+
+      finalFilesToUpsert = replaceBannedImageHostsInFiles(
+        finalFilesToUpsert,
+        uploadedAssets?.map((asset) => asset.url).filter((url) => typeof url === 'string' && url.trim().length > 0) || []
+      );
 
       // Option A: Always enable backend for every project (so generated projects are always "live")
       await supabase.from('project_backends').upsert({

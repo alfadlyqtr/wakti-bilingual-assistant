@@ -271,7 +271,8 @@ export function SmartMediaManager({
         { content_type: { photo: 1 } },
         page,
         12,
-        isRTLMode ? 'ar-SA' : 'en-US'
+        isRTLMode ? 'ar-SA' : 'en-US',
+        projectId
       );
 
       if (result.success && result.data) {

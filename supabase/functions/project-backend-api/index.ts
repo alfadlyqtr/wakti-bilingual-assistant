@@ -1399,52 +1399,69 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
       const { query, page = 1, limit = 20, filters } = data;
       if (!query) throw new Error('query required');
 
-      const params = new URLSearchParams({
-        term: query as string,
-        page: String(page),
-        limit: String(Math.min(limit as number, 100)),
-      });
+      const normalizedQuery = String(query).trim();
+      const queryCandidates = Array.from(new Set([
+        normalizedQuery,
+        normalizedQuery.replace(/\b(detail|texture|fabric|editorial|instagram post)\b/gi, '').replace(/\s+/g, ' ').trim(),
+        'luxury abaya fashion',
+        'modest fashion model',
+      ].filter(Boolean)));
 
-      // Add optional filters
-      if (filters) {
-        const f = filters as Record<string, string>;
-        if (f.type) params.append('filters[content_type][photo]', f.type === 'photo' ? '1' : '0');
-        if (f.orientation) params.append('filters[orientation]', f.orientation);
-        if (f.color) params.append('filters[color]', f.color);
+      for (const candidate of queryCandidates) {
+        const params = new URLSearchParams({
+          locale: 'en-US',
+          term: candidate,
+          page: String(page),
+          limit: String(Math.min(limit as number, 100)),
+          'filters[content_type][photo]': '1',
+        });
+
+        if (filters) {
+          const f = filters as Record<string, string>;
+          if (f.type) params.set('filters[content_type][photo]', f.type === 'photo' ? '1' : '0');
+          if (f.orientation) params.append('filters[orientation]', f.orientation);
+          if (f.color) params.append('filters[color]', f.color);
+        }
+
+        const response = await fetch(`https://api.freepik.com/v1/resources?${params}`, { headers });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[Freepik] Images search error for "${candidate}":`, errorText);
+          continue;
+        }
+
+        const result = await response.json();
+        const images = (result.data || []).map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          url: item.image?.source?.url || item.image?.source_url || '',
+          thumbnail: item.image?.source?.url || '',
+          size: item.image?.source?.size || '',
+          orientation: item.image?.orientation || 'horizontal',
+          type: item.image?.type || 'photo',
+          author: item.author?.name || 'Freepik',
+          authorAvatar: item.author?.avatar || '',
+          freepikUrl: item.url || '',
+          downloads: item.stats?.downloads || 0,
+          likes: item.stats?.likes || 0,
+        })).filter((img: any) => img.url);
+
+        if (images.length > 0) {
+          return {
+            images,
+            total: result.meta?.total || images.length,
+            page: result.meta?.current_page || page,
+            lastPage: result.meta?.last_page || 1,
+          };
+        }
       }
 
-      const response = await fetch(`https://api.freepik.com/v1/resources?${params}`, { headers });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[Freepik] Images search error:`, errorText);
-        throw new Error(`Freepik API error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      
-      // Transform to simpler format for AI - using correct API response structure
-      // API returns: item.image.source.url (not source_url)
-      const images = (result.data || []).map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        url: item.image?.source?.url || item.image?.source_url || '',
-        thumbnail: item.image?.source?.url || '',
-        size: item.image?.source?.size || '',
-        orientation: item.image?.orientation || 'horizontal',
-        type: item.image?.type || 'photo',
-        author: item.author?.name || 'Freepik',
-        authorAvatar: item.author?.avatar || '',
-        freepikUrl: item.url || '',
-        downloads: item.stats?.downloads || 0,
-        likes: item.stats?.likes || 0,
-      })).filter((img: any) => img.url); // Filter out items without valid URLs
-
-      return { 
-        images, 
-        total: result.meta?.total || images.length,
-        page: result.meta?.current_page || page,
-        lastPage: result.meta?.last_page || 1,
+      return {
+        images: [],
+        total: 0,
+        page,
+        lastPage: 1,
       };
     }
 

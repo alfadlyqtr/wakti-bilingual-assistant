@@ -527,13 +527,22 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
               )}
 
               {/* FIXED: Message content with proper alignment */}
-              <div 
-                className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
-                dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
-              />
-
-              {hasGroundedPlaceCards && (
-                <GroundedPlacesBlock message={message} language={language} />
+              {hasGroundedPlaceCards ? (
+                <>
+                  {(() => {
+                    const raw = (message.content || '').replace(/\[REMINDER:[^\]]*\]/g, '').trim();
+                    const opener = raw.split(/\n[\s]*[-*•]|\n[\s]*\d+\./)[0].trim();
+                    return opener ? (
+                      <p className="text-sm leading-relaxed mb-2">{opener}</p>
+                    ) : null;
+                  })()}
+                  <GroundedPlacesBlock message={message} language={language} />
+                </>
+              ) : (
+                <div 
+                  className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
+                  dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
+                />
               )}
 
               {/* Image display - STANDARDIZED for both user and AI messages */}

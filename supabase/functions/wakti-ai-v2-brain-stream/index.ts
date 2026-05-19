@@ -1347,7 +1347,8 @@ interface Gemini3SearchResult {
 function buildSearchFollowupContents(
   rawUserMessage: string,
   queryText: string,
-  recentMessages: unknown[] | undefined
+  recentMessages: unknown[] | undefined,
+  searchTool: 'google_search' | 'google_maps' = 'google_search'
 ): Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> {
   const contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
 
@@ -1418,7 +1419,7 @@ function buildSearchFollowupContents(
       `${compactSummary ? compactSummary + '\n\n' : ''}` +
       `${lastUser ? `Last user message: ${lastUser.slice(0, 400)}\n` : ''}` +
       `${lastAssistant ? `Last assistant answer: ${lastAssistant.slice(0, 500)}\n` : ''}` +
-      `\nNow answer the user's new request using google_search.`;
+      `\nNow answer the user's new request using ${searchTool}.`;
 
     contents.push({ role: 'user', parts: [{ text: ctx }] });
     if (lastAssistant) {
@@ -1428,6 +1429,30 @@ function buildSearchFollowupContents(
 
   contents.push({ role: 'user', parts: [{ text: resolvedQueryText }] });
   return contents;
+}
+
+function buildMapsGroundingQuery(
+  query: string,
+  userLocation?: { latitude: number; longitude: number; city?: string; country?: string } | null,
+): string {
+  const cleaned = (query || '')
+    .replace(/\?+$/g, '')
+    .replace(/^(?:can you|could you|would you|please|find me|show me|give me|i want|i need|looking for|search for|recommend(?: me)?|suggest(?: me)?|what are|where are)\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const city = (userLocation?.city || '').trim();
+  const country = (userLocation?.country || '').trim();
+  const locationLabel = city && country ? `${city}, ${country}` : (city || country);
+  if (!cleaned) return locationLabel || query.trim();
+  if (!locationLabel) return cleaned;
+
+  const lowerCleaned = cleaned.toLowerCase();
+  if ((city && lowerCleaned.includes(city.toLowerCase())) || (country && lowerCleaned.includes(country.toLowerCase()))) {
+    return cleaned;
+  }
+
+  return `${cleaned} in ${locationLabel}`;
 }
 
 // --- Brain-First: lightweight in-memory search cache (60s TTL) ---
@@ -1650,10 +1675,11 @@ async function streamGemini3WithSearch(
     }
   }
   const latestQuery = `${query} (as of ${todayStr}).${nhlHint}${locationHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: "2023-24"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
-  const effectiveQuery = useMapsGrounding ? query : latestQuery;
+  const mapsQuery = useMapsGrounding ? buildMapsGroundingQuery(query, userLocation) : query;
+  const effectiveQuery = useMapsGrounding ? mapsQuery : latestQuery;
 
   const body: Record<string, unknown> = {
-    contents: buildSearchFollowupContents(query, effectiveQuery, recentMessages),
+    contents: buildSearchFollowupContents(query, effectiveQuery, recentMessages, useMapsGrounding ? 'google_maps' : 'google_search'),
     tools: useMapsGrounding
       ? [{ googleMaps: { enableWidget: true } }]
       : [{ google_search: {} }],
@@ -1839,7 +1865,6 @@ OUTPUT RULES:
 - For business queries, do not make the user ask for Google Maps, Rating, Google Reviews, Email, Website, Instagram, WhatsApp, Facebook, or TikTok. If the data exists, include it by default.
 - For business queries, do not output plain text URLs or plain text phone numbers. Always format them as clickable markdown links.
 - For business queries, do not collapse the answer into one sentence per place. Keep the named subfields so it reads like the older Wakti Maps-style result.
-- For business queries, never say "Greetings" or "I've pulled the latest for you". Sound like a sharp local guide, not a system announcement.
 - For business and nearby queries, avoid cheesy opener lines like "if you're looking to...", "to get you moving", or "to grab a brew".
 ${isBusinessSearch ? '- This request is a business/place search. Follow the exact business output shape above.' : ''}
 - If space is tight, keep the most useful facts first and drop extras.`;
@@ -2141,7 +2166,13 @@ function buildSystemPrompt(
 
 type ChatMessage = { role: string; content: string };
 
-function convertMessagesToClaudeFormat(messages: ChatMessage[]) {
+function convertMessagesToClaudeFormat(messages: ChatMessage[]): {
+  system: string;
+  messages: {
+    role: string;
+    content: string;
+  }[];
+} {
   const systemMessage = messages.find((m: ChatMessage) => m.role === 'system');
   const conversationMessages = messages.filter((m: ChatMessage) => m.role !== 'system');
   return {
@@ -2198,7 +2229,19 @@ async function streamClaudeResponse(
 }
 
 
-async function executeRegularSearch(query: string, language = 'en') {
+async function executeRegularSearch(query: string, language = 'en'): Promise<{
+  success: boolean;
+  error?: string;
+  data?: {
+    answer: string;
+    results: unknown[];
+    followUpQuestions: string[];
+    query: string;
+    total_results: number;
+  };
+  context?: string;
+  details?: string;
+}> {
   const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
   
   
@@ -2746,7 +2789,7 @@ function getCleanSubject(message: string): string {
   // Strip bot name references
   s = s.replace(/\b(wakto|waqti|wakti|jester|assistant|hey|hi|hello|ok|okay)\b/gi, '');
   // Iteratively strip leading openers (run twice to handle nested: "explain the history of X")
-  const leadingOpeners = /^(what\s+is\s+the\s+(city|country|life|history|story|process|concept|meaning)\s+of|what\s+is|what\s+are|explain\s+the\s+(process|history|concept|life)\s+of|explain|describe|give\s+me\s+info\s+on|information\s+about|facts\s+about|about|define|meaning\s+of|what\s+do\s+you\s+know\s+about|can\s+you\s+explain|can\s+you\s+tell\s+me\s+about|i\s+want\s+to\s+know\s+about|i\s+need\s+to\s+know\s+about|help\s+me\s+understand|show\s+me|list\s+the|summary\s+of|the\s+(city|country|history|life|story|process)\s+of|the)\s+/i;
+  const leadingOpeners = /^(what\s+is\s+the\s+(city|country|life|history|story|process|concept|meaning)\s+of|what\s+is|what\s+are|explain\s+the\s+(process|history|concept|life)\s+of|explain|describe|give\s+me\s+info\s+on|information\s+about|facts\s+about|about|define|meaning\s+of|what\s+do\s+you\s+know\s+about|can\s+you\s+explain|can\s+you\s+tell\s+me\s+about|i\s+want\s+to\s+know\s+about|i\s+need\s+to\s+know\s+about|help\s+me\s+understand|show\s+me|list\s+the|summary\s+of|the)\s+/i;
   s = s.replace(leadingOpeners, '').replace(leadingOpeners, '');
   // Strip trailing instructional modifiers
   s = s
@@ -2785,7 +2828,11 @@ async function translateSubjectToEnglish(subject: string): Promise<string> {
 }
 
 // LLM API: modern endpoint that returns a clean fact sheet for any academic subject
-async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promise<{ success: boolean; factSheet?: string; error?: string }> {
+async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promise<{
+  success: boolean;
+  factSheet?: string;
+  error?: string;
+}> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -2809,7 +2856,13 @@ async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promi
 }
 
 // === WOLFRAM|ALPHA HELPER (legacy v2/query — used for math/calculation outside study mode) ===
-async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{ success: boolean; answer?: string; steps?: string[]; interpretation?: string; error?: string }> {
+async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{
+  success: boolean;
+  answer?: string;
+  steps?: string[];
+  interpretation?: string;
+  error?: string;
+}> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -3331,18 +3384,17 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult
 // Detect search intent from user query
 function detectSearchIntent(query: string): 'business' | 'news' | 'url' | 'general' {
   const lower = query.toLowerCase();
+  const hasBusinessKeyword = /\b(near me|nearby|closest|nearest|location|address|phone|email|hours|open|closed|directions|map|restaurant|restaurants|cafe|cafes|coffee|breakfast|brunch|lunch|dinner|burger|pizza|shawarma|bakery|dessert|shop|store|mall|hotel|hospital|gym|bank|pharmacy|pharmacies|salon|spa|barber|clinic|supermarket|grocery)\b/i.test(lower);
+  const hasBusinessDiscoveryPhrase = /\b(best|top|recommend|recommended|suggest|suggested|find|looking for|where is|where can i|where do i|get me|show me|authentic|good|great)\b/i.test(lower);
+  const hasArabicBusinessKeyword = /\u0642\u0631\u064a\u0628|\u0628\u0627\u0644\u0642\u0631\u0628|\u0627\u0644\u0623\u0642\u0631\u0628|\u0627\u0642\u0631\u0628|\u0645\u0648\u0642\u0639|\u0639\u0646\u0648\u0627\u0646|\u0647\u0627\u062a\u0641|\u0631\u0642\u0645|\u0633\u0627\u0639\u0627\u062a|\u0645\u0641\u062a\u0648\u062d|\u0645\u063a\u0644\u0642|\u0627\u062a\u062c\u0627\u0647\u0627\u062a|\u062e\u0631\u064a\u0637\u0629|\u0645\u0637\u0639\u0645|\u0645\u0637\u0627\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0648\u0641\u064a|\u0641\u0637\u0648\u0631|\u0625\u0641\u0637\u0627\u0631|\u063a\u062f\u0627\u0621|\u0639\u0634\u0627\u0621|\u0645\u062d\u0644|\u0645\u062a\u062c\u0631|\u0645\u0648\u0644|\u0641\u0646\u062f\u0642|\u0645\u0633\u062a\u0634\u0641\u0649|\u0635\u064a\u062f\u0644\u064a\u0629|\u0628\u0646\u0643|\u0635\u0627\u0644\u0648\u0646|\u0633\u0628\u0627|\u062d\u0644\u0627\u0642|\u0639\u064a\u0627\u062f\u0629|\u0633\u0648\u0628\u0631\u0645\u0627\u0631\u0643\u062a/.test(query);
+  const hasArabicDiscoveryPhrase = /\u0623\u0641\u0636\u0644|\u0627\u062d\u0633\u0646|\u0631\u0634\u062d|\u0627\u0642\u062a\u0631\u062d|\u0648\u064a\u0646|\u0623\u064a\u0646|\u0623\u0628\u063a\u0649|\u0627\u0628\u064a|\u0623\u0631\u064a\u062f|\u0627\u062f\u0648\u0631|\u0623\u062f\u0648\u0631|\u062f\u0644\u0646\u064a|\u062f\u0644\u0651\u0646\u064a|\u0644\u0642\u0650|\u0644\u0642\u064a\u062a/.test(query);
   
-  // URL pattern
   if (/https?:\/\//.test(query) || /www\./i.test(query)) return 'url';
-  
-  // Business/location patterns (English)
-  if (/\b(near me|location|address|phone|email|hours|open|closed|directions|map|restaurant|cafe|coffee|shop|store|hotel|hospital|gym|bank|pharmacy|pharmacies)\b/i.test(lower)) return 'business';
+  if (hasBusinessKeyword) return 'business';
+  if (hasBusinessKeyword && hasBusinessDiscoveryPhrase) return 'business';
   if (/\b(where is|how to get to|find|search for)\b/i.test(lower) && /\b(place|business|store|restaurant|cafe|hotel)\b/i.test(lower)) return 'business';
-  
-  // Business/location patterns (Arabic)
-  if (/قريب|موقع|عنوان|هاتف|ساعات|مفتوح|مغلق|اتجاهات|خريطة|مطعم|مقهى|محل|فندق|مستشفى|صيدلية|بنك/.test(query)) return 'business';
-  
-  // News/research patterns
+  if (hasArabicBusinessKeyword) return 'business';
+  if (hasArabicBusinessKeyword && hasArabicDiscoveryPhrase) return 'business';
   if (/\b(news|latest|breaking|update|today|yesterday|recent|current events|what happened|headlines)\b/i.test(lower)) return 'news';
   if (/\b(research|study|paper|article|learn about|explain|what is|who is|history of)\b/i.test(lower)) return 'news';
   

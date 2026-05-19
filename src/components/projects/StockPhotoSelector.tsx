@@ -187,7 +187,8 @@ export function StockPhotoSelector({
         filters,
         pageToLoad, // Use the passed parameter, not stale state
         12,
-        language === 'ar' ? 'ar-SA' : 'en-US'
+        language === 'ar' ? 'ar-SA' : 'en-US',
+        projectId
       );
       
       if (result.success && result.data) {

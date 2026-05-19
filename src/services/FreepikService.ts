@@ -1,8 +1,11 @@
 import { supabase } from '@/integrations/supabase/client';
 
 // Define types for Freepik API responses
+const BACKEND_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api';
+const PROJECT_ID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
 export interface FreepikResource {
-  id: number;
+  id: number | string;
   title: string;
   url: string;
   image: {
@@ -14,16 +17,6 @@ export interface FreepikResource {
   };
   author: {
     name: string;
-  };
-}
-
-export interface FreepikSearchResponse {
-  data: FreepikResource[];
-  meta: {
-    current_page: number;
-    last_page: number;
-    per_page: number;
-    total: number;
   };
 }
 
@@ -46,32 +39,72 @@ export interface FreepikSearchFilters {
   color?: string;
 }
 
+export interface FreepikSearchResponse {
+  data: FreepikResource[];
+  meta: {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+  };
+}
+
+interface BackendFreepikImage {
+  id?: number | string;
+  title?: string;
+  url?: string;
+  thumbnail?: string;
+  orientation?: string;
+  type?: string;
+  author?: string;
+  freepikUrl?: string;
+}
+
+function mapBackendImageToResource(image: BackendFreepikImage, index: number): FreepikResource {
+  const imageUrl = image.url || image.thumbnail || '';
+
+  return {
+    id: image.id ?? `freepik-${index}`,
+    title: image.title || 'Freepik image',
+    url: image.freepikUrl || imageUrl,
+    image: {
+      source: {
+        url: imageUrl,
+      },
+      type: image.type || 'photo',
+      orientation: image.orientation || 'landscape',
+    },
+    author: {
+      name: image.author || 'Freepik',
+    },
+  };
+}
+
+function normalizeFilters(filters: FreepikSearchFilters): Record<string, string> {
+  const orientation = Object.entries(filters.orientation || {}).find(([, value]) => Boolean(value))?.[0];
+  const contentType = Object.entries(filters.content_type || {}).find(([, value]) => Boolean(value))?.[0];
+
+  return {
+    ...(orientation ? { orientation } : {}),
+    ...(contentType ? { type: contentType } : {}),
+    ...(filters.color ? { color: filters.color } : {}),
+  };
+}
+
+function resolveProjectId(projectId?: string): string | null {
+  if (projectId?.trim()) {
+    return projectId.trim();
+  }
+
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const match = window.location.pathname.match(PROJECT_ID_PATTERN);
+  return match?.[0] || null;
+}
+
 class FreepikServiceClass {
-  private apiKey: string | null = null;
-
-  constructor() {
-    // The API key will be fetched from Supabase environment variables
-    this.initApiKey();
-  }
-
-  private async initApiKey() {
-    try {
-      // Fetch API key from Supabase Edge Function
-      const { data, error } = await supabase.functions.invoke('get-api-keys', {
-        body: { service: 'freepik' }
-      });
-
-      if (error) {
-        console.error('Failed to fetch Freepik API key:', error);
-        return;
-      }
-
-      this.apiKey = data?.apiKey || null;
-    } catch (err) {
-      console.error('Error initializing Freepik API key:', err);
-    }
-  }
-
   /**
    * Search for images on Freepik
    * @param term Search term
@@ -79,38 +112,69 @@ class FreepikServiceClass {
    * @param page Page number (starts at 1)
    * @param limit Results per page
    * @param language Language code (e.g., 'en-US')
+   * @param projectId Project ID
    */
   async searchImages(
     term: string,
     filters: FreepikSearchFilters = {},
     page: number = 1,
     limit: number = 10,
-    language: string = 'en-US'
+    language: string = 'en-US',
+    projectId?: string
   ): Promise<{ success: boolean; data?: FreepikSearchResponse; error?: string }> {
     try {
-      if (!this.apiKey) {
-        await this.initApiKey();
-        if (!this.apiKey) {
-          return { success: false, error: 'API key not available' };
-        }
+      const resolvedProjectId = resolveProjectId(projectId);
+      if (!resolvedProjectId) {
+        return { success: false, error: 'Project ID not available' };
       }
 
-      // Call Freepik API via Supabase Edge Function to protect API key
-      const { data, error } = await supabase.functions.invoke('freepik-search', {
-        body: {
-          term,
-          filters,
-          page,
-          limit,
-          language
-        }
+      const response = await fetch(BACKEND_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId: resolvedProjectId,
+          action: 'freepik/images',
+          data: {
+            query: term,
+            page,
+            limit,
+            language,
+            filters: normalizeFilters(filters),
+          },
+        }),
       });
 
-      if (error) {
-        return { success: false, error: error.message };
+      if (!response.ok) {
+        let errorMessage = `Freepik search failed (${response.status})`;
+
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData?.error || errorData?.message || errorMessage;
+        } catch {
+        }
+
+        return { success: false, error: errorMessage };
       }
 
-      return { success: true, data };
+      const data = await response.json();
+      const mappedImages = Array.isArray(data?.images)
+        ? data.images
+            .map((image: BackendFreepikImage, index: number) => mapBackendImageToResource(image, index))
+            .filter((image: FreepikResource) => Boolean(image.image?.source?.url))
+        : [];
+
+      return {
+        success: true,
+        data: {
+          data: mappedImages,
+          meta: {
+            current_page: Number(data?.page) || page,
+            last_page: Number(data?.lastPage) || 1,
+            per_page: limit,
+            total: Number(data?.total) || mappedImages.length,
+          },
+        },
+      };
     } catch (err: any) {
       return { success: false, error: err.message || 'Failed to search Freepik' };
     }

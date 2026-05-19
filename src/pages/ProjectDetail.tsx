@@ -65,7 +65,8 @@ import type {
   ProjectFile, 
   GeneratedFiles, 
   BackendContext,
-  UploadedAsset 
+  UploadedAsset,
+  SelectedElementInfo
 } from './ProjectDetail/types';
 
 // Import hook interfaces for future integration
@@ -127,6 +128,8 @@ import {
   getResponse
 } from '@/utils/IntentManager';
 import { FreepikService } from '@/services/FreepikService';
+
+type AgentExecutionMode = 'surgical_edit' | 'design_rebuild';
 
 // Lovable-style components
 import { QuickActionButtons } from '@/components/projects/QuickActionButtons';
@@ -406,6 +409,13 @@ export default function ProjectDetail() {
     projectId: id || '',
     onFilesChanged: syncAgentFilesToEditor,
   });
+
+  const resolveAgentExecutionMode = useCallback((requestText: string): AgentExecutionMode => {
+    const normalized = (requestText || '').toLowerCase();
+    return /(premium|luxury|editorial|hero|homepage|landing page|first impression|redesign|rebuild|layout improvement|hierarchy|typography|wow|make this look better)/i.test(normalized)
+      ? 'design_rebuild'
+      : 'surgical_edit';
+  }, []);
 
   // Helper to build prompt with clarifying question answers
   const buildPromptWithAnswers = useCallback((basePrompt: string, answers: Record<string, string | string[]>) => {
@@ -914,18 +924,7 @@ export default function ProjectDetail() {
   // On mobile, auto-enable so users can tap elements immediately
   const isMobileDevice = typeof window !== 'undefined' && window.innerWidth < 768;
   const [elementSelectMode, setElementSelectMode] = useState(false);
-  const [selectedElementInfo, setSelectedElementInfo] = useState<{
-    tagName: string;
-    className: string;
-    id: string;
-    innerText: string;
-    openingTag: string;
-    computedStyle?: {
-      color: string;
-      backgroundColor: string;
-      fontSize: string;
-    };
-  } | null>(null);
+  const [selectedElementInfo, setSelectedElementInfo] = useState<SelectedElementInfo | null>(null);
   
   // Visual Edit Popover state
   const [showElementEditPopover, setShowElementEditPopover] = useState(false);
@@ -1578,7 +1577,8 @@ export default function ProjectDetail() {
             uploadedAssets: uploadedAssetsForCreate, // PDFs/docs/images with filename+url+file_type for extraction
             userInstructions: customThemeInstructions,
             backendContext: backendContextForCreate || undefined,
-            debugContext: debugContext?.getDebugContextForAgent?.(),
+            executionMode: resolveAgentExecutionMode(finalPrompt),
+            debugContext: debugContext?.getDebugContextForAgent?.(selectedElementInfo, resolveAgentExecutionMode(finalPrompt)),
             lang: searchParams.get('lang') || language,
           },
         });
@@ -3567,6 +3567,8 @@ ${convertToGlobalComponent(content, componentName)}
 
         try {
           fixerResponse = (await runSharedAgent(`Fix this error: ${error}`, latestFilesForFixer, {
+            executionMode: 'surgical_edit',
+            debugContext: debugContext?.getDebugContextForAgent?.(null, 'surgical_edit'),
             fixerMode: true,
             fixerContext: {
               errorMessage: error,
@@ -5392,7 +5394,8 @@ ${fixInstructions}
             assetIntent: userImages.length > 0 ? attachmentIntent : undefined,
             uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
             backendContext: backendContext || undefined,
-            debugContext: debugContext?.getDebugContextForAgent?.(),
+            executionMode: resolveAgentExecutionMode(userMessage),
+            debugContext: debugContext?.getDebugContextForAgent?.(selectedElementInfo, resolveAgentExecutionMode(userMessage)),
           },
         });
 
@@ -5494,9 +5497,10 @@ ${fixInstructions}
           userInstructions,
           images: codeImages,
           assetIntent: codeImages ? attachmentIntent : undefined,
+          executionMode: resolveAgentExecutionMode(userMessage),
           uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
           backendContext: backendContext || undefined,
-          debugContext: debugContext?.getDebugContextForAgent?.(),
+          debugContext: debugContext?.getDebugContextForAgent?.(selectedElementInfo, resolveAgentExecutionMode(userMessage)),
         });
 
         const agentResult = agentPlan.rawResult;
@@ -6468,8 +6472,10 @@ ${fixInstructions}
 
                                       const agentPlan = await runSharedAgent(selectionMsg, latestFilesForAgent, {
                                         lang: isRTL ? 'ar' : 'en',
+                                        executionMode: resolveAgentExecutionMode(selectionMsg),
                                         uploadedAssets,
                                         backendContext,
+                                        debugContext: debugContext?.getDebugContextForAgent?.(selectedElementInfo, resolveAgentExecutionMode(selectionMsg)),
                                       });
 
                                       const agentResult = agentPlan.rawResult;

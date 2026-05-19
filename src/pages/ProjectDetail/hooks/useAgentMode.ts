@@ -64,6 +64,8 @@ export interface ConversationContext {
   };
 }
 
+export type AgentExecutionMode = 'surgical_edit' | 'design_rebuild';
+
 export interface UseAgentModeOptions {
   projectId: string;
   /** Called when the agent job finishes successfully with an updated file map. */
@@ -79,6 +81,7 @@ export interface AgentRunExtras {
   lang?: 'en' | 'ar';
   images?: string[];
   assetIntent?: 'layout' | 'style' | 'content';
+  executionMode?: AgentExecutionMode;
   uploadedAssets?: UploadedAsset[];
   backendContext?: BackendContext;
   debugContext?: unknown;
@@ -308,6 +311,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
             lang: extras?.lang || 'en',
             images: extras?.images,
             assetIntent: extras?.assetIntent,
+            executionMode: extras?.executionMode,
             uploadedAssets: extras?.uploadedAssets,
             backendContext: extras?.backendContext,
             debugContext: extras?.debugContext,

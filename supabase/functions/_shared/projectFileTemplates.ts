@@ -21,7 +21,9 @@
  * ============================================================================
  */
 
-const PROJECT_ID_TOKEN = /\{\{PROJECT_ID\}\}/g;
+const PROJECT_ID_TOKEN = /\{\{PROJECT_ID\}\}|PROJECT_ID_HERE/g;
+const PROJECT_ID_CONST_TOKEN = /(\bconst\s+PROJECT_ID\s*=\s*["'])([^"']+)(["'])/g;
+const PROJECT_ID_PROPERTY_TOKEN = /(\bprojectId\s*:\s*["'])([^"']+)(["'])/g;
 
 /**
  * Replace `{{PROJECT_ID}}` in a single file's content with the real projectId.
@@ -29,8 +31,17 @@ const PROJECT_ID_TOKEN = /\{\{PROJECT_ID\}\}/g;
  */
 export function resolveProjectPlaceholders(content: string, projectId: string): string {
   if (!content || !projectId) return content;
-  if (!content.includes("{{PROJECT_ID}}")) return content;
-  return content.replace(PROJECT_ID_TOKEN, projectId);
+  let next = content;
+  if (next.includes("{{PROJECT_ID}}") || next.includes("PROJECT_ID_HERE")) {
+    next = next.replace(PROJECT_ID_TOKEN, projectId);
+  }
+  if (next.includes("const PROJECT_ID")) {
+    next = next.replace(PROJECT_ID_CONST_TOKEN, `$1${projectId}$3`);
+  }
+  if (next.includes("projectId")) {
+    next = next.replace(PROJECT_ID_PROPERTY_TOKEN, `$1${projectId}$3`);
+  }
+  return next;
 }
 
 /**

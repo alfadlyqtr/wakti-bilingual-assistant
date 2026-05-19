@@ -191,8 +191,24 @@ function SearchMessageCard({
   const sources: SearchSource[] = Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : [];
   const hasGroundedPlaceCards = hasGroundedPlaces(message as any);
 
+  // When rich place cards are available, extract only the short opener line (before the first bullet/list)
+  // and suppress the full markdown bullet list — the cards ARE the content.
+  const openerLine = hasGroundedPlaceCards
+    ? content.split(/\n[\s]*[-*•]|\n[\s]*\d+\./)[0].trim()
+    : null;
+
   return (
     <div className="w-full space-y-4">
+      {hasGroundedPlaceCards ? (
+        <>
+          {openerLine && (
+            <p className="text-sm leading-relaxed text-foreground/90 font-medium pb-1">
+              {openerLine}
+            </p>
+          )}
+          <GroundedPlacesBlock message={message as any} language={language} />
+        </>
+      ) : (
       <div 
         className="search-result-content prose prose-sm sm:prose-base max-w-none dark:prose-invert" 
         dir="auto"
@@ -270,9 +286,6 @@ function SearchMessageCard({
           {content}
         </ReactMarkdown>
       </div>
-
-      {hasGroundedPlaceCards && (
-        <GroundedPlacesBlock message={message as any} language={language} />
       )}
 
       {sources.length > 0 && (

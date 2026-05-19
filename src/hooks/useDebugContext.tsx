@@ -39,6 +39,27 @@ export interface CapturedConsoleLog {
   args?: any[];
 }
 
+interface DebugSelectedElement {
+  tagName: string;
+  className: string;
+  id: string;
+  innerText: string;
+  openingTag: string;
+  computedStyle?: {
+    color: string;
+    backgroundColor: string;
+    fontSize: string;
+  };
+  rect?: {
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  };
+}
+
+type AgentExecutionMode = 'surgical_edit' | 'design_rebuild';
+
 export interface DebugSession {
   id: string;
   startedAt: Date;
@@ -67,7 +88,7 @@ interface DebugContextValue {
   
   // Error context for AI
   getDebugContextForAI: () => string;
-  getDebugContextForAgent: () => any; // Full context object for agent mode
+  getDebugContextForAgent: (selectedElement?: DebugSelectedElement | null, executionMode?: AgentExecutionMode) => any;
   hasErrors: () => boolean;
   getErrorCount: () => number;
   
@@ -299,14 +320,16 @@ export const DebugContextProvider: React.FC<DebugContextProviderProps> = ({
   }, [session]);
 
   // Get full debug context object for agent mode
-  const getDebugContextForAgent = useCallback(() => {
+  const getDebugContextForAgent = useCallback((selectedElement?: DebugSelectedElement | null, executionMode: AgentExecutionMode = 'surgical_edit') => {
     if (!session) {
       return {
         errors: [],
         networkErrors: [],
         consoleLogs: [],
         autoFixAttempt: 0,
-        maxAutoFixAttempts: 3
+        maxAutoFixAttempts: 3,
+        selectedElement: selectedElement || null,
+        executionMode
       };
     }
     
@@ -332,7 +355,9 @@ export const DebugContextProvider: React.FC<DebugContextProviderProps> = ({
         timestamp: l.timestamp.toISOString()
       })),
       autoFixAttempt: session.autoFixAttempts,
-      maxAutoFixAttempts: session.maxAutoFixAttempts
+      maxAutoFixAttempts: session.maxAutoFixAttempts,
+      selectedElement: selectedElement || null,
+      executionMode
     };
   }, [session]);
 

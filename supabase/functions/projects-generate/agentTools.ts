@@ -2178,6 +2178,25 @@ export interface AgentDebugContext {
   }>;
   autoFixAttempt?: number;
   maxAutoFixAttempts?: number;
+  selectedElement?: {
+    tagName: string;
+    className: string;
+    id: string;
+    innerText: string;
+    openingTag: string;
+    computedStyle?: {
+      color: string;
+      backgroundColor: string;
+      fontSize: string;
+    };
+    rect?: {
+      top: number;
+      left: number;
+      width: number;
+      height: number;
+    };
+  } | null;
+  executionMode?: 'surgical_edit' | 'design_rebuild';
 }
 
 // Tool definitions for Gemini function calling
