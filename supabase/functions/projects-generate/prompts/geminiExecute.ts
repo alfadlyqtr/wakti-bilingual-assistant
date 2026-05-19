@@ -12,6 +12,16 @@ export function buildGeminiExecuteSystemPrompt(foundationBricks: string[]): stri
 - Prefer fewer strong sections over many weak ones.
 - Make the hero and above-the-fold area feel purposeful, branded, and visually impressive.
 
+### PREMIUM STARTER SYSTEMS (MANDATORY FOR DESIGN-HEAVY REQUESTS)
+For premium, hero, homepage, branding, first-impression, or layout-heavy requests, do NOT freestyle from scratch.
+Choose the closest strong starting system below and build from it:
+- **Luxury Fashion Hero**: editorial image-led composition, dark or warm premium overlay, elegant serif/sans pairing, clear high-contrast headline, restrained CTA row, generous whitespace.
+- **Premium SaaS Hero**: crisp hierarchy, trust-first product framing, clean conversion path, premium preview cards, structured spacing, clear CTA cluster.
+- **Editorial Landing Page**: art-directed typography, asymmetrical composition, storytelling rhythm, refined whitespace, image-led section pacing.
+- **Modern Service Brand Homepage**: confident headline, premium trust cues, polished service blocks, strong CTA path, high-clarity structure.
+
+Anchor your rewrite in ONE of these systems first, then adapt it to the user's business.
+
 ### ANTI-UGLY GUARDRAILS
 - Never leave a giant empty rectangle with weak text as the hero.
 - Never use bland gray placeholder blocks as the main visual identity.
@@ -19,6 +29,15 @@ export function buildGeminiExecuteSystemPrompt(foundationBricks: string[]): stri
 - Never make every card, section, and block use the same treatment with identical spacing.
 - Never add animations, gradients, or glows just because they exist; they must improve the design.
 - Never preserve obviously poor typography, bad spacing, or weak contrast when the request is about improving the UI.
+
+### HARD VISUAL FAIL RULES
+If ANY of the following is true, the result is NOT done and you must keep rewriting:
+- Text readability is bad.
+- The hero has weak contrast or a washed-out overlay.
+- The main image is missing, broken, irrelevant, or low-impact.
+- The main heading blends into the background or lacks clear dominance.
+- The CTA is not clearly visible or feels visually lost.
+- The hero feels empty, generic, placeholder-like, or compositionally dead.
 
 ### SCREENSHOT ANALYSIS (CRITICAL - READ FIRST)
 When the user attaches a screenshot:
@@ -66,6 +85,8 @@ When users ask for visual improvements, ACTUALLY ADD THEM:
 - **Colors**: Use the active theme colors and strong contrast, not random black/white or muddy placeholders.
 - **Typography**: Strengthen heading scale, supporting copy, and CTA emphasis so the page feels designed.
 - **Imagery**: Use relevant imagery or product-focused visuals that match the actual business type.
+- **Starter system first**: For design-heavy work, pick the correct premium starter system before editing details.
+- **Fail fast on ugly**: If the result still fails readability, contrast, image impact, CTA visibility, or premium presence, keep rewriting instead of finishing.
 
 ### AVAILABLE PACKAGES (authoritative list — everything else WILL crash)
 {{ALLOWED_PACKAGES_LIST}}

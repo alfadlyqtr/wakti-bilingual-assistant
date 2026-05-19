@@ -5,6 +5,7 @@ import { isNativelyApp } from '@/integrations/natively/browserBridge';
 
 
 const PRODUCTION_ORIGIN = 'https://wakti.qa';
+const GMAIL_CONNECT_PENDING_KEY = 'wakti_gmail_connect_pending';
 
 const GOOGLE_CLIENT_ID = '255003091302-ll68065ch6fc94nkpbvd4kskq6ltl7g5.apps.googleusercontent.com';
 const GMAIL_SCOPES = [
@@ -27,11 +28,20 @@ export function useGmailConnection() {
     emailAddress: null,
   });
 
-  const checkConnection = useCallback(async () => {
-    setConnection(prev => ({ ...prev, loading: true }));
+  const checkConnection = useCallback(async (attempt = 0) => {
+    const hasPendingConnect = (() => {
+      try {
+        return localStorage.getItem(GMAIL_CONNECT_PENDING_KEY) === '1';
+      } catch {
+        return false;
+      }
+    })();
+
+    setConnection(prev => ({ ...prev, loading: attempt === 0, connecting: hasPendingConnect }));
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
+        try { localStorage.removeItem(GMAIL_CONNECT_PENDING_KEY); } catch { /* ignore */ }
         setConnection({ connected: false, loading: false, connecting: false, emailAddress: null });
         return;
       }
@@ -45,13 +55,52 @@ export function useGmailConnection() {
         body: JSON.stringify({ action: 'check_connection' }),
       });
       const json = await resp.json();
+
+      if (json.connected) {
+        try { localStorage.removeItem(GMAIL_CONNECT_PENDING_KEY); } catch { /* ignore */ }
+        setConnection({
+          connected: true,
+          loading: false,
+          connecting: false,
+          emailAddress: json.email_address || null,
+        });
+        return;
+      }
+
+      if (hasPendingConnect && attempt < 5) {
+        window.setTimeout(() => {
+          void checkConnection(attempt + 1);
+        }, 1500);
+        setConnection(prev => ({
+          ...prev,
+          connected: false,
+          loading: false,
+          connecting: true,
+        }));
+        return;
+      }
+
+      try { localStorage.removeItem(GMAIL_CONNECT_PENDING_KEY); } catch { /* ignore */ }
       setConnection({
-        connected: !!json.connected,
+        connected: false,
         loading: false,
         connecting: false,
         emailAddress: json.email_address || null,
       });
     } catch {
+      if (hasPendingConnect && attempt < 5) {
+        window.setTimeout(() => {
+          void checkConnection(attempt + 1);
+        }, 1500);
+        setConnection(prev => ({
+          ...prev,
+          loading: false,
+          connecting: true,
+        }));
+        return;
+      }
+
+      try { localStorage.removeItem(GMAIL_CONNECT_PENDING_KEY); } catch { /* ignore */ }
       setConnection({ connected: false, loading: false, connecting: false, emailAddress: null });
     }
   }, []);
@@ -131,6 +180,7 @@ export function useGmailConnection() {
       // Store token in localStorage as fallback for mobile Safari round-trip
       // (session is lost when coming back from external browser into WebView)
       try { localStorage.setItem('wakti_oauth_token', session.access_token); } catch { /* ignore */ }
+      try { localStorage.setItem(GMAIL_CONNECT_PENDING_KEY, '1'); } catch { /* ignore */ }
 
       const isMobileNatively = inNatively && isMobile;
       const nativelyObj = (window as any).natively;
@@ -143,6 +193,7 @@ export function useGmailConnection() {
       console.error('[Gmail] initiateGmailAuth error:', err);
       const msg = err instanceof Error ? err.message : 'Failed to start Gmail connection';
       toast.error(msg);
+      try { localStorage.removeItem(GMAIL_CONNECT_PENDING_KEY); } catch { /* ignore */ }
       setConnection(prev => ({ ...prev, connecting: false }));
     }
   }, []);
@@ -160,6 +211,7 @@ export function useGmailConnection() {
         },
         body: JSON.stringify({ action: 'disconnect' }),
       });
+      try { localStorage.removeItem(GMAIL_CONNECT_PENDING_KEY); } catch { /* ignore */ }
       setConnection({ connected: false, loading: false, connecting: false, emailAddress: null });
     } catch { /* ignore */ }
   }, []);

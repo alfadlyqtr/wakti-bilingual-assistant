@@ -50,12 +50,21 @@ async function refreshAccessToken(refreshToken: string): Promise<{ access_token:
    return /invalid_grant|expired or revoked|token has been expired or revoked|revoked/i.test(message);
  }
 
+ async function getPreferredGmailTokenRow(supabase: ReturnType<typeof createClient>, userId: string) {
+   const { data, error } = await supabase
+     .from("gmail_tokens")
+     .select("access_token, refresh_token, expires_at, email_address, account_type")
+     .eq("user_id", userId)
+     .order("account_type", { ascending: true })
+     .order("updated_at", { ascending: false })
+     .limit(1)
+     .maybeSingle();
+
+   return { data, error };
+ }
+
 async function getValidAccessToken(supabase: ReturnType<typeof createClient>, userId: string): Promise<string> {
-  const { data: tokenRow, error } = await supabase
-    .from("gmail_tokens")
-    .select("access_token, refresh_token, expires_at")
-    .eq("user_id", userId)
-    .maybeSingle();
+  const { data: tokenRow, error } = await getPreferredGmailTokenRow(supabase, userId);
 
   if (error || !tokenRow) throw new Error("Gmail not connected");
 
@@ -506,11 +515,7 @@ Deno.serve(async (req: Request) => {
         return jsonResponse({ error: "to, subject, and body are required" }, 400);
       }
 
-      const { data: tokenRow } = await supabase
-        .from("gmail_tokens")
-        .select("email_address")
-        .eq("user_id", userId)
-        .maybeSingle();
+      const { data: tokenRow } = await getPreferredGmailTokenRow(supabase, userId);
       const fromEmail = tokenRow?.email_address || "me";
 
       const raw = encodeBase64Url(buildRawEmailMessage({

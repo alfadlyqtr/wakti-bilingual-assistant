@@ -2686,35 +2686,6 @@ async function extractOfficialSocialLinksFromWebsite(websiteUrl: string): Promis
   }
 }
 
-async function executeBusinessLinkSearch(query: string): Promise<Array<Record<string, unknown>>> {
-  const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
-  if (!TAVILY_API_KEY) return [];
-
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1800);
-    const response = await fetch('https://api.tavily.com/search', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      signal: controller.signal,
-      body: JSON.stringify({
-        api_key: TAVILY_API_KEY,
-        query,
-        search_depth: 'basic',
-        include_answer: false,
-        include_raw_content: false,
-        max_results: 8,
-      })
-    });
-    clearTimeout(timeoutId);
-    if (!response.ok) return [];
-    const data = await response.json().catch(() => null) as Record<string, unknown> | null;
-    return Array.isArray(data?.results) ? (data.results as Array<Record<string, unknown>>) : [];
-  } catch {
-    return [];
-  }
-}
-
 async function enrichGroundedPlacesWithOfficialLinks(places: GroundedPlaceCard[]): Promise<GroundedPlaceCard[]> {
   if (!Array.isArray(places) || places.length === 0) return places;
 
@@ -2722,18 +2693,17 @@ async function enrichGroundedPlacesWithOfficialLinks(places: GroundedPlaceCard[]
     places.slice(0, 6).map(async (place) => {
       if (!place?.name && !place?.placeId) return place;
 
+      // Step 1: Enrich with Google Places API (reviews, opening hours, phone, website)
       let enrichedPlace = mergeGroundedPlaceCard(place, await fetchGooglePlaceDetails(place));
 
+      // Step 2: If we have a website URL, scrape its HTML for social profile links
       if (enrichedPlace.websiteUrl) {
         enrichedPlace = mergeGroundedPlaceCard(enrichedPlace, await extractOfficialSocialLinksFromWebsite(enrichedPlace.websiteUrl));
       }
 
-      const missingOfficialLinks = !enrichedPlace.websiteUrl || !enrichedPlace.instagramUrl || !enrichedPlace.facebookUrl || !enrichedPlace.tiktokUrl || !enrichedPlace.whatsappUrl;
-      if (!missingOfficialLinks) return enrichedPlace;
-
-      const results = await executeBusinessLinkSearch(`"${enrichedPlace.name || place.name}" ${enrichedPlace.address || place.address || ''} official website instagram facebook tiktok whatsapp`);
-      if (!Array.isArray(results) || results.length === 0) return enrichedPlace;
-      return mergeGroundedPlaceCard(enrichedPlace, pickVerifiedBusinessLinks(results, enrichedPlace));
+      // No Tavily. Google grounding web chunks already ran pickVerifiedBusinessLinks
+      // earlier in the pipeline before this function is called.
+      return enrichedPlace;
     })
   );
 

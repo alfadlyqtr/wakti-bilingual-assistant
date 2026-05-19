@@ -114,12 +114,21 @@ async function clearGmailTokens(supabase: ReturnType<typeof createClient>, userI
     .eq("user_id", userId);
 }
 
-async function validateGmailConnection(supabase: ReturnType<typeof createClient>, userId: string) {
+async function getPreferredGmailTokenRow(supabase: ReturnType<typeof createClient>, userId: string) {
   const { data, error } = await supabase
     .from("gmail_tokens")
-    .select("access_token, refresh_token, email_address, expires_at")
+    .select("access_token, refresh_token, email_address, expires_at, account_type")
     .eq("user_id", userId)
+    .order("account_type", { ascending: true })
+    .order("updated_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
+
+  return { data, error };
+}
+
+async function validateGmailConnection(supabase: ReturnType<typeof createClient>, userId: string) {
+  const { data, error } = await getPreferredGmailTokenRow(supabase, userId);
 
   if (error || !data) {
     return { connected: false as const };
@@ -176,12 +185,21 @@ async function validateGmailConnection(supabase: ReturnType<typeof createClient>
 
 async function fetchUserEmail(accessToken: string) {
   const res = await fetch(
-    "https://www.googleapis.com/oauth2/v2/userinfo",
+    "https://gmail.googleapis.com/gmail/v1/users/me/profile",
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const data = await res.json();
-  if (data.error) return null;
-  return (data.email as string) || null;
+  if (!data.error && data.emailAddress) {
+    return data.emailAddress as string;
+  }
+
+  const fallbackRes = await fetch(
+    "https://www.googleapis.com/oauth2/v2/userinfo",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const fallbackData = await fallbackRes.json();
+  if (fallbackData.error) return null;
+  return (fallbackData.email as string) || null;
 }
 
 Deno.serve(async (req: Request) => {
@@ -249,11 +267,20 @@ Deno.serve(async (req: Request) => {
         // Determine account_type: primary if no accounts exist yet, secondary otherwise
         const { data: existingAccounts } = await supabase
           .from("gmail_tokens")
-          .select("account_type, refresh_token")
+          .select("account_type, refresh_token, email_address")
           .eq("user_id", userId);
 
+        const existingForEmail = emailAddress
+          ? existingAccounts?.find((r: any) => r.email_address === emailAddress)
+          : null;
         const hasPrimary = existingAccounts?.some((r: any) => r.account_type === "primary");
-        const accountType: "primary" | "secondary" = hasPrimary ? "secondary" : "primary";
+        const accountType: "primary" | "secondary" = existingForEmail?.account_type === "primary"
+          ? "primary"
+          : existingForEmail?.account_type === "secondary"
+            ? "secondary"
+            : hasPrimary
+              ? "secondary"
+              : "primary";
 
         // Preserve any existing refresh_token for this account_type if Google didn't return a new one
         let refreshTokenToStore: string | null = tokens.refresh_token ?? null;
@@ -284,10 +311,16 @@ Deno.serve(async (req: Request) => {
           return jsonResponse({ error: "Failed to save Gmail connection" }, 500);
         }
 
+        const validated = await validateGmailConnection(supabase, userId);
+        if (!validated.connected) {
+          return jsonResponse({ error: "Failed to confirm Gmail connection" }, 500);
+        }
+
         return jsonResponse({
           success: true,
-          email_address: emailAddress,
+          email_address: validated.email_address,
           account_type: accountType,
+          connected: true,
         });
       }
 

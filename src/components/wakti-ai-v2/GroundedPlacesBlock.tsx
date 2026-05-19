@@ -154,7 +154,8 @@ export function GroundedPlacesBlock({
     const hasSocials = Boolean(place.instagramUrl || place.facebookUrl || place.tiktokUrl || place.whatsappUrl);
     const hasReviews = Array.isArray(place.reviewSnippets) && place.reviewSnippets.some((r: any) => r?.snippet);
     const hasEditorial = Boolean(place.editorialSummary && place.editorialSummary.trim());
-    return hasRating || hasAddress || hasPhone || hasWeb || hasSocials || hasReviews || hasEditorial;
+    // Must have at least rating or phone — a card with only address/website looks broken
+    return (hasRating || hasPhone) || (hasSocials && (hasRating || hasPhone || hasAddress)) || (hasReviews && hasAddress);
   });
 
   // If no place has rich data, skip the entire block — the written text is enough
