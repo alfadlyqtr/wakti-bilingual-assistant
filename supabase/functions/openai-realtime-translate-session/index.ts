@@ -6,8 +6,10 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-const MODEL = "gpt-4o-realtime-preview-2024-12-17";
+const DEFAULT_REALTIME_MODEL = "gpt-realtime-mini-2025-12-15";
+const MODEL = Deno.env.get("OPENAI_REALTIME_TRANSLATE_MODEL") || Deno.env.get("OPENAI_REALTIME_MODEL") || DEFAULT_REALTIME_MODEL;
 const REALTIME_URL = `https://api.openai.com/v1/realtime?model=${MODEL}`;
+const FRIENDLY_CONNECTION_ERROR = "Live Translator is not available right now. Please try again.";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,7 +73,11 @@ serve(async (req: Request) => {
     if (!openaiResponse.ok) {
       const errorText = await openaiResponse.text();
       console.error("[openai-realtime-translate-session] OpenAI error:", openaiResponse.status, errorText);
-      return new Response(JSON.stringify({ error: "Failed to create realtime session", details: errorText }), {
+      return new Response(JSON.stringify({
+        error: "LIVE_TRANSLATOR_UNAVAILABLE",
+        message: FRIENDLY_CONNECTION_ERROR,
+        details: FRIENDLY_CONNECTION_ERROR,
+      }), {
         status: openaiResponse.status,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -97,7 +103,11 @@ serve(async (req: Request) => {
     });
   } catch (err) {
     console.error("[openai-realtime-translate-session] Error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error", details: String(err) }), {
+    return new Response(JSON.stringify({
+      error: "LIVE_TRANSLATOR_UNAVAILABLE",
+      message: FRIENDLY_CONNECTION_ERROR,
+      details: FRIENDLY_CONNECTION_ERROR,
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

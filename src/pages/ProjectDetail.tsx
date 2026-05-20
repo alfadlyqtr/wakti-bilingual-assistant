@@ -923,11 +923,56 @@ export default function ProjectDetail() {
   // Element selection mode - for "Send Element" feature (Visual Inspector)
   // On mobile, auto-enable so users can tap elements immediately
   const isMobileDevice = typeof window !== 'undefined' && window.innerWidth < 768;
+  const visualSelectionRef = useRef<{ key: string; ts: number }>({ key: '', ts: 0 });
   const [elementSelectMode, setElementSelectMode] = useState(false);
   const [selectedElementInfo, setSelectedElementInfo] = useState<SelectedElementInfo | null>(null);
   
   // Visual Edit Popover state
   const [showElementEditPopover, setShowElementEditPopover] = useState(false);
+  const handleVisualElementSelected = useCallback((elementInfo: SelectedElementInfo) => {
+    const selectionKey = [elementInfo.tagName, elementInfo.id, elementInfo.className, elementInfo.innerText].join('|');
+    const selectionTs = Date.now();
+    const lastSelection = visualSelectionRef.current;
+
+    if (lastSelection.key === selectionKey && selectionTs - lastSelection.ts < 250) {
+      return;
+    }
+
+    visualSelectionRef.current = { key: selectionKey, ts: selectionTs };
+    setSelectedElementInfo(elementInfo);
+    setShowElementEditPopover(false);
+
+    requestAnimationFrame(() => {
+      setSelectedElementInfo(elementInfo);
+      setShowElementEditPopover(true);
+    });
+
+    window.setTimeout(() => {
+      if (visualSelectionRef.current.key === selectionKey && visualSelectionRef.current.ts === selectionTs) {
+        setSelectedElementInfo(elementInfo);
+        setShowElementEditPopover(true);
+      }
+    }, 120);
+
+    if (!isMobileDevice) {
+      setElementSelectMode(false);
+    }
+  }, [isMobileDevice]);
+
+  useEffect(() => {
+    const handleFallbackVisualSelection = (event: Event) => {
+      const customEvent = event as CustomEvent<{ info?: SelectedElementInfo }>;
+      const info = customEvent.detail?.info;
+      if (info) {
+        handleVisualElementSelected(info);
+      }
+    };
+
+    window.addEventListener('wakti:visual-element-selected', handleFallbackVisualSelection as EventListener);
+    return () => {
+      window.removeEventListener('wakti:visual-element-selected', handleFallbackVisualSelection as EventListener);
+    };
+  }, [handleVisualElementSelected]);
   
   // Force Sandpack re-render key (incremented on revert, starts with timestamp to force fresh mount)
   const [sandpackKey, setSandpackKey] = useState(() => Date.now());
@@ -4107,6 +4152,7 @@ ${fixInstructions}
             ? `قم بتحديث صورة ${contextInfo} إلى هذا الرابط: ${imageUrl}`
             : `Update the image source for ${contextInfo} to this URL: ${imageUrl}`;
           
+          setLeftPanelMode('code');
           setChatInput(promptText);
           toast.info(isRTL ? 'جاري تطبيق التغيير...' : 'Applying change...');
           
@@ -8733,12 +8779,7 @@ ${fixInstructions}
                       isRTL={isRTL}
                       onElementSelect={(ref, elementInfo) => {
                         if (elementInfo) {
-                          setSelectedElementInfo(elementInfo);
-                          setShowElementEditPopover(true); // Show edit popover immediately
-                        }
-                        // On mobile, keep inspect mode on for continuous tap-to-edit
-                        if (!isMobileDevice) {
-                          setElementSelectMode(false);
+                          handleVisualElementSelected(elementInfo);
                         }
                       }}
                     />
@@ -9209,9 +9250,13 @@ ${fixInstructions}
           }}
           onAIEdit={(prompt) => {
             const contextPrompt = `For the ${selectedElementInfo.tagName} element ${selectedElementInfo.className ? `with class "${selectedElementInfo.className.split(' ')[0]}"` : ''} containing "${selectedElementInfo.innerText.substring(0, 50)}...": ${prompt}`;
+            setLeftPanelMode('code');
             setChatInput(contextPrompt);
             setShowElementEditPopover(false);
-            setSelectedElementInfo(null);
+            setTimeout(() => {
+              const formEl = document.querySelector('form[data-chat-form]') as HTMLFormElement | null;
+              if (formEl) formEl.requestSubmit?.();
+            }, 100);
           }}
           onSelectParent={() => {
             // Send message to iframe to select parent element
@@ -9323,8 +9368,13 @@ ${fixInstructions}
               } else {
                 // Fallback: send to AI if direct replacement fails
                 const contextPrompt = `Change the image src in the ${selectedElementInfo.tagName} element${className ? ` with class "${className}"` : ''} to: ${changes.imageUrl}`;
+                setLeftPanelMode('code');
                 setChatInput(contextPrompt);
-                toast.info(isRTL ? 'اضغط إرسال للتطبيق' : 'Press send to apply');
+                toast.info(isRTL ? 'جاري تطبيق التغيير...' : 'Applying change...');
+                setTimeout(() => {
+                  const formEl = document.querySelector('form[data-chat-form]') as HTMLFormElement | null;
+                  if (formEl) formEl.requestSubmit?.();
+                }, 100);
               }
               
               setShowElementEditPopover(false);
@@ -9494,9 +9544,13 @@ ${fixInstructions}
 
             // Non-image request: proceed with AI edit as before
             const contextPrompt = `For the ${selectedElementInfo.tagName} element ${selectedElementInfo.className ? `with class "${selectedElementInfo.className.split(' ')[0]}"` : ''} containing "${selectedElementInfo.innerText.substring(0, 50)}...": ${prompt}`;
+            setLeftPanelMode('code');
             setChatInput(contextPrompt);
             setShowElementEditPopover(false);
-            setSelectedElementInfo(null);
+            setTimeout(() => {
+              const formEl = document.querySelector('form[data-chat-form]') as HTMLFormElement | null;
+              if (formEl) formEl.requestSubmit?.();
+            }, 100);
           }}
           isRTL={isRTL}
           canUndo={visualEditHistory.canUndo}

@@ -35,7 +35,7 @@ const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || '';
 // Query Recognizer / Summary Box / LLM API all use the SAME commercial AppID.
-// Controlled entirely by the Supabase secret — no hardcoded fallbacks.
+// Controlled entirely by the Supabase secret ΓÇö no hardcoded fallbacks.
 const WOLFRAM_LLM_APP_ID = Deno.env.get('WOLFRAM_LLM_APP_ID') || WOLFRAM_APP_ID;
 const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -271,7 +271,7 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
     let userGoal = 'Not specified';
     
     if (lastUser) {
-      if (/\b(remind|reminder|alert|notify|calendar|schedule|تذكير|ذكرني|ذكّرني|نبهني|نبهني)\b/i.test(lastUserLower)) {
+      if (/\b(remind|reminder|alert|notify|calendar|schedule|╪¬╪░┘â┘è╪▒|╪░┘â╪▒┘å┘è|╪░┘â┘æ╪▒┘å┘è|┘å╪¿┘ç┘å┘è|┘å╪¿┘ç┘å┘è)\b/i.test(lastUserLower)) {
         currentTopic = 'Reminder & Scheduling';
         userGoal = 'Set, review, or manage a reminder';
       } else if (/\b(search|find|look up|google|near me|nearest|closest)\b/i.test(lastUserLower)) {
@@ -336,7 +336,7 @@ function buildStayHotSummary(recentMessages: unknown[]): string {
     }
 
     const lines: string[] = [];
-    lines.push('🎯 CURRENT CONVERSATION TOPIC (CRITICAL - USE THIS FOR CONTEXT)');
+    lines.push('≡ƒÄ» CURRENT CONVERSATION TOPIC (CRITICAL - USE THIS FOR CONTEXT)');
     lines.push(`- TOPIC: ${currentTopic}`);
     lines.push(`- USER GOAL: ${userGoal}`);
     if (lastUser.length > 0) {
@@ -444,7 +444,7 @@ function isForbiddenMemoryContent(text: string): boolean {
   if (!text) return true;
   const forbidden = [
     /\b(bank|iban|swift|account\s+number|credit\s+card|debit\s+card|cvv|pin\s+code|password|otp|salary|income|debt|loan|mortgage|net\s+worth|paycheck|wage)\b/i,
-    /بنك|آيبان|حساب\s+رقم|بطاقة\s+ائتمان|كلمة\s+السر|رقم\s+سري|راتب|دخل|دين|قرض/,
+    /╪¿┘å┘â|╪ó┘è╪¿╪º┘å|╪¡╪│╪º╪¿\s+╪▒┘é┘à|╪¿╪╖╪º┘é╪⌐\s+╪º╪ª╪¬┘à╪º┘å|┘â┘ä┘à╪⌐\s+╪º┘ä╪│╪▒|╪▒┘é┘à\s+╪│╪▒┘è|╪▒╪º╪¬╪¿|╪»╪«┘ä|╪»┘è┘å|┘é╪▒╪╢/,
     /\bmy\s+(son|daughter|kid|child)\s+(?:is\s+\d|goes\s+to|attends|studies\s+at)/i
   ];
   return forbidden.some((p) => p.test(text));
@@ -491,7 +491,7 @@ function extractHelpfulMemoryKeywords(...inputs: string[]): string[] {
 function classifyHelpfulMemorySensitivity(text: string): 'normal' | 'careful' {
   const value = normalizeHelpfulMemoryText(text, 220).toLowerCase();
   if (!value) return 'normal';
-  if (/\bwife\b|\bhusband\b|\bson\b|\bdaughter\b|\bfamily\b|\bhealth\b|\bmedical\b|\bdoctor\b|\bbank\b|\bsalary\b|\bdebt\b|\bprayer\b|\breligion\b|زوجتي|زوجي|أطفالي|عائلتي|صحتي|طبيب|راتب|دين|صلاة|دين/i.test(value)) {
+  if (/\bwife\b|\bhusband\b|\bson\b|\bdaughter\b|\bfamily\b|\bhealth\b|\bmedical\b|\bdoctor\b|\bbank\b|\bsalary\b|\bdebt\b|\bprayer\b|\breligion\b|╪▓┘ê╪¼╪¬┘è|╪▓┘ê╪¼┘è|╪ú╪╖┘ü╪º┘ä┘è|╪╣╪º╪ª┘ä╪¬┘è|╪╡╪¡╪¬┘è|╪╖╪¿┘è╪¿|╪▒╪º╪¬╪¿|╪»┘è┘å|╪╡┘ä╪º╪⌐|╪»┘è┘å/i.test(value)) {
     return 'careful';
   }
   return 'normal';
@@ -576,7 +576,6 @@ function scoreHelpfulMemoryRelevance(
   if (item.layer === 'routine' && /every|weekly|monday|tuesday|wednesday|thursday|friday|saturday|sunday|each|always|usually|flower|gift|card/i.test(query)) score += 10;
   if (item.layer === 'project') score += 4;
   if (item.layer === 'always_use') score += 2;
-  if (activeTrigger === 'search' && item.category === 'preference') score -= 4;
   if (chatSubmode === 'study' && item.category === 'project') score -= 4;
 
   return score;
@@ -589,7 +588,7 @@ function selectRelevantHelpfulMemory(
   chatSubmode: string
 ): HelpfulMemoryItem[] {
   if (!Array.isArray(items) || items.length === 0) return [];
-  const limit = activeTrigger === 'search' ? 2 : 3;
+  const limit = activeTrigger === 'search' ? 4 : 3;
 
   return [...items]
     .map((item) => ({ item, score: scoreHelpfulMemoryRelevance(item, message, activeTrigger, chatSubmode) }))
@@ -608,34 +607,34 @@ function buildMemoryPostureBlock(personalTouch: unknown): string {
   const toneRaw = typeof pt.tone === 'string' ? pt.tone.toLowerCase().trim() : '';
   const styleRaw = typeof pt.style === 'string' ? pt.style.toLowerCase().trim() : '';
 
-  // Style → surfacing frequency
+  // Style ΓåÆ surfacing frequency
   let styleLine = '';
   if (styleRaw.includes('short')) {
-    styleLine = 'Style=Short answers → surface memory ONLY when directly asked or absolutely essential. Never preempt.';
+    styleLine = 'Style=Short answers ΓåÆ surface memory ONLY when directly asked or absolutely essential. Never preempt.';
   } else if (styleRaw.includes('detail')) {
-    styleLine = 'Style=Detailed → you MAY connect relevant memory facts that genuinely enrich the answer, kept natural.';
+    styleLine = 'Style=Detailed ΓåÆ you MAY connect relevant memory facts that genuinely enrich the answer, kept natural.';
   } else if (styleRaw.includes('analy')) {
-    styleLine = 'Style=Analytical → use memory as reasoning context where it applies to the user\'s question.';
+    styleLine = 'Style=Analytical ΓåÆ use memory as reasoning context where it applies to the user\'s question.';
   } else if (styleRaw.includes('convers')) {
-    styleLine = 'Style=Conversational → reference memory only when it genuinely improves flow. Light touch.';
+    styleLine = 'Style=Conversational ΓåÆ reference memory only when it genuinely improves flow. Light touch.';
   } else {
-    styleLine = 'Style=Default → reference memory sparingly and only when it clearly improves the answer.';
+    styleLine = 'Style=Default ΓåÆ reference memory sparingly and only when it clearly improves the answer.';
   }
 
-  // Tone → phrasing style
+  // Tone ΓåÆ phrasing style
   let toneLine = '';
   if (toneRaw.includes('funny') || toneRaw.includes('playful') || toneRaw.includes('humor')) {
-    toneLine = 'Tone=Funny → you may reference memory playfully and briefly, never labored.';
+    toneLine = 'Tone=Funny ΓåÆ you may reference memory playfully and briefly, never labored.';
   } else if (toneRaw.includes('serious')) {
-    toneLine = 'Tone=Serious → professional reference only when topically relevant. No asides.';
+    toneLine = 'Tone=Serious ΓåÆ professional reference only when topically relevant. No asides.';
   } else if (toneRaw.includes('casual')) {
-    toneLine = 'Tone=Casual → natural woven mention when appropriate (e.g., "since you\'re in Alkhor...").';
+    toneLine = 'Tone=Casual ΓåÆ natural woven mention when appropriate (e.g., "since you\'re in Alkhor...").';
   } else if (toneRaw.includes('encourag') || toneRaw.includes('supportive')) {
-    toneLine = 'Tone=Encouraging → reference goals/routines supportively only when motivating the user.';
+    toneLine = 'Tone=Encouraging ΓåÆ reference goals/routines supportively only when motivating the user.';
   } else if (toneRaw.includes('engag')) {
-    toneLine = 'Tone=Engaging → weave memory naturally when it makes the reply more alive.';
+    toneLine = 'Tone=Engaging ΓåÆ weave memory naturally when it makes the reply more alive.';
   } else {
-    toneLine = 'Tone=Neutral → use plain, unembellished phrasing when you do reference memory.';
+    toneLine = 'Tone=Neutral ΓåÆ use plain, unembellished phrasing when you do reference memory.';
   }
 
   return [
@@ -650,7 +649,7 @@ function buildPromptMemoryContext(lines: string[], personalTouch?: unknown): str
     lines
       .map((line) => normalizeHelpfulMemoryText(line, 180))
       .filter(Boolean)
-  )).slice(0, 4);
+  )).slice(0, 6);
 
   if (normalizedLines.length === 0) return '';
 
@@ -662,15 +661,15 @@ function buildPromptMemoryContext(lines: string[], personalTouch?: unknown): str
     '',
     postureBlock,
     '',
-    'HARD RULES (NON-NEGOTIABLE — apply regardless of posture):',
-    '- NEVER inject memory into greetings ("hey", "hi", "good morning", "السلام عليكم", "صباح الخير") — just greet back.',
+    'HARD RULES (NON-NEGOTIABLE ΓÇö apply regardless of posture):',
+    '- NEVER inject memory into greetings ("hey", "hi", "good morning", "╪º┘ä╪│┘ä╪º┘à ╪╣┘ä┘è┘â┘à", "╪╡╪¿╪º╪¡ ╪º┘ä╪«┘è╪▒") ΓÇö just greet back.',
     '- NEVER inject memory into pure creative requests (poems, stories, duas, love notes, images, translations) unless the user explicitly connects the memory to the request.',
     '- NEVER open a response with a memory-derived factoid unless the user asked about that fact.',
     '- A memory is RELEVANT only if removing it would leave the answer incomplete. If the answer works fine without it, LEAVE IT OUT.',
-    '- If asked "what do you remember about me?" / "ماذا تتذكر عني؟", list the items above plainly and mention the Helpful Memory panel for edits.',
-    '- If the user says they no longer do X / forget X / لم أعد / انسى: just acknowledge briefly ("Done, I\'ve forgotten that." / "تمّ، نسيتها."). Do NOT ask for confirmation and do NOT tell them to open a panel — the system removes the matching memory automatically.',
+    '- If asked "what do you remember about me?" / "┘à╪º╪░╪º ╪¬╪¬╪░┘â╪▒ ╪╣┘å┘è╪ƒ", list the items above plainly and mention the Helpful Memory panel for edits.',
+    '- If the user says they no longer do X / forget X / ┘ä┘à ╪ú╪╣╪» / ╪º┘å╪│┘ë: just acknowledge briefly ("Done, I\'ve forgotten that." / "╪¬┘à┘æ╪î ┘å╪│┘è╪¬┘ç╪º."). Do NOT ask for confirmation and do NOT tell them to open a panel ΓÇö the system removes the matching memory automatically.',
     '- Never invent a memory that is not listed above.',
-    '- Routines tied to a specific day/season ("Every Thursday...", "During Ramadan...") — act on them only when today actually matches AND the user\'s current message is about that routine; otherwise leave them unmentioned.'
+    '- Routines tied to a specific day/season ("Every Thursday...", "During Ramadan...") ΓÇö act on them only when today actually matches AND the user\'s current message is about that routine; otherwise leave them unmentioned.'
   ].join('\n').trim();
 }
 
@@ -840,7 +839,7 @@ async function upsertAutoHelpfulMemory(
 }
 
 // --- Forget flow ----------------------------------------------------------
-// When the user says "I no longer X", "forget X", "لم أعد X", etc., the
+// When the user says "I no longer X", "forget X", "┘ä┘à ╪ú╪╣╪» X", etc., the
 // frontend emits a DurableMemoryItem with action='forget' and text=<phrase>.
 // This function fuzzy-matches the phrase against existing active memories
 // for the user and either:
@@ -859,9 +858,9 @@ function splitListMemory(text: string): { label: string; items: string[]; separa
   const m = /^([^:\n]{2,40}):\s*(.+)$/.exec(text || '');
   if (!m) return null;
   const raw = m[2] || '';
-  if (!/[,،]/.test(raw)) return null;
-  const separator = raw.includes('،') ? '، ' : ', ';
-  const items = raw.split(/\s*[,،]\s*/).map((p) => p.trim()).filter(Boolean);
+  if (!/[,╪î]/.test(raw)) return null;
+  const separator = raw.includes('╪î') ? '╪î ' : ', ';
+  const items = raw.split(/\s*[,╪î]\s*/).map((p) => p.trim()).filter(Boolean);
   if (items.length < 2) return null;
   return { label: m[1].trim(), items, separator };
 }
@@ -893,7 +892,7 @@ async function processForgetItems(
         const haystack = normalizeForMatch(mem.memory_text || '');
         if (!haystack.includes(needle)) continue;
 
-        // Case 1: list-style memory — try surgical removal of the matching item
+        // Case 1: list-style memory ΓÇö try surgical removal of the matching item
         const listed = splitListMemory(mem.memory_text);
         if (listed) {
           const kept = listed.items.filter((it) => {
@@ -920,7 +919,7 @@ async function processForgetItems(
             }
           }
           if (kept.length === 0) {
-            // Removed everything in the list — soft-delete the whole memory
+            // Removed everything in the list ΓÇö soft-delete the whole memory
             try {
               await supabaseAdmin
                 .from('user_helpful_memory')
@@ -934,7 +933,7 @@ async function processForgetItems(
           }
         }
 
-        // Case 2: forget phrase covers most of the memory text — soft-delete
+        // Case 2: forget phrase covers most of the memory text ΓÇö soft-delete
         const coverage = needle.length / Math.max(haystack.length, 1);
         if (coverage >= 0.5 || haystack === needle) {
           try {
@@ -949,7 +948,7 @@ async function processForgetItems(
           continue;
         }
 
-        // Otherwise: leave it alone — too risky to mutate partial matches
+        // Otherwise: leave it alone ΓÇö too risky to mutate partial matches
       }
     }
   } catch (error) {
@@ -995,7 +994,7 @@ function normalizeDurableMemoryItems(input: unknown): DurableMemoryItem[] {
       : [];
 
     if (!key || !type || !text) continue;
-    // Forget items are NOT subject to the forbidden-content filter — the user is
+    // Forget items are NOT subject to the forbidden-content filter ΓÇö the user is
     // instructing removal, not adding new content.
     if (action !== 'forget' && isForbiddenMemoryContent(text)) continue;
     if (out.some((existing) => existing.key === key || (existing.text === text && existing.action === action))) continue;
@@ -1032,7 +1031,6 @@ function scoreDurableMemoryItem(
   if (item.type === 'recurring_goal' && /goal|need|improve|fix|better|solve|reliable|quality/i.test(query)) score += 8;
   if (item.type === 'working_style' && /explain|plan|audit|report|stage|help|walk me through/i.test(query)) score += 8;
   if (item.type === 'priority' && /speed|fast|performance|latency|token|lean|quality/i.test(query)) score += 10;
-  if (activeTrigger === 'search' && item.type === 'working_style') score -= 5;
   if (chatSubmode === 'study' && item.type === 'project_context') score -= 4;
 
   return score;
@@ -1045,7 +1043,7 @@ function selectRelevantDurableMemory(
   chatSubmode: string
 ): DurableMemoryItem[] {
   if (!Array.isArray(items) || items.length === 0) return [];
-  const limit = activeTrigger === 'search' ? 2 : 3;
+  const limit = activeTrigger === 'search' ? 4 : 3;
 
   return [...items]
     .map((item) => ({ item, score: scoreDurableMemoryItem(item, message, activeTrigger, chatSubmode) }))
@@ -1057,7 +1055,7 @@ function selectRelevantDurableMemory(
 
 function messageRequestsReminder(message: string): boolean {
   if (!message || typeof message !== 'string') return false;
-  return /\b(remind(?:er)?|alert|notify|notification|remember to|don't let me forget|dont let me forget|wake me|ping me|nudge me|set (?:a )?reminder|set (?:a )?note|tell me (?:at|in|tomorrow|later)|mark my calendar)\b|تذكير|ذكّرني|ذكرني|تذكرني|لا تخليني أنسى|نبّهني|نبهني|صحيني|ذكرني\s+(?:في|بكرة|غداً|غدا|بعد|الساعة)/i.test(message);
+  return /\b(remind(?:er)?|alert|notify|notification|remember to|don't let me forget|dont let me forget|wake me|ping me|nudge me|set (?:a )?reminder|set (?:a )?note|tell me (?:at|in|tomorrow|later)|mark my calendar)\b|╪¬╪░┘â┘è╪▒|╪░┘â┘æ╪▒┘å┘è|╪░┘â╪▒┘å┘è|╪¬╪░┘â╪▒┘å┘è|┘ä╪º ╪¬╪«┘ä┘è┘å┘è ╪ú┘å╪│┘ë|┘å╪¿┘æ┘ç┘å┘è|┘å╪¿┘ç┘å┘è|╪╡╪¡┘è┘å┘è|╪░┘â╪▒┘å┘è\s+(?:┘ü┘è|╪¿┘â╪▒╪⌐|╪║╪»╪º┘ï|╪║╪»╪º|╪¿╪╣╪»|╪º┘ä╪│╪º╪╣╪⌐)/i.test(message);
 }
 
 
@@ -1123,10 +1121,10 @@ async function logAIUsage(params: {
     });
     
     if (error) {
-      console.error('⚠️ AI LOG: Failed to log usage:', error.message);
+      console.error('ΓÜá∩╕Å AI LOG: Failed to log usage:', error.message);
     }
   } catch (err) {
-    console.error('⚠️ AI LOG: Exception:', err);
+    console.error('ΓÜá∩╕Å AI LOG: Exception:', err);
   }
 }
 
@@ -1372,7 +1370,7 @@ function buildSearchFollowupContents(
     // EN
     if (/^(yes|y|yeah|yep|sure|ok|okay|do it|go ahead|please)\b/.test(t)) return true;
     // AR
-    if (/^(نعم|اي|أيوه|ايوه|تمام|اوكي|حاضر|تفضل|يلا)\b/.test(t)) return true;
+    if (/^(┘å╪╣┘à|╪º┘è|╪ú┘è┘ê┘ç|╪º┘è┘ê┘ç|╪¬┘à╪º┘à|╪º┘ê┘â┘è|╪¡╪º╪╢╪▒|╪¬┘ü╪╢┘ä|┘è┘ä╪º)\b/.test(t)) return true;
     return false;
   })();
 
@@ -1460,28 +1458,28 @@ const chatSearchCache = new Map<string, { result: string; ts: number }>();
 const CHAT_SEARCH_CACHE_TTL_MS = 60_000;
 
 function isKnowledgeOrCreativeQuery(query: string): boolean {
-  return /\b(explain|teach|study|summari[sz]e|summary|analy[sz]e|compare|pros?\s+and\s+cons|definition|define|meaning|history|why does|how does|tutorial|guide|essay|write|rewrite|improve|translate|brainstorm|idea|ideas|debug|fix this code|code review|refactor|math|equation|solve|proof)\b|اشرح|لخص|حلل|قارن|عرّف|عرف|المعنى|التاريخ|ليش|لماذا|كيف|دليل|مقال|اكتب|ترجم|افكار|أفكار|صحح|برمجة|معادلة|حل/i.test(query);
+  return /\b(explain|teach|study|summari[sz]e|summary|analy[sz]e|compare|pros?\s+and\s+cons|definition|define|meaning|history|why does|how does|tutorial|guide|essay|write|rewrite|improve|translate|brainstorm|idea|ideas|debug|fix this code|code review|refactor|math|equation|solve|proof)\b|╪º╪┤╪▒╪¡|┘ä╪«╪╡|╪¡┘ä┘ä|┘é╪º╪▒┘å|╪╣╪▒┘æ┘ü|╪╣╪▒┘ü|╪º┘ä┘à╪╣┘å┘ë|╪º┘ä╪¬╪º╪▒┘è╪«|┘ä┘è╪┤|┘ä┘à╪º╪░╪º|┘â┘è┘ü|╪»┘ä┘è┘ä|┘à┘é╪º┘ä|╪º┘â╪¬╪¿|╪¬╪▒╪¼┘à|╪º┘ü┘â╪º╪▒|╪ú┘ü┘â╪º╪▒|╪╡╪¡╪¡|╪¿╪▒┘à╪¼╪⌐|┘à╪╣╪º╪»┘ä╪⌐|╪¡┘ä/i.test(query);
 }
 
 function isUserLocalClockQuestion(query: string): boolean {
-  return /\b(what time is it|current time|local time|time now)\b|الساعة كم|كم الساعة|الوقت الآن|الوقت الان/i.test(query);
+  return /\b(what time is it|current time|local time|time now)\b|╪º┘ä╪│╪º╪╣╪⌐ ┘â┘à|┘â┘à ╪º┘ä╪│╪º╪╣╪⌐|╪º┘ä┘ê┘é╪¬ ╪º┘ä╪ó┘å|╪º┘ä┘ê┘é╪¬ ╪º┘ä╪º┘å/i.test(query);
 }
 
 // Brain-First hard router: returns true ONLY for explicit live-data queries.
-// Everything else (math, history, science, creative, general knowledge) → pure brain.
+// Everything else (math, history, science, creative, general knowledge) ΓåÆ pure brain.
 function chatNeedsSearch(query: string): boolean {
   const q = (query || '').trim().toLowerCase();
   if (!q) return false;
   if (isUserLocalClockQuestion(q)) return false;
   if (isKnowledgeOrCreativeQuery(q)) return false;
 
-  const hasTimeCue = /\b(today|tonight|now|right now|latest|current|live|this week|this month|as of today|breaking)\b|اليوم|الآن|الان|مباشر|حالي|أحدث|اخر/i.test(q);
+  const hasTimeCue = /\b(today|tonight|now|right now|latest|current|live|this week|this month|as of today|breaking)\b|╪º┘ä┘è┘ê┘à|╪º┘ä╪ó┘å|╪º┘ä╪º┘å|┘à╪¿╪º╪┤╪▒|╪¡╪º┘ä┘è|╪ú╪¡╪»╪½|╪º╪«╪▒/i.test(q);
 
-  if (/\b(weather|forecast|temperature|rain|snow|humid|wind speed)\b|طقس|درجة الحرارة|توقعات/i.test(q)) return true;
-  if (/\b(breaking news|latest news|news today|headline|headlines today)\b|أخبار عاجلة|آخر الأخبار|اخر الأخبار/i.test(q)) return true;
-  if (/\b(current score|live score|match result|final score|halftime|fulltime|standings today|table today)\b|نتيجة مباشرة|ترتيب اليوم|مباراة اليوم/i.test(q)) return true;
-  if (/\b(stock price|share price|market cap|nasdaq|nyse|crypto price|bitcoin price|eth price|exchange rate|usd to|eur to|gbp to|currency today)\b|سعر السهم|سعر البيتكوين|سعر العملة|سعر الصرف/i.test(q)) return true;
-  if (/\b(earthquake|tsunami|hurricane|cyclone|flood)\b|زلزال|تسونامي|إعصار|فيضان/i.test(q) && hasTimeCue) return true;
+  if (/\b(weather|forecast|temperature|rain|snow|humid|wind speed)\b|╪╖┘é╪│|╪»╪▒╪¼╪⌐ ╪º┘ä╪¡╪▒╪º╪▒╪⌐|╪¬┘ê┘é╪╣╪º╪¬/i.test(q)) return true;
+  if (/\b(breaking news|latest news|news today|headline|headlines today)\b|╪ú╪«╪¿╪º╪▒ ╪╣╪º╪¼┘ä╪⌐|╪ó╪«╪▒ ╪º┘ä╪ú╪«╪¿╪º╪▒|╪º╪«╪▒ ╪º┘ä╪ú╪«╪¿╪º╪▒/i.test(q)) return true;
+  if (/\b(current score|live score|match result|final score|halftime|fulltime|standings today|table today)\b|┘å╪¬┘è╪¼╪⌐ ┘à╪¿╪º╪┤╪▒╪⌐|╪¬╪▒╪¬┘è╪¿ ╪º┘ä┘è┘ê┘à|┘à╪¿╪º╪▒╪º╪⌐ ╪º┘ä┘è┘ê┘à/i.test(q)) return true;
+  if (/\b(stock price|share price|market cap|nasdaq|nyse|crypto price|bitcoin price|eth price|exchange rate|usd to|eur to|gbp to|currency today)\b|╪│╪╣╪▒ ╪º┘ä╪│┘ç┘à|╪│╪╣╪▒ ╪º┘ä╪¿┘è╪¬┘â┘ê┘è┘å|╪│╪╣╪▒ ╪º┘ä╪╣┘à┘ä╪⌐|╪│╪╣╪▒ ╪º┘ä╪╡╪▒┘ü/i.test(q)) return true;
+  if (/\b(earthquake|tsunami|hurricane|cyclone|flood)\b|╪▓┘ä╪▓╪º┘ä|╪¬╪│┘ê┘å╪º┘à┘è|╪Ñ╪╣╪╡╪º╪▒|┘ü┘è╪╢╪º┘å/i.test(q) && hasTimeCue) return true;
   if (/\b(today's|tonight's|this week's).{0,30}(news|price|score|weather|result)\b/.test(q)) return true;
 
   return false;
@@ -1516,7 +1514,7 @@ async function streamGemini3FlashChat(
         if (r !== 'user' && r !== 'assistant') continue;
         const role: 'user' | 'model' = r === 'assistant' ? 'model' : 'user';
         
-        // Keep historical replay compact — the current query is added separately in full below.
+        // Keep historical replay compact ΓÇö the current query is added separately in full below.
         const isLastMessage = i === msgs.length - 1;
         const charLimit = role === 'model'
           ? 700
@@ -1553,7 +1551,7 @@ async function streamGemini3FlashChat(
     }
     // Signal UI immediately so user sees "Searching..." instead of blank wait
     try {
-      onSignal?.({ searching: true, message: language === 'ar' ? 'جارٍ البحث...' : 'Searching...' });
+      onSignal?.({ searching: true, message: language === 'ar' ? '╪¼╪º╪▒┘ì ╪º┘ä╪¿╪¡╪½...' : 'Searching...' });
     } catch { /* ignore */ }
   }
 
@@ -1582,7 +1580,7 @@ async function streamGemini3FlashChat(
 
   if (!resp.ok || !resp.body) {
     const errText = await resp.text().catch(() => '');
-    console.error('❌ CHAT GROUNDED ERROR:', resp.status, errText);
+    console.error('Γ¥î CHAT GROUNDED ERROR:', resp.status, errText);
     throw new Error(`Chat grounded error: ${resp.status}`);
   }
 
@@ -1627,8 +1625,8 @@ async function streamGemini3FlashChat(
     }
     // Append search-mode tip to the streamed response
     const tip = language === 'ar'
-      ? '\n\n> 💡 *للحصول على نتائج بحث أعمق، جرب **وضع البحث**.*'
-      : '\n\n> 💡 *For deeper search results, try **Search Mode**.*';
+      ? '\n\n> ≡ƒÆí *┘ä┘ä╪¡╪╡┘ê┘ä ╪╣┘ä┘ë ┘å╪¬╪º╪ª╪¼ ╪¿╪¡╪½ ╪ú╪╣┘à┘é╪î ╪¼╪▒╪¿ **┘ê╪╢╪╣ ╪º┘ä╪¿╪¡╪½**.*'
+      : '\n\n> ≡ƒÆí *For deeper search results, try **Search Mode**.*';
     onToken(tip);
     fullText += tip;
   }
@@ -1715,7 +1713,7 @@ async function streamGemini3WithSearch(
 
   if (!resp.ok || !resp.body) {
     const errText = await resp.text().catch(() => '');
-    console.error('❌ GEMINI SEARCH ERROR:', resp.status, errText);
+    console.error('Γ¥î GEMINI SEARCH ERROR:', resp.status, errText);
     throw new Error(`Gemini search error: ${resp.status}`);
   }
 
@@ -1834,8 +1832,8 @@ FORMAT:
 - For business queries, users should not need to separately ask for Google Maps, rating, review count, phone, verified email, website, or official social links. Treat them as default nearby-result fields and include each one whenever grounded or verified data exists.
 - For business queries, if grounded Google Maps review snippets exist, the UI will show the latest 2 reviews automatically. In the answer text, still include rating and Google Reviews count whenever available.
 - For business queries, when grounded place cards exist, keep the written intro to 1-2 short sentences max and let the structured place result carry the detailed links, reviews, and contact fields.
-- For business queries, use this exact output shape for EACH place:
-  1. **[Name] ([Area])**
+  - For business queries, use this exact output shape for EACH place:
+    1. **[Name] ([Area])**
      - **Reason:** [why it made the list]
      - **Vibe:** [2-4 keywords]
      - **Must-Try:** [best item / specialty / reason to go]
@@ -1846,12 +1844,12 @@ FORMAT:
      - **Phone:** [+974xxxx](tel:+974xxxx) (only if verified)
      - **Website:** [domain.com](https://domain.com) (official website only if verified)
      - **Instagram:** [@handle](https://instagram.com/handle) (official Instagram only if verified)
-     - **WhatsApp:** [Chat](https://wa.me/<digits>) (only if explicitly verified)
+     - **WhatsApp:** [Chat](https://wa.me/${'\\<digits>'}) (only if explicitly verified)
      - **Facebook:** [Page](https://facebook.com/...) (official Facebook only if verified)
      - **TikTok:** [@handle](https://tiktok.com/@handle) (official TikTok only if verified)
-- Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps.
-- Research queries: give a short executive summary, 2-4 key insights, and 2-3 high-quality sources.
-- URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant.
+- Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps. End with a compact `Sources:` line using 2-4 clickable grounded links whenever grounded links exist.
+- Research queries: give a short executive summary, 2-4 key insights, and 2-4 high-quality sources.
+- URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant. End with a compact `Sources:` line whenever grounded links exist.
 
 OUTPUT RULES:
 - Keep place descriptions to 3 sentences max.
@@ -1859,6 +1857,7 @@ OUTPUT RULES:
 - Phone numbers must use tel: links.
 - WhatsApp must use wa.me only when explicitly verified.
 - Never invent emails, social handles, hours, scores, prices, or sources.
+- For non-business searches, if grounded web links exist, include a compact `Sources:` block at the end. Do not omit sources when grounded URLs are available.
 - For place queries, never output a wide markdown table. Use compact bullets with one place per block.
 - For business queries, keep the answer highly practical: proximity first, then quality, then useful links.
 - For business queries, if a field is not verified, omit it instead of filling with placeholders.
@@ -1870,7 +1869,7 @@ ${isBusinessSearch ? '- This request is a business/place search. Follow the exac
 - If space is tight, keep the most useful facts first and drop extras.`;
 } // Added the missing closing brace here
 
-// ─── LAZY-LOAD PROMPT BUILDING BLOCKS ───────────────────────────────────────
+// ΓöÇΓöÇΓöÇ LAZY-LOAD PROMPT BUILDING BLOCKS ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 
 function _promptPersonalSection(pt: Record<string, unknown>): string {
   const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
@@ -1885,24 +1884,24 @@ function _promptPersonalSection(pt: Record<string, unknown>): string {
   const toneLower = tone.toLowerCase();
   let toneLine = '';
   if (tone) {
-    if (toneLower.includes('funny'))            toneLine = `Tone — FUNNY (mandatory): include light humour, wordplay or amusing observations. Keep content accurate.`;
-    else if (toneLower.includes('encourag'))    toneLine = `Tone — ENCOURAGING (mandatory): use positive, supportive language; celebrate wins; be warm.`;
-    else if (toneLower.includes('serious'))     toneLine = `Tone — SERIOUS (mandatory): formal and professional. No humour or emoji.`;
-    else if (toneLower.includes('casual'))      toneLine = `Tone — CASUAL (mandatory): relaxed, friendly, plain language — like a helpful buddy.`;
+    if (toneLower.includes('funny'))            toneLine = `Tone ΓÇö FUNNY (mandatory): include light humour, wordplay or amusing observations. Keep content accurate.`;
+    else if (toneLower.includes('encourag'))    toneLine = `Tone ΓÇö ENCOURAGING (mandatory): use positive, supportive language; celebrate wins; be warm.`;
+    else if (toneLower.includes('serious'))     toneLine = `Tone ΓÇö SERIOUS (mandatory): formal and professional. No humour or emoji.`;
+    else if (toneLower.includes('casual'))      toneLine = `Tone ΓÇö CASUAL (mandatory): relaxed, friendly, plain language ΓÇö like a helpful buddy.`;
     else if (toneLower.includes('neutral'))     toneLine = '';
-    else                                        toneLine = `Tone — ${tone} (mandatory): keep this tone consistently.`;
+    else                                        toneLine = `Tone ΓÇö ${tone} (mandatory): keep this tone consistently.`;
   }
 
   // Per-value Style enforcement
   const styleLower = styleRaw.toLowerCase();
   let styleLine = '';
   if (styleRaw) {
-    if (styleLower.includes('short'))           styleLine = `Style — SHORT ANSWERS (mandatory): keep every reply direct and concise, max 3-4 sentences unless absolutely necessary. No fluff. Go straight to the point.`;
-    else if (styleLower.includes('detailed'))   styleLine = `Style — DETAILED (mandatory): give thorough explanations with examples and clear structure. Break topics into organised sections.`;
-    else if (styleLower.includes('bullet'))     styleLine = `Style — BULLET POINTS (mandatory): organise answers as • bullet lists whenever possible.`;
-    else if (styleLower.includes('step'))       styleLine = `Style — STEP BY STEP (mandatory): organise answers as numbered steps (Step 1, Step 2, ...).`;
-    else if (styleLower.includes('conversational')) styleLine = `Style — CONVERSATIONAL (mandatory): reply like a natural back-and-forth chat. No headings, no bullet dumps.`;
-    else                                        styleLine = `Style — ${styleRaw} (mandatory): apply this style in every reply.`;
+    if (styleLower.includes('short'))           styleLine = `Style ΓÇö SHORT ANSWERS (mandatory): keep every reply direct and concise, max 3-4 sentences unless absolutely necessary. No fluff. Go straight to the point.`;
+    else if (styleLower.includes('detailed'))   styleLine = `Style ΓÇö DETAILED (mandatory): give thorough explanations with examples and clear structure. Break topics into organised sections.`;
+    else if (styleLower.includes('bullet'))     styleLine = `Style ΓÇö BULLET POINTS (mandatory): organise answers as ΓÇó bullet lists whenever possible.`;
+    else if (styleLower.includes('step'))       styleLine = `Style ΓÇö STEP BY STEP (mandatory): organise answers as numbered steps (Step 1, Step 2, ...).`;
+    else if (styleLower.includes('conversational')) styleLine = `Style ΓÇö CONVERSATIONAL (mandatory): reply like a natural back-and-forth chat. No headings, no bullet dumps.`;
+    else                                        styleLine = `Style ΓÇö ${styleRaw} (mandatory): apply this style in every reply.`;
   }
 
   let s = `\nPERSONAL TOUCH:`;
@@ -1929,12 +1928,12 @@ function _promptBase(
 TIME AUTHORITY (NON-NEGOTIABLE):
 - The "Date" and "Local time" above are the user's ACTUAL current date and local clock. Treat them as ground truth.
 - Do NOT drift past midnight, do NOT assume a different day, do NOT say "by now it must be tomorrow" or "it's officially past midnight now". If the clock above says it is Wednesday afternoon, it is Wednesday afternoon.
-- When deciding whether to act on day-specific routines (e.g. "every Thursday..."), compare against the date above. If today is not that day, acknowledge the routine exists but wait — do NOT act on it pre-emptively.
+- When deciding whether to act on day-specific routines (e.g. "every Thursday..."), compare against the date above. If today is not that day, acknowledge the routine exists but wait ΓÇö do NOT act on it pre-emptively.
 - If the user corrects you about the day/time, trust the user and the clock above, not your instincts.
 
 MEMORY: Use the conversation history fully. Never ask about something the user already told you. Reference prior context naturally. Treat the whole conversation as one continuous discussion.
 
-LANGUAGE: Always respond in ${language === 'ar' ? 'Arabic (العربية)' : 'English'} unless the user explicitly asks to translate. Non-negotiable.${personalSection}
+LANGUAGE: Always respond in ${language === 'ar' ? 'Arabic (╪º┘ä╪╣╪▒╪¿┘è╪⌐)' : 'English'} unless the user explicitly asks to translate. Non-negotiable.${personalSection}
 FORMATTING: Use Markdown tables only if the data naturally fits a table format. If the user prefers a short or conversational style, use sentences or bullets instead. Never output internal reasoning.
 
 CRITICAL RULE: DO NOT output your internal thought process, reasoning, or meta-commentary (e.g. do not write "The user is asking for..." or "I should..."). Output ONLY the final response to the user.`;
@@ -1947,27 +1946,27 @@ CRITICAL RULE: DO NOT output your internal thought process, reasoning, or meta-c
 
 // STUDY MODE EXTENSION (~600 chars): Only when chatSubmode === 'study'
 function _promptStudy(): string {
-  return `\n\n📚 STUDY MODE (TUTOR STYLE) - CRITICAL\nYou are now in STUDY MODE. Act as a friendly, patient tutor.\n\nSTUDY MODE RULES:\n0. ANSWER BOX (MANDATORY): Your response MUST start with a unique 1-sentence summary wrapped in [BOX]...[/BOX] tags. Example: [BOX]Photosynthesis is the process plants use to convert sunlight into food.[/BOX]. DO NOT repeat this sentence anywhere in the main body of your response.\n1. EXPLAIN STEP-BY-STEP: After the [BOX], break down the reasoning in simple, numbered steps.\n2. USE SIMPLE LANGUAGE: Avoid jargon. Explain like teaching a curious student.\n3. STRUCTURE CLEARLY: Use bullet points, numbered lists, or short paragraphs. Never a wall of text.\n4. ADD EXAMPLES: When helpful, include a real-world example or analogy.\n5. PRACTICE QUESTIONS (optional): For suitable topics, end with 1-2 short practice questions.\n6. ENCOURAGE: Be supportive and encouraging.\n\nApplies to ALL subjects: math, science, history, languages, programming, exam prep, general knowledge.\nIf user uploads an image (photo of notes, textbook, problem), analyze and teach based on what you see.`;
+  return `\n\n≡ƒôÜ STUDY MODE (TUTOR STYLE) - CRITICAL\nYou are now in STUDY MODE. Act as a friendly, patient tutor.\n\nSTUDY MODE RULES:\n0. ANSWER BOX (MANDATORY): Your response MUST start with a unique 1-sentence summary wrapped in [BOX]...[/BOX] tags. Example: [BOX]Photosynthesis is the process plants use to convert sunlight into food.[/BOX]. DO NOT repeat this sentence anywhere in the main body of your response.\n1. EXPLAIN STEP-BY-STEP: After the [BOX], break down the reasoning in simple, numbered steps.\n2. USE SIMPLE LANGUAGE: Avoid jargon. Explain like teaching a curious student.\n3. STRUCTURE CLEARLY: Use bullet points, numbered lists, or short paragraphs. Never a wall of text.\n4. ADD EXAMPLES: When helpful, include a real-world example or analogy.\n5. PRACTICE QUESTIONS (optional): For suitable topics, end with 1-2 short practice questions.\n6. ENCOURAGE: Be supportive and encouraging.\n\nApplies to ALL subjects: math, science, history, languages, programming, exam prep, general knowledge.\nIf user uploads an image (photo of notes, textbook, problem), analyze and teach based on what you see.`;
 }
 
 // SEARCH EXTENSION (~800 chars): Only when useSearch===true in chat mode
 function _promptChatSearch(userNick: string, aiNick: string, currentDate: string): string {
-  return `\n\n🔍 LIVE DATA LOOKUP (CHAT MODE QUICK SEARCH)\n- You are doing a fast fact-check. Keep it concise — 2000 tokens max.\n- Only output numbers/facts from the retrieved web snippets. Do NOT invent data.\n- If sources conflict, prefer the most recent and note which one you used.\n- Format: short intro (1-2 sentences) + bullet points or compact table. No long paragraphs.\n- If you open with a greeting, keep it short and natural. Never say "Greetings" or "I've pulled the latest for you". Good examples: "Here's the quick latest:" or "${userNick || 'Friend'}, here's the quick latest."\n\n> 💡 *For deeper search results, try **Search Mode**.*`;
+  return `\n\n≡ƒöì LIVE DATA LOOKUP (CHAT MODE QUICK SEARCH)\n- You are doing a fast fact-check. Keep it concise ΓÇö 2000 tokens max.\n- Only output numbers/facts from the retrieved web snippets. Do NOT invent data.\n- If sources conflict, prefer the most recent and note which one you used.\n- Format: short intro (1-2 sentences) + bullet points or compact table. No long paragraphs.\n- If you open with a greeting, keep it short and natural. Never say "Greetings" or "I've pulled the latest for you". Good examples: "Here's the quick latest:" or "${userNick || 'Friend'}, here's the quick latest."\n\n> ≡ƒÆí *For deeper search results, try **Search Mode**.*`;
 }
 
 // SEARCH MODE FULL EXTENSION: Only for activeTrigger === 'search'
 function _promptSearchModeFull(userNick: string, aiNick: string, currentDate: string, localTime: string): string {
-  return `\n\n🔍 SEARCH MODE INTELLIGENCE (CRITICAL)\n\nCONTEXT-AWARE SEARCH PROTOCOL:\n1. CHECK CONVERSATION CONTEXT FIRST: Look at the "CURRENT CONVERSATION TOPIC" section in the Stay Hot Summary above.\n2. INFER SEARCH INTENT: If user says just "search" or "find" without specifying what, check what they were just discussing and intelligently infer what they want.\n3. ASK ONLY IF TRULY AMBIGUOUS: Only ask "search about what?" if there's genuinely no context to infer from.\n\nSEARCH EXECUTION RULES:\n- You MUST use the google_search tool for web facts and current events.\n- Do NOT answer from pre-trained memory for live data (scores, prices, news).\n\nCRITICAL SEARCH FORMATTING RULES (NON-NEGOTIABLE)\nSEARCH MODE = FACTS FIRST (CRITICAL)\n- NO jokes, no storytelling, no assumptions, no "filler".\n- For live facts (sports standings/scores, prices, flights, news):\n  - You MUST ONLY output numbers/facts that appear in the retrieved web snippets.\n  - If you cannot find exact numbers, say so clearly.\n- If sources conflict, prefer the most recent dated source and say which one you used.\n- When you present a table/dashboard with numbers, include a short "Sources" section with direct URLs.\n\nFRESHNESS ENFORCEMENT (MANDATORY)\n- If the user asks for "latest", "today", "current", or live data — use results updated today/this week.\n- If retrieved snippets mention an older season/year, treat as STALE and re-search with stricter queries.\n- Re-search strategy: (1) Add today's year and season label, (2) Add "updated today" / "live", (3) Prefer official sources.\n- If after re-search you STILL cannot find verified up-to-date numbers, do NOT guess. Provide the best official link(s).\n\nFORMATTING ENFORCEMENT:\n- NEVER respond with a single long paragraph.\n- ALWAYS use: Dashboard layout, Short answers (1-2 sentence intro + max 3 bullets), or Detailed answers (2-3 sentence intro + 5-7 bullets).\n- If 3+ distinct items: Use a Markdown table (Event | Key Detail | Source).\n- ALWAYS start with: "Greetings, ${userNick || 'friend'} — ${aiNick || 'Wakti'} here. ${currentDate}. I've pulled the latest for you —"\n\nCONTENT RULES:\n- Base your answer ONLY on the search results provided.\n- Do NOT invent events, dates, or facts not in the search results.\n- Keep each bullet point or table row concise (1-2 sentences max).`;
+  return `\n\n≡ƒöì SEARCH MODE INTELLIGENCE (CRITICAL)\n\nCONTEXT-AWARE SEARCH PROTOCOL:\n1. CHECK CONVERSATION CONTEXT FIRST: Look at the "CURRENT CONVERSATION TOPIC" section in the Stay Hot Summary above.\n2. INFER SEARCH INTENT: If user says just "search" or "find" without specifying what, check what they were just discussing and intelligently infer what they want.\n3. ASK ONLY IF TRULY AMBIGUOUS: Only ask "search about what?" if there's genuinely no context to infer from.\n\nSEARCH EXECUTION RULES:\n- You MUST use the google_search tool for web facts and current events.\n- Do NOT answer from pre-trained memory for live data (scores, prices, news).\n\nCRITICAL SEARCH FORMATTING RULES (NON-NEGOTIABLE)\nSEARCH MODE = FACTS FIRST (CRITICAL)\n- NO jokes, no storytelling, no assumptions, no "filler".\n- For live facts (sports standings/scores, prices, flights, news):\n  - You MUST ONLY output numbers/facts that appear in the retrieved web snippets.\n  - If you cannot find exact numbers, say so clearly.\n- If sources conflict, prefer the most recent dated source and say which one you used.\n- When you present a table/dashboard with numbers, include a short "Sources" section with direct URLs.\n\nFRESHNESS ENFORCEMENT (MANDATORY)\n- If the user asks for "latest", "today", "current", or live data ΓÇö use results updated today/this week.\n- If retrieved snippets mention an older season/year, treat as STALE and re-search with stricter queries.\n- Re-search strategy: (1) Add today's year and season label, (2) Add "updated today" / "live", (3) Prefer official sources.\n- If after re-search you STILL cannot find verified up-to-date numbers, do NOT guess. Provide the best official link(s).\n\nFORMATTING ENFORCEMENT:\n- NEVER respond with a single long paragraph.\n- ALWAYS use: Dashboard layout, Short answers (1-2 sentence intro + max 3 bullets), or Detailed answers (2-3 sentence intro + 5-7 bullets).\n- If 3+ distinct items: Use a Markdown table (Event | Key Detail | Source).\n- ALWAYS start with: "Greetings, ${userNick || 'friend'} ΓÇö ${aiNick || 'Wakti'} here. ${currentDate}. I've pulled the latest for you ΓÇö"\n\nCONTENT RULES:\n- Base your answer ONLY on the search results provided.\n- Do NOT invent events, dates, or facts not in the search results.\n- Keep each bullet point or table row concise (1-2 sentences max).`;
 }
 
 // TIMEZONE EXTENSION (~400 chars): Injected whenever time conversions may be needed
 function _promptTimezone(): string {
-  return `\n\n⏰ CRITICAL TIMEZONE RULES (HIGHEST PRIORITY):\n1. The user's local time is shown above as "Current local time". This IS the user's timezone.\n2. When you find times in OTHER timezones (ET, PT, GMT, UTC), convert them to the user's local timezone.\n3. If a time is ALREADY in the user's local timezone, DO NOT convert it again.\n4. Format: Show local time first, then original. Example: "3:00 AM (7:00 PM ET)"\n5. NEVER double-convert.`;
+  return `\n\nΓÅ░ CRITICAL TIMEZONE RULES (HIGHEST PRIORITY):\n1. The user's local time is shown above as "Current local time". This IS the user's timezone.\n2. When you find times in OTHER timezones (ET, PT, GMT, UTC), convert them to the user's local timezone.\n3. If a time is ALREADY in the user's local timezone, DO NOT convert it again.\n4. Format: Show local time first, then original. Example: "3:00 AM (7:00 PM ET)"\n5. NEVER double-convert.`;
 }
 
 // REMINDER INTERCEPTION: dynamic instruction injected only when user requests a reminder.
 function buildReminderInstruction(formattedOffset: string): string {
-  return `⚠️ REMINDER OUTPUT RULE (HIGHEST PRIORITY — OVERRIDE EVERYTHING ELSE):
+  return `ΓÜá∩╕Å REMINDER OUTPUT RULE (HIGHEST PRIORITY ΓÇö OVERRIDE EVERYTHING ELSE):
 The user is asking for a reminder. You MUST append the following JSON block on its own line at the ABSOLUTE END of your response, after all text. No markdown, no code fences, no explanation:
 {"action":"set_reminder","time":"ISO-8601 datetime with offset","text":"reminder description"}
 Rules:
@@ -1991,12 +1990,12 @@ async function interceptAndScheduleReminder(
   encoder: TextEncoder,
   userOffset = '+00:00'
 ): Promise<string> {
-  // Use lastIndexOf to find the TRAILING action block — not a mid-response mention
+  // Use lastIndexOf to find the TRAILING action block ΓÇö not a mid-response mention
   const triggerIdx = responseText.lastIndexOf('{"action"');
   if (triggerIdx === -1) return responseText;
 
   const rawTail = responseText.substring(triggerIdx).trim();
-  // Find the last closing brace — AI may append trailing text/newlines after the JSON
+  // Find the last closing brace ΓÇö AI may append trailing text/newlines after the JSON
   const lastBrace = rawTail.lastIndexOf('}');
   const tail = lastBrace !== -1 ? rawTail.substring(0, lastBrace + 1) : rawTail;
 
@@ -2021,7 +2020,7 @@ async function interceptAndScheduleReminder(
         );
         const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
-        // Parse the scheduled time — handle ISO 8601 with timezone offset (e.g. 2026-03-24T10:36:00+03:00)
+        // Parse the scheduled time ΓÇö handle ISO 8601 with timezone offset (e.g. 2026-03-24T10:36:00+03:00)
         const cleanedTimeStr = timeStr
           .replace(/[\u200B-\u200D\uFEFF]/g, '') // strip zero-width chars
           .replace(/[^\x20-\x7E]/g, '')          // strip non-ASCII
@@ -2029,12 +2028,12 @@ async function interceptAndScheduleReminder(
           .replace(' ', 'T');                     // normalise space-separated datetime
 
         if (!cleanedTimeStr) {
-          console.error(`⚠️ REMINDER INTERCEPT: Empty scheduled_for — aborting`);
+          console.error(`ΓÜá∩╕Å REMINDER INTERCEPT: Empty scheduled_for ΓÇö aborting`);
           return cleanText;
         }
 
-        // Manual ISO+offset parser — guaranteed to work in all Deno versions
-        // Handles: YYYY-MM-DDTHH:MM[:SS][.mmm](Z|±HH:MM|±HHMM)
+        // Manual ISO+offset parser ΓÇö guaranteed to work in all Deno versions
+        // Handles: YYYY-MM-DDTHH:MM[:SS][.mmm](Z|┬▒HH:MM|┬▒HHMM)
         let validTimeStr: string;
         const m = cleanedTimeStr.match(
           /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:(Z)|([+-])(\d{2}):?(\d{2}))$/
@@ -2048,7 +2047,7 @@ async function interceptAndScheduleReminder(
           // Last-resort fallback
           const fb = new Date(cleanedTimeStr);
           validTimeStr = isNaN(fb.getTime()) ? new Date(Date.now() + 60_000).toISOString() : fb.toISOString();
-          console.error(`⚠️ REMINDER INTERCEPT: Non-standard date "${timeStr}" — using fallback: ${validTimeStr}`);
+          console.error(`ΓÜá∩╕Å REMINDER INTERCEPT: Non-standard date "${timeStr}" ΓÇö using fallback: ${validTimeStr}`);
         }
 
         // INSERT notification_history row first so process-scheduled-reminders can pick it up
@@ -2067,7 +2066,7 @@ async function interceptAndScheduleReminder(
           .single();
 
         if (insertError) {
-          console.error('⚠️ REMINDER INTERCEPT: Failed to insert notification_history row', insertError.message);
+          console.error('ΓÜá∩╕Å REMINDER INTERCEPT: Failed to insert notification_history row', insertError.message);
         } else {
           // Reminder row saved successfully; delivery scheduling continues below.
         }
@@ -2095,7 +2094,7 @@ async function interceptAndScheduleReminder(
           reminderDeliveryMode = 'scheduled';
         } else {
           const errBody = await schedResp.text();
-          console.error(`⚠️ REMINDER INTERCEPT: Schedule failed ${schedResp.status}`, errBody);
+          console.error(`ΓÜá∩╕Å REMINDER INTERCEPT: Schedule failed ${schedResp.status}`, errBody);
         }
 
         if (notificationId) {
@@ -2104,19 +2103,19 @@ async function interceptAndScheduleReminder(
           } catch { /* stream may be closing */ }
         }
       } catch (err) {
-        console.error('⚠️ REMINDER INTERCEPT: Fetch error', err);
+        console.error('ΓÜá∩╕Å REMINDER INTERCEPT: Fetch error', err);
       }
 
       return cleanText;
     }
   } catch (e) {
-      console.error('⚠️ REMINDER INTERCEPT: Failed to parse intercepted reminder JSON', e);
+      console.error('ΓÜá∩╕Å REMINDER INTERCEPT: Failed to parse intercepted reminder JSON', e);
   }
 
   return responseText;
 }
 
-// ─── LAZY-LOAD DISPATCHER ────────────────────────────────────────────────────
+// ΓöÇΓöÇΓöÇ LAZY-LOAD DISPATCHER ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
 // Builds ONLY the blocks needed for the current mode.
 // Pure chat: ~500 chars. With study/search/reminders: grows as needed.
 function buildSystemPrompt(
@@ -2143,7 +2142,7 @@ function buildSystemPrompt(
   // BASE is always included (~500 chars)
   let prompt = reminderPrefix + _promptBase(language, currentDate, localTime, pt, aiNick);
 
-  // MODE-SPECIFIC EXTENSIONS — injected only when needed
+  // MODE-SPECIFIC EXTENSIONS ΓÇö injected only when needed
   if (activeTrigger === 'search') {
     // Full search mode: comprehensive research rules
     prompt += _promptSearchModeFull(userNick, aiNick, currentDate, localTime);
@@ -2157,7 +2156,7 @@ function buildSystemPrompt(
     prompt += _promptChatSearch(userNick, aiNick, currentDate);
     prompt += _promptTimezone();
   } else {
-    // Pure chat: freshness hint only — reminder interception handled at backend level
+    // Pure chat: freshness hint only ΓÇö reminder interception handled at backend level
     prompt += _promptChatFreshness();
   }
 
@@ -2279,7 +2278,7 @@ async function executeRegularSearch(query: string, language = 'en'): Promise<{
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('❌ SEARCH API ERROR:', response.status, errorText);
+      console.error('Γ¥î SEARCH API ERROR:', response.status, errorText);
       throw new Error(`Search API error: ${response.status}`);
     }
 
@@ -2293,8 +2292,8 @@ async function executeRegularSearch(query: string, language = 'en'): Promise<{
     try {
       searchData = JSON.parse(responseText);
     } catch (jsonError) {
-      console.error('❌ SEARCH JSON parsing error:', jsonError);
-      console.error('❌ Raw response:', responseText.substring(0, 200));
+      console.error('Γ¥î SEARCH JSON parsing error:', jsonError);
+      console.error('Γ¥î Raw response:', responseText.substring(0, 200));
       throw new Error('Invalid JSON response from search service');
     }
 
@@ -2340,7 +2339,7 @@ async function executeRegularSearch(query: string, language = 'en'): Promise<{
     };
 
   } catch (error: unknown) {
-    console.error('❌ SEARCH: Critical error:', error);
+    console.error('Γ¥î SEARCH: Critical error:', error);
     const details = error instanceof Error ? error.message : String(error);
     
     return {
@@ -2366,6 +2365,9 @@ type GroundedPlaceCard = {
   email?: string;
   openNow: boolean | null;
   businessStatus: string;
+  reason: string;
+  vibe: string;
+  mustTry: string;
   editorialSummary: string;
   reviewSnippets: Array<{
     uri?: string;
@@ -2430,6 +2432,19 @@ function scoreBusinessLinkMatch(haystack: string, tokens: string[], exactName: s
   return score;
 }
 
+function isGoogleMapsLikeUrl(rawUrl: string): boolean {
+  const normalized = normalizeExternalUrl(rawUrl);
+  if (!normalized) return false;
+  const host = getSafeHostname(normalized);
+  if (!host) return false;
+  return (
+    host === 'maps.app.goo.gl'
+    || host === 'goo.gl'
+    || ((host === 'google.com' || host === 'maps.google.com' || host.endsWith('.google.com'))
+      && (normalized.includes('/maps') || normalized.includes('maps/search') || normalized.includes('query_place_id=')))
+  );
+}
+
 function pickVerifiedBusinessLinks(results: Array<Record<string, unknown>>, place: GroundedPlaceCard): Partial<GroundedPlaceCard> {
   const exactName = normalizeBusinessLookupText(place.name);
   const tokens = getBusinessLookupTokens(`${place.name} ${place.address}`);
@@ -2450,10 +2465,16 @@ function pickVerifiedBusinessLinks(results: Array<Record<string, unknown>>, plac
     const content = typeof result.content === 'string' ? result.content : '';
     const haystack = normalizeBusinessLookupText(`${title} ${content} ${url}`);
     const score = scoreBusinessLinkMatch(haystack, tokens, exactName);
-    if (score < 2) continue;
+    const isKnownMapsOrSocialHost = isGoogleMapsLikeUrl(url)
+      || hostMatchesAny(host, ['instagram.com', 'facebook.com', 'm.facebook.com', 'tiktok.com', 'wa.me', 'whatsapp.com']);
+    if (score < 2 && !(isKnownMapsOrSocialHost && score >= 1)) continue;
     const pathSegments = getSafePathSegments(url);
     const firstSegment = pathSegments[0] || '';
 
+    if (!links.mapsUrl && isGoogleMapsLikeUrl(url)) {
+      links.mapsUrl = normalizeExternalUrl(url);
+      continue;
+    }
     if (!links.instagramUrl && hostMatchesAny(host, ['instagram.com']) && !blockedInstagramSegments.includes(firstSegment)) {
       links.instagramUrl = url;
       continue;
@@ -2531,6 +2552,252 @@ function mergeReviewSnippets(
   return merged.slice(0, 4);
 }
 
+function extractMarkdownLinks(value: string): Array<{ label: string; url: string }> {
+  const matches: Array<{ label: string; url: string }> = [];
+  const regex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(value)) !== null) {
+    matches.push({
+      label: toTrimmedString(match[1]),
+      url: toTrimmedString(match[2]),
+    });
+  }
+  return matches;
+}
+
+function stripMarkdownLinks(value: string): string {
+  return toTrimmedString(value.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1'));
+}
+
+function normalizeLikelyExternalUrl(rawUrl: string): string {
+  const value = toTrimmedString(rawUrl);
+  if (!value) return '';
+  return normalizeExternalUrl(value) || normalizeExternalUrl(`https://${value.replace(/^\/+/, '')}`);
+}
+
+function extractDirectUrls(value: string): string[] {
+  return (value.match(/https?:\/\/[^\s)]+/gi) || []).map((entry) => toTrimmedString(entry));
+}
+
+function applyExtractedLinksToPlace(place: GroundedPlaceCard, value: string) {
+  const candidates = [
+    ...extractMarkdownLinks(value).map((entry) => entry.url),
+    ...extractDirectUrls(value),
+  ];
+
+  for (const candidate of candidates) {
+    const url = normalizeLikelyExternalUrl(candidate);
+    if (!url) continue;
+    const host = getSafeHostname(url);
+    if (!host) continue;
+
+    if (!place.mapsUrl && isGoogleMapsLikeUrl(url)) {
+      place.mapsUrl = url;
+      continue;
+    }
+    if (!place.instagramUrl && hostMatchesAny(host, ['instagram.com'])) {
+      place.instagramUrl = url;
+      continue;
+    }
+    if (!place.facebookUrl && hostMatchesAny(host, ['facebook.com', 'm.facebook.com'])) {
+      place.facebookUrl = url;
+      continue;
+    }
+    if (!place.tiktokUrl && hostMatchesAny(host, ['tiktok.com'])) {
+      place.tiktokUrl = url;
+      continue;
+    }
+    if (!place.whatsappUrl && hostMatchesAny(host, ['wa.me', 'whatsapp.com'])) {
+      place.whatsappUrl = url;
+      continue;
+    }
+    if (!place.websiteUrl && !hostMatchesAny(host, ['google.com', 'maps.google.com', 'maps.app.goo.gl', 'goo.gl', 'instagram.com', 'facebook.com', 'm.facebook.com', 'tiktok.com', 'wa.me', 'whatsapp.com'])) {
+      place.websiteUrl = url;
+    }
+  }
+}
+
+function normalizePlaceMatchKey(name: string, address: string): string {
+  return normalizeBusinessLookupText(`${toTrimmedString(name)} ${toTrimmedString(address)}`);
+}
+
+function createGroundedPlaceCard(seed: Partial<GroundedPlaceCard> = {}): GroundedPlaceCard {
+  return {
+    placeId: toTrimmedString(seed.placeId),
+    name: toTrimmedString(seed.name),
+    address: toTrimmedString(seed.address),
+    latitude: typeof seed.latitude === 'number' ? seed.latitude : null,
+    longitude: typeof seed.longitude === 'number' ? seed.longitude : null,
+    rating: typeof seed.rating === 'number' ? seed.rating : null,
+    userRatingCount: typeof seed.userRatingCount === 'number' ? seed.userRatingCount : null,
+    websiteUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.websiteUrl)),
+    phone: toTrimmedString(seed.phone),
+    email: normalizeEmail(seed.email),
+    openNow: typeof seed.openNow === 'boolean' ? seed.openNow : null,
+    businessStatus: toTrimmedString(seed.businessStatus),
+    reason: toTrimmedString(seed.reason),
+    vibe: toTrimmedString(seed.vibe),
+    mustTry: toTrimmedString(seed.mustTry),
+    editorialSummary: toTrimmedString(seed.editorialSummary),
+    reviewSnippets: Array.isArray(seed.reviewSnippets) ? mergeReviewSnippets(seed.reviewSnippets, []) : [],
+    mapsUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.mapsUrl)),
+    instagramUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.instagramUrl)),
+    facebookUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.facebookUrl)),
+    tiktokUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.tiktokUrl)),
+    whatsappUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.whatsappUrl)),
+  };
+}
+
+function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
+  const places: GroundedPlaceCard[] = [];
+  let current: GroundedPlaceCard | null = null;
+
+  const commit = () => {
+    if (!current) return;
+    const hasMeaningfulField = Boolean(
+      current.rating !== null
+      || current.userRatingCount !== null
+      || current.phone
+      || current.email
+      || current.websiteUrl
+      || current.mapsUrl
+      || current.instagramUrl
+      || current.facebookUrl
+      || current.tiktokUrl
+      || current.whatsappUrl
+      || current.reason
+      || current.vibe
+      || current.mustTry
+      || current.reviewSnippets.length > 0
+      || current.editorialSummary
+    );
+    if (current.name && hasMeaningfulField) {
+      places.push(current);
+    }
+    current = null;
+  };
+
+  for (const rawLine of (text || '').split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const bulletBoldMatch = line.match(/^(?:[-*â€¢]|\d+\.)\s+\*\*([^*]+)\*\*\s*(.*)$/);
+    if (!bulletBoldMatch) continue;
+
+    const boldText = toTrimmedString(bulletBoldMatch[1]);
+    const rest = toTrimmedString(bulletBoldMatch[2]);
+
+    if (!boldText.endsWith(':')) {
+      commit();
+      current = createGroundedPlaceCard({ name: boldText });
+      continue;
+    }
+
+    if (!current) continue;
+
+    const field = boldText.slice(0, -1).trim().toLowerCase();
+    const links = extractMarkdownLinks(rest);
+    const plain = stripMarkdownLinks(rest);
+    applyExtractedLinksToPlace(current, rest);
+
+    if (field === 'reason') {
+      current.reason = plain;
+      continue;
+    }
+
+    if (field === 'vibe') {
+      current.vibe = plain;
+      continue;
+    }
+
+    if (field === 'must-try' || field === 'must try') {
+      current.mustTry = plain;
+      continue;
+    }
+
+    if (field === 'summary' || field === 'description' || field === 'editorial summary') {
+      current.editorialSummary = current.editorialSummary
+        ? `${current.editorialSummary} ${plain}`.trim()
+        : plain;
+      continue;
+    }
+
+    if (field === 'status') {
+      current.businessStatus = plain;
+      if (/\bopen\b/i.test(plain)) current.openNow = true;
+      if (/\bclosed\b/i.test(plain)) current.openNow = false;
+      continue;
+    }
+
+    if (field === 'rating') {
+      const match = plain.match(/(\d+(?:\.\d+)?)/);
+      const parsed = match ? toFiniteNumber(match[1]) : null;
+      if (parsed !== null) current.rating = parsed;
+      continue;
+    }
+
+    if (field === 'google reviews' || field === 'reviews') {
+      const match = plain.match(/([\d,]+)/);
+      const parsed = match ? Number(match[1].replace(/,/g, '')) : NaN;
+      if (Number.isFinite(parsed)) current.userRatingCount = parsed;
+      continue;
+    }
+
+    if (field === 'google maps' || field === 'google maps link' || field === 'maps' || field === 'maps link' || field === 'location') {
+      current.mapsUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
+      continue;
+    }
+
+    if (field === 'phone') {
+      const telLink = links.find((entry) => /^tel:/i.test(entry.url));
+      if (telLink?.label) {
+        current.phone = telLink.label;
+      } else {
+        const match = plain.match(/(\+\d[\d\s()\-]{5,}\d)/);
+        if (match?.[1]) current.phone = match[1].replace(/\s+/g, ' ').trim();
+      }
+      continue;
+    }
+
+    if (field === 'website') {
+      current.websiteUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
+      continue;
+    }
+
+    if (field === 'instagram') {
+      current.instagramUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
+      continue;
+    }
+
+    if (field === 'whatsapp') {
+      current.whatsappUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
+      continue;
+    }
+
+    if (field === 'facebook') {
+      current.facebookUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
+      continue;
+    }
+
+    if (field === 'tiktok') {
+      current.tiktokUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
+      continue;
+    }
+
+    if (field === 'social' || field === 'socials' || field === 'social link' || field === 'social links') {
+      continue;
+    }
+
+    if (field === 'email') {
+      const mailtoLink = links.find((entry) => /^mailto:/i.test(entry.url));
+      current.email = normalizeEmail(mailtoLink?.label || plain);
+    }
+  }
+
+  commit();
+  return places;
+}
+
 function mergeGroundedPlaceCard(base: GroundedPlaceCard, patch: Partial<GroundedPlaceCard>): GroundedPlaceCard {
   return {
     ...base,
@@ -2540,18 +2807,21 @@ function mergeGroundedPlaceCard(base: GroundedPlaceCard, patch: Partial<Grounded
     longitude: base.longitude ?? (typeof patch.longitude === 'number' ? patch.longitude : null),
     rating: base.rating ?? (typeof patch.rating === 'number' ? patch.rating : null),
     userRatingCount: base.userRatingCount ?? (typeof patch.userRatingCount === 'number' ? patch.userRatingCount : null),
-    websiteUrl: base.websiteUrl || toTrimmedString(patch.websiteUrl),
+    websiteUrl: base.websiteUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.websiteUrl)),
     phone: base.phone || toTrimmedString(patch.phone),
     email: normalizeEmail(base.email) || normalizeEmail(patch.email),
     openNow: typeof base.openNow === 'boolean' ? base.openNow : (typeof patch.openNow === 'boolean' ? patch.openNow : null),
     businessStatus: base.businessStatus || toTrimmedString(patch.businessStatus),
+    reason: base.reason || toTrimmedString(patch.reason),
+    vibe: base.vibe || toTrimmedString(patch.vibe),
+    mustTry: base.mustTry || toTrimmedString(patch.mustTry),
     editorialSummary: base.editorialSummary || toTrimmedString(patch.editorialSummary),
     reviewSnippets: mergeReviewSnippets(base.reviewSnippets, Array.isArray(patch.reviewSnippets) ? patch.reviewSnippets : []),
-    mapsUrl: base.mapsUrl || toTrimmedString(patch.mapsUrl),
-    instagramUrl: base.instagramUrl || toTrimmedString(patch.instagramUrl),
-    facebookUrl: base.facebookUrl || toTrimmedString(patch.facebookUrl),
-    tiktokUrl: base.tiktokUrl || toTrimmedString(patch.tiktokUrl),
-    whatsappUrl: base.whatsappUrl || toTrimmedString(patch.whatsappUrl),
+    mapsUrl: base.mapsUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.mapsUrl)),
+    instagramUrl: base.instagramUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.instagramUrl)),
+    facebookUrl: base.facebookUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.facebookUrl)),
+    tiktokUrl: base.tiktokUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.tiktokUrl)),
+    whatsappUrl: base.whatsappUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.whatsappUrl)),
   };
 }
 
@@ -2566,7 +2836,7 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,googleMapsUri,websiteUri,internationalPhoneNumber,nationalPhoneNumber,rating,userRatingCount,businessStatus,currentOpeningHours,regularOpeningHours,reviews',
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,googleMapsUri,websiteUri,internationalPhoneNumber,nationalPhoneNumber,rating,userRatingCount,businessStatus,currentOpeningHours,regularOpeningHours,reviews,editorialSummary',
       },
       signal: controller.signal,
     });
@@ -2577,6 +2847,7 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
     if (!data || typeof data !== 'object') return {};
 
     const displayName = data.displayName && typeof data.displayName === 'object' ? data.displayName as Record<string, unknown> : null;
+    const editorialSummary = data.editorialSummary && typeof data.editorialSummary === 'object' ? data.editorialSummary as Record<string, unknown> : null;
     const location = data.location && typeof data.location === 'object' ? data.location as Record<string, unknown> : null;
     const currentOpeningHours = data.currentOpeningHours && typeof data.currentOpeningHours === 'object' ? data.currentOpeningHours as Record<string, unknown> : null;
     const regularOpeningHours = data.regularOpeningHours && typeof data.regularOpeningHours === 'object' ? data.regularOpeningHours as Record<string, unknown> : null;
@@ -2597,7 +2868,7 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
         const googleMapsUri = normalizeExternalUrl(toTrimmedString(review.googleMapsUri));
         const titleParts = [
           authorName,
-          typeof rating === 'number' ? `${rating.toFixed(1)}★` : '',
+          typeof rating === 'number' ? `${rating.toFixed(1)}Γÿà` : '',
           relativeTime,
         ].filter(Boolean);
         return {
@@ -2605,7 +2876,7 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
           review: {
             uri: googleMapsUri,
             googleMapsUri,
-            title: titleParts.join(' · '),
+            title: titleParts.join(' ┬╖ '),
             reviewId: toTrimmedString(review.name),
             snippet,
           },
@@ -2621,6 +2892,14 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
         reviewSnippets.push(entry.review);
       });
 
+    const placeLabel = toTrimmedString(displayName?.text) || place.name || place.address;
+    const placeMapsUrl = normalizeExternalUrl(toTrimmedString(data.googleMapsUri))
+      || (place.placeId
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeLabel)}&query_place_id=${encodeURIComponent(place.placeId)}`
+        : (toFiniteNumber(location?.latitude) !== null && toFiniteNumber(location?.longitude) !== null
+            ? `https://www.google.com/maps/search/?api=1&query=${toFiniteNumber(location?.latitude)},${toFiniteNumber(location?.longitude)}`
+            : (placeLabel ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeLabel)}` : '')));
+
     return {
       name: toTrimmedString(displayName?.text),
       address: toTrimmedString(data.formattedAddress),
@@ -2634,7 +2913,8 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
         ? currentOpeningHours.openNow as boolean
         : (typeof regularOpeningHours?.openNow === 'boolean' ? regularOpeningHours.openNow as boolean : null),
       businessStatus: toTrimmedString(data.businessStatus),
-      mapsUrl: normalizeExternalUrl(toTrimmedString(data.googleMapsUri)),
+      editorialSummary: toTrimmedString(editorialSummary?.text),
+      mapsUrl: placeMapsUrl,
       reviewSnippets,
     };
   } catch {
@@ -2762,11 +3042,11 @@ async function enrichGroundedPlacesWithOfficialLinks(places: GroundedPlaceCard[]
 // Strip conversational noise so Wolfram receives a clean subject string
 function getCleanSubject(message: string): string {
   if (!message) return '';
-  const cleaned = message.replace(/\?+$/, '').replace(/[؟!]+$/, '').trim();
+  const cleaned = message.replace(/\?+$/, '').replace(/[╪ƒ!]+$/, '').trim();
 
   // SHORT-CIRCUIT: For person/entity queries, extract proper nouns only (capitalized words after the opener)
-  // "Who was Bill Clinton" → "Bill Clinton"
-  // "Tell me about Albert Einstein" → "Albert Einstein"
+  // "Who was Bill Clinton" ΓåÆ "Bill Clinton"
+  // "Tell me about Albert Einstein" ΓåÆ "Albert Einstein"
   const entityOpenerMatch = cleaned.match(
     /^(?:who\s+(?:is|was)|tell\s+me\s+about(?:\s+the)?|what\s+is(?:\s+the)?)\s+(.+)$/i
   );
@@ -2777,7 +3057,7 @@ function getCleanSubject(message: string): string {
     if (properNounMatch && properNounMatch[1].length >= 2) {
         return properNounMatch[1];
     }
-    // No proper nouns found — return the rest stripped of filler
+    // No proper nouns found ΓÇö return the rest stripped of filler
     const fillerStripped = rest
       .replace(/^(the\s+(city|country|life|history|story|process|concept|meaning)\s+of\s+)/i, '')
       .replace(/^(the\s+)/i, '')
@@ -2840,7 +3120,7 @@ async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promi
     const resp = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (!resp.ok) {
-      console.warn(`⚠️ WOLFRAM LLM: HTTP ${resp.status}`);
+      console.warn(`ΓÜá∩╕Å WOLFRAM LLM: HTTP ${resp.status}`);
       return { success: false, error: `HTTP ${resp.status}` };
     }
     const text = await resp.text();
@@ -2850,12 +3130,12 @@ async function queryWolframLLM(subject: string, timeoutMs: number = 8000): Promi
     return { success: true, factSheet: text.trim() };
   } catch (err: unknown) {
     const isAbort = err && typeof err === 'object' && 'name' in err && (err as { name?: unknown }).name === 'AbortError';
-    console.warn(isAbort ? `⚠️ WOLFRAM LLM: Timeout after ${timeoutMs}ms` : `⚠️ WOLFRAM LLM: Error`);
+    console.warn(isAbort ? `ΓÜá∩╕Å WOLFRAM LLM: Timeout after ${timeoutMs}ms` : `ΓÜá∩╕Å WOLFRAM LLM: Error`);
     return { success: false, error: isAbort ? 'Timeout' : String(err) };
   }
 }
 
-// === WOLFRAM|ALPHA HELPER (legacy v2/query — used for math/calculation outside study mode) ===
+// === WOLFRAM|ALPHA HELPER (legacy v2/query ΓÇö used for math/calculation outside study mode) ===
 async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{
   success: boolean;
   answer?: string;
@@ -2886,7 +3166,7 @@ async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      console.warn('⚠️ WOLFRAM: HTTP error', response.status);
+      console.warn('ΓÜá∩╕Å WOLFRAM: HTTP error', response.status);
       return { success: false, error: `HTTP ${response.status}` };
     }
 
@@ -2938,10 +3218,10 @@ async function queryWolfram(input: string, timeoutMs: number = 4000): Promise<{
     const errName = (err && typeof err === 'object' && 'name' in err) ? (err as { name?: unknown }).name : undefined;
     const errMessage = err instanceof Error ? err.message : String(err);
     if (errName === 'AbortError') {
-      console.warn('⚠️ WOLFRAM: Timeout after', timeoutMs, 'ms');
+      console.warn('ΓÜá∩╕Å WOLFRAM: Timeout after', timeoutMs, 'ms');
       return { success: false, error: 'Timeout' };
     }
-    console.error('❌ WOLFRAM: Error:', errMessage);
+    console.error('Γ¥î WOLFRAM: Error:', errMessage);
     return { success: false, error: errMessage };
   }
 }
@@ -2964,10 +3244,10 @@ function normalizeSummaryBoxQuery(input: string): string {
     ''
   );
   const strippedArabic = stripped.replace(
-    /^\s*(من هو|من كانت|ما هو|ما هي|ماذا تعرف عن|اشرح|عرف|ملخص عن)\s+/,
+    /^\s*(┘à┘å ┘ç┘ê|┘à┘å ┘â╪º┘å╪¬|┘à╪º ┘ç┘ê|┘à╪º ┘ç┘è|┘à╪º╪░╪º ╪¬╪╣╪▒┘ü ╪╣┘å|╪º╪┤╪▒╪¡|╪╣╪▒┘ü|┘à┘ä╪«╪╡ ╪╣┘å)\s+/,
     ''
   );
-  const cleaned = strippedArabic.replace(/[?؟!]+\s*$/g, '').trim();
+  const cleaned = strippedArabic.replace(/[?╪ƒ!]+\s*$/g, '').trim();
   return cleaned.length >= 2 ? cleaned : trimmed;
 }
 
@@ -2989,7 +3269,7 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
 
     if (!recognizerResp.ok) {
       clearTimeout(timeoutId);
-      console.warn('⚠️ WOLFRAM SUMMARY: Recognizer HTTP error', recognizerResp.status);
+      console.warn('ΓÜá∩╕Å WOLFRAM SUMMARY: Recognizer HTTP error', recognizerResp.status);
       return { success: false, error: `Recognizer HTTP ${recognizerResp.status}` };
     }
 
@@ -3019,7 +3299,7 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
     clearTimeout(timeoutId);
 
     if (!summaryResp.ok) {
-      console.warn('⚠️ WOLFRAM SUMMARY: Summary HTTP error', summaryResp.status);
+      console.warn('ΓÜá∩╕Å WOLFRAM SUMMARY: Summary HTTP error', summaryResp.status);
       return { success: false, error: `Summary HTTP ${summaryResp.status}` };
     }
 
@@ -3045,10 +3325,10 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
     const errName = (err && typeof err === 'object' && 'name' in err) ? (err as { name?: unknown }).name : undefined;
     const errMessage = err instanceof Error ? err.message : String(err);
     if (errName === 'AbortError') {
-      console.warn('⚠️ WOLFRAM SUMMARY: Timeout after', timeoutMs, 'ms');
+      console.warn('ΓÜá∩╕Å WOLFRAM SUMMARY: Timeout after', timeoutMs, 'ms');
       return { success: false, error: 'Timeout' };
     }
-    console.error('❌ WOLFRAM SUMMARY: Error:', errMessage);
+    console.error('Γ¥î WOLFRAM SUMMARY: Error:', errMessage);
     return { success: false, error: errMessage };
   }
 }
@@ -3074,15 +3354,15 @@ async function extractTextFromImageForStudy(
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
 
     const ocrPrompt = language === 'ar'
-      ? `أنت خبير في استخراج النصوص من الصور التعليمية. مهمتك:
-1. استخرج كل النص والأرقام والمعادلات والرموز من الصورة بدقة تامة
-2. إذا كانت معادلة رياضية، اكتبها بصيغة نصية واضحة (مثل: 2x + 3 = 7)
-3. إذا كان سؤال اختيار من متعدد، اكتب السؤال وجميع الخيارات
-4. حافظ على التنسيق الأصلي قدر الإمكان
+      ? `╪ú┘å╪¬ ╪«╪¿┘è╪▒ ┘ü┘è ╪º╪│╪¬╪«╪▒╪º╪¼ ╪º┘ä┘å╪╡┘ê╪╡ ┘à┘å ╪º┘ä╪╡┘ê╪▒ ╪º┘ä╪¬╪╣┘ä┘è┘à┘è╪⌐. ┘à┘ç┘à╪¬┘â:
+1. ╪º╪│╪¬╪«╪▒╪¼ ┘â┘ä ╪º┘ä┘å╪╡ ┘ê╪º┘ä╪ú╪▒┘é╪º┘à ┘ê╪º┘ä┘à╪╣╪º╪»┘ä╪º╪¬ ┘ê╪º┘ä╪▒┘à┘ê╪▓ ┘à┘å ╪º┘ä╪╡┘ê╪▒╪⌐ ╪¿╪»┘é╪⌐ ╪¬╪º┘à╪⌐
+2. ╪Ñ╪░╪º ┘â╪º┘å╪¬ ┘à╪╣╪º╪»┘ä╪⌐ ╪▒┘è╪º╪╢┘è╪⌐╪î ╪º┘â╪¬╪¿┘ç╪º ╪¿╪╡┘è╪║╪⌐ ┘å╪╡┘è╪⌐ ┘ê╪º╪╢╪¡╪⌐ (┘à╪½┘ä: 2x + 3 = 7)
+3. ╪Ñ╪░╪º ┘â╪º┘å ╪│╪ñ╪º┘ä ╪º╪«╪¬┘è╪º╪▒ ┘à┘å ┘à╪¬╪╣╪»╪»╪î ╪º┘â╪¬╪¿ ╪º┘ä╪│╪ñ╪º┘ä ┘ê╪¼┘à┘è╪╣ ╪º┘ä╪«┘è╪º╪▒╪º╪¬
+4. ╪¡╪º┘ü╪╕ ╪╣┘ä┘ë ╪º┘ä╪¬┘å╪│┘è┘é ╪º┘ä╪ú╪╡┘ä┘è ┘é╪»╪▒ ╪º┘ä╪Ñ┘à┘â╪º┘å
 
-سياق المستخدم: "${userPrompt}"
+╪│┘è╪º┘é ╪º┘ä┘à╪│╪¬╪«╪»┘à: "${userPrompt}"
 
-أعد النص المستخرج فقط، بدون شرح أو تحليل.`
+╪ú╪╣╪» ╪º┘ä┘å╪╡ ╪º┘ä┘à╪│╪¬╪«╪▒╪¼ ┘ü┘é╪╖╪î ╪¿╪»┘ê┘å ╪┤╪▒╪¡ ╪ú┘ê ╪¬╪¡┘ä┘è┘ä.`
       : `You are an expert at extracting text from educational images. Your task:
 1. Extract ALL text, numbers, equations, and symbols from the image with perfect accuracy
 2. If it's a math equation, write it in clear text format (e.g., 2x + 3 = 7)
@@ -3119,7 +3399,7 @@ Return ONLY the extracted text, no explanations or analysis.`;
 
     if (!response.ok) {
       const errText = await response.text().catch(() => '');
-      console.error('❌ STUDY OCR: Gemini error', response.status, errText.slice(0, 200));
+      console.error('Γ¥î STUDY OCR: Gemini error', response.status, errText.slice(0, 200));
       return { success: false, error: `Gemini OCR error: ${response.status}` };
     }
 
@@ -3133,7 +3413,7 @@ Return ONLY the extracted text, no explanations or analysis.`;
     // Detect question type for better Wolfram routing
     const lower = extractedText.toLowerCase();
     let questionType: StudyOCRResult['questionType'] = 'general';
-    if (/[+\-*/=^√∫∑∏]|equation|solve|calculate|x\s*[=+\-]|[0-9]+\s*[+\-*/]/.test(extractedText)) {
+    if (/[+\-*/=^ΓêÜΓê½ΓêæΓêÅ]|equation|solve|calculate|x\s*[=+\-]|[0-9]+\s*[+\-*/]/.test(extractedText)) {
       questionType = 'math';
     } else if (/atom|molecule|element|chemical|physics|force|energy|velocity|acceleration/i.test(lower)) {
       questionType = 'science';
@@ -3147,7 +3427,7 @@ Return ONLY the extracted text, no explanations or analysis.`;
 
   } catch (err) {
     const errMessage = err instanceof Error ? err.message : String(err);
-    console.error('❌ STUDY OCR: Error:', errMessage);
+    console.error('Γ¥î STUDY OCR: Error:', errMessage);
     return { success: false, error: errMessage };
   }
 }
@@ -3179,7 +3459,7 @@ function isWolframQuery(q: string): boolean {
   
   // === MATHEMATICS (All Levels) ===
   if (/\d+\s*[\+\-\*\/\^]\s*\d+/.test(q)) return true;
-  if (/[∫∑∏√π∞±×÷=≠≤≥<>]/.test(q)) return true;
+  if (/[Γê½ΓêæΓêÅΓêÜ╧ÇΓê₧┬▒├ù├╖=ΓëáΓëñΓëÑ<>]/.test(q)) return true;
   if (/\b(sin|cos|tan|cot|sec|csc|log|ln|sqrt|exp)\s*\(/i.test(q)) return true;
   if (/\b(math|maths|arithmetic|algebra|geometry|trigonometry|calculus|statistics|probability|precalculus|pre-calculus)\b/i.test(lower)) return true;
   if (/\b(solve|integrate|derivative|differentiate|limit|factor|simplify|equation|calculate|compute|evaluate|graph|plot)\b/i.test(lower)) return true;
@@ -3234,7 +3514,7 @@ function isWolframQuery(q: string): boolean {
   if (/\b(prophet muhammad|sahaba|companion|imam|scholar|mosque|masjid|kaaba|mecca|medina)\b/i.test(lower)) return true;
   if (/\b(surah|ayah|verse|chapter|revelation|angel|jannah|jahannam|day of judgment)\b/i.test(lower)) return true;
   // Arabic Islamic terms
-  if (/\b(قرآن|حديث|فقه|تفسير|سيرة|عقيدة|شريعة|تجويد|أصول|علوم|مقاصد|اجتهاد|فتوى|حلال|حرام|سنة|صلاة|زكاة|حج|صوم|رمضان)\b/.test(q)) return true;
+  if (/\b(┘é╪▒╪ó┘å|╪¡╪»┘è╪½|┘ü┘é┘ç|╪¬┘ü╪│┘è╪▒|╪│┘è╪▒╪⌐|╪╣┘é┘è╪»╪⌐|╪┤╪▒┘è╪╣╪⌐|╪¬╪¼┘ê┘è╪»|╪ú╪╡┘ê┘ä|╪╣┘ä┘ê┘à|┘à┘é╪º╪╡╪»|╪º╪¼╪¬┘ç╪º╪»|┘ü╪¬┘ê┘ë|╪¡┘ä╪º┘ä|╪¡╪▒╪º┘à|╪│┘å╪⌐|╪╡┘ä╪º╪⌐|╪▓┘â╪º╪⌐|╪¡╪¼|╪╡┘ê┘à|╪▒┘à╪╢╪º┘å)\b/.test(q)) return true;
   
   // === LANGUAGES (Arabic, English, French, etc.) ===
   if (/\b(grammar|syntax|morphology|phonetics|phonology|semantics|linguistics|vocabulary|etymology)\b/i.test(lower)) return true;
@@ -3243,7 +3523,7 @@ function isWolframQuery(q: string): boolean {
   if (/\b(english grammar|french grammar|spanish grammar|german grammar)\b/i.test(lower)) return true;
   if (/\b(translation|translate|meaning of|definition of|what does .* mean)\b/i.test(lower)) return true;
   // Arabic grammar terms
-  if (/\b(نحو|صرف|بلاغة|إعراب|فعل|اسم|حرف|جملة|مبتدأ|خبر|فاعل|مفعول)\b/.test(q)) return true;
+  if (/\b(┘å╪¡┘ê|╪╡╪▒┘ü|╪¿┘ä╪º╪║╪⌐|╪Ñ╪╣╪▒╪º╪¿|┘ü╪╣┘ä|╪º╪│┘à|╪¡╪▒┘ü|╪¼┘à┘ä╪⌐|┘à╪¿╪¬╪»╪ú|╪«╪¿╪▒|┘ü╪º╪╣┘ä|┘à┘ü╪╣┘ê┘ä)\b/.test(q)) return true;
   
   // === ECONOMICS / BUSINESS / FINANCE ===
   if (/\b(economics|microeconomics|macroeconomics|econometrics|finance|accounting|business)\b/i.test(lower)) return true;
@@ -3269,7 +3549,7 @@ function isWolframQuery(q: string): boolean {
   
   // === CONVERSIONS & MEASUREMENTS ===
   if (/\b(convert|conversion|how many|how much|what is .* in)\b/i.test(lower)) return true;
-  if (/\d+\s*(km|m|cm|mm|ft|in|mi|yd|kg|g|lb|oz|l|ml|gal|mph|kph|°[CF]|kelvin|fahrenheit|celsius)/i.test(q)) return true;
+  if (/\d+\s*(km|m|cm|mm|ft|in|mi|yd|kg|g|lb|oz|l|ml|gal|mph|kph|┬░[CF]|kelvin|fahrenheit|celsius)/i.test(q)) return true;
   
   // === GENERAL ACADEMIC QUESTION PATTERNS ===
   if (/\b(what is|what are|who is|who was|when did|where is|why does|how does|explain|define|describe|compare|contrast)\b/i.test(lower)) return true;
@@ -3283,7 +3563,7 @@ function isWaktiInvolved(q: string) {
   try {
     const s = String(q || '').trim();
     if (!s) return false;
-    const hasWakti = /\bwakti\b/i.test(s) || /وقتي/.test(s);
+    const hasWakti = /\bwakti\b/i.test(s) || /┘ê┘é╪¬┘è/.test(s);
     if (!hasWakti) return false;
     
     // Exclude dev/meta messages about building/debugging Wakti itself
@@ -3297,11 +3577,11 @@ function isWaktiInvolved(q: string) {
     // English question patterns
     const enQuestionPatterns = /\b(what is|what's|how (do|can|to)|tell me about|explain|help( me)?( with)?|show me|where is|can you|could you|is there|does wakti|can wakti|will wakti|wakti (can|does|is|has|help|support|do|work))\b/i;
     // Arabic question patterns
-    const arQuestionPatterns = /(ما هو|ماهو|وش هو|وشهو|شو هو|ايش|كيف|ليش|وين|فين|هل|ممكن|ساعدني|عرفني|قولي|اشرح|وضح|علمني|عطني|ابي اعرف|ودي اعرف|يقدر|تقدر|فيه|عنده)/;
-    // Short standalone mentions (just "wakti" or "wakti?" or "وقتي؟")
-    const shortStandalone = /^(wakti|وقتي)\s*[?؟]?\s*$/i;
+    const arQuestionPatterns = /(┘à╪º ┘ç┘ê|┘à╪º┘ç┘ê|┘ê╪┤ ┘ç┘ê|┘ê╪┤┘ç┘ê|╪┤┘ê ┘ç┘ê|╪º┘è╪┤|┘â┘è┘ü|┘ä┘è╪┤|┘ê┘è┘å|┘ü┘è┘å|┘ç┘ä|┘à┘à┘â┘å|╪│╪º╪╣╪»┘å┘è|╪╣╪▒┘ü┘å┘è|┘é┘ê┘ä┘è|╪º╪┤╪▒╪¡|┘ê╪╢╪¡|╪╣┘ä┘à┘å┘è|╪╣╪╖┘å┘è|╪º╪¿┘è ╪º╪╣╪▒┘ü|┘ê╪»┘è ╪º╪╣╪▒┘ü|┘è┘é╪»╪▒|╪¬┘é╪»╪▒|┘ü┘è┘ç|╪╣┘å╪»┘ç)/;
+    // Short standalone mentions (just "wakti" or "wakti?" or "┘ê┘é╪¬┘è╪ƒ")
+    const shortStandalone = /^(wakti|┘ê┘é╪¬┘è)\s*[?╪ƒ]?\s*$/i;
     // Direct help-seeking phrases
-    const helpPhrases = /\b(not working|doesn't work|broken|issue|problem|bug|error|stuck|confused|lost|مشكلة|ما يشتغل|خربان|مو شغال|ضايع|محتار)\b/i;
+    const helpPhrases = /\b(not working|doesn't work|broken|issue|problem|bug|error|stuck|confused|lost|┘à╪┤┘â┘ä╪⌐|┘à╪º ┘è╪┤╪¬╪║┘ä|╪«╪▒╪¿╪º┘å|┘à┘ê ╪┤╪║╪º┘ä|╪╢╪º┘è╪╣|┘à╪¡╪¬╪º╪▒)\b/i;
     
     if (enQuestionPatterns.test(s)) return true;
     if (arQuestionPatterns.test(s)) return true;
@@ -3326,7 +3606,7 @@ function needsVerifiedLookup(q: string): boolean {
   // Nearest/location patterns
   if (/\b(nearest|closest|near me|nearby|around me)\b/i.test(s)) return true;
   // Arabic equivalents
-  if (/هاتف|رقم|اتصال|موقع|ايميل|واتساب|انستقرام|فيسبوك|تيك توك|ساعات|مفتوح|مغلق|أقرب|قريب/.test(s)) return true;
+  if (/┘ç╪º╪¬┘ü|╪▒┘é┘à|╪º╪¬╪╡╪º┘ä|┘à┘ê┘é╪╣|╪º┘è┘à┘è┘ä|┘ê╪º╪¬╪│╪º╪¿|╪º┘å╪│╪¬┘é╪▒╪º┘à|┘ü┘è╪│╪¿┘ê┘â|╪¬┘è┘â ╪¬┘ê┘â|╪│╪º╪╣╪º╪¬|┘à┘ü╪¬┘ê╪¡|┘à╪║┘ä┘é|╪ú┘é╪▒╪¿|┘é╪▒┘è╪¿/.test(s)) return true;
   return false;
 }
 
@@ -3340,7 +3620,7 @@ interface GeocodingResult {
 // Reverse geocode coordinates to get accurate city name
 async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult> {
   if (!GOOGLE_MAPS_API_KEY) {
-    console.warn('⚠️ GEOCODING: No API key configured');
+    console.warn('ΓÜá∩╕Å GEOCODING: No API key configured');
     return {};
   }
 
@@ -3350,7 +3630,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult
     const data = await response.json();
 
     if (data.status !== 'OK' || !data.results || data.results.length === 0) {
-      console.warn('⚠️ GEOCODING: No results', data.status);
+      console.warn('ΓÜá∩╕Å GEOCODING: No results', data.status);
       return {};
     }
 
@@ -3376,7 +3656,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult
       formattedAddress: result.formatted_address
     };
   } catch (error) {
-    console.error('❌ GEOCODING ERROR:', error);
+    console.error('Γ¥î GEOCODING ERROR:', error);
     return {};
   }
 }
@@ -3448,9 +3728,9 @@ function userApprovedSearch(message: string, recentMessages: unknown[]): boolean
   const askedToSearch = /\b(search|look it up|check online|live check|google)\b/i.test(lastAssistant) && /\?/.test(lastAssistant);
   if (!askedToSearch) return false;
 
-  // Simple “yes” intent in EN/AR
+  // Simple ΓÇ£yesΓÇ¥ intent in EN/AR
   if (/^(yes|yep|yeah|sure|ok|okay|do it|go ahead|please|yalla)\b/.test(userMsg)) return true;
-  if (/^(نعم|اي|أيوه|ايوه|تمام|اوكي|حاضر|تفضل|يلا)\b/.test(userMsg)) return true;
+  if (/^(┘å╪╣┘à|╪º┘è|╪ú┘è┘ê┘ç|╪º┘è┘ê┘ç|╪¬┘à╪º┘à|╪º┘ê┘â┘è|╪¡╪º╪╢╪▒|╪¬┘ü╪╢┘ä|┘è┘ä╪º)\b/.test(userMsg)) return true;
   return false;
 }
 
@@ -3463,7 +3743,7 @@ function userDeclinedSearch(message: string, recentMessages: unknown[]): boolean
   if (!askedToSearch) return false;
 
   if (/^(no|nah|nope|don\s?t|do not|skip|not now)\b/.test(userMsg)) return true;
-  if (/^(لا|مو|مو\s?الحين|لا\s?ابي|لا\s?أبي)\b/.test(userMsg)) return true;
+  if (/^(┘ä╪º|┘à┘ê|┘à┘ê\s?╪º┘ä╪¡┘è┘å|┘ä╪º\s?╪º╪¿┘è|┘ä╪º\s?╪ú╪¿┘è)\b/.test(userMsg)) return true;
   return false;
 }
 
@@ -3505,7 +3785,7 @@ serve(async (req) => {
     parsedBody = bodyText ? JSON.parse(bodyText) : {};
   } catch (bodyErr: unknown) {
     bodyParseError = bodyErr instanceof Error ? bodyErr.message : 'Unknown error';
-    console.error('🔥 BODY PARSE ERROR:', bodyParseError);
+    console.error('≡ƒöÑ BODY PARSE ERROR:', bodyParseError);
   }
 
   const encoder = new TextEncoder();
@@ -3540,7 +3820,7 @@ serve(async (req) => {
           chatSubmode = 'chat', // 'chat' or 'study'
           location = null,
           clientTimezone = 'UTC',
-          attachedFiles = [] // Images for Study mode OCR→Wolfram pipeline
+          attachedFiles = [] // Images for Study mode OCRΓåÆWolfram pipeline
         } = body as { message?: string; language?: string; recentMessages?: unknown[]; conversationId?: string | null; conversationSummary?: string; durableMemory?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: unknown; clientTimezone?: string; attachedFiles?: unknown[] };
         const requestLocation = (location && typeof location === 'object')
           ? location as { city?: string; country?: string; latitude?: number; longitude?: number }
@@ -3560,14 +3840,14 @@ serve(async (req) => {
         requestSubmode = chatSubmode;
 
         let effectiveTrigger = activeTrigger;
-        // LAZY: classifySearchIntent only for chat mode — run async, resolved before we need effectiveTrigger
+        // LAZY: classifySearchIntent only for chat mode ΓÇö run async, resolved before we need effectiveTrigger
         // for the search path. For chat path it resolves in background while we build context.
         const shouldCheckSearchIntent = activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '');
         const intentGatePromise = shouldCheckSearchIntent
           ? classifySearchIntent(message || '', language).catch(() => null)
           : Promise.resolve(null);
 
-        // Resolve intent gate (non-blocking for most messages — classifySearchIntent is a local regex classifier)
+        // Resolve intent gate (non-blocking for most messages ΓÇö classifySearchIntent is a local regex classifier)
         try {
           const gate = await intentGatePromise;
           if (gate?.needsSearch && gate.confidence >= 0.95) {
@@ -3583,7 +3863,7 @@ serve(async (req) => {
           return;
         }
 
-        // Trial gate: ai_chat — 15 messages for free users
+        // Trial gate: ai_chat ΓÇö 15 messages for free users
         if (userId) {
           const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
           const trial = await checkAiChatTrialAccess(supabaseAdmin, userId);
@@ -3597,11 +3877,11 @@ serve(async (req) => {
 
         const stayHotSummary = buildStayHotSummary(Array.isArray(recentMessages) ? recentMessages : []);
 
-        // IP-based geo: DEMOTED — used ONLY for timezone fallback on search path.
-        // Skip entirely for chat mode — clientTimezone from the frontend is sufficient.
+        // IP-based geo: DEMOTED ΓÇö used ONLY for timezone fallback on search path.
+        // Skip entirely for chat mode ΓÇö clientTimezone from the frontend is sufficient.
         // Device GPS (via Natively SDK) is the source of truth for city/coordinates.
         const clientIp = extractClientIp(req);
-        // clientTimezone from browser is always authoritative — only fall back to IP geo if it is absent or UTC
+        // clientTimezone from browser is always authoritative ΓÇö only fall back to IP geo if it is absent or UTC
         const needsIpGeo = !clientTimezone || clientTimezone === 'UTC';
         const ipGeo = needsIpGeo
           ? await lookupIpGeo(clientIp)
@@ -3628,7 +3908,7 @@ serve(async (req) => {
           const forgetItems = normalizedDurableMemory.filter((it) => it.action === 'forget');
           const rememberItems = normalizedDurableMemory.filter((it) => it.action !== 'forget');
 
-          // Forget always runs — users must always be able to remove memories even when capture is paused.
+          // Forget always runs ΓÇö users must always be able to remove memories even when capture is paused.
           if (forgetItems.length > 0) {
             processForgetItems(supabaseAdmin, userId, forgetItems).catch((error) => {
               console.warn('helpful memory forget processing failed', error);
@@ -3686,7 +3966,7 @@ serve(async (req) => {
           : null;
 
         // Priority: clientTimezone (browser) > profileTimezone (DB) > ipGeo (last resort)
-        // NEVER let ipGeo override a real clientTimezone — that is what caused the India bug.
+        // NEVER let ipGeo override a real clientTimezone ΓÇö that is what caused the India bug.
         const effectiveTimezone = (clientTimezone && clientTimezone !== 'UTC')
           ? clientTimezone
           : (profileTimezone || ipGeo?.timezone || 'UTC');
@@ -3703,7 +3983,7 @@ serve(async (req) => {
         })();
 
         // Build full location context (for Chat + Search modes)
-        // Device GPS only — no IP geo fallback for city/coordinates
+        // Device GPS only ΓÇö no IP geo fallback for city/coordinates
         let fullLocationContext = '';
         {
           let userCity = requestLocation?.latitude && requestLocation?.longitude ? '' : (requestLocation?.city || '');
@@ -3711,7 +3991,7 @@ serve(async (req) => {
           const userLat = requestLocation?.latitude;
           const userLng = requestLocation?.longitude;
           
-          // Reverse geocode only on search path — chat doesn't need precise city/coords
+          // Reverse geocode only on search path ΓÇö chat doesn't need precise city/coords
           if (userLat && userLng && effectiveTrigger !== 'chat') {
             try {
               const geocoded = await reverseGeocode(userLat, userLng);
@@ -3726,21 +4006,21 @@ serve(async (req) => {
             else if (userCity) parts.push(`City: ${userCity}`);
             else if (userCountry) parts.push(`Country: ${userCountry}`);
             if (userLat && userLng) {
-              parts.push(`Coordinates: ${userLat.toFixed(4)}°N, ${userLng.toFixed(4)}°E`);
+              parts.push(`Coordinates: ${userLat.toFixed(4)}┬░N, ${userLng.toFixed(4)}┬░E`);
             }
             if (parts.length > 0) {
-              fullLocationContext = `USER LOCATION CONTEXT (from device GPS — INTERNAL USE ONLY):
+              fullLocationContext = `USER LOCATION CONTEXT (from device GPS ΓÇö INTERNAL USE ONLY):
 ${parts.join('\n')}
 
-LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "around me", "closest", or location-dependent query):
+LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "around me", "closest", or location-dependent query):
 1. ALWAYS start your answer by acknowledging the user's CURRENT LOCATION. Use phrases like:
-   - "Based on your current location…"
-   - "From where you are right now…"
-   - "Near you right now…"
-   - (Arabic) "استناداً إلى موقعك الحالي…" / "حسب موقعك الآن…"
+   - "Based on your current locationΓÇª"
+   - "From where you are right nowΓÇª"
+   - "Near you right nowΓÇª"
+   - (Arabic) "╪º╪│╪¬┘å╪º╪»╪º┘ï ╪Ñ┘ä┘ë ┘à┘ê┘é╪╣┘â ╪º┘ä╪¡╪º┘ä┘èΓÇª" / "╪¡╪│╪¿ ┘à┘ê┘é╪╣┘â ╪º┘ä╪ó┘åΓÇª"
 2. NEVER name the user's neighborhood, district, compound, tower, street, or sub-area as if you just knew it (examples of forbidden phrasing: "you are positioned in Fox Hills district", "since you're in Lusail Marina", "as you are at West Bay"). Even if web search results contain a neighborhood name, DO NOT attribute it to the user.
 3. You MAY name the broad city or country in a neutral way (e.g. "here in <City>") ONLY after opener rule #1, and only if the city is present in LOCATION CONTEXT above. Do not invent one.
-4. If the user's exact area is uncertain, say "near you right now" or "closest to you right now" — never guess a neighborhood and never say "near your current coordinates".
+4. If the user's exact area is uncertain, say "near you right now" or "closest to you right now" ΓÇö never guess a neighborhood and never say "near your current coordinates".
 5. Keep all recommendations tightly scoped to this location. Do not list places from unrelated cities or countries.
 6. These rules override any tone/style preferences when they conflict.`;
             }
@@ -3753,7 +4033,7 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
           const greeting = userName ? `Sure, ${userName}! ` : 'Sure! ';
           
           const promoText = language === 'ar'
-            ? `بالتأكيد${userName ? '، ' + userName : ''}! وقتي هو تطبيق ذكاء اصطناعي شامل للإنتاجية. مصمم ليكون سهل الاستخدام ومتكيف مع احتياجاتك.\n\nللحصول على أدلة خطوة بخطوة، افتح المساعدة والأدلة - هناك 3 تبويبات:\n- الأدلة (مثل المستندات المصغرة)\n- أخوي الصغير مساعد وقتي الذي سيشرح لك كل شيء إذا ما ودّك تقرأ\n- تبويب الدعم للتواصل معنا مباشرة`
+            ? `╪¿╪º┘ä╪¬╪ú┘â┘è╪»${userName ? '╪î ' + userName : ''}! ┘ê┘é╪¬┘è ┘ç┘ê ╪¬╪╖╪¿┘è┘é ╪░┘â╪º╪í ╪º╪╡╪╖┘å╪º╪╣┘è ╪┤╪º┘à┘ä ┘ä┘ä╪Ñ┘å╪¬╪º╪¼┘è╪⌐. ┘à╪╡┘à┘à ┘ä┘è┘â┘ê┘å ╪│┘ç┘ä ╪º┘ä╪º╪│╪¬╪«╪»╪º┘à ┘ê┘à╪¬┘â┘è┘ü ┘à╪╣ ╪º╪¡╪¬┘è╪º╪¼╪º╪¬┘â.\n\n┘ä┘ä╪¡╪╡┘ê┘ä ╪╣┘ä┘ë ╪ú╪»┘ä╪⌐ ╪«╪╖┘ê╪⌐ ╪¿╪«╪╖┘ê╪⌐╪î ╪º┘ü╪¬╪¡ ╪º┘ä┘à╪│╪º╪╣╪»╪⌐ ┘ê╪º┘ä╪ú╪»┘ä╪⌐ - ┘ç┘å╪º┘â 3 ╪¬╪¿┘ê┘è╪¿╪º╪¬:\n- ╪º┘ä╪ú╪»┘ä╪⌐ (┘à╪½┘ä ╪º┘ä┘à╪│╪¬┘å╪»╪º╪¬ ╪º┘ä┘à╪╡╪║╪▒╪⌐)\n- ╪ú╪«┘ê┘è ╪º┘ä╪╡╪║┘è╪▒ ┘à╪│╪º╪╣╪» ┘ê┘é╪¬┘è ╪º┘ä╪░┘è ╪│┘è╪┤╪▒╪¡ ┘ä┘â ┘â┘ä ╪┤┘è╪í ╪Ñ╪░╪º ┘à╪º ┘ê╪»┘æ┘â ╪¬┘é╪▒╪ú\n- ╪¬╪¿┘ê┘è╪¿ ╪º┘ä╪»╪╣┘à ┘ä┘ä╪¬┘ê╪º╪╡┘ä ┘à╪╣┘å╪º ┘à╪¿╪º╪┤╪▒╪⌐`
             : `${greeting}Wakti AI is your all-in-one productivity AI app. It's built to be user-friendly and adaptable to your needs.\n\nFor step-by-step guides, open Help & Guides - there are 3 tabs:\n- Guides (like mini documents)\n- My little brother Wakti Help Assistant who will walk you through everything if you don't feel like reading\n- A Support tab to get in touch with us directly`;
 
           // Emit the chip first
@@ -3761,7 +4041,7 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({
               metadata: {
                 helpGuideChip: {
-                  label: language === 'ar' ? 'افتح المساعدة والإرشادات' : 'Open Help & Guides',
+                  label: language === 'ar' ? '╪º┘ü╪¬╪¡ ╪º┘ä┘à╪│╪º╪╣╪»╪⌐ ┘ê╪º┘ä╪Ñ╪▒╪┤╪º╪»╪º╪¬' : 'Open Help & Guides',
                   route: '/help'
                 }
               }
@@ -3793,7 +4073,7 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
           hour12: true
         });
 
-        // Active reminders: fire-and-forget fetch — never blocks the stream.
+        // Active reminders: fire-and-forget fetch ΓÇö never blocks the stream.
         // Result is passed into system prompt only when it resolves before buildSystemPrompt is called.
         // For chat mode with no reminder keywords, skip entirely.
         const messageHasReminderKeyword = messageRequestsReminder(message || '');
@@ -3820,14 +4100,14 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
                     }) : 'unknown time';
                     return `- "${content}" at ${time}`;
                   }).join('\n');
-                  return `\n\n📋 USER'S ACTIVE REMINDERS (DO NOT OFFER DUPLICATES):\n${remindersList}\nIf user already has a reminder for something, acknowledge it instead of offering a new one.`;
+                  return `\n\n≡ƒôï USER'S ACTIVE REMINDERS (DO NOT OFFER DUPLICATES):\n${remindersList}\nIf user already has a reminder for something, acknowledge it instead of offering a new one.`;
                 }
               } catch { /* not critical */ }
               return '';
             })()
           : Promise.resolve('');
 
-        // Race: use reminders context only if DB responds within 300ms — never stall the stream
+        // Race: use reminders context only if DB responds within 300ms ΓÇö never stall the stream
         activeRemindersContext = await Promise.race([
           remindersPromise,
           new Promise<string>(resolve => setTimeout(() => resolve(''), 300))
@@ -3873,16 +4153,16 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
           { useSearch: chatUsesSearch, hasReminders: !!activeRemindersContext, isReminderTrigger: messageHasReminderKeyword, formattedOffset }
         );
         // Detect WhatsApp-style reply marker injected by the frontend and convert it into an explicit system instruction.
-        // Supports EN: [Replying to: (wakti said) "..."]  and  AR: [ردًا على: (وكتي قال) "..."]
+        // Supports EN: [Replying to: (wakti said) "..."]  and  AR: [╪▒╪»┘ï╪º ╪╣┘ä┘ë: (┘ê┘â╪¬┘è ┘é╪º┘ä) "..."]
         let replyInstruction = '';
         try {
           const msgStr = typeof message === 'string' ? message : '';
-          const replyMatch = msgStr.match(/^\s*\[(?:Replying to|ردًا على):\s*\((?:wakti said|وكتي قال)\)\s*"([\s\S]*?)"\s*\]/);
+          const replyMatch = msgStr.match(/^\s*\[(?:Replying to|╪▒╪»┘ï╪º ╪╣┘ä┘ë):\s*\((?:wakti said|┘ê┘â╪¬┘è ┘é╪º┘ä)\)\s*"([\s\S]*?)"\s*\]/);
           if (replyMatch && replyMatch[1]) {
             const quoted = replyMatch[1].trim().slice(0, 400);
             replyInstruction = language === 'ar'
-              ? `REPLY FOCUS (ضروري): المستخدم يرد تحديدًا على رسالتك السابقة المقتبسة أدناه. خاطب هذه النقطة بالذات، لا تعامل الرسالة كموضوع جديد. إذا طلب المستخدم رأيك/إعادة صياغة/تصحيحًا/تفصيلًا فأجبه عن المحتوى المقتبس حصرًا.\nRESPONSE LANGUAGE: اكتب الرد بالعربية.\nالمقتبس: "${quoted}"`
-              : `REPLY FOCUS (CRITICAL): The user is replying SPECIFICALLY to your previous message quoted below. Address that exact point — do NOT treat their message as a new topic. If they ask for your opinion / rephrase / correction / elaboration, answer about the quoted content only.\nQUOTED MESSAGE: "${quoted}"`;
+              ? `REPLY FOCUS (╪╢╪▒┘ê╪▒┘è): ╪º┘ä┘à╪│╪¬╪«╪»┘à ┘è╪▒╪» ╪¬╪¡╪»┘è╪»┘ï╪º ╪╣┘ä┘ë ╪▒╪│╪º┘ä╪¬┘â ╪º┘ä╪│╪º╪¿┘é╪⌐ ╪º┘ä┘à┘é╪¬╪¿╪│╪⌐ ╪ú╪»┘å╪º┘ç. ╪«╪º╪╖╪¿ ┘ç╪░┘ç ╪º┘ä┘å┘é╪╖╪⌐ ╪¿╪º┘ä╪░╪º╪¬╪î ┘ä╪º ╪¬╪╣╪º┘à┘ä ╪º┘ä╪▒╪│╪º┘ä╪⌐ ┘â┘à┘ê╪╢┘ê╪╣ ╪¼╪»┘è╪». ╪Ñ╪░╪º ╪╖┘ä╪¿ ╪º┘ä┘à╪│╪¬╪«╪»┘à ╪▒╪ú┘è┘â/╪Ñ╪╣╪º╪»╪⌐ ╪╡┘è╪º╪║╪⌐/╪¬╪╡╪¡┘è╪¡┘ï╪º/╪¬┘ü╪╡┘è┘ä┘ï╪º ┘ü╪ú╪¼╪¿┘ç ╪╣┘å ╪º┘ä┘à╪¡╪¬┘ê┘ë ╪º┘ä┘à┘é╪¬╪¿╪│ ╪¡╪╡╪▒┘ï╪º.\nRESPONSE LANGUAGE: ╪º┘â╪¬╪¿ ╪º┘ä╪▒╪» ╪¿╪º┘ä╪╣╪▒╪¿┘è╪⌐.\n╪º┘ä┘à┘é╪¬╪¿╪│: "${quoted}"`
+              : `REPLY FOCUS (CRITICAL): The user is replying SPECIFICALLY to your previous message quoted below. Address that exact point ΓÇö do NOT treat their message as a new topic. If they ask for your opinion / rephrase / correction / elaboration, answer about the quoted content only.\nQUOTED MESSAGE: "${quoted}"`;
           }
         } catch { /* best-effort */ }
 
@@ -3957,7 +4237,7 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
             else if (userCity) parts.push(`City: ${userCity}`);
             else if (userCountry) parts.push(`Country: ${userCountry}`);
             if (requestLocation?.latitude && requestLocation?.longitude) {
-              parts.push(`Coordinates: ${requestLocation.latitude.toFixed(4)}°N, ${requestLocation.longitude.toFixed(4)}°E`);
+              parts.push(`Coordinates: ${requestLocation.latitude.toFixed(4)}┬░N, ${requestLocation.longitude.toFixed(4)}┬░E`);
             }
             if (parts.length > 0) {
               locationContext = `\n\nUSER LOCATION CONTEXT:\n${parts.join('\n')}`;
@@ -3965,9 +4245,9 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
 
             const eliteIntroRule = (() => {
               if (language === 'ar') {
-                return `ابدأ بسطر افتتاحي عربي قصير، دافئ، وجذاب. رحّب بالمستخدم بشكل طبيعي واذكر اسمه مرة واحدة إذا كان ذلك مناسباً. لا تستخدم تحية روبوتية محفوظة، ولا تقل "تحياتي" أو "جهّزت لك أحدث النتائج" أو أي إعلان عن عملية البحث. أمثلة جيدة: "هلا ${userNick || userDisplayName || 'صديقي'} — إذا ودك بغداء قوي الآن، هذه أفضل الأماكن الأقرب لك." أو "يا ${userNick || userDisplayName || 'صديقي'}، هذه أقوى الخيارات القريبة منك الآن."`;
+                return `╪º╪¿╪»╪ú ╪¿╪│╪╖╪▒ ╪º┘ü╪¬╪¬╪º╪¡┘è ╪╣╪▒╪¿┘è ┘é╪╡┘è╪▒╪î ╪»╪º┘ü╪ª╪î ┘ê╪¼╪░╪º╪¿. ╪▒╪¡┘æ╪¿ ╪¿╪º┘ä┘à╪│╪¬╪«╪»┘à ╪¿╪┤┘â┘ä ╪╖╪¿┘è╪╣┘è ┘ê╪º╪░┘â╪▒ ╪º╪│┘à┘ç ┘à╪▒╪⌐ ┘ê╪º╪¡╪»╪⌐ ╪Ñ╪░╪º ┘â╪º┘å ╪░┘ä┘â ┘à┘å╪º╪│╪¿╪º┘ï. ┘ä╪º ╪¬╪│╪¬╪«╪»┘à ╪¬╪¡┘è╪⌐ ╪▒┘ê╪¿┘ê╪¬┘è╪⌐ ┘à╪¡┘ü┘ê╪╕╪⌐╪î ┘ê┘ä╪º ╪¬┘é┘ä "╪¬╪¡┘è╪º╪¬┘è" ╪ú┘ê "╪¼┘ç┘æ╪▓╪¬ ┘ä┘â ╪ú╪¡╪»╪½ ╪º┘ä┘å╪¬╪º╪ª╪¼" ╪ú┘ê ╪ú┘è ╪Ñ╪╣┘ä╪º┘å ╪╣┘å ╪╣┘à┘ä┘è╪⌐ ╪º┘ä╪¿╪¡╪½. ╪ú┘à╪½┘ä╪⌐ ╪¼┘è╪»╪⌐: "┘ç┘ä╪º ${userNick || userDisplayName || '╪╡╪»┘è┘é┘è'} ΓÇö ╪Ñ╪░╪º ┘ê╪»┘â ╪¿╪║╪»╪º╪í ┘é┘ê┘è ╪º┘ä╪ó┘å╪î ┘ç╪░┘ç ╪ú┘ü╪╢┘ä ╪º┘ä╪ú┘à╪º┘â┘å ╪º┘ä╪ú┘é╪▒╪¿ ┘ä┘â." ╪ú┘ê "┘è╪º ${userNick || userDisplayName || '╪╡╪»┘è┘é┘è'}╪î ┘ç╪░┘ç ╪ú┘é┘ê┘ë ╪º┘ä╪«┘è╪º╪▒╪º╪¬ ╪º┘ä┘é╪▒┘è╪¿╪⌐ ┘à┘å┘â ╪º┘ä╪ó┘å."`;
               }
-              return `Open with one short warm engaging line. Greet the user naturally and mention their name once when it feels right. Do not use a scripted greeting. Never say "Greetings" or "I've pulled the latest for you" or announce your own search process. Good examples: "Hey ${userNick || userDisplayName || 'there'} — if you're after a strong lunch right now, these are the best spots nearest to you." or "${userNick || userDisplayName || 'Friend'}, here are the strongest nearby picks for you right now."`;
+              return `Open with one short warm engaging line. Greet the user naturally and mention their name once when it feels right. Do not use a scripted greeting. Never say "Greetings" or "I've pulled the latest for you" or announce your own search process. Good examples: "Hey ${userNick || userDisplayName || 'there'} ΓÇö if you're after a strong lunch right now, these are the best spots nearest to you." or "${userNick || userDisplayName || 'Friend'}, here are the strongest nearby picks for you right now."`;
             })();
 
             // Intent detection is now built into the system prompt itself
@@ -3981,15 +4261,15 @@ LOCATION PHRASING RULES — STRICT (mandatory for any "near me", "nearby", "arou
               conversationSummary: rollingConversationSummary,
               stayHotSummary
             });
-            let searchSystemPrompt = `${searchHelpfulMemoryContext ? searchHelpfulMemoryContext + "\n\n" : ''}${searchContinuityContext ? searchContinuityContext + "\n\n" : ''}You are WAKTI AI — an elite, hyper-intelligent Search Intelligence.
+            let searchSystemPrompt = `${searchHelpfulMemoryContext ? searchHelpfulMemoryContext + "\n\n" : ''}${searchContinuityContext ? searchContinuityContext + "\n\n" : ''}You are WAKTI AI ΓÇö an elite, hyper-intelligent Search Intelligence.
 You are the Al Jazeera of news (deep context), the ESPN of sports (real-time stakes), and the Oxford of research (academic rigor).
 You perform REAL-TIME SYNTHESIS. You are a digital strategist with the brain of a researcher and the style of a high-end concierge.${personalSection}
 
-### 🌐 THE WORLD SENSOR (LIVE CONTEXT)
+### ≡ƒîÉ THE WORLD SENSOR (LIVE CONTEXT)
 - CURRENT TIME: ${localTime} (${userTimeZone})
 - LOCATION: ${searchLocationContext || 'Unknown'}
 
-### 🧠 PERSONALIZATION SETTINGS
+### ≡ƒºá PERSONALIZATION SETTINGS
 ${userNick ? `- USER NICKNAME: "${userNick}" (use naturally once in the intro).` : '- Use an elite, professional greeting.'}
 ${aiNick ? `- YOUR NAME: "${aiNick}".` : ''}
 ${toneVal !== 'neutral' ? `- TONE: ${toneVal}.` : ''}
@@ -3997,12 +4277,12 @@ ${styleVal ? `- STYLE: ${styleVal}` : ''}
 ${customNote ? `- SPECIAL NOTE (obey): ${customNote}` : ''}
 - LANGUAGE: ${language === 'ar' ? 'Arabic (RTL when appropriate)' : 'English'}
 
-### 🧠 REASONING PROTOCOL (INTERNAL STEPS - DO BEFORE EVERY RESPONSE)
+### ≡ƒºá REASONING PROTOCOL (INTERNAL STEPS - DO BEFORE EVERY RESPONSE)
 1. VERIFY: Check ${localTime} against business hours found. If it's 10 PM and they close at 9 PM, flag it as "Closed Now".
 2. CROSS-REFERENCE: For sports/news, check 3+ sources to find "The Lead" (the most important fact).
 3. ANALYZE IMPACT: Don't just find facts; explain the impact (e.g., "This win moves them to 2nd place in the division").
 
-### 🛡️ DATA INTEGRITY PROTOCOL (STRICT)
+### ≡ƒ¢í∩╕Å DATA INTEGRITY PROTOCOL (STRICT)
 1. NO PRE-TRAINED GUESSING: For Scores, Stocks, and Flights, you are FORBIDDEN from using internal memory. You MUST perform a fresh search for "[Topic] results ${localTime}" and extract numbers directly from search snippets.
 2. DATE VERIFICATION: Compare the date in search results to today (${localTime}). If the result says "Yesterday" but refers to a month ago, ignore it and keep searching.
 3. THE "STAKES" RULE: Never just give a number. Explain what the number means (e.g., "This win clinches a playoff spot" or "This price drop is a 52-week low").
@@ -4018,21 +4298,21 @@ Detect the user's need and apply the corresponding "Brain":
 
 A) PLACE / BUSINESS (The Concierge Brain):
 Restaurants, cafes, malls, hotels, salons, shops, services, "near me".
-→ Use grounded map/place results as the primary truth whenever they exist.
-→ Write like a sharp local guide: practical, warm, specific. No luxury-critic filler and no robotic system narration.
+ΓåÆ Use grounded map/place results as the primary truth whenever they exist.
+ΓåÆ Write like a sharp local guide: practical, warm, specific. No luxury-critic filler and no robotic system narration.
 
 B) LIVE DATA (The ESPN/Market Brain):
 Sports scores, schedules, standings. Stocks, crypto, exchange rates. Airport / flights.
-→ Cross-reference 3+ sources to ensure the score/price is accurate for today.
-→ Always explain "The Stakes" — why this result matters.
+ΓåÆ Cross-reference 3+ sources to ensure the score/price is accurate for today.
+ΓåÆ Always explain "The Stakes" ΓÇö why this result matters.
 
 C) RESEARCH (The Oxford Brain):
 School project, history, science, how/why questions, "explain", "compare", "pros/cons".
-→ Do not just list facts. Provide the "Strategic Nuance" — a scholarly debate or a rare historical perspective.
+ΓåÆ Do not just list facts. Provide the "Strategic Nuance" ΓÇö a scholarly debate or a rare historical perspective.
 
 D) URL ANALYSIS (The Auditor Brain):
 User provides a URL or asks to analyze a specific page.
-→ Deep-read the provided URL. Identify the "Lead," the "Evidence," and the "Hidden Bias."
+ΓåÆ Deep-read the provided URL. Identify the "Lead," the "Evidence," and the "Hidden Bias."
 
 If ambiguous, choose the closest intent and proceed without asking questions unless necessary.
 
@@ -4062,7 +4342,7 @@ Never hallucinate weather/events. If not confidently found, skip it.
 -------------------------
 INTENT A: PLACE / BUSINESS
 -------------------------
-Return 4–6 results max.
+Return 4ΓÇô6 results max.
 
 Users should not need to separately ask for Google Maps, rating, Google review count, phone, verified email, website, or official social links. If that data is grounded or clearly verified, include it by default.
 When grounded place cards are available, keep the prose compact and let the cards carry the detailed links, contact info, and review snippets.
@@ -4071,24 +4351,24 @@ For EACH result use EXACTLY this structure:
 
 ## [Number]. [Name] ([Area])
 
-[2–3 sentences max: what it is + why it's good + who it's for.
+[2ΓÇô3 sentences max: what it is + why it's good + who it's for.
 Include cuisine/type, price ($/$$/$$$), and rating if available.]
 
-- **${language === 'ar' ? 'الأجواء' : 'Vibe'}:** [2–4 keywords]
-- **${language === 'ar' ? 'جرّب' : 'Must Try'}:** [specific dish/service]
-- **${language === 'ar' ? 'الذكاء' : 'Intelligence'}:** [Status (e.g., Open for another 2 hours / Closed Now) | Nearest Metro | Parking availability]
-- **${language === 'ar' ? 'التقييم' : 'Rating'}:** [4.4] (include whenever grounded)
-- **${language === 'ar' ? 'مراجعات Google' : 'Google Reviews'}:** [123 reviews] (include whenever grounded)
-- **${language === 'ar' ? 'المعلومات' : 'Info'}:**
-  - **${language === 'ar' ? 'الساعات' : 'Hours'}:** [hours or Open now/Closed] (omit if unknown)
-  - **${language === 'ar' ? 'الهاتف' : 'Phone'}:** [+974xxxx](tel:+974xxxx) (omit if unknown)
-  - **${language === 'ar' ? 'واتساب' : 'WhatsApp'}:** [Chat](https://wa.me/<digits>) (only if verified / explicitly listed as WhatsApp)
-  - **${language === 'ar' ? 'البريد' : 'Email'}:** [name@domain.com](mailto:name@domain.com) (only if verified)
-  - **${language === 'ar' ? 'الموقع' : 'Website'}:** [domain.com](https://domain.com) (only if verified)
-  - **${language === 'ar' ? 'إنستغرام' : 'Instagram'}:** [@handle](https://instagram.com/handle) (only if verified)
-  - **${language === 'ar' ? 'فيسبوك' : 'Facebook'}:** [Page](https://facebook.com/...) (only if verified)
-  - **${language === 'ar' ? 'تيك توك' : 'TikTok'}:** [@handle](https://tiktok.com/@handle) (only if verified)
-- 📍 **Google Maps:** [${language === 'ar' ? 'ابدأ التنقل' : 'Initiate Navigation'}](https://www.google.com/maps/search/?api=1&query=[URL-encoded name and location]${language === 'ar' ? '&hl=ar' : ''})
+- **${language === 'ar' ? '╪º┘ä╪ú╪¼┘ê╪º╪í' : 'Vibe'}:** [2ΓÇô4 keywords]
+- **${language === 'ar' ? '╪¼╪▒┘æ╪¿' : 'Must Try'}:** [specific dish/service]
+- **${language === 'ar' ? '╪º┘ä╪░┘â╪º╪í' : 'Intelligence'}:** [Status (e.g., Open for another 2 hours / Closed Now) | Nearest Metro | Parking availability]
+- **${language === 'ar' ? '╪º┘ä╪¬┘é┘è┘è┘à' : 'Rating'}:** [4.4] (include whenever grounded)
+- **${language === 'ar' ? '┘à╪▒╪º╪¼╪╣╪º╪¬ Google' : 'Google Reviews'}:** [123 reviews] (include whenever grounded)
+- **${language === 'ar' ? '╪º┘ä┘à╪╣┘ä┘ê┘à╪º╪¬' : 'Info'}:**
+  - **${language === 'ar' ? '╪º┘ä╪│╪º╪╣╪º╪¬' : 'Hours'}:** [hours or Open now/Closed] (omit if unknown)
+  - **${language === 'ar' ? '╪º┘ä┘ç╪º╪¬┘ü' : 'Phone'}:** [+974xxxx](tel:+974xxxx) (omit if unknown)
+  - **${language === 'ar' ? '┘ê╪º╪¬╪│╪º╪¿' : 'WhatsApp'}:** [Chat](https://wa.me/<digits>) (only if verified / explicitly listed as WhatsApp)
+  - **${language === 'ar' ? '╪º┘ä╪¿╪▒┘è╪»' : 'Email'}:** [name@domain.com](mailto:name@domain.com) (only if verified)
+  - **${language === 'ar' ? '╪º┘ä┘à┘ê┘é╪╣' : 'Website'}:** [domain.com](https://domain.com) (only if verified)
+  - **${language === 'ar' ? '╪Ñ┘å╪│╪¬╪║╪▒╪º┘à' : 'Instagram'}:** [@handle](https://instagram.com/handle) (only if verified)
+  - **${language === 'ar' ? '┘ü┘è╪│╪¿┘ê┘â' : 'Facebook'}:** [Page](https://facebook.com/...) (only if verified)
+  - **${language === 'ar' ? '╪¬┘è┘â ╪¬┘ê┘â' : 'TikTok'}:** [@handle](https://tiktok.com/@handle) (only if verified)
+- ≡ƒôì **Google Maps:** [${language === 'ar' ? '╪º╪¿╪»╪ú ╪º┘ä╪¬┘å┘é┘ä' : 'Initiate Navigation'}](https://www.google.com/maps/search/?api=1&query=[URL-encoded name and location]${language === 'ar' ? '&hl=ar' : ''})
 
 Rules for Info block:
 - Do NOT put plain text phone numbers. Always use tel: links when phone is present.
@@ -4112,19 +4392,19 @@ WHATSAPP vs PHONE:
 After the list, add:
 
 ---
-💡 **${language === 'ar' ? 'نصيحة احترافية' : 'Pro Tip'}:** [One insider tip that is specific and useful: best time/day, reservation tip, parking tip, hidden menu item, best seating, etc.]
+≡ƒÆí **${language === 'ar' ? '┘å╪╡┘è╪¡╪⌐ ╪º╪¡╪¬╪▒╪º┘ü┘è╪⌐' : 'Pro Tip'}:** [One insider tip that is specific and useful: best time/day, reservation tip, parking tip, hidden menu item, best seating, etc.]
 
 -------------------------
 INTENT B: LIVE DATA (ESPN/MARKET BRAIN)
 -------------------------
 
-## 📊 ${language === 'ar' ? 'لوحة تحديث حي' : 'Live Dashboard'}: [Topic]
+## ≡ƒôè ${language === 'ar' ? '┘ä┘ê╪¡╪⌐ ╪¬╪¡╪»┘è╪½ ╪¡┘è' : 'Live Dashboard'}: [Topic]
 
-[${language === 'ar' ? 'التوليف' : 'Synthesis'}: Connect today's result to the bigger picture/standings. Explain "The Stakes" — why this matters.]
+[${language === 'ar' ? '╪º┘ä╪¬┘ê┘ä┘è┘ü' : 'Synthesis'}: Connect today's result to the bigger picture/standings. Explain "The Stakes" ΓÇö why this matters.]
 
-FORMATTING: You MUST use expansive, high-quality Markdown tables for data comparisons. Use **bold** for headers and key facts. Ensure the table is wide and detailed — include as many meaningful columns as the data supports. Avoid a cramped look. Only be concise if the user's style preference is 'short answers'.
+FORMATTING: You MUST use expansive, high-quality Markdown tables for data comparisons. Use **bold** for headers and key facts. Ensure the table is wide and detailed ΓÇö include as many meaningful columns as the data supports. Avoid a cramped look. Only be concise if the user's style preference is 'short answers'.
 
-| ${language === 'ar' ? 'العنصر' : 'Data Category'} | ${language === 'ar' ? 'النتيجة/الحالة' : 'Current Status'} | ${language === 'ar' ? 'الأثر/الرهانات' : 'The Stakes / Impact'} |
+| ${language === 'ar' ? '╪º┘ä╪╣┘å╪╡╪▒' : 'Data Category'} | ${language === 'ar' ? '╪º┘ä┘å╪¬┘è╪¼╪⌐/╪º┘ä╪¡╪º┘ä╪⌐' : 'Current Status'} | ${language === 'ar' ? '╪º┘ä╪ú╪½╪▒/╪º┘ä╪▒┘ç╪º┘å╪º╪¬' : 'The Stakes / Impact'} |
 | :--- | :--- | :--- |
 | [Item/Match/Ticker] | [Live Value/Score] | [Standings Impact / Trend / Gate Info] |
 
@@ -4142,36 +4422,36 @@ TABLE FORMAT ENFORCEMENT (CRITICAL):
 - Prevent merged headers (example: never output "PointsThe Stakes / Impact"). Ensure each header is a separate cell separated by |.
 - Avoid hard line breaks inside table cells; keep each row on a single line.
 
-*${language === 'ar' ? 'المصادر' : 'Sources'}: [Verified Source 1], [Verified Source 2]*
+*${language === 'ar' ? '╪º┘ä┘à╪╡╪º╪»╪▒' : 'Sources'}: [Verified Source 1], [Verified Source 2]*
 
 End with:
-💡 **${language === 'ar' ? 'نصيحة احترافية' : 'Pro Tip'}:** [watching tip / trading caution / travel tip]
+≡ƒÆí **${language === 'ar' ? '┘å╪╡┘è╪¡╪⌐ ╪º╪¡╪¬╪▒╪º┘ü┘è╪⌐' : 'Pro Tip'}:** [watching tip / trading caution / travel tip]
 
 -------------------------
 INTENT C: RESEARCH (OXFORD BRAIN)
 -------------------------
 Write like a smart teacher, but still clean and "premium".
 
-## 🎯 ${language === 'ar' ? 'الملخص التنفيذي' : 'Executive Summary'}
+## ≡ƒÄ» ${language === 'ar' ? '╪º┘ä┘à┘ä╪«╪╡ ╪º┘ä╪¬┘å┘ü┘è╪░┘è' : 'Executive Summary'}
 [High-level scholarly overview of the subject.]
 
-## 🔍 ${language === 'ar' ? 'التحليل الاستراتيجي' : 'Strategic Analysis'}
-- **${language === 'ar' ? 'الجوهر' : 'The Core'}:** [The 80/20 summary — the most important facts]
-- **${language === 'ar' ? 'النقاش' : 'The Debate'}:** [A high-level "Oxford-tier" perspective — show that historians/experts disagree, or provide a revisionist view that most basic searches miss]
-- [Additional Point] — [Explanation]
+## ≡ƒöì ${language === 'ar' ? '╪º┘ä╪¬╪¡┘ä┘è┘ä ╪º┘ä╪º╪│╪¬╪▒╪º╪¬┘è╪¼┘è' : 'Strategic Analysis'}
+- **${language === 'ar' ? '╪º┘ä╪¼┘ê┘ç╪▒' : 'The Core'}:** [The 80/20 summary ΓÇö the most important facts]
+- **${language === 'ar' ? '╪º┘ä┘å┘é╪º╪┤' : 'The Debate'}:** [A high-level "Oxford-tier" perspective ΓÇö show that historians/experts disagree, or provide a revisionist view that most basic searches miss]
+- [Additional Point] ΓÇö [Explanation]
 
 If comparing: use a table.
 
-## 💡 ${language === 'ar' ? 'رؤية وقتي' : 'THE WAKTI INSIGHT'}
-[Provide one rare, scholarly fact or unique perspective that demonstrates deep intelligence — something a normal search wouldn't find.]
+## ≡ƒÆí ${language === 'ar' ? '╪▒╪ñ┘è╪⌐ ┘ê┘é╪¬┘è' : 'THE WAKTI INSIGHT'}
+[Provide one rare, scholarly fact or unique perspective that demonstrates deep intelligence ΓÇö something a normal search wouldn't find.]
 
-## 📚 ${language === 'ar' ? 'مصادر موثوقة' : 'High-Quality Sources'}
+## ≡ƒôÜ ${language === 'ar' ? '┘à╪╡╪º╪»╪▒ ┘à┘ê╪½┘ê┘é╪⌐' : 'High-Quality Sources'}
 - [Source 1](url)
 - [Source 2](url)
 - [Source 3](url)
 
 End with:
-💡 **${language === 'ar' ? 'نصيحة احترافية' : 'Pro Tip'}:** [related topic or how to use this in a project/presentation + one bonus fact]
+≡ƒÆí **${language === 'ar' ? '┘å╪╡┘è╪¡╪⌐ ╪º╪¡╪¬╪▒╪º┘ü┘è╪⌐' : 'Pro Tip'}:** [related topic or how to use this in a project/presentation + one bonus fact]
 
 -------------------------
 INTENT D: URL ANALYSIS (AUDITOR BRAIN)
@@ -4180,20 +4460,20 @@ Deep-read the provided URL. Identify the "Lead," the "Evidence," and the "Hidden
 First summarize the URL content (not generic web results).
 Then optionally add related verified context.
 
-## 🧾 ${language === 'ar' ? 'ملخص الصفحة' : 'Summary of the Page'}
-[Key takeaways — identify the "Lead" (main point)]
+## ≡ƒº╛ ${language === 'ar' ? '┘à┘ä╪«╪╡ ╪º┘ä╪╡┘ü╪¡╪⌐' : 'Summary of the Page'}
+[Key takeaways ΓÇö identify the "Lead" (main point)]
 
-## 🔎 ${language === 'ar' ? 'الأدلة والنقاط المهمة' : 'What Matters / Key Evidence'}
+## ≡ƒöÄ ${language === 'ar' ? '╪º┘ä╪ú╪»┘ä╪⌐ ┘ê╪º┘ä┘å┘é╪º╪╖ ╪º┘ä┘à┘ç┘à╪⌐' : 'What Matters / Key Evidence'}
 - [Evidence 1]
 - [Evidence 2]
 - [Hidden detail most readers would miss]
 
-## ⚖️ ${language === 'ar' ? 'ملاحظات الموثوقية والانحياز' : 'Bias / Reliability Notes'} (if relevant)
+## ΓÜû∩╕Å ${language === 'ar' ? '┘à┘ä╪º╪¡╪╕╪º╪¬ ╪º┘ä┘à┘ê╪½┘ê┘é┘è╪⌐ ┘ê╪º┘ä╪º┘å╪¡┘è╪º╪▓' : 'Bias / Reliability Notes'} (if relevant)
 - [Is this a corporate landing page? News outlet? Academic source?]
 - [Any potential bias or promotional tone?]
 
 End with:
-💡 **${language === 'ar' ? 'نصيحة احترافية' : 'Pro Tip'}:** [what to read next / how to verify claims]
+≡ƒÆí **${language === 'ar' ? '┘å╪╡┘è╪¡╪⌐ ╪º╪¡╪¬╪▒╪º┘ü┘è╪⌐' : 'Pro Tip'}:** [what to read next / how to verify claims]
 
 ============================================================
 4) UNIVERSAL DOMINANCE RULES (DO NOT BREAK)
@@ -4201,7 +4481,7 @@ End with:
 - Never hallucinate contacts, emails, socials.
 - If you can't verify, omit.
 - Keep Place descriptions <= 3 sentences.
-- 4–6 Place results max to avoid truncation.
+- 4ΓÇô6 Place results max to avoid truncation.
 - All links must be clickable markdown.
 - Phone MUST be a tel: link if included.
 - WhatsApp MUST be wa.me if included.
@@ -4270,6 +4550,7 @@ If you are running out of space, keep this order and drop the rest:
                 const gm = groundingMetadata as NonNullable<Gemini3SearchResult['groundingMetadata']>;
                 const mapsSourceByPlaceId = new Map<string, { uri?: string; title?: string; googleMapsUri?: string; reviewSnippets?: Array<{ uri?: string; googleMapsUri?: string; title?: string; reviewId?: string; snippet?: string }> }>();
                 const groundedWebResultsByPlaceId = new Map<string, Array<Record<string, unknown>>>();
+                const allGroundingLinkResults: Array<Record<string, unknown>> = [];
                 for (const chunk of (gm.groundingChunks || [])) {
                   const linkedPlaceId = toTrimmedString(chunk?.place?.placeId) || toTrimmedString(chunk?.maps?.placeId);
                   const maps = chunk?.maps;
@@ -4281,7 +4562,23 @@ If you are running out of space, keep this order and drop the rest:
                       reviewSnippets: Array.isArray(maps.placeAnswerSources?.reviewSnippets) ? maps.placeAnswerSources?.reviewSnippets : [],
                     });
                   }
+                  const mapsUrl = normalizeExternalUrl(typeof maps?.googleMapsUri === 'string' ? maps.googleMapsUri : '')
+                    || normalizeExternalUrl(typeof maps?.uri === 'string' ? maps.uri : '');
+                  if (mapsUrl) {
+                    allGroundingLinkResults.push({
+                      url: mapsUrl,
+                      title: typeof maps?.title === 'string' ? maps.title : '',
+                      content: typeof maps?.title === 'string' ? maps.title : '',
+                    });
+                  }
                   const webUrl = normalizeExternalUrl(typeof chunk?.web?.uri === 'string' ? chunk.web.uri : '');
+                  if (webUrl) {
+                    allGroundingLinkResults.push({
+                      url: webUrl,
+                      title: typeof chunk?.web?.title === 'string' ? chunk.web.title : (typeof maps?.title === 'string' ? maps.title : ''),
+                      content: typeof chunk?.web?.title === 'string' ? chunk.web.title : '',
+                    });
+                  }
                   if (linkedPlaceId && webUrl) {
                     const existingWebResults = groundedWebResultsByPlaceId.get(linkedPlaceId) || [];
                     existingWebResults.push({
@@ -4289,9 +4586,22 @@ If you are running out of space, keep this order and drop the rest:
                       title: typeof chunk?.web?.title === 'string' ? chunk.web.title : (typeof maps?.title === 'string' ? maps.title : ''),
                       content: typeof chunk?.web?.title === 'string' ? chunk.web.title : '',
                     });
+                    if (mapsUrl) {
+                      existingWebResults.push({
+                        url: mapsUrl,
+                        title: typeof maps?.title === 'string' ? maps.title : (typeof chunk?.web?.title === 'string' ? chunk.web.title : ''),
+                        content: typeof maps?.title === 'string' ? maps.title : '',
+                      });
+                    }
                     groundedWebResultsByPlaceId.set(linkedPlaceId, existingWebResults);
                   }
                 }
+                const mergeGroundingBusinessLinks = (place: GroundedPlaceCard, placeResults: Array<Record<string, unknown>>) => {
+                  const scopedLinks = pickVerifiedBusinessLinks(placeResults, place);
+                  const scopedMergedPlace = mergeGroundedPlaceCard(place, scopedLinks);
+                  const fallbackLinks = pickVerifiedBusinessLinks(allGroundingLinkResults, scopedMergedPlace);
+                  return mergeGroundedPlaceCard(scopedMergedPlace, fallbackLinks);
+                };
                 const groundedPlaceById = new Map<string, GroundedPlaceCard>();
                 for (const place of (gm.places || [])) {
                   const label = place.displayName?.text || place.formattedAddress || 'Place';
@@ -4322,6 +4632,9 @@ If you are running out of space, keep this order and drop the rest:
                     email: '',
                     openNow: typeof place.regularOpeningHours?.openNow === 'boolean' ? place.regularOpeningHours.openNow : null,
                     businessStatus: typeof place.businessStatus === 'string' ? place.businessStatus : '',
+                    reason: '',
+                    vibe: '',
+                    mustTry: '',
                     editorialSummary: typeof place.editorialSummary?.text === 'string' ? place.editorialSummary.text : '',
                     reviewSnippets: Array.isArray(sourceMeta?.reviewSnippets) ? sourceMeta.reviewSnippets : [],
                     instagramUrl: '',
@@ -4330,10 +4643,10 @@ If you are running out of space, keep this order and drop the rest:
                     whatsappUrl: '',
                     mapsUrl,
                   };
-                  const groundedWebLinks = place.placeId
-                    ? pickVerifiedBusinessLinks(groundedWebResultsByPlaceId.get(place.placeId) || [], initialPlace)
-                    : {};
-                  groundedPlaceById.set(place.placeId || label, mergeGroundedPlaceCard(initialPlace, groundedWebLinks));
+                  const groundedWebResults = place.placeId
+                    ? (groundedWebResultsByPlaceId.get(place.placeId) || [])
+                    : [];
+                  groundedPlaceById.set(place.placeId || label, mergeGroundingBusinessLinks(initialPlace, groundedWebResults));
                 }
 
                 for (const [placeId, sourceMeta] of mapsSourceByPlaceId.entries()) {
@@ -4356,6 +4669,9 @@ If you are running out of space, keep this order and drop the rest:
                       email: '',
                       openNow: null,
                       businessStatus: '',
+                      reason: '',
+                      vibe: '',
+                      mustTry: '',
                       editorialSummary: '',
                       reviewSnippets: Array.isArray(sourceMeta.reviewSnippets) ? sourceMeta.reviewSnippets : [],
                       instagramUrl: '',
@@ -4364,30 +4680,89 @@ If you are running out of space, keep this order and drop the rest:
                       whatsappUrl: '',
                       mapsUrl: fallbackMapsUrl,
                     };
-                    const groundedWebLinks = pickVerifiedBusinessLinks(groundedWebResultsByPlaceId.get(placeId) || [], fallbackPlace);
-                    groundedPlaceById.set(placeId, mergeGroundedPlaceCard(fallbackPlace, groundedWebLinks));
+                    const groundedWebResults = groundedWebResultsByPlaceId.get(placeId) || [];
+                    groundedPlaceById.set(placeId, mergeGroundingBusinessLinks(fallbackPlace, groundedWebResults));
                     continue;
                   }
 
                   const existing = groundedPlaceById.get(placeId);
                   if (!existing) continue;
-                  groundedPlaceById.set(placeId, mergeGroundedPlaceCard(existing, {
+                  const mergedExisting = mergeGroundedPlaceCard(existing, {
                     reviewSnippets: Array.isArray(sourceMeta.reviewSnippets) ? sourceMeta.reviewSnippets : [],
                     mapsUrl: fallbackMapsUrl,
-                    ...pickVerifiedBusinessLinks(groundedWebResultsByPlaceId.get(placeId) || [], existing),
-                  }));
+                  });
+                  groundedPlaceById.set(placeId, mergeGroundingBusinessLinks(mergedExisting, groundedWebResultsByPlaceId.get(placeId) || []));
+                }
+
+                const allGroundedWebResults: Array<Record<string, unknown>> = allGroundingLinkResults;
+
+                for (const parsedPlace of parseGroundedPlacesFromText(fullResponseText)) {
+                  const parsedKey = normalizePlaceMatchKey(parsedPlace.name, parsedPlace.address);
+                  const verifiedLinks = pickVerifiedBusinessLinks(parsedPlace.placeId ? (groundedWebResultsByPlaceId.get(parsedPlace.placeId) || allGroundedWebResults) : allGroundedWebResults, parsedPlace);
+                  const mergedParsedPlace = mergeGroundedPlaceCard(parsedPlace, verifiedLinks);
+                  let matchedKey = '';
+
+                  for (const [existingKey, existingPlace] of groundedPlaceById.entries()) {
+                    if (mergedParsedPlace.placeId && existingPlace.placeId && mergedParsedPlace.placeId === existingPlace.placeId) {
+                      matchedKey = existingKey;
+                      break;
+                    }
+                    const existingMatchKey = normalizePlaceMatchKey(existingPlace.name, existingPlace.address);
+                    if (parsedKey && existingMatchKey && (parsedKey === existingMatchKey || parsedKey.includes(existingMatchKey) || existingMatchKey.includes(parsedKey))) {
+                      matchedKey = existingKey;
+                      break;
+                    }
+                  }
+
+                  if (matchedKey) {
+                    const existing = groundedPlaceById.get(matchedKey);
+                    if (!existing) continue;
+                    groundedPlaceById.set(matchedKey, mergeGroundedPlaceCard(existing, mergedParsedPlace));
+                    continue;
+                  }
+
+                  groundedPlaceById.set(mergedParsedPlace.placeId || parsedKey || mergedParsedPlace.name, mergedParsedPlace);
                 }
 
                 let groundedPlaces: GroundedPlaceCard[] = Array.from(groundedPlaceById.values());
                 groundedPlaces = await enrichGroundedPlacesWithOfficialLinks(groundedPlaces);
+                const builtSources = (() => {
+                  const byUrl = new Map<string, { url: string; title: string }>();
+                  const addSource = (rawUrl?: string, rawTitle?: string) => {
+                    const normalizedUrl = normalizeExternalUrl(typeof rawUrl === 'string' ? rawUrl : '');
+                    if (!normalizedUrl) return;
+                    let title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
+                    if (!title) {
+                      try {
+                        title = new URL(normalizedUrl).hostname.replace(/^www\./, '');
+                      } catch {
+                        title = normalizedUrl;
+                      }
+                    }
+                    if (!byUrl.has(normalizedUrl)) {
+                      byUrl.set(normalizedUrl, { url: normalizedUrl, title });
+                    }
+                  };
+
+                  for (const chunk of (gm.groundingChunks || [])) {
+                    addSource(chunk?.web?.uri, chunk?.web?.title);
+                    addSource(chunk?.maps?.googleMapsUri || chunk?.maps?.uri, chunk?.maps?.title);
+                  }
+
+                  if (byUrl.size === 0) {
+                    for (const place of groundedPlaces) {
+                      addSource(place.mapsUrl, place.name);
+                      addSource(place.websiteUrl, place.name);
+                    }
+                  }
+
+                  return Array.from(byUrl.values()).slice(0, 12);
+                })();
                 const metaPayload = {
                   metadata: {
                     geminiSearch: {
                       queries: gm.webSearchQueries || [],
-                      sources: (gm.groundingChunks || []).map((c: { web?: { uri: string; title: string }; maps?: { uri?: string; googleMapsUri?: string; title?: string } }) => ({
-                        url: c.maps?.googleMapsUri || c.maps?.uri || c.web?.uri || '',
-                        title: c.maps?.title || c.web?.title || ''
-                      })).filter((item: { url: string; title: string }) => item.url),
+                      sources: builtSources,
                       supports: gm.groundingSupports || [],
                       places: groundedPlaces,
                       googleMapsWidgetContextToken: gm.googleMapsWidgetContextToken || null,
@@ -4396,6 +4771,50 @@ If you are running out of space, keep this order and drop the rest:
                   }
                 };
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify(metaPayload)}\n\n`));
+              } catch { /* ignore */ }
+            } else if (fullResponseText) {
+              try {
+                const fallbackSources = (() => {
+                  const byUrl = new Map<string, { url: string; title: string }>();
+                  const addSource = (rawUrl?: string, rawTitle?: string) => {
+                    const normalizedUrl = normalizeLikelyExternalUrl(typeof rawUrl === 'string' ? rawUrl : '');
+                    if (!normalizedUrl || byUrl.has(normalizedUrl)) return;
+                    let title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
+                    if (!title) {
+                      try {
+                        title = new URL(normalizedUrl).hostname.replace(/^www\./, '');
+                      } catch {
+                        title = normalizedUrl;
+                      }
+                    }
+                    byUrl.set(normalizedUrl, { url: normalizedUrl, title });
+                  };
+
+                  for (const entry of extractMarkdownLinks(fullResponseText)) {
+                    addSource(entry.url, entry.label);
+                  }
+                  for (const entry of extractDirectUrls(fullResponseText)) {
+                    addSource(entry, '');
+                  }
+
+                  return Array.from(byUrl.values()).slice(0, 12);
+                })();
+
+                if (fallbackSources.length > 0) {
+                  const fallbackPayload = {
+                    metadata: {
+                      geminiSearch: {
+                        queries: [],
+                        sources: fallbackSources,
+                        supports: [],
+                        places: [],
+                        googleMapsWidgetContextToken: null,
+                        searchEntryPointHtml: ''
+                      }
+                    }
+                  };
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(fallbackPayload)}\n\n`));
+                }
               } catch { /* ignore */ }
             }
 
@@ -4420,7 +4839,7 @@ If you are running out of space, keep this order and drop the rest:
 
             if (!fullResponseText) {
               // Fallback message if no response
-              const fallback = language === 'ar' ? 'لم أتمكن من العثور على نتائج.' : 'I could not find results for that query.';
+              const fallback = language === 'ar' ? '┘ä┘à ╪ú╪¬┘à┘â┘å ┘à┘å ╪º┘ä╪╣╪½┘ê╪▒ ╪╣┘ä┘ë ┘å╪¬╪º╪ª╪¼.' : 'I could not find results for that query.';
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
             }
 
@@ -4430,19 +4849,19 @@ If you are running out of space, keep this order and drop the rest:
             return; // Exit early - search handled completely by Gemini
 
           } catch (e) {
-            console.warn('⚠️ GEMINI SEARCH ERROR:', e);
+            console.warn('ΓÜá∩╕Å GEMINI SEARCH ERROR:', e);
             // Fallback: add user message and let normal flow handle it
             messages.push({ role: 'user', content: message });
           }
         } else {
-          // ─── CHAT MODE: Always grounded with Gemini 2.5 Flash (smooth, no prompts) ───
+          // ΓöÇΓöÇΓöÇ CHAT MODE: Always grounded with Gemini 2.5 Flash (smooth, no prompts) ΓöÇΓöÇΓöÇ
           if (effectiveTrigger === 'chat' && chatSubmode === 'chat') {
-            // ─── LOCATION FOLLOW-UP DETECTION ───
+            // ΓöÇΓöÇΓöÇ LOCATION FOLLOW-UP DETECTION ΓöÇΓöÇΓöÇ
             // If assistant previously asked for location and user just replied with a place,
             // combine with the original intent and run a proper grounded search
             let effectiveMessage = message;
             try {
-              // ─── YES/OK FOLLOW-UP RESOLVER (CHAT) ───
+              // ΓöÇΓöÇΓöÇ YES/OK FOLLOW-UP RESOLVER (CHAT) ΓöÇΓöÇΓöÇ
               // Users often reply with just "yes" to multi-option follow-ups.
               // In Chat mode, make "yes" mean: do BOTH options offered in the last assistant question.
               const rawUser = (message || '').trim();
@@ -4452,7 +4871,7 @@ If you are running out of space, keep this order and drop the rest:
                 // EN
                 if (/^(yes|y|yeah|yep|sure|ok|okay|do it|go ahead|please)\b/.test(rawUserLower)) return true;
                 // AR
-                if (/^(نعم|اي|أيوه|ايوه|تمام|اوكي|حاضر|تفضل|يلا)\b/.test(rawUserLower)) return true;
+                if (/^(┘å╪╣┘à|╪º┘è|╪ú┘è┘ê┘ç|╪º┘è┘ê┘ç|╪¬┘à╪º┘à|╪º┘ê┘â┘è|╪¡╪º╪╢╪▒|╪¬┘ü╪╢┘ä|┘è┘ä╪º)\b/.test(rawUserLower)) return true;
                 return false;
               })();
 
@@ -4495,7 +4914,7 @@ If you are running out of space, keep this order and drop the rest:
                 }
                 
                 if (originalIntent) {
-                  // Combine: "Find the closest coffee shop" + "Al Khor Qatar" → "Find the closest coffee shop near Al Khor, Qatar"
+                  // Combine: "Find the closest coffee shop" + "Al Khor Qatar" ΓåÆ "Find the closest coffee shop near Al Khor, Qatar"
                   const locationReply = message.trim();
                   effectiveMessage = `${originalIntent.replace(/\b(near me|around me|close to me)\b/gi, '')} near ${locationReply}`.trim();
                 }
@@ -4512,7 +4931,7 @@ If you are running out of space, keep this order and drop the rest:
               let fullResponseText = '';
               // Force reminder JSON compliance: append instruction to user turn (Gemini ignores system_instruction alone)
               const reminderAugmentedMessage = messageHasReminderKeyword
-                ? `${effectiveMessage}\n\n[SYSTEM OVERRIDE — MUST COMPLY]: Append this exact JSON on its own line at the very end of your response, no code fences, no extra text after it:\n{"action":"set_reminder","time":"REPLACE_WITH_ISO8601_DATETIME${formattedOffset}","text":"REPLACE_WITH_REMINDER_TEXT"}`
+                ? `${effectiveMessage}\n\n[SYSTEM OVERRIDE ΓÇö MUST COMPLY]: Append this exact JSON on its own line at the very end of your response, no code fences, no extra text after it:\n{"action":"set_reminder","time":"REPLACE_WITH_ISO8601_DATETIME${formattedOffset}","text":"REPLACE_WITH_REMINDER_TEXT"}`
                 : effectiveMessage;
               await streamGemini3FlashChat(
                 reminderAugmentedMessage,
@@ -4530,7 +4949,7 @@ If you are running out of space, keep this order and drop the rest:
               );
 
               if (!fullResponseText) {
-                const fallback = language === 'ar' ? 'لم أتمكن من الرد.' : 'I could not generate a response.';
+                const fallback = language === 'ar' ? '┘ä┘à ╪ú╪¬┘à┘â┘å ┘à┘å ╪º┘ä╪▒╪».' : 'I could not generate a response.';
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
               }
 
@@ -4542,19 +4961,19 @@ If you are running out of space, keep this order and drop the rest:
               controller.close();
               return;
             } catch (e) {
-              console.warn('⚠️ CHAT GROUNDED ERROR:', e);
+              console.warn('ΓÜá∩╕Å CHAT GROUNDED ERROR:', e);
               // Fallback to normal chat flow below
             }
           }
 
-          // Emit Study mode metadata so frontend can show 📚 Study badge (even without Wolfram)
+          // Emit Study mode metadata so frontend can show ≡ƒôÜ Study badge (even without Wolfram)
           if (chatSubmode === 'study') {
             try {
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { studyMode: true } })}\n\n`));
             } catch { /* ignore */ }
           }
 
-          // === STUDY MODE OCR→WOLFRAM PIPELINE ===
+          // === STUDY MODE OCRΓåÆWOLFRAM PIPELINE ===
           // If Study mode has attached images, extract text first, then send to Wolfram
           let ocrExtractedText = '';
           let ocrQuestionType: string | undefined;
@@ -4608,7 +5027,7 @@ If you are running out of space, keep this order and drop the rest:
           // Widened gate: chat mode now also triggers Wolfram for entity queries
           // ("who is X", "tell me about X", proper-noun lookups). Previously entity
           // questions skipped Wolfram entirely because isWolframQuery's regex only
-          // matched math/science subject words — exactly Blake's Dec 2025 feedback.
+          // matched math/science subject words ΓÇö exactly Blake's Dec 2025 feedback.
           const useWolfram = chatSubmode === 'study' || isWolframQuery(rawWolframQuery) || useSummaryBox;
 
           if (useWolfram) {
@@ -4621,12 +5040,12 @@ If you are running out of space, keep this order and drop the rest:
               const rawSubject = ocrExtractedText || message || '';
               let cleanSubject = getCleanSubject(rawSubject);
 
-              // STEP 0 — Arabic Translation Bridge (internal, never shown to user)
+              // STEP 0 ΓÇö Arabic Translation Bridge (internal, never shown to user)
               if (language === 'ar' && cleanSubject.length > 0) {
                 cleanSubject = await translateSubjectToEnglish(cleanSubject);
               }
 
-              // STEP 1 — Query Recognizer: check accepted + detect summarybox path
+              // STEP 1 ΓÇö Query Recognizer: check accepted + detect summarybox path
               let recognizerAccepted = true;
               let summaryBoxPath: string | null = null;
               let recognizerDomain: string | null = null;
@@ -4654,7 +5073,7 @@ If you are running out of space, keep this order and drop the rest:
                 let eliteSummaryBoxResult: SummaryBoxResult | null = null;
 
                 if (summaryBoxPath) {
-                  // STEP 2a — ELITE CARD PATH: Summary Box + LLM API in parallel
+                  // STEP 2a ΓÇö ELITE CARD PATH: Summary Box + LLM API in parallel
                   const [llmResult, summaryBoxResult] = await Promise.all([
                     queryWolframLLM(cleanSubject, 8000),
                     queryWolframSummaryBox(cleanSubject, 5000),
@@ -4670,13 +5089,13 @@ If you are running out of space, keep this order and drop the rest:
                     wolframUsedOuter = true;
                   }
                 } else {
-                  // STEP 2b — STANDARD PATH: LLM API for deep context
+                  // STEP 2b ΓÇö STANDARD PATH: LLM API for deep context
                   const llmResult = await queryWolframLLM(cleanSubject, 8000);
                   if (llmResult.success && llmResult.factSheet) {
                     parts.push(`[WOLFRAM VERIFIED DATA]:\n${llmResult.factSheet}`);
                     wolframUsedOuter = true;
                   } else {
-                    // STEP 3 — SHORT ANSWER FALLBACK: v1/result for a single verified fact
+                    // STEP 3 ΓÇö SHORT ANSWER FALLBACK: v1/result for a single verified fact
                     try {
                       const saCtrl = new AbortController();
                       const saTid = setTimeout(() => saCtrl.abort(), 3000);
@@ -4705,8 +5124,8 @@ If you are running out of space, keep this order and drop the rest:
 
                 if (parts.length > 0) {
                   const instruction = language === 'ar'
-                    ? '\n\nأنت مدرس خبير وذو شخصية. استخدم البيانات الموثقة أعلاه كمصدرك الرئيسي للحقائق.\nقاعدة صارمة: اكتب جملة ملخص فريدة وذات شخصية داخل وسوم [BOX]...[/BOX] في بداية ردك فقط. الجملة داخل [BOX] يجب أن لا تُكرَّر أبداً في الفقرة الأولى أو أي مكان في النص.'
-                    : '\n\nYou are an expert tutor with personality. Use the Verified Data above as your primary source of truth.\nSTRICT RULE: Write ONE unique personality-driven sentence inside [BOX]...[/BOX] at the very start. That exact sentence MUST NOT appear again — not in the first paragraph, not anywhere in the body. The body explanation starts fresh after the [BOX] tag.';
+                    ? '\n\n╪ú┘å╪¬ ┘à╪»╪▒╪│ ╪«╪¿┘è╪▒ ┘ê╪░┘ê ╪┤╪«╪╡┘è╪⌐. ╪º╪│╪¬╪«╪»┘à ╪º┘ä╪¿┘è╪º┘å╪º╪¬ ╪º┘ä┘à┘ê╪½┘é╪⌐ ╪ú╪╣┘ä╪º┘ç ┘â┘à╪╡╪»╪▒┘â ╪º┘ä╪▒╪ª┘è╪│┘è ┘ä┘ä╪¡┘é╪º╪ª┘é.\n┘é╪º╪╣╪»╪⌐ ╪╡╪º╪▒┘à╪⌐: ╪º┘â╪¬╪¿ ╪¼┘à┘ä╪⌐ ┘à┘ä╪«╪╡ ┘ü╪▒┘è╪»╪⌐ ┘ê╪░╪º╪¬ ╪┤╪«╪╡┘è╪⌐ ╪»╪º╪«┘ä ┘ê╪│┘ê┘à [BOX]...[/BOX] ┘ü┘è ╪¿╪»╪º┘è╪⌐ ╪▒╪»┘â ┘ü┘é╪╖. ╪º┘ä╪¼┘à┘ä╪⌐ ╪»╪º╪«┘ä [BOX] ┘è╪¼╪¿ ╪ú┘å ┘ä╪º ╪¬┘Å┘â╪▒┘Ä┘æ╪▒ ╪ú╪¿╪»╪º┘ï ┘ü┘è ╪º┘ä┘ü┘é╪▒╪⌐ ╪º┘ä╪ú┘ê┘ä┘ë ╪ú┘ê ╪ú┘è ┘à┘â╪º┘å ┘ü┘è ╪º┘ä┘å╪╡.'
+                    : '\n\nYou are an expert tutor with personality. Use the Verified Data above as your primary source of truth.\nSTRICT RULE: Write ONE unique personality-driven sentence inside [BOX]...[/BOX] at the very start. That exact sentence MUST NOT appear again ΓÇö not in the first paragraph, not anywhere in the body. The body explanation starts fresh after the [BOX] tag.';
                   wolframContext = parts.join('\n\n') + instruction;
 
                   try {
@@ -4718,7 +5137,7 @@ If you are running out of space, keep this order and drop the rest:
             } else {
               // === NON-STUDY MODE: Full Results (math/science) + Summary Box (entities), in parallel ===
               // Only hit legacy v2/query when the query genuinely looks computational.
-              // Pure entity queries skip it — Wolfram's v2/query would return empty and
+              // Pure entity queries skip it ΓÇö Wolfram's v2/query would return empty and
               // still be counted as a billable failed Full Results call.
               const summaryBoxInput = normalizeSummaryBoxQuery(rawWolframQuery);
               const runFullResults = isWolframQuery(rawWolframQuery);
@@ -4737,7 +5156,7 @@ If you are running out of space, keep this order and drop the rest:
                 wolframMetaBase = { answer: wolfResult.answer, interpretation: wolfResult.interpretation || null, steps: wolfResult.steps || [], mode: chatSubmode, api: 'full_results' };
                 try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: wolframMetaBase } })}\n\n`)); } catch { /* ignore */ }
                 fullResultsData = language === 'ar'
-                  ? `[حقيقة موثقة: ${wolfResult.answer}]`
+                  ? `[╪¡┘é┘è┘é╪⌐ ┘à┘ê╪½┘é╪⌐: ${wolfResult.answer}]`
                   : `[Verified fact: ${wolfResult.answer}]`;
                 wolframUsedOuter = true;
               }
@@ -4748,14 +5167,14 @@ If you are running out of space, keep this order and drop the rest:
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { wolfram: { ...(wolframMetaBase || {}), summaryBox: summaryText.substring(0, 1200), summaryDomain: summaryBoxResult.domain || null, api: wolframMetaBase ? 'full_results+summary_boxes' : 'summary_boxes' } } })}\n\n`));
                 } catch { /* ignore */ }
                 summaryBoxData = language === 'ar'
-                  ? `[معلومات إضافية عن ${summaryBoxResult.domain || 'الموضوع'}]\n${summaryText.substring(0, 800)}`
+                  ? `[┘à╪╣┘ä┘ê┘à╪º╪¬ ╪Ñ╪╢╪º┘ü┘è╪⌐ ╪╣┘å ${summaryBoxResult.domain || '╪º┘ä┘à┘ê╪╢┘ê╪╣'}]\n${summaryText.substring(0, 800)}`
                   : `[Additional info about ${summaryBoxResult.domain || 'topic'}]\n${summaryText.substring(0, 800)}`;
                 wolframUsedOuter = true;
               }
 
               if (fullResultsData || summaryBoxData) {
                 const combinedParts = [fullResultsData, summaryBoxData].filter(Boolean);
-                wolframContext = combinedParts.join('\n\n') + (language === 'ar' ? '\n\nاستخدم هذه المعلومات في إجابتك بشكل طبيعي.' : '\n\nUse this information naturally in your response.');
+                wolframContext = combinedParts.join('\n\n') + (language === 'ar' ? '\n\n╪º╪│╪¬╪«╪»┘à ┘ç╪░┘ç ╪º┘ä┘à╪╣┘ä┘ê┘à╪º╪¬ ┘ü┘è ╪Ñ╪¼╪º╪¿╪¬┘â ╪¿╪┤┘â┘ä ╪╖╪¿┘è╪╣┘è.' : '\n\nUse this information naturally in your response.');
               }
             }
           }
@@ -4764,7 +5183,7 @@ If you are running out of space, keep this order and drop the rest:
           // Include OCR-extracted text context for Study mode with images
           const ocrContext = ocrExtractedText 
             ? (language === 'ar'
-                ? `\n\n[نص مستخرج من الصورة]:\n${ocrExtractedText}`
+                ? `\n\n[┘å╪╡ ┘à╪│╪¬╪«╪▒╪¼ ┘à┘å ╪º┘ä╪╡┘ê╪▒╪⌐]:\n${ocrExtractedText}`
                 : `\n\n[Text extracted from image]:\n${ocrExtractedText}`)
             : '';
           
@@ -4772,7 +5191,7 @@ If you are running out of space, keep this order and drop the rest:
             messages.push({ role: 'user', content: `${wolframContext}${ocrContext}\n\nUser question: ${message}` });
           } else if (ocrExtractedText) {
             // Study mode with image but no Wolfram result - still include OCR context
-            messages.push({ role: 'user', content: `${ocrContext}\n\nUser question: ${message || (language === 'ar' ? 'اشرح هذا' : 'Explain this')}` });
+            messages.push({ role: 'user', content: `${ocrContext}\n\nUser question: ${message || (language === 'ar' ? '╪º╪┤╪▒╪¡ ┘ç╪░╪º' : 'Explain this')}` });
           } else {
             messages.push({ role: 'user', content: message });
           }
@@ -4800,7 +5219,7 @@ If you are running out of space, keep this order and drop the rest:
           }
           
           aiProvider = 'gemini';
-          // Tiered Engine Router — based on user's engineTier preference (speed | intelligence)
+          // Tiered Engine Router ΓÇö based on user's engineTier preference (speed | intelligence)
           const isDeepWork = chatSubmode === 'study' || effectiveTrigger === 'search';
           let selectedModel: string;
           let engineLabel: string;
@@ -4900,18 +5319,18 @@ If you are running out of space, keep this order and drop the rest:
             await tryGemini();
           } catch (errGemini) {
             const errMsg = errGemini instanceof Error ? errGemini.message : String(errGemini);
-            console.warn('⚠️ Gemini failed, trying OpenAI...', errMsg);
+            console.warn('ΓÜá∩╕Å Gemini failed, trying OpenAI...', errMsg);
             try {
               await tryOpenAI();
             } catch (errOpenAI) {
               const errMsg2 = errOpenAI instanceof Error ? errOpenAI.message : String(errOpenAI);
-              console.warn('⚠️ OpenAI failed, trying Claude...', errMsg2);
+              console.warn('ΓÜá∩╕Å OpenAI failed, trying Claude...', errMsg2);
               await tryClaude();
             }
           }
         } catch (finalErr) {
           const errMsg = finalErr instanceof Error ? finalErr.message : String(finalErr);
-          console.error('❌ All providers failed', errMsg);
+          console.error('Γ¥î All providers failed', errMsg);
           throw finalErr;
         }
 
@@ -5016,7 +5435,7 @@ If you are running out of space, keep this order and drop the rest:
         controller.close();
       } catch (error) {
         const errMsg = error instanceof Error ? error.message : 'Unknown error';
-        console.error('🔥 ERROR:', errMsg);
+        console.error('≡ƒöÑ ERROR:', errMsg);
         
         // Log failed AI usage (no tokens/cost on error)
         logAIUsage({

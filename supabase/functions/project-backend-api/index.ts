@@ -1383,51 +1383,90 @@ async function handleComments(action: string, projectId: string, ownerId: string
 }
 
 // Handle FreePik stock media search (images and videos)
-const FREEPIK_API_KEY = Deno.env.get('FREEPIK_API_KEY') || 'FPSX97f81d1b76ea19976ac068b75e93ea9d';
+const FREEPIK_API_KEY = Deno.env.get('MAGNIFIC_API_KEY') || Deno.env.get('FREEPIK_API_KEY') || 'FPSX97f81d1b76ea19976ac068b75e93ea9d';
+const FREEPIK_API_BASE_URL = 'https://api.magnific.com/v1';
+
+function normalizeFreepikFilters(filters: unknown): { type?: string; orientation?: string; color?: string } {
+  if (!filters || typeof filters !== 'object') {
+    return {};
+  }
+
+  const filterRecord = filters as Record<string, unknown>;
+  const orientationRecord = filterRecord.orientation as Record<string, unknown> | undefined;
+  const contentTypeRecord = filterRecord.content_type as Record<string, unknown> | undefined;
+
+  const orientation = typeof filterRecord.orientation === 'string'
+    ? filterRecord.orientation
+    : Object.entries(orientationRecord || {}).find(([, value]) => Boolean(value))?.[0];
+
+  const type = typeof filterRecord.type === 'string'
+    ? filterRecord.type
+    : Object.entries(contentTypeRecord || {}).find(([, value]) => Boolean(value))?.[0];
+
+  const color = typeof filterRecord.color === 'string' ? filterRecord.color : undefined;
+
+  return {
+    ...(type ? { type } : {}),
+    ...(orientation ? { orientation } : {}),
+    ...(color ? { color } : {}),
+  };
+}
 
 async function handleFreepik(action: string, _projectId: string, _ownerId: string, data: Record<string, unknown>) {
   console.log(`[project-backend-api] Freepik: ${action}`, data);
 
+  if (!FREEPIK_API_KEY) {
+    throw new Error('Freepik API key not configured');
+  }
+
   const headers = {
-    'x-freepik-api-key': FREEPIK_API_KEY,
+    'x-magnific-api-key': FREEPIK_API_KEY,
     'Accept': 'application/json',
   };
 
   switch (action) {
     case 'images': {
       // Search for images/photos/vectors
-      const { query, page = 1, limit = 20, filters } = data;
+      const { query, page = 1, limit = 20, filters, language = 'en-US' } = data;
       if (!query) throw new Error('query required');
 
       const normalizedQuery = String(query).trim();
+      const normalizedFilters = normalizeFreepikFilters(filters);
       const queryCandidates = Array.from(new Set([
         normalizedQuery,
         normalizedQuery.replace(/\b(detail|texture|fabric|editorial|instagram post)\b/gi, '').replace(/\s+/g, ' ').trim(),
         'luxury abaya fashion',
         'modest fashion model',
       ].filter(Boolean)));
+      const upstreamErrors: string[] = [];
 
       for (const candidate of queryCandidates) {
         const params = new URLSearchParams({
-          locale: 'en-US',
           term: candidate,
           page: String(page),
           limit: String(Math.min(limit as number, 100)),
           'filters[content_type][photo]': '1',
         });
 
-        if (filters) {
-          const f = filters as Record<string, string>;
-          if (f.type) params.set('filters[content_type][photo]', f.type === 'photo' ? '1' : '0');
-          if (f.orientation) params.append('filters[orientation]', f.orientation);
-          if (f.color) params.append('filters[color]', f.color);
+        if (normalizedFilters.type) {
+          params.delete('filters[content_type][photo]');
+          params.set(`filters[content_type][${normalizedFilters.type}]`, '1');
         }
 
-        const response = await fetch(`https://api.freepik.com/v1/resources?${params}`, { headers });
+        if (normalizedFilters.orientation) params.set(`filters[orientation][${normalizedFilters.orientation}]`, '1');
+        if (normalizedFilters.color) params.set('filters[color]', normalizedFilters.color);
+
+        const response = await fetch(`${FREEPIK_API_BASE_URL}/resources?${params}`, {
+          headers: {
+            ...headers,
+            'Accept-Language': String(language),
+          },
+        });
 
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`[Freepik] Images search error for "${candidate}":`, errorText);
+          upstreamErrors.push(`${response.status}: ${errorText || 'Unknown upstream error'}`);
           continue;
         }
 
@@ -1457,6 +1496,10 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
         }
       }
 
+      if (upstreamErrors.length > 0) {
+        throw new Error(`Freepik image search failed: ${upstreamErrors[0]}`);
+      }
+
       return {
         images: [],
         total: 0,
@@ -1483,7 +1526,12 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
         if (f.orientation) params.append('filters[orientation]', f.orientation);
       }
 
-      const response = await fetch(`https://api.freepik.com/v1/videos?${params}`, { headers });
+      const response = await fetch(`${FREEPIK_API_BASE_URL}/videos?${params}`, {
+        headers: {
+          ...headers,
+          'Accept-Language': 'en-US',
+        },
+      });
       
       if (!response.ok) {
         const errorText = await response.text();
@@ -1517,8 +1565,8 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
       if (!resourceId) throw new Error('resourceId required');
 
       const endpoint = type === 'video' 
-        ? `https://api.freepik.com/v1/videos/${resourceId}/download`
-        : `https://api.freepik.com/v1/resources/${resourceId}/download`;
+        ? `${FREEPIK_API_BASE_URL}/videos/${resourceId}/download`
+        : `${FREEPIK_API_BASE_URL}/resources/${resourceId}/download`;
 
       const response = await fetch(endpoint, { headers });
       

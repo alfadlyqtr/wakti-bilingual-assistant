@@ -9,12 +9,360 @@ type MessageLike = {
 
 export function resolveGroundedBrowsingData(message: MessageLike | null | undefined) {
   if (!message || typeof message !== 'object') return null;
-  return message.browsingData || message.metadata?.browsingData || message.metadata?.geminiSearch || null;
+  const candidates = [message.browsingData, message.metadata?.browsingData, message.metadata?.geminiSearch]
+    .filter((item) => item && typeof item === 'object');
+  if (candidates.length === 0) return null;
+
+  const merged: any = {};
+  const seenSourceUrls = new Set<string>();
+  const seenPlaceKeys = new Set<string>();
+
+  for (const candidate of candidates) {
+    if (!merged.provider && typeof candidate.provider === 'string') merged.provider = candidate.provider;
+    if (!merged.googleMapsWidgetContextToken && typeof candidate.googleMapsWidgetContextToken === 'string' && candidate.googleMapsWidgetContextToken.trim()) {
+      merged.googleMapsWidgetContextToken = candidate.googleMapsWidgetContextToken;
+    }
+    if (!merged.searchEntryPointHtml && typeof candidate.searchEntryPointHtml === 'string' && candidate.searchEntryPointHtml.trim()) {
+      merged.searchEntryPointHtml = candidate.searchEntryPointHtml;
+    }
+
+    if (Array.isArray(candidate.queries)) {
+      merged.queries = Array.from(new Set([...(Array.isArray(merged.queries) ? merged.queries : []), ...candidate.queries.filter((item: unknown) => typeof item === 'string' && item.trim())]));
+    }
+
+    if (Array.isArray(candidate.supports)) {
+      merged.supports = [...(Array.isArray(merged.supports) ? merged.supports : []), ...candidate.supports];
+    }
+
+    if (Array.isArray(candidate.sources)) {
+      const nextSources = Array.isArray(merged.sources) ? [...merged.sources] : [];
+      for (const source of candidate.sources) {
+        const url = typeof source?.url === 'string' ? source.url.trim() : '';
+        if (!url || seenSourceUrls.has(url)) continue;
+        seenSourceUrls.add(url);
+        nextSources.push(source);
+      }
+      merged.sources = nextSources;
+    }
+
+    if (Array.isArray(candidate.places)) {
+      const nextPlaces = Array.isArray(merged.places) ? [...merged.places] : [];
+      for (const place of candidate.places) {
+        const placeKey = [place?.placeId, place?.name, place?.mapsUrl, place?.websiteUrl]
+          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .filter(Boolean)
+          .join('|');
+        if (!placeKey || seenPlaceKeys.has(placeKey)) continue;
+        seenPlaceKeys.add(placeKey);
+        nextPlaces.push(place);
+      }
+      merged.places = nextPlaces;
+    }
+  }
+
+  return merged;
+}
+
+function stripMarkdownText(value: string) {
+  return value
+    .replace(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:|tel:)[^)]+)\)/gi, '$1')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\\([*_`\[\]()])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function toCleanString(value?: unknown) {
+  return typeof value === 'string' ? stripMarkdownText(value) : '';
+}
+
+function normalizePlaceKey(value?: unknown) {
+  return toCleanString(value)
+    .replace(/\([^)]*\)/g, ' ')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function extractFirstLink(value: string) {
+  const markdownMatch = value.match(/\[[^\]]+\]\(((?:https?:\/\/|mailto:|tel:)[^)]+)\)/i);
+  if (markdownMatch?.[1]) return markdownMatch[1].trim();
+  const directMatch = value.match(/(?:https?:\/\/|mailto:|tel:)[^\s)]+/i);
+  if (directMatch?.[0]) return directMatch[0].trim();
+  return '';
+}
+
+function extractAllLinks(value: string) {
+  const found = new Set<string>();
+  const markdownRegex = /\[[^\]]+\]\(((?:https?:\/\/|mailto:|tel:)[^)]+)\)/gi;
+  let markdownMatch: RegExpExecArray | null;
+  while ((markdownMatch = markdownRegex.exec(value)) !== null) {
+    if (markdownMatch[1]) found.add(markdownMatch[1].trim());
+  }
+  const directMatches = value.match(/(?:https?:\/\/|mailto:|tel:)[^\s)]+/gi) || [];
+  for (const match of directMatches) {
+    found.add(match.trim());
+  }
+  return Array.from(found);
+}
+
+function getUrlHost(value: string) {
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function applyLinksToParsedPlace(place: any, value: string) {
+  for (const url of extractAllLinks(value)) {
+    const host = getUrlHost(url);
+    if (!host) continue;
+
+    if (!place.mapsUrl && ((host.includes('google.com') && url.includes('/maps')) || host === 'maps.app.goo.gl' || host === 'goo.gl')) {
+      place.mapsUrl = url;
+      continue;
+    }
+    if (!place.instagramUrl && host.endsWith('instagram.com')) {
+      place.instagramUrl = url;
+      continue;
+    }
+    if (!place.facebookUrl && host.endsWith('facebook.com')) {
+      place.facebookUrl = url;
+      continue;
+    }
+    if (!place.tiktokUrl && host.endsWith('tiktok.com')) {
+      place.tiktokUrl = url;
+      continue;
+    }
+    if (!place.whatsappUrl && (host === 'wa.me' || host.endsWith('whatsapp.com'))) {
+      place.whatsappUrl = url;
+      continue;
+    }
+    if (!place.websiteUrl && /^https?:\/\//i.test(url) && !host.includes('google.com')) {
+      place.websiteUrl = url;
+    }
+  }
+}
+
+function extractLinkLabel(value: string) {
+  const markdownMatch = value.match(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:|tel:)[^)]+)\)/i);
+  if (markdownMatch?.[1]) return toCleanString(markdownMatch[1]);
+  return toCleanString(value);
+}
+
+function formatPhoneDisplay(value?: string) {
+  const cleaned = toCleanString(value);
+  if (!cleaned) return '';
+  const digits = cleaned.replace(/[^\d+]/g, '');
+  if (!digits) return cleaned;
+  if (digits.startsWith('+') && digits.length > 4) {
+    const countryCode = digits.slice(0, 4);
+    const rest = digits.slice(4);
+    const groups = rest.match(/.{1,4}/g)?.join(' ') || rest;
+    return `${countryCode} ${groups}`.trim();
+  }
+  return digits.match(/.{1,4}/g)?.join(' ') || digits;
+}
+
+function extractSegments(value: string) {
+  const matches = Array.from(value.matchAll(/(Reason|Vibe|Must-?Try|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/gi));
+  if (matches.length === 0) return [] as Array<{ label: string; value: string }>;
+  return matches.map((match, index) => {
+    const start = match.index ?? 0;
+    const label = match[1] || '';
+    const valueStart = start + match[0].length;
+    const valueEnd = index + 1 < matches.length ? (matches[index + 1].index ?? value.length) : value.length;
+    return {
+      label: label.toLowerCase(),
+      value: value.slice(valueStart, valueEnd).trim(),
+    };
+  });
+}
+
+function createFallbackPlace(seed: Record<string, unknown>) {
+  return {
+    placeId: '',
+    name: toCleanString(seed.name),
+    address: toCleanString(seed.address),
+    latitude: null,
+    longitude: null,
+    rating: null,
+    userRatingCount: null,
+    websiteUrl: '',
+    phone: '',
+    email: '',
+    openNow: null,
+    businessStatus: '',
+    reason: '',
+    vibe: '',
+    mustTry: '',
+    editorialSummary: '',
+    reviewSnippets: [],
+    mapsUrl: '',
+    instagramUrl: '',
+    facebookUrl: '',
+    tiktokUrl: '',
+    whatsappUrl: '',
+  };
+}
+
+function parsePlacesFromMessageContent(content?: string) {
+  const places: any[] = [];
+  let current: any = null;
+  const knownLabelPattern = /^(Reason|Vibe|Must-?Try|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/i;
+
+  const commit = () => {
+    if (!current?.name) return;
+    places.push(current);
+    current = null;
+  };
+
+  for (const rawLine of (content || '').split('\n')) {
+    const trimmedLine = rawLine.trim();
+    if (!trimmedLine) continue;
+
+    const bulletMatch = trimmedLine.match(/^(?:[-*•]|\d+\.)\s+(.*)$/);
+    const rawValue = (bulletMatch?.[1] || trimmedLine).trim();
+    const segmentSource = rawValue.replace(/\*\*([^*]+)\*\*/g, '$1').trim();
+    const line = toCleanString(segmentSource);
+    if (!line) continue;
+
+    if (bulletMatch && !knownLabelPattern.test(line) && !line.includes(':')) {
+      commit();
+      current = createFallbackPlace({ name: line });
+      continue;
+    }
+
+    const segments = extractSegments(segmentSource);
+    if (!current || segments.length === 0) continue;
+
+    for (const segment of segments) {
+      const segmentRawValue = segment.value.replace(/^[-–—]\s*/, '').trim();
+      const segmentValue = toCleanString(segmentRawValue);
+      if (!segmentValue) continue;
+
+      if (segment.label === 'reason') {
+        current.reason = current.reason || segmentValue;
+        applyLinksToParsedPlace(current, segmentRawValue);
+        continue;
+      }
+      if (segment.label === 'vibe') {
+        current.vibe = current.vibe || segmentValue;
+        applyLinksToParsedPlace(current, segmentRawValue);
+        continue;
+      }
+      if (segment.label === 'must-try' || segment.label === 'musttry') {
+        current.mustTry = current.mustTry || segmentValue;
+        applyLinksToParsedPlace(current, segmentRawValue);
+        continue;
+      }
+      if (segment.label === 'google maps' || segment.label === 'maps' || segment.label === 'maps link' || segment.label === 'location') {
+        current.mapsUrl = current.mapsUrl || extractFirstLink(segmentRawValue);
+        applyLinksToParsedPlace(current, segmentRawValue);
+        continue;
+      }
+      if (segment.label === 'phone') {
+        current.phone = current.phone || extractLinkLabel(segmentRawValue.replace(/^📞\s*/, '').trim());
+        continue;
+      }
+      if (segment.label === 'website') {
+        current.websiteUrl = current.websiteUrl || extractFirstLink(segmentRawValue) || segmentValue;
+        applyLinksToParsedPlace(current, segmentRawValue);
+        continue;
+      }
+      if (segment.label === 'instagram') {
+        current.instagramUrl = current.instagramUrl || extractFirstLink(segmentRawValue) || segmentValue;
+        continue;
+      }
+      if (segment.label === 'facebook') {
+        current.facebookUrl = current.facebookUrl || extractFirstLink(segmentRawValue) || segmentValue;
+        continue;
+      }
+      if (segment.label === 'tiktok') {
+        current.tiktokUrl = current.tiktokUrl || extractFirstLink(segmentRawValue) || segmentValue;
+        continue;
+      }
+      if (segment.label === 'whatsapp') {
+        current.whatsappUrl = current.whatsappUrl || extractFirstLink(segmentRawValue) || segmentValue;
+        continue;
+      }
+      if (segment.label === 'social' || segment.label === 'social links' || segment.label === 'socials') {
+        applyLinksToParsedPlace(current, segmentRawValue);
+        continue;
+      }
+      if (segment.label === 'email') {
+        current.email = current.email || extractLinkLabel(segmentRawValue);
+        continue;
+      }
+      if (segment.label === 'rating') {
+        const ratingMatch = segmentValue.match(/\d+(?:\.\d+)?/);
+        if (ratingMatch?.[0]) current.rating = Number(ratingMatch[0]);
+        continue;
+      }
+      if (segment.label === 'google reviews' || segment.label === 'reviews') {
+        const reviewsMatch = segmentValue.match(/[\d,]+/);
+        if (reviewsMatch?.[0]) current.userRatingCount = Number(reviewsMatch[0].replace(/,/g, ''));
+      }
+    }
+  }
+
+  commit();
+  return places;
+}
+
+function mergeGroundedPlaceData(existingPlace: any, parsedPlace: any) {
+  return {
+    ...existingPlace,
+    name: toCleanString(existingPlace?.name) || toCleanString(parsedPlace?.name),
+    address: toCleanString(existingPlace?.address) || toCleanString(parsedPlace?.address),
+    rating: typeof existingPlace?.rating === 'number' ? existingPlace.rating : (typeof parsedPlace?.rating === 'number' ? parsedPlace.rating : null),
+    userRatingCount: typeof existingPlace?.userRatingCount === 'number' ? existingPlace.userRatingCount : (typeof parsedPlace?.userRatingCount === 'number' ? parsedPlace.userRatingCount : null),
+    websiteUrl: toCleanString(existingPlace?.websiteUrl) || toCleanString(parsedPlace?.websiteUrl),
+    phone: toCleanString(existingPlace?.phone) || toCleanString(parsedPlace?.phone),
+    email: toCleanString(existingPlace?.email) || toCleanString(parsedPlace?.email),
+    reason: toCleanString(existingPlace?.reason) || toCleanString(parsedPlace?.reason),
+    vibe: toCleanString(existingPlace?.vibe) || toCleanString(parsedPlace?.vibe),
+    mustTry: toCleanString(existingPlace?.mustTry) || toCleanString(parsedPlace?.mustTry),
+    editorialSummary: toCleanString(existingPlace?.editorialSummary) || toCleanString(parsedPlace?.editorialSummary),
+    mapsUrl: toCleanString(existingPlace?.mapsUrl) || toCleanString(parsedPlace?.mapsUrl),
+    instagramUrl: toCleanString(existingPlace?.instagramUrl) || toCleanString(parsedPlace?.instagramUrl),
+    facebookUrl: toCleanString(existingPlace?.facebookUrl) || toCleanString(parsedPlace?.facebookUrl),
+    tiktokUrl: toCleanString(existingPlace?.tiktokUrl) || toCleanString(parsedPlace?.tiktokUrl),
+    whatsappUrl: toCleanString(existingPlace?.whatsappUrl) || toCleanString(parsedPlace?.whatsappUrl),
+    reviewSnippets: Array.isArray(existingPlace?.reviewSnippets) && existingPlace.reviewSnippets.length > 0
+      ? existingPlace.reviewSnippets
+      : (Array.isArray(parsedPlace?.reviewSnippets) ? parsedPlace.reviewSnippets : []),
+  };
 }
 
 export function getGroundedPlaces(message: MessageLike | null | undefined): any[] {
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
-  return Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
+  const backendPlaces = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
+  const parsedPlaces = parsePlacesFromMessageContent(message?.content);
+
+  if (backendPlaces.length === 0) return parsedPlaces;
+  if (parsedPlaces.length === 0) return backendPlaces;
+
+  const mergedPlaces = [...backendPlaces];
+  for (const parsedPlace of parsedPlaces) {
+    const parsedKey = normalizePlaceKey(parsedPlace?.name);
+    const matchIndex = mergedPlaces.findIndex((existingPlace: any) => {
+      const existingKey = normalizePlaceKey(existingPlace?.name);
+      return Boolean(parsedKey && existingKey && (parsedKey === existingKey || parsedKey.includes(existingKey) || existingKey.includes(parsedKey)));
+    });
+
+    if (matchIndex >= 0) {
+      mergedPlaces[matchIndex] = mergeGroundedPlaceData(mergedPlaces[matchIndex], parsedPlace);
+      continue;
+    }
+
+    mergedPlaces.push(parsedPlace);
+  }
+
+  return mergedPlaces;
 }
 
 export function hasGroundedPlaces(message: MessageLike | null | undefined) {
@@ -30,9 +378,12 @@ export function hasGroundedPlaces(message: MessageLike | null | undefined) {
     const hasPlaceId = Boolean(p.placeId && p.placeId.trim());
     const hasWebsite = Boolean(p.websiteUrl && p.websiteUrl.trim());
     const hasMaps = Boolean(p.mapsUrl && p.mapsUrl.trim());
+    const hasReason = Boolean(p.reason && p.reason.trim());
+    const hasVibe = Boolean(p.vibe && p.vibe.trim());
+    const hasMustTry = Boolean(p.mustTry && p.mustTry.trim());
     const hasSocials = Boolean(p.instagramUrl || p.facebookUrl || p.tiktokUrl || p.whatsappUrl);
     const hasReviews = Array.isArray(p.reviewSnippets) && p.reviewSnippets.some((r: any) => r?.snippet);
-    return hasRating || hasPhone || hasEmail || hasWebsite || hasMaps || (hasPlaceId && hasAddress) || (hasSocials && hasAddress) || (hasReviews && hasAddress);
+    return hasRating || hasPhone || hasEmail || hasWebsite || hasMaps || hasReason || hasVibe || hasMustTry || (hasPlaceId && hasAddress) || (hasSocials && hasAddress) || (hasReviews && hasAddress);
   });
 }
 
@@ -71,6 +422,25 @@ function truncateReviewText(value?: string, max = 200) {
   return text.length > max ? `${text.slice(0, max - 3)}...` : text;
 }
 
+function extractPlacesIntro(content?: string) {
+  if (!content) return '';
+  const introLines: string[] = [];
+  const knownLabelPattern = /^(Reason|Vibe|Must-?Try|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/i;
+  for (const rawLine of content.split('\n')) {
+    const trimmedLine = rawLine.trim();
+    if (!trimmedLine) continue;
+    if (/^(?:[-*•]|\d+\.)\s+/.test(trimmedLine)) break;
+    const cleanedLine = stripMarkdownText(trimmedLine);
+    if (!cleanedLine) continue;
+    if (knownLabelPattern.test(cleanedLine)) break;
+    introLines.push(cleanedLine);
+    if (introLines.length >= 2) break;
+  }
+  const intro = introLines.join(' ').replace(/\s+/g, ' ').trim();
+  if (!intro) return '';
+  return intro.length > 220 ? `${intro.slice(0, 217)}...` : intro;
+}
+
 function getGoogleMapsSearchUrl(resolvedBrowsingData: any, groundedPlaces: any[]) {
   const queries = Array.isArray(resolvedBrowsingData?.queries) ? resolvedBrowsingData.queries : [];
   const query = queries.find((value: unknown) => typeof value === 'string' && value.trim()) as string | undefined;
@@ -82,7 +452,7 @@ function getGoogleMapsSearchUrl(resolvedBrowsingData: any, groundedPlaces: any[]
 
 function parseReviewTitle(title?: string): { author: string; rating: number | null; relTime: string } {
   if (!title) return { author: '', rating: null, relTime: '' };
-  const parts = title.split('·').map((p) => p.trim());
+  const parts = toCleanString(title).split('·').map((p) => p.trim());
   const author = parts[0] || '';
   let rating: number | null = null;
   let relTime = '';
@@ -166,11 +536,12 @@ export function GroundedPlacesBlock({
   language: string;
 }) {
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
-  const groundedPlaces = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
+  const groundedPlaces = getGroundedPlaces(message);
   const searchEntryPointHtml = typeof resolvedBrowsingData?.searchEntryPointHtml === 'string'
     ? resolvedBrowsingData.searchEntryPointHtml.trim()
     : '';
   const googleMapsSearchUrl = getGoogleMapsSearchUrl(resolvedBrowsingData, groundedPlaces);
+  const introText = extractPlacesIntro(message?.content);
 
   if (groundedPlaces.length === 0) return null;
 
@@ -186,13 +557,16 @@ export function GroundedPlacesBlock({
     const hasEmail = Boolean(emailHref);
     const hasWeb = Boolean(place.websiteUrl && place.websiteUrl.trim());
     const hasMaps = Boolean(place.mapsUrl && place.mapsUrl.trim());
+    const hasReason = Boolean(place.reason && place.reason.trim());
+    const hasVibe = Boolean(place.vibe && place.vibe.trim());
+    const hasMustTry = Boolean(place.mustTry && place.mustTry.trim());
     const hasSocials = Boolean(place.instagramUrl || place.facebookUrl || place.tiktokUrl || place.whatsappUrl);
     const hasReviews = Array.isArray(place.reviewSnippets) && place.reviewSnippets.some((r: any) => r?.snippet);
     const hasEditorial = Boolean(place.editorialSummary && place.editorialSummary.trim());
     // Must have meaningful data — rating or phone is ideal, but placeId+address is enough
     // (fetchGooglePlaceDetails will have enriched it if GOOGLE_MAPS_API_KEY is set)
     const hasPlaceId = Boolean(place.placeId && place.placeId.trim());
-    return hasRating || hasPhone || hasEmail || hasWeb || hasMaps || hasEditorial || (hasPlaceId && hasAddress) || (hasSocials && hasAddress) || (hasReviews && hasAddress);
+    return hasRating || hasPhone || hasEmail || hasWeb || hasMaps || hasReason || hasVibe || hasMustTry || hasEditorial || (hasPlaceId && hasAddress) || (hasSocials && hasAddress) || (hasReviews && hasAddress);
   });
   const displayPlaces = richPlaces.length > 0
     ? richPlaces
@@ -233,15 +607,35 @@ export function GroundedPlacesBlock({
         const phoneHref = normalizePhoneHref(place.phone);
         const emailHref = normalizeEmailHref(place.email);
         const reviewSnippets = Array.isArray(place.reviewSnippets)
-          ? place.reviewSnippets.filter((item: any) => item?.snippet || item?.googleMapsUri || item?.uri).slice(0, 2)
+          ? place.reviewSnippets.filter((item: any) => item?.snippet || item?.googleMapsUri || item?.uri).slice(0, 4)
           : [];
-        const hasMaps = Boolean(place.mapsUrl);
+        const hasMaps = Boolean(place.mapsUrl && String(place.mapsUrl).trim());
         const hasCall = Boolean(phoneHref);
         const hasEmail = Boolean(emailHref);
         const hasWeb = Boolean(place.websiteUrl && place.websiteUrl.trim());
         const hasWhatsApp = Boolean(place.whatsappUrl && place.whatsappUrl.trim());
         const hasSocials = Boolean(place.instagramUrl || place.facebookUrl || place.tiktokUrl || place.whatsappUrl);
         const websiteLabel = getWebsiteLabel(place.websiteUrl);
+        const reasonText = toCleanString(place.reason);
+        const vibeText = toCleanString(place.vibe);
+        const mustTryText = toCleanString(place.mustTry);
+        const placeName = toCleanString(place.name) || (isAr ? 'مكان' : 'Place');
+        const addressText = toCleanString(place.address);
+        const editorialSummary = toCleanString(place.editorialSummary);
+        const phoneText = formatPhoneDisplay(place.phone);
+        const emailText = toCleanString(place.email);
+        const mapsUrl = toCleanString(place.mapsUrl);
+        const websiteUrl = toCleanString(place.websiteUrl);
+        const ratingText = typeof place.rating === 'number' ? place.rating.toFixed(1) : (isAr ? 'غير متوفر' : 'Not available');
+        const reviewCountText = typeof place.userRatingCount === 'number'
+          ? formatReviewCount(place.userRatingCount, language)
+          : (isAr ? 'غير متوفر' : 'Not available');
+        const socialLinks = [
+          place.instagramUrl ? { label: 'Instagram', url: toCleanString(place.instagramUrl) } : null,
+          place.facebookUrl ? { label: 'Facebook', url: toCleanString(place.facebookUrl) } : null,
+          place.tiktokUrl ? { label: 'TikTok', url: toCleanString(place.tiktokUrl) } : null,
+          place.whatsappUrl ? { label: 'WhatsApp', url: toCleanString(place.whatsappUrl) } : null,
+        ].filter(Boolean) as Array<{ label: string; url: string }>;
 
         return (
           <div
@@ -251,6 +645,11 @@ export function GroundedPlacesBlock({
           >
             {/* ── Header strip ── */}
             <div className="px-4 pt-4 pb-3">
+              {index === 0 && introText && (
+                <div className="mb-3 rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
+                  <div className="text-[13px] text-white/75 leading-relaxed">{introText}</div>
+                </div>
+              )}
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xl"
@@ -259,12 +658,12 @@ export function GroundedPlacesBlock({
                   </div>
                   <div className="min-w-0">
                     <div className="font-bold text-[15px] text-white leading-tight">
-                      {place.name || (isAr ? 'مكان' : 'Place')}
+                      {placeName}
                     </div>
-                    {place.address && (
+                    {addressText && (
                       <div className="flex items-center gap-1 mt-0.5">
                         <MapPin size={11} className="shrink-0 text-white/40" />
-                        <span className="text-[11px] text-white/50 truncate">{place.address}</span>
+                        <span className="text-[11px] text-white/50 truncate">{addressText}</span>
                       </div>
                     )}
                   </div>
@@ -281,23 +680,43 @@ export function GroundedPlacesBlock({
               </div>
 
               {/* Rating row */}
-              {typeof place.rating === 'number' && (
-                <div className="flex items-center gap-2 mb-2">
-                  <StarRating value={place.rating} />
-                  <span className="text-sm font-bold text-amber-400">{place.rating.toFixed(1)}</span>
-                  {typeof place.userRatingCount === 'number' && (
-                    <span className="text-xs text-white/40">
-                      ({formatReviewCount(place.userRatingCount, language)} {isAr ? 'تقييم' : 'reviews'})
-                    </span>
-                  )}
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <div className="rounded-full bg-white/6 px-2.5 py-1 text-[11px] text-white/75 ring-1 ring-white/10">
+                  {isAr ? 'التقييم' : 'Rating'}: {ratingText}
                 </div>
-              )}
+                <div className="rounded-full bg-white/6 px-2.5 py-1 text-[11px] text-white/75 ring-1 ring-white/10">
+                  {isAr ? 'عدد المراجعات' : 'Review count'}: {reviewCountText}
+                </div>
+              </div>
 
               {/* Editorial summary */}
-              {place.editorialSummary && (
-                <p className="text-[13px] text-white/60 leading-relaxed mb-2">
-                  {truncateReviewText(place.editorialSummary, 160)}
+              {editorialSummary && (
+                <p className="text-[13px] text-white/60 leading-relaxed mb-2 whitespace-pre-line">
+                  {editorialSummary}
                 </p>
+              )}
+
+              {(reasonText || vibeText || mustTryText) && (
+                <div className="space-y-2 mb-2">
+                  {reasonText && (
+                    <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
+                      <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'السبب' : 'Reason'}</div>
+                      <div className="text-[13px] text-white/75 leading-relaxed">{reasonText}</div>
+                    </div>
+                  )}
+                  {vibeText && (
+                    <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
+                      <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'الأجواء' : 'Vibe'}</div>
+                      <div className="text-[13px] text-white/75 leading-relaxed">{vibeText}</div>
+                    </div>
+                  )}
+                  {mustTryText && (
+                    <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
+                      <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'لازم تجربه' : 'Must-try'}</div>
+                      <div className="text-[13px] text-white/75 leading-relaxed">{mustTryText}</div>
+                    </div>
+                  )}
+                </div>
               )}
 
               {typeof place.userRatingCount === 'number' && typeof place.rating !== 'number' && (
@@ -307,32 +726,48 @@ export function GroundedPlacesBlock({
               )}
 
               {/* Phone row */}
-              {phoneHref && (
-                <div className="flex items-center gap-2 mb-1">
-                  <Phone size={13} className="shrink-0 text-white/40" />
-                  <a href={phoneHref} className="text-[13px] text-blue-300 hover:text-blue-200 transition-colors">
-                    {place.phone}
-                  </a>
+              <div className="space-y-2 mb-2">
+                <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
+                  <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'الهاتف' : 'Phone'}</div>
+                  {phoneHref ? (
+                    <a href={phoneHref} className="text-[13px] font-medium text-blue-300 hover:text-blue-200 transition-colors">
+                      {phoneText}
+                    </a>
+                  ) : (
+                    <div className="text-[13px] text-white/45">{isAr ? 'غير متوفر' : 'Not available'}</div>
+                  )}
                 </div>
-              )}
-
-              {emailHref && (
-                <div className="flex items-center gap-2 mb-1">
-                  <Mail size={13} className="shrink-0 text-white/40" />
-                  <a href={emailHref} className="text-[13px] text-blue-300 hover:text-blue-200 transition-colors break-all">
-                    {place.email}
-                  </a>
+                <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
+                  <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'الإيميل' : 'Email'}</div>
+                  {emailHref ? (
+                    <a href={emailHref} className="text-[13px] font-medium text-blue-300 hover:text-blue-200 transition-colors break-all">
+                      {emailText}
+                    </a>
+                  ) : (
+                    <div className="text-[13px] text-white/45">{isAr ? 'غير متوفر' : 'Not available'}</div>
+                  )}
                 </div>
-              )}
-
-              {hasWeb && (
-                <div className="flex items-center gap-2 mb-1">
-                  <Globe size={13} className="shrink-0 text-white/40" />
-                  <a href={place.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-[13px] text-blue-300 hover:text-blue-200 transition-colors break-all">
-                    {websiteLabel || place.websiteUrl}
-                  </a>
+                <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
+                  <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'الموقع' : 'Website'}</div>
+                  {hasWeb ? (
+                    <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-blue-300 hover:text-blue-200 transition-colors break-all">
+                      {websiteLabel || websiteUrl}
+                    </a>
+                  ) : (
+                    <div className="text-[13px] text-white/45">{isAr ? 'غير متوفر' : 'Not available'}</div>
+                  )}
                 </div>
-              )}
+                <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
+                  <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">Google Maps</div>
+                  {hasMaps ? (
+                    <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-blue-300 hover:text-blue-200 transition-colors break-all">
+                      {isAr ? 'افتح في Google Maps' : 'Open in Google Maps'}
+                    </a>
+                  ) : (
+                    <div className="text-[13px] text-white/45">{isAr ? 'غير متوفر' : 'Not available'}</div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* ── Action buttons ── */}
@@ -382,43 +817,22 @@ export function GroundedPlacesBlock({
             )}
 
             {/* ── Social follow badges ── */}
-            {hasSocials && (
-              <div className="px-4 pb-3 flex flex-wrap items-center gap-2 border-t border-white/8 pt-3">
-                <span className="text-[11px] text-white/40 font-medium mr-1">{isAr ? 'السوشال:' : 'Social:'}</span>
-                {place.instagramUrl && (
-                  <a href={place.instagramUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 text-white/85 text-xs"
-                    style={{ background: 'rgba(255,255,255,0.08)' }} title="Instagram">
-                    <InstagramIcon size={22} />
-                    <span>Instagram</span>
-                  </a>
-                )}
-                {place.facebookUrl && (
-                  <a href={place.facebookUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 text-white/85 text-xs"
-                    style={{ background: 'rgba(255,255,255,0.08)' }} title="Facebook">
-                    <FacebookIcon size={22} />
-                    <span>Facebook</span>
-                  </a>
-                )}
-                {place.tiktokUrl && (
-                  <a href={place.tiktokUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 text-white/85 text-xs"
-                    style={{ background: 'rgba(255,255,255,0.08)' }} title="TikTok">
-                    <TikTokIcon size={22} />
-                    <span>TikTok</span>
-                  </a>
-                )}
-                {place.whatsappUrl && (
-                  <a href={place.whatsappUrl} target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 text-white/85 text-xs"
-                    style={{ background: 'rgba(255,255,255,0.08)' }} title="WhatsApp">
-                    <WhatsAppIcon size={22} />
-                    <span>WhatsApp</span>
-                  </a>
-                )}
-              </div>
-            )}
+            <div className="px-4 pb-3 flex flex-wrap items-center gap-2 border-t border-white/8 pt-3">
+              <span className="text-[11px] text-white/40 font-medium mr-1">{isAr ? 'روابط السوشال:' : 'Social links:'}</span>
+              {socialLinks.length > 0 ? socialLinks.map((social) => (
+                <a key={social.label} href={social.url} target="_blank" rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 text-white/85 text-xs"
+                  style={{ background: 'rgba(255,255,255,0.08)' }} title={social.label}>
+                  {social.label === 'Instagram' ? <InstagramIcon size={22} /> : null}
+                  {social.label === 'Facebook' ? <FacebookIcon size={22} /> : null}
+                  {social.label === 'TikTok' ? <TikTokIcon size={22} /> : null}
+                  {social.label === 'WhatsApp' ? <WhatsAppIcon size={22} /> : null}
+                  <span>{social.label}</span>
+                </a>
+              )) : (
+                <span className="text-[12px] text-white/45">{isAr ? 'غير متوفرة' : 'Not available'}</span>
+              )}
+            </div>
 
             {/* ── Recent Reviews ── */}
             {reviewSnippets.length > 0 && (
@@ -437,7 +851,7 @@ export function GroundedPlacesBlock({
                           <span className="text-xs font-semibold text-white/80">{parsed.author}</span>
                         )}
                         {typeof parsed.rating === 'number' && (
-                          <StarRating value={parsed.rating} size={11} />
+                          <span className="text-[11px] text-white/55">{parsed.rating.toFixed(1)}/5</span>
                         )}
                         {parsed.relTime && (
                           <span className="text-[11px] text-white/35">{parsed.relTime}</span>
@@ -445,7 +859,7 @@ export function GroundedPlacesBlock({
                       </div>
                       {review.snippet && (
                         <p className="text-[12px] text-white/55 leading-relaxed">
-                          {truncateReviewText(review.snippet, 200)}
+                          {truncateReviewText(toCleanString(review.snippet), 200)}
                         </p>
                       )}
                     </div>

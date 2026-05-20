@@ -380,6 +380,8 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
     message.metadata?.browsingUsed ||
     resolveGroundedBrowsingData(message)
   );
+  const resolvedBrowsingData = resolveGroundedBrowsingData(message);
+  const sources = Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : [];
   const hasGroundedPlaceCards = !isUser && hasGroundedPlaces(message);
 
   // FIXED: Get correct mode indicator icon based on actual message context
@@ -528,21 +530,35 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
 
               {/* FIXED: Message content with proper alignment */}
               {hasGroundedPlaceCards ? (
-                <>
-                  {(() => {
-                    const raw = (message.content || '').replace(/\[REMINDER:[^\]]*\]/g, '').trim();
-                    const opener = raw.split(/\n[\s]*[-*•]|\n[\s]*\d+\./)[0].trim();
-                    return opener ? (
-                      <p className="text-sm leading-relaxed mb-2">{opener}</p>
-                    ) : null;
-                  })()}
-                  <GroundedPlacesBlock message={message} language={language} />
-                </>
+                <GroundedPlacesBlock message={message} language={language} />
               ) : (
                 <div 
                   className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
                   dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
                 />
+              )}
+
+              {!isUser && sources.length > 0 && (
+                <details className="rounded-xl border border-border/40 bg-muted/10 dark:bg-white/5 p-3 mt-2">
+                  <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                    {language === 'ar' ? `المصادر (${sources.length})` : `Sources (${sources.length})`}
+                  </summary>
+                  <ul className="mt-3 space-y-2">
+                    {sources.slice(0, 10).map((s: any, idx: number) => (
+                      <li key={idx} className="flex items-start gap-2 min-w-0">
+                        <span className="text-muted-foreground text-xs mt-1">•</span>
+                        <a
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline text-xs break-words"
+                        >
+                          {s.title || s.url}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
               )}
 
               {/* Image display - STANDARDIZED for both user and AI messages */}

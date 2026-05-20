@@ -132,9 +132,13 @@ function WaktiInspector() {
     var label = overlayRef.current.label;
     var vw = window.innerWidth;
     var vh = window.innerHeight;
-    var isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    var touchStartTarget = null;
-    var touchStartTime = 0;
+    var pointerDownTarget = null;
+    var pointerDownTime = 0;
+    var pointerStartX = 0;
+    var pointerStartY = 0;
+    var pointerDidMove = false;
+    var activePointerId = null;
+    var activePointerType = '';
     
     var isSkippable = function(target) {
       if (!target || target === overlay || target.id === 'wakti-inspector-overlay' || target.id === 'wakti-inspector-label') return true;
@@ -208,87 +212,88 @@ function WaktiInspector() {
       setTimeout(function() { overlay.style.background = 'transparent'; }, 150);
     };
 
-    // === MOUSE EVENTS (desktop fallback) ===
-    var handleMouseMove = function(e) { updateOverlay(e.target); };
-    var handleMouseOut = function(e) {
-      if (!e.relatedTarget || e.relatedTarget === document.body) overlay.style.display = 'none';
+    var handlePointerMove = function(e) {
+      if (e.pointerType === 'mouse') {
+        updateOverlay(e.target);
+      }
+
+      if (activePointerId !== e.pointerId || e.pointerType === 'mouse') return;
+
+      if (Math.abs(e.clientX - pointerStartX) > 10 || Math.abs(e.clientY - pointerStartY) > 10) {
+        pointerDidMove = true;
+        pointerDownTarget = null;
+        overlay.style.display = 'none';
+      }
+    };
+    var handlePointerOut = function(e) {
+      if (e.pointerType === 'mouse' && (!e.relatedTarget || e.relatedTarget === document.body)) overlay.style.display = 'none';
+    };
+    var handlePointerDown = function(e) {
+      activePointerId = e.pointerId;
+      activePointerType = e.pointerType || 'mouse';
+      pointerDownTime = Date.now();
+      pointerStartX = e.clientX;
+      pointerStartY = e.clientY;
+      pointerDidMove = false;
+      pointerDownTarget = document.elementFromPoint(e.clientX, e.clientY) || e.target;
+
+      if (activePointerType !== 'mouse' && pointerDownTarget && !isSkippable(pointerDownTarget)) {
+        updateOverlay(pointerDownTarget);
+      }
+    };
+    var handlePointerUp = function(e) {
+      if (activePointerId !== e.pointerId) return;
+
+      var target = document.elementFromPoint(e.clientX, e.clientY) || pointerDownTarget || e.target;
+      var elapsed = Date.now() - pointerDownTime;
+      var shouldSelect = activePointerType === 'mouse' || (!pointerDidMove && elapsed <= 500);
+
+      activePointerId = null;
+      activePointerType = '';
+      pointerDownTime = 0;
+      pointerDidMove = false;
+      pointerDownTarget = null;
+
+      if (isSkippable(target)) return;
+      if (!shouldSelect) return;
+
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+      updateOverlay(target);
+      selectElement(target);
+    };
+    var handlePointerCancel = function() {
+      activePointerId = null;
+      activePointerType = '';
+      pointerDownTarget = null;
+      pointerDownTime = 0;
+      pointerDidMove = false;
+      overlay.style.display = 'none';
     };
     var handleClick = function(e) {
-      if (isTouchDevice) return; // Skip on touch devices — handled by touch events
-      var target = e.target;
-      if (isSkippable(target)) return;
       e.preventDefault();
       e.stopPropagation();
-      e.stopImmediatePropagation();
-      updateOverlay(target);
-      selectElement(target);
-    };
-    var handleMouseDown = function(e) {
-      if (isTouchDevice) return;
-      e.preventDefault();
-    };
-
-    // === TOUCH EVENTS (mobile-first) ===
-    var handleTouchStart = function(e) {
-      if (!e.touches || !e.touches[0]) return;
-      var touch = e.touches[0];
-      touchStartTarget = document.elementFromPoint(touch.clientX, touch.clientY);
-      touchStartTime = Date.now();
-      
-      // Show highlight immediately on touch
-      if (touchStartTarget && !isSkippable(touchStartTarget)) {
-        updateOverlay(touchStartTarget);
-      }
-    };
-    
-    var handleTouchEnd = function(e) {
-      // Only select if it was a quick tap (< 500ms), not a scroll
-      var elapsed = Date.now() - touchStartTime;
-      if (elapsed > 500 || !touchStartTarget) {
-        touchStartTarget = null;
-        return;
-      }
-      
-      var target = touchStartTarget;
-      touchStartTarget = null;
-      
-      if (isSkippable(target)) return;
-      
-      // Prevent the tap from triggering links/buttons in the preview
-      e.preventDefault();
-      e.stopPropagation();
-      
-      updateOverlay(target);
-      selectElement(target);
-    };
-    
-    var handleTouchMove = function(e) {
-      // If user is scrolling, cancel the tap selection
-      touchStartTarget = null;
-      overlay.style.display = 'none';
+      if (e.stopImmediatePropagation) e.stopImmediatePropagation();
     };
 
     // Register all events
-    document.addEventListener('mousemove', handleMouseMove, true);
-    document.addEventListener('mouseout', handleMouseOut, true);
+    document.addEventListener('pointermove', handlePointerMove, true);
+    document.addEventListener('pointerout', handlePointerOut, true);
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('pointerup', handlePointerUp, true);
+    document.addEventListener('pointercancel', handlePointerCancel, true);
     document.addEventListener('click', handleClick, true);
-    document.addEventListener('mousedown', handleMouseDown, true);
-    document.addEventListener('touchstart', handleTouchStart, { capture: true, passive: true });
-    document.addEventListener('touchend', handleTouchEnd, { capture: true, passive: false });
-    document.addEventListener('touchmove', handleTouchMove, { capture: true, passive: true });
     
-    if (!isTouchDevice) {
-      document.body.style.cursor = 'crosshair';
-    }
+    document.body.style.cursor = 'crosshair';
 
     return function() {
-      document.removeEventListener('mousemove', handleMouseMove, true);
-      document.removeEventListener('mouseout', handleMouseOut, true);
+      document.removeEventListener('pointermove', handlePointerMove, true);
+      document.removeEventListener('pointerout', handlePointerOut, true);
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('pointerup', handlePointerUp, true);
+      document.removeEventListener('pointercancel', handlePointerCancel, true);
       document.removeEventListener('click', handleClick, true);
-      document.removeEventListener('mousedown', handleMouseDown, true);
-      document.removeEventListener('touchstart', handleTouchStart, true);
-      document.removeEventListener('touchend', handleTouchEnd, true);
-      document.removeEventListener('touchmove', handleTouchMove, true);
       document.body.style.cursor = '';
       overlay.style.display = 'none';
     };

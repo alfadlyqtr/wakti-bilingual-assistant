@@ -217,12 +217,13 @@ class WaktiAIV2ServiceClass {
   // Async variant: if the local PT is missing a nickname, await a DB refresh BEFORE returning.
   // This ensures the FIRST chat/vision message of a session uses the correct nickname from DB,
   // instead of firing with an empty PT and getting a 'friend' fallback on the backend.
-  private async ensurePersonalTouchAwaitingDB(userId?: string): Promise<any> {
+  private async ensurePersonalTouchAwaitingDB(userId?: string, opts?: { forceRefresh?: boolean }): Promise<any> {
     try {
       let current: any = null;
       try { current = this.getPersonalTouch(); } catch {}
       const hasNickname = !!(current && typeof current === 'object' && (current.nickname || '').toString().trim());
-      if (!hasNickname && userId) {
+      const forceRefresh = opts?.forceRefresh === true;
+      if ((forceRefresh || !hasNickname) && userId) {
         // Bypass 2-minute throttle for the first-session load by resetting lastPTFetchAt
         this.lastPTFetchAt = 0;
         await this.maybeRefreshPersonalTouchFromServer(userId);
@@ -279,11 +280,10 @@ class WaktiAIV2ServiceClass {
       if (!pt.pt_updated_at) pt.pt_updated_at = new Date().toISOString();
     }
 
-    // Attach display_name / username from cached profile as fallback for greeting (after nickname).
-    // This lets the backend build greetings like: nickname || displayName || 'friend' (last-resort).
     try {
       const displayName = this.getCachedDisplayName();
-      if (displayName) pt.displayName = displayName;
+      if (!pt.nickname && displayName) pt.displayName = displayName;
+      else if (pt.nickname && pt.displayName) delete pt.displayName;
     } catch {}
 
     // Attach hash for transport
@@ -1257,7 +1257,6 @@ class WaktiAIV2ServiceClass {
     if (item.type === 'recurring_goal' && /need|goal|improve|fix|make|solve|reliable|better/i.test(query)) score += 8;
     if (item.type === 'working_style' && /explain|plan|audit|report|stage|help|walk me through/i.test(query)) score += 8;
     if (item.type === 'priority' && /speed|fast|performance|latency|quality|lean|token/i.test(query)) score += 10;
-    if (activeTrigger === 'search' && item.type === 'working_style') score -= 6;
     if (chatSubmode === 'study' && item.type === 'project_context') score -= 4;
 
     return score;
@@ -1274,7 +1273,7 @@ class WaktiAIV2ServiceClass {
     const candidates = this.buildDurableMemoryCandidates(messages, conversationSummary, personalTouch);
     if (candidates.length === 0) return [];
 
-    const limit = activeTrigger === 'search' ? 2 : 3;
+    const limit = activeTrigger === 'search' ? 4 : 3;
 
     // Forget items MUST bypass relevance scoring — they are imperative user
     // instructions, not contextual context. Keep them all, transport them all.
@@ -1310,7 +1309,7 @@ class WaktiAIV2ServiceClass {
     if (!Array.isArray(messages) || messages.length === 0) return [];
 
     const limit = activeTrigger === 'search'
-      ? 10
+      ? 14
       : chatSubmode === 'study'
         ? 12
         : 16;
@@ -1321,7 +1320,7 @@ class WaktiAIV2ServiceClass {
       .map((msg, index, arr) => {
         const isLast = index === arr.length - 1;
         const maxLength = activeTrigger === 'search'
-          ? (msg.role === 'assistant' ? 500 : 700)
+          ? (isLast ? 1400 : (msg.role === 'assistant' ? 900 : 1100))
           : chatSubmode === 'study'
             ? (msg.role === 'assistant' ? 900 : 1100)
             : (isLast ? 1200 : (msg.role === 'assistant' ? 700 : 900));
@@ -1549,7 +1548,7 @@ class WaktiAIV2ServiceClass {
       // Build Personal Touch AFTER auth resolves. If local PT has no nickname, await DB refresh.
       // This guarantees the FIRST message of a session sends the correct nickname instead of
       // falling back to 'friend' on the backend.
-      const pt = await this.ensurePersonalTouchAwaitingDB(userId);
+      const pt = await this.ensurePersonalTouchAwaitingDB(userId, { forceRefresh: activeTrigger === 'search' });
       const durableMemory = this.buildDurableMemoryTransport(message, enhancedMessages, finalSummary, pt, activeTrigger, chatSubmode);
 
       const clientTimezone = location?.timezone || this.getClientTimezone();

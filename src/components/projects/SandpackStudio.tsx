@@ -40,6 +40,8 @@ interface SelectedElementInfo {
   };
 }
 
+const WAKTI_VISUAL_ELEMENT_SELECTED_EVENT = 'wakti:visual-element-selected';
+
 // --- 3. INSPECTABLE PREVIEW COMPONENT ---
 // Uses SandpackPreview ref to directly access the iframe for reliable postMessage communication
 const InspectablePreview = ({ 
@@ -78,6 +80,35 @@ const InspectablePreview = ({
     return iframe || null;
   }, [sandpack.clients]);
 
+  const getPreviewWindow = useCallback((): Window | null => {
+    const iframe = iframeRef.current || findIframe();
+    if (iframe) {
+      iframeRef.current = iframe;
+    }
+    return iframe?.contentWindow || null;
+  }, [findIframe]);
+
+  const isPreviewMessage = useCallback((event: MessageEvent): boolean => {
+    const previewWindow = getPreviewWindow();
+    return !previewWindow || event.source === previewWindow;
+  }, [getPreviewWindow]);
+
+  const emitElementSelection = useCallback((info: SelectedElementInfo) => {
+    let ref = `the ${info.tagName}`;
+    if (info.innerText) {
+      ref += ` "${info.innerText.substring(0, 40)}${info.innerText.length > 40 ? '...' : ''}"`;
+    }
+    if (info.className) {
+      const firstClass = info.className.split(' ').filter(Boolean)[0];
+      if (firstClass) ref += ` (.${firstClass})`;
+    }
+
+    onElementSelect?.(ref, info);
+    window.dispatchEvent(new CustomEvent(WAKTI_VISUAL_ELEMENT_SELECTED_EVENT, {
+      detail: { ref, info },
+    }));
+  }, [onElementSelect]);
+
   // Send inspect mode toggle with retry logic
   const sendToggleMessage = useCallback((enabled: boolean) => {
     // Clear any pending retry
@@ -113,8 +144,12 @@ const InspectablePreview = ({
   // Listen for inspector ready, mode ack, and element selection
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
+      const data = e.data;
+      if (!data || typeof data !== 'object' || !("type" in data)) return;
+      if (!isPreviewMessage(e)) return;
+
       // Inspector loaded confirmation
-      if (e.data.type === 'WAKTI_INSPECTOR_READY') {
+      if (data.type === 'WAKTI_INSPECTOR_READY') {
         console.log('[InspectablePreview] Inspector ready received');
         setInspectorReady(true);
         // If inspect mode is already on, re-send the toggle
@@ -122,29 +157,22 @@ const InspectablePreview = ({
       }
 
       // Mode change acknowledgment
-      if (e.data.type === 'WAKTI_INSPECT_MODE_CHANGED') {
-        console.log('[InspectablePreview] Mode ACK received:', e.data.payload);
+      if (data.type === 'WAKTI_INSPECT_MODE_CHANGED') {
+        console.log('[InspectablePreview] Mode ACK received:', data.payload);
         setModeAckReceived(true);
       }
 
       // Pong response for debugging
-      if (e.data.type === 'WAKTI_INSPECTOR_PONG') {
+      if (data.type === 'WAKTI_INSPECTOR_PONG') {
         console.log('[InspectablePreview] Pong received - connection confirmed');
       }
 
       // Element selected
-      if (e.data.type === 'WAKTI_ELEMENT_SELECTED' && e.data.payload) {
-        console.log('[InspectablePreview] Element selected:', e.data.payload);
-        const info = e.data.payload as SelectedElementInfo;
-        let ref = `the ${info.tagName}`;
-        if (info.innerText) {
-          ref += ` "${info.innerText.substring(0, 40)}${info.innerText.length > 40 ? '...' : ''}"`;
-        }
-        if (info.className) {
-          const firstClass = info.className.split(' ').filter(Boolean)[0];
-          if (firstClass) ref += ` (.${firstClass})`;
-        }
-        onElementSelect?.(ref, info);
+      if (data.type === 'WAKTI_ELEMENT_SELECTED' && data.payload) {
+        console.log('[InspectablePreview] Element selected:', data.payload);
+        setModeAckReceived(true);
+        const info = data.payload as SelectedElementInfo;
+        emitElementSelection(info);
       }
     };
     
@@ -153,7 +181,7 @@ const InspectablePreview = ({
       window.removeEventListener('message', handleMessage);
       if (retryRef.current) clearTimeout(retryRef.current);
     };
-  }, [onElementSelect, elementSelectMode, sendToggleMessage]);
+  }, [elementSelectMode, emitElementSelection, isPreviewMessage, sendToggleMessage]);
 
   // Send toggle when mode changes
   useEffect(() => {
@@ -521,7 +549,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
     next["/index.html"] = indexHtmlContent;
 
     return next;
-  }, [files, sandpackI18nBundle]);
+  }, [files, sandpackI18nBundle, WAKTI_INSPECTOR_COMPONENT]);
 
   const {
     activeFile,
