@@ -386,28 +386,27 @@ serve(async (req: Request) => {
     }
 
     // ========================================================================
-    // PRIMARY: Gemini 2.5 Flash TTS (English only — Arabic skips to Chirp)
+    // PRIMARY: Gemini 2.5 Flash TTS
     // ========================================================================
     const bearerToken = await getGoogleAccessTokenFromServiceAccount();
-    // Gemini is English-only; Arabic goes straight to Google Chirp below
 
-    if (!textIsArabic && (bearerToken || GEMINI_TTS_KEY)) {
-      console.log('🎵 Using Gemini 2.5 Flash TTS (English path)');
+    if (bearerToken || GEMINI_TTS_KEY) {
+      console.log(`🎵 Using Gemini 2.5 Flash TTS (Arabic=${textIsArabic})`);
       
       const geminiVoice = GEMINI_VOICES[voiceGender];
-      const languageCode = getLanguageCode(false); // always en-US here
+      const languageCode = getLanguageCode(textIsArabic);
       
       const preparedText = text;
       
       console.log(`🎵 Gemini TTS config:`, {
         voice: geminiVoice,
         language: languageCode,
-        isArabic: false,
+        isArabic: textIsArabic,
         gender: voiceGender,
         textLength: preparedText.length
       });
 
-      const stylePrompt = getStylePrompt(false);
+      const stylePrompt = getStylePrompt(textIsArabic);
       
       const geminiUrl = bearerToken
         ? 'https://texttospeech.googleapis.com/v1/text:synthesize'
@@ -454,7 +453,7 @@ serve(async (req: Request) => {
                 voice: geminiVoice,
                 language: languageCode,
                 audioSize: audioBytes.byteLength,
-                isArabic: false,
+                isArabic: textIsArabic,
               }
             });
 
@@ -476,8 +475,6 @@ serve(async (req: Request) => {
       } catch (geminiErr) {
         console.warn('🎵 Gemini TTS threw error (will fallback to Google Chirp):', geminiErr);
       }
-    } else if (textIsArabic) {
-      console.log('🎵 Arabic text detected — skipping Gemini, using Google Chirp directly');
     }
 
     // ========================================================================

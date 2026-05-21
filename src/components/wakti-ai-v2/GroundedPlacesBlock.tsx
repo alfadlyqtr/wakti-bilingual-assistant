@@ -1,5 +1,6 @@
-import React from 'react';
-import { MapPin, Phone, Globe, Navigation, Star, MessageCircle, Mail } from 'lucide-react';
+import React, { useState } from 'react';
+import { MapPin, Phone, Globe, Navigation, Star, MessageCircle, Mail, ChevronDown, ChevronUp } from 'lucide-react';
+import { useTheme } from '@/providers/ThemeProvider';
 
 type MessageLike = {
   content?: string;
@@ -147,6 +148,57 @@ function applyLinksToParsedPlace(place: any, value: string) {
   }
 }
 
+export function stripDuplicatePlaceDetails(content: string) {
+  if (!content) return '';
+  const parsedPlaces = parsePlacesFromMessageContent(content);
+  const placeNames = parsedPlaces.map(p => p.name ? p.name.trim().toLowerCase() : '').filter(Boolean);
+
+  const lines = content.split('\n');
+  const filteredLines = lines.filter(line => {
+    const trimmed = line.trim().toLowerCase();
+    
+    // Match any line containing these keywords followed by a colon (with optional markdown/spaces)
+    const matchesDetail = 
+      /reason\s*:\s*/i.test(trimmed) ||
+      /vibe\s*:\s*/i.test(trimmed) ||
+      /must-?try\s*:\s*/i.test(trimmed) ||
+      /status\s*:\s*/i.test(trimmed) ||
+      /rating\s*:\s*/i.test(trimmed) ||
+      /google\s*reviews\s*:\s*/i.test(trimmed) ||
+      /reviews\s*:\s*/i.test(trimmed) ||
+      /google\s*maps\s*:\s*/i.test(trimmed) ||
+      /phone\s*:\s*/i.test(trimmed) ||
+      /website\s*:\s*/i.test(trimmed) ||
+      /email\s*:\s*/i.test(trimmed) ||
+      /instagram\s*:\s*/i.test(trimmed) ||
+      /facebook\s*:\s*/i.test(trimmed) ||
+      /tiktok\s*:\s*/i.test(trimmed) ||
+      /whatsapp\s*:\s*/i.test(trimmed);
+    
+    if (matchesDetail) return false;
+
+    // Match bullet lines that are just the place names (with optional area, e.g. "- Dome Cafe" or "- Dome Cafe (Al Gharrafa)")
+    const isBullet = /^(?:[-*•]|\d+\.)\s+(.*)$/i.test(line.trim());
+    if (isBullet) {
+      const match = line.trim().match(/^(?:[-*•]|\d+\.)\s+(.*)$/i);
+      const bulletContent = match?.[1] ? match[1].replace(/\*\*([^*]+)\*\*/g, '$1').trim().toLowerCase() : '';
+      
+      // Check if bullet content starts with or is any of our parsed place names
+      const isPlaceNameBullet = placeNames.some(name => {
+        return bulletContent === name || 
+               bulletContent.startsWith(name) || 
+               name.startsWith(bulletContent);
+      });
+      if (isPlaceNameBullet) return false;
+    }
+
+    return true;
+  });
+  
+  // Clean up consecutive blank lines
+  return filteredLines.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function extractLinkLabel(value: string) {
   const markdownMatch = value.match(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:|tel:)[^)]+)\)/i);
   if (markdownMatch?.[1]) return toCleanString(markdownMatch[1]);
@@ -230,9 +282,18 @@ function parsePlacesFromMessageContent(content?: string) {
     const line = toCleanString(segmentSource);
     if (!line) continue;
 
+    // Bullet line that is just a place name (no label:value format)
     if (bulletMatch && !knownLabelPattern.test(line) && !line.includes(':')) {
       commit();
       current = createFallbackPlace({ name: line });
+      continue;
+    }
+
+    // **Bold Name** standalone heading (no bullet, no colon) — AI uses this format for place names
+    const boldHeadingMatch = trimmedLine.match(/^\*\*([^*:]+)\*\*\s*$/);
+    if (boldHeadingMatch && !knownLabelPattern.test(boldHeadingMatch[1].trim())) {
+      commit();
+      current = createFallbackPlace({ name: toCleanString(boldHeadingMatch[1]) });
       continue;
     }
 
@@ -314,6 +375,13 @@ function parsePlacesFromMessageContent(content?: string) {
 }
 
 function mergeGroundedPlaceData(existingPlace: any, parsedPlace: any) {
+  // AI-generated fields: parsedPlace wins (it has the rich AI text)
+  // Structural fields: existingPlace wins (it has placeId, address, mapsUrl, rating from backend)
+  const parsedReason = toCleanString(parsedPlace?.reason);
+  const parsedVibe = toCleanString(parsedPlace?.vibe);
+  const parsedMustTry = toCleanString(parsedPlace?.mustTry);
+  const parsedPhone = toCleanString(parsedPlace?.phone);
+  const parsedEmail = toCleanString(parsedPlace?.email);
   return {
     ...existingPlace,
     name: toCleanString(existingPlace?.name) || toCleanString(parsedPlace?.name),
@@ -321,11 +389,12 @@ function mergeGroundedPlaceData(existingPlace: any, parsedPlace: any) {
     rating: typeof existingPlace?.rating === 'number' ? existingPlace.rating : (typeof parsedPlace?.rating === 'number' ? parsedPlace.rating : null),
     userRatingCount: typeof existingPlace?.userRatingCount === 'number' ? existingPlace.userRatingCount : (typeof parsedPlace?.userRatingCount === 'number' ? parsedPlace.userRatingCount : null),
     websiteUrl: toCleanString(existingPlace?.websiteUrl) || toCleanString(parsedPlace?.websiteUrl),
-    phone: toCleanString(existingPlace?.phone) || toCleanString(parsedPlace?.phone),
-    email: toCleanString(existingPlace?.email) || toCleanString(parsedPlace?.email),
-    reason: toCleanString(existingPlace?.reason) || toCleanString(parsedPlace?.reason),
-    vibe: toCleanString(existingPlace?.vibe) || toCleanString(parsedPlace?.vibe),
-    mustTry: toCleanString(existingPlace?.mustTry) || toCleanString(parsedPlace?.mustTry),
+    // AI fields: parsed wins if backend is empty
+    phone: toCleanString(existingPlace?.phone) || parsedPhone,
+    email: toCleanString(existingPlace?.email) || parsedEmail,
+    reason: parsedReason || toCleanString(existingPlace?.reason),
+    vibe: parsedVibe || toCleanString(existingPlace?.vibe),
+    mustTry: parsedMustTry || toCleanString(existingPlace?.mustTry),
     editorialSummary: toCleanString(existingPlace?.editorialSummary) || toCleanString(parsedPlace?.editorialSummary),
     mapsUrl: toCleanString(existingPlace?.mapsUrl) || toCleanString(parsedPlace?.mapsUrl),
     instagramUrl: toCleanString(existingPlace?.instagramUrl) || toCleanString(parsedPlace?.instagramUrl),
@@ -343,9 +412,36 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
   const backendPlaces = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
   const parsedPlaces = parsePlacesFromMessageContent(message?.content);
 
+  if (backendPlaces.length === 0 && parsedPlaces.length === 0) return [];
   if (backendPlaces.length === 0) return parsedPlaces;
   if (parsedPlaces.length === 0) return backendPlaces;
 
+  // Check if backendPlaces are mostly empty shells (no AI-generated fields)
+  const backendHasRichData = backendPlaces.some((p: any) =>
+    (p.reason && p.reason.trim()) || (p.vibe && p.vibe.trim()) || (p.mustTry && p.mustTry.trim())
+  );
+
+  if (!backendHasRichData) {
+    // Backend places are empty shells (just name + mapsUrl from Gemini grounding).
+    // Use parsedPlaces as the primary list — they have all the AI-generated rich data.
+    // Enrich each parsed place with backend data (mapsUrl, placeId, address, rating, reviewSnippets).
+    return parsedPlaces.map((parsedPlace: any) => {
+      const parsedKey = normalizePlaceKey(parsedPlace?.name);
+      const backendMatch = backendPlaces.find((bp: any) => {
+        const backendKey = normalizePlaceKey(bp?.name);
+        return Boolean(parsedKey && backendKey && (
+          parsedKey === backendKey ||
+          parsedKey.includes(backendKey) ||
+          backendKey.includes(parsedKey)
+        ));
+      });
+      if (!backendMatch) return parsedPlace;
+      // Merge: parsedPlace fields win for AI content; backendMatch fills in maps/placeId/address/rating
+      return mergeGroundedPlaceData(backendMatch, parsedPlace);
+    });
+  }
+
+  // Backend has rich data — use it as primary, fill gaps with parsedPlaces
   const mergedPlaces = [...backendPlaces];
   for (const parsedPlace of parsedPlaces) {
     const parsedKey = normalizePlaceKey(parsedPlace?.name);
@@ -452,12 +548,12 @@ function getGoogleMapsSearchUrl(resolvedBrowsingData: any, groundedPlaces: any[]
 
 function parseReviewTitle(title?: string): { author: string; rating: number | null; relTime: string } {
   if (!title) return { author: '', rating: null, relTime: '' };
-  const parts = toCleanString(title).split('·').map((p) => p.trim());
+  const parts = toCleanString(title).split(/[·•\u00B7\u2022\u2027|]/).map((p) => p.trim());
   const author = parts[0] || '';
   let rating: number | null = null;
   let relTime = '';
   for (const p of parts.slice(1)) {
-    const starMatch = p.match(/^([\d.]+)★/);
+    const starMatch = p.match(/^([\d.]+)[★⭐\u2605\u2B50]/);
     if (starMatch) { rating = parseFloat(starMatch[1]); continue; }
     if (p) relTime = p;
   }
@@ -535,6 +631,9 @@ export function GroundedPlacesBlock({
   message: MessageLike;
   language: string;
 }) {
+  const { theme } = useTheme();
+  const isDark = theme === 'dark';
+
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
   const groundedPlaces = getGroundedPlaces(message);
   const searchEntryPointHtml = typeof resolvedBrowsingData?.searchEntryPointHtml === 'string'
@@ -546,6 +645,33 @@ export function GroundedPlacesBlock({
   if (groundedPlaces.length === 0) return null;
 
   const isAr = language === 'ar';
+
+  const [expandedIndices, setExpandedIndices] = useState<Record<number, boolean>>({});
+  const toggleExpand = (idx: number) => {
+    setExpandedIndices(prev => ({
+      ...prev,
+      [idx]: !prev[idx]
+    }));
+  };
+
+  // Theme-aware styles
+  const cardBg = isDark 
+    ? 'linear-gradient(145deg, hsl(235 25% 10%) 0%, hsl(240 20% 13%) 100%)'
+    : '#ffffff';
+  
+  const cardBorder = isDark 
+    ? 'border-white/10 dark:border-white/8' 
+    : 'border-slate-200/70 shadow-[0_15px_42px_rgba(0,0,0,0.05)]';
+  
+  const textTitle = isDark ? 'text-white' : 'text-[#060541] font-bold text-base';
+  const textBody = isDark ? 'text-white/75' : 'text-slate-700';
+  const textMuted = isDark ? 'text-white/40' : 'text-slate-400';
+  const textMutedLight = isDark ? 'text-white/50' : 'text-slate-600 font-semibold';
+  const badgeBg = isDark ? 'bg-white/6 ring-1 ring-white/10' : 'bg-slate-50/80 border border-slate-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.015)]';
+  const infoBlockBg = isDark ? 'bg-white/6 ring-1 ring-white/8' : 'bg-slate-50 border border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.02)]';
+  const labelText = isDark ? 'text-white/35 font-medium' : 'text-slate-400 font-bold tracking-widest text-[9.5px]';
+  const linkText = isDark ? 'text-blue-300 hover:text-blue-200' : 'text-blue-600 hover:text-blue-700 font-semibold';
+  const textVal = isDark ? 'text-white/75' : 'text-slate-800 font-normal leading-relaxed text-[13.5px]';
 
   // Only show cards that have at least one meaningful field beyond just name+mapsUrl
   const richPlaces = groundedPlaces.slice(0, 6).filter((place: any) => {
@@ -566,7 +692,8 @@ export function GroundedPlacesBlock({
     // Must have meaningful data — rating or phone is ideal, but placeId+address is enough
     // (fetchGooglePlaceDetails will have enriched it if GOOGLE_MAPS_API_KEY is set)
     const hasPlaceId = Boolean(place.placeId && place.placeId.trim());
-    return hasRating || hasPhone || hasEmail || hasWeb || hasMaps || hasReason || hasVibe || hasMustTry || hasEditorial || (hasPlaceId && hasAddress) || (hasSocials && hasAddress) || (hasReviews && hasAddress);
+    // hasMaps alone is NOT enough — a card must have meaningful content to display
+    return hasRating || hasPhone || hasEmail || hasWeb || hasReason || hasVibe || hasMustTry || hasEditorial || (hasPlaceId && hasAddress) || (hasSocials && hasAddress) || (hasReviews && hasAddress);
   });
   const displayPlaces = richPlaces.length > 0
     ? richPlaces
@@ -607,7 +734,7 @@ export function GroundedPlacesBlock({
         const phoneHref = normalizePhoneHref(place.phone);
         const emailHref = normalizeEmailHref(place.email);
         const reviewSnippets = Array.isArray(place.reviewSnippets)
-          ? place.reviewSnippets.filter((item: any) => item?.snippet || item?.googleMapsUri || item?.uri).slice(0, 4)
+          ? place.reviewSnippets.filter((item: any) => item?.snippet || item?.title || item?.googleMapsUri || item?.uri).slice(0, 3)
           : [];
         const hasMaps = Boolean(place.mapsUrl && String(place.mapsUrl).trim());
         const hasCall = Boolean(phoneHref);
@@ -626,245 +753,265 @@ export function GroundedPlacesBlock({
         const emailText = toCleanString(place.email);
         const mapsUrl = toCleanString(place.mapsUrl);
         const websiteUrl = toCleanString(place.websiteUrl);
-        const ratingText = typeof place.rating === 'number' ? place.rating.toFixed(1) : (isAr ? 'غير متوفر' : 'Not available');
-        const reviewCountText = typeof place.userRatingCount === 'number'
+        const ratingValue = typeof place.rating === 'number' ? place.rating.toFixed(1) : null;
+        const reviewCountValue = typeof place.userRatingCount === 'number'
           ? formatReviewCount(place.userRatingCount, language)
-          : (isAr ? 'غير متوفر' : 'Not available');
-        const socialLinks = [
+          : null;
+
+        let socialLinks = [
           place.instagramUrl ? { label: 'Instagram', url: toCleanString(place.instagramUrl) } : null,
           place.facebookUrl ? { label: 'Facebook', url: toCleanString(place.facebookUrl) } : null,
           place.tiktokUrl ? { label: 'TikTok', url: toCleanString(place.tiktokUrl) } : null,
           place.whatsappUrl ? { label: 'WhatsApp', url: toCleanString(place.whatsappUrl) } : null,
         ].filter(Boolean) as Array<{ label: string; url: string }>;
 
+        const displayReviews = reviewSnippets;
+
+        const isExpanded = expandedIndices[index] || false;
+
         return (
           <div
             key={`${place.placeId || place.name || 'place'}-${index}`}
-            className="rounded-2xl overflow-hidden shadow-md border border-white/10 dark:border-white/8"
-            style={{ background: 'linear-gradient(145deg, hsl(235 25% 10%) 0%, hsl(240 20% 13%) 100%)' }}
+            className={`rounded-2xl overflow-hidden shadow-md border ${cardBorder}`}
+            style={{ background: cardBg }}
           >
-            {/* ── Header strip ── */}
-            <div className="px-4 pt-4 pb-3">
-              {index === 0 && introText && (
-                <div className="mb-3 rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
-                  <div className="text-[13px] text-white/75 leading-relaxed">{introText}</div>
-                </div>
-              )}
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="flex items-center gap-3 min-w-0">
+            {/* ── Clickable Header strip to Toggle Collapse ── */}
+            <div 
+              className={`px-4 py-3.5 cursor-pointer select-none transition-colors flex items-center justify-between gap-3 ${
+                isDark ? 'hover:bg-white/5 active:bg-white/10' : 'hover:bg-slate-50 active:bg-slate-100'
+              }`}
+              onClick={() => toggleExpand(index)}
+            >
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {place.photoUrl ? (
+                  <img 
+                    src={place.photoUrl} 
+                    alt={placeName} 
+                    className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100 dark:border-white/10"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
+                  />
+                ) : (
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-xl"
                     style={{ background: 'linear-gradient(135deg, hsl(210 100% 50%) 0%, hsl(260 70% 55%) 100%)' }}>
                     🏪
                   </div>
-                  <div className="min-w-0">
-                    <div className="font-bold text-[15px] text-white leading-tight">
-                      {placeName}
-                    </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className={`font-bold text-[15px] ${textTitle} leading-tight flex items-center gap-2 flex-wrap`}>
+                    <span className="truncate max-w-[150px] sm:max-w-xs">{placeName}</span>
+                    {typeof place.openNow === 'boolean' && (
+                      <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        place.openNow
+                          ? 'bg-green-500/20 text-green-500 ring-1 ring-green-500/30 dark:text-green-400'
+                          : 'bg-red-500/20 text-red-500 ring-1 ring-red-500/30 dark:text-red-400'
+                      }`}>
+                        {isAr ? (place.openNow ? 'مفتوح' : 'مغلق') : (place.openNow ? 'Open' : 'Closed')}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     {addressText && (
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <MapPin size={11} className="shrink-0 text-white/40" />
-                        <span className="text-[11px] text-white/50 truncate">{addressText}</span>
+                      <div className="flex items-center gap-1 min-w-0 max-w-[130px] sm:max-w-[200px]">
+                        <MapPin size={11} className={`shrink-0 ${isDark ? 'text-white/40' : 'text-slate-400'}`} />
+                        <span className={`text-[11px] ${isDark ? 'text-white/50' : 'text-slate-500'} truncate`}>{addressText}</span>
                       </div>
+                    )}
+                    {addressText && ratingValue && <span className={`text-[10px] ${isDark ? 'text-white/20' : 'text-slate-300'}`}>•</span>}
+                    {ratingValue && (
+                      <span className={`text-[11px] font-semibold ${isDark ? 'text-amber-400' : 'text-amber-500'} flex items-center gap-0.5`}>
+                        <Star size={11} fill="currentColor" /> {ratingValue}{reviewCountValue ? ` (${reviewCountValue})` : ''}
+                      </span>
                     )}
                   </div>
                 </div>
-                {typeof place.openNow === 'boolean' && (
-                  <span className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full ${
-                    place.openNow
-                      ? 'bg-green-500/20 text-green-400 ring-1 ring-green-500/30'
-                      : 'bg-red-500/20 text-red-400 ring-1 ring-red-500/30'
-                  }`}>
-                    {isAr ? (place.openNow ? 'مفتوح' : 'مغلق') : (place.openNow ? 'Open' : 'Closed')}
-                  </span>
-                )}
               </div>
-
-              {/* Rating row */}
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <div className="rounded-full bg-white/6 px-2.5 py-1 text-[11px] text-white/75 ring-1 ring-white/10">
-                  {isAr ? 'التقييم' : 'Rating'}: {ratingText}
-                </div>
-                <div className="rounded-full bg-white/6 px-2.5 py-1 text-[11px] text-white/75 ring-1 ring-white/10">
-                  {isAr ? 'عدد المراجعات' : 'Review count'}: {reviewCountText}
-                </div>
-              </div>
-
-              {/* Editorial summary */}
-              {editorialSummary && (
-                <p className="text-[13px] text-white/60 leading-relaxed mb-2 whitespace-pre-line">
-                  {editorialSummary}
-                </p>
-              )}
-
-              {(reasonText || vibeText || mustTryText) && (
-                <div className="space-y-2 mb-2">
-                  {reasonText && (
-                    <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
-                      <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'السبب' : 'Reason'}</div>
-                      <div className="text-[13px] text-white/75 leading-relaxed">{reasonText}</div>
-                    </div>
-                  )}
-                  {vibeText && (
-                    <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
-                      <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'الأجواء' : 'Vibe'}</div>
-                      <div className="text-[13px] text-white/75 leading-relaxed">{vibeText}</div>
-                    </div>
-                  )}
-                  {mustTryText && (
-                    <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
-                      <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'لازم تجربه' : 'Must-try'}</div>
-                      <div className="text-[13px] text-white/75 leading-relaxed">{mustTryText}</div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {typeof place.userRatingCount === 'number' && typeof place.rating !== 'number' && (
-                <div className="mb-2 inline-flex items-center rounded-full bg-white/6 px-2.5 py-1 text-[11px] text-white/55 ring-1 ring-white/10">
-                  {formatReviewCount(place.userRatingCount, language)} {isAr ? 'مراجعة Google' : 'Google reviews'}
-                </div>
-              )}
-
-              {/* Phone row */}
-              <div className="space-y-2 mb-2">
-                <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
-                  <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'الهاتف' : 'Phone'}</div>
-                  {phoneHref ? (
-                    <a href={phoneHref} className="text-[13px] font-medium text-blue-300 hover:text-blue-200 transition-colors">
-                      {phoneText}
-                    </a>
-                  ) : (
-                    <div className="text-[13px] text-white/45">{isAr ? 'غير متوفر' : 'Not available'}</div>
-                  )}
-                </div>
-                <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
-                  <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'الإيميل' : 'Email'}</div>
-                  {emailHref ? (
-                    <a href={emailHref} className="text-[13px] font-medium text-blue-300 hover:text-blue-200 transition-colors break-all">
-                      {emailText}
-                    </a>
-                  ) : (
-                    <div className="text-[13px] text-white/45">{isAr ? 'غير متوفر' : 'Not available'}</div>
-                  )}
-                </div>
-                <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
-                  <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">{isAr ? 'الموقع' : 'Website'}</div>
-                  {hasWeb ? (
-                    <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-blue-300 hover:text-blue-200 transition-colors break-all">
-                      {websiteLabel || websiteUrl}
-                    </a>
-                  ) : (
-                    <div className="text-[13px] text-white/45">{isAr ? 'غير متوفر' : 'Not available'}</div>
-                  )}
-                </div>
-                <div className="rounded-xl bg-white/6 px-3 py-2 ring-1 ring-white/8">
-                  <div className="text-[10px] uppercase tracking-widest text-white/35 mb-1">Google Maps</div>
-                  {hasMaps ? (
-                    <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className="text-[13px] font-medium text-blue-300 hover:text-blue-200 transition-colors break-all">
-                      {isAr ? 'افتح في Google Maps' : 'Open in Google Maps'}
-                    </a>
-                  ) : (
-                    <div className="text-[13px] text-white/45">{isAr ? 'غير متوفر' : 'Not available'}</div>
-                  )}
-                </div>
+              <div className={`p-1.5 rounded-full shrink-0 transition-all ${
+                isDark ? 'bg-white/5 hover:bg-white/10 text-white/60' : 'bg-slate-100 hover:bg-slate-200 text-slate-600'
+              } ${isExpanded ? 'rotate-180' : ''}`}>
+                <ChevronDown size={15} />
               </div>
             </div>
 
-            {/* ── Action buttons ── */}
-            {(hasMaps || hasCall || hasEmail || hasWeb || hasWhatsApp) && (
-              <div className="px-4 pb-3 flex flex-wrap gap-2">
-                {hasMaps && (
-                  <a href={place.mapsUrl} target="_blank" rel="noopener noreferrer"
-                    className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                    style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%) 0%, hsl(220 90% 38%) 100%)' }}>
-                    <Navigation size={13} />
-                    {isAr ? 'الخريطة' : 'Maps'}
-                  </a>
-                )}
-                {hasCall && (
-                  <a href={phoneHref}
-                    className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                    style={{ background: 'linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(150 70% 28%) 100%)' }}>
-                    <Phone size={13} />
-                    {isAr ? 'اتصال' : 'Call'}
-                  </a>
-                )}
-                {hasEmail && (
-                  <a href={emailHref}
-                    className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                    style={{ background: 'linear-gradient(135deg, hsl(210 80% 56%) 0%, hsl(235 75% 44%) 100%)' }}>
-                    <Mail size={13} />
-                    {isAr ? 'إيميل' : 'Email'}
-                  </a>
-                )}
-                {hasWhatsApp && (
-                  <a href={place.whatsappUrl} target="_blank" rel="noopener noreferrer"
-                    className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                    style={{ background: 'linear-gradient(135deg, hsl(142 76% 42%) 0%, hsl(160 75% 30%) 100%)' }}>
-                    <MessageCircle size={13} />
-                    WhatsApp
-                  </a>
-                )}
-                {hasWeb && (
-                  <a href={place.websiteUrl} target="_blank" rel="noopener noreferrer"
-                    className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                    style={{ background: 'linear-gradient(135deg, hsl(280 60% 45%) 0%, hsl(270 55% 35%) 100%)' }}>
-                    <Globe size={13} />
-                    {isAr ? 'الموقع' : 'Website'}
-                  </a>
-                )}
-              </div>
-            )}
+            {/* ── Collapsible Card Content ── */}
+            {isExpanded && (
+              <div className={`border-t ${isDark ? 'border-white/5' : 'border-slate-100'} animate-in fade-in slide-in-from-top-1 duration-200`}>
+                <div className="px-4 pt-4 pb-3">
+                  {/* Editorial summary */}
+                  {editorialSummary && (
+                    <p className={`text-[13px] ${isDark ? 'text-white/60' : 'text-slate-600'} leading-relaxed mb-3 whitespace-pre-line`}>
+                      {editorialSummary}
+                    </p>
+                  )}
 
-            {/* ── Social follow badges ── */}
-            <div className="px-4 pb-3 flex flex-wrap items-center gap-2 border-t border-white/8 pt-3">
-              <span className="text-[11px] text-white/40 font-medium mr-1">{isAr ? 'روابط السوشال:' : 'Social links:'}</span>
-              {socialLinks.length > 0 ? socialLinks.map((social) => (
-                <a key={social.label} href={social.url} target="_blank" rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 text-white/85 text-xs"
-                  style={{ background: 'rgba(255,255,255,0.08)' }} title={social.label}>
-                  {social.label === 'Instagram' ? <InstagramIcon size={22} /> : null}
-                  {social.label === 'Facebook' ? <FacebookIcon size={22} /> : null}
-                  {social.label === 'TikTok' ? <TikTokIcon size={22} /> : null}
-                  {social.label === 'WhatsApp' ? <WhatsAppIcon size={22} /> : null}
-                  <span>{social.label}</span>
-                </a>
-              )) : (
-                <span className="text-[12px] text-white/45">{isAr ? 'غير متوفرة' : 'Not available'}</span>
-              )}
-            </div>
-
-            {/* ── Recent Reviews ── */}
-            {reviewSnippets.length > 0 && (
-              <div className="border-t border-white/8 px-4 py-3 space-y-3"
-                style={{ background: 'rgba(0,0,0,0.15)' }}>
-                <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-white/35 font-semibold">
-                  <MessageCircle size={11} />
-                  {isAr ? 'مراجعات Google' : 'Google Reviews'}
-                </div>
-                {reviewSnippets.map((review: any, reviewIndex: number) => {
-                  const parsed = parseReviewTitle(review.title);
-                  return (
-                    <div key={`${place.placeId || place.name || 'place'}-review-${reviewIndex}`} className="space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {parsed.author && (
-                          <span className="text-xs font-semibold text-white/80">{parsed.author}</span>
-                        )}
-                        {typeof parsed.rating === 'number' && (
-                          <span className="text-[11px] text-white/55">{parsed.rating.toFixed(1)}/5</span>
-                        )}
-                        {parsed.relTime && (
-                          <span className="text-[11px] text-white/35">{parsed.relTime}</span>
-                        )}
-                      </div>
-                      {review.snippet && (
-                        <p className="text-[12px] text-white/55 leading-relaxed">
-                          {truncateReviewText(toCleanString(review.snippet), 200)}
-                        </p>
+                  {(reasonText || vibeText || mustTryText) && (
+                    <div className="space-y-2 mb-3">
+                      {reasonText && (
+                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'السبب' : 'Reason'}</div>
+                          <div className={`text-[13px] ${textVal} leading-relaxed`}>{reasonText}</div>
+                        </div>
+                      )}
+                      {vibeText && (
+                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الأجواء' : 'Vibe'}</div>
+                          <div className={`text-[13px] ${textVal} leading-relaxed`}>{vibeText}</div>
+                        </div>
+                      )}
+                      {mustTryText && (
+                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'لازم تجربه' : 'Must-try'}</div>
+                          <div className={`text-[13px] ${textVal} leading-relaxed`}>{mustTryText}</div>
+                        </div>
                       )}
                     </div>
-                  );
-                })}
+                  )}
+
+                  {typeof place.userRatingCount === 'number' && typeof place.rating !== 'number' && (
+                    <div className={`mb-3 inline-flex items-center rounded-full ${badgeBg} px-2.5 py-1 text-[11px] ${textMutedLight}`}>
+                      {formatReviewCount(place.userRatingCount, language)} {isAr ? 'مراجعة Google' : 'Google reviews'}
+                    </div>
+                  )}
+
+                  {/* Contact details list — only render rows that have real data */}
+                  {(hasCall || hasEmail || hasWeb || hasMaps) && (
+                    <div className="space-y-2 mb-3">
+                      {hasCall && (
+                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الهاتف' : 'Phone'}</div>
+                          <a href={phoneHref} className={`text-[13px] font-medium ${linkText} transition-colors`}>
+                            {phoneText}
+                          </a>
+                        </div>
+                      )}
+                      {hasEmail && (
+                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الإيميل' : 'Email'}</div>
+                          <a href={emailHref} className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
+                            {emailText}
+                          </a>
+                        </div>
+                      )}
+                      {hasWeb && (
+                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الموقع الإلكتروني' : 'Website'}</div>
+                          <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
+                            {websiteLabel || websiteUrl}
+                          </a>
+                        </div>
+                      )}
+                      {hasMaps && (
+                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>Google Maps</div>
+                          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
+                            {isAr ? 'افتح في Google Maps' : 'Open in Google Maps'}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Action buttons ── */}
+                {(hasMaps || hasCall || hasEmail || hasWeb || hasWhatsApp) && (
+                  <div className="px-4 pb-3 flex flex-wrap gap-2">
+                    {hasMaps && (
+                      <a href={place.mapsUrl} target="_blank" rel="noopener noreferrer"
+                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
+                        style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%) 0%, hsl(220 90% 38%) 100%)' }}>
+                        <Navigation size={13} />
+                        {isAr ? 'الخريطة' : 'Maps'}
+                      </a>
+                    )}
+                    {hasCall && (
+                      <a href={phoneHref}
+                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
+                        style={{ background: 'linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(150 70% 28%) 100%)' }}>
+                        <Phone size={13} />
+                        {isAr ? 'اتصال' : 'Call'}
+                      </a>
+                    )}
+                    {hasEmail && (
+                      <a href={emailHref}
+                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
+                        style={{ background: 'linear-gradient(135deg, hsl(210 80% 56%) 0%, hsl(235 75% 44%) 100%)' }}>
+                        <Mail size={13} />
+                        {isAr ? 'إيميل' : 'Email'}
+                      </a>
+                    )}
+                    {hasWhatsApp && (
+                      <a href={place.whatsappUrl} target="_blank" rel="noopener noreferrer"
+                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
+                        style={{ background: 'linear-gradient(135deg, hsl(142 76% 42%) 0%, hsl(160 75% 30%) 100%)' }}>
+                        <MessageCircle size={13} />
+                        WhatsApp
+                      </a>
+                    )}
+                    {hasWeb && (
+                      <a href={place.websiteUrl} target="_blank" rel="noopener noreferrer"
+                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
+                        style={{ background: 'linear-gradient(135deg, hsl(280 60% 45%) 0%, hsl(270 55% 35%) 100%)' }}>
+                        <Globe size={13} />
+                        {isAr ? 'الموقع' : 'Website'}
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Social follow badges ── */}
+                {socialLinks.length > 0 && (
+                  <div className={`px-4 pb-3 flex flex-wrap items-center gap-2 border-t ${isDark ? 'border-white/8' : 'border-slate-100'} pt-3`}>
+                    <span className={`text-[11px] ${labelText} font-medium mr-1`}>{isAr ? 'روابط السوشال:' : 'Social links:'}</span>
+                    {socialLinks.map((social) => (
+                      <a key={social.label} href={social.url} target="_blank" rel="noopener noreferrer"
+                        className={`inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 ${isDark ? 'text-white/85' : 'text-slate-700'} text-xs`}
+                        style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }} title={social.label}>
+                        {social.label === 'Instagram' ? <InstagramIcon size={22} /> : null}
+                        {social.label === 'Facebook' ? <FacebookIcon size={22} /> : null}
+                        {social.label === 'TikTok' ? <TikTokIcon size={22} /> : null}
+                        {social.label === 'WhatsApp' ? <WhatsAppIcon size={22} /> : null}
+                        <span>{social.label}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── Recent Reviews ── */}
+                {displayReviews.length > 0 && (
+                  <div className={`border-t ${isDark ? 'border-white/8' : 'border-slate-100'} px-4 py-3 space-y-3`}
+                    style={{ background: isDark ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.02)' }}>
+                    <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-widest ${labelText} font-semibold`}>
+                      <MessageCircle size={11} />
+                      {isAr ? 'مراجعات Google' : 'Google Reviews'}
+                    </div>
+                    {displayReviews.map((review: any, reviewIndex: number) => {
+                      const parsed = parseReviewTitle(review.title);
+                      return (
+                        <div key={`${place.placeId || place.name || 'place'}-review-${reviewIndex}`} className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {parsed.author ? (
+                              <span className={`text-xs font-semibold ${isDark ? 'text-white/80' : 'text-slate-800'}`}>{parsed.author}</span>
+                            ) : review.title ? (
+                              <span className={`text-xs font-semibold ${isDark ? 'text-white/80' : 'text-slate-800'}`}>{toCleanString(review.title)}</span>
+                            ) : null}
+                            {typeof parsed.rating === 'number' && (
+                              <span className={`text-[11px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>{parsed.rating.toFixed(1)}/5</span>
+                            )}
+                            {parsed.relTime && (
+                              <span className={`text-[11px] ${isDark ? 'text-white/35' : 'text-slate-400'}`}>{parsed.relTime}</span>
+                            )}
+                          </div>
+                          {review.snippet && (
+                            <p className={`text-[12px] ${isDark ? 'text-white/55' : 'text-slate-600'} leading-relaxed`}>
+                              {truncateReviewText(toCleanString(review.snippet), 200)}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

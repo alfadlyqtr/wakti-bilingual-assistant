@@ -26,7 +26,8 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
   'gemini-2.5-flash':        { input: 0.15,  output: 0.60 },
   'gemini-2.0-flash':        { input: 0.10,  output: 0.40 },
   'gemini-2.5-pro':          { input: 1.25,  output: 5.00 },
-  // Gemini 3.x preview models
+  // Gemini 3.x models
+  'gemini-3.5-flash':        { input: 0.075, output: 0.30 },
   'gemini-3-flash-preview':  { input: 0.15,  output: 0.60 },
   'gemini-3.1-pro-preview':  { input: 1.25,  output: 5.00 },
 };
@@ -39,13 +40,14 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
 // Opt-in to preview models via env vars when Google stabilises them.
 export const GEMINI_MODEL_CREATE = Deno.env.get('GEMINI_MODEL_CREATE') || 'gemini-3.1-pro-preview';
 export const GEMINI_MODEL_AGENT  = Deno.env.get('GEMINI_MODEL_AGENT')  || 'gemini-3.1-pro-preview';
-export const GEMINI_MODEL_PLAN   = Deno.env.get('GEMINI_MODEL_PLAN')   || 'gemini-3-flash-preview';
-export const GEMINI_MODEL_SIMPLE = Deno.env.get('GEMINI_MODEL_SIMPLE') || 'gemini-3-flash-preview';
-export const GEMINI_MODEL_VISION = Deno.env.get('GEMINI_MODEL_VISION') || 'gemini-3-flash-preview';
+export const GEMINI_MODEL_PLAN   = Deno.env.get('GEMINI_MODEL_PLAN')   || 'gemini-3.5-flash';
+export const GEMINI_MODEL_SIMPLE = Deno.env.get('GEMINI_MODEL_SIMPLE') || 'gemini-3.5-flash';
+export const GEMINI_MODEL_VISION = Deno.env.get('GEMINI_MODEL_VISION') || 'gemini-3.5-flash';
 
 /** Fallback map: if a 3.x model fails, retry with its 2.5 equivalent. */
 export const MODEL_FALLBACK: Record<string, string> = {
   'gemini-3.1-pro-preview': 'gemini-2.5-pro',
+  'gemini-3.5-flash': 'gemini-2.5-flash',
   'gemini-3-flash-preview': 'gemini-2.5-flash',
 };
 

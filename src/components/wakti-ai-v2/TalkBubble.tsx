@@ -541,6 +541,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
       // Add audio track
       stream.getAudioTracks().forEach(track => {
+        track.enabled = false;
         pc.addTrack(track, stream);
       });
 
@@ -672,10 +673,8 @@ ${memoryContext ? memoryContext : ''}`
         dc.send(JSON.stringify({
           type: 'session.update',
           session: {
+            type: 'realtime',
             instructions,
-            voice: openaiVoice,
-            input_audio_transcription: { model: 'whisper-1' },
-            turn_detection: null, // Manual - we control when user finishes speaking
           }
         }));
         
@@ -780,6 +779,11 @@ ${memoryContext ? memoryContext : ''}`
       case 'input_audio_buffer.committed':
         // Audio buffer committed
         console.log('[Talk] Audio committed');
+        // If in search mode, cancel the auto-response immediately so we can
+        // inject search results before the model replies
+        if (searchModeRef.current && dcRef.current?.readyState === 'open') {
+          dcRef.current.send(JSON.stringify({ type: 'response.cancel' }));
+        }
         break;
       case 'conversation.item.input_audio_transcription.completed':
         // User's speech transcribed
@@ -806,18 +810,19 @@ ${memoryContext ? memoryContext : ''}`
           if (searchModeRef.current) {
             console.log('[Talk] Search mode active - performing web search for:', transcript);
             pendingTranscriptRef.current = transcript;
+            setAiTranscript(''); // clear any stale AI text
             
             // Clean the transcript for better search results (removes filler words)
             const cleanedQuery = cleanSearchQuery(transcript);
+            
+            // Auto-reset search mode BEFORE async work to prevent double-trigger
+            setSearchMode(false);
+            searchModeRef.current = false;
             
             // Perform search and then send response with results
             performWebSearch(cleanedQuery, detectedLang).then((searchContext) => {
               console.log('[Talk] Search complete, sending response with context');
               sendResponseCreate(searchContext, transcript, detectedLang);
-              
-              // Auto-reset search mode after one use (A2 behavior)
-              setSearchMode(false);
-              searchModeRef.current = false;
             });
           } else {
             // Talk mode - respond normally (transcript already validated as non-empty)
@@ -892,8 +897,14 @@ ${memoryContext ? memoryContext : ''}`
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       
+      const location = userLocationRef.current;
       const response = await supabase.functions.invoke('live-talk-search', {
-        body: { query, language: lang },
+        body: { 
+          query, 
+          language: lang,
+          ...(location?.city ? { city: location.city } : {}),
+          ...(location?.country ? { country: location.country } : {}),
+        },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
       
@@ -965,7 +976,7 @@ ${memoryContext ? memoryContext : ''}`
 
         dcRef.current.send(JSON.stringify({
           type: 'session.update',
-          session: { instructions: refreshedInstructions }
+          session: { type: 'realtime', instructions: refreshedInstructions }
         }));
       }
     } catch (e) {
@@ -1008,6 +1019,12 @@ ${memoryContext ? memoryContext : ''}`
     setIsHolding(false);
     isHoldingRef.current = false;
     setStatus('processing');
+
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach(track => {
+        track.enabled = false;
+      });
+    }
 
     // Send input_audio_buffer.commit to finalize
     if (dcRef.current && dcRef.current.readyState === 'open') {
@@ -1052,6 +1069,12 @@ ${memoryContext ? memoryContext : ''}`
     // Reset the stopping guard when starting a new recording
     isStoppingRef.current = false;
 
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach(track => {
+        track.enabled = true;
+      });
+    }
+
     dcRef.current?.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
     console.log('[Talk] Cleared audio buffer for fresh recording');
 
@@ -1075,8 +1098,7 @@ ${memoryContext ? memoryContext : ''}`
   }, [isConnectionReady, isHolding, language, stopRecording]);
 
   // Hold handlers
-  const handleHoldStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
-    e.preventDefault();
+  const handleHoldStart = useCallback(() => {
     if (status === 'ready' && isConnectionReady) {
       setError(null);
       setIsHolding(true);
@@ -1085,8 +1107,7 @@ ${memoryContext ? memoryContext : ''}`
     }
   }, [status, isConnectionReady, startRecording]);
 
-  const handleHoldEnd = useCallback((e: React.TouchEvent | React.MouseEvent) => {
-    e.preventDefault();
+  const handleHoldEnd = useCallback(() => {
     if (isHolding) {
       stopRecording();
     }
@@ -1461,14 +1482,13 @@ ${memoryContext ? memoryContext : ''}`
           <div className="plasma plasma-4"></div>
           
           <button
-            onMouseDown={handleHoldStart}
-            onMouseUp={handleHoldEnd}
-            onMouseLeave={handleHoldEnd}
-            onTouchStart={handleHoldStart}
-            onTouchEnd={handleHoldEnd}
+            onPointerDown={handleHoldStart}
+            onPointerUp={handleHoldEnd}
+            onPointerLeave={handleHoldEnd}
+            onPointerCancel={handleHoldEnd}
             onContextMenu={(e) => e.preventDefault()}
             disabled={!isConnectionReady || status === 'processing' || status === 'speaking' || status === 'connecting'}
-            className="voice-orb"
+            className="voice-orb touch-none"
             aria-label={statusText[status]}
           >
             {/* Inner glass highlight */}
@@ -1526,7 +1546,7 @@ ${memoryContext ? memoryContext : ''}`
         {/* End button */}
         <button
           onClick={() => {
-            conversationHistory.forEach(item => {
+            conversationHistoryRef.current.forEach(item => {
               if (item.role === 'user') {
                 onUserMessage(item.text);
               } else {

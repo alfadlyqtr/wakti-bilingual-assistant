@@ -130,9 +130,13 @@ const WaktiAIV2 = () => {
 
   const { profile: cachedProfile, isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
 
-  const loadUserProfile = () => {
+  const loadUserProfile = useCallback(() => {
     const user = authUser;
-    if (user) setUserProfile(user);
+    if (cachedProfile) {
+      setUserProfile(cachedProfile);
+    } else if (user) {
+      setUserProfile(user);
+    }
     if (!user?.id) return;
     // Mount-time check using cached profile: has this user already exhausted their ai_chat trial?
     // Prevents the refresh loophole where chatTrialLimitReached resets to false on reload.
@@ -143,7 +147,11 @@ const WaktiAIV2 = () => {
         setChatTrialLimitReached(true);
       }
     }
-  };
+  }, [authUser, cachedProfile, isSubscribed, isAdminGifted, hasTrialStarted]);
+
+  useEffect(() => {
+    loadUserProfile();
+  }, [loadUserProfile]);
 
   const loadPersonalTouch = () => {
     try {
@@ -216,7 +224,6 @@ const WaktiAIV2 = () => {
 
 
   useEffect(() => {
-    loadUserProfile();
     loadPersonalTouch();
 
     // localStorage is the source of truth for the current active session.
@@ -741,14 +748,16 @@ const WaktiAIV2 = () => {
 
         // Flush final content into sessionMessages (one-time, not per-token)
         // Then clear streaming overlay — ChatMessages will switch to rendering message.content
+        // IMPORTANT: keep setStreamingMessageId + setSessionMessages adjacent (no DOM mutations
+        // between them) so React 18 auto-batches both into one render and eliminates flicker.
         setStreamingMessageId(null);
-        streamingBubbleRef.current?.reset();
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
           setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
           setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);
           return finalMessages;
         });
+        streamingBubbleRef.current?.reset();
         return; // Done (skip streaming path)
       }
       else {
@@ -920,14 +929,16 @@ const WaktiAIV2 = () => {
 
         // Flush final content into sessionMessages (one-time, not per-token)
         // Then clear streaming overlay — ChatMessages will switch to rendering message.content
+        // IMPORTANT: keep setStreamingMessageId + setSessionMessages adjacent (no DOM mutations
+        // between them) so React 18 auto-batches both into one render and eliminates flicker.
         setStreamingMessageId(null);
-        streamingBubbleRef.current?.reset();
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
           setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
           setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);
           return finalMessages;
         });
+        streamingBubbleRef.current?.reset();
       }
 
     } catch (error: any) {

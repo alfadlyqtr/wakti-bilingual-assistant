@@ -4134,11 +4134,11 @@ ${fixInstructions}
         );
         
         if (success && targetFile) {
-          setGeneratedFiles(updatedFiles);
-          // Update codeContent if the target file is the current active file
-          if (targetFile === '/App.js' || Object.keys(updatedFiles).length === 1) {
-            setCodeContent(updatedFiles[targetFile] || updatedFiles['/App.js'] || '');
-          }
+          // Push current state to history before applying changes
+          visualEditHistory.pushState(generatedFiles, isRTL ? 'تحديث الصورة' : 'Image update');
+          
+          // Save code to database and refresh preview
+          void saveCode(updatedFiles);
           toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
         } else {
           // Fallback: Use AI prompt with the URL
@@ -4407,7 +4407,11 @@ ${fixInstructions}
         const { success, updatedFiles } = replaceCarouselImagesInFiles(generatedFiles, imageUrls);
         
         if (success) {
-          setGeneratedFiles(updatedFiles);
+          // Push current state to history before applying changes
+          visualEditHistory.pushState(generatedFiles, language === 'ar' ? 'تحديث الكاروسيل' : 'Carousel update');
+          
+          // Save code to database and refresh preview
+          void saveCode(updatedFiles);
           toast.success(
             language === 'ar' 
               ? `تم تحديث ${imageUrls.length} صور في الكاروسيل` 
@@ -9222,6 +9226,7 @@ ${fixInstructions}
                   }));
                   await (supabase.from('project_files' as any).upsert(rows, { onConflict: 'project_id,path' }) as any);
                   toast.success(isRTL ? `✓ تم الحفظ: ${finalResult.message}` : `✓ Saved: ${finalResult.message}`);
+                  refreshPreview();
                 } catch (err) {
                   console.error('[Visual Edit] Auto-save failed:', err);
                   toast.warning(isRTL ? `تم التطبيق: ${finalResult.message}` : `Applied: ${finalResult.message}`);
@@ -9253,6 +9258,7 @@ ${fixInstructions}
             setLeftPanelMode('code');
             setChatInput(contextPrompt);
             setShowElementEditPopover(false);
+            setSelectedElementInfo(null);
             setTimeout(() => {
               const formEl = document.querySelector('form[data-chat-form]') as HTMLFormElement | null;
               if (formEl) formEl.requestSubmit?.();
@@ -9362,8 +9368,10 @@ ${fixInstructions}
               if (replaced) {
                 // Push current state to history before applying changes
                 visualEditHistory.pushState(generatedFiles, isRTL ? 'تحديث الصورة' : 'Image update');
-                setGeneratedFiles(prev => ({ ...prev, '/App.js': newCode }));
+                const updatedFiles = { ...generatedFiles, '/App.js': newCode };
+                setGeneratedFiles(updatedFiles);
                 setCodeContent(newCode);
+                void saveCode(updatedFiles);
                 toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
               } else {
                 // Fallback: send to AI if direct replacement fails
@@ -9441,6 +9449,7 @@ ${fixInstructions}
                       ? `✓ تم الحفظ: ${finalResult.message}`
                       : `✓ Saved: ${finalResult.message}`
                   );
+                  refreshPreview();
                 } catch (err) {
                   console.error('[Visual Edit] Auto-save failed:', err);
                   toast.warning(
@@ -9547,6 +9556,7 @@ ${fixInstructions}
             setLeftPanelMode('code');
             setChatInput(contextPrompt);
             setShowElementEditPopover(false);
+            setSelectedElementInfo(null);
             setTimeout(() => {
               const formEl = document.querySelector('form[data-chat-form]') as HTMLFormElement | null;
               if (formEl) formEl.requestSubmit?.();

@@ -440,6 +440,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
         setCurrentPlan(executing);
 
         return await new Promise<AgentPlan>((resolve, reject) => {
+          let consecutiveFailures = 0;
           const poll = async () => {
             if (abortRef.current?.signal.aborted) {
               reject(createAgentError('cancelled', startData));
@@ -453,6 +454,8 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
               const data = (res.data || {}) as EdgeStatusResponse;
               const job = data.job;
               if (!job) throw new Error(data.error || 'Agent job not found');
+
+              consecutiveFailures = 0; // Reset counter on success
 
               const next: AgentPlan = {
                 ...executing,
@@ -494,12 +497,20 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
               setCurrentPlan(next);
               pollTimerRef.current = setTimeout(poll, pollIntervalMs);
             } catch (err) {
-              setIsRunning(false);
-              activeJobIdRef.current = null;
-               clearPollTimer();
-              const msg = err instanceof Error ? err.message : String(err);
-              onError?.(msg);
-              reject(err);
+              consecutiveFailures++;
+              console.warn(`[useAgentMode] Status check failed (attempt ${consecutiveFailures}/3):`, err);
+              
+              if (consecutiveFailures < 3) {
+                // Keep polling despite temporary status check failure
+                pollTimerRef.current = setTimeout(poll, pollIntervalMs);
+              } else {
+                setIsRunning(false);
+                activeJobIdRef.current = null;
+                clearPollTimer();
+                const msg = err instanceof Error ? err.message : String(err);
+                onError?.(msg);
+                reject(err);
+              }
             }
           };
           poll();

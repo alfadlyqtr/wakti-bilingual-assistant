@@ -5,8 +5,8 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-const MODEL = "gpt-realtime-mini-2025-12-15";
-const REALTIME_URL = `https://api.openai.com/v1/realtime?model=${MODEL}`;
+const MODEL = "gpt-realtime-2";
+const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,17 +51,31 @@ serve(async (req: Request) => {
       });
     }
 
-    console.log("[openai-realtime-session] Creating session (legacy realtime SDP endpoint)...");
+    console.log("[openai-realtime-session] Creating session using GA unified interface...");
     console.log("[openai-realtime-session] Model:", MODEL);
 
-    // Call OpenAI Realtime API with SDP offer (legacy endpoint)
-    const openaiResponse = await fetch(REALTIME_URL, {
+    const sessionConfig = JSON.stringify({
+      type: "realtime",
+      model: MODEL,
+      audio: {
+        input: {
+          transcription: { model: "gpt-realtime-whisper" },
+        },
+        output: { voice: "shimmer" },
+      },
+    });
+
+    const formData = new FormData();
+    formData.set("sdp", sdp_offer);
+    formData.set("session", sessionConfig);
+
+    // Call OpenAI Realtime API with multipart form (unified GA interface)
+    const openaiResponse = await fetch(REALTIME_CALLS_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/sdp",
       },
-      body: sdp_offer,
+      body: formData,
     });
 
     if (!openaiResponse.ok) {

@@ -10,7 +10,7 @@ import { ImageModal } from './ImageModal';
 import { supabase } from '@/integrations/supabase/client';
 import { getSelectedVoices } from './TalkBackSettings';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
-import { GroundedPlacesBlock, hasGroundedPlaces, resolveGroundedBrowsingData } from './GroundedPlacesBlock';
+import { GroundedPlacesBlock, hasGroundedPlaces, resolveGroundedBrowsingData, stripDuplicatePlaceDetails } from './GroundedPlacesBlock';
 
 // Proxy image URLs through our Edge Function to avoid COEP/CORS blocking
 const SUPABASE_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co';
@@ -529,13 +529,15 @@ export function ChatBubble({ message, userProfile, activeTrigger }: ChatBubblePr
               )}
 
               {/* FIXED: Message content with proper alignment */}
-              {hasGroundedPlaceCards ? (
-                <GroundedPlacesBlock message={message} language={language} />
-              ) : (
-                <div 
-                  className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
-                  dangerouslySetInnerHTML={{ __html: formatContent(message.content) }}
-                />
+              <div 
+                className={`text-sm whitespace-pre-wrap ${isUser ? 'text-right' : 'text-left'}`}
+                dangerouslySetInnerHTML={{ __html: formatContent(hasGroundedPlaceCards ? stripDuplicatePlaceDetails(message.content || '') : (message.content || '')) }}
+              />
+
+              {hasGroundedPlaceCards && (
+                <div className="mt-4">
+                  <GroundedPlacesBlock message={message} language={language} />
+                </div>
               )}
 
               {!isUser && sources.length > 0 && (

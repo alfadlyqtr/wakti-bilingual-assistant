@@ -233,11 +233,13 @@ const SandpackWorkspaceSync = ({
   openTabs,
   onActiveFileChange,
   onOpenTabsChange,
+  onSave,
 }: {
   activeFile: string;
   openTabs: string[];
   onActiveFileChange: (path: string) => void;
   onOpenTabsChange: (paths: string[]) => void;
+  onSave?: (files: Record<string, string>) => void;
 }) => {
   const { sandpack } = useSandpack();
 
@@ -246,6 +248,36 @@ const SandpackWorkspaceSync = ({
   const sandpackVisibleFiles = Array.isArray(sandpackApi.visibleFiles)
     ? sandpackApi.visibleFiles.filter((path: unknown): path is string => typeof path === 'string')
     : [];
+
+  // Background Auto-Save on manual file editing
+  const lastSavedRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!onSave) return;
+
+    const liveFiles: Record<string, string> = {};
+    for (const [path, file] of Object.entries(sandpack.files)) {
+      const anyFile = file as any;
+      liveFiles[path] = anyFile?.code ?? anyFile?.content ?? '';
+    }
+
+    const currentFilesStr = JSON.stringify(liveFiles);
+
+    // Initialize lastSavedRef on first load
+    if (!lastSavedRef.current) {
+      lastSavedRef.current = currentFilesStr;
+      return;
+    }
+
+    if (currentFilesStr === lastSavedRef.current) return;
+
+    const timer = setTimeout(() => {
+      onSave(liveFiles);
+      lastSavedRef.current = currentFilesStr;
+    }, 2500);
+
+    return () => clearTimeout(timer);
+  }, [sandpack.files, onSave]);
 
   useEffect(() => {
     if (!activeFile) return;
@@ -759,6 +791,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
           openTabs={openTabs}
           onActiveFileChange={setActiveFile}
           onOpenTabsChange={setOpenTabs}
+          onSave={onSave}
         />
 
         {/* SANDPACK ENGINE */}

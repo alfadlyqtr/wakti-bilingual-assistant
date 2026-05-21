@@ -68,6 +68,12 @@ function findElementInCode(
   const { tagName, innerText, className, openingTag: elementOpeningTag } = element;
 
   const tagCandidates = [tagName, `motion.${tagName}`];
+  if (tagName.toLowerCase() === 'a') {
+    tagCandidates.push('Link', 'NavLink', 'MotionLink', 'motion.Link');
+  } else if (tagName.toLowerCase() === 'button') {
+    tagCandidates.push('Button', 'MotionButton', 'motion.button');
+  }
+  
   const escapeTagForRegex = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   
   // Self-closing tags that don't have closing tags
@@ -140,8 +146,11 @@ function findElementInCode(
     if (classToMatch) {
       const escapedClass = classToMatch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-      for (const cand of tagCandidates) {
-        const t = escapeTagForRegex(cand);
+      // We first try with specific tag candidates, and if those fail, we try with ANY tag name
+      const expandedCandidates = [...tagCandidates, '[a-zA-Z0-9_.-]+'];
+
+      for (const cand of expandedCandidates) {
+        const t = cand === '[a-zA-Z0-9_.-]+' ? cand : escapeTagForRegex(cand);
         
         if (isSelfClosing) {
           // For self-closing tags, match the whole tag including />

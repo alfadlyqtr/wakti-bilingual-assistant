@@ -6,9 +6,8 @@ const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
-const DEFAULT_REALTIME_MODEL = "gpt-realtime-mini-2025-12-15";
-const MODEL = Deno.env.get("OPENAI_REALTIME_TRANSLATE_MODEL") || Deno.env.get("OPENAI_REALTIME_MODEL") || DEFAULT_REALTIME_MODEL;
-const REALTIME_URL = `https://api.openai.com/v1/realtime?model=${MODEL}`;
+const MODEL = "gpt-realtime-2";
+const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
 const FRIENDLY_CONNECTION_ERROR = "Live Translator is not available right now. Please try again.";
 
 const corsHeaders = {
@@ -52,7 +51,9 @@ serve(async (req: Request) => {
     }
 
     const body = await req.json();
-    const { sdp_offer } = body;
+    const { sdp_offer, voice } = body;
+    // cedar = Male (ash), marin = Female (shimmer)
+    const resolvedVoice = voice === 'cedar' ? 'ash' : voice === 'marin' ? 'shimmer' : 'ash';
 
     if (!sdp_offer) {
       return new Response(JSON.stringify({ error: "Missing sdp_offer" }), {
@@ -61,13 +62,31 @@ serve(async (req: Request) => {
       });
     }
 
-    const openaiResponse = await fetch(REALTIME_URL, {
+    console.log("[openai-realtime-translate-session] Creating session using GA unified interface...");
+    console.log("[openai-realtime-translate-session] Model:", MODEL);
+
+    const sessionConfig = JSON.stringify({
+      type: "realtime",
+      model: MODEL,
+      audio: {
+        input: {
+          transcription: { model: "gpt-realtime-whisper" },
+        },
+        output: { voice: resolvedVoice },
+      },
+    });
+
+    const formData = new FormData();
+    formData.set("sdp", sdp_offer);
+    formData.set("session", sessionConfig);
+
+    // Call OpenAI Realtime API with multipart form (unified GA interface)
+    const openaiResponse = await fetch(REALTIME_CALLS_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/sdp",
       },
-      body: sdp_offer,
+      body: formData,
     });
 
     if (!openaiResponse.ok) {

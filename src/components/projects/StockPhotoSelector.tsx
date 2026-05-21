@@ -3,7 +3,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { FreepikService, FreepikResource } from '@/services/FreepikService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Loader2, Search, X, Image, Check, Upload, Filter, Camera, Grid2X2, Grid3X3, LayoutGrid } from 'lucide-react';
+import { Loader2, Search, X, Image, Check, Upload, Filter, Camera, Grid2X2, Grid3X3, LayoutGrid, Sparkles } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -30,6 +30,13 @@ interface BackendPhoto {
   file_type: string | null;
 }
 
+interface SavedImage {
+  id: string;
+  image_url: string;
+  prompt: string | null;
+  created_at: string;
+}
+
 type GridSize = 'small' | 'medium' | 'large';
 
 export function StockPhotoSelector({ 
@@ -46,12 +53,14 @@ export function StockPhotoSelector({
   const { language } = useTheme();
   const isRTL = language === 'ar';
   // If showOnlyUserPhotos, force user tab
-  const [activeTab, setActiveTab] = useState<'stock' | 'user'>(showOnlyUserPhotos ? 'user' : initialTab);
+  const [activeTab, setActiveTab] = useState<'stock' | 'user' | 'saved'>(showOnlyUserPhotos ? 'user' : (initialTab as any));
   const [searchQuery, setSearchQuery] = useState(''); // Always start empty - user must type search
   const [isSearching, setIsSearching] = useState(false);
   const [stockPhotos, setStockPhotos] = useState<FreepikResource[]>([]);
   const [backendPhotos, setBackendPhotos] = useState<BackendPhoto[]>([]);
+  const [savedImages, setSavedImages] = useState<SavedImage[]>([]);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
+  const [isLoadingSaved, setIsLoadingSaved] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string } | null>(null);
   const [selectedPhotos, setSelectedPhotos] = useState<{ url: string; title: string }[]>([]); // Multi-select
   // Allow user to switch between single/multi inside the modal (defaults to prop)
@@ -89,9 +98,39 @@ export function StockPhotoSelector({
     if (projectId) {
       loadBackendPhotos();
     }
-  }, [projectId]);
+    if (activeTab === 'saved') {
+      loadSavedImages();
+    }
+  }, [projectId, activeTab]);
 
   // Removed: auto-search on mount - user must manually search
+
+  const loadSavedImages = async () => {
+    setIsLoadingSaved(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) {
+        setIsLoadingSaved(false);
+        return;
+      }
+      
+      const { data, error } = await supabase
+        .from('user_generated_images' as any)
+        .select('id, image_url, prompt, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50) as any;
+        
+      if (error) throw error;
+      setSavedImages((data || []) as SavedImage[]);
+    } catch (err) {
+      console.error('Error loading saved images:', err);
+      toast.error(isRTL ? 'فشل في تحميل الصور المحفوظة' : 'Failed to load saved images');
+    } finally {
+      setIsLoadingSaved(false);
+    }
+  };
 
   const loadBackendPhotos = async () => {
     if (!projectId) {
@@ -263,9 +302,11 @@ export function StockPhotoSelector({
   };
 
   const handleTabChange = (value: string) => {
-    setActiveTab(value as 'stock' | 'user');
+    setActiveTab(value as 'stock' | 'user' | 'saved');
     if (value === 'user' && backendPhotos.length === 0 && !isLoadingPhotos && projectId) {
       loadBackendPhotos();
+    } else if (value === 'saved' && savedImages.length === 0 && !isLoadingSaved) {
+      loadSavedImages();
     }
   };
 
@@ -417,6 +458,10 @@ export function StockPhotoSelector({
               <TabsTrigger value="user" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
                 <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 {isRTL ? 'صوري' : 'My Photos'}
+              </TabsTrigger>
+              <TabsTrigger value="saved" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
+                <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                {isRTL ? 'الصور المولّدة' : 'Saved Photos'}
               </TabsTrigger>
             </TabsList>
             {showOnlyUserPhotos && (
@@ -731,6 +776,72 @@ export function StockPhotoSelector({
                   <Loader2 className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4 animate-spin" />
                   <p className="text-sm sm:text-base text-muted-foreground">
                     {isRTL ? 'جاري التحقق من الصور...' : 'Checking for photos...'}
+                  </p>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+          
+          {/* Saved Photos Tab */}
+          <TabsContent value="saved" className="flex-1 flex flex-col min-h-0 mt-0 overflow-hidden">
+            {/* Photos Grid - Scrollable */}
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
+              {isLoadingSaved ? (
+                <div className="flex flex-col items-center justify-center h-48 sm:h-64">
+                  <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-2">
+                    {isRTL ? 'جاري التحميل...' : 'Loading...'}
+                  </p>
+                </div>
+              ) : savedImages.length > 0 ? (
+                <div className={cn("grid", gridClasses[gridSize])}>
+                  {savedImages.map((photo) => (
+                    <div 
+                      key={photo.id}
+                      className={cn(
+                        "relative overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
+                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-square rounded-lg",
+                        isPhotoSelected(photo.image_url) 
+                          ? "ring-2 ring-primary ring-offset-1 ring-offset-background" 
+                          : "border border-border/50"
+                      )}
+                      onClick={() => handleSelectPhoto({
+                        url: photo.image_url,
+                        title: photo.prompt || (isRTL ? 'صورة مولّدة' : 'AI Generated Photo')
+                      })}
+                    >
+                      <img 
+                        src={photo.image_url} 
+                        alt={photo.prompt || 'Generated image'}
+                        className="w-full h-full object-cover"
+                      />
+                      {/* Selection overlay */}
+                      {isPhotoSelected(photo.image_url) && (
+                        <div className="absolute inset-0 bg-primary/20" />
+                      )}
+                      {/* Checkmark badge */}
+                      {isPhotoSelected(photo.image_url) && (
+                        <div className={cn(
+                          "absolute bg-primary text-primary-foreground rounded-full shadow-lg",
+                          gridSize === 'small' ? "top-1 right-1 p-0.5" : "top-2 right-2 p-1.5"
+                        )}>
+                          <Check className={gridSize === 'small' ? "h-3 w-3" : "h-4 w-4"} strokeWidth={3} />
+                        </div>
+                      )}
+                      {/* Prompt on large view */}
+                      {gridSize === 'large' && photo.prompt && (
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                          <p className="text-white text-sm font-medium truncate">{photo.prompt}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
+                  <Sparkles className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
+                  <p className="text-sm sm:text-base text-muted-foreground">
+                    {isRTL ? 'لا توجد صور مولّدة ومحفوظة. أنشئ صوراً في استوديو الذكاء الاصطناعي أولاً.' : 'No AI generated photos found. Create images in the AI Studio first.'}
                   </p>
                 </div>
               )}

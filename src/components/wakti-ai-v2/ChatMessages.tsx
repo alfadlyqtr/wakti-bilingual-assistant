@@ -183,18 +183,35 @@ function SearchMessageCard({
   message: AIMessage;
   language: string;
 }) {
-  const rawContent = message.content || '';
-  // Strip reminder blocks before displaying
-  const cleanedContent = stripReminderBlocks(rawContent);
-  const content = repairMarkdownTables(cleanedContent);
   const resolvedBrowsingData = resolveGroundedBrowsingData(message as any);
   const sources: SearchSource[] = Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : [];
   const hasGroundedPlaceCards = hasGroundedPlaces(message as any);
-  const shouldRenderSearchText = !hasGroundedPlaceCards;
+  const rawContent = message.content || '';
+  // Strip reminder blocks before displaying
+  const cleanedContent = stripReminderBlocks(rawContent);
+
+  // When place cards are present, only show the intro line(s) before the first bullet —
+  // everything else (place names, ratings, phone, maps, etc.) lives inside the cards.
+  const textToShow = hasGroundedPlaceCards
+    ? (() => {
+        const lines = cleanedContent.split('\n');
+        const introLines: string[] = [];
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) { if (introLines.length) break; continue; }
+          // Stop at the first bullet / numbered list item
+          if (/^(?:[-*•]|\d+\.)\s+/.test(trimmed)) break;
+          introLines.push(line);
+        }
+        return introLines.join('\n').trim();
+      })()
+    : cleanedContent;
+
+  const content = repairMarkdownTables(textToShow);
 
   return (
     <div className="w-full space-y-4">
-      {shouldRenderSearchText && (
+      {content.trim() && (
         <div 
           className="search-result-content prose prose-sm sm:prose-base max-w-none dark:prose-invert" 
           dir="auto"
@@ -1263,7 +1280,11 @@ export function ChatMessages({
   const renderWelcomeMessage = () => {
     if (!isNewConversation || sessionMessages.length > 0) return null;
 
-    const userName = personalTouch?.nickname || userProfile?.display_name || (language === 'ar' ? 'صديقي' : 'friend');
+    const userName = personalTouch?.nickname || 
+                     userProfile?.display_name || 
+                     userProfile?.user_metadata?.display_name || 
+                     userProfile?.user_metadata?.full_name || 
+                     (language === 'ar' ? 'صديقي' : 'friend');
     
     return (
       <div className="flex justify-start mb-6 group">

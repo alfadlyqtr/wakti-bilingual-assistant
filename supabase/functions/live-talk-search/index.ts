@@ -21,10 +21,16 @@ Deno.serve(async (req) => {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const query = typeof body?.query === 'string' ? body.query.trim() : '';
+    const rawQuery = typeof body?.query === 'string' ? body.query.trim() : '';
     const language = typeof body?.language === 'string' ? body.language : 'en';
+    const city = typeof body?.city === 'string' ? body.city.trim() : '';
+    const country = typeof body?.country === 'string' ? body.country.trim() : '';
 
-    if (!query) {
+    // Append location context to query so Tavily returns locally relevant results
+    const locationSuffix = city ? ` in ${city}${country ? ', ' + country : ''}` : (country ? ` in ${country}` : '');
+    const query = rawQuery + locationSuffix;
+
+    if (!rawQuery) {
       return new Response(
         JSON.stringify({ success: false, error: 'Missing query', context: '' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

@@ -1847,9 +1847,9 @@ FORMAT:
      - **WhatsApp:** [Chat](https://wa.me/${'\\<digits>'}) (only if explicitly verified)
      - **Facebook:** [Page](https://facebook.com/...) (official Facebook only if verified)
      - **TikTok:** [@handle](https://tiktok.com/@handle) (official TikTok only if verified)
-- Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps. End with a compact `Sources:` line using 2-4 clickable grounded links whenever grounded links exist.
+- Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps. End with a compact "Sources:" line using 2-4 clickable grounded links whenever grounded links exist.
 - Research queries: give a short executive summary, 2-4 key insights, and 2-4 high-quality sources.
-- URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant. End with a compact `Sources:` line whenever grounded links exist.
+- URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant. End with a compact "Sources:" line whenever grounded links exist.
 
 OUTPUT RULES:
 - Keep place descriptions to 3 sentences max.
@@ -1857,7 +1857,7 @@ OUTPUT RULES:
 - Phone numbers must use tel: links.
 - WhatsApp must use wa.me only when explicitly verified.
 - Never invent emails, social handles, hours, scores, prices, or sources.
-- For non-business searches, if grounded web links exist, include a compact `Sources:` block at the end. Do not omit sources when grounded URLs are available.
+- For non-business searches, if grounded web links exist, include a compact "Sources:" block at the end. Do not omit sources when grounded URLs are available.
 - For place queries, never output a wide markdown table. Use compact bullets with one place per block.
 - For business queries, keep the answer highly practical: proximity first, then quality, then useful links.
 - For business queries, if a field is not verified, omit it instead of filling with placeholders.
@@ -2381,6 +2381,7 @@ type GroundedPlaceCard = {
   facebookUrl?: string;
   tiktokUrl?: string;
   whatsappUrl?: string;
+  photoUrl?: string;
 };
 
 const BUSINESS_LINK_STOPWORDS = new Set([
@@ -2645,6 +2646,7 @@ function createGroundedPlaceCard(seed: Partial<GroundedPlaceCard> = {}): Grounde
     facebookUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.facebookUrl)),
     tiktokUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.tiktokUrl)),
     whatsappUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.whatsappUrl)),
+    photoUrl: toTrimmedString(seed.photoUrl),
   };
 }
 
@@ -2822,6 +2824,7 @@ function mergeGroundedPlaceCard(base: GroundedPlaceCard, patch: Partial<Grounded
     facebookUrl: base.facebookUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.facebookUrl)),
     tiktokUrl: base.tiktokUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.tiktokUrl)),
     whatsappUrl: base.whatsappUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.whatsappUrl)),
+    photoUrl: base.photoUrl || toTrimmedString(patch.photoUrl),
   };
 }
 
@@ -2836,7 +2839,7 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
-        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,googleMapsUri,websiteUri,internationalPhoneNumber,nationalPhoneNumber,rating,userRatingCount,businessStatus,currentOpeningHours,regularOpeningHours,reviews,editorialSummary',
+        'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,googleMapsUri,websiteUri,internationalPhoneNumber,nationalPhoneNumber,rating,userRatingCount,businessStatus,currentOpeningHours,regularOpeningHours,reviews,editorialSummary,photos',
       },
       signal: controller.signal,
     });
@@ -2900,6 +2903,10 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
             ? `https://www.google.com/maps/search/?api=1&query=${toFiniteNumber(location?.latitude)},${toFiniteNumber(location?.longitude)}`
             : (placeLabel ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeLabel)}` : '')));
 
+    const photos = Array.isArray(data.photos) ? data.photos : [];
+    const firstPhoto = photos[0] && typeof photos[0] === 'object' ? photos[0] as Record<string, unknown> : null;
+    const photoUrl = firstPhoto?.name ? `https://places.googleapis.com/v1/${firstPhoto.name}/media?key=${GOOGLE_MAPS_API_KEY}&maxWidthPx=400` : '';
+
     return {
       name: toTrimmedString(displayName?.text),
       address: toTrimmedString(data.formattedAddress),
@@ -2916,6 +2923,7 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
       editorialSummary: toTrimmedString(editorialSummary?.text),
       mapsUrl: placeMapsUrl,
       reviewSnippets,
+      photoUrl,
     };
   } catch {
     return {};
