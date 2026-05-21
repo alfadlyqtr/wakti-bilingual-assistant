@@ -536,7 +536,12 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       analyserRef.current = analyser;
 
       // Create RTCPeerConnection
-      const pc = new RTCPeerConnection();
+      const pc = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+        ],
+      });
       pcRef.current = pc;
 
       // Add audio track
@@ -711,6 +716,26 @@ ${memoryContext ? memoryContext : ''}`
 
       // Create offer
       await pc.setLocalDescription();
+
+      // Wait for ICE gathering to complete so the offer includes all candidates
+      await new Promise<void>((resolve) => {
+        if (pc.iceGatheringState === 'complete') {
+          resolve();
+          return;
+        }
+        const onStateChange = () => {
+          if (pc.iceGatheringState === 'complete') {
+            pc.removeEventListener('icegatheringstatechange', onStateChange);
+            resolve();
+          }
+        };
+        pc.addEventListener('icegatheringstatechange', onStateChange);
+        setTimeout(() => {
+          pc.removeEventListener('icegatheringstatechange', onStateChange);
+          resolve();
+        }, 5000);
+      });
+
       const offer = pc.localDescription;
 
       if (!offer) {

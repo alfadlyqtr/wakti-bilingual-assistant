@@ -132,7 +132,10 @@ function findElementInCode(
   // Strategy 2: Find by tag + className (prefer unique/specific classes)
   if (className) {
     // Filter out generic Tailwind utility classes for better matching
-    const genericClasses = ['w-full', 'h-full', 'flex', 'block', 'hidden', 'relative', 'absolute', 'p-', 'm-', 'text-', 'bg-'];
+    const genericClasses = [
+      'w-full', 'h-full', 'flex', 'block', 'hidden', 'relative', 'absolute', 'p-', 'm-', 'text-', 'bg-',
+      'font-', 'min-', 'max-', 'justify-', 'items-', 'gap-', 'border-', 'shadow-', 'rounded-', 'transition-'
+    ];
     const classes = className.split(' ').filter((c) => c && !c.includes('hover:') && !c.includes(':'));
     
     // Try to find a more specific class first
