@@ -4,6 +4,8 @@ import { checkTrialAccess, checkAndConsumeTrialTokenOnce, buildTrialErrorPayload
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
+const GOOGLE_TTS_KEY = Deno.env.get("GOOGLE_TTS_KEY") || Deno.env.get("GOOGLE_TTS_API_KEY") || "";
+const GEMINI_TTS_KEY = GOOGLE_TTS_KEY || GEMINI_API_KEY;
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -13,10 +15,10 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Gemini 3.1 Flash TTS voices
+// Gemini 2.5 Flash TTS voices (mirrors voice-tts function)
 const VOICE_MAP: Record<string, string> = {
-  cedar: "Orus",   // Male — deep, authoritative
-  marin: "Leda",   // Female — warm, clear
+  cedar: "Puck",   // Male
+  marin: "Leda",   // Female
 };
 
 serve(async (req: Request) => {
@@ -75,7 +77,7 @@ serve(async (req: Request) => {
       });
     }
 
-    const geminiVoice = VOICE_MAP[voiceKey] || "Orus";
+    const geminiVoice = VOICE_MAP[voiceKey] || "Puck";
 
     // ── Step 1: Whisper transcription ──────────────────────────────────────
     console.log("[live-translate] Step 1: Whisper transcription...");
@@ -165,10 +167,12 @@ serve(async (req: Request) => {
     }
     console.log("[live-translate] Translation:", translation);
 
-    // ── Step 3: Gemini 3.1 Flash TTS via Gemini AI API ───────────────────
-    console.log("[live-translate] Step 3: Gemini 3.1 Flash TTS with voice:", geminiVoice);
+    // ── Step 3: Gemini 2.5 Flash TTS ──────────────────────────────────────
+    // Uses generativelanguage.googleapis.com — works with GEMINI_API_KEY (AI Studio).
+    // texttospeech.googleapis.com requires a Google Cloud key (different product).
+    console.log("[live-translate] Step 3: Gemini 2.5 Flash TTS voice:", geminiVoice);
     const ttsRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-tts-preview:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-tts:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -196,11 +200,11 @@ serve(async (req: Request) => {
     }
 
     const ttsData = await ttsRes.json();
-    const inlineData = ttsData?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-    const audioBase64 = inlineData?.data as string | undefined;
-    const audioMime = (inlineData?.mimeType as string | undefined) || "audio/wav";
+    const audioPart = ttsData?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+    const audioBase64 = audioPart?.data as string | undefined;
+    const audioMime = (audioPart?.mimeType as string) || "audio/wav";
     if (!audioBase64) {
-      console.error("[live-translate] Gemini TTS no audio data:", JSON.stringify(ttsData).slice(0, 300));
+      console.error("[live-translate] Gemini TTS no audio:", JSON.stringify(ttsData).slice(0, 300));
       return new Response(JSON.stringify({ error: "Voice synthesis returned empty audio. Please try again." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
