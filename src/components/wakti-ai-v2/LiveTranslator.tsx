@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ArrowLeftRight, Mic, X, Volume2, Languages, Loader2 } from 'lucide-react';
+import { ArrowLeftRight, Mic, Volume2, Languages, Loader2, Bookmark, BookmarkCheck, Trash2, Play, Square } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
@@ -17,14 +17,17 @@ type LiveTranslatorStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 const MIN_USER_RECORD_MS = 500;
 const MAX_USER_RECORD_SECONDS = 20;
 
-// Complete language list
+// Complete language list — sorted alphabetically by English name
 const TRANSLATION_LANGUAGES = [
-  { code: 'en', name: { en: 'English', ar: 'الإنجليزية' } },
-  { code: 'ar', name: { en: 'Arabic', ar: 'العربية' } },
   { code: 'af', name: { en: 'Afrikaans', ar: 'الأفريقانية' } },
   { code: 'sq', name: { en: 'Albanian', ar: 'الألبانية' } },
-  { code: 'bn', name: { en: 'Bengali', ar: 'البنغالية' } },
+  { code: 'am', name: { en: 'Amharic', ar: 'الأمهرية' } },
+  { code: 'ar', name: { en: 'Arabic', ar: 'العربية' } },
+  { code: 'hy', name: { en: 'Armenian', ar: 'الأرمنية' } },
+  { code: 'az', name: { en: 'Azerbaijani', ar: 'الأذربيجانية' } },
   { code: 'eu', name: { en: 'Basque', ar: 'الباسكية' } },
+  { code: 'be', name: { en: 'Belarusian', ar: 'البيلاروسية' } },
+  { code: 'bn', name: { en: 'Bengali', ar: 'البنغالية' } },
   { code: 'bg', name: { en: 'Bulgarian', ar: 'البلغارية' } },
   { code: 'ca', name: { en: 'Catalan', ar: 'الكاتالونية' } },
   { code: 'zh', name: { en: 'Chinese', ar: 'الصينية' } },
@@ -32,13 +35,16 @@ const TRANSLATION_LANGUAGES = [
   { code: 'cs', name: { en: 'Czech', ar: 'التشيكية' } },
   { code: 'da', name: { en: 'Danish', ar: 'الدنماركية' } },
   { code: 'nl', name: { en: 'Dutch', ar: 'الهولندية' } },
+  { code: 'en', name: { en: 'English', ar: 'الإنجليزية' } },
   { code: 'et', name: { en: 'Estonian', ar: 'الإستونية' } },
   { code: 'tl', name: { en: 'Filipino (Tagalog)', ar: 'الفلبينية (التاغالوغ)' } },
   { code: 'fi', name: { en: 'Finnish', ar: 'الفنلندية' } },
   { code: 'fr', name: { en: 'French', ar: 'الفرنسية' } },
+  { code: 'fr_ca', name: { en: 'French (Canada)', ar: 'الفرنسية (كندا)' } },
   { code: 'ka', name: { en: 'Georgian', ar: 'الجورجية' } },
   { code: 'de', name: { en: 'German', ar: 'الألمانية' } },
   { code: 'el', name: { en: 'Greek', ar: 'اليونانية' } },
+  { code: 'ht', name: { en: 'Haitian Creole', ar: 'الكريولية الهايتية' } },
   { code: 'he', name: { en: 'Hebrew', ar: 'العبرية' } },
   { code: 'hi', name: { en: 'Hindi', ar: 'الهندية' } },
   { code: 'hu', name: { en: 'Hungarian', ar: 'المجرية' } },
@@ -50,16 +56,21 @@ const TRANSLATION_LANGUAGES = [
   { code: 'lv', name: { en: 'Latvian', ar: 'اللاتفية' } },
   { code: 'lt', name: { en: 'Lithuanian', ar: 'الليتوانية' } },
   { code: 'lb', name: { en: 'Luxembourgish', ar: 'اللوكسمبورغية' } },
-  { code: 'ms', name: { en: 'Malaysian', ar: 'الماليزية' } },
+  { code: 'ml', name: { en: 'Malayalam', ar: 'المالايالامية' } },
+  { code: 'ms', name: { en: 'Malay', ar: 'الماليزية' } },
   { code: 'mt', name: { en: 'Maltese', ar: 'المالطية' } },
+  { code: 'ne', name: { en: 'Nepali', ar: 'النيبالية' } },
   { code: 'no', name: { en: 'Norwegian', ar: 'النرويجية' } },
+  { code: 'nn', name: { en: 'Norwegian Nynorsk', ar: 'النرويجية النينورسك' } },
   { code: 'fa', name: { en: 'Persian (Farsi)', ar: 'الفارسية' } },
   { code: 'pl', name: { en: 'Polish', ar: 'البولندية' } },
   { code: 'pt', name: { en: 'Portuguese', ar: 'البرتغالية' } },
+  { code: 'pa', name: { en: 'Punjabi', ar: 'البنجابية' } },
   { code: 'ro', name: { en: 'Romanian', ar: 'الرومانية' } },
   { code: 'ru', name: { en: 'Russian', ar: 'الروسية' } },
   { code: 'sr', name: { en: 'Serbian', ar: 'الصربية' } },
   { code: 'sk', name: { en: 'Slovak', ar: 'السلوفاكية' } },
+  { code: 'sl', name: { en: 'Slovenian', ar: 'السلوفينية' } },
   { code: 'es', name: { en: 'Spanish', ar: 'الإسبانية' } },
   { code: 'sw', name: { en: 'Swahili', ar: 'السواحلية' } },
   { code: 'sv', name: { en: 'Swedish', ar: 'السويدية' } },
@@ -67,7 +78,7 @@ const TRANSLATION_LANGUAGES = [
   { code: 'tr', name: { en: 'Turkish', ar: 'التركية' } },
   { code: 'uk', name: { en: 'Ukrainian', ar: 'الأوكرانية' } },
   { code: 'ur', name: { en: 'Urdu', ar: 'الأردية' } },
-  { code: 'vi', name: { en: 'Vietnamese', ar: 'الفيتنامية' } }
+  { code: 'vi', name: { en: 'Vietnamese', ar: 'الفيتنامية' } },
 ];
 
 const LANGUAGE_CODES = new Set(TRANSLATION_LANGUAGES.map((lang) => lang.code));
@@ -76,6 +87,18 @@ const getValidLanguageCode = (value: string | null | undefined, fallback: string
   return fallback;
 };
 
+
+const MAX_SAVED = 10;
+
+interface SavedTranslation {
+  id: string;
+  spoken_language: string;
+  target_language: string;
+  original_text: string;
+  translated_text: string;
+  audio_base64: string | null;
+  created_at: string;
+}
 
 export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const { language, theme } = useTheme();
@@ -104,6 +127,13 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const [userTranscript, setUserTranscript] = useState('');
   const [translatedText, setTranslatedText] = useState('');
   const [replayUrl, setReplayUrl] = useState<string | null>(null);
+  const [currentAudioBase64, setCurrentAudioBase64] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'result' | 'saved'>('result');
+  const [savedList, setSavedList] = useState<SavedTranslation[]>([]);
+  const [savedLoading, setSavedLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  const [playingId, setPlayingId] = useState<string | null>(null);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -132,6 +162,80 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
       if (audioRef.current) { try { audioRef.current.pause(); } catch {} }
     };
   }, []);
+
+  // ── Load saved translations from Supabase ──────────────────────────────────
+  const loadSaved = useCallback(async () => {
+    setSavedLoading(true);
+    try {
+      const { data, error: err } = await supabase
+        .from('saved_translations')
+        .select('id, spoken_language, target_language, original_text, translated_text, audio_base64, created_at')
+        .order('created_at', { ascending: false })
+        .limit(10);
+      if (!err && data) setSavedList(data as SavedTranslation[]);
+    } finally {
+      setSavedLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadSaved(); }, [loadSaved]);
+
+  // ── Save current translation ───────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    if (!userTranscript || !translatedText || saving) return;
+    if (savedList.length >= MAX_SAVED) {
+      setError(t('You have 10 saved translations. Delete one to save more.', 'لديك 10 ترجمات محفوظة. احذف واحدة لحفظ المزيد.'));
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+      if (!userId) return;
+      const { error: insertErr } = await supabase.from('saved_translations').insert({
+        user_id: userId,
+        spoken_language: spokenLangRef.current,
+        target_language: targetLangRef.current,
+        original_text: userTranscript,
+        translated_text: translatedText,
+        audio_base64: currentAudioBase64 || null,
+      });
+      if (!insertErr) {
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 2000);
+        loadSaved();
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [userTranscript, translatedText, currentAudioBase64, saving, savedList.length, t, loadSaved]);
+
+  // ── Delete saved translation ───────────────────────────────────────────────
+  const handleDelete = useCallback(async (id: string) => {
+    await supabase.from('saved_translations').delete().eq('id', id);
+    setSavedList(prev => prev.filter(s => s.id !== id));
+  }, []);
+
+  // ── Play saved translation (from stored audio — zero API calls) ─────────────
+  const handlePlaySaved = useCallback(async (item: SavedTranslation) => {
+    if (playingId === item.id) {
+      if (audioRef.current) { try { audioRef.current.pause(); } catch {} }
+      setPlayingId(null);
+      return;
+    }
+    if (!item.audio_base64 || !audioRef.current) return;
+    setPlayingId(item.id);
+    try {
+      const byteArr = Uint8Array.from(atob(item.audio_base64), c => c.charCodeAt(0));
+      const blob = new Blob([byteArr], { type: 'audio/mp3' });
+      const url = URL.createObjectURL(blob);
+      audioRef.current.src = url;
+      audioRef.current.load();
+      audioRef.current.onended = () => { setPlayingId(null); URL.revokeObjectURL(url); };
+      audioRef.current.onerror = () => { setPlayingId(null); };
+      await audioRef.current.play();
+    } catch { setPlayingId(null); }
+  }, [playingId]);
 
   // ── Core: send audio to edge function ─────────────────────────────────────
   const processAudio = useCallback(async (audioBlob: Blob) => {
@@ -181,6 +285,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
       }
 
       const { transcript, translation, audio_base64, audio_mime } = json;
+      setCurrentAudioBase64(audio_base64 || null);
 
       setUserTranscript(transcript || '');
       setTranslatedText(translation || '');
@@ -330,6 +435,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   }, [replayUrl, status]);
 
   const isBusy = status === 'listening' || status === 'processing' || status === 'speaking';
+  const getLangName = (code: string) => TRANSLATION_LANGUAGES.find(l => l.code === code)?.name[language] || code;
   const currentTargetLangName = TRANSLATION_LANGUAGES.find(l => l.code === targetLanguage)?.name[language] || targetLanguage;
 
   const statusText: Record<LiveTranslatorStatus, string> = {
@@ -461,13 +567,43 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
         </div>
       </div>
 
-      {/* Transcripts */}
-      {(userTranscript || translatedText) && (
+      {/* Tabs */}
+      <div className="flex gap-1 rounded-xl p-1 bg-white/5 border border-white/10">
+        <button
+          type="button"
+          onClick={() => setActiveTab('result')}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+            activeTab === 'result'
+              ? 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 text-cyan-400 border border-cyan-500/30'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {t('Result', 'النتيجة')}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('saved'); loadSaved(); }}
+          className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1 ${
+            activeTab === 'saved'
+              ? 'bg-gradient-to-r from-cyan-500/30 to-purple-500/30 text-cyan-400 border border-cyan-500/30'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Bookmark className="w-3 h-3" />
+          {t('Saved', 'المحفوظات')}
+          {savedList.length > 0 && (
+            <span className="ml-1 bg-cyan-500/20 text-cyan-400 text-[10px] px-1.5 rounded-full">{savedList.length}/10</span>
+          )}
+        </button>
+      </div>
+
+      {/* Result Tab */}
+      {activeTab === 'result' && (
         <div className="space-y-2">
           {userTranscript && (
             <div className={`px-3 py-2 rounded-lg border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
               <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-0.5 font-bold">
-                {TRANSLATION_LANGUAGES.find(l => l.code === spokenLanguage)?.name[language]} — {t('You said', 'قلت')}
+                {getLangName(spokenLanguage)} — {t('You said', 'قلت')}
               </div>
               <div className="text-sm" dir="auto">{userTranscript}</div>
             </div>
@@ -476,22 +612,64 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
             <div className="px-3 py-2 rounded-lg border border-white/10 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10">
               <div className="mb-1 flex items-center justify-between gap-2">
                 <div className="text-[10px] uppercase tracking-wider bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 bg-clip-text text-transparent font-bold">
-                  {TRANSLATION_LANGUAGES.find(l => l.code === targetLanguage)?.name[language]} — {t('Translation', 'الترجمة')}
+                  {getLangName(targetLanguage)} — {t('Translation', 'الترجمة')}
                 </div>
-                {replayUrl && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleReplay}
-                    disabled={status === 'speaking' || status === 'processing'}
-                    className="h-7 px-2 text-[11px] text-cyan-500 hover:text-cyan-400"
-                  >
-                    <Volume2 className="mr-1 h-3.5 w-3.5" /> {t('Replay', 'إعادة')}
+                <div className="flex items-center gap-1">
+                  {replayUrl && (
+                    <Button type="button" variant="ghost" size="sm" onClick={handleReplay} disabled={status === 'speaking' || status === 'processing'} className="h-7 px-2 text-[11px] text-cyan-500 hover:text-cyan-400">
+                      <Volume2 className="mr-1 h-3.5 w-3.5" /> {t('Replay', 'إعادة')}
+                    </Button>
+                  )}
+                  <Button type="button" variant="ghost" size="sm" onClick={handleSave} disabled={saving || justSaved || !translatedText} className={`h-7 px-2 text-[11px] transition-colors ${justSaved ? 'text-green-400' : 'text-muted-foreground hover:text-cyan-400'}`}>
+                    {justSaved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
                   </Button>
-                )}
+                </div>
               </div>
               <div className="text-sm font-medium" dir="auto">{translatedText}</div>
+            </div>
+          )}
+          {!userTranscript && !translatedText && (
+            <div className="text-center text-xs text-muted-foreground py-4">
+              {t('Your translation will appear here', 'ستظهر ترجمتك هنا')}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Saved Tab */}
+      {activeTab === 'saved' && (
+        <div className="space-y-2">
+          {savedLoading ? (
+            <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+          ) : savedList.length === 0 ? (
+            <div className="text-center text-xs text-muted-foreground py-6">
+              <Bookmark className="w-8 h-8 mx-auto mb-2 opacity-30" />
+              {t('No saved translations yet', 'لا توجد ترجمات محفوظة بعد')}
+            </div>
+          ) : (
+            savedList.map(item => (
+              <div key={item.id} className={`px-3 py-2 rounded-lg border ${theme === 'dark' ? 'bg-white/5 border-white/10' : 'bg-gray-50 border-gray-200'}`}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                    {getLangName(item.spoken_language)} → {getLangName(item.target_language)}
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" title={playingId === item.id ? 'Stop' : 'Play'} onClick={() => handlePlaySaved(item)} className={`transition-colors ${playingId === item.id ? 'text-cyan-400' : 'text-muted-foreground hover:text-cyan-400'}`}>
+                      {playingId === item.id ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                    </button>
+                    <button type="button" title="Delete" onClick={() => handleDelete(item.id)} className="text-red-400/60 hover:text-red-400 transition-colors">
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground mb-0.5" dir="auto">{item.original_text}</div>
+                <div className="text-sm font-medium bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 bg-clip-text text-transparent" dir="auto">{item.translated_text}</div>
+              </div>
+            ))
+          )}
+          {savedList.length >= MAX_SAVED && (
+            <div className="text-center text-[11px] text-amber-400/80 py-1">
+              {t('10/10 — Delete a saved item to add more', '10/10 — احذف عنصراً لإضافة المزيد')}
             </div>
           )}
         </div>
