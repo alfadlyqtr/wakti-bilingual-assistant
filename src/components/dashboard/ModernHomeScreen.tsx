@@ -829,14 +829,25 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
 
 // ─── Quote Widget Inline ─────────────────────────────────────────────────────
 
-function QuoteWidgetInline({ shell, navigate, language }: { shell: ShellFn; navigate: (p: string) => void; language: string }) {
-  const [quote] = useState(() => getQuoteForDisplay());
+function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: { quoteText: string; quoteAuthor: string; language: string; onClose: () => void; exiting: boolean; }) {
+  return (
+    <div className={`fixed inset-0 z-[200] flex items-center justify-center px-8 transition-opacity duration-300 ${exiting ? 'opacity-0' : 'opacity-100'}`} onClick={onClose}>
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-xl" />
+      <div className="relative max-w-md text-center" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <p className="text-[clamp(19px,5.2vw,27px)] italic font-light leading-[1.72] text-white/95">{quoteText}</p>
+        {quoteAuthor ? <p className="mt-4 text-sm text-white/60">— {quoteAuthor}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function QuoteWidgetInline({ shell, language, quote, onExpand }: { shell: ShellFn; language: string; quote: ReturnType<typeof getQuoteForDisplay>; onExpand: () => void }) {
   const text = getQuoteText(quote, language);
   const author = getQuoteAuthor(quote);
   return shell(
     'linear-gradient(145deg,#312e81 0%,#4338ca 50%,#1e1b4b 100%)',
     '#6366f1',
-    () => navigate('/settings'),
+    onExpand,
     <div className="flex flex-col h-full justify-between p-3">
       <div className="flex items-center gap-1.5">
         <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-200/80">{language === 'ar' ? 'اقتباس اليوم' : "Today's Quote"}</span>
@@ -1058,6 +1069,9 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const navigate = useNavigate();
   const { language, theme } = useTheme();
   const { profile } = useUserProfile();
+  const [quote] = useState(() => getQuoteForDisplay());
+  const [quoteExpanded, setQuoteExpanded] = useState(false);
+  const [quoteExiting, setQuoteExiting] = useState(false);
 
   const { tasks, reminders } = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1143,6 +1157,8 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
     "text-center font-black leading-none text-foreground",
     language === "ar" ? "text-[1.55rem] tracking-tight" : "text-[1.2rem] tracking-[-0.015em]"
   );
+  const quoteText = getQuoteText(quote, language);
+  const quoteAuthor = getQuoteAuthor(quote);
 
   return (
     <div
@@ -1156,7 +1172,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
     >
       <div className="mx-auto flex h-full min-h-0 w-full max-w-[980px] flex-1 flex-col gap-3 md:gap-4">
         {/* Top row: Account + Modes/AI controls | Widgets carousel */}
-        <div className="grid grid-cols-[102px_minmax(0,1fr)] gap-3 md:grid-cols-[116px_minmax(0,1fr)]">
+        <div className="grid items-start grid-cols-[102px_minmax(0,1fr)] gap-3 md:grid-cols-[116px_minmax(0,1fr)]">
           <div className="space-y-3 pt-1">
             <p className={cn(
               "text-center text-[15px] font-bold leading-tight tracking-tight",
@@ -1216,19 +1232,19 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 >
                   <Sparkles className="h-5 w-5 text-white" />
                 </span>
-                <span className="text-[10px] font-semibold text-foreground/70">
+                <span className="whitespace-nowrap text-[10px] font-semibold leading-none text-foreground/70">
                   WAKTI AI
                 </span>
               </button>
             </div>
           </div>
 
-          <section className={cn("rounded-[2rem] border-[1.5px] px-3 pt-2 pb-3", cardShell)} style={widgetsSectionStyle}>
+          <section className={cn("self-start rounded-[2rem] border-[1.5px] px-3 pt-2 pb-0", cardShell)} style={widgetsSectionStyle}>
             <Carousel opts={{ align: "start", dragFree: true, direction: "ltr" }} className="w-full" dir="ltr">
               <CarouselContent className="sm:-ml-2">
                 <CarouselItem className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
                   <div className="h-52">
-                    <QuoteWidgetInline shell={shell} navigate={navigate} language={language} />
+                    <QuoteWidgetInline shell={shell} language={language} quote={quote} onExpand={() => { setQuoteExpanded(true); setQuoteExiting(false); }} />
                   </div>
                 </CarouselItem>
                 <CarouselItem className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
@@ -1280,7 +1296,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
           </section>
           <aside className={cn("relative rounded-[2rem] border-[1.5px] px-2 py-1.5", cardShell)} style={systemSectionStyle}>
             <div className={cn("absolute inset-y-2.5 flex items-center justify-center", language === "ar" ? "left-1" : "right-1")}>
-              <span className={cn("text-foreground/85 font-extrabold", language === "ar" ? "[writing-mode:vertical-lr] text-[1.28rem] tracking-[0.08em]" : "[writing-mode:vertical-rl] text-[13px] tracking-[0.3em]")}>
+              <span className={cn("text-foreground/85 font-extrabold", language === "ar" ? "[writing-mode:vertical-lr] text-[1.34rem] tracking-[0.14em]" : "[writing-mode:vertical-rl] text-[13px] tracking-[0.42em]")}>
                 {language === "ar" ? "النظام" : "SYSTEM"}
               </span>
             </div>
@@ -1293,8 +1309,8 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
         </div>
 
         {/* Creation & Generation */}
-        <section className={cn("mt-auto -translate-y-2 rounded-[2.2rem] border-[1.5px] px-2.5 pt-1.5 pb-2.5", cardShell)} style={creationSectionStyle}>
-          <h3 className={cn("mb-1.5", creationTitleClass)}>
+        <section className={cn("mt-auto -translate-y-3 rounded-[2.2rem] border-[1.5px] px-2.5 pt-1 pb-0", cardShell)} style={creationSectionStyle}>
+          <h3 className={cn("mb-1", creationTitleClass)}>
             {language === "ar" ? "الإبداع والتوليد" : "Creation & Generation"}
           </h3>
           <div className="grid grid-cols-5 gap-1.5 md:gap-2">
@@ -1303,6 +1319,19 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             ))}
           </div>
         </section>
+
+        {quoteExpanded && (
+          <QuoteOverlay
+            quoteText={quoteText}
+            quoteAuthor={quoteAuthor}
+            language={language}
+            onClose={() => {
+              setQuoteExiting(true);
+              setTimeout(() => { setQuoteExpanded(false); setQuoteExiting(false); }, 420);
+            }}
+            exiting={quoteExiting}
+          />
+        )}
       </div>
     </div>
   );
