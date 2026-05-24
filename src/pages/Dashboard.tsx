@@ -13,6 +13,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { t } from "@/utils/translations";
 import { getScopedStorageItem, migrateLegacyScopedStorage, setScopedStorageItem } from "@/utils/userScopedStorage";
 
+const DEFAULT_DASHBOARD_LOOK = 'modern' as const;
+const DASHBOARD_LOOK_MIGRATION_FLAG = 'wakti_dashboard_look_default_migrated_v1';
+
 export default function Dashboard() {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -22,13 +25,45 @@ export default function Dashboard() {
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen' | 'modern'>(() => {
     // Instant load from localStorage — no flash
     const cached = getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
-    return cached === 'dashboard' || cached === 'homescreen' || cached === 'modern' ? cached : 'homescreen';
+    return cached === 'dashboard' || cached === 'homescreen' || cached === 'modern' ? cached : DEFAULT_DASHBOARD_LOOK;
   });
 
   useEffect(() => {
     if (!user?.id) return;
     migrateLegacyScopedStorage('wakti_dashboard_look', user.id, 'wakti_dashboard_look');
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || !profile) return;
+    const hasMigrated = getScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, user.id, DASHBOARD_LOOK_MIGRATION_FLAG);
+    if (hasMigrated === 'true') return;
+    const currentSettings = (profile.settings as any) || {};
+
+    if (currentSettings.dashboardLook === DEFAULT_DASHBOARD_LOOK) {
+      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
+      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user.id);
+      setScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, 'true', user.id);
+      return;
+    }
+
+    const applyModernLookDefault = async () => {
+      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
+      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user.id);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ settings: { ...currentSettings, dashboardLook: DEFAULT_DASHBOARD_LOOK } })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error applying default modern dashboard look:', error);
+        return;
+      }
+
+      setScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, 'true', user.id);
+    };
+
+    void applyModernLookDefault();
+  }, [user?.id, profile]);
 
   // Sync from cached profile (source of truth) + cache to localStorage
   useEffect(() => {

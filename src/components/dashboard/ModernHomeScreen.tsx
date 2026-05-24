@@ -1223,7 +1223,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             </div>
           </div>
 
-          <section className={cn("rounded-[2rem] border-[1.5px] p-3", cardShell)} style={widgetsSectionStyle}>
+          <section className={cn("rounded-[2rem] border-[1.5px] px-3 pt-2 pb-3", cardShell)} style={widgetsSectionStyle}>
             <Carousel opts={{ align: "start", dragFree: true, direction: "ltr" }} className="w-full" dir="ltr">
               <CarouselContent className="sm:-ml-2">
                 <CarouselItem className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
@@ -1293,8 +1293,8 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
         </div>
 
         {/* Creation & Generation */}
-        <section className={cn("mt-auto -translate-y-2 rounded-[2.2rem] border-[1.5px] px-2.5 py-2.5 pb-3", cardShell)} style={creationSectionStyle}>
-          <h3 className={cn("mb-2", creationTitleClass)}>
+        <section className={cn("mt-auto -translate-y-2 rounded-[2.2rem] border-[1.5px] px-2.5 pt-1.5 pb-2.5", cardShell)} style={creationSectionStyle}>
+          <h3 className={cn("mb-1.5", creationTitleClass)}>
             {language === "ar" ? "الإبداع والتوليد" : "Creation & Generation"}
           </h3>
           <div className="grid grid-cols-5 gap-1.5 md:gap-2">

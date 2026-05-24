@@ -53,6 +53,8 @@ const LS_HSBG_BASE = "homescreen_bg_style_v1";
 const LS_HSBG_ACTIVE_BASE = "homescreen_bg_style_active";
 const LS_BG_CHOICE_BASE = "homescreen_bg_choice_v1";
 const LS_DOCK_COLOR_BASE = "homescreen_dock_color";
+const DEFAULT_DASHBOARD_LOOK = 'modern' as const;
+const DASHBOARD_LOOK_MIGRATION_FLAG = 'wakti_dashboard_look_default_migrated_v1';
 
 const isBgChoiceValue = (value: unknown): value is 'default' | 'wallpaper' | 'style' => value === 'default' || value === 'wallpaper' || value === 'style';
 const isDefaultBgAsset = (value?: string | null) => !value || value === DEFAULT_BG_DARK || value === DEFAULT_BG_LIGHT;
@@ -147,7 +149,7 @@ export default function Settings() {
   // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = iPhone look, 'modern' = grouped modern look)
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen' | 'modern'>(() => {
     const cached = getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
-    return cached === 'dashboard' || cached === 'homescreen' || cached === 'modern' ? cached : 'homescreen';
+    return cached === 'dashboard' || cached === 'homescreen' || cached === 'modern' ? cached : DEFAULT_DASHBOARD_LOOK;
   });
 
   // Active widget settings based on current mode
@@ -203,6 +205,39 @@ export default function Settings() {
     if (error) throw error;
     return nextSettings;
   };
+
+  useEffect(() => {
+    if (!user?.id || !cachedProfile) return;
+    const hasMigrated = getScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, user.id, DASHBOARD_LOOK_MIGRATION_FLAG);
+    if (hasMigrated === 'true') return;
+
+    const currentSettings = (cachedProfile.settings as any) || {};
+
+    if (currentSettings.dashboardLook === DEFAULT_DASHBOARD_LOOK) {
+      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
+      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user.id);
+      setScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, 'true', user.id);
+      return;
+    }
+
+    const applyModernLookDefault = async () => {
+      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
+      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user.id);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ settings: { ...currentSettings, dashboardLook: DEFAULT_DASHBOARD_LOOK } })
+        .eq('id', user.id);
+
+      if (error) {
+        console.error('Error applying default modern dashboard look from settings:', error);
+        return;
+      }
+
+      setScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, 'true', user.id);
+    };
+
+    void applyModernLookDefault();
+  }, [user?.id, cachedProfile]);
 
   const loadSettingsFromProfile = () => {
     try {
@@ -366,6 +401,8 @@ export default function Settings() {
       const savedLook = s?.dashboardLook;
       if (savedLook === 'dashboard' || savedLook === 'homescreen' || savedLook === 'modern') {
         setDashboardLook(savedLook);
+      } else {
+        setDashboardLook(DEFAULT_DASHBOARD_LOOK);
       }
 
       setPrivacySettings({
