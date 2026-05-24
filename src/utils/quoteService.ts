@@ -86,7 +86,6 @@ export const getCustomQuotes = (userId?: string): string[] => {
 // -------------------------------------------
 // Helper function to get all quotes from a category or multiple categories
 const getAllQuotesFromCategory = (category: string, userId?: string): (QuoteObject | string)[] => {
-  console.log(`Getting quotes from category: ${category}`);
 
   if (category === 'mixed') {
     // For mixed category, collect all quotes from all categories
@@ -107,11 +106,9 @@ const getAllQuotesFromCategory = (category: string, userId?: string): (QuoteObje
         categoryQuotes = [...categoryQuotes, ...quotes[category][subcat]];
       }
     });
-    console.log(`Found ${categoryQuotes.length} quotes in category '${category}'`);
     return categoryQuotes;
   }
   // If category doesn't exist or is empty
-  console.log(`Category '${category}' not found or empty, using default quote`);
   return [{
     text_en: "Wisdom awaits. More quotes coming soon.",
     text_ar: "الحكمة تنتظر. المزيد من الاقتباسات قريبًا.",
@@ -246,9 +243,7 @@ export const shouldShowNewQuote = (frequency: string): boolean => {
   const lastQuoteTime = new Date(timestamp).getTime();
   const currentTime = new Date().getTime();
   const hoursSinceLastQuote = (currentTime - lastQuoteTime) / (1000 * 60 * 60);
-  
-  console.log(`Hours since last quote: ${hoursSinceLastQuote.toFixed(2)}, frequency: ${frequency}`);
-  
+
   switch (frequency) {
     case '2xday':
       return hoursSinceLastQuote >= 12; // Show new quote every 12 hours

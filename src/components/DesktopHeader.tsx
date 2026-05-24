@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { emitEvent, onEvent } from "@/utils/eventBus";
+import { onEvent } from "@/utils/eventBus";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,7 +22,6 @@ import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadContext } from "@/contexts/UnreadContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
-import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
 import { getScopedStorageItem } from "@/utils/userScopedStorage";
 
 export function DesktopHeader() {
@@ -271,20 +270,6 @@ export function DesktopHeader() {
           >
             <Play className={cn("h-4 w-4 fill-current", bgMusicSrc ? "text-emerald-400" : "text-foreground/80")} />
           </Button>
-
-          {/* Voice Assistant mic button */}
-          <VoiceAssistant
-            onSaveEntry={(entry) => {
-              console.log('[DesktopHeader] Dispatching voice entry event:', entry);
-              // Store entry in sessionStorage so calendar can pick it up after navigation
-              sessionStorage.setItem('wakti-pending-voice-entry', JSON.stringify(entry));
-              emitEvent('wakti-voice-add-entry', entry);
-              // Navigate to calendar if not already there
-              if (!window.location.pathname.includes('/calendar')) {
-                navigate('/calendar');
-              }
-            }}
-          />
 
           {/* Weather Button */}
           <div className="relative">

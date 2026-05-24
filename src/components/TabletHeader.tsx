@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { emitEvent, onEvent } from "@/utils/eventBus";
+import { onEvent } from "@/utils/eventBus";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -22,7 +22,6 @@ import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadContext } from "@/contexts/UnreadContext";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
-import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
 import { getScopedStorageItem } from "@/utils/userScopedStorage";
 
 export function TabletHeader() {
@@ -219,13 +218,6 @@ export function TabletHeader() {
         </div>
 
         <div className="flex items-center space-x-3 relative z-10">
-          {/* Voice Assistant mic button */}
-          <VoiceAssistant
-            onSaveEntry={(entry) => {
-              emitEvent('wakti-voice-add-entry', entry);
-            }}
-          />
-
           {/* Weather Button */}
           <div className="relative">
             <WeatherButton />

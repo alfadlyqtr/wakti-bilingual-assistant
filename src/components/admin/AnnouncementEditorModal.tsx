@@ -59,6 +59,28 @@ const AUDIENCE_OPTIONS = [
   { id: 'saved_group',     label: 'Saved group',        hint: 'Reuse a customer segment you saved earlier' },
 ] as const;
 
+const EXTRA_APP_ROUTES = [
+  { path: '/wakti-ai', label: 'Wakti AI (Classic)', group: 'Core' },
+  { path: '/tr', label: 'Tasks & Reminders (Quick link)', group: 'Core' },
+  { path: '/social', label: 'Social', group: 'Core' },
+  { path: '/contacts/*', label: 'Direct chat (any)', group: 'Social & Chat' },
+  { path: '/group-chats/*', label: 'Group chat (any)', group: 'Social & Chat' },
+  { path: '/gallery/*', label: 'Gallery (any)', group: 'Social & Chat' },
+  { path: '/maw3d/create', label: 'Create event', group: 'Events & Planning' },
+  { path: '/maw3d/manage/*', label: 'Manage event (any)', group: 'Events & Planning' },
+  { path: '/maw3d/edit/*', label: 'Edit event (any)', group: 'Events & Planning' },
+  { path: '/tools/text/translation/*', label: 'Translation view (any)', group: 'Studio & Tools' },
+  { path: '/tools/email', label: 'Email', group: 'Studio & Tools' },
+  { path: '/tools/voice', label: 'Voice Studio (alias)', group: 'Studio & Tools' },
+  { path: '/games/letters/ai', label: 'Letters AI setup', group: 'Games' },
+  { path: '/games/letters/ai/play', label: 'Letters AI play', group: 'Games' },
+  { path: '/games/letters/create', label: 'Letters create', group: 'Games' },
+  { path: '/games/letters/join', label: 'Letters join', group: 'Games' },
+  { path: '/games/letters/waiting', label: 'Letters waiting', group: 'Games' },
+  { path: '/games/letters/play/*', label: 'Letters play (any)', group: 'Games' },
+  { path: '/games/letters/results/*', label: 'Letters results (any)', group: 'Games' },
+] as const;
+
 function toLocalInput(value: string | null): string {
   if (!value) return '';
   try {
@@ -125,6 +147,7 @@ export function AnnouncementEditorModal({ open, onClose, initial, onSaved }: Pro
   const [ctaLabelAr, setCtaLabelAr]     = useState('');
   const [ctaActionType, setCtaActionType] = useState<'url' | 'navigate' | 'event' | ''>('');
   const [ctaActionValue, setCtaActionValue] = useState('');
+  const [ctaPageSearch, setCtaPageSearch] = useState('');
   const [frequency, setFrequency] = useState<'show_once' | 'show_until_acted' | 'show_n_times'>('show_once');
   const [maxShows, setMaxShows]   = useState(1);
   const [priority, setPriority]   = useState<'normal' | 'high'>('normal');
@@ -205,18 +228,42 @@ export function AnnouncementEditorModal({ open, onClose, initial, onSaved }: Pro
       setFrequency('show_once'); setMaxShows(1); setPriority('normal');
       setExcludeCsv(''); setShowAdvanced(false);
     }
-    setUserSearch(''); setUserResults([]); setGroupName(''); setGroupDescription(''); setAudiencePreview(null);
+    setUserSearch(''); setUserResults([]); setGroupName(''); setGroupDescription(''); setAudiencePreview(null); setCtaPageSearch('');
     setDeliveryUserSearch(''); setDeliveryUserResults([]); setDeliveryUser(null); setDeliveryPath(''); setEligibility(null);
   }, [open, initial]);
 
+  const routeOptions = useMemo(() => {
+    const seen = new Set<string>();
+    return [...APP_ROUTES, ...EXTRA_APP_ROUTES].filter((route) => {
+      if (seen.has(route.path)) return false;
+      seen.add(route.path);
+      return true;
+    });
+  }, []);
+
   const grouped = useMemo(() => {
-    const map = new Map<string, typeof APP_ROUTES>();
-    APP_ROUTES.forEach((r) => {
+    const map = new Map<string, typeof routeOptions>();
+    routeOptions.forEach((r) => {
       if (!map.has(r.group)) map.set(r.group, []);
       map.get(r.group)!.push(r);
     });
     return Array.from(map.entries());
-  }, []);
+  }, [routeOptions]);
+
+  const filteredCtaGroups = useMemo(() => {
+    const q = ctaPageSearch.trim().toLowerCase();
+    const filtered = q
+      ? routeOptions.filter((route) => route.label.toLowerCase().includes(q) || route.path.toLowerCase().includes(q) || route.group.toLowerCase().includes(q))
+      : routeOptions;
+    const map = new Map<string, typeof routeOptions>();
+    filtered.forEach((route) => {
+      if (!map.has(route.group)) map.set(route.group, []);
+      map.get(route.group)!.push(route);
+    });
+    return Array.from(map.entries());
+  }, [ctaPageSearch, routeOptions]);
+
+  const selectedCtaRoute = useMemo(() => routeOptions.find((route) => route.path === ctaActionValue) || null, [routeOptions, ctaActionValue]);
 
   const doSearch = async () => {
     const q = userSearch.trim();
@@ -842,7 +889,11 @@ export function AnnouncementEditorModal({ open, onClose, initial, onSaved }: Pro
                       aria-label="Action type"
                       className="h-10 w-full rounded-md bg-white/5 border border-white/10 px-2 text-sm text-white/80"
                       value={ctaActionType}
-                      onChange={(e) => setCtaActionType(e.target.value as any)}
+                      onChange={(e) => {
+                        setCtaActionType(e.target.value as any);
+                        setCtaActionValue('');
+                        setCtaPageSearch('');
+                      }}
                     >
                       <option value="">Pick an action…</option>
                       <option value="navigate">Go to a WAKTI page</option>
@@ -850,9 +901,59 @@ export function AnnouncementEditorModal({ open, onClose, initial, onSaved }: Pro
                       <option value="event">Fire internal event (advanced)</option>
                     </select>
                   </Field>
-                  <Field label={ctaActionType === 'navigate' ? 'Page path (e.g. /wakti-ai-v2)' : ctaActionType === 'url' ? 'External URL' : 'Event name'}>
-                    <Input value={ctaActionValue} onChange={(e) => setCtaActionValue(e.target.value)} placeholder={ctaActionType === 'url' ? 'https://…' : ctaActionType === 'navigate' ? '/calendar' : 'wakti-open-memory-panel'} className="h-10 bg-white/5 border-white/10 text-sm" />
-                  </Field>
+                  <div className={ctaActionType === 'navigate' ? 'md:col-span-2' : ''}>
+                    <Field label={ctaActionType === 'navigate' ? 'Choose a WAKTI page' : ctaActionType === 'url' ? 'External URL' : 'Event name'}>
+                      {ctaActionType === 'navigate' ? (
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Search className="h-3.5 w-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                            <Input value={ctaPageSearch} onChange={(e) => setCtaPageSearch(e.target.value)} placeholder="Search WAKTI pages…" className="pl-9 h-10 bg-white/5 border-white/10 text-sm" />
+                          </div>
+                          {ctaActionValue && (
+                            <div className="rounded-lg border border-emerald-400/25 bg-emerald-400/10 px-3 py-2">
+                              <div className="text-[10px] text-emerald-100/80">Selected page</div>
+                              <div className="text-sm text-white">{selectedCtaRoute?.label || ctaActionValue}</div>
+                              <code className="text-[11px] text-white/50 font-mono">{ctaActionValue}</code>
+                            </div>
+                          )}
+                          <div className="max-h-56 overflow-auto rounded-lg border border-white/10 bg-[#0e1119] pr-1">
+                            {filteredCtaGroups.length === 0 ? (
+                              <div className="px-3 py-3 text-[11px] text-white/40">No pages found.</div>
+                            ) : (
+                              <div className="space-y-3 p-2">
+                                {filteredCtaGroups.map(([group, routes]) => (
+                                  <div key={group}>
+                                    <div className="text-[10px] font-semibold text-white/40 uppercase tracking-wider mb-1">{group}</div>
+                                    <div className="space-y-1">
+                                      {routes.map((route) => {
+                                        const active = ctaActionValue === route.path;
+                                        return (
+                                          <button
+                                            key={route.path}
+                                            type="button"
+                                            onClick={() => setCtaActionValue(route.path)}
+                                            className={`w-full flex items-center justify-between rounded-lg border px-2 py-1.5 text-left text-[12px] transition ${active ? 'border-emerald-400/40 bg-emerald-400/10 text-emerald-100' : 'border-white/10 bg-white/5 text-white/70 hover:bg-white/10'}`}
+                                          >
+                                            <span className="truncate">{route.label}</span>
+                                            <span className="flex items-center gap-2">
+                                              <code className="text-[10px] text-white/40 font-mono">{route.path}</code>
+                                              {active && <Check className="h-3 w-3 text-emerald-300" />}
+                                            </span>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <Input value={ctaActionValue} onChange={(e) => setCtaActionValue(e.target.value)} placeholder={ctaActionType === 'url' ? 'https://…' : 'wakti-open-memory-panel'} className="h-10 bg-white/5 border-white/10 text-sm" />
+                      )}
+                    </Field>
+                  </div>
                 </div>
               )}
 
@@ -1084,3 +1185,5 @@ function DeliveryFlag({ label, value }: { label: string; value: boolean | null }
     </div>
   );
 }
+
+

@@ -144,10 +144,10 @@ export default function Settings() {
   const [savedImagesOpen, setSavedImagesOpen] = useState(false);
   const bgInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = new home screen look)
-  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
+  // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = iPhone look, 'modern' = grouped modern look)
+  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen' | 'modern'>(() => {
     const cached = getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
-    return cached === 'dashboard' ? 'dashboard' : 'homescreen';
+    return cached === 'dashboard' || cached === 'homescreen' || cached === 'modern' ? cached : 'homescreen';
   });
 
   // Active widget settings based on current mode
@@ -364,7 +364,7 @@ export default function Settings() {
 
       // Load dashboard look preference
       const savedLook = s?.dashboardLook;
-      if (savedLook === 'dashboard' || savedLook === 'homescreen') {
+      if (savedLook === 'dashboard' || savedLook === 'homescreen' || savedLook === 'modern') {
         setDashboardLook(savedLook);
       }
 
@@ -437,7 +437,7 @@ export default function Settings() {
     }
   };
 
-  const updateDashboardLook = async (look: 'dashboard' | 'homescreen') => {
+  const updateDashboardLook = async (look: 'dashboard' | 'homescreen' | 'modern') => {
     try {
       setDashboardLook(look);
       setScopedStorageItem('wakti_dashboard_look', look, user?.id);
@@ -960,40 +960,50 @@ export default function Settings() {
                   {language === "ar" ? "اختر مظهر شاشتك الرئيسية" : "Choose your home screen style"}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "الشكل الافتراضي (لوحة التحكم)" : "Default Look (Dashboard)"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {language === "ar" 
-                        ? "عرض الأدوات كبطاقات قابلة للتخصيص" 
-                        : "Show widgets as customizable cards"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={dashboardLook === 'dashboard'}
-                    onCheckedChange={(checked) => updateDashboardLook(checked ? 'dashboard' : 'homescreen')}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-md border p-4">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">
-                      {language === "ar" ? "شكل الشاشة الرئيسية" : "Home Screen Look"}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {language === "ar" 
-                        ? "عرض أنيق ومركز للوصول السريع" 
-                        : "Clean, focused layout for quick access"}
-                    </p>
-                  </div>
-                  <Switch 
-                    checked={dashboardLook === 'homescreen'}
-                    onCheckedChange={(checked) => updateDashboardLook(checked ? 'homescreen' : 'dashboard')}
-                  />
-                </div>
+              <CardContent className="space-y-3">
+                {[
+                  {
+                    value: 'dashboard',
+                    titleEn: 'Default Look (Dashboard)',
+                    titleAr: 'الشكل الافتراضي (لوحة التحكم)',
+                    descEn: 'Show widgets as customizable cards',
+                    descAr: 'عرض الأدوات كبطاقات قابلة للتخصيص',
+                  },
+                  {
+                    value: 'homescreen',
+                    titleEn: 'Home Screen Look',
+                    titleAr: 'شكل الشاشة الرئيسية',
+                    descEn: 'Clean, focused layout for quick access',
+                    descAr: 'عرض أنيق ومركز للوصول السريع',
+                  },
+                  {
+                    value: 'modern',
+                    titleEn: 'Modern Look',
+                    titleAr: 'المظهر الحديث',
+                    descEn: 'Grouped app sections with widget carousel and WAKTI AI chat bar',
+                    descAr: 'مجموعات تطبيقات حديثة مع كاروسيل للودجتس وشريط دردشة وكتي AI',
+                  },
+                ].map((option) => {
+                  const isActive = dashboardLook === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => updateDashboardLook(option.value as 'dashboard' | 'homescreen' | 'modern')}
+                      className={`w-full rounded-xl border p-4 text-left transition-all ${isActive ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/40'}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">{language === 'ar' ? option.titleAr : option.titleEn}</p>
+                          <p className="text-xs text-muted-foreground">{language === 'ar' ? option.descAr : option.descEn}</p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${isActive ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                          {isActive ? (language === 'ar' ? 'مفعّل' : 'Active') : (language === 'ar' ? 'تفعيل' : 'Select')}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
               </CardContent>
             </Card>
 

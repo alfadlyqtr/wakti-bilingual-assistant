@@ -3974,10 +3974,17 @@ serve(async (req) => {
           : null;
 
         // Priority: clientTimezone (browser) > profileTimezone (DB) > ipGeo (last resort)
-        // NEVER let ipGeo override a real clientTimezone ΓÇö that is what caused the India bug.
-        const effectiveTimezone = (clientTimezone && clientTimezone !== 'UTC')
+        // Default fallback is Asia/Qatar (GMT+3) since Wakti is designed and built in Qatar.
+        const effectiveTimezone = (clientTimezone && clientTimezone !== 'UTC' && clientTimezone !== 'undefined')
           ? clientTimezone
-          : (profileTimezone || ipGeo?.timezone || 'UTC');
+          : (profileTimezone || (ipGeo?.timezone && ipGeo.timezone !== 'UTC' ? ipGeo.timezone : 'Asia/Qatar'));
+
+        console.log(`[wakti-ai-v2-brain-stream] Timezone resolved:`, {
+          clientTimezone,
+          profileTimezone,
+          ipGeoTimezone: ipGeo?.timezone,
+          resolvedEffective: effectiveTimezone
+        });
 
         const ipLocationLine = (() => {
           if (!ipGeo) return '';

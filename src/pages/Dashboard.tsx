@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { DragModeToggle } from "@/components/dashboard/DragModeToggle";
 import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
 import { HomeScreen } from "@/components/dashboard/HomeScreen";
+import { ModernHomeScreen } from "@/components/dashboard/ModernHomeScreen";
 import { useWidgetManager } from "@/hooks/useWidgetManager";
 import { supabase } from "@/integrations/supabase/client";
 import { t } from "@/utils/translations";
@@ -18,10 +19,10 @@ export default function Dashboard() {
   const { profile, loading: profileLoading } = useUserProfile();
   const [isDragging, setIsDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen'>(() => {
+  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen' | 'modern'>(() => {
     // Instant load from localStorage — no flash
     const cached = getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
-    return cached === 'dashboard' ? 'dashboard' : 'homescreen';
+    return cached === 'dashboard' || cached === 'homescreen' || cached === 'modern' ? cached : 'homescreen';
   });
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!profile) return;
     const savedLook = (profile.settings as any)?.dashboardLook;
-    if (savedLook === 'dashboard' || savedLook === 'homescreen') {
+    if (savedLook === 'dashboard' || savedLook === 'homescreen' || savedLook === 'modern') {
       setDashboardLook(savedLook);
       setScopedStorageItem('wakti_dashboard_look', savedLook, user?.id);
     }
@@ -43,7 +44,7 @@ export default function Dashboard() {
   useEffect(() => {
     const handleDashboardLookChange = (val: unknown) => {
       // Narrow eventBus payload to the strict state type before setState.
-      if (val !== 'dashboard' && val !== 'homescreen') return;
+      if (val !== 'dashboard' && val !== 'homescreen' && val !== 'modern') return;
       setDashboardLook(val);
       setScopedStorageItem('wakti_dashboard_look', val, user?.id);
       setRefreshKey(prev => prev + 1);
@@ -67,8 +68,14 @@ export default function Dashboard() {
     } else {
       document.body.classList.remove('homescreen-active');
     }
+    if (dashboardLook === 'modern') {
+      document.body.classList.add('modern-dashboard-active');
+    } else {
+      document.body.classList.remove('modern-dashboard-active');
+    }
     return () => {
       document.body.classList.remove('homescreen-active');
+      document.body.classList.remove('modern-dashboard-active');
     };
   }, [dashboardLook]);
 
@@ -112,6 +119,14 @@ export default function Dashboard() {
     return (
       <div className="w-full h-full p-0 m-0">
         <HomeScreen displayName={displayName} key={refreshKey} />
+      </div>
+    );
+  }
+
+  if (dashboardLook === 'modern') {
+    return (
+      <div className="modern-dashboard-shell w-full h-full min-h-full p-0 m-0">
+        <ModernHomeScreen displayName={displayName} key={refreshKey} />
       </div>
     );
   }

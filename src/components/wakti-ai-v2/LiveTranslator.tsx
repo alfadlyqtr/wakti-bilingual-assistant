@@ -148,6 +148,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const spokenLangRef = useRef(spokenLanguage);
   const voiceRef = useRef(voice);
   const abortRef = useRef<AbortController | null>(null);
+  const currentAudioBase64Ref = useRef<string | null>(null);
 
   // Keep refs synced + persist
   useEffect(() => { targetLangRef.current = targetLanguage; localStorage.setItem('wakti_live_translator_target', targetLanguage); }, [targetLanguage]);
@@ -198,7 +199,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
         target_language: targetLangRef.current,
         original_text: userTranscript,
         translated_text: translatedText,
-        audio_base64: currentAudioBase64 || null,
+        audio_base64: currentAudioBase64Ref.current || null,
       });
       if (!insertErr) {
         setJustSaved(true);
@@ -285,6 +286,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
       }
 
       const { transcript, translation, audio_base64, audio_mime } = json;
+      currentAudioBase64Ref.current = audio_base64 || null;
       setCurrentAudioBase64(audio_base64 || null);
 
       setUserTranscript(transcript || '');
@@ -364,6 +366,8 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
     setError(null);
     setUserTranscript('');
     setTranslatedText('');
+    currentAudioBase64Ref.current = null;
+    setCurrentAudioBase64(null);
     setCountdown(MAX_USER_RECORD_SECONDS);
 
     try {
@@ -496,7 +500,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
       <div className="grid grid-cols-12 gap-3 p-3 rounded-xl border border-white/10 bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10">
         <div className="col-span-5">
           <Label className="text-xs font-medium text-muted-foreground mb-1 block">{t('Spoken', 'المتحدث')}</Label>
-          <Select value={spokenLanguage} onValueChange={v => { setSpokenLanguage(v); setUserTranscript(''); setTranslatedText(''); }} disabled={isBusy}>
+          <Select value={spokenLanguage} onValueChange={v => { setSpokenLanguage(v); setUserTranscript(''); setTranslatedText(''); currentAudioBase64Ref.current = null; setCurrentAudioBase64(null); }} disabled={isBusy}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent className="max-h-60">
               {TRANSLATION_LANGUAGES.map(l => <SelectItem key={l.code} value={l.code}>{l.name[language]}</SelectItem>)}
@@ -512,7 +516,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
             onClick={() => {
               const ns = targetLanguage; const nt = spokenLanguage;
               setSpokenLanguage(ns); setTargetLanguage(nt);
-              setUserTranscript(''); setTranslatedText('');
+              setUserTranscript(''); setTranslatedText(''); currentAudioBase64Ref.current = null; setCurrentAudioBase64(null);
             }}
             className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/60 dark:bg-white/10 transition-all active:scale-95"
           >
@@ -522,7 +526,7 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
 
         <div className="col-span-5">
           <Label className="text-xs font-medium text-muted-foreground mb-1 block">{t('To', 'إلى')}</Label>
-          <Select value={targetLanguage} onValueChange={v => { setTargetLanguage(v); setUserTranscript(''); setTranslatedText(''); }} disabled={isBusy}>
+          <Select value={targetLanguage} onValueChange={v => { setTargetLanguage(v); setUserTranscript(''); setTranslatedText(''); currentAudioBase64Ref.current = null; setCurrentAudioBase64(null); }} disabled={isBusy}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent className="max-h-60">
               {TRANSLATION_LANGUAGES.map(l => <SelectItem key={l.code} value={l.code}>{l.name[language]}</SelectItem>)}
@@ -653,12 +657,12 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
                   <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
                     {getLangName(item.spoken_language)} → {getLangName(item.target_language)}
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-4">
                     <button type="button" title={playingId === item.id ? 'Stop' : 'Play'} onClick={() => handlePlaySaved(item)} className={`transition-colors ${playingId === item.id ? 'text-cyan-400' : 'text-muted-foreground hover:text-cyan-400'}`}>
-                      {playingId === item.id ? <Square className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                      {playingId === item.id ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
                     </button>
                     <button type="button" title="Delete" onClick={() => handleDelete(item.id)} className="text-red-400/60 hover:text-red-400 transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>

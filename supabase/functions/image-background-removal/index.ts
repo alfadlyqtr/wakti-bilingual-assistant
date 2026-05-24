@@ -8,7 +8,14 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
 };
 
-const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY");
+const KIE_API_KEY = Deno.env.get("KIE_API_KEY");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+const STORAGE_BUCKET = "generated-files";
+const SIGNED_URL_EXPIRES_SECONDS = 10 * 60;
+const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
+const KIE_STATUS_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
+const KIE_MODEL = "recraft/remove-background";
 
 function uuid() {
   try {
@@ -18,66 +25,174 @@ function uuid() {
   }
 }
 
-async function safeJson(resp: Response): Promise<unknown> {
-  const text = await resp.text();
-  if (!text || text.trim().length === 0) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { __raw: text };
+function decodeBase64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
   }
+  return bytes;
 }
 
-function ensureDataUri(img: unknown): unknown {
-  if (!img || typeof img !== "string") return img;
-  if (img.startsWith("http") || img.startsWith("data:")) return img;
-  return `data:image/jpeg;base64,${img}`;
+function stripDataUrlPrefix(maybeDataUrl?: string): { base64: string; mimeHint?: string } {
+  if (maybeDataUrl && maybeDataUrl.startsWith("data:")) {
+    const [meta, data] = maybeDataUrl.split(",", 2);
+    const match = /data:([^;]+);base64/.exec(meta || "");
+    const mime = match?.[1];
+    return { base64: data || "", mimeHint: mime };
+  }
+  return { base64: maybeDataUrl || "" };
+}
+
+function detectMimeAndExt(bytes: Uint8Array, mimeHint?: string): { mime: string; ext: string } {
+  if (mimeHint && (mimeHint === "image/png" || mimeHint === "image/jpeg" || mimeHint === "image/webp")) {
+    return {
+      mime: mimeHint,
+      ext: mimeHint === "image/png" ? "png" : mimeHint === "image/jpeg" ? "jpg" : "webp",
+    };
+  }
+  if (bytes.length > 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 && bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) {
+    return { mime: "image/png", ext: "png" };
+  }
+  if (bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { mime: "image/jpeg", ext: "jpg" };
+  }
+  if (bytes.length > 12 && bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+    return { mime: "image/webp", ext: "webp" };
+  }
+  return { mime: mimeHint || "image/png", ext: mimeHint === "image/jpeg" ? "jpg" : mimeHint === "image/webp" ? "webp" : "png" };
 }
 
 const IMAGE_URL_KEYS = ["imageURL", "URL", "url", "outputUrl", "outputURL"];
-const IMAGE_DATAURI_KEYS = ["imageDataURI", "dataURI", "dataUrl", "data_uri"];
 
-function findFirstImage(node: unknown): { url?: string; dataURI?: string } | null {
-  const visited = new Set<object>();
-
-  function dfs(obj: unknown): { url?: string; dataURI?: string } | null {
-    if (!obj || typeof obj !== "object") return null;
-    const asObj = obj as Record<string, unknown>;
-    if (visited.has(asObj)) return null;
-    visited.add(asObj);
-
-    for (const k of IMAGE_URL_KEYS) {
-      const v = asObj[k];
-      if (typeof v === "string" && v) return { url: v };
-    }
-    for (const k of IMAGE_DATAURI_KEYS) {
-      const v = asObj[k];
-      if (typeof v === "string" && v) return { dataURI: v };
-    }
-
-    if (Array.isArray(obj)) {
-      for (const it of obj) {
-        const got = dfs(it);
-        if (got) return got;
+function extractImageUrls(data: unknown): string[] {
+  const urls: string[] = [];
+  if (typeof (data as { resultJson?: unknown } | null)?.resultJson === "string" && (data as { resultJson: string }).resultJson) {
+    try {
+      const parsed = JSON.parse((data as { resultJson: string }).resultJson);
+      if (Array.isArray(parsed?.resultUrls)) {
+        for (const u of parsed.resultUrls) {
+          if (typeof u === "string" && u.startsWith("http")) urls.push(u);
+        }
       }
-    } else {
-      for (const key in asObj) {
-        const got = dfs(asObj[key]);
-        if (got) return got;
+    } catch {
+    }
+  }
+  if (urls.length > 0) return urls;
+  const seen = new Set<string>();
+  const scan = (obj: unknown, depth = 0) => {
+    if (!obj || typeof obj !== "object" || depth > 8) return;
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (typeof v === "string" && v.startsWith("http") && !seen.has(v)) {
+        const keyLooksImagey = /url|image|img|src|uri|link|photo|pic/i.test(k);
+        const hasImageExt = /\.(png|jpg|jpeg|webp)/i.test(v);
+        if (keyLooksImagey || hasImageExt) {
+          seen.add(v);
+          urls.push(v);
+        }
+      } else if (v && typeof v === "object") {
+        scan(v, depth + 1);
       }
     }
-    return null;
+  };
+  scan(data);
+  return urls;
+}
+
+async function uploadAndSignReferenceImage(params: { input: string; userId: string; index: number }): Promise<string> {
+  const { input, userId, index } = params;
+  if (input.startsWith("http://") || input.startsWith("https://")) {
+    return input;
+  }
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("Supabase storage not configured");
   }
 
-  return dfs(node);
+  const { base64, mimeHint } = stripDataUrlPrefix(input);
+  if (!base64) {
+    throw new Error("Invalid image data");
+  }
+  const bytes = decodeBase64ToUint8Array(base64);
+  const { mime, ext } = detectMimeAndExt(bytes, mimeHint);
+  const path = `bg-removal-input/${userId}/${Date.now()}-${index}-${uuid()}.${ext}`;
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  const upload = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, bytes, { contentType: mime, upsert: true });
+
+  if (upload.error) {
+    throw new Error(`Storage upload failed: ${upload.error.message}`);
+  }
+
+  const signed = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .createSignedUrl(path, SIGNED_URL_EXPIRES_SECONDS);
+
+  if (signed.error || !signed.data?.signedUrl) {
+    throw new Error(`Signed URL failed: ${signed.error?.message || "Unknown error"}`);
+  }
+
+  return signed.data.signedUrl;
+}
+
+async function pollKieTaskForImage(taskId: string): Promise<string> {
+  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+  const deadline = Date.now() + 180000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    const resp = await fetch(`${KIE_STATUS_URL}?taskId=${encodeURIComponent(taskId)}`, {
+      headers: { Authorization: `Bearer ${KIE_API_KEY}` },
+    });
+    const rawText = await resp.text();
+    if (!resp.ok) {
+      throw new Error(`KIE poll failed ${resp.status}: ${rawText.slice(0, 200)}`);
+    }
+    const json = JSON.parse(rawText);
+    const rawStatus = (json?.data?.state || json?.data?.status || json?.data?.taskStatus || "").toString().toLowerCase();
+    const imageUrls = extractImageUrls(json?.data);
+    const isDone = rawStatus === "success" || rawStatus === "completed" || rawStatus === "finished"
+      || rawStatus === "succeed" || rawStatus === "done" || rawStatus === "2";
+    const isFailed = rawStatus === "failed" || rawStatus === "error" || rawStatus === "fail" || rawStatus === "3";
+    if (isFailed) {
+      throw new Error(`KIE task failed: ${rawStatus}`);
+    }
+    if ((isDone || imageUrls.length > 0) && imageUrls[0]) {
+      return imageUrls[0];
+    }
+  }
+  throw new Error("KIE generation timed out");
+}
+
+async function submitKieBackgroundRemoval(imageUrl: string): Promise<string> {
+  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+  const submitResp = await fetch(KIE_CREATE_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: KIE_MODEL,
+      input: { image: imageUrl },
+    }),
+  });
+  const submitText = await submitResp.text();
+  if (!submitResp.ok) {
+    throw new Error(`KIE submit failed ${submitResp.status}: ${submitText.slice(0, 200)}`);
+  }
+  const submitJson = JSON.parse(submitText);
+  const taskId = submitJson?.data?.taskId;
+  if (!taskId) {
+    throw new Error(`No taskId in KIE response: ${submitText.slice(0, 200)}`);
+  }
+  return await pollKieTaskForImage(taskId);
 }
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { status: 200, headers: corsHeaders });
 
   try {
-    if (!RUNWARE_API_KEY) {
-      return new Response(JSON.stringify({ error: "Runware API key not configured" }), {
+    if (!KIE_API_KEY) {
+      return new Response(JSON.stringify({ error: "KIE API key not configured" }), {
         status: 503,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -91,6 +206,7 @@ serve(async (req) => {
     }
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    let authenticatedUserId = "anonymous";
 
     // ── Trial Token Check: bg_removal ──
     const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
@@ -101,6 +217,7 @@ serve(async (req) => {
       );
       const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
       if (user) {
+        authenticatedUserId = user.id;
         const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, 'bg_removal', 2);
         if (!trial.allowed) {
           return new Response(
@@ -112,7 +229,6 @@ serve(async (req) => {
     }
     // ── End Trial Token Check ──
 
-    // Support both single image (backwards compat) and multiple images
     const imagesToProcess: unknown[] = [];
     if (Array.isArray(body?.referenceImages)) {
       imagesToProcess.push(...(body.referenceImages as unknown[]));
@@ -120,79 +236,12 @@ serve(async (req) => {
       imagesToProcess.push(body.image);
     }
 
-    const positivePrompt = typeof body?.positivePrompt === "string" && body.positivePrompt.trim()
-      ? body.positivePrompt
-      : typeof body?.text === "string" && body.text.trim()
-        ? body.text
-        : "";
-
-    if (!positivePrompt || positivePrompt.trim().length === 0) {
+    if (imagesToProcess.length === 0) {
       return new Response(JSON.stringify({
-        error: "positivePrompt missing",
-        hint: "provide 'positivePrompt' (or 'text')",
+        error: "image missing",
+        hint: "provide 'referenceImages' or 'image'",
       }), {
         status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const outputFormat = (typeof body?.outputFormat === "string" && body.outputFormat) || "PNG";
-    const outputType = (Array.isArray(body?.outputType) && (body.outputType as unknown[]).length > 0)
-      ? body.outputType
-      : ["URL", "dataURI"];
-    const outputQuality = typeof body?.outputQuality === "number" ? body.outputQuality : 90;
-
-    // PROMPT-ONLY fallback: allow using this expensive model without an input image
-    if (imagesToProcess.length === 0) {
-      const payload = [
-        { taskType: "authentication", apiKey: RUNWARE_API_KEY },
-        {
-          taskType: "imageInference",
-          taskUUID: uuid(),
-          model: "google:4@1",
-          positivePrompt,
-          numberResults: 1,
-          outputType,
-          outputFormat,
-          includeCost: true,
-          outputQuality,
-        },
-      ];
-
-      const rwRes = await fetch("https://api.runware.ai/v1", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await safeJson(rwRes);
-      if (!rwRes.ok || !data) {
-        return new Response(JSON.stringify({
-          error: "Runware API error",
-          status: rwRes.status,
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      const found = findFirstImage(data);
-      if (!found?.url && !found?.dataURI) {
-        return new Response(JSON.stringify({
-          error: "No image returned from Runware",
-        }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      return new Response(JSON.stringify({
-        provider: "runware",
-        model: "google:4@1",
-        imageUrl: found.url,
-        imageDataURI: found.dataURI,
-      }), {
-        status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -210,73 +259,36 @@ serve(async (req) => {
 
     for (let i = 0; i < imagesToProcess.length; i++) {
       try {
-        const inputImage = ensureDataUri(String(imagesToProcess[i] || "")) as string;
-
+        const inputImage = String(imagesToProcess[i] || "").trim();
         if (!inputImage) {
           errors.push({ index: i, error: "Invalid image data" });
           continue;
         }
-
-        const payload = [
-          { taskType: "authentication", apiKey: RUNWARE_API_KEY },
-          {
-            taskType: "imageInference",
-            taskUUID: uuid(),
-            model: "google:4@1",
-            positivePrompt,
-            numberResults: 1,
-            outputType,
-            outputFormat,
-            includeCost: true,
-            referenceImages: [inputImage],
-            outputQuality,
-          },
-        ];
-
-        const rwRes = await fetch("https://api.runware.ai/v1", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        const data = await safeJson(rwRes);
-        if (!rwRes.ok || !data) {
-          errors.push({ index: i, error: `Runware API error: ${rwRes.status}` });
-          continue;
-        }
-
-        const found = findFirstImage(data);
-        if (found?.url || found?.dataURI) {
-          results.push({ index: i, imageUrl: found.url, imageDataURI: found.dataURI });
-        } else {
-          errors.push({ index: i, error: "No image returned from Runware" });
-        }
+        const sourceUrl = await uploadAndSignReferenceImage({ input: inputImage, userId: authenticatedUserId, index: i });
+        const outputUrl = await submitKieBackgroundRemoval(sourceUrl);
+        results.push({ index: i, imageUrl: outputUrl });
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
         errors.push({ index: i, error: msg });
       }
     }
 
-    // Return results
     if (results.length > 0) {
-      // Backwards compatibility: if single image, return old format
       if (imagesToProcess.length === 1 && results.length === 1) {
         return new Response(JSON.stringify({
-          provider: "runware",
-          model: "google:4@1",
+          provider: "kie",
+          model: KIE_MODEL,
           imageUrl: results[0].imageUrl,
-          imageDataURI: results[0].imageDataURI,
         }), {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
-      // Multi-image: return array format
       return new Response(JSON.stringify({
-        provider: "runware",
-        model: "google:4@1",
-        results: results.map((r) => ({ imageUrl: r.imageUrl, imageDataURI: r.imageDataURI })),
+        provider: "kie",
+        model: KIE_MODEL,
+        results: results.map((r) => ({ imageUrl: r.imageUrl })),
         errors: errors.length > 0 ? errors : undefined,
       }), {
         status: 200,

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { emitEvent, onEvent } from "@/utils/eventBus";
+import { onEvent } from "@/utils/eventBus";
 import { createPortal } from "react-dom";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -26,7 +26,6 @@ import { UnreadBadge } from "./UnreadBadge";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { VoiceAssistant } from "@/components/voice/VoiceAssistant";
 import { getScopedStorageItem } from "@/utils/userScopedStorage";
 
 interface AppHeaderProps {
@@ -556,22 +555,6 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
               </div>
             )}
           </div>
-
-          {/* Voice Assistant mic button */}
-          <VoiceAssistant
-            onSaveEntry={(entry) => {
-              console.log('[AppHeader] Dispatching voice entry event:', entry);
-              // Store entry in sessionStorage so calendar can pick it up after navigation
-              try {
-                sessionStorage.setItem('wakti-pending-voice-entry', JSON.stringify(entry));
-              } catch {}
-              emitEvent('wakti-voice-add-entry', entry);
-              // Navigate to calendar if not already there
-              if (!window.location.pathname.includes('/calendar')) {
-                navigate('/calendar');
-              }
-            }}
-          />
 
           {/* Weather Button - Made smaller */}
           <WeatherButton />

@@ -1,4 +1,4 @@
-@tailwind base;
+﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
@@ -2869,6 +2869,12 @@ body.homescreen-active .app-main-scroll > .dashboard-container {
   flex: 1 1 0% !important;
   min-height: 0 !important;
   height: 100% !important;
+}
+
+/* Modern dashboard: remove reserved bottom mobile tab space */
+body.modern-dashboard-active .app-main-scroll,
+body.modern-dashboard-active .app-layout-mobile main {
+  padding-bottom: 0 !important;
 }
 
 /* Dock bottom: flush to edge + iPhone safe area */

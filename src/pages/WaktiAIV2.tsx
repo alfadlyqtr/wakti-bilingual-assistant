@@ -1056,6 +1056,48 @@ const WaktiAIV2 = () => {
     return () => window.removeEventListener('wakti-search-confirm', handler as EventListener);
   }, [handleSendMessage]);
 
+  // One-shot: handle messages/mode/plus-drawer injected from the homescreen chat bar
+  useEffect(() => {
+    try {
+      const pending = localStorage.getItem('wakti_pending_message');
+      const pendingTrigger = localStorage.getItem('wakti_active_trigger');
+      const openPlus = localStorage.getItem('wakti_open_plus');
+      const pendingSubmode = localStorage.getItem('wakti_chat_submode') as 'chat' | 'study' | null;
+      if (pendingSubmode) { setChatSubmode(pendingSubmode); localStorage.removeItem('wakti_chat_submode'); }
+      if (pending && pending.trim()) {
+        localStorage.removeItem('wakti_pending_message');
+        if (pendingTrigger) { setActiveTrigger(pendingTrigger); localStorage.removeItem('wakti_active_trigger'); }
+        setTimeout(() => { handleSendMessage(pending.trim(), pendingTrigger || 'chat', [], undefined, undefined, pendingSubmode || 'chat'); }, 600);
+      } else if (pendingTrigger) {
+        setActiveTrigger(pendingTrigger);
+        localStorage.removeItem('wakti_active_trigger');
+      }
+      if (openPlus === '1') { localStorage.removeItem('wakti_open_plus'); setTimeout(() => setIsSidebarOpen(true), 400); }
+      // Re-dispatch files selected via homescreen PlusMenu
+      const pendingVisionRaw = sessionStorage.getItem('wakti_pending_vision_files');
+      if (pendingVisionRaw) {
+        sessionStorage.removeItem('wakti_pending_vision_files');
+        try {
+          const stored: { name: string; type: string; data: string }[] = JSON.parse(pendingVisionRaw);
+          if (stored.length > 0) {
+            // Build a DataTransfer-like FileList substitute and dispatch wakti-file-selected
+            const dt = new DataTransfer();
+            for (const f of stored) {
+              const byteStr = atob(f.data.split(',')[1] || '');
+              const arr = new Uint8Array(byteStr.length);
+              for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+              dt.items.add(new File([arr], f.name, { type: f.type }));
+            }
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('wakti-file-selected', { detail: { files: dt.files } }));
+            }, 600);
+          }
+        } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // intentionally empty — run once on mount only
+
   const handleConfirmTask = (taskData: any) => { console.log('Task confirmed:', taskData); setShowTaskConfirmation(false); };
   const handleDeclineTask = () => { console.log('Task declined'); setShowTaskConfirmation(false); };
   const handleConfirmReminder = (reminderData: any) => { console.log('Reminder confirmed:', reminderData); };
