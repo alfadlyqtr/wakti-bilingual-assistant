@@ -27,6 +27,7 @@ import {
 interface SavedImage {
   id: string;
   image_url: string;
+  meta: Record<string, unknown> | null;
   prompt: string | null;
   submode: string;
   quality: string | null;
@@ -70,7 +71,7 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
     try {
       const { data, error } = await (supabase as any)
         .from('user_generated_images')
-        .select('id, image_url, prompt, submode, quality, created_at')
+        .select('id, image_url, meta, prompt, submode, quality, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -482,13 +483,13 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
           </button>
         </div>
 
-        {/* 20-day auto-delete notice */}
+        {/* 60-day auto-delete notice */}
         <div className="flex items-start gap-2.5 px-3 py-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/30">
           <Download className="h-4 w-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
           <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
             {language === 'ar'
-              ? 'يتم حذف الصور تلقائيًا بعد 20 يومًا. قم بتنزيل صورك المفضلة للاحتفاظ بها!'
-              : 'Images are automatically deleted after 20 days. Download your favorites to keep them!'}
+              ? 'يتم حذف الصور تلقائيًا بعد 60 يومًا. قم بتنزيل صورك المفضلة للاحتفاظ بها!'
+              : 'Images are automatically deleted after 60 days. Download your favorites to keep them!'}
           </p>
         </div>
 
@@ -574,6 +575,8 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
                     mediaType="image"
                     defaultCaption={''}
                     language={language as 'en' | 'ar'}
+                    savedImageId={img.id}
+                    initialPublished={img.meta?.instagram_published === true}
                   />
                 </div>
               </div>

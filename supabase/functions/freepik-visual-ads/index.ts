@@ -495,7 +495,7 @@ function buildCtaDirectives(spec: VisualAdsSpec): string[] {
   const ctaText = (spec.campaign?.cta_text || "").trim();
   if (!ctaText) return [];
 
-  const lines = [`CTA MODE: Treat "${ctaText}" as the single main action and give it clear high-contrast emphasis.`];
+  const lines = [`CTA MODE: Render "${ctaText}" inside the final poster as the single main action. Place it once only with clear hierarchy and strong readability.`];
 
   switch (ctaId) {
     case "download-now":
@@ -523,6 +523,8 @@ function buildCtaDirectives(spec: VisualAdsSpec): string[] {
       break;
   }
 
+  lines.push("CTA PLACEMENT: Keep the CTA in a clean protected area. In screenshot-led layouts, do not let it cover important device edges, app UI, or key readable screen content.");
+
   return lines;
 }
 
@@ -533,25 +535,27 @@ function buildTextSystemDirectives(spec: VisualAdsSpec): string[] {
 
   switch (textPresenceId) {
     case "quiet":
-      lines.push("TEXT PRESENCE / QUIET: Reserve a compact clean text-safe zone near the lower center for restrained external overlay text. Keep the safe area elegant, unobtrusive, and free from busy objects or strong texture.");
+      lines.push("TEXT PRESENCE / QUIET: Keep the approved text restrained, compact, and elegant. Feature callouts should feel refined and supportive, while the CTA stays present but controlled.");
       break;
     case "balanced":
-      lines.push("TEXT PRESENCE / BALANCED: Reserve a moderate lower-center text-safe zone for external overlay text with clear premium hierarchy. Keep enough negative space for a CTA plus compact supporting chips.");
+      lines.push("TEXT PRESENCE / BALANCED: Use a clear premium hierarchy with compact feature callouts and one readable CTA. Keep the text noticeable but not oversized or loud.");
       break;
     case "strong-cta":
-      lines.push("TEXT PRESENCE / STRONG CTA: Reserve a wider stronger lower-center text-safe zone for an externally composited CTA with small supporting chips above it. Keep this area clean, readable, and protected from visual clutter.");
+      lines.push("TEXT PRESENCE / STRONG CTA: Make the CTA the strongest text element while keeping the feature callouts compact and supportive. The text system should feel conversion-focused without overwhelming the poster.");
       break;
   }
 
+  lines.push("TEXT PLACEMENT: When the layout is screenshot-led, place callouts and CTA around the device in protected negative space. Do not cover important screen content, key app UI, or the dominant screenshot read.");
+
   switch (textColorStyleId) {
     case "auto-contrast":
-      lines.push("TEXT COLOR / AUTO CONTRAST: Keep the reserved text-safe zone tonally stable and readable so external overlay text can achieve clean contrast without loud decorative color behind it.");
+      lines.push("TEXT COLOR / AUTO CONTRAST: Choose a clean high-contrast treatment that stays readable against the actual poster background without looking harsh or cheap.");
       break;
     case "brand-accent":
-      lines.push("TEXT COLOR / BRAND ACCENT: Keep the reserved text-safe zone neutral and premium so a restrained brand-accent CTA can be composited later without clashing with the background.");
+      lines.push("TEXT COLOR / BRAND ACCENT: Keep most text neutral and premium. Use restrained accent color mainly on the CTA or tiny highlights rather than coloring every text element.");
       break;
     case "minimal-monochrome":
-      lines.push("TEXT COLOR / MINIMAL MONOCHROME: Keep the reserved text-safe zone clean and elegant so monochrome external overlay text will remain crisp and premium.");
+      lines.push("TEXT COLOR / MINIMAL MONOCHROME: Keep the full text treatment monochrome, crisp, and elegant with a luxury-minimal feel.");
       break;
   }
 
@@ -828,13 +832,13 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
 
   if (featureChips.length > 0) {
     if (campaignId == "social-proof") {
-      lines.push("Use the approved key points as tasteful proof markers, trust labels, or premium endorsement chips without inventing quotes or reviews.");
+      lines.push("Render each approved key point once as a tasteful proof marker, trust label, or premium endorsement chip without inventing quotes or reviews.");
     } else if (campaignId == "features") {
-      lines.push("Use the approved key points as concise feature callouts or benefit labels connected clearly to the hero subject or interface.");
+      lines.push("Render each approved key point once as a concise feature callout or benefit label connected clearly to the hero subject or interface. Keep them compact, premium, and outside important screenshot UI.");
     } else if (campaignId == "sale") {
-      lines.push("Use the approved key points as compact supporting offer or benefit chips while keeping the hierarchy clean and premium.");
+      lines.push("Render each approved key point once as a compact supporting offer or benefit chip while keeping the hierarchy clean and premium.");
     } else {
-      lines.push("Use the approved key points as concise premium support labels or callout chips around the main subject.");
+      lines.push("Render each approved key point once as a concise premium support label or callout chip around the main subject.");
     }
   }
 
@@ -843,7 +847,7 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
   lines.push("");
   const allowedText = ctaText ? [ctaText, ...featureChips.filter((chip) => chip !== ctaText)] : featureChips;
   if (allowedText.length) {
-    lines.push("The following approved short text will be composited later in a controlled overlay layer:");
+    lines.push("The following approved short text is the only new poster text you may render in the final image:");
     for (const item of allowedText) lines.push(`\"${item}\"`);
   } else {
     lines.push("No extra on-poster text beyond what is already approved in the brief.");
@@ -882,23 +886,33 @@ function compileVisualAdsFallbackPrompt(spec: VisualAdsSpec, legacyPrompt: strin
     lines.push(...textSystemDirectives);
   }
 
+  const ctaDirectives = buildCtaDirectives(spec);
+  if (ctaDirectives.length > 0) {
+    lines.push("");
+    lines.push("CTA System:");
+    lines.push("");
+    lines.push(...ctaDirectives);
+  }
+
   if (ctaText) {
     lines.push("");
-    lines.push("CTA Overlay Guidance:");
+    lines.push("CTA Guidance:");
     lines.push("");
-    lines.push(`Reserve clean lower-center space for external rendering of \"${ctaText}\" as the main call to action.`);
-    lines.push("Do not typeset, paint, or invent the CTA inside the base poster image unless it already exists inside a protected uploaded asset.");
+    lines.push(`Render \"${ctaText}\" as the main CTA inside the final poster.`);
+    lines.push("Do not duplicate the CTA in multiple places, and do not let it cover important screenshot or device content.");
   }
 
   lines.push("");
   lines.push("Strict Rules:");
   lines.push("");
   lines.push("Do NOT add any extra text beyond the allowed phrases listed above.");
-  lines.push("Do NOT typeset the approved overlay text directly into the base poster image. Leave clean negative space for the controlled overlay layer.");
+  lines.push("Do NOT render any new text that is not in the approved allowed-text list unless that text already exists inside a protected uploaded asset.");
+  lines.push("Do NOT duplicate approved phrases in multiple places or repeat the same chip or CTA more than once.");
   lines.push("Do NOT invent names, headlines, taglines, or brand copy.");
   lines.push("Do NOT invent testimonials, ratings, reviews, or social proof copy.");
   if (hasScreenshot || hasAnyLogo || hasProduct) lines.push("Do NOT erase, rewrite, or hallucinate text that already exists inside a protected uploaded screenshot, logo, or product package.");
   if (hasScreenshot) lines.push("Do NOT show uploader chrome, Image 1/2 boxes, red X icons, browser chrome, or recursive interfaces around any screenshot.");
+  if (hasScreenshot) lines.push("Do NOT place feature callouts or CTA on top of important app UI, key readable screen content, or the dominant screenshot read.");
   if (hasAnyLogo) lines.push("Do NOT crop, cut off, restyle, reinterpret, or transform any uploaded logo into an object, badge, sticker, prop, sculpture, or scenic element.");
   if (hasTransparentLogo) {
     lines.push("Do NOT place the logo inside a background box, card, frame, or shape — it must stay transparent and flat.");
@@ -1086,7 +1100,10 @@ function buildVisualAdsPriorityReinforcement(spec: VisualAdsSpec): string {
     lines.push("- texture_subordination: Any uploaded texture must remain a subtle supporting texture layer and must not become a literal object or replacement backdrop.");
   }
   if (campaignId === "features" && (spec.campaign?.feature_chips || []).length > 0) {
-    lines.push("- feature_layout: Approved feature chips should appear as concise feature callouts or benefit labels, not invented long-form copy.");
+    lines.push("- feature_layout: Render the approved feature chips once each as concise feature callouts or benefit labels. Keep them outside important screenshot UI and do not duplicate them.");
+  }
+  if ((spec.text_policy?.allowed_text || []).length > 0) {
+    lines.push("- approved_text_only: Any new poster text must come only from the approved allowed-text list. Do not add extra copy and do not repeat the same approved phrase multiple times.");
   }
   if (campaignId === "sale" || campaignId === "limited-offer") {
     lines.push("- offer_hierarchy: Keep urgency and CTA visually clear without inventing prices, discount percentages, coupon codes, or extra offer text.");

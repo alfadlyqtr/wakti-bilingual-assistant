@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { composeVisualAdsPoster, type VisualAdsPosterTextSpec } from '@/components/studio/visualAdsPosterComposer';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { emitEvent } from '@/utils/eventBus';
 import { toast } from 'sonner';
@@ -587,46 +586,26 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     }
   }, [user?.id, submode, importExternalImageToStorage]);
 
-  const storeGeneratedImageBlob = useCallback(async (
-    blob: Blob,
-    filenamePrefix: string,
-  ): Promise<{ url: string; storagePath: string }> => {
-    if (!user?.id) throw new Error('Authentication required');
-
-    const ext = blob.type === 'image/png' ? 'png' : blob.type === 'image/webp' ? 'webp' : 'jpg';
-    const randomId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const fileName = `${user.id}/${filenamePrefix}-${Date.now()}-${randomId}.${ext}`;
-    const { error: uploadErr } = await supabase.storage
-      .from('generated-images')
-      .upload(fileName, blob, { contentType: blob.type || 'image/png', upsert: false });
-    if (uploadErr) throw uploadErr;
-
-    const { data: urlData } = supabase.storage
-      .from('generated-images')
-      .getPublicUrl(fileName);
-    const bucketUrl = sanitizeImageUrl(urlData?.publicUrl || '');
-    if (!bucketUrl) throw new Error('Failed to get public URL');
-    return { url: bucketUrl, storagePath: fileName };
-  }, [user?.id]);
-
   const syncVisualAdsGalleryResult = useCallback(async (
     taskId: string,
     resultIndex: number,
     finalUrl: string,
-    storagePath: string,
-    sourceUrl: string,
   ) => {
     if (!user?.id) return null as string | null;
 
-    const metaPatch = {
-      storage_path: storagePath,
+    let storagePath = '';
+    const storageUrlParts = finalUrl.split('/generated-images/');
+    if (storageUrlParts[1]) {
+      storagePath = decodeURIComponent(storageUrlParts[1]);
+    }
+
+    const metaPatch: Record<string, unknown> = {
       visual_ads_task_id: taskId,
       visual_ads_result_index: resultIndex,
-      visual_ads_source_url: sourceUrl,
-      visual_ads_composed: true,
     };
+    if (storagePath) {
+      metaPatch.storage_path = storagePath;
+    }
 
     const { data: existingRow, error: existingErr } = await (supabase as any)
       .from('user_generated_images')
@@ -672,31 +651,17 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   const finalizeVisualAdsResult = useCallback(async (
     rawUrls: string[],
-    textSpec: VisualAdsPosterTextSpec,
     taskId?: string | null,
   ) => {
     const sanitizedRawUrls = rawUrls.filter((url): url is string => typeof url === 'string' && url.length > 0);
     const firstRawUrl = sanitizedRawUrls[0];
     if (!firstRawUrl) throw new Error('Generation completed but no image URL returned');
 
-    const composedResults = await Promise.all(
-      sanitizedRawUrls.map(async (rawUrl, index) => {
-        const composedBlob = await composeVisualAdsPoster(rawUrl, textSpec);
-        const stored = await storeGeneratedImageBlob(composedBlob, `visual-ads-composed-${index + 1}`);
-        const imageId = taskId
-          ? await syncVisualAdsGalleryResult(taskId, index, stored.url, stored.storagePath, rawUrl)
-          : null;
-        return {
-          rawUrl,
-          finalUrl: stored.url,
-          imageId,
-        };
-      })
-    );
-
-    const finalUrls = composedResults.map((item) => item.finalUrl);
-    const firstResult = composedResults[0];
-    if (!firstResult?.finalUrl) throw new Error('Failed to prepare the final poster image');
+    const finalUrls = sanitizedRawUrls;
+    const imageIds = taskId
+      ? await Promise.all(finalUrls.map((finalUrl, index) => syncVisualAdsGalleryResult(taskId, index, finalUrl)))
+      : [];
+    const firstImageId = imageIds[0] || null;
 
     if (taskId) {
       await (supabase as any)
@@ -710,14 +675,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     }
 
     stopProgress();
-    setResultImageUrl(firstResult.finalUrl);
+    setResultImageUrl(firstRawUrl);
     setResultUrls(finalUrls);
-    setIsSaved(Boolean(firstResult.imageId));
-    setSavedImageId(firstResult.imageId || null);
-    setSavedBucketUrl(firstResult.finalUrl);
-    setSavedSourceUrl(firstResult.finalUrl);
-    return firstResult.finalUrl;
-  }, [composeVisualAdsPoster, stopProgress, storeGeneratedImageBlob, syncVisualAdsGalleryResult, user?.id]);
+    setIsSaved(Boolean(firstImageId));
+    setSavedImageId(firstImageId);
+    setSavedBucketUrl(firstRawUrl);
+    setSavedSourceUrl(firstRawUrl);
+    return firstRawUrl;
+  }, [stopProgress, syncVisualAdsGalleryResult, user?.id]);
 
   const persistGeneratedImage = useCallback(async (
     imageUrl: string,
@@ -1863,26 +1828,17 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 ...(canUseFeatureChips ? featureChips : []),
                 ...allowedText,
               ];
-              const visualAdsTextSpec: VisualAdsPosterTextSpec = {
-                aspectRatio: visualState.campaignDNA.platform,
-                ctaText: resolvedCallToAction,
-                featureChips: canUseFeatureChips ? featureChips : [],
-                textPresence: visualState.creativeSoul.textPresence,
-                textColorStyle: visualState.creativeSoul.textColorStyle,
-                language,
-              };
 
-              promptLines.push(`Create one premium ${ratio} advertising poster base using the provided uploaded images.`);
-              promptLines.push(`Use the structured metadata in this request as the source of truth for image roles, style direction, and composition.`);
-              promptLines.push(`Keep the lower central area clean and uncluttered so approved poster text can be overlaid later in a controlled premium layout.`);
-              promptLines.push(`Do not render new CTA text, feature chips, headlines, or extra poster copy yourself unless that text already exists inside a protected uploaded asset.`);
+              promptLines.push(`Create one premium ${ratio} advertising poster using the provided uploaded images.`);
+              promptLines.push(`Use the structured metadata in this request as the source of truth for image roles, style direction, composition, and approved text.`);
+              promptLines.push(`The result must be one fully finished final poster, not a base image for later overlay.`);
 
               if (exactPosterText.length) {
                 promptLines.push(``);
-                promptLines.push(`Approved external overlay text:`);
+                promptLines.push(`Approved poster text only:`);
                 exactPosterText.forEach((textLine) => promptLines.push(textLine));
+                promptLines.push(`Use only these approved phrases if you render text in the poster.`);
                 promptLines.push(`Do not add any other text, headline, tagline, review, app store badge, or extra copy.`);
-                promptLines.push(`Reserve clean negative space for this overlay text instead of typesetting it into the base image.`);
               }
 
               promptLines.push(``);
@@ -2029,7 +1985,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                         settle(() => {
                           void (async () => {
                             try {
-                              await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], visualAdsTextSpec, taskId);
+                              await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], taskId);
                               resolve();
                             } catch (error) {
                               reject(error instanceof Error ? error : new Error('Ad generation failed'));
@@ -2089,7 +2045,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                           settle(() => {
                             void (async () => {
                               try {
-                                await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], visualAdsTextSpec, taskId);
+                                await finalizeVisualAdsResult(generatedUrls.length ? generatedUrls : [finalUrl], taskId);
                                 resolve();
                               } catch (error) {
                                 reject(error instanceof Error ? error : new Error('Ad generation failed'));

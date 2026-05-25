@@ -55,12 +55,13 @@ export default function Signup() {
   const passwordRef = useRef<HTMLInputElement | null>(null);
   const MAX_RECORD_SECONDS = 10;
 
-  // Auto-Greeting Logic - Play welcome audio on page load with word highlighting
+  // Greeting audio setup with manual play control
   useEffect(() => {
-    const playGreeting = async () => {
+    const setupGreeting = () => {
       if (audioRef.current) {
         audioRef.current.src = language === 'ar' ? '/welcome to wakti arabic.mp3' : '/welcome to wakti english.mp3';
         audioRef.current.volume = 0.5;
+        setAudioUnlocked(true);
         audioRef.current.onplay = () => {
           setIsPlayingAudio(true);
           setCurrentWordIndex(0);
@@ -103,19 +104,10 @@ export default function Signup() {
         
         audioRef.current.addEventListener('ended', clearHighlights);
         audioRef.current.addEventListener('pause', clearHighlights);
-        
-        try {
-          await audioRef.current.play();
-          setAudioUnlocked(true);
-        } catch (e) {
-          console.warn('Auto-play blocked, waiting for interaction', e);
-          clearHighlights();
-        }
       }
     };
-    
-    // Auto-play on page load
-    playGreeting();
+
+    setupGreeting();
     
     // Cleanup
     return () => {

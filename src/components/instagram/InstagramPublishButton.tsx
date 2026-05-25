@@ -31,6 +31,8 @@ interface InstagramPublishButtonProps {
   publishTarget?: InstagramTarget;
   defaultCaption?: string;
   language?: 'en' | 'ar';
+  savedImageId?: string | null;
+  initialPublished?: boolean;
 }
 
 const META_APP_ID = import.meta.env.VITE_META_APP_ID || '';
@@ -79,13 +81,15 @@ export default function InstagramPublishButton({
   publishTarget = 'feed',
   defaultCaption = '',
   language = 'en',
+  savedImageId = null,
+  initialPublished = false,
 }: InstagramPublishButtonProps) {
   const [igAccount, setIgAccount] = useState<IGAccount | null>(null);
   const [checkingStatus, setCheckingStatus] = useState(true);
   const [showPanel, setShowPanel] = useState(false);
   const [caption, setCaption] = useState(defaultCaption);
   const [publishing, setPublishing] = useState(false);
-  const [published, setPublished] = useState(false);
+  const [published, setPublished] = useState(Boolean(initialPublished));
   const [generatingCaption, setGeneratingCaption] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState<InstagramTarget>(publishTarget as InstagramTarget);
   const [polling, setPolling] = useState(false);
@@ -96,6 +100,71 @@ export default function InstagramPublishButton({
   const ar = language === 'ar';
   const isImageMedia = mediaType === 'image';
   const supportsStory = !igAccount?.account_type || (igAccount.account_type || '').toUpperCase() === 'BUSINESS';
+
+  const normalizeComparableUrl = useCallback((url: string) => url.replace(/%20/g, ' ').trim(), []);
+
+  const persistPublishedState = useCallback(async (jobId: string, instagramMediaId?: string | null) => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.user?.id) {
+      setPublished(true);
+      return;
+    }
+
+    const comparableUrls = Array.from(new Set([
+      mediaUrl,
+      normalizeComparableUrl(mediaUrl),
+    ].filter((value): value is string => Boolean(value))));
+
+    let targetRowId = savedImageId;
+
+    if (!targetRowId) {
+      const { data: matchedRow } = await (supabase as any)
+        .from('user_generated_images')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .in('image_url', comparableUrls)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      targetRowId = matchedRow?.id || null;
+    }
+
+    if (targetRowId) {
+      const { data: existingRow } = await (supabase as any)
+        .from('user_generated_images')
+        .select('meta')
+        .eq('id', targetRowId)
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      const currentMeta = ((existingRow?.meta as Record<string, unknown> | null) || {});
+      const nextMeta: Record<string, unknown> = {
+        ...currentMeta,
+        instagram_published: true,
+        instagram_publish_job_id: jobId,
+        instagram_published_at: new Date().toISOString(),
+        instagram_publish_target: selectedTarget,
+        instagram_source_media_url: comparableUrls[0] || mediaUrl,
+      };
+      if (instagramMediaId) {
+        nextMeta.instagram_media_id = instagramMediaId;
+      }
+
+      await (supabase as any)
+        .from('user_generated_images')
+        .update({ meta: nextMeta })
+        .eq('id', targetRowId)
+        .eq('user_id', session.user.id);
+
+      window.dispatchEvent(new Event('wakti-saved-images-reload'));
+    }
+
+    setPublished(true);
+  }, [mediaUrl, normalizeComparableUrl, savedImageId, selectedTarget]);
 
   const targetLabels: Record<InstagramTarget, { en: string; ar: string }> = {
     feed: { en: 'Post', ar: 'منشور' },
@@ -130,6 +199,75 @@ export default function InstagramPublishButton({
   useEffect(() => {
     setCaption(defaultCaption);
   }, [defaultCaption]);
+
+  useEffect(() => {
+    setPublished(Boolean(initialPublished));
+  }, [initialPublished, mediaUrl, savedImageId]);
+
+  useEffect(() => {
+    if (!mediaUrl || initialPublished) return;
+
+    let cancelled = false;
+
+    const loadPublishedState = async () => {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        if (!session?.user?.id) {
+          if (!cancelled) setPublished(false);
+          return;
+        }
+
+        if (savedImageId) {
+          const { data: imageRow } = await (supabase as any)
+            .from('user_generated_images')
+            .select('meta')
+            .eq('id', savedImageId)
+            .eq('user_id', session.user.id)
+            .maybeSingle();
+
+          const meta = (imageRow?.meta as Record<string, unknown> | null) || null;
+          if (meta?.instagram_published === true) {
+            if (!cancelled) setPublished(true);
+            return;
+          }
+        }
+
+        const comparableUrls = Array.from(new Set([
+          mediaUrl,
+          normalizeComparableUrl(mediaUrl),
+        ].filter((value): value is string => Boolean(value))));
+
+        const { data: publishJob } = await (supabase as any)
+          .from('instagram_publish_jobs')
+          .select('id, instagram_media_id')
+          .eq('user_id', session.user.id)
+          .eq('status', 'published')
+          .in('source_media_url', comparableUrls)
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (publishJob?.id) {
+          await persistPublishedState(publishJob.id as string, typeof publishJob.instagram_media_id === 'string' ? publishJob.instagram_media_id : null);
+          if (!cancelled) setPublished(true);
+          return;
+        }
+
+        if (!cancelled) setPublished(false);
+      } catch {
+        if (!cancelled) setPublished(false);
+      }
+    };
+
+    void loadPublishedState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialPublished, mediaUrl, normalizeComparableUrl, persistPublishedState, savedImageId]);
 
   useEffect(() => {
     if (!showPanel || !isImageMedia || !mediaUrl) return;
@@ -210,7 +348,7 @@ export default function InstagramPublishButton({
       }
     };
     exchangeCode();
-  }, [ar]);
+  }, [ar, persistPublishedState]);
 
   const handleGenerateCaption = async () => {
     setGeneratingCaption(true);
@@ -266,7 +404,7 @@ export default function InstagramPublishButton({
         if (error || !data) throw new Error('Poll failed');
 
         if (data.status === 'published') {
-          setPublished(true);
+          await persistPublishedState(jobId, typeof data.instagram_media_id === 'string' ? data.instagram_media_id : null);
           setPublishing(false);
           setPolling(false);
           setPublishPhase('');
@@ -348,7 +486,7 @@ export default function InstagramPublishButton({
       }
 
       if (data.status === 'published') {
-        setPublished(true);
+        await persistPublishedState(data.job_id, typeof data.instagram_media_id === 'string' ? data.instagram_media_id : null);
         setPublishing(false);
         setPublishPhase('');
         setShowPanel(false);

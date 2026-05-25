@@ -16,7 +16,7 @@ const CLEANUP_FOLDERS = [
 
 // Max age in days before deletion
 const MAX_AGE_DAYS_LEGACY = 7;
-const MAX_AGE_DAYS_GENERATED = 20;
+const MAX_AGE_DAYS_GENERATED = 60;
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -74,7 +74,7 @@ serve(async (req: Request) => {
       }
     }
 
-    // ─── Part 2: Clean generated-images bucket + DB rows (20 days) ───
+    // ─── Part 2: Clean generated-images bucket + DB rows (60 days) ───
     const generatedCutoff = new Date();
     generatedCutoff.setDate(generatedCutoff.getDate() - MAX_AGE_DAYS_GENERATED);
     let generatedDeleted = 0;
