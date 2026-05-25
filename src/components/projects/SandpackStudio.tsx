@@ -40,16 +40,24 @@ interface SelectedElementInfo {
   };
 }
 
+type PreviewHealthState = 'loading' | 'ready' | 'recovering' | 'failed';
+
 const WAKTI_VISUAL_ELEMENT_SELECTED_EVENT = 'wakti:visual-element-selected';
 
 // --- 3. INSPECTABLE PREVIEW COMPONENT ---
 // Uses SandpackPreview ref to directly access the iframe for reliable postMessage communication
 const InspectablePreview = ({ 
   elementSelectMode, 
-  onElementSelect 
+  onElementSelect,
+  watchdogEnabled = true,
+  onPreviewReady,
+  onPreviewFailure,
 }: { 
   elementSelectMode?: boolean;
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
+  watchdogEnabled?: boolean;
+  onPreviewReady?: () => void;
+  onPreviewFailure?: (reason: string) => void;
 }) => {
   const { sandpack } = useSandpack();
   const previewRef = useRef<{ clientId: string; getClient: () => any } | null>(null);
@@ -57,6 +65,10 @@ const InspectablePreview = ({
   const [modeAckReceived, setModeAckReceived] = useState(false);
   const retryRef = useRef<NodeJS.Timeout | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const pingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const healthcheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const lastPongAtRef = useRef(0);
+  const failureReportedRef = useRef(false);
 
   // Find the iframe in the DOM (fallback method)
   const findIframe = useCallback((): HTMLIFrameElement | null => {
@@ -109,6 +121,13 @@ const InspectablePreview = ({
     }));
   }, [onElementSelect]);
 
+  const reportPreviewFailure = useCallback((reason: string) => {
+    if (failureReportedRef.current) return;
+    failureReportedRef.current = true;
+    console.warn('[InspectablePreview] Preview health check failed:', reason);
+    onPreviewFailure?.(reason);
+  }, [onPreviewFailure]);
+
   // Send inspect mode toggle with retry logic
   const sendToggleMessage = useCallback((enabled: boolean) => {
     // Clear any pending retry
@@ -152,6 +171,9 @@ const InspectablePreview = ({
       if (data.type === 'WAKTI_INSPECTOR_READY') {
         console.log('[InspectablePreview] Inspector ready received');
         setInspectorReady(true);
+        lastPongAtRef.current = Date.now();
+        failureReportedRef.current = false;
+        onPreviewReady?.();
         // If inspect mode is already on, re-send the toggle
         sendToggleMessage(!!elementSelectMode);
       }
@@ -165,6 +187,7 @@ const InspectablePreview = ({
       // Pong response for debugging
       if (data.type === 'WAKTI_INSPECTOR_PONG') {
         console.log('[InspectablePreview] Pong received - connection confirmed');
+        lastPongAtRef.current = Date.now();
       }
 
       // Element selected
@@ -180,8 +203,10 @@ const InspectablePreview = ({
     return () => {
       window.removeEventListener('message', handleMessage);
       if (retryRef.current) clearTimeout(retryRef.current);
+      if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+      if (healthcheckIntervalRef.current) clearInterval(healthcheckIntervalRef.current);
     };
-  }, [elementSelectMode, emitElementSelection, isPreviewMessage, sendToggleMessage]);
+  }, [elementSelectMode, emitElementSelection, isPreviewMessage, onPreviewReady, sendToggleMessage]);
 
   // Send toggle when mode changes
   useEffect(() => {
@@ -193,6 +218,8 @@ const InspectablePreview = ({
     if (sandpack.status === 'initial' || sandpack.status === 'idle') {
       setInspectorReady(false);
       setModeAckReceived(false);
+      lastPongAtRef.current = 0;
+      failureReportedRef.current = false;
     }
   }, [sandpack.status]);
 
@@ -208,6 +235,57 @@ const InspectablePreview = ({
       return () => clearTimeout(timeout);
     }
   }, [elementSelectMode, modeAckReceived, inspectorReady]);
+
+  useEffect(() => {
+    if (!watchdogEnabled || inspectorReady || sandpack.error) return;
+
+    const timeout = setTimeout(() => {
+      if (inspectorReady || sandpack.error) return;
+      const iframe = findIframe();
+      const iframeSrc = iframe?.getAttribute('src') || '';
+      reportPreviewFailure(
+        iframeSrc
+          ? `Preview did not become ready: ${iframeSrc}`
+          : 'Preview iframe did not become ready.'
+      );
+    }, 12000);
+
+    return () => clearTimeout(timeout);
+  }, [findIframe, inspectorReady, reportPreviewFailure, sandpack.error, watchdogEnabled]);
+
+  useEffect(() => {
+    if (!watchdogEnabled || !inspectorReady || sandpack.error) return;
+
+    const pingPreview = () => {
+      const previewWindow = getPreviewWindow();
+      if (!previewWindow) {
+        reportPreviewFailure('Preview iframe became unavailable.');
+        return;
+      }
+
+      try {
+        previewWindow.postMessage({ type: 'WAKTI_INSPECTOR_PING' }, '*');
+      } catch {
+        reportPreviewFailure('Preview connection was lost.');
+        return;
+      }
+
+      if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+      pingTimeoutRef.current = setTimeout(() => {
+        if (Date.now() - lastPongAtRef.current > 3000) {
+          reportPreviewFailure('Preview stopped responding.');
+        }
+      }, 3000);
+    };
+
+    pingPreview();
+    healthcheckIntervalRef.current = setInterval(pingPreview, 5000);
+
+    return () => {
+      if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
+      if (healthcheckIntervalRef.current) clearInterval(healthcheckIntervalRef.current);
+    };
+  }, [getPreviewWindow, inspectorReady, reportPreviewFailure, sandpack.error, watchdogEnabled]);
 
   return (
     <SandpackPreview 
@@ -362,6 +440,10 @@ export default function SandpackStudio({
   const [selectedElement, setSelectedElement] = useState<SelectedElementInfo | null>(null);
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(() => window.innerWidth < 768);
+  const [previewSessionKey, setPreviewSessionKey] = useState(0);
+  const [previewHealth, setPreviewHealth] = useState<PreviewHealthState>('loading');
+  const [previewFailureMessage, setPreviewFailureMessage] = useState('');
+  const autoRecoveryCountRef = useRef(0);
   
   // Remove Sandpack resize handle - it causes issues in preview-only mode
   useEffect(() => {
@@ -408,6 +490,38 @@ export default function SandpackStudio({
       observer.disconnect();
     };
   }, [viewMode]);
+
+  const handlePreviewReady = useCallback(() => {
+    autoRecoveryCountRef.current = 0;
+    setPreviewFailureMessage('');
+    setPreviewHealth('ready');
+  }, []);
+
+  const handlePreviewFailure = useCallback((reason: string) => {
+    if (autoRecoveryCountRef.current < 1) {
+      autoRecoveryCountRef.current += 1;
+      setPreviewFailureMessage(reason);
+      setPreviewHealth('recovering');
+      setPreviewSessionKey(prev => prev + 1);
+      return;
+    }
+
+    setPreviewFailureMessage(reason);
+    setPreviewHealth('failed');
+  }, []);
+
+  const handleManualPreviewReload = useCallback(() => {
+    autoRecoveryCountRef.current = 0;
+    setPreviewFailureMessage('');
+    setPreviewHealth('loading');
+
+    if (onRefresh) {
+      onRefresh();
+      return;
+    }
+
+    setPreviewSessionKey(prev => prev + 1);
+  }, [onRefresh]);
   
   // Scan project files for actual import statements and return only used packages.
   // This prevents Sandpack from resolving all 50+ packages on every project load.
@@ -449,6 +563,14 @@ export default function SandpackStudio({
     if (!appJs.includes("import") && !appJs.includes("export") && !appJs.includes("function")) return false;
     return true;
   }, [files]);
+
+  useEffect(() => {
+    if (isLoading || !hasValidFiles) {
+      autoRecoveryCountRef.current = 0;
+      setPreviewFailureMessage('');
+      setPreviewHealth('loading');
+    }
+  }, [hasValidFiles, isLoading, projectId]);
 
   // Element selection is now handled by InspectablePreview component
 
@@ -696,7 +818,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
-              <DropdownMenuItem onClick={onRefresh} className="flex items-center gap-2 cursor-pointer">
+              <DropdownMenuItem onClick={handleManualPreviewReload} className="flex items-center gap-2 cursor-pointer">
                 <RefreshCw className="h-4 w-4" />
                 <span>Refresh</span>
               </DropdownMenuItem>
@@ -756,6 +878,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
 
   return (<>
     <SandpackProvider
+      key={`sandpack-provider-${projectId ?? 'local'}-${previewSessionKey}`}
       template="react"
       theme={atomDark}
       files={formattedFiles}
@@ -926,6 +1049,50 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                       isRTL={isRTL}
                     />
                   )}
+
+                  {viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'recovering' && (
+                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0c0f14]/70 backdrop-blur-sm p-4">
+                      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c0f14] px-5 py-4 text-center shadow-2xl">
+                        <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-400">
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        </div>
+                        <div className="text-sm font-semibold text-white">
+                          {isRTL ? 'جارِ استرجاع المعاينة' : 'Recovering preview'}
+                        </div>
+                        <div className="mt-2 text-xs text-zinc-400">
+                          {isRTL ? 'أحاول إعادة تشغيل المعاينة الحية الآن.' : 'Trying to restart the live preview now.'}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'failed' && (
+                    <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0c0f14]/80 backdrop-blur-sm p-4">
+                      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0c0f14] p-6 text-center shadow-2xl">
+                        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-400">
+                          <RefreshCw className="h-5 w-5" />
+                        </div>
+                        <div className="text-lg font-semibold text-white">
+                          {isRTL ? 'فشل تحميل المعاينة' : 'Preview connection failed'}
+                        </div>
+                        <div className="mt-2 text-sm text-zinc-400">
+                          {isRTL ? 'المعاينة الحية لم تفتح بشكل صحيح. أعد تحميلها للمحاولة مرة أخرى.' : 'The live preview did not open correctly. Reload it to try again.'}
+                        </div>
+                        {previewFailureMessage && (
+                          <div className="mt-3 break-words text-xs text-zinc-500">
+                            {previewFailureMessage}
+                          </div>
+                        )}
+                        <button
+                          onClick={handleManualPreviewReload}
+                          className="mt-5 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-medium text-[#060541] transition-colors hover:bg-zinc-200"
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                          <span>{isRTL ? 'إعادة تحميل المعاينة' : 'Reload preview'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   
                   {/* Error Boundary to prevent entire app crash from broken components */}
                   <SandpackErrorBoundary
@@ -937,6 +1104,9 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     <InspectablePreview 
                       elementSelectMode={elementSelectMode}
                       onElementSelect={onElementSelect}
+                      watchdogEnabled={viewMode === 'preview' && !isLoading && hasValidFiles}
+                      onPreviewReady={handlePreviewReady}
+                      onPreviewFailure={handlePreviewFailure}
                     />
                   </SandpackErrorBoundary>
 
