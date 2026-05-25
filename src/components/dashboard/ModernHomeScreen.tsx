@@ -123,9 +123,7 @@ const PRODUCTIVITY_APPS: AppItem[] = [
   { id: "deen", nameEn: "Deen", nameAr: "دين", path: "/deen", icon: BookOpen, accent: "#818cf8", glow: "rgba(129,140,248,0.24)" },
 ];
 
-// ─── AppCircle ────────────────────────────────────────────────────────────────
-
-function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overrideIcon, overrideAccent, overrideGlow, useWaktiLogo }: {
+type AppCircleProps = {
   app: AppItem;
   language: "en" | "ar";
   onClick: () => void;
@@ -135,25 +133,29 @@ function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overri
   overrideAccent?: string;
   overrideGlow?: string;
   useWaktiLogo?: boolean;
-}) {
+  scale?: number;
+};
+
+// ─── AppCircle ────────────────────────────────────────────────────────────────
+
+function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overrideIcon, overrideAccent, overrideGlow, useWaktiLogo, scale = 1 }: AppCircleProps) {
   const Icon = overrideIcon ?? app.icon;
   const accent = overrideAccent ?? app.accent;
   const glow = overrideGlow ?? app.glow;
-  const iconSize = size === "compact" ? "h-4.5 w-4.5" : size === "small" ? "h-5 w-5" : size === "large" ? "h-8 w-8" : "h-6 w-6";
-  const bubbleSize = size === "compact" ? "h-12 w-12" : size === "small" ? "h-14 w-14" : size === "large" ? "h-20 w-20" : "h-16 w-16";
-  const labelSize = size === "compact" ? "text-[10px]" : "text-[11.5px]";
-  const buttonGap = size === "compact" ? "gap-1" : "gap-1.5";
+  const resolvedScale = size === "compact" || size === "large" ? scale : 1;
+  const bubblePx = (size === "compact" ? 48 : size === "small" ? 56 : size === "large" ? 80 : 64) * resolvedScale;
+  const iconPx = (size === "compact" ? 18 : size === "small" ? 20 : size === "large" ? 32 : 24) * resolvedScale;
+  const labelPx = (size === "compact" ? 10 : 11.5) * resolvedScale;
+  const gapPx = (size === "compact" ? 4 : 6) * resolvedScale;
   const isAccount = app.id === "account";
 
   return (
-    <button type="button" onClick={onClick} className={cn("group flex min-w-0 flex-col items-center", buttonGap)}>
+    <button type="button" onClick={onClick} className="group flex min-w-0 flex-col items-center" style={{ gap: `${gapPx}px` }}>
       <span
-        className={cn(
-          "relative flex items-center justify-center rounded-full border transition-all duration-200 overflow-hidden",
-          bubbleSize,
-          "border-white/40 group-hover:scale-105"
-        )}
+        className="relative flex items-center justify-center rounded-full border transition-all duration-200 overflow-hidden border-white/40 group-hover:scale-105"
         style={{
+          width: `${bubblePx}px`,
+          height: `${bubblePx}px`,
           background: `radial-gradient(circle at 30% 20%, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.1) 48%, rgba(10,20,40,0.1) 100%), linear-gradient(135deg, ${accent}22 0%, ${accent}42 100%)`,
           borderColor: `${accent}66`,
           boxShadow: `0 7px 16px ${glow}, inset 0 1px 0 rgba(255,255,255,0.52)`,
@@ -162,11 +164,11 @@ function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overri
         {isAccount && avatarUrl
           ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
           : useWaktiLogo
-            ? <WaktiIcon className={cn(iconSize)} style={{ color: accent }} />
-            : Icon ? <Icon className={cn(iconSize)} style={{ color: accent }} /> : null
+            ? <WaktiIcon style={{ color: accent, width: `${iconPx}px`, height: `${iconPx}px` }} />
+            : Icon ? <Icon style={{ color: accent, width: `${iconPx}px`, height: `${iconPx}px` }} /> : null
         }
       </span>
-      <span className={cn("text-center font-semibold leading-tight text-foreground/90", size === "compact" ? "whitespace-nowrap" : "line-clamp-2", labelSize)}>
+      <span className={cn("text-center font-semibold leading-tight text-foreground/90", size === "compact" ? "whitespace-nowrap" : "line-clamp-2")} style={{ fontSize: `${labelPx}px` }}>
         {language === "ar" ? app.nameAr : app.nameEn}
       </span>
     </button>
@@ -1104,11 +1106,13 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const navigate = useNavigate();
   const { language, theme } = useTheme();
   const { profile } = useUserProfile();
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const [quote] = useState(() => getQuoteForDisplay());
   const [quoteExpanded, setQuoteExpanded] = useState(false);
   const [quoteExiting, setQuoteExiting] = useState(false);
   const [modernWidgetSettings, setModernWidgetSettings] = useState<ModernWidgetSettings>(DEFAULT_MODERN_WIDGET_SETTINGS);
   const [modernWidgetOrder, setModernWidgetOrder] = useState<ModernWidgetKey[]>(DEFAULT_MODERN_WIDGET_ORDER);
+  const [availableSize, setAvailableSize] = useState({ width: 390, height: 720 });
 
   const { tasks, reminders } = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1196,6 +1200,74 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   );
   const quoteText = getQuoteText(quote, language);
   const quoteAuthor = getQuoteAuthor(quote);
+  const isDesktopLike = availableSize.width >= 768;
+  const layoutScale = isDesktopLike
+    ? 1
+    : Math.max(0.78, Math.min(1, availableSize.width / 390, availableSize.height / 720));
+  const scalePx = (value: number, min = 0) => Math.max(min, Number((value * layoutScale).toFixed(2)));
+  const rootPaddingX = isDesktopLike ? 16 : scalePx(12, 9);
+  const rootPaddingTop = scalePx(12, 9);
+  const containerGap = isDesktopLike ? 16 : scalePx(12, 8);
+  const topRowGap = scalePx(isDesktopLike ? 16 : 12, 8);
+  const topRowLeadWidth = scalePx(isDesktopLike ? 116 : 102, 84);
+  const modesButtonGap = scalePx(4, 3);
+  const modeControlsGap = scalePx(8, 6);
+  const modeControlsTopMargin = scalePx(12, 8);
+  const greetingFontSize = scalePx(15, 12);
+  const modeBubbleHeight = scalePx(48, 38);
+  const modeBubbleRadius = scalePx(16, 12);
+  const modeIconSize = scalePx(20, 16);
+  const modeLabelSize = scalePx(10, 8.5);
+  const widgetsRadius = scalePx(32, 24);
+  const widgetsPaddingX = scalePx(12, 9);
+  const widgetsPaddingTop = scalePx(8, 6);
+  const widgetsPaddingBottom = scalePx(6, 4);
+  const widgetCardHeight = scalePx(208, 170);
+  const middleRowGap = scalePx(10, 7);
+  const systemRailWidth = scalePx(108, 88);
+  const sectionRadius = scalePx(32, 24);
+  const creationRadius = scalePx(35.2, 26);
+  const sectionPaddingX = scalePx(10, 7.5);
+  const sectionPaddingY = scalePx(10, 7.5);
+  const systemPaddingX = scalePx(8, 6);
+  const systemPaddingTop = scalePx(6, 4.5);
+  const productivityTitleMargin = scalePx(10, 7);
+  const productivityTitleSize = scalePx(language === "ar" ? 27.52 : 24.8, language === "ar" ? 21 : 19);
+  const productivityGridGap = scalePx(8, 5.5);
+  const systemTitleSize = scalePx(21.12, 16.5);
+  const systemTitleMargin = scalePx(8, 5.5);
+  const systemGap = scalePx(12, 8);
+  const systemVerticalFontSize = scalePx(13, 10.5);
+  const systemVerticalLetterSpacing = scalePx(6.76, 5.1);
+  const systemRightPadding = scalePx(16, 12);
+  const creationTranslateY = scalePx(12, 8);
+  const creationPaddingTop = scalePx(4, 3);
+  const creationPaddingBottom = scalePx(0, 0);
+  const creationTitleMargin = scalePx(4, 3);
+  const creationTitleSize = scalePx(language === "ar" ? 24.8 : 19.2, language === "ar" ? 19 : 15);
+  const creationGridGap = scalePx(6, 4.5);
+
+  useEffect(() => {
+    const updateAvailableSize = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      const nextWidth = rect?.width && rect.width > 0 ? rect.width : window.innerWidth;
+      const nextHeight = rect?.height && rect.height > 0 ? rect.height : window.innerHeight;
+      setAvailableSize({ width: nextWidth, height: nextHeight });
+    };
+
+    updateAvailableSize();
+    const observer = typeof ResizeObserver !== "undefined" && rootRef.current
+      ? new ResizeObserver(() => updateAvailableSize())
+      : null;
+
+    if (observer && rootRef.current) observer.observe(rootRef.current);
+    window.addEventListener("resize", updateAvailableSize);
+
+    return () => {
+      window.removeEventListener("resize", updateAvailableSize);
+      observer?.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     const settings = (profile?.settings as any)?.dashboardWidgets ?? (profile?.settings as any)?.widgets ?? {};
@@ -1248,6 +1320,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
 
   return (
     <div
+      ref={rootRef}
       dir="ltr"
       className={cn(
         "flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-3 pb-0 pt-3 md:px-4 md:pb-0",
@@ -1255,17 +1328,18 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
           ? "bg-[radial-gradient(circle_at_top,#17233a_0%,#0c0f14_55%,#090b10_100%)]"
           : "bg-[radial-gradient(circle_at_top,#f4f8ff_0%,#fcfefd_52%,#eef3ff_100%)]"
       )}
+      style={{ paddingLeft: `${rootPaddingX}px`, paddingRight: `${rootPaddingX}px`, paddingTop: `${rootPaddingTop}px` }}
     >
-      <div className="mx-auto flex h-full min-h-0 w-full max-w-[980px] flex-1 flex-col gap-3 md:gap-4">
+      <div className="mx-auto flex h-full min-h-0 w-full max-w-[980px] flex-1 flex-col" style={{ gap: `${containerGap}px` }}>
         {/* Top row: Account + Modes/AI controls | Widgets carousel */}
-        <div className="grid items-start grid-cols-[102px_minmax(0,1fr)] gap-3 md:grid-cols-[116px_minmax(0,1fr)]">
-          <div className="space-y-3 pt-1">
+        <div className="grid items-start" style={{ gridTemplateColumns: `${topRowLeadWidth}px minmax(0, 1fr)`, gap: `${topRowGap}px` }}>
+          <div className="pt-1" style={{ paddingTop: `${scalePx(4, 3)}px` }}>
             <p className={cn(
               "text-center text-[15px] font-bold leading-tight tracking-tight",
               isDark
                 ? "bg-gradient-to-r from-blue-300 via-purple-300 to-pink-300 bg-clip-text text-transparent"
                 : "bg-gradient-to-r from-[#060541] via-indigo-600 to-purple-600 bg-clip-text text-transparent"
-            )}>
+            )} style={{ fontSize: `${greetingFontSize}px` }}>
               {(() => {
                 const h = new Date().getHours();
                 if (language === "ar") return h < 12 ? "صباح الخير" : h < 17 ? "مساء الخير" : "مساء النور";
@@ -1273,31 +1347,33 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
               })()}
             </p>
             <div className="flex justify-center">
-              <AppCircle app={ACCOUNT_APP} language={language} onClick={() => navigate(ACCOUNT_APP.path)} avatarUrl={avatarUrl} size="large" />
+              <AppCircle app={ACCOUNT_APP} language={language} onClick={() => navigate(ACCOUNT_APP.path)} avatarUrl={avatarUrl} size="large" scale={layoutScale} />
             </div>
 
             {/* Modes + WAKTI AI side by side — pushed down */}
-            <div className="grid grid-cols-2 gap-2 mt-3">
+            <div className="grid grid-cols-2" style={{ gap: `${modeControlsGap}px`, marginTop: `${modeControlsTopMargin}px` }}>
               {/* Modes button — sliders icon */}
               <button
                 type="button"
                 onClick={() => setModePickerTrigger(v => v + 1)}
-                className="group flex flex-col items-center gap-1 active:scale-95 transition-all"
+                className="group flex flex-col items-center active:scale-95 transition-all"
+                style={{ gap: `${modesButtonGap}px` }}
               >
                 <span
-                  className="flex items-center justify-center rounded-2xl w-full h-12 transition-all"
+                  className="flex w-full items-center justify-center transition-all"
                   style={{
+                    height: `${modeBubbleHeight}px`,
+                    borderRadius: `${modeBubbleRadius}px`,
                     background: `linear-gradient(135deg, ${modeAccentMap[activeModeKey]}33 0%, ${modeAccentMap[activeModeKey]}55 100%)`,
                     boxShadow: `0 4px 14px ${modeGlowMap[activeModeKey]}`,
                     border: `1.5px solid ${modeAccentMap[activeModeKey]}60`,
                   }}
                 >
                   <SlidersHorizontal
-                    className="h-5 w-5"
-                    style={{ color: modeAccentMap[activeModeKey] }}
+                    style={{ color: modeAccentMap[activeModeKey], width: `${modeIconSize}px`, height: `${modeIconSize}px` }}
                   />
                 </span>
-                <span className="text-[10px] font-semibold text-foreground/70">
+                <span className="font-semibold text-foreground/70" style={{ fontSize: `${modeLabelSize}px` }}>
                   {language === "ar" ? "الأوضاع" : "Modes"}
                 </span>
               </button>
@@ -1306,31 +1382,34 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
               <button
                 type="button"
                 onClick={() => navigate("/wakti-ai")}
-                className="group flex flex-col items-center gap-1 active:scale-95 transition-all"
+                className="group flex flex-col items-center active:scale-95 transition-all"
+                style={{ gap: `${modesButtonGap}px` }}
               >
                 <span
-                  className="flex items-center justify-center rounded-full w-12 h-12 transition-all"
+                  className="flex items-center justify-center rounded-full transition-all"
                   style={{
+                    width: `${modeBubbleHeight}px`,
+                    height: `${modeBubbleHeight}px`,
                     background: "linear-gradient(135deg, #c2440a 0%, #f97316 60%, #fb923c 100%)",
                     boxShadow: "0 4px 16px rgba(249,115,22,0.55), inset 0 1px 0 rgba(255,255,255,0.25)",
                     border: "1.5px solid rgba(255,255,255,0.2)",
                   }}
                 >
-                  <Sparkles className="h-5 w-5 text-white" />
+                  <Sparkles className="text-white" style={{ width: `${modeIconSize}px`, height: `${modeIconSize}px` }} />
                 </span>
-                <span className="whitespace-nowrap text-[10px] font-semibold leading-none text-foreground/70">
+                <span className="whitespace-nowrap font-semibold leading-none text-foreground/70" style={{ fontSize: `${modeLabelSize}px` }}>
                   WAKTI AI
                 </span>
               </button>
             </div>
           </div>
 
-          <section className={cn("self-start rounded-[2rem] border-[1.5px] px-3 pt-2 pb-1.5", cardShell)} style={widgetsSectionStyle}>
+          <section className={cn("self-start border-[1.5px]", cardShell)} style={{ ...widgetsSectionStyle, borderRadius: `${widgetsRadius}px`, paddingLeft: `${widgetsPaddingX}px`, paddingRight: `${widgetsPaddingX}px`, paddingTop: `${widgetsPaddingTop}px`, paddingBottom: `${widgetsPaddingBottom}px` }}>
             <Carousel opts={{ align: "start", dragFree: true, direction: "ltr" }} className="w-full" dir="ltr">
               <CarouselContent className="sm:-ml-2">
                 {visibleModernWidgetOrder.map((key) => (
                   <CarouselItem key={key} className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
-                    <div className="h-52">
+                    <div style={{ height: `${widgetCardHeight}px` }}>
                       {modernWidgetCards[key]}
                     </div>
                   </CarouselItem>
@@ -1344,39 +1423,39 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
         <HomescreenChatBar language={language} isDark={isDark} cardShell={cardShell} navigate={navigate} triggerOpenModePicker={modePickerTrigger} />
 
         {/* Productivity + System */}
-        <div className="grid grid-cols-[minmax(0,1fr)_108px] gap-2.5">
-          <section className={cn("rounded-[2rem] border-[1.5px] px-2.5 py-2.5", cardShell)} style={productivitySectionStyle}>
-            <h3 className={cn("mb-2.5", productivityTitleClass)}>
+        <div className="grid" style={{ gridTemplateColumns: `minmax(0, 1fr) ${systemRailWidth}px`, gap: `${middleRowGap}px` }}>
+          <section className={cn("border-[1.5px]", cardShell)} style={{ ...productivitySectionStyle, borderRadius: `${sectionRadius}px`, paddingLeft: `${sectionPaddingX}px`, paddingRight: `${sectionPaddingX}px`, paddingTop: `${sectionPaddingY}px`, paddingBottom: `${sectionPaddingY}px` }}>
+            <h3 className={productivityTitleClass} style={{ marginBottom: `${productivityTitleMargin}px`, fontSize: `${productivityTitleSize}px` }}>
               {language === "ar" ? "الإنتاجية" : "Productivity"}
             </h3>
-            <div className="grid grid-cols-3 gap-2 md:grid-cols-4">
+            <div className="grid grid-cols-3 md:grid-cols-4" style={{ gap: `${productivityGridGap}px` }}>
               {PRODUCTIVITY_APPS.map((app) => (
-                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" />
+                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
               ))}
             </div>
           </section>
-          <aside className={cn("relative rounded-[2rem] border-[1.5px] px-2 py-1.5", cardShell)} style={systemSectionStyle}>
+          <aside className={cn("relative border-[1.5px]", cardShell)} style={{ ...systemSectionStyle, borderRadius: `${sectionRadius}px`, paddingLeft: `${systemPaddingX}px`, paddingRight: `${systemPaddingX}px`, paddingTop: `${systemPaddingTop}px`, paddingBottom: `${systemPaddingTop}px` }}>
             {language === "ar" ? (
               <>
-                <h3 className="mb-2 whitespace-nowrap text-center text-[1.32rem] font-black leading-none tracking-tight text-foreground">
+                <h3 className="whitespace-nowrap text-center font-black leading-none tracking-tight text-foreground" style={{ marginBottom: `${systemTitleMargin}px`, fontSize: `${systemTitleSize}px` }}>
                   النظام
                 </h3>
-                <div className="flex flex-1 flex-col items-center justify-center gap-3">
+                <div className="flex flex-1 flex-col items-center justify-center" style={{ gap: `${systemGap}px` }}>
                   {SYSTEM_APPS.map((app) => (
-                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" />
+                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
                   ))}
                 </div>
               </>
             ) : (
               <>
                 <div className="absolute inset-y-1.5 right-1 flex items-center justify-center">
-                  <span className="select-none text-[13px] font-extrabold leading-none tracking-[0.52em] text-foreground/85 [text-orientation:upright] [writing-mode:vertical-rl]">
+                  <span className="select-none font-extrabold leading-none text-foreground/85 [text-orientation:upright] [writing-mode:vertical-rl]" style={{ fontSize: `${systemVerticalFontSize}px`, letterSpacing: `${systemVerticalLetterSpacing}px` }}>
                     SYSTEM
                   </span>
                 </div>
-                <div className="flex h-full flex-col items-center justify-center gap-3 pr-4">
+                <div className="flex h-full flex-col items-center justify-center" style={{ gap: `${systemGap}px`, paddingRight: `${systemRightPadding}px` }}>
                   {SYSTEM_APPS.map((app) => (
-                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" />
+                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
                   ))}
                 </div>
               </>
@@ -1385,13 +1464,13 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
         </div>
 
         {/* Creation & Generation */}
-        <section className={cn("mt-auto -translate-y-3 rounded-[2.2rem] border-[1.5px] px-2.5 pt-1 pb-0", cardShell)} style={creationSectionStyle}>
-          <h3 className={cn("mb-1", creationTitleClass)}>
+        <section className={cn("mt-auto border-[1.5px]", cardShell)} style={{ ...creationSectionStyle, borderRadius: `${creationRadius}px`, paddingLeft: `${sectionPaddingX}px`, paddingRight: `${sectionPaddingX}px`, paddingTop: `${creationPaddingTop}px`, paddingBottom: `${creationPaddingBottom}px`, transform: `translateY(-${creationTranslateY}px)` }}>
+          <h3 className={creationTitleClass} style={{ marginBottom: `${creationTitleMargin}px`, fontSize: `${creationTitleSize}px` }}>
             {language === "ar" ? "الإبداع والتوليد" : "Creation & Generation"}
           </h3>
-          <div className="grid grid-cols-5 gap-1.5 md:gap-2">
+          <div className="grid grid-cols-5 md:gap-2" style={{ gap: `${creationGridGap}px` }}>
             {CREATION_APPS.map((app) => (
-              <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" />
+              <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
             ))}
           </div>
         </section>
