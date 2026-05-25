@@ -523,14 +523,13 @@ export class TRSharedService {
 
   // Subscribe to real-time updates
   static subscribeToTaskUpdates(taskId: string, onUpdate: () => void) {
+    const channelName = `task-activity-${taskId}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const channel = supabase
-      .channel(`task-activity-${taskId}`)
+      .channel(channelName)
       // Shared responses (comments, completions, requests)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_shared_responses', filter: `task_id=eq.${taskId}` }, () => onUpdate())
       // Subtasks (title/complete/due updates)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_subtasks', filter: `task_id=eq.${taskId}` }, () => onUpdate())
-      // Visitors / access pings
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_shared_responses', filter: `task_id=eq.${taskId}` }, () => onUpdate())
       // Parent task updates (e.g., task completed, snoozed)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_tasks', filter: `id=eq.${taskId}` }, () => onUpdate())
       .subscribe();

@@ -115,7 +115,7 @@ const PRODUCTIVITY_APPS: AppItem[] = [
   { id: "my-files", nameEn: "My Files", nameAr: "ملفاتي", path: "/my-warranty", icon: FolderOpen, accent: "#10b981", glow: "rgba(16,185,129,0.24)" },
   { id: "journal", nameEn: "Journal", nameAr: "اليومية", path: "/journal", icon: NotebookPen, accent: "#f59e0b", glow: "rgba(245,158,11,0.24)" },
   { id: "calendar", nameEn: "Calendar", nameAr: "التقويم", path: "/calendar", icon: Calendar, accent: "#38bdf8", glow: "rgba(56,189,248,0.24)" },
-  { id: "tasks", nameEn: "Tasks • Reminders", nameAr: "المهام • التذكيرات", path: "/tr", icon: ListTodo, accent: "#22c55e", glow: "rgba(34,197,94,0.24)" },
+  { id: "tasks", nameEn: "Tasks", nameAr: "المهام", path: "/tr", icon: ListTodo, accent: "#22c55e", glow: "rgba(34,197,94,0.24)" },
   { id: "email", nameEn: "Email", nameAr: "البريد", path: "/tools/email", icon: Mail, accent: "#fbbf24", glow: "rgba(251,191,36,0.24)" },
   { id: "social", nameEn: "Social", nameAr: "سوشيال", path: "/social", icon: MessageCircle, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
   { id: "vitality", nameEn: "Health", nameAr: "الصحة", path: "/fitness", icon: Activity, accent: "#84cc16", glow: "rgba(132,204,22,0.24)" },
@@ -135,6 +135,30 @@ type AppCircleProps = {
   useWaktiLogo?: boolean;
   scale?: number;
 };
+
+const MODERN_SCALE_BASE_WIDTH = 390;
+const MODERN_SCALE_BASE_HEIGHT = 720;
+
+function getStableModernViewport() {
+  if (typeof window === "undefined") {
+    return { width: MODERN_SCALE_BASE_WIDTH, height: MODERN_SCALE_BASE_HEIGHT };
+  }
+
+  const viewportWidth = window.innerWidth || MODERN_SCALE_BASE_WIDTH;
+  const viewportHeight = window.innerHeight || MODERN_SCALE_BASE_HEIGHT;
+
+  if (viewportWidth >= 768) {
+    return { width: viewportWidth, height: viewportHeight };
+  }
+
+  const screenWidth = window.screen?.width || viewportWidth;
+  const screenHeight = window.screen?.height || viewportHeight;
+
+  return {
+    width: Math.min(screenWidth, screenHeight),
+    height: Math.max(screenWidth, screenHeight),
+  };
+}
 
 // ─── AppCircle ────────────────────────────────────────────────────────────────
 
@@ -1106,13 +1130,12 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const navigate = useNavigate();
   const { language, theme } = useTheme();
   const { profile } = useUserProfile();
-  const rootRef = useRef<HTMLDivElement | null>(null);
   const [quote] = useState(() => getQuoteForDisplay());
   const [quoteExpanded, setQuoteExpanded] = useState(false);
   const [quoteExiting, setQuoteExiting] = useState(false);
   const [modernWidgetSettings, setModernWidgetSettings] = useState<ModernWidgetSettings>(DEFAULT_MODERN_WIDGET_SETTINGS);
   const [modernWidgetOrder, setModernWidgetOrder] = useState<ModernWidgetKey[]>(DEFAULT_MODERN_WIDGET_ORDER);
-  const [availableSize, setAvailableSize] = useState({ width: 390, height: 720 });
+  const [stableViewport] = useState(() => getStableModernViewport());
 
   const { tasks, reminders } = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1200,10 +1223,10 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   );
   const quoteText = getQuoteText(quote, language);
   const quoteAuthor = getQuoteAuthor(quote);
-  const isDesktopLike = availableSize.width >= 768;
+  const isDesktopLike = stableViewport.width >= 768;
   const layoutScale = isDesktopLike
     ? 1
-    : Math.max(0.78, Math.min(1, availableSize.width / 390, availableSize.height / 720));
+    : Math.max(0.78, Math.min(1, stableViewport.width / MODERN_SCALE_BASE_WIDTH, stableViewport.height / MODERN_SCALE_BASE_HEIGHT));
   const scalePx = (value: number, min = 0) => Math.max(min, Number((value * layoutScale).toFixed(2)));
   const rootPaddingX = isDesktopLike ? 16 : scalePx(12, 9);
   const rootPaddingTop = scalePx(12, 9);
@@ -1246,28 +1269,6 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const creationTitleMargin = scalePx(4, 3);
   const creationTitleSize = scalePx(language === "ar" ? 24.8 : 19.2, language === "ar" ? 19 : 15);
   const creationGridGap = scalePx(6, 4.5);
-
-  useEffect(() => {
-    const updateAvailableSize = () => {
-      const rect = rootRef.current?.getBoundingClientRect();
-      const nextWidth = rect?.width && rect.width > 0 ? rect.width : window.innerWidth;
-      const nextHeight = rect?.height && rect.height > 0 ? rect.height : window.innerHeight;
-      setAvailableSize({ width: nextWidth, height: nextHeight });
-    };
-
-    updateAvailableSize();
-    const observer = typeof ResizeObserver !== "undefined" && rootRef.current
-      ? new ResizeObserver(() => updateAvailableSize())
-      : null;
-
-    if (observer && rootRef.current) observer.observe(rootRef.current);
-    window.addEventListener("resize", updateAvailableSize);
-
-    return () => {
-      window.removeEventListener("resize", updateAvailableSize);
-      observer?.disconnect();
-    };
-  }, []);
 
   useEffect(() => {
     const settings = (profile?.settings as any)?.dashboardWidgets ?? (profile?.settings as any)?.widgets ?? {};
@@ -1320,7 +1321,6 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
 
   return (
     <div
-      ref={rootRef}
       dir="ltr"
       className={cn(
         "flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-3 pb-0 pt-3 md:px-4 md:pb-0",
