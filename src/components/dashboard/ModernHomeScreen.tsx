@@ -41,6 +41,7 @@ import { useJournalData } from "@/hooks/useJournalData";
 import { getTodayHealthSummary, getSleepAnalysis } from "@/integrations/natively/healthkitBridge";
 import { getScopedStorageItem, setScopedStorageItem } from "@/utils/userScopedStorage";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
+import { onEvent } from "@/utils/eventBus";
 import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
@@ -62,31 +63,64 @@ type AppItem = {
   glow: string;
 };
 
+type ModernWidgetKey = "showCalendarWidget" | "showTRWidget" | "showMaw3dWidget" | "showVitalityWidget" | "showJournalWidget" | "showQuoteWidget";
+type ModernWidgetSettings = Record<ModernWidgetKey, boolean>;
+
+const DEFAULT_MODERN_WIDGET_ORDER: ModernWidgetKey[] = [
+  "showCalendarWidget",
+  "showTRWidget",
+  "showMaw3dWidget",
+  "showVitalityWidget",
+  "showJournalWidget",
+  "showQuoteWidget",
+];
+
+const DEFAULT_MODERN_WIDGET_SETTINGS: ModernWidgetSettings = {
+  showCalendarWidget: true,
+  showTRWidget: true,
+  showMaw3dWidget: true,
+  showVitalityWidget: true,
+  showJournalWidget: true,
+  showQuoteWidget: true,
+};
+
+function sanitizeModernWidgetOrder(raw: unknown): ModernWidgetKey[] {
+  if (!Array.isArray(raw)) return DEFAULT_MODERN_WIDGET_ORDER;
+
+  const validKeys = new Set<ModernWidgetKey>(DEFAULT_MODERN_WIDGET_ORDER);
+  const normalized = raw.filter((value): value is ModernWidgetKey => typeof value === "string" && validKeys.has(value as ModernWidgetKey));
+
+  return [
+    ...normalized,
+    ...DEFAULT_MODERN_WIDGET_ORDER.filter((key) => !normalized.includes(key)),
+  ];
+}
+
 // ─── App lists ───────────────────────────────────────────────────────────────
 
 const CREATION_APPS: AppItem[] = [
-  { id: "projects", nameEn: "Code", nameAr: "البرمجة", path: "/projects", icon: Code2, accent: "#818cf8", glow: "rgba(129,140,248,0.5)" },
-  { id: "studio", nameEn: "Studio", nameAr: "الاستوديو", path: "/music", icon: Aperture, accent: "#d946ef", glow: "rgba(217,70,239,0.5)" },
-  { id: "text", nameEn: "Text", nameAr: "النص", path: "/tools/text", icon: PenTool, accent: "#a855f7", glow: "rgba(168,85,247,0.45)" },
-  { id: "voice", nameEn: "Voice", nameAr: "الصوت", path: "/tools/voice-studio", icon: Mic, accent: "#f472b6", glow: "rgba(244,114,182,0.45)" },
-  { id: "maw3d", nameEn: "Maw3d", nameAr: "مواعيد", path: "/maw3d", icon: CalendarClock, accent: "#c084fc", glow: "rgba(192,132,252,0.45)" },
+  { id: "projects", nameEn: "Code", nameAr: "البرمجة", path: "/projects", icon: Code2, accent: "#60a5fa", glow: "rgba(96,165,250,0.26)" },
+  { id: "studio", nameEn: "Studio", nameAr: "الاستوديو", path: "/music", icon: Aperture, accent: "#34d399", glow: "rgba(52,211,153,0.24)" },
+  { id: "text", nameEn: "Text", nameAr: "النص", path: "/tools/text", icon: PenTool, accent: "#f59e0b", glow: "rgba(245,158,11,0.24)" },
+  { id: "voice", nameEn: "Voice", nameAr: "الصوت", path: "/tools/voice-studio", icon: Mic, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
+  { id: "maw3d", nameEn: "Maw3d", nameAr: "مواعيد", path: "/maw3d", icon: CalendarClock, accent: "#fb923c", glow: "rgba(251,146,60,0.24)" },
 ];
 
 const SYSTEM_APPS: AppItem[] = [
-  { id: "settings", nameEn: "Settings", nameAr: "الإعدادات", path: "/settings", icon: Settings, accent: "#60a5fa", glow: "rgba(96,165,250,0.45)" },
-  { id: "help", nameEn: "Help", nameAr: "المساعدة", path: "/help", icon: HelpCircle, accent: "#34d399", glow: "rgba(52,211,153,0.45)" },
+  { id: "settings", nameEn: "Settings", nameAr: "الإعدادات", path: "/settings", icon: Settings, accent: "#60a5fa", glow: "rgba(96,165,250,0.24)" },
+  { id: "help", nameEn: "Help", nameAr: "المساعدة", path: "/help", icon: HelpCircle, accent: "#4ade80", glow: "rgba(74,222,128,0.24)" },
 ];
 
 const PRODUCTIVITY_APPS: AppItem[] = [
-  { id: "my-files", nameEn: "My Files", nameAr: "ملفاتي", path: "/my-warranty", icon: FolderOpen, accent: "#10b981", glow: "rgba(16,185,129,0.45)" },
-  { id: "journal", nameEn: "Journal", nameAr: "اليومية", path: "/journal", icon: NotebookPen, accent: "#ec4899", glow: "rgba(236,72,153,0.45)" },
-  { id: "calendar", nameEn: "Calendar", nameAr: "التقويم", path: "/calendar", icon: Calendar, accent: "#38bdf8", glow: "rgba(56,189,248,0.45)" },
-  { id: "tasks", nameEn: "Tasks • Reminders", nameAr: "المهام • التذكيرات", path: "/tr", icon: ListTodo, accent: "#22c55e", glow: "rgba(34,197,94,0.45)" },
-  { id: "email", nameEn: "Email", nameAr: "البريد", path: "/tools/email", icon: Mail, accent: "#e9ceb0", glow: "rgba(233,206,176,0.5)" },
-  { id: "social", nameEn: "Social", nameAr: "سوشيال", path: "/social", icon: MessageCircle, accent: "#38bdf8", glow: "rgba(56,189,248,0.45)" },
-  { id: "vitality", nameEn: "Health", nameAr: "الصحة", path: "/fitness", icon: Activity, accent: "#22c55e", glow: "rgba(34,197,94,0.45)" },
-  { id: "games", nameEn: "Games", nameAr: "الألعاب", path: "/tools/game", icon: Gamepad2, accent: "#f87171", glow: "rgba(248,113,113,0.45)" },
-  { id: "deen", nameEn: "Deen", nameAr: "دين", path: "/deen", icon: BookOpen, accent: "#60a5fa", glow: "rgba(96,165,250,0.45)" },
+  { id: "my-files", nameEn: "My Files", nameAr: "ملفاتي", path: "/my-warranty", icon: FolderOpen, accent: "#10b981", glow: "rgba(16,185,129,0.24)" },
+  { id: "journal", nameEn: "Journal", nameAr: "اليومية", path: "/journal", icon: NotebookPen, accent: "#f59e0b", glow: "rgba(245,158,11,0.24)" },
+  { id: "calendar", nameEn: "Calendar", nameAr: "التقويم", path: "/calendar", icon: Calendar, accent: "#38bdf8", glow: "rgba(56,189,248,0.24)" },
+  { id: "tasks", nameEn: "Tasks • Reminders", nameAr: "المهام • التذكيرات", path: "/tr", icon: ListTodo, accent: "#22c55e", glow: "rgba(34,197,94,0.24)" },
+  { id: "email", nameEn: "Email", nameAr: "البريد", path: "/tools/email", icon: Mail, accent: "#fbbf24", glow: "rgba(251,191,36,0.24)" },
+  { id: "social", nameEn: "Social", nameAr: "سوشيال", path: "/social", icon: MessageCircle, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
+  { id: "vitality", nameEn: "Health", nameAr: "الصحة", path: "/fitness", icon: Activity, accent: "#84cc16", glow: "rgba(132,204,22,0.24)" },
+  { id: "games", nameEn: "Games", nameAr: "الألعاب", path: "/tools/game", icon: Gamepad2, accent: "#f97316", glow: "rgba(249,115,22,0.24)" },
+  { id: "deen", nameEn: "Deen", nameAr: "دين", path: "/deen", icon: BookOpen, accent: "#818cf8", glow: "rgba(129,140,248,0.24)" },
 ];
 
 // ─── AppCircle ────────────────────────────────────────────────────────────────
@@ -120,8 +154,9 @@ function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overri
           "border-white/40 group-hover:scale-105"
         )}
         style={{
-          background: `radial-gradient(circle at 30% 20%, rgba(255,255,255,0.52) 0%, rgba(255,255,255,0.2) 52%, rgba(10,20,40,0.1) 100%), linear-gradient(135deg, ${accent}25 0%, ${accent}55 100%)`,
-          boxShadow: `0 10px 22px ${glow}, inset 0 1px 0 rgba(255,255,255,0.65)`,
+          background: `radial-gradient(circle at 30% 20%, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.1) 48%, rgba(10,20,40,0.1) 100%), linear-gradient(135deg, ${accent}22 0%, ${accent}42 100%)`,
+          borderColor: `${accent}66`,
+          boxShadow: `0 7px 16px ${glow}, inset 0 1px 0 rgba(255,255,255,0.52)`,
         }}
       >
         {isAccount && avatarUrl
@@ -1072,6 +1107,8 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const [quote] = useState(() => getQuoteForDisplay());
   const [quoteExpanded, setQuoteExpanded] = useState(false);
   const [quoteExiting, setQuoteExiting] = useState(false);
+  const [modernWidgetSettings, setModernWidgetSettings] = useState<ModernWidgetSettings>(DEFAULT_MODERN_WIDGET_SETTINGS);
+  const [modernWidgetOrder, setModernWidgetOrder] = useState<ModernWidgetKey[]>(DEFAULT_MODERN_WIDGET_ORDER);
 
   const { tasks, reminders } = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1160,6 +1197,55 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const quoteText = getQuoteText(quote, language);
   const quoteAuthor = getQuoteAuthor(quote);
 
+  useEffect(() => {
+    const settings = (profile?.settings as any)?.dashboardWidgets ?? (profile?.settings as any)?.widgets ?? {};
+
+    setModernWidgetSettings({
+      showCalendarWidget: settings.showCalendarWidget !== false,
+      showTRWidget: (settings.showTRWidget !== false) || settings.showTasksWidget === true,
+      showMaw3dWidget: settings.showMaw3dWidget !== false,
+      showVitalityWidget: settings.showVitalityWidget !== false,
+      showJournalWidget: settings.showJournalWidget !== false,
+      showQuoteWidget: settings.showQuoteWidget !== false,
+    });
+
+    setModernWidgetOrder(sanitizeModernWidgetOrder(settings.order));
+  }, [profile?.settings]);
+
+  useEffect(() => {
+    return onEvent("widgetSettingsChanged", (prefs) => {
+      if ((prefs as any)?.mode === "homescreen") return;
+
+      setModernWidgetSettings({
+        showCalendarWidget: (prefs as any)?.showCalendarWidget !== false,
+        showTRWidget: ((prefs as any)?.showTRWidget !== false) || (prefs as any)?.showTasksWidget === true,
+        showMaw3dWidget: (prefs as any)?.showMaw3dWidget !== false,
+        showVitalityWidget: (prefs as any)?.showVitalityWidget !== false,
+        showJournalWidget: (prefs as any)?.showJournalWidget !== false,
+        showQuoteWidget: (prefs as any)?.showQuoteWidget !== false,
+      });
+
+      if (Array.isArray((prefs as any)?.order)) {
+        setModernWidgetOrder(sanitizeModernWidgetOrder((prefs as any).order));
+      }
+    });
+  }, []);
+
+  const modernWidgetCards: Record<ModernWidgetKey, React.ReactNode> = {
+    showCalendarWidget: <CalendarWidgetInline shell={shell} navigate={navigate} language={language} upcomingCount={upcomingCount} />,
+    showTRWidget: (
+      <TRWidgetInline shell={shell} navigate={navigate} language={language}
+        pendingTasks={pendingTasks} completedToday={completedToday} total={total} pct={pct}
+        taskAccent={taskAccent} taskIconBg={taskIconBg} reminders={reminders ?? []} />
+    ),
+    showMaw3dWidget: <Maw3dWidgetInline shell={shell} navigate={navigate} language={language} events={maw3dEvents ?? []} attendingCounts={attendingCounts ?? {}} />,
+    showVitalityWidget: <VitalityWidgetInline shell={shell} navigate={navigate} language={language} whoopData={whoopData} />,
+    showJournalWidget: <JournalWidgetInline shell={shell} navigate={navigate} language={language} journalData={journalData} />,
+    showQuoteWidget: <QuoteWidgetInline shell={shell} language={language} quote={quote} onExpand={() => { setQuoteExpanded(true); setQuoteExiting(false); }} />,
+  };
+
+  const visibleModernWidgetOrder = modernWidgetOrder.filter((key) => modernWidgetSettings[key] !== false);
+
   return (
     <div
       dir="ltr"
@@ -1239,41 +1325,16 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             </div>
           </div>
 
-          <section className={cn("self-start rounded-[2rem] border-[1.5px] px-3 pt-2 pb-0", cardShell)} style={widgetsSectionStyle}>
+          <section className={cn("self-start rounded-[2rem] border-[1.5px] px-3 pt-2 pb-1.5", cardShell)} style={widgetsSectionStyle}>
             <Carousel opts={{ align: "start", dragFree: true, direction: "ltr" }} className="w-full" dir="ltr">
               <CarouselContent className="sm:-ml-2">
-                <CarouselItem className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
-                  <div className="h-52">
-                    <QuoteWidgetInline shell={shell} language={language} quote={quote} onExpand={() => { setQuoteExpanded(true); setQuoteExiting(false); }} />
-                  </div>
-                </CarouselItem>
-                <CarouselItem className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
-                  <div className="h-52">
-                    <TRWidgetInline shell={shell} navigate={navigate} language={language}
-                      pendingTasks={pendingTasks} completedToday={completedToday} total={total} pct={pct}
-                      taskAccent={taskAccent} taskIconBg={taskIconBg} reminders={reminders ?? []} />
-                  </div>
-                </CarouselItem>
-                <CarouselItem className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
-                  <div className="h-52">
-                    <CalendarWidgetInline shell={shell} navigate={navigate} language={language} upcomingCount={upcomingCount} />
-                  </div>
-                </CarouselItem>
-                <CarouselItem className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
-                  <div className="h-52">
-                    <Maw3dWidgetInline shell={shell} navigate={navigate} language={language} events={maw3dEvents ?? []} attendingCounts={attendingCounts ?? {}} />
-                  </div>
-                </CarouselItem>
-                <CarouselItem className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
-                  <div className="h-52">
-                    <JournalWidgetInline shell={shell} navigate={navigate} language={language} journalData={journalData} />
-                  </div>
-                </CarouselItem>
-                <CarouselItem className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
-                  <div className="h-52">
-                    <VitalityWidgetInline shell={shell} navigate={navigate} language={language} whoopData={whoopData} />
-                  </div>
-                </CarouselItem>
+                {visibleModernWidgetOrder.map((key) => (
+                  <CarouselItem key={key} className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
+                    <div className="h-52">
+                      {modernWidgetCards[key]}
+                    </div>
+                  </CarouselItem>
+                ))}
               </CarouselContent>
             </Carousel>
           </section>
@@ -1295,16 +1356,31 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             </div>
           </section>
           <aside className={cn("relative rounded-[2rem] border-[1.5px] px-2 py-1.5", cardShell)} style={systemSectionStyle}>
-            <div className={cn("absolute inset-y-2.5 flex items-center justify-center", language === "ar" ? "left-1" : "right-1")}>
-              <span className={cn("text-foreground/85 font-extrabold", language === "ar" ? "[writing-mode:vertical-lr] text-[1.34rem] tracking-[0.14em]" : "[writing-mode:vertical-rl] text-[13px] tracking-[0.42em]")}>
-                {language === "ar" ? "النظام" : "SYSTEM"}
-              </span>
-            </div>
-            <div className={cn("flex h-full flex-col items-center justify-center gap-3", language === "ar" ? "pl-4" : "pr-4")}>
-              {SYSTEM_APPS.map((app) => (
-                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" />
-              ))}
-            </div>
+            {language === "ar" ? (
+              <>
+                <h3 className="mb-2 whitespace-nowrap text-center text-[1.32rem] font-black leading-none tracking-tight text-foreground">
+                  النظام
+                </h3>
+                <div className="flex flex-1 flex-col items-center justify-center gap-3">
+                  {SYSTEM_APPS.map((app) => (
+                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="absolute inset-y-1.5 right-1 flex items-center justify-center">
+                  <span className="select-none text-[13px] font-extrabold leading-none tracking-[0.52em] text-foreground/85 [text-orientation:upright] [writing-mode:vertical-rl]">
+                    SYSTEM
+                  </span>
+                </div>
+                <div className="flex h-full flex-col items-center justify-center gap-3 pr-4">
+                  {SYSTEM_APPS.map((app) => (
+                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" />
+                  ))}
+                </div>
+              </>
+            )}
           </aside>
         </div>
 

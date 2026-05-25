@@ -32,7 +32,7 @@ import { QuotePreferencesManager } from "@/components/settings/QuotePreferencesM
 import { CustomQuoteManager } from "@/components/settings/CustomQuoteManager";
 import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 import { t } from "@/utils/translations";
-import { Shield, Users, Eye, Quote, Palette, Bell, Layout, Home, LayoutDashboard, AlertTriangle, Image as ImageIcon, RotateCcw, X } from "lucide-react";
+import { Shield, Users, Eye, Quote, Palette, Bell, Layout, Home, LayoutDashboard, AlertTriangle, Image as ImageIcon, RotateCcw, X, ChevronUp, ChevronDown } from "lucide-react";
 import { useAccessibility } from "@/hooks/useAccessibility";
 import { COLOR_BLIND_MODES } from "@/components/accessibility/ColorBlindFilters";
 import { useTextSize } from "@/hooks/useTextSize";
@@ -55,6 +55,28 @@ const LS_BG_CHOICE_BASE = "homescreen_bg_choice_v1";
 const LS_DOCK_COLOR_BASE = "homescreen_dock_color";
 const DEFAULT_DASHBOARD_LOOK = 'modern' as const;
 const DASHBOARD_LOOK_MIGRATION_FLAG = 'wakti_dashboard_look_default_migrated_v1';
+const MODERN_WIDGET_ORDER_KEYS = [
+  'showCalendarWidget',
+  'showTRWidget',
+  'showMaw3dWidget',
+  'showVitalityWidget',
+  'showJournalWidget',
+  'showQuoteWidget',
+] as const;
+
+type ModernWidgetKey = typeof MODERN_WIDGET_ORDER_KEYS[number];
+
+const sanitizeModernWidgetOrder = (raw: unknown): ModernWidgetKey[] => {
+  if (!Array.isArray(raw)) return [...MODERN_WIDGET_ORDER_KEYS];
+
+  const validKeys = new Set<ModernWidgetKey>(MODERN_WIDGET_ORDER_KEYS);
+  const normalized = raw.filter((value): value is ModernWidgetKey => typeof value === 'string' && validKeys.has(value as ModernWidgetKey));
+
+  return [
+    ...normalized,
+    ...MODERN_WIDGET_ORDER_KEYS.filter((key) => !normalized.includes(key)),
+  ];
+};
 
 const isBgChoiceValue = (value: unknown): value is 'default' | 'wallpaper' | 'style' => value === 'default' || value === 'wallpaper' || value === 'style';
 const isDefaultBgAsset = (value?: string | null) => !value || value === DEFAULT_BG_DARK || value === DEFAULT_BG_LIGHT;
@@ -173,6 +195,7 @@ export default function Settings() {
     { key: 'showJournalWidget', labelEn: "Today's Journal", labelAr: 'يوميات وقتي' },
     { key: 'showQuoteWidget', labelEn: 'Daily Quote', labelAr: 'اقتباس اليوم' },
   ];
+  const [modernWidgetOrder, setModernWidgetOrder] = useState<ModernWidgetKey[]>([...MODERN_WIDGET_ORDER_KEYS]);
 
   useEffect(() => {
     if (cachedProfile) {
@@ -266,6 +289,7 @@ export default function Settings() {
         const w = s.widgets;
         setDashboardWidgets(prev => ({ ...prev, ...w, showTRWidget: (w.showTRWidget !== false) || (w.showTasksWidget === true) }));
       }
+      setModernWidgetOrder(sanitizeModernWidgetOrder(s?.dashboardWidgets?.order ?? s?.widgets?.order));
 
       const rawHomescreenWidgets = hs?.homescreenWidgets || s?.homescreenWidgets;
       if (rawHomescreenWidgets) {
@@ -441,6 +465,47 @@ export default function Settings() {
     refetchProfile();
   };
 
+  const persistModernWidgetOrder = async (nextOrder: ModernWidgetKey[]) => {
+    const previousOrder = modernWidgetOrder;
+    setModernWidgetOrder(nextOrder);
+
+    try {
+      await updateProfileSettings((currentSettings) => ({
+        ...currentSettings,
+        dashboardWidgets: {
+          ...(currentSettings.dashboardWidgets || currentSettings.widgets || {}),
+          ...dashboardWidgets,
+          order: nextOrder,
+        },
+        widgets: {
+          ...(currentSettings.widgets || currentSettings.dashboardWidgets || {}),
+          ...dashboardWidgets,
+          order: nextOrder,
+        },
+      }));
+
+      refetchProfile();
+      emitEvent('widgetSettingsChanged', { ...dashboardWidgets, order: nextOrder, mode: dashboardLook });
+    } catch (error) {
+      console.error('Error updating modern widget order:', error);
+      setModernWidgetOrder(previousOrder);
+      showError(t("errorUpdatingSettings", language));
+    }
+  };
+
+  const moveModernWidget = async (key: ModernWidgetKey, direction: -1 | 1) => {
+    const currentIndex = modernWidgetOrder.indexOf(key);
+    const nextIndex = currentIndex + direction;
+
+    if (currentIndex === -1 || nextIndex < 0 || nextIndex >= modernWidgetOrder.length) return;
+
+    const nextOrder = [...modernWidgetOrder];
+    const [moved] = nextOrder.splice(currentIndex, 1);
+    nextOrder.splice(nextIndex, 0, moved);
+
+    await persistModernWidgetOrder(nextOrder);
+  };
+
   const updateWidgetSetting = async (key: keyof WidgetConfig, value: boolean) => {
     const isHomescreen = dashboardLook === 'homescreen';
     const current = isHomescreen ? homescreenWidgets : dashboardWidgets;
@@ -457,14 +522,22 @@ export default function Settings() {
       } else {
         await updateProfileSettings((currentSettings) => ({
           ...currentSettings,
-          dashboardWidgets: newSettings,
-          widgets: newSettings,
+          dashboardWidgets: {
+            ...(currentSettings.dashboardWidgets || {}),
+            ...newSettings,
+            order: modernWidgetOrder,
+          },
+          widgets: {
+            ...(currentSettings.widgets || {}),
+            ...newSettings,
+            order: modernWidgetOrder,
+          },
         }));
       }
 
       showSuccess(t("settingsUpdated", language));
       refetchProfile();
-      emitEvent('widgetSettingsChanged', { ...newSettings, mode: dashboardLook });
+      emitEvent('widgetSettingsChanged', { ...newSettings, order: modernWidgetOrder, mode: dashboardLook });
     } catch (error) {
       console.error('Error updating widget setting:', error);
       showError(t("errorUpdatingSettings", language));
@@ -1047,7 +1120,10 @@ export default function Settings() {
             {/* Widget Visibility — always shown, behavior changes per mode */}
             {(() => {
               const isHomescreen = dashboardLook === 'homescreen';
-              const widgetEntries = homescreenWidgetEntries;
+              const isModern = dashboardLook === 'modern';
+              const widgetEntries = isModern
+                ? modernWidgetOrder.map((key) => homescreenWidgetEntries.find((entry) => entry.key === key)).filter(Boolean)
+                : homescreenWidgetEntries;
               const enabledCount = widgetEntries.filter(e => widgetSettings[e.key]).length;
 
               const handleWidgetToggle = (key: keyof typeof widgetSettings, checked: boolean) => {
@@ -1070,7 +1146,9 @@ export default function Settings() {
                       <CardDescription>
                         {isHomescreen
                           ? (language === "ar" ? "اختر ما يصل إلى ٤ ودجتات تظهر في الشاشة الرئيسية" : "Choose up to 4 widgets to show on your Home Screen")
-                          : (language === "ar" ? "اختر الأدوات التي تريد عرضها في لوحة التحكم" : "Choose which widgets to display on your dashboard")}
+                          : isModern
+                            ? (language === "ar" ? "اختر الأدوات ورتّبها كما تريد في المظهر الحديث" : "Choose and reorder the widgets for Modern Look")
+                            : (language === "ar" ? "اختر الأدوات التي تريد عرضها في لوحة التحكم" : "Choose which widgets to display on your dashboard")}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -1078,6 +1156,7 @@ export default function Settings() {
                         const isOn = !!widgetSettings[key];
                         const isDisabled = isHomescreen && !isOn && enabledCount >= MAX_HOMESCREEN_WIDGETS;
                         const currentSize = homescreenWidgetSizes[key] ?? 'big';
+                        const orderIndex = isModern ? modernWidgetOrder.indexOf(key as ModernWidgetKey) : -1;
                         return (
                           <div
                             key={key}
@@ -1092,8 +1171,35 @@ export default function Settings() {
                                   {language === 'ar' ? 'الحد الأقصى ٤ ودجتات' : 'Max 4 reached'}
                                 </p>
                               )}
+                              {isModern && (
+                                <p className="text-xs text-muted-foreground">
+                                  {language === 'ar' ? 'يمكنك تغيير الترتيب من الأسهم' : 'Use the arrows to change the order'}
+                                </p>
+                              )}
                             </div>
                             <div className="flex items-center gap-2">
+                              {isModern && (
+                                <div className="flex overflow-hidden rounded-lg border border-border bg-muted/30">
+                                  <button
+                                    type="button"
+                                    onClick={() => moveModernWidget(key as ModernWidgetKey, -1)}
+                                    disabled={orderIndex <= 0}
+                                    className="px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-40"
+                                    aria-label={language === 'ar' ? 'حرّك لأعلى' : 'Move up'}
+                                  >
+                                    <ChevronUp className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => moveModernWidget(key as ModernWidgetKey, 1)}
+                                    disabled={orderIndex === -1 || orderIndex >= modernWidgetOrder.length - 1}
+                                    className="border-l border-border px-2 py-1 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-40"
+                                    aria-label={language === 'ar' ? 'حرّك لأسفل' : 'Move down'}
+                                  >
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              )}
                               {isHomescreen && isOn && (
                                 <div className="flex overflow-hidden rounded-lg border border-border bg-muted/30">
                                   <button
