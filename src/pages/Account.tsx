@@ -36,6 +36,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { getPurchasesShellSnapshot, purchasePackage, showPaywall, getOfferings, restorePurchases } from "@/integrations/natively/purchasesBridge";
+import { isStudentEligibleForQU } from "@/utils/studentVerification";
 import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
 
 
@@ -252,7 +253,7 @@ export default function Account() {
   const handleBillingSubscribe = () => {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
-    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    const isQUUser = isStudentEligibleForQU(user);
     const isAndroid = /Android/.test(navigator.userAgent);
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     console.log('[BillingSubscribe] QU:', isQUUser, '| iOS:', isIOS);

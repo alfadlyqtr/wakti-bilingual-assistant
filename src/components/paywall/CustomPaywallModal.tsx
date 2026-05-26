@@ -24,6 +24,7 @@ import { Sparkles, RefreshCw, LogOut, Shield, MessageCircle, GraduationCap } fro
 import { Logo3D } from "@/components/Logo3D";
 import { toast } from "sonner";
 import type { PaywallVariant } from "@/components/ProtectedRoute";
+import { isStudentEligibleForQU } from "@/utils/studentVerification";
 
 interface CustomPaywallModalProps {
   open: boolean;
@@ -40,7 +41,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
-  const isQUUserDisplay = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+  const isQUUserDisplay = isStudentEligibleForQU(user);
   const price = isQUUserDisplay
     ? { qar: 'QAR 73/month', usd: '$19.99/month' }
     : { qar: 'QAR 92/month', usd: '$25/month' };
@@ -119,7 +120,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
     setLoading(true);
     setPurchaseInProgress(true);
 
-    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+    const isQUUser = isQUUserDisplay;
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
     const isAndroid = /Android/.test(navigator.userAgent);
     console.log('[Purchase] QU:', isQUUser, '| iOS:', isIOS);
@@ -444,7 +445,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
               .continue-btn-glow { animation: pulse-glow 2.5s ease-in-out infinite; }
             `}</style>
 
-            {(() => { const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa')); return null; })()}
+            {(() => { const isQUUser = !!(isQUUserDisplay); return null; })()}
             <div className="space-y-4 py-2">
               {/* Greeting */}
               <div className="text-center space-y-2 pt-1 hello-float hello-float-1">
@@ -456,7 +457,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                 </div>
                 <h2 className="gradient-text-animated text-2xl font-bold leading-snug inline-flex items-center justify-center gap-2">
                   {(() => {
-                    const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                    const isQUUser = isQUUserDisplay;
                     if (language === 'ar') {
                       return (
                         <>
@@ -483,7 +484,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                       setEditingName(true);
                     }}
                     className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[10px] rounded-full border ${
-                      user?.email?.toLowerCase().endsWith('@qu.edu.qa')
+                      isQUUserDisplay
                         ? 'border-[#8A1538] text-foreground/40 hover:text-foreground/70 hover:border-[#8A1538]/70 hover:bg-[#8A1538]/5'
                         : 'border-foreground/20 text-foreground/40 hover:text-foreground/70 hover:border-foreground/35 hover:bg-foreground/5'
                     } active:scale-95 transition-all duration-150`}
@@ -549,7 +550,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
               {/* Pitch */}
               {(() => {
-                const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                const isQUUser = isQUUserDisplay;
                 return (
                   <div className={`hello-float hello-float-2 rounded-xl px-4 py-3 text-center bg-gradient-to-br from-[hsl(210,100%,65%,0.12)] to-[hsl(280,70%,65%,0.1)] shadow-[0_0_24px_hsl(210,100%,65%,0.15),inset_0_1px_0_hsl(210,100%,65%,0.2)] border ${
                     isQUUser ? 'border-[#8A1538]' : 'border-[hsl(210,100%,65%,0.3)]'
@@ -573,7 +574,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
 
               {/* Feature grid - Collapsible */}
               {(() => {
-                const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                const isQUUser = isQUUserDisplay;
                 return (
                   <div className={`hello-float hello-float-3 ${
                     isQUUser ? 'rounded-xl border border-[#8A1538] p-2' : ''
@@ -626,7 +627,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   onClick={handleSkip}
                   size="lg"
                   className={`continue-btn-glow w-full min-h-[64px] bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:opacity-95 text-white font-bold text-xl tracking-wide active:scale-[0.98] transition-all duration-150 rounded-2xl shadow-[0_0_40px_hsl(200,100%,55%,0.6),0_0_80px_hsl(200,100%,55%,0.3),0_4px_20px_hsl(200,100%,55%,0.4)] ${
-                    user?.email?.toLowerCase().endsWith('@qu.edu.qa') ? 'border-2 border-[#8A1538]' : 'border-0'
+                    isQUUserDisplay ? 'border-2 border-[#8A1538]' : 'border-0'
                   }`}
                 >
                   <Sparkles className="w-5 h-5 mr-2" />
@@ -655,7 +656,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
               <div className="rounded-lg p-4 text-center space-y-1 border border-[hsl(210,100%,65%,0.2)] bg-[hsl(210,100%,65%,0.05)] shadow-[0_0_20px_hsl(210,100%,65%,0.08)]">
                 {(() => {
                   const normalize = (s?: string) => s || '';
-                  const isQUUser = !!(user?.email?.toLowerCase().endsWith('@qu.edu.qa'));
+                  const isQUUser = isQUUserDisplay;
                   if (language === 'ar') {
                     const usd = isQUUser ? '19.99 دولار أمريكي/شهر' : (normalize(price.usd).replace('/month', '/شهر').replace('$', '') + ' دولار أمريكي/شهر') || '25 دولار أمريكي/شهر';
                     const qar = isQUUser ? 'ر.ق 73/شهر' : (normalize(price.qar).replace('/month', '/شهر').replace('QAR', 'ر.ق').trim() || 'ر.ق 92/شهر');

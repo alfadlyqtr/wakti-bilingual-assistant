@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { countries } from '@/utils/countries';
+import { StudentVerificationDialog } from '@/components/auth/StudentVerificationDialog';
+import { buildStudentVerificationMetadata, verifyStudentAccountWithRealX, type StudentVerificationStatus } from '@/utils/studentVerification';
 import { validateDisplayName, validateEmail, validatePassword, validateConfirmPassword } from '@/utils/validations';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -173,6 +175,7 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
     country: '',
     countryCode: '',
     city: '',
+    studentAccountFromRealX: false,
     agreedToTerms: false,
   });
 
@@ -182,6 +185,18 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
   const [capturedValue, setCapturedValue] = useState('');
   const [editValue, setEditValue] = useState('');
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [studentDialogState, setStudentDialogState] = useState<{
+    open: boolean;
+    mode: 'not_verified' | 'integration_unavailable';
+    portalUrl: string | null;
+    continueStatus: StudentVerificationStatus;
+  }>({
+    open: false,
+    mode: 'not_verified',
+    portalUrl: null,
+    continueStatus: 'skipped',
+  });
+  const [pendingStudentSignupStatus, setPendingStudentSignupStatus] = useState<StudentVerificationStatus | null>(null);
 
   // ─── Connection state ──────────────────────────────────────────────────────
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'connecting' | 'ready' | 'listening' | 'processing' | 'speaking'>('idle');
@@ -873,65 +888,93 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
   }, [formData.agreedToTerms]);
 
   // ─── Final signup ──────────────────────────────────────────────────────────
+  const completeSignup = useCallback(async (studentStatus: StudentVerificationStatus) => {
+    const redirectUrl = `${window.location.origin}/confirmed`;
+    const selectedCountry = countries.find(c => c.code === formData.countryCode || c.name === formData.country);
+
+    const { data, error } = await supabase.auth.signUp({
+      email: formData.email,
+      password: formData.password,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: formData.name,
+          username: formData.username,
+          date_of_birth: formData.dob || '',
+          country: selectedCountry?.name || formData.country || '',
+          country_code: selectedCountry?.code || formData.countryCode || '',
+          city: formData.city || '',
+          ...buildStudentVerificationMetadata({
+            selected: formData.studentAccountFromRealX,
+            status: studentStatus,
+          }),
+        },
+      },
+    });
+
+    if (error) {
+      if (error.status === 422 || error.message?.toLowerCase().includes('weak') || error.message?.toLowerCase().includes('easy to guess')) {
+        onError(t('Please choose a different password. Try making it more unique.', 'يرجى اختيار كلمة مرور مختلفة. حاول جعلها أكثر تميزًا.'));
+      } else {
+        onError(error.message);
+      }
+      setStepIndex(STEPS.findIndex(s => s.id === 'password'));
+      setPhase('asking');
+      return false;
+    }
+
+    if (data?.user) {
+      setStepIndex(STEPS.findIndex(s => s.id === 'welcome'));
+      const welcomeMsg = t(
+        "Welcome to Wakti! You have free access for 24 hours. Don't forget to subscribe. Check your email to confirm your account.",
+        'مرحبًا بك في وقتي! لديك وصول مجاني لمدة 24 ساعة. لا تنسَ الاشتراك. تحقق من بريدك الإلكتروني لتأكيد حسابك.'
+      );
+      speakQuestion(welcomeMsg);
+
+      setTimeout(() => {
+        onSignupComplete(!data.user.email_confirmed_at);
+      }, 6000);
+      return true;
+    }
+
+    return false;
+  }, [formData, onError, onSignupComplete, speakQuestion, t]);
+
   useEffect(() => {
     if (currentStep?.id !== 'creating' || isSigningUp) return;
 
     const doSignup = async () => {
       setIsSigningUp(true);
       try {
-        const redirectUrl = `${window.location.origin}/confirmed`;
-        const selectedCountry = countries.find(c => c.code === formData.countryCode || c.name === formData.country);
+        const studentStatus: StudentVerificationStatus = pendingStudentSignupStatus ?? (formData.studentAccountFromRealX ? 'verified' : 'skipped');
 
-        const { data, error } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            emailRedirectTo: redirectUrl,
-            data: {
-              full_name: formData.name,
-              username: formData.username,
-              date_of_birth: formData.dob || '',
-              country: selectedCountry?.name || formData.country || '',
-              country_code: selectedCountry?.code || formData.countryCode || '',
-              city: formData.city || '',
-            },
-          },
-        });
+        if (formData.studentAccountFromRealX && !pendingStudentSignupStatus) {
+          const verification = await verifyStudentAccountWithRealX(formData.email);
 
-        if (error) {
-          if (error.status === 422 || error.message?.toLowerCase().includes('weak') || error.message?.toLowerCase().includes('easy to guess')) {
-            onError(t('Please choose a different password. Try making it more unique.', 'يرجى اختيار كلمة مرور مختلفة. حاول جعلها أكثر تميزًا.'));
-          } else {
-            onError(error.message);
+          if (verification.outcome !== 'verified') {
+            setStudentDialogState({
+              open: true,
+              mode: verification.outcome === 'not_verified' ? 'not_verified' : 'integration_unavailable',
+              portalUrl: verification.portalUrl,
+              continueStatus: verification.outcome === 'not_verified' ? 'unverified' : 'skipped',
+            });
+            setStepIndex(STEPS.findIndex(s => s.id === 'terms'));
+            setPhase('asking');
+            return;
           }
-          // Go back to password step
-          setStepIndex(STEPS.findIndex(s => s.id === 'password'));
-          setPhase('asking');
-          setIsSigningUp(false);
-          return;
         }
 
-        if (data?.user) {
-          // Speak welcome
-          setStepIndex(STEPS.findIndex(s => s.id === 'welcome'));
-          const welcomeMsg = t(
-            "Welcome to Wakti! You have free access for 24 hours. Don't forget to subscribe. Check your email to confirm your account.",
-            'مرحبًا بك في وقتي! لديك وصول مجاني لمدة 24 ساعة. لا تنسَ الاشتراك. تحقق من بريدك الإلكتروني لتأكيد حسابك.'
-          );
-          speakQuestion(welcomeMsg);
-
-          setTimeout(() => {
-            onSignupComplete(!data.user.email_confirmed_at);
-          }, 6000);
-        }
+        await completeSignup(studentStatus);
       } catch (err: any) {
         onError(err.message || t('An unexpected error occurred', 'حدث خطأ غير متوقع'));
+      } finally {
+        setPendingStudentSignupStatus(null);
         setIsSigningUp(false);
       }
     };
 
     doSignup();
-  }, [currentStep?.id, isSigningUp, formData, onSignupComplete, onError, speakQuestion, t]);
+  }, [completeSignup, currentStep?.id, formData, isSigningUp, onError, pendingStudentSignupStatus, t]);
 
   // ─── Render helpers ────────────────────────────────────────────────────────
 
@@ -1501,12 +1544,33 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
             {/* ── Terms step ── */}
             {currentStep.id === 'terms' && (
               <div className="space-y-4">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, studentAccountFromRealX: !prev.studentAccountFromRealX }))}
+                  className={`w-full rounded-[22px] px-4 py-3.5 transition-all ${formData.studentAccountFromRealX
+                    ? isDark
+                      ? 'border border-[#16c65b]/50 bg-[rgba(22,198,91,0.08)] shadow-[0_0_0_1px_rgba(22,198,91,0.18)]'
+                      : 'border border-[#16c65b]/35 bg-[rgba(22,198,91,0.06)] shadow-[0_0_0_1px_rgba(22,198,91,0.12)]'
+                    : isDark
+                      ? 'border border-white/10 bg-white/[0.03]'
+                      : 'border border-[#060541]/10 bg-[#060541]/[0.03]'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5">
+                    <span className="inline-flex min-w-[128px] items-center justify-center rounded-full border border-white/10 bg-[#050507] px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                      <img src="/realx.avif" alt="" className="h-7 w-auto" />
+                    </span>
+                    <div className={`flex-1 ${language === 'ar' ? 'text-right' : 'text-left'} ${formData.studentAccountFromRealX ? (isDark ? 'text-[#9df0bf]' : 'text-[#117a3d]') : textColor}`}>
+                      <div className="text-[14px] font-semibold leading-tight">{t('Student account via realX', 'حساب طالب عبر realX')}</div>
+                    </div>
+                  </div>
+                </button>
                 <div className="flex items-start space-x-3">
                   <Checkbox
                     id="voice-terms"
                     checked={formData.agreedToTerms}
                     onCheckedChange={(checked) => setFormData(prev => ({ ...prev, agreedToTerms: checked as boolean }))}
-                    className="mt-1"
+                    className="mt-1 h-5 w-5 rounded-md border-2"
                   />
                   <label htmlFor="voice-terms" className={`text-[13px] leading-relaxed cursor-pointer ${textColor}`}>
                     <span className="text-red-400 mr-0.5">*</span>
@@ -1602,6 +1666,20 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
           {formData.city && <div><span className={`font-medium ${isDark ? 'text-white/40' : 'text-[#060541]/45'}`}>{t('City:', 'المدينة:')}</span> {formData.city}</div>}
         </motion.div>
       )}
+
+      <StudentVerificationDialog
+        open={studentDialogState.open}
+        language={language}
+        mode={studentDialogState.mode}
+        portalUrl={studentDialogState.portalUrl}
+        onClose={() => setStudentDialogState(prev => ({ ...prev, open: false }))}
+        onContinueRegular={() => {
+          setStudentDialogState(prev => ({ ...prev, open: false }));
+          setPendingStudentSignupStatus(studentDialogState.continueStatus);
+          setStepIndex(STEPS.findIndex(s => s.id === 'creating'));
+          setPhase('asking');
+        }}
+      />
     </div>
   );
 }

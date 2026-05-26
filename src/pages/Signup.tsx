@@ -12,8 +12,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { EmailConfirmationDialog } from "@/components/EmailConfirmationDialog";
+import { RealXPartnerSignupDialog } from "@/components/auth/RealXPartnerSignupDialog";
+import { StudentVerificationDialog } from "@/components/auth/StudentVerificationDialog";
+import { buildStudentVerificationMetadata, verifyStudentAccountWithRealX, type StudentVerificationStatus } from "@/utils/studentVerification";
 import { validateDisplayName, validateEmail, validatePassword } from "@/utils/validations";
-import { countries, getCountryByCode } from "@/utils/countries";
+import { countries } from "@/utils/countries";
 
 export default function Signup() {
   const navigate = useNavigate();
@@ -35,7 +38,24 @@ export default function Signup() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isRealXPartnerDialogOpen, setIsRealXPartnerDialogOpen] = useState(false);
+  const [realXPartnerError, setRealXPartnerError] = useState<string | null>(null);
+  const [pendingPartnerSignup, setPendingPartnerSignup] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
+  const [studentDialogState, setStudentDialogState] = useState<{
+    open: boolean;
+    mode: "not_verified" | "integration_unavailable";
+    portalUrl: string | null;
+    continueStatus: StudentVerificationStatus;
+  }>({
+    open: false,
+    mode: "not_verified",
+    portalUrl: null,
+    continueStatus: "skipped",
+  });
 
   // ─── Voice State ───
   const [isRecording, setIsRecording] = useState(false);
@@ -252,6 +272,133 @@ export default function Signup() {
     setTimeout(() => { isStoppingRef.current = false; }, 1000);
   };
 
+  const performSignup = useCallback(async ({
+    signupEmail = email,
+    signupPassword = password,
+    studentSelected,
+    studentStatus,
+    onError,
+  }: {
+    signupEmail?: string;
+    signupPassword?: string;
+    studentSelected: boolean;
+    studentStatus: StudentVerificationStatus;
+    onError?: (message: string) => void;
+  }) => {
+    const redirectUrl = `${window.location.origin}/confirmed`;
+    const surfaceError = onError ?? setErrorMsg;
+
+    console.log('Attempting signup with redirect URL:', redirectUrl);
+
+    const selectedCountry = countries.find(c => c.code === country);
+
+    const { data, error } = await supabase.auth.signUp({
+      email: signupEmail,
+      password: signupPassword,
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          full_name: name,
+          username: username || '',
+          date_of_birth: dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : '',
+          country: selectedCountry?.name || '',
+          country_code: country,
+          city: city || '',
+          ...buildStudentVerificationMetadata({
+            selected: studentSelected,
+            status: studentStatus,
+          }),
+        },
+      },
+    });
+
+    if (error) {
+      console.error("Signup error:", error);
+
+      if (error.status === 422 ||
+          error.message?.toLowerCase().includes('weak') ||
+          error.message?.toLowerCase().includes('easy to guess')) {
+        const weakPasswordMsg = language === 'en'
+          ? 'Please choose a different password. Try making it more unique.'
+          : 'يرجى اختيار كلمة مرور مختلفة. حاول جعلها أكثر تميزًا.';
+        surfaceError(weakPasswordMsg);
+        return false;
+      }
+
+      surfaceError(error.message);
+      toast.error(language === 'en' ? 'Signup Failed: ' + error.message : 'فشل إنشاء الحساب: ' + error.message);
+      return false;
+    }
+
+    if (data?.user) {
+      console.log('Signup successful:', data);
+
+      if (!data.user.email_confirmed_at) {
+        console.log('Email confirmation required');
+        toast.success(language === 'en'
+          ? 'Please check your email and click the confirmation link to verify your account.'
+          : 'يرجى فحص بريدك الإلكتروني والنقر على رابط التأكيد للتحقق من حسابك.'
+        );
+        setIsEmailConfirmationDialogOpen(true);
+      } else {
+        console.log('User already confirmed, redirecting to dashboard');
+        navigate("/dashboard");
+      }
+    }
+
+    return true;
+  }, [city, country, dateOfBirth, email, language, name, navigate, password, username]);
+
+  const handleRealXPartnerSignup = async ({
+    email: studentEmail,
+    password: studentPassword,
+  }: {
+    email: string;
+    password: string;
+    agreedToTerms: boolean;
+  }) => {
+    setRealXPartnerError(null);
+    setErrorMsg(null);
+    setIsLoading(true);
+
+    try {
+      const verification = await verifyStudentAccountWithRealX(studentEmail);
+
+      if (verification.outcome === 'verified') {
+        const success = await performSignup({
+          signupEmail: studentEmail,
+          signupPassword: studentPassword,
+          studentSelected: true,
+          studentStatus: 'verified',
+          onError: setRealXPartnerError,
+        });
+
+        if (success) {
+          setIsRealXPartnerDialogOpen(false);
+          setPendingPartnerSignup(null);
+        }
+      } else {
+        setPendingPartnerSignup({
+          email: studentEmail,
+          password: studentPassword,
+        });
+        setIsRealXPartnerDialogOpen(false);
+        setStudentDialogState({
+          open: true,
+          mode: verification.outcome === 'not_verified' ? 'not_verified' : 'integration_unavailable',
+          portalUrl: verification.portalUrl,
+          continueStatus: verification.outcome === 'not_verified' ? 'unverified' : 'skipped',
+        });
+      }
+    } catch (err) {
+      console.error("Unexpected error during realX partner signup:", err);
+      setRealXPartnerError(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+      toast.error(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -289,65 +436,10 @@ export default function Signup() {
     setIsLoading(true);
     
     try {
-      // Get the redirect URL for email confirmation
-      const redirectUrl = `${window.location.origin}/confirmed`;
-      
-      console.log('Attempting signup with redirect URL:', redirectUrl);
-      
-      // Find the selected country data
-      const selectedCountry = countries.find(c => c.code === country);
-      
-      // Create the user in Supabase Auth with email confirmation
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: redirectUrl,
-          data: {
-            full_name: name,
-            username: username || '',
-            date_of_birth: dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : '',
-            country: selectedCountry?.name || '',
-            country_code: country,
-            city: city || ''
-          },
-        },
+      await performSignup({
+        studentSelected: false,
+        studentStatus: 'skipped',
       });
-      
-      if (error) {
-        console.error("Signup error:", error);
-        
-        // Handle weak password 422 error specifically to prevent Natively error screen
-        if (error.status === 422 || 
-            error.message?.toLowerCase().includes('weak') ||
-            error.message?.toLowerCase().includes('easy to guess')) {
-          const weakPasswordMsg = language === 'en' 
-            ? 'Please choose a different password. Try making it more unique.'
-            : 'يرجى اختيار كلمة مرور مختلفة. حاول جعلها أكثر تميزًا.';
-          setErrorMsg(weakPasswordMsg);
-          return; // Don't show toast - just inline error
-        }
-        
-        // Other errors
-        setErrorMsg(error.message);
-        toast.error(language === 'en' ? 'Signup Failed: ' + error.message : 'فشل إنشاء الحساب: ' + error.message);
-      } else if (data?.user) {
-        console.log('Signup successful:', data);
-        
-        // Check if user needs email confirmation
-        if (!data.user.email_confirmed_at) {
-          console.log('Email confirmation required');
-          toast.success(language === 'en' 
-            ? 'Please check your email and click the confirmation link to verify your account.' 
-            : 'يرجى فحص بريدك الإلكتروني والنقر على رابط التأكيد للتحقق من حسابك.'
-          );
-          setIsEmailConfirmationDialogOpen(true);
-        } else {
-          // User is already confirmed (shouldn't happen with email confirmations enabled)
-          console.log('User already confirmed, redirecting to dashboard');
-          navigate("/dashboard");
-        }
-      }
     } catch (err) {
       console.error("Unexpected error during signup:", err);
       setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
@@ -681,6 +773,25 @@ export default function Signup() {
         .su-pill:disabled::after { display: none; }
 
         /* ─── add-details vibrant pill ─── */
+        .su-checkbox {
+          width: 20px !important; height: 20px !important;
+          border-radius: 6px !important;
+          border: 2px solid ${dk ? 'hsl(280,60%,55%)' : 'hsl(243,84%,30%)'} !important;
+          background: ${dk ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.9)'} !important;
+          transition: all 0.2s ease !important;
+          flex-shrink: 0;
+          align-self: flex-start;
+        }
+        .su-checkbox[data-state='checked'] {
+          background: ${dk
+            ? 'linear-gradient(135deg, hsl(280,60%,50%) 0%, hsl(210,80%,50%) 100%)'
+            : 'linear-gradient(135deg, #060541 0%, hsl(250,70%,35%) 100%)'
+          } !important;
+          border-color: transparent !important;
+          box-shadow: ${dk ? '0 0 12px hsla(280,60%,55%,0.28)' : '0 0 10px hsla(243,84%,20%,0.18)'};
+        }
+
+        /* ─── add-details vibrant pill ─── */
         .su-details-pill {
           display: inline-flex; align-items: center; gap: 5px;
           padding: 5px 16px; border-radius: 999px;
@@ -720,59 +831,95 @@ export default function Signup() {
         }
         .su-details-pill:hover::before { opacity: ${dk ? '0.75' : '0.55'}; }
 
-        /* ─── vibrant checkbox ─── */
-        .su-checkbox {
-          width: 16px !important; height: 16px !important;
-          border-radius: 5px !important;
-          border: 2px solid ${dk ? 'hsl(280,60%,55%)' : 'hsl(243,84%,30%)'} !important;
-          background: transparent !important;
-          transition: all 0.2s ease !important;
-          flex-shrink: 0;
-        }
-        .su-checkbox[data-state='checked'] {
-          background: ${dk
-            ? 'linear-gradient(135deg, hsl(280,60%,50%) 0%, hsl(210,80%,50%) 100%)'
-            : 'linear-gradient(135deg, #060541 0%, hsl(250,70%,35%) 100%)'
-          } !important;
-          border-color: transparent !important;
-          box-shadow: ${dk
-            ? '0 0 12px hsla(280,60%,55%,0.4), 0 0 4px hsla(210,80%,55%,0.3)'
-            : '0 0 8px hsla(243,84%,14%,0.25)'
-          };
-        }
-
         /* ─── login link ─── */
         .su-login-link {
-          font-weight: 800; letter-spacing: 0.03em;
-          background: ${dk
-            ? 'linear-gradient(135deg, hsl(210,100%,65%) 0%, hsl(280,70%,70%) 50%, hsl(180,80%,60%) 100%)'
-            : 'linear-gradient(135deg, #060541 0%, hsl(250,70%,32%) 50%, hsl(210,90%,38%) 100%)'
-          };
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          background-clip: text;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 58px;
+          height: 28px;
+          padding: 0 12px;
+          border-radius: 999px;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          color: #fff;
           text-decoration: none;
           position: relative;
           transition: all 0.25s ease;
-          padding: 0 1px;
+          background: ${dk
+            ? 'linear-gradient(135deg, hsla(210,100%,65%,0.9) 0%, hsla(280,70%,68%,0.9) 100%)'
+            : 'linear-gradient(135deg, #060541 0%, hsl(250,70%,32%) 100%)'
+          };
+          box-shadow: ${dk
+            ? '0 6px 18px hsla(210,100%,65%,0.22)'
+            : '0 6px 16px hsla(243,84%,14%,0.18)'
+          };
         }
         .su-login-link::after {
-          content: ''; position: absolute;
-          bottom: -1px; left: 0; right: 0; height: 1.5px;
-          border-radius: 2px;
-          background: ${dk
-            ? 'linear-gradient(90deg, hsl(210,100%,65%), hsl(280,70%,65%), hsl(180,80%,55%))'
-            : 'linear-gradient(90deg, #060541, hsl(250,70%,32%), hsl(210,90%,38%))'
-          };
-          opacity: 0.5;
-          transform: scaleX(0.6);
-          transition: all 0.25s ease;
+          content: '';
+          position: absolute;
+          inset: 1px;
+          border-radius: 999px;
+          border: 1px solid ${dk ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.35)'};
+          opacity: 0.9;
         }
         .su-login-link:hover::after {
-          opacity: 1; transform: scaleX(1);
+          opacity: 1;
         }
         .su-login-link:hover {
-          filter: ${dk ? 'drop-shadow(0 0 8px hsla(210,100%,65%,0.4))' : 'drop-shadow(0 0 6px hsla(243,84%,14%,0.2))'};
+          transform: translateY(-1px);
+          box-shadow: ${dk
+            ? '0 10px 24px hsla(210,100%,65%,0.28)'
+            : '0 10px 22px hsla(243,84%,14%,0.22)'
+          };
+        }
+
+        .su-partner-entry {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          padding: 14px 16px;
+          border-radius: 22px;
+          border: 1px solid ${dk ? 'rgba(255,255,255,0.08)' : 'rgba(6,5,65,0.10)'};
+          background: ${dk ? 'rgba(255,255,255,0.03)' : 'rgba(6,5,65,0.03)'};
+          transition: all 0.22s ease;
+        }
+        .su-partner-entry:hover {
+          transform: translateY(-1px);
+          border-color: ${dk ? 'hsla(140,70%,45%,0.45)' : 'hsla(140,70%,35%,0.28)'};
+          box-shadow: ${dk ? '0 8px 24px rgba(0,0,0,0.24)' : '0 8px 20px rgba(6,5,65,0.08)'};
+        }
+        .su-realx-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          height: 38px;
+          min-width: 128px;
+          padding: 0 10px;
+          border-radius: 999px;
+          background: #050507;
+          border: 1px solid rgba(255,255,255,0.08);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+          flex-shrink: 0;
+        }
+        .su-realx-logo {
+          width: 98px;
+          height: auto;
+          display: block;
+        }
+        .su-partner-entry-copy {
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.2;
+          color: ${dk ? 'rgba(255,255,255,0.92)' : 'hsl(243,84%,18%)'};
+        }
+        .su-partner-entry-note {
+          font-size: 10px;
+          margin-top: 4px;
+          color: ${dk ? 'rgba(255,255,255,0.48)' : 'hsl(243,20%,44%)'};
         }
 
         /* ─── back button ─── */
@@ -869,7 +1016,46 @@ export default function Signup() {
               >
                 {language === 'en' ? 'Create Account' : 'إنشاء حساب'}
               </h1>
-              <p className="text-sm text-muted-foreground max-w-[320px] mx-auto leading-relaxed">
+              <div className="flex justify-center mb-1">
+                <AnimatePresence mode="wait">
+                  {isPlayingAudio ? (
+                    <motion.button
+                      key="pause"
+                      type="button"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.15 }}
+                      onClick={() => { if (audioRef.current) { audioRef.current.pause(); } }}
+                      className="su-audio-btn"
+                      aria-label="Pause"
+                    >
+                      <Pause className="w-3 h-3" />
+                    </motion.button>
+                  ) : audioUnlocked ? (
+                    <motion.button
+                      key="play"
+                      type="button"
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.15 }}
+                      onClick={() => {
+                        if (audioRef.current) {
+                          audioRef.current.currentTime = 0;
+                          audioRef.current.play();
+                        }
+                      }}
+                      className="su-audio-btn"
+                      aria-label="Play"
+                    >
+                      <Play className="w-3 h-3" />
+                    </motion.button>
+                  ) : null}
+                </AnimatePresence>
+              </div>
+
+              <p className="text-sm text-muted-foreground max-w-[320px] mx-auto leading-relaxed text-center">
                 {language === 'ar' ? (
                   <span className="inline-block">
                     {['أهلاً', '!', 'شكراً', 'لانضمامك', 'إلينا', '،', 'يرجى', 'إدخال', 'بريدك', 'الإلكتروني', 'وكلمة', 'المرور', 'للبدء', '.'].map((word, index) => (
@@ -877,8 +1063,8 @@ export default function Signup() {
                         key={index}
                         initial={{ color: 'hsl(var(--muted-foreground))' }}
                         animate={{
-                          color: currentWordIndex === index && isPlayingAudio 
-                            ? 'hsl(142, 76%, 55%)' // GREEN color for highlighted words
+                          color: currentWordIndex === index && isPlayingAudio
+                            ? 'hsl(142, 76%, 55%)'
                             : 'hsl(var(--muted-foreground))',
                           scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
                           fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
@@ -888,8 +1074,8 @@ export default function Signup() {
                         style={{
                           marginRight: word === '،' || word === '.' ? '0.2rem' : '0.3rem',
                           marginLeft: word === '،' || word === '.' ? '0.2rem' : '0',
-                          textShadow: currentWordIndex === index && isPlayingAudio 
-                            ? '0 0 15px hsla(142, 76%, 55%, 0.4)' // GREEN glow - reduced to prevent flickering
+                          textShadow: currentWordIndex === index && isPlayingAudio
+                            ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
                             : 'none'
                         }}
                       >
@@ -904,8 +1090,8 @@ export default function Signup() {
                         key={index}
                         initial={{ color: 'hsl(var(--muted-foreground))' }}
                         animate={{
-                          color: currentWordIndex === index && isPlayingAudio 
-                            ? 'hsl(142, 76%, 55%)' // GREEN color for highlighted words
+                          color: currentWordIndex === index && isPlayingAudio
+                            ? 'hsl(142, 76%, 55%)'
                             : 'hsl(var(--muted-foreground))',
                           scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
                           fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
@@ -914,8 +1100,8 @@ export default function Signup() {
                         className="inline-block"
                         style={{
                           marginRight: word === '.' || word === '!' ? '0.4rem' : '0.25rem',
-                          textShadow: currentWordIndex === index && isPlayingAudio 
-                            ? '0 0 15px hsla(142, 76%, 55%, 0.4)' // GREEN glow - reduced to prevent flickering
+                          textShadow: currentWordIndex === index && isPlayingAudio
+                            ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
                             : 'none'
                         }}
                       >
@@ -925,46 +1111,6 @@ export default function Signup() {
                   </span>
                 )}
               </p>
-            </div>
-
-            {/* Audio pause/play control */}
-            <div className="flex justify-center mt-1">
-              <AnimatePresence mode="wait">
-                {isPlayingAudio ? (
-                  <motion.button
-                    key="pause"
-                    type="button"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={() => { if (audioRef.current) { audioRef.current.pause(); } }}
-                    className="su-audio-btn"
-                    aria-label="Pause"
-                  >
-                    <Pause className="w-3 h-3" />
-                  </motion.button>
-                ) : audioUnlocked ? (
-                  <motion.button
-                    key="play"
-                    type="button"
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{ duration: 0.15 }}
-                    onClick={() => {
-                      if (audioRef.current) {
-                        audioRef.current.currentTime = 0;
-                        audioRef.current.play();
-                      }
-                    }}
-                    className="su-audio-btn"
-                    aria-label="Play"
-                  >
-                    <Play className="w-3 h-3" />
-                  </motion.button>
-                ) : null}
-              </AnimatePresence>
             </div>
           </div>
 
@@ -1087,15 +1233,15 @@ export default function Signup() {
               </AnimatePresence>
 
               {/* Terms */}
-              <div className="flex items-start gap-2.5 pt-0.5">
+              <div className="flex items-start gap-3 pt-0.5">
                 <Checkbox
                   id="terms"
                   checked={agreedToTerms}
                   onCheckedChange={(v) => setAgreedToTerms(v as boolean)}
                   disabled={isLoading}
-                  className="su-checkbox mt-0.5"
+                  className="su-checkbox mt-[2px]"
                 />
-                <label htmlFor="terms" className="cursor-pointer text-[10px] leading-relaxed" style={{ color: fgHi('0.35') }}>
+                <label htmlFor="terms" className="cursor-pointer text-[10.5px] leading-relaxed" style={{ color: fgHi('0.35') }}>
                   {language === 'ar' ? '* أوافق على ' : '* I agree to the '}
                   <button type="button" onClick={() => navigate("/privacy-terms")} className="font-bold underline decoration-dotted underline-offset-2" style={{ color: accent }}>
                     {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
@@ -1122,7 +1268,7 @@ export default function Signup() {
                     : <><Sparkles className="w-3.5 h-3.5" />{t.signup}</>
                   }
                 </button>
-                <p className="text-[11px] text-center" style={{ color: fgHi('0.35') }}>
+                <p className="text-[11px] text-center flex items-center justify-center gap-2" style={{ color: fgHi('0.35') }}>
                   {t.alreadyHaveAccount}{' '}
                   <button
                     onClick={() => navigate("/login")}
@@ -1136,12 +1282,86 @@ export default function Signup() {
             </form>
           </motion.div>
 
+          <motion.button
+            type="button"
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.16, duration: 0.4, ease: [0.22,1,0.36,1] }}
+            onClick={() => {
+              setRealXPartnerError(null);
+              setIsRealXPartnerDialogOpen(true);
+            }}
+            className="su-partner-entry mt-3 w-full max-w-sm"
+          >
+            <span className="su-realx-badge" aria-hidden="true">
+              <img src="/realx.avif" alt="" className="su-realx-logo" />
+            </span>
+            <div className={cn("flex-1", language === 'ar' ? 'text-right' : 'text-left')}>
+              <div className="su-partner-entry-copy">
+                {language === 'ar' ? 'التسجيل الطلابي عبر realX' : 'Student signup with realX'}
+              </div>
+              <div className="su-partner-entry-note">
+                {language === 'ar' ? 'افتح مسار الشريك المخصص' : 'Open the dedicated partner flow'}
+              </div>
+            </div>
+          </motion.button>
+
         </div>
       </div>
+
+      <RealXPartnerSignupDialog
+        open={isRealXPartnerDialogOpen}
+        loading={isLoading}
+        errorMessage={realXPartnerError}
+        onClose={() => {
+          setIsRealXPartnerDialogOpen(false);
+          setRealXPartnerError(null);
+        }}
+        onSubmit={handleRealXPartnerSignup}
+      />
 
       <EmailConfirmationDialog
         open={isEmailConfirmationDialogOpen}
         onClose={handleDialogClose}
+      />
+
+      <StudentVerificationDialog
+        open={studentDialogState.open}
+        language={language}
+        mode={studentDialogState.mode}
+        portalUrl={studentDialogState.portalUrl}
+        onClose={() => setStudentDialogState(prev => ({ ...prev, open: false }))}
+        onContinueRegular={async () => {
+          setStudentDialogState(prev => ({ ...prev, open: false }));
+          setIsLoading(true);
+          setErrorMsg(null);
+          try {
+            if (!pendingPartnerSignup) {
+              return;
+            }
+
+            const success = await performSignup({
+              signupEmail: pendingPartnerSignup.email,
+              signupPassword: pendingPartnerSignup.password,
+              studentSelected: true,
+              studentStatus: studentDialogState.continueStatus,
+              onError: (message) => {
+                setRealXPartnerError(message);
+                setIsRealXPartnerDialogOpen(true);
+              },
+            });
+
+            if (success) {
+              setPendingPartnerSignup(null);
+            }
+          } catch (err) {
+            console.error("Unexpected error during regular signup fallback:", err);
+            setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+            toast.error(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+          } finally {
+            setIsLoading(false);
+          }
+        }}
       />
     </>
   );
