@@ -913,7 +913,11 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
     });
 
     if (error) {
-      if (error.status === 422 || error.message?.toLowerCase().includes('weak') || error.message?.toLowerCase().includes('easy to guess')) {
+      const normalizedErrorMessage = error.message?.toLowerCase() || '';
+
+      if (normalizedErrorMessage.includes('already registered') || normalizedErrorMessage.includes('already exists')) {
+        onError(t('This email is already registered. Please log in or use a different email.', 'هذا البريد الإلكتروني مسجل بالفعل. يرجى تسجيل الدخول أو استخدام بريد إلكتروني مختلف.'));
+      } else if (normalizedErrorMessage.includes('weak') || normalizedErrorMessage.includes('easy to guess')) {
         onError(t('Please choose a different password. Try making it more unique.', 'يرجى اختيار كلمة مرور مختلفة. حاول جعلها أكثر تميزًا.'));
       } else {
         onError(error.message);

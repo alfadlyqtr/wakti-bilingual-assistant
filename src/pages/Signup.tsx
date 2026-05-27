@@ -315,9 +315,18 @@ export default function Signup() {
     if (error) {
       console.error("Signup error:", error);
 
-      if (error.status === 422 ||
-          error.message?.toLowerCase().includes('weak') ||
-          error.message?.toLowerCase().includes('easy to guess')) {
+      const normalizedErrorMessage = error.message?.toLowerCase() || '';
+
+      if (normalizedErrorMessage.includes('already registered') || normalizedErrorMessage.includes('already exists')) {
+        const existingUserMsg = language === 'en'
+          ? 'This email is already registered. Please log in or use a different email.'
+          : 'هذا البريد الإلكتروني مسجل بالفعل. يرجى تسجيل الدخول أو استخدام بريد إلكتروني مختلف.';
+        surfaceError(existingUserMsg);
+        return false;
+      }
+
+      if (normalizedErrorMessage.includes('weak') ||
+          normalizedErrorMessage.includes('easy to guess')) {
         const weakPasswordMsg = language === 'en'
           ? 'Please choose a different password. Try making it more unique.'
           : 'يرجى اختيار كلمة مرور مختلفة. حاول جعلها أكثر تميزًا.';
