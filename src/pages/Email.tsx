@@ -1,4 +1,5 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useEmailConnections, ImapConnectionHealth } from '@/hooks/useEmailConnections';
 import { EmailConnectionModal } from '@/components/email/EmailConnectionModal';
@@ -13,6 +14,9 @@ import { GmailClient } from '@/components/email/GmailClient';
 import { CustomMailClient } from '@/components/email/CustomMailClient';
 import { toast } from 'sonner';
 import { buildSignatureHtml, generateEmailSignatureHtml, prepareEmailSignatureImage, readEmailSignatureSettings, saveEmailSignatureSettings } from '@/utils/emailSignature';
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
+import type { MailComposerPreset } from '@/components/email/MailComposer';
+import { emitEvent } from '@/utils/eventBus';
 
 type EmailTab = 'settings' | 'gmail' | 'apple' | 'mail';
 
@@ -29,6 +33,7 @@ function GmailIcon({ size = 16, className = '' }: { size?: number; className?: s
 
 export default function Email() {
   const { language } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
   const emailConn = useEmailConnections();
   const storedSignatureSettings = useMemo(() => readEmailSignatureSettings(), []);
   const signatureImageInputRef = useRef<HTMLInputElement | null>(null);
@@ -47,8 +52,69 @@ export default function Email() {
   const outlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.34)] dark:hover:!bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]';
 
   const customConnections = emailConn.imap.connections;
+  const imapLoading = emailConn.imap.loading;
   const gmailConnected = emailConn.gmail.connection.connected;
   const verifiedCustomCount = customConnections.filter(connection => emailConn.imap.health[connection.id]?.status === 'verified').length;
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(searchParams.get('waktiOperator')), [searchParams]);
+  const operatorPreset = useMemo<MailComposerPreset | null>(() => {
+    if (!operatorPayload?.email) return null;
+    return {
+      to: operatorPayload.email.to,
+      cc: operatorPayload.email.cc || [],
+      subject: operatorPayload.email.subject,
+      body: operatorPayload.email.body,
+      attachments: operatorPayload.email.attachments || [],
+    };
+  }, [operatorPayload]);
+  const [pendingOperatorPreset, setPendingOperatorPreset] = useState<MailComposerPreset | null>(null);
+
+  useEffect(() => {
+    if (!operatorPreset) return;
+    setPendingOperatorPreset(operatorPreset);
+  }, [operatorPreset]);
+
+  const handleOperatorPresetConsumed = () => {
+    setPendingOperatorPreset(null);
+    if (operatorPayload?.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'completed',
+      });
+    }
+    const payloadId = searchParams.get('waktiOperator');
+    if (payloadId) {
+      clearWaktiOperatorPayload(payloadId);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('waktiOperator');
+      setSearchParams(nextParams, { replace: true });
+    }
+  };
+
+  useEffect(() => {
+    if (!operatorPayload?.email) return;
+    const preferred = operatorPayload.email.preferredProvider;
+    if (preferred === 'mail' && imapLoading) {
+      return;
+    }
+    if (preferred === 'gmail' && gmailConnected) {
+      setActiveTab('gmail');
+      return;
+    }
+    if (preferred === 'mail' && customConnections.length > 0) {
+      setActiveTab('mail');
+      return;
+    }
+    if (gmailConnected) {
+      setActiveTab('gmail');
+      return;
+    }
+    if (customConnections.length > 0) {
+      setActiveTab('mail');
+      return;
+    }
+    setActiveTab('settings');
+  }, [customConnections.length, gmailConnected, imapLoading, operatorPayload]);
 
   const t = useMemo(() => ({
     title: language === 'ar' ? 'البريد' : 'Email',
@@ -489,6 +555,8 @@ export default function Email() {
         onConnect={emailConn.gmail.initiateGmailAuth}
         onDisconnect={emailConn.gmail.disconnectGmail}
         language={language}
+        operatorPreset={activeTab === 'gmail' ? pendingOperatorPreset : null}
+        onOperatorPresetConsumed={handleOperatorPresetConsumed}
       />
     </div>
   );
@@ -540,6 +608,8 @@ export default function Email() {
         health={emailConn.imap.health}
         onOpenSettings={() => setActiveTab('settings')}
         language={language}
+        operatorPreset={activeTab === 'mail' ? pendingOperatorPreset : null}
+        onOperatorPresetConsumed={handleOperatorPresetConsumed}
       />
     </div>
   );

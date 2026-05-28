@@ -31,6 +31,12 @@ type EventMap = {
     limit?: number;
     remaining?: number;
   };
+  'wakti-operator-status': {
+    runId: string;
+    stepId: string;
+    status: 'pending' | 'running' | 'completed' | 'paused' | 'failed';
+    error?: string;
+  };
 
   // ─── Registered for type-safety, still emitted via window.dispatchEvent ─
   // Safe to migrate incrementally — the listeners already accept these shapes.

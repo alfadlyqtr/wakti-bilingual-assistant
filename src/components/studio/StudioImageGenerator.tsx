@@ -1,5 +1,6 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,6 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import ShareButton from '@/components/ui/ShareButton';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
+import type { MailComposerAttachment } from '@/components/email/MailComposer';
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload, stashWaktiOperatorPayload } from '@/utils/waktiOperator';
 import {
   Send,
   Loader2,
@@ -69,12 +72,41 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 };
 
 interface StudioImageGeneratorProps {
-  onSaveSuccess?: () => void;
+  onSaveSuccess?: (saved?: { imageId: string | null; imageUrl: string | null }) => void;
+}
+
+async function remoteImageToAttachment(url: string, fallbackName = 'wakti-generated-image.jpg'): Promise<MailComposerAttachment> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error('Failed to load the saved image for email handoff');
+  }
+  const blob = await response.blob();
+  return await new Promise<MailComposerAttachment>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const content = result.includes(',') ? result.split(',')[1] || '' : result;
+      resolve({
+        name: fallbackName,
+        contentType: blob.type || 'image/jpeg',
+        content,
+      });
+    };
+    reader.onerror = () => reject(reader.error || new Error('Failed to read the saved image'));
+    reader.readAsDataURL(blob);
+  });
 }
 
 export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGeneratorProps) {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { language } = useTheme();
   const { user } = useAuth();
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
+  const operatorSetupRef = useRef<string | null>(null);
+  const operatorAutoGenerateRef = useRef<string | null>(null);
+  const operatorAutoSaveRef = useRef<string | null>(null);
 
   // Submode & quality
   const [submode, setSubmode] = useState<ImageSubmode>('text2image');
@@ -707,7 +739,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         toast.success(language === 'ar' ? 'تم الحفظ بالفعل' : 'Already saved');
       }
       if (triggerSaveSuccess) {
-        onSaveSuccess?.();
+        onSaveSuccess?.({ imageId: savedImageId, imageUrl: savedBucketUrl || imageUrl });
       }
       return { success: true, imageId: savedImageId, imageUrl: savedBucketUrl || imageUrl };
     }
@@ -766,7 +798,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         toast.success(language === 'ar' ? 'تم الحفظ' : 'Saved');
       }
       if (triggerSaveSuccess) {
-        onSaveSuccess?.();
+        onSaveSuccess?.({ imageId: resolvedImageId, imageUrl: bucketUrl || imageUrl });
       }
       return { success: true, imageId: resolvedImageId, imageUrl: bucketUrl || imageUrl };
     } catch (err: any) {
@@ -779,6 +811,20 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       setIsSaving(false);
     }
   }, [user?.id, isSaved, savedImageId, savedBucketUrl, savedSourceUrl, submode, prompt, quality, language, onSaveSuccess, storeGeneratedImageAsset]);
+
+  useEffect(() => {
+    if (!operatorPayloadId || !operatorPayload?.image) return;
+    if (operatorSetupRef.current === operatorPayloadId) return;
+    operatorSetupRef.current = operatorPayloadId;
+    setSubmode(operatorPayload.image.submode || 'text2image');
+    setPrompt(operatorPayload.image.prompt || '');
+    if (operatorPayload.image.autoGenerate) {
+      setQuality('fast');
+    }
+    if (operatorPayload.image.autoGenerate) {
+      operatorAutoGenerateRef.current = operatorPayloadId;
+    }
+  }, [operatorPayload, operatorPayloadId]);
 
   const selectQuickResult = useCallback((index: number) => {
     const nextUrl = resultUrls[index];
@@ -795,6 +841,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const handleGenerate = useCallback(async () => {
     if (generateLockRef.current || isGenerating) {
       return;
+    }
+
+    if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.generateStepId,
+        status: 'running',
+      });
     }
 
     if (submode === 'draw') {
@@ -859,24 +913,133 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         generatedUrl = url;
         setResultImageUrl(url);
       }
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.generateStepId,
+          status: 'completed',
+        });
+      }
     } catch (err: any) {
       stopProgress();
       const msg = err?.message || (language === 'ar' ? 'فشل إنشاء الصورة' : 'Image generation failed');
       setResultError(msg);
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.generateStepId,
+          status: 'failed',
+          error: msg,
+        });
+      }
       toast.error(msg);
     } finally {
       setIsGenerating(false);
       generateLockRef.current = false;
     }
     // Auto-save is fire-and-forget — skip for Quick (Grok) since user must choose which image to save
-    if (generatedUrl && quality !== 'quick' && submode !== 'visual-ads') {
+    if (generatedUrl && quality !== 'quick' && submode !== 'visual-ads' && !operatorPayload?.image?.autoSave) {
       persistGeneratedImage(generatedUrl, {
         showSuccessToast: false,
         showAlreadySavedToast: false,
         triggerSaveSuccess: false,
       }).catch(() => { /* silent */ });
     }
-  }, [submode, prompt, quality, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4, language, persistGeneratedImage]);
+  }, [submode, prompt, quality, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4, language, operatorPayload, persistGeneratedImage]);
+
+  useEffect(() => {
+    if (!operatorPayloadId || !operatorPayload?.image?.autoGenerate) return;
+    if (operatorAutoGenerateRef.current !== operatorPayloadId) return;
+    if ((prompt || '').trim() !== (operatorPayload.image.prompt || '').trim()) return;
+    operatorAutoGenerateRef.current = null;
+    window.setTimeout(() => {
+      handleGenerate().catch((error) => {
+        console.error('Operator image generation failed:', error);
+      });
+    }, 180);
+  }, [handleGenerate, operatorPayload, operatorPayloadId, prompt]);
+
+  useEffect(() => {
+    if (!operatorPayloadId || !operatorPayload?.image?.autoSave || !resultImageUrl) return;
+    if (isSaving || isSaved) return;
+    if (operatorAutoSaveRef.current === resultImageUrl) return;
+    operatorAutoSaveRef.current = resultImageUrl;
+    if (operatorPayload.runId && operatorPayload.stepRefs?.saveStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.saveStepId,
+        status: 'running',
+      });
+    }
+    persistGeneratedImage(resultImageUrl, {
+      showSuccessToast: false,
+      showAlreadySavedToast: false,
+      triggerSaveSuccess: true,
+    }).then(async (saved) => {
+      if (!saved.success) {
+        if (operatorPayload.runId && operatorPayload.stepRefs?.saveStepId) {
+          emitEvent('wakti-operator-status', {
+            runId: operatorPayload.runId,
+            stepId: operatorPayload.stepRefs.saveStepId,
+            status: 'failed',
+            error: language === 'ar' ? 'فشل حفظ الصورة' : 'Failed to save the image',
+          });
+        }
+        return;
+      }
+      if (operatorPayload.runId && operatorPayload.stepRefs?.saveStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.saveStepId,
+          status: 'completed',
+        });
+      }
+      if (operatorPayload.image?.nextEmailDraft && saved.imageUrl) {
+        try {
+          const attachment = await remoteImageToAttachment(saved.imageUrl);
+          const nextPayloadId = stashWaktiOperatorPayload({
+            runId: operatorPayload.runId,
+            stepId: operatorPayload.stepRefs?.handoffStepId || operatorPayload.stepId,
+            transcript: operatorPayload.transcript,
+            summary: operatorPayload.summary,
+            stepRefs: operatorPayload.stepRefs,
+            source: operatorPayload.source,
+            email: {
+              ...operatorPayload.image.nextEmailDraft,
+              attachments: [
+                ...(operatorPayload.image.nextEmailDraft.attachments || []),
+                attachment,
+              ],
+            },
+          });
+          clearWaktiOperatorPayload(operatorPayloadId);
+          navigate(`/tools/email?waktiOperator=${nextPayloadId}`);
+          return;
+        } catch (attachmentError) {
+          console.error('Operator email handoff failed:', attachmentError);
+          if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+            emitEvent('wakti-operator-status', {
+              runId: operatorPayload.runId,
+              stepId: operatorPayload.stepRefs.handoffStepId,
+              status: 'failed',
+              error: language === 'ar' ? 'فشل تجهيز البريد' : 'Failed to prepare the email handoff',
+            });
+          }
+        }
+      }
+      clearWaktiOperatorPayload(operatorPayloadId);
+    }).catch((error) => {
+      console.error('Operator auto-save failed:', error);
+      if (operatorPayload.runId && operatorPayload.stepRefs?.saveStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.saveStepId,
+          status: 'failed',
+          error: error instanceof Error ? error.message : (language === 'ar' ? 'فشل حفظ الصورة' : 'Failed to save the image'),
+        });
+      }
+    });
+  }, [isSaved, isSaving, language, navigate, operatorPayload, operatorPayloadId, persistGeneratedImage, resultImageUrl]);
 
   // ─── Amp prompt ───
   const handleAmp = async () => {
@@ -1009,7 +1172,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         }
       }
       toast.success(language === 'ar' ? `تم حفظ ${successCount} صورة` : `Saved ${successCount} images`);
-      onSaveSuccess?.();
+      onSaveSuccess?.({ imageId: savedImageId, imageUrl: savedBucketUrl || resultImageUrl });
     } catch (err: any) {
       console.error('Save all failed:', err);
       toast.error(language === 'ar' ? 'فشل حفظ بعض الصور' : 'Failed to save some images');

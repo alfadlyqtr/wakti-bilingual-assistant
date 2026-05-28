@@ -27,6 +27,7 @@ import { useUserProfile } from "@/hooks/useUserProfile";
 import { WeatherButton } from "@/components/WeatherButton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { getScopedStorageItem } from "@/utils/userScopedStorage";
+import { useWaktiOperator } from "@/contexts/WaktiOperatorContext";
 
 interface AppHeaderProps {
   unreadTotal?: number;
@@ -35,6 +36,7 @@ interface AppHeaderProps {
 export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
   const { user, signOut } = useAuth();
+  const { isOpen: isOperatorOpen, stage: operatorStage, close: closeOperator, startRecording } = useWaktiOperator();
   const { profile, loading: profileLoading, refetch: refetchProfile } = useUserProfile();
   const navigate = useNavigate();
   const location = useLocation();
@@ -267,6 +269,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const [bgCurrentTime, setBgCurrentTime] = useState(0);
   const [bgDuration, setBgDuration] = useState(0);
   const miniPlayerRef = useRef<HTMLDivElement>(null);
+  const operatorBusy = operatorStage === 'recording' || operatorStage === 'transcribing' || operatorStage === 'planning' || operatorStage === 'executing';
 
   useEffect(() => {
     const offIndicator = onEvent('wakti-bg-music-indicator-on', () => {
@@ -558,6 +561,38 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
 
           {/* Weather Button - Made smaller */}
           <WeatherButton />
+
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => { if (isOperatorOpen) closeOperator(); else startRecording().catch(() => {}); }}
+                  className={cn(
+                    "relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border transition-all active:scale-95",
+                    operatorBusy
+                      ? "border-cyan-300/60 ring-2 ring-cyan-300/25 shadow-[0_0_18px_rgba(56,189,248,0.35)]"
+                      : "border-black/10 dark:border-white/15 shadow-sm hover:shadow-md"
+                  )}
+                  aria-label={language === 'ar' ? 'افتح مشغل وكتي' : 'Open Wakti Operator'}
+                >
+                  <img
+                    src="/wakti-image-1779978811747.jpg"
+                    alt="Wakti Operator"
+                    className="h-full w-full object-cover"
+                  />
+                  {operatorBusy ? (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px]">
+                      <Sparkles className="h-4 w-4 text-white drop-shadow-[0_0_8px_rgba(56,189,248,0.75)]" />
+                    </span>
+                  ) : null}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{language === 'ar' ? 'مشغل وكتي' : 'Wakti Operator'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           
           {/* Language Toggle Button - always enabled */}
           <TooltipProvider>

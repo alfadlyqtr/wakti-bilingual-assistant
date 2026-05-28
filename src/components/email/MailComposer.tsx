@@ -33,12 +33,21 @@ export interface MailComposerSubmitInput {
   threadId?: string;
 }
 
+export interface MailComposerPreset {
+  to?: string[];
+  cc?: string[];
+  subject?: string;
+  body?: string;
+  attachments?: MailComposerAttachment[];
+}
+
 interface MailComposerProps {
   onClose: () => void;
   onSend: (input: MailComposerSubmitInput) => Promise<boolean>;
   replyTo?: MailComposerReplyTo;
   fromLabel?: string | null;
   initialBody?: string;
+  preset?: MailComposerPreset | null;
 }
 
 const COMPRESSIBLE_IMAGE_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/webp', 'image/png']);
@@ -631,18 +640,18 @@ function buildComposeAiPrompt(params: {
   ].filter(Boolean).join('\n\n');
 }
 
-export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody = '' }: MailComposerProps) {
+export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody = '', preset = null }: MailComposerProps) {
   const navigate = useNavigate();
   const { language } = useTheme();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [signatureSettings, setSignatureSettings] = useState<EmailSignatureSettings>(() => readEmailSignatureSettings());
-  const [to, setTo] = useState(replyTo?.to || '');
-  const [cc, setCc] = useState('');
-  const [subject, setSubject] = useState(replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : '');
-  const [body, setBody] = useState(initialBody);
+  const [to, setTo] = useState((preset?.to || []).join(', ') || replyTo?.to || '');
+  const [cc, setCc] = useState((preset?.cc || []).join(', '));
+  const [subject, setSubject] = useState(preset?.subject || (replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : ''));
+  const [body, setBody] = useState(preset?.body ?? initialBody);
   const [sending, setSending] = useState(false);
   const [loadingAttachments, setLoadingAttachments] = useState(false);
-  const [attachments, setAttachments] = useState<MailComposerAttachment[]>([]);
+  const [attachments, setAttachments] = useState<MailComposerAttachment[]>(preset?.attachments || []);
   const [attachSourceOpen, setAttachSourceOpen] = useState(false);
   const [savedPickerOpen, setSavedPickerOpen] = useState(false);
   const [includeSignature, setIncludeSignature] = useState(() => readEmailSignatureSettings().enabled);
@@ -660,10 +669,12 @@ export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody 
   const defaultComposeAiLanguage: ComposeAiLanguage = uiLang === 'ar' ? 'ar' : 'en';
 
   useEffect(() => {
-    setTo(replyTo?.to || '');
-    setSubject(replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : '');
-    setBody(initialBody);
-  }, [initialBody, replyTo]);
+    setTo((preset?.to || []).join(', ') || replyTo?.to || '');
+    setCc((preset?.cc || []).join(', '));
+    setSubject(preset?.subject || (replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : ''));
+    setBody(preset?.body ?? initialBody);
+    setAttachments(preset?.attachments || []);
+  }, [initialBody, preset, replyTo]);
 
   useEffect(() => {
     const refreshSignatureSettings = () => {

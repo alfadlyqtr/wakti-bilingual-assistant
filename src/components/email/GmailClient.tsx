@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useGmailMessages, GmailMessage, GmailMessageFull, GmailLabel } from '@/hooks/useGmailMessages';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MailComposer, MailComposerSubmitInput } from '@/components/email/MailComposer';
+import { MailComposer, MailComposerPreset, MailComposerSubmitInput } from '@/components/email/MailComposer';
 import { EmailAiAssistant } from '@/components/email/EmailAiAssistant';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
@@ -252,9 +252,11 @@ interface GmailClientProps {
   onConnect: () => void;
   onDisconnect: () => void;
   language?: string;
+  operatorPreset?: MailComposerPreset | null;
+  onOperatorPresetConsumed?: () => void;
 }
 
-export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, language = 'en' }: GmailClientProps) {
+export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, language = 'en', operatorPreset = null, onOperatorPresetConsumed }: GmailClientProps) {
   const gmail = useGmailMessages();
   const [selectedMessage, setSelectedMessage] = useState<GmailMessageFull | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(false);
@@ -263,6 +265,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
   const [showCompose, setShowCompose] = useState(false);
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string; threadId: string } | undefined>();
   const [composerInitialBody, setComposerInitialBody] = useState('');
+  const [activePreset, setActivePreset] = useState<MailComposerPreset | null>(operatorPreset);
   const [customFolders, setCustomFolders] = useState<GmailLabel[]>([]);
   const [showFolders, setShowFolders] = useState(false);
   const [deletingMessage, setDeletingMessage] = useState(false);
@@ -313,6 +316,15 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
     }
   }, [gmail.labels]);
 
+  useEffect(() => {
+    if (!operatorPreset) return;
+    setReplyTo(undefined);
+    setComposerInitialBody(operatorPreset.body || '');
+    setActivePreset(operatorPreset);
+    setShowCompose(true);
+    onOperatorPresetConsumed?.();
+  }, [onOperatorPresetConsumed, operatorPreset]);
+
   const handleOpenMessage = async (msg: GmailMessage) => {
     setLoadingMessage(true);
     const full = await gmail.fetchMessage(msg.id);
@@ -349,6 +361,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
     setShowCompose(false);
     setReplyTo(undefined);
     setComposerInitialBody('');
+    setActivePreset(null);
   };
 
   const handleUseAiReply = useCallback((text: string) => {
@@ -672,6 +685,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
           replyTo={replyTo}
           fromLabel={emailAddress || 'Gmail'}
           initialBody={composerInitialBody}
+          preset={activePreset}
         />
       )}
     </div>

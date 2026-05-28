@@ -3,7 +3,7 @@ import { useImapMessages, ImapMessage, ImapMessageFull } from '@/hooks/useImapMe
 import { ImapConnection, ImapConnectionHealth } from '@/hooks/useEmailConnections';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MailComposer, MailComposerSubmitInput } from '@/components/email/MailComposer';
+import { MailComposer, MailComposerPreset, MailComposerSubmitInput } from '@/components/email/MailComposer';
 import { EmailAiAssistant } from '@/components/email/EmailAiAssistant';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
@@ -258,9 +258,11 @@ interface CustomMailClientProps {
   health: Record<string, ImapConnectionHealth>;
   onOpenSettings: () => void;
   language?: string;
+  operatorPreset?: MailComposerPreset | null;
+  onOperatorPresetConsumed?: () => void;
 }
 
-export function CustomMailClient({ connections, health, onOpenSettings, language = 'en' }: CustomMailClientProps) {
+export function CustomMailClient({ connections, health, onOpenSettings, language = 'en', operatorPreset = null, onOperatorPresetConsumed }: CustomMailClientProps) {
   const [activeConnectionId, setActiveConnectionId] = useState(
     connections.find(c => c.is_primary)?.id || connections[0]?.id || ''
   );
@@ -274,6 +276,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
   const [showCompose, setShowCompose] = useState(false);
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string } | undefined>();
   const [composerInitialBody, setComposerInitialBody] = useState('');
+  const [activePreset, setActivePreset] = useState<MailComposerPreset | null>(operatorPreset);
   const [deletingMessage, setDeletingMessage] = useState(false);
   const [deletingRowUid, setDeletingRowUid] = useState<number | null>(null);
 
@@ -359,6 +362,15 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
     return () => window.clearInterval(intervalId);
   }, [activeConnectionId, imap.activeFolder, imap.fetchMessages]);
 
+  useEffect(() => {
+    if (!operatorPreset) return;
+    setReplyTo(undefined);
+    setComposerInitialBody(operatorPreset.body || '');
+    setActivePreset(operatorPreset);
+    setShowCompose(true);
+    onOperatorPresetConsumed?.();
+  }, [onOperatorPresetConsumed, operatorPreset]);
+
   const handleOpenMessage = async (msg: ImapMessage) => {
     setLoadingMessage(true);
     setSelectedMessage(null);
@@ -399,6 +411,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
     setShowCompose(false);
     setReplyTo(undefined);
     setComposerInitialBody('');
+    setActivePreset(null);
   };
 
   const handleUseAiReply = useCallback((text: string) => {
@@ -729,6 +742,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
           replyTo={replyTo}
           fromLabel={activeEmail || activeConn?.display_name || 'Custom mail'}
           initialBody={composerInitialBody}
+          preset={activePreset}
         />
       )}
     </div>

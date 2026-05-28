@@ -78,6 +78,7 @@ import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
 import SavedImagesTab from '@/components/studio/SavedImagesTab';
 import QRCodeCreator from '@/components/studio/QRCodeCreator';
 import { useLocation, useSearchParams } from 'react-router-dom';
+import { readWaktiOperatorPayload } from '@/utils/waktiOperator';
 
 const normalizeAudioUrl = (url: string) => {
   if (!url) return '';
@@ -1047,6 +1048,8 @@ export default function MusicStudio() {
   const { user: authUser } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(searchParams.get('waktiOperator')), [searchParams]);
+  const operatorMusicAutoRunRef = useRef<string | null>(null);
 
   useEffect(() => {
     const node = topTabsRef.current;
@@ -1087,6 +1090,14 @@ export default function MusicStudio() {
   }, [location.state]);
 
   useEffect(() => {
+    if (searchParams.get('operatorTarget') === 'image') {
+      setMainTab('image');
+      setImageMode('create');
+    }
+    if (searchParams.get('operatorTarget') === 'music') {
+      setMainTab('music');
+      setMusicSubTab('compose');
+    }
     if (searchParams.get('subtab') === 'editor') {
       setMainTab('music');
       setMusicSubTab('editor');
@@ -2386,6 +2397,39 @@ function VoicesTab({
   const [autoLabelLyrics, setAutoLabelLyrics] = useState(true); // ON by default; power users can disable
   const [variations, setVariations] = useState(1);
   const [duration, setDuration] = useState(30); // seconds
+
+  useEffect(() => {
+    if (!operatorPayload?.music) return;
+    setMainTab('music');
+    setMusicSubTab('compose');
+    setTitle((current) => current || operatorPayload.music?.title || '');
+    setLyricsText((current) => current || operatorPayload.music?.lyrics || '');
+    setTitleOpen(true);
+    setMusicStyleOpen(false);
+    setVocalsOpen(false);
+    setLyricsOpen(false);
+    if (operatorPayload.music.autoGenerate) {
+      operatorMusicAutoRunRef.current = operatorPayload.stepId;
+    }
+  }, [operatorPayload]);
+
+  useEffect(() => {
+    if (!operatorPayload?.stepRefs?.openStepId) return;
+    if (searchParams.get('operatorTarget') === 'image' && mainTab === 'image' && imageMode === 'create') {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.openStepId,
+        status: 'completed',
+      });
+    }
+    if (searchParams.get('operatorTarget') === 'music' && mainTab === 'music' && musicSubTab === 'compose') {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.openStepId,
+        status: 'completed',
+      });
+    }
+  }, [imageMode, mainTab, musicSubTab, operatorPayload, searchParams]);
   
   // Preset styles list (genres only)
   const STYLE_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
@@ -6343,8 +6387,23 @@ function VoicesTab({
 
   const handleGenerate = async () => {
     if (overLimit) return;
+    if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.generateStepId,
+        status: 'running',
+      });
+    }
     if (!title.trim()) {
       toast.error(isAr ? 'العنوان مطلوب' : 'Title is required');
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.generateStepId,
+          status: 'failed',
+          error: isAr ? 'العنوان مطلوب' : 'Title is required',
+        });
+      }
       setTitleOpen(true);
       setMusicStyleOpen(false);
       setVocalsOpen(false);
@@ -6353,6 +6412,14 @@ function VoicesTab({
     }
     if (vocalType !== 'none' && !lyricsText.trim()) {
       toast.error(isAr ? 'الكلمات مطلوبة أو اختر موسيقى بدون كلمات' : 'Lyrics are required, or choose Instrumental');
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.generateStepId,
+          status: 'failed',
+          error: isAr ? 'الكلمات مطلوبة' : 'Lyrics are required',
+        });
+      }
       setTitleOpen(false);
       setMusicStyleOpen(false);
       setVocalsOpen(false);
@@ -6362,6 +6429,14 @@ function VoicesTab({
     if (vocalType === 'custom') {
       if (!selectedMusicVoice || selectedMusicVoice.status !== 'ready' || !selectedMusicVoice.kieVoiceId) {
         toast.error(isAr ? 'الصوت المخصص غير جاهز بعد. افتح تبويب الأصوات وتحقق من الحالة.' : 'Custom voice is not ready yet. Open the Voices tab and check its status.');
+        if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+          emitEvent('wakti-operator-status', {
+            runId: operatorPayload.runId,
+            stepId: operatorPayload.stepRefs.generateStepId,
+            status: 'failed',
+            error: isAr ? 'الصوت المخصص غير جاهز' : 'Custom voice is not ready yet',
+          });
+        }
         return;
       }
     }
@@ -6396,6 +6471,14 @@ function VoicesTab({
             ? `لقد وصلت إلى الحد الأقصى: ${used} من ${limit} أغاني هذا الشهر`
             : `Monthly limit reached: ${used} of ${limit} songs this month`
         );
+        if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+          emitEvent('wakti-operator-status', {
+            runId: operatorPayload.runId,
+            stepId: operatorPayload.stepRefs.generateStepId,
+            status: 'failed',
+            error: language === 'ar' ? 'تم الوصول إلى الحد الشهري' : 'Monthly limit reached',
+          });
+        }
         setSubmitting(false);
         return;
       }
@@ -6803,6 +6886,13 @@ function VoicesTab({
         if (songsRemaining <= 1) {
           emitEvent('wakti-trial-quota-finished', { feature: 'music', consumed: 1, limit: 1, remaining: 0 });
         }
+        if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+          emitEvent('wakti-operator-status', {
+            runId: operatorPayload.runId,
+            stepId: operatorPayload.stepRefs.generateStepId,
+            status: 'completed',
+          });
+        }
         setSubmitting(false);
         setGeneratingTask(null);
         setGeneratedTracks(tracks);
@@ -6828,6 +6918,14 @@ function VoicesTab({
       const msg = e?.message || String(e);
       setLastError(msg);
       setSubmitting(false);
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.generateStepId,
+          status: 'failed',
+          error: msg,
+        });
+      }
       toast.error((language === 'ar' ? 'فشل العملية: ' : 'Operation failed: ') + msg);
     }
   };
@@ -6856,6 +6954,13 @@ function VoicesTab({
       setSongsRemaining((v) => Math.max(0, v - 1));
       setLastError(null);
       setLastNotice(null);
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.generateStepId,
+          status: 'completed',
+        });
+      }
       toast.success(language === 'ar' ? 'تم إنشاء الموسيقى بنجاح!' : 'Music generated successfully!');
     };
 
@@ -6866,6 +6971,14 @@ function VoicesTab({
       setSubmitting(false);
       setLastError(msg);
       setLastNotice(null);
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.generateStepId,
+          status: 'failed',
+          error: msg,
+        });
+      }
       toast.error(msg);
     };
 
@@ -6963,6 +7076,20 @@ function VoicesTab({
       supabase.removeChannel(channel);
     };
   }, [generatingTask, language]);
+
+  useEffect(() => {
+    if (!operatorPayload?.music?.autoGenerate) return;
+    if (operatorMusicAutoRunRef.current !== operatorPayload.stepId) return;
+    if ((title || '').trim() !== (operatorPayload.music.title || '').trim()) return;
+    if ((lyricsText || '').trim() !== (operatorPayload.music.lyrics || '').trim()) return;
+    if (submitting) return;
+    operatorMusicAutoRunRef.current = null;
+    window.setTimeout(() => {
+      handleGenerate().catch((error) => {
+        console.error('Operator music generation failed:', error);
+      });
+    }, 180);
+  }, [handleGenerate, lyricsText, operatorPayload, submitting, title]);
 
   // Position and outside-click handling for pickers
   useEffect(() => {

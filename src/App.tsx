@@ -13,6 +13,7 @@ import AdminRouter from "@/routes/AdminRouter";
 import ConsumerRouter from "@/routes/ConsumerRouter";
 import { ColorBlindFilters } from "@/components/accessibility/ColorBlindFilters";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { WaktiOperatorOverlay, WaktiOperatorProvider } from "@/contexts/WaktiOperatorContext";
 
 import "./App.css";
 
@@ -100,11 +101,14 @@ function App() {
             <AuthProvider>
               <UserProfileProvider>
                 <BrowserRouter>
-                  <ColorBlindFilters />
-                  <div className="bg-background font-sans antialiased">
-                    <ConsumerRouter />
-                    <AppStoreBanner position="bottom" dismissible={true} />
-                  </div>
+                  <WaktiOperatorProvider>
+                    <ColorBlindFilters />
+                    <div className="bg-background font-sans antialiased">
+                      <ConsumerRouter />
+                      <AppStoreBanner position="bottom" dismissible={true} />
+                    </div>
+                    <WaktiOperatorOverlay />
+                  </WaktiOperatorProvider>
                 </BrowserRouter>
               </UserProfileProvider>
             </AuthProvider>
