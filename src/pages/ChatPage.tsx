@@ -4,10 +4,12 @@
  * Displays chat with a contact in full-screen with back navigation
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
+import { emitEvent } from "@/utils/eventBus";
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from "@/utils/waktiOperator";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -29,8 +31,10 @@ const MAX_CHARS = 200;
 export default function ChatPage() {
   const { contactId } = useParams<{ contactId: string }>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { language, theme } = useTheme();
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
   
   const [messageText, setMessageText] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -45,6 +49,7 @@ export default function ChatPage() {
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [operatorDraftApplied, setOperatorDraftApplied] = useState(false);
 
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
@@ -56,6 +61,14 @@ export default function ChatPage() {
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const isContactOnline = contactId ? isOnline(contactId) : false;
   const entrySource = searchParams.get("from");
+
+  const clearOperatorFlow = useCallback(() => {
+    if (!operatorPayloadId) return;
+    clearWaktiOperatorPayload(operatorPayloadId);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('waktiOperator');
+    setSearchParams(nextParams, { replace: true });
+  }, [operatorPayloadId, searchParams, setSearchParams]);
 
   // Auto scroll to bottom on new messages
   const scrollToBottom = () => {
@@ -70,6 +83,49 @@ export default function ChatPage() {
     }
     getUserId();
   }, []);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.openStepId,
+      status: 'completed',
+    });
+  }, [operatorPayload?.runId, operatorPayload?.stepRefs?.openStepId]);
+
+  useEffect(() => {
+    if (!operatorPayload?.chat?.draftMessage || operatorDraftApplied) return;
+    setMessageText((current) => current || operatorPayload.chat?.draftMessage || '');
+    setOperatorDraftApplied(true);
+    if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'running',
+      });
+    }
+  }, [operatorDraftApplied, operatorPayload]);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.handoffStepId || operatorPayload?.chat?.draftMessage) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.handoffStepId,
+      status: 'completed',
+    });
+    clearOperatorFlow();
+  }, [clearOperatorFlow, operatorPayload]);
+
+  useEffect(() => {
+    emitEvent('wakti-operator-visual-mode', {
+      mode: operatorPayload ? 'subtle' : 'default',
+    });
+    return () => {
+      emitEvent('wakti-operator-visual-mode', {
+        mode: 'default',
+      });
+    };
+  }, [operatorPayload]);
 
   // Fetch contact profile
   useEffect(() => {
@@ -198,6 +254,14 @@ export default function ChatPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
       scrollToBottom();
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.handoffStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.handoffStepId,
+          status: 'completed',
+        });
+        clearOperatorFlow();
+      }
     },
     onError: (error) => {
       console.error("Error sending message:", error);

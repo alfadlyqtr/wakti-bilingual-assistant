@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
+import type { WaktiOperatorRoutePayload } from "@/utils/waktiOperator";
 import { MessageSquare, Star, UserX, Trash2, Gift, Images, User, LayoutList, LayoutGrid } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getContacts, blockContact, deleteContact, toggleContactFavorite } from "@/services/contactsService";
@@ -57,6 +58,8 @@ interface ContactListProps {
   source?: "contacts" | "social";
   viewMode?: "contacts" | "cards";
   showViewToggle?: boolean;
+  operatorPayload?: WaktiOperatorRoutePayload | null;
+  operatorPayloadId?: string | null;
 }
 
 export function ContactList({ 
@@ -68,6 +71,8 @@ export function ContactList({
   source = "contacts",
   viewMode,
   showViewToggle = true,
+  operatorPayload = null,
+  operatorPayloadId = null,
 }: ContactListProps) {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -202,6 +207,35 @@ export function ContactList({
       setChatOpen(true);
     }
   };
+
+  useEffect(() => {
+    const targetName = operatorPayload?.chat?.targetContactName?.trim();
+    if (!operatorPayloadId || !targetName || !contacts || contacts.length === 0) return;
+
+    const normalize = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s@._-]/gu, ' ').replace(/\s+/g, ' ').trim();
+    const normalizedTarget = normalize(targetName);
+    if (!normalizedTarget) return;
+
+    const scoredContacts = contacts
+      .map((contact: any) => {
+        const profile = contact.profile || {};
+        const username = normalize(profile.username || '');
+        const displayName = normalize(profile.display_name || '');
+        const exactDisplay = displayName && displayName === normalizedTarget;
+        const exactUsername = username && username === normalizedTarget;
+        const containsDisplay = displayName && displayName.includes(normalizedTarget);
+        const containsUsername = username && username.includes(normalizedTarget);
+        const score = exactDisplay ? 100 : exactUsername ? 96 : containsDisplay ? 88 : containsUsername ? 82 : 0;
+        return { contact, score };
+      })
+      .filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score);
+
+    const bestMatch = scoredContacts[0]?.contact;
+    if (!bestMatch?.contact_id) return;
+
+    navigate(`/contacts/${bestMatch.contact_id}?waktiOperator=${operatorPayloadId}&from=operator`, { replace: true });
+  }, [contacts, navigate, operatorPayload?.chat?.targetContactName, operatorPayloadId]);
 
   const handleToggleFavorite = (favoriteRecordId: string | null | undefined, isCurrentlyFavorite: boolean) => {
     if (!favoriteRecordId) {

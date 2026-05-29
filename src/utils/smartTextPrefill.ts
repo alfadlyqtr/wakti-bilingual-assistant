@@ -1,4 +1,4 @@
-export type SmartTextPrefillTab = 'compose' | 'reply' | 'generated';
+export type SmartTextPrefillTab = 'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4';
 
 export interface SmartTextPrefill {
   tab: SmartTextPrefillTab;
@@ -55,7 +55,7 @@ export function consumeSmartTextPrefill(): SmartTextPrefill | null {
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed !== 'object') return null;
     const tab = parsed.tab;
-    if (tab !== 'compose' && tab !== 'reply' && tab !== 'generated') return null;
+    if (tab !== 'compose' && tab !== 'reply' && tab !== 'generated' && tab !== 'diagrams' && tab !== 'presentation' && tab !== 'translate' && tab !== 'a4') return null;
     return parsed as SmartTextPrefill;
   } catch {
     return null;

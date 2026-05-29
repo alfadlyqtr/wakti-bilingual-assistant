@@ -98,6 +98,15 @@ serve(async (req) => {
     const type = ((payload.callbackType || payload.type || "") as string).toLowerCase();
 
     console.log(`[music-callback] taskId=${taskId}, status=${status}, type=${type}`);
+    console.log("[music-callback] callback shape", {
+      taskId,
+      status,
+      type,
+      payloadDataLength: Array.isArray(payload.data) ? payload.data.length : null,
+      responseSunoDataLength: Array.isArray(payload.response?.sunoData) ? payload.response?.sunoData.length : null,
+      parsedKeys: typeof parsed === "object" && parsed ? Object.keys(parsed) : [],
+      payloadKeys: typeof payload === "object" && payload ? Object.keys(payload) : [],
+    });
 
     if (!taskId) {
       return new Response(JSON.stringify({ ok: false, error: "Missing taskId" }), {
@@ -117,10 +126,37 @@ serve(async (req) => {
       const normalizedTracks = sunoData.map(normalizeTrack).filter((track) => track.audioUrl);
 
       if (normalizedTracks.length === 0) {
-        console.warn(`[music-callback] SUCCESS but no sunoData for taskId=${taskId}`);
+        const { data: existingRows, error: fetchError } = await supabaseService
+          .from("user_music_tracks")
+          .select("id, meta")
+          .eq("task_id", taskId)
+          .limit(1);
+        const placeholderRow = existingRows?.[0] ?? null;
+        console.error("[music-callback] SUCCESS but no audio tracks", {
+          taskId,
+          status,
+          type,
+          payloadDataLength: Array.isArray(payload.data) ? payload.data.length : null,
+          responseSunoDataLength: Array.isArray(payload.response?.sunoData) ? payload.response?.sunoData.length : null,
+          requestPayload: placeholderRow?.meta?.request_payload ?? null,
+          fetchError: fetchError?.message ?? null,
+        });
+        const existingMeta = placeholderRow?.meta && typeof placeholderRow.meta === "object" ? placeholderRow.meta : {};
         await supabaseService
           .from("user_music_tracks")
-          .update({ meta: { status: "failed", error: "No audio data returned" } })
+          .update({
+            meta: {
+              ...existingMeta,
+              status: "failed",
+              error: "No audio data returned",
+              callback_status: status || null,
+              callback_type: type || null,
+              callback_debug: {
+                payloadDataLength: Array.isArray(payload.data) ? payload.data.length : null,
+                responseSunoDataLength: Array.isArray(payload.response?.sunoData) ? payload.response?.sunoData.length : null,
+              },
+            },
+          })
           .eq("task_id", taskId)
           .eq("meta->>status", "generating");
 
@@ -164,12 +200,23 @@ serve(async (req) => {
       const failureMessage = payload.errorMessage || payload.errorCode || parsed?.msg || "Generation failed";
       console.error(`[music-callback] Task failed taskId=${taskId}:`, failureMessage);
 
+      const { data: existingRows } = await supabaseService
+        .from("user_music_tracks")
+        .select("id, meta")
+        .eq("task_id", taskId)
+        .limit(1);
+      const placeholderRow = existingRows?.[0] ?? null;
+      const existingMeta = placeholderRow?.meta && typeof placeholderRow.meta === "object" ? placeholderRow.meta : {};
+
       await supabaseService
         .from("user_music_tracks")
         .update({
           meta: {
+            ...existingMeta,
             status: "failed",
             error: failureMessage,
+            callback_status: status || null,
+            callback_type: type || null,
           },
         })
         .eq("task_id", taskId);

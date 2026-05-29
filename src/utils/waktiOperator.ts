@@ -1,4 +1,5 @@
 import type { MailComposerAttachment } from '@/components/email/MailComposer';
+import type { SmartTextPrefill, SmartTextPrefillTab } from '@/utils/smartTextPrefill';
 import { getWaktiCapabilityGuide, getWaktiCapabilityRouteLabel, getWaktiCapabilitySteps, getWaktiCapabilitySupportSummary, getWaktiCapabilityTitle, type WaktiCapability } from '@/utils/waktiCapabilities';
 import { analyzeWaktiOperatorIntent, type WaktiOperatorIntentKind } from '@/utils/waktiOperatorIntent';
 import { saveTRPrefill, type TRPrefill, type TRReminderPrefillDraft, type TRTaskPrefillDraft } from '@/utils/trPrefill';
@@ -17,7 +18,11 @@ export type WaktiOperatorStepKind =
   | 'save_image'
   | 'open_music_studio'
   | 'generate_music'
-  | 'open_email_compose';
+  | 'open_email_compose'
+  | 'open_contacts_chat'
+  | 'prepare_chat_message'
+  | 'open_text_tools'
+  | 'prepare_text_request';
 
 export interface WaktiOperatorEmailDraft {
   to: string[];
@@ -42,6 +47,16 @@ export interface WaktiOperatorMusicRequest {
   autoGenerate?: boolean;
 }
 
+export interface WaktiOperatorChatRequest {
+  targetContactName: string;
+  draftMessage: string;
+}
+
+export interface WaktiOperatorTextRequest {
+  tab: SmartTextPrefillTab;
+  prefill?: SmartTextPrefill;
+}
+
 export interface WaktiOperatorRoutePayload {
   runId: string;
   stepId: string;
@@ -56,6 +71,8 @@ export interface WaktiOperatorRoutePayload {
   image?: WaktiOperatorImageRequest;
   music?: WaktiOperatorMusicRequest;
   email?: WaktiOperatorEmailDraft;
+  chat?: WaktiOperatorChatRequest;
+  textTool?: WaktiOperatorTextRequest;
   trPrefill?: TRPrefill;
   source?: string;
 }
@@ -97,6 +114,11 @@ function trimSentence(value: string) {
   return value.replace(/\s+/g, ' ').trim();
 }
 
+function extractQuotedText(transcript: string) {
+  const match = transcript.match(/["“”'']([^"“”'']+)["“”'']/);
+  return trimSentence(match?.[1] || '');
+}
+
 function titleCaseFromWords(input: string, maxWords = 6) {
   const words = input
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
@@ -129,6 +151,143 @@ function stripOperatorPhrases(transcript: string): string {
       .replace(/\b(send|email|mail|gmail|compose|draft|generate|create|make|save|and then|then)\b/gi, ' ')
       .replace(/\s+/g, ' ')
   );
+}
+
+function stripTextRequestLanguage(transcript: string): string {
+  return trimSentence(
+    transcript
+      .replace(/\b(can you|please|could you|would you|inside wakti|in wakti|using wakti|with wakti|for me)\b/gi, ' ')
+      .replace(/\b(write|rewrite|generate|create|make|draft|compose|prepare|reply|respond|translate|summarize|improve|polish|turn|open)\b/gi, ' ')
+      .replace(/\b(text tools|text tool|smart text generator|message|email|presentation|diagram|a4|document|translation|translator)\b/gi, ' ')
+      .replace(/\b(اكتب|أكتب|اعد|أعد|صياغة|أنشئ|انشئ|ولّد|ولد|جهز|جهّز|رد|جاوب|ترجم|ترجمة|لخص|لخّص|افتح|أدوات النص|النص|رسالة|بريد|عرض|مخطط|مستند)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+  );
+}
+
+function cleanNameFragment(value: string) {
+  return trimSentence(
+    value
+      .replace(/^[@\s]+/, '')
+      .replace(/\b(my contact|contact|person|conversation|chat)\b/gi, ' ')
+      .replace(/\b(جهة الاتصال|جهات الاتصال|الشخص|المحادثة|الدردشة)\b/g, ' ')
+      .replace(/[,.!?;:]+$/g, '')
+  ).slice(0, 80);
+}
+
+function extractChatTargetName(transcript: string) {
+  const patterns = [
+    /(?:send|text|message|dm|chat|write|reply)\s+(?:a\s+)?(?:message|dm|chat|reply)?\s*(?:to|for)\s+(.+?)(?=\s+(?:saying|say|that says|with message|and say|to say|about|regarding)\b|$)/i,
+    /(?:reply to|chat with|message)\s+(.+?)(?=\s+(?:saying|say|with message|and say|to say|about|regarding)\b|$)/i,
+    /(?:ارسل|أرسل|ابعث|ابعت|دز|راسل|كلم|كلّم|رد على|ردّ على)\s+(?:رسالة\s+)?(?:إلى|الى|ل|على)?\s*(.+?)(?=\s+(?:وقل|قل|نصها|محتواها|بخصوص|عن|يقول|تقول)\b|$)/,
+  ];
+  for (const pattern of patterns) {
+    const match = transcript.match(pattern);
+    const candidate = cleanNameFragment(match?.[1] || '');
+    if (candidate) return candidate;
+  }
+  return '';
+}
+
+function extractChatDraftMessage(transcript: string) {
+  const quoted = extractQuotedText(transcript);
+  if (quoted) return quoted.slice(0, 400);
+  const patterns = [
+    /(?:saying|say|that says|with(?: the)? message|message(?:\s+that)?|tell(?: him| her| them)?|to say)\s+(.+)/i,
+    /(?:وقل|قل له|قل لها|قل لهم|نصها|محتواها|رسالتها|يقول|تقول)\s+(.+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = transcript.match(pattern);
+    const candidate = trimSentence(match?.[1] || '');
+    if (candidate) return candidate.slice(0, 400);
+  }
+  const colonIndex = transcript.search(/[:：]/);
+  if (colonIndex >= 0) {
+    const candidate = trimSentence(transcript.slice(colonIndex + 1));
+    if (candidate) return candidate.slice(0, 400);
+  }
+  return '';
+}
+
+function inferTextToolTab(transcript: string): SmartTextPrefillTab {
+  if (/\b(translate|translation|translator|ترجم|ترجمة|مترجم)\b/i.test(transcript)) return 'translate';
+  if (/\b(diagram|flowchart|flow chart|mind map|schema|chart|مخطط|رسم بياني|خريطة ذهنية)\b/i.test(transcript)) return 'diagrams';
+  if (/\b(presentation|slides|slide deck|powerpoint|deck|عرض تقديمي|شرائح|برزنتيشن|عرض)\b/i.test(transcript)) return 'presentation';
+  if (/\b(a4|document|letter|report|proposal|essay|contract|invoice|مستند|وثيقة|تقرير|خطاب|رسالة رسمية)\b/i.test(transcript)) return 'a4';
+  if (/\b(reply|respond|response|رد|جاوب|رد على|ردّ على)\b/i.test(transcript)) return 'reply';
+  return 'compose';
+}
+
+function detectTextContentType(transcript: string) {
+  if (/\b(email|mail|gmail|بريد|ايميل)\b/i.test(transcript)) return 'email';
+  if (/\b(text message|sms|رسالة نصية)\b/i.test(transcript)) return 'text_message';
+  if (/\b(message|رسالة)\b/i.test(transcript)) return 'message';
+  if (/\b(summarize|summary|summarise|تلخيص|لخص|لخّص)\b/i.test(transcript)) return 'summarize';
+  return 'auto';
+}
+
+function extractTextReplySource(transcript: string) {
+  const quoted = extractQuotedText(transcript);
+  if (quoted) return quoted.slice(0, 800);
+  const patterns = [
+    /(?:reply|respond)(?:\s+to)?\s+(?:this|the following|following)?\s*[:\-]?\s*(.+)/i,
+    /(?:رد|جاوب)(?:\s+على)?\s*(?:هذا|التالي)?\s*[:\-]?\s*(.+)/,
+  ];
+  for (const pattern of patterns) {
+    const match = transcript.match(pattern);
+    const candidate = trimSentence(match?.[1] || '');
+    if (candidate) return candidate.slice(0, 800);
+  }
+  return '';
+}
+
+function extractTextRequestTopic(transcript: string) {
+  const quoted = extractQuotedText(transcript);
+  if (quoted) return quoted.slice(0, 800);
+  const cleaned = stripTextRequestLanguage(transcript);
+  return (cleaned || transcript).slice(0, 800).trim();
+}
+
+function buildTextToolRequest(transcript: string): WaktiOperatorTextRequest {
+  const tab = inferTextToolTab(transcript);
+  if (tab === 'reply') {
+    const originalMessage = extractTextReplySource(transcript);
+    return {
+      tab,
+      prefill: {
+        tab,
+        originalMessage,
+      },
+    };
+  }
+  if (tab === 'compose') {
+    return {
+      tab,
+      prefill: {
+        tab,
+        topic: extractTextRequestTopic(transcript),
+        contentType: detectTextContentType(transcript),
+      },
+    };
+  }
+  return {
+    tab,
+    prefill: {
+      tab,
+    },
+  };
+}
+
+function getTextToolTabLabel(tab: SmartTextPrefillTab, language: 'ar' | 'en') {
+  const labels = {
+    compose: language === 'ar' ? 'التأليف' : 'Compose',
+    reply: language === 'ar' ? 'الرد' : 'Reply',
+    generated: language === 'ar' ? 'النص المولد' : 'Generated',
+    diagrams: language === 'ar' ? 'المخططات' : 'Diagrams',
+    presentation: language === 'ar' ? 'العروض' : 'Presentations',
+    translate: language === 'ar' ? 'الترجمة' : 'Translate',
+    a4: language === 'ar' ? 'مستند A4' : 'A4 Document',
+  } as const;
+  return labels[tab];
 }
 
 function stripImageWorkflowTail(value: string): string {
@@ -419,8 +578,10 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
   const steps: WaktiOperatorStep[] = [];
   const wantsImage = /(image|picture|photo|poster|logo|thumbnail|cover|صورة|بوستر|شعار)/i.test(normalized);
   const wantsMusic = /(music|song|track|beat|jingle|anthem|أغنية|موسيقى|مقطع)/i.test(normalized);
-  const wantsEmail = /(email|mail|gmail|send|compose|draft|بريد|ايميل|أرسل)/i.test(normalized);
+  const wantsEmail = matchedCapability?.id === 'email' || /(email|mail|gmail|بريد|ايميل)/i.test(normalized) || extractEmailAddresses(normalized).length > 0;
   const wantsTasks = /(task|todo|to do|remind|reminder|schedule|مهمة|تذكير|ذكرني|رتب)/i.test(normalized);
+  const wantsContactsChat = matchedCapability?.id === 'contacts_chat' || /\b(contact|contacts|chat|dm|direct message|conversation|group chat|جهات الاتصال|جهة الاتصال|دردشة|محادثة)\b/i.test(normalized);
+  const wantsTextTools = matchedCapability?.id === 'text_tools' || /\b(write|rewrite|reply|respond|translate|translation|diagram|presentation|summarize|document|a4|compose|text tools|text generator|اكتب|أكتب|إعادة صياغة|اعادة صياغة|رد|جاوب|ترجم|ترجمة|مخطط|عرض|مستند|لخص|لخّص)\b/i.test(normalized);
 
   if (wantsImage) {
     const openStepId = createId('step');
@@ -557,6 +718,55 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
     });
   }
 
+  if (steps.length === 0 && !wantsEmail && !wantsImage && !wantsMusic) {
+    const targetContactName = extractChatTargetName(normalized);
+    const draftMessage = extractChatDraftMessage(normalized);
+    const looksLikeDirectMessage = wantsContactsChat || Boolean(targetContactName) || (/\b(send|text|message|reply|write)\b/i.test(normalized) && /\b(to|for)\b/i.test(normalized));
+    if (looksLikeDirectMessage) {
+      const openStepId = createId('step');
+      const handoffStepId = createId('step');
+      const chatPayload: WaktiOperatorRoutePayload = {
+        runId: planId,
+        stepId: openStepId,
+        transcript: normalized,
+        summary: language === 'ar' ? 'تحضير الدردشة المباشرة' : 'Preparing the direct chat',
+        stepRefs: {
+          openStepId,
+          handoffStepId,
+        },
+        chat: {
+          targetContactName,
+          draftMessage,
+        },
+        source: 'voice',
+      };
+      const payloadId = stashWaktiOperatorPayload(chatPayload);
+      steps.push({
+        id: openStepId,
+        kind: 'open_contacts_chat',
+        label: language === 'ar' ? 'افتح المحادثة الصحيحة' : 'Open the right chat',
+        description: targetContactName
+          ? (language === 'ar' ? `أبحث عن ${targetContactName} داخل جهات الاتصال المعتمدة.` : `Find ${targetContactName} inside approved contacts.`)
+          : (language === 'ar' ? 'أفتح قسم جهات الاتصال والمحادثة داخل وكتي.' : 'Open the Contacts & Chat area inside Wakti.'),
+        risk: 'safe',
+        status: 'pending',
+        href: `/contacts?waktiOperator=${payloadId}&tab=contacts`,
+        payloadId,
+      });
+      steps.push({
+        id: handoffStepId,
+        kind: 'prepare_chat_message',
+        label: draftMessage
+          ? (language === 'ar' ? 'راجع وأرسل الرسالة' : 'Review and send the message')
+          : (language === 'ar' ? 'تابع من داخل الدردشة' : 'Continue inside chat'),
+        description: draftMessage || (targetContactName || normalized),
+        risk: draftMessage ? 'approval_required' : 'safe',
+        status: 'pending',
+        payloadId,
+      });
+    }
+  }
+
   if (wantsTasks && steps.length === 0) {
     const isReminder = detectReminderIntent(normalized);
     const openStepId = createId('step');
@@ -613,6 +823,46 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
         ? (language === 'ar' ? 'أنشئ التذكير' : 'Create reminder')
         : (language === 'ar' ? 'أنشئ المهمة' : 'Create task'),
       description: trPrefill.draft.title || normalized,
+      risk: 'safe',
+      status: 'pending',
+      payloadId,
+    });
+  }
+
+  if (steps.length === 0 && !wantsEmail && !wantsImage && !wantsMusic && !wantsTasks && wantsTextTools) {
+    const openStepId = createId('step');
+    const handoffStepId = createId('step');
+    const textTool = buildTextToolRequest(normalized);
+    const textPayload: WaktiOperatorRoutePayload = {
+      runId: planId,
+      stepId: openStepId,
+      transcript: normalized,
+      summary: language === 'ar' ? 'تحضير طلب النص داخل أدوات النص' : 'Preparing the text request inside Text Tools',
+      stepRefs: {
+        openStepId,
+        handoffStepId,
+      },
+      textTool,
+      source: 'voice',
+    };
+    const payloadId = stashWaktiOperatorPayload(textPayload);
+    const tabLabel = getTextToolTabLabel(textTool.tab, language);
+    const draftDescription = textTool.prefill?.originalMessage || textTool.prefill?.topic || tabLabel;
+    steps.push({
+      id: openStepId,
+      kind: 'open_text_tools',
+      label: language === 'ar' ? 'افتح أدوات النص' : 'Open Text Tools',
+      description: language === 'ar' ? 'أنتقل إلى صفحة أدوات النص داخل وكتي.' : 'Navigate to the Text Tools page inside Wakti.',
+      risk: 'safe',
+      status: 'pending',
+      href: `/tools/text?tab=${textTool.tab}&waktiOperator=${payloadId}`,
+      payloadId,
+    });
+    steps.push({
+      id: handoffStepId,
+      kind: 'prepare_text_request',
+      label: language === 'ar' ? `جهّز ${tabLabel}` : `Prepare ${tabLabel}`,
+      description: draftDescription,
       risk: 'safe',
       status: 'pending',
       payloadId,

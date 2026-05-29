@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ContactSearch } from "@/components/contacts/ContactSearch";
 import { ContactRequests } from "@/components/contacts/ContactRequests";
@@ -7,6 +7,7 @@ import { BlockedUsers } from "@/components/contacts/BlockedUsers";
 import { GroupChatTab } from "@/components/contacts/GroupChatTab";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
+import { readWaktiOperatorPayload } from "@/utils/waktiOperator";
 import { useQuery } from "@tanstack/react-query";
 import { Contact, Bell, ShieldCheck, Users, LayoutGrid, LayoutList } from "lucide-react";
 import { getPendingRequestsCount } from "@/services/contactsService";
@@ -31,6 +32,8 @@ const resolveContactsView = (searchParams: URLSearchParams) => {
 export default function Contacts() {
   const { language } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
   const initialTab = resolveContactsTab(searchParams);
   const initialContactView = resolveContactsView(searchParams);
   const [activeTab, setActiveTab] = useState(initialTab);
@@ -82,6 +85,8 @@ export default function Contacts() {
       setContactView={handleContactViewChange}
       openChatUserId={openChatUserId}
       source="contacts"
+      operatorPayload={operatorPayload}
+      operatorPayloadId={operatorPayloadId}
       clearOpenChat={() => {
         searchParams.delete('openChat');
         setSearchParams(searchParams, { replace: true });
@@ -101,6 +106,8 @@ export function ContactsContent({
   clearOpenChat = () => {},
   embedded = false,
   source = "contacts",
+  operatorPayload = null,
+  operatorPayloadId = null,
 }: { 
   language: string; 
   activeTab: string;
@@ -112,6 +119,8 @@ export function ContactsContent({
   /** When true, the inner ContactList keeps chat in a modal instead of navigating away. */
   embedded?: boolean;
   source?: "contacts" | "social";
+  operatorPayload?: ReturnType<typeof readWaktiOperatorPayload>;
+  operatorPayloadId?: string | null;
 }) {
   // Fetch pending requests count for the badge
   const { data: pendingRequestsCount = 0 } = useQuery({
@@ -192,6 +201,8 @@ export function ContactsContent({
             source={source}
             viewMode={contactView}
             showViewToggle={false}
+            operatorPayload={operatorPayload}
+            operatorPayloadId={operatorPayloadId}
           />
         </div>
       )}

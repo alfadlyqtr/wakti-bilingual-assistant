@@ -341,6 +341,10 @@ serve(async (req) => {
     const audioWeight = typeof body?.audioWeight === "number" ? body.audioWeight : undefined;
     const personaId = (body?.personaId || "").toString().trim();
     const personaModel = (body?.personaModel || "").toString().trim();
+    const customVoiceId = (body?.customVoiceId || "").toString().trim();
+    const customVoiceKieVoiceId = (body?.customVoiceKieVoiceId || "").toString().trim();
+    const customVoiceType = (body?.customVoiceType || "").toString().trim();
+    const customVoiceName = (body?.customVoiceName || "").toString().trim();
     const khaleejiDialect = (body?.khaleejiDialect || "").toString().trim();
     const khaleejiDialectLabel = (body?.khaleejiDialectLabel || "").toString().trim();
     const khaleejiAccentAnchor = (body?.khaleejiAccentAnchor || "").toString().trim();
@@ -374,6 +378,26 @@ serve(async (req) => {
 
     if (durationHint === null || !ALLOWED_DURATION_SECONDS.has(durationHint)) {
       return new Response(JSON.stringify({ error: "A valid duration is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const hasUnsupportedCustomVoiceRequest = Boolean(customVoiceKieVoiceId || customVoiceId);
+    if (hasUnsupportedCustomVoiceRequest) {
+      console.error("[music-generate] Unsupported custom voice request", {
+        model,
+        customVoiceId,
+        customVoiceKieVoiceId,
+        customVoiceType,
+        customVoiceName,
+        personaId,
+        personaModel,
+      });
+      return new Response(JSON.stringify({
+        error: "Custom voice music generation is temporarily unavailable while we update the provider mapping.",
+        detail: "KIE custom voice IDs cannot be sent to music generation as persona IDs.",
+      }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -443,7 +467,21 @@ serve(async (req) => {
       throw new Error("Duration was not attached to the outbound KIE payload");
     }
 
-    console.log("[music-generate] Calling KIE.ai generate", { model, customMode, instrumental, duration: durationHint, payloadDuration: kiePayload.duration ?? null, styleLen: style.length, promptLen: effectivePrompt.length });
+    console.log("[music-generate] Calling KIE.ai generate", {
+      model,
+      customMode,
+      instrumental,
+      duration: durationHint,
+      payloadDuration: kiePayload.duration ?? null,
+      styleLen: style.length,
+      promptLen: effectivePrompt.length,
+      hasPersonaId: Boolean(personaId),
+      personaModel: personaModel || null,
+      customVoiceId: customVoiceId || null,
+      customVoiceKieVoiceId: customVoiceKieVoiceId || null,
+      customVoiceType: customVoiceType || null,
+      customVoiceName: customVoiceName || null,
+    });
     console.log("[music-generate] KIE payload keys:", Object.keys(kiePayload));
 
     const kieResp = await fetch("https://api.kie.ai/api/v1/generate", {
@@ -513,6 +551,12 @@ serve(async (req) => {
       khaleejiDialectLabel: khaleejiDialectLabel || null,
       khaleejiAccentAnchor: khaleejiAccentAnchor || null,
       duration_seconds: durationHint,
+      personaId: personaId || null,
+      personaModel: personaModel || null,
+      customVoiceId: customVoiceId || null,
+      customVoiceKieVoiceId: customVoiceKieVoiceId || null,
+      customVoiceType: customVoiceType || null,
+      customVoiceName: customVoiceName || null,
     };
 
     // DB insert is non-fatal: if it fails we log and still return success to the user

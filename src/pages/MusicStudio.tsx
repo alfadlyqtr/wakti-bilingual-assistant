@@ -6881,8 +6881,10 @@ function VoicesTab({
 
       if (!instrumental) invokeBody.prompt = structuredPrompt;
       if (vocalType === 'custom' && selectedMusicVoice?.kieVoiceId) {
-        invokeBody.personaId = selectedMusicVoice.kieVoiceId;
-        invokeBody.personaModel = 'voice_persona';
+        invokeBody.customVoiceId = selectedMusicVoice.id;
+        invokeBody.customVoiceKieVoiceId = selectedMusicVoice.kieVoiceId;
+        invokeBody.customVoiceType = selectedMusicVoice.voiceType;
+        invokeBody.customVoiceName = selectedMusicVoice.name;
         if (selectedMusicVoice.voiceType === 'female') {
           invokeBody.vocalGender = 'f';
         } else {
