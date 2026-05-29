@@ -354,14 +354,14 @@ export const WAKTI_CAPABILITIES: WaktiCapability[] = [
     route: '/help',
     routeLabelEn: 'Open Help',
     routeLabelAr: 'افتح المساعدة',
-    keywords: ['help', 'support', 'how do i', 'show me how', 'guide', 'tutorial', 'help page', 'مساعدة', 'شرح', 'كيف', 'دلني'],
+    keywords: ['help', 'support', 'help page', 'support page', 'customer support', 'contact support', 'مساعدة', 'صفحة المساعدة', 'الدعم', 'الدعم الفني'],
     guideEn: 'Help is the built-in guidance area when you want a manual explanation instead of direct execution.',
     guideAr: 'المساعدة هي مساحة الإرشاد المدمجة عندما تريد شرحاً يدوياً بدلاً من التنفيذ المباشر.',
     stepsEn: ['Open Help', 'Choose the relevant help topic', 'Use the guide as a walkthrough while you act'],
     stepsAr: ['افتح المساعدة', 'اختر موضوع المساعدة المناسب', 'استخدم الدليل كشرح أثناء تنفيذك'],
     supportLevel: 'guided_operator',
-    supportSummaryEn: 'Operator can route guidance requests here, but the better long-term path is unified explain + CTA inside the Agent runtime.',
-    supportSummaryAr: 'يمكن للمشغّل توجيه طلبات الإرشاد إلى هنا، لكن المسار الأفضل على المدى الطويل هو دمج الشرح مع زر الانتقال داخل وقت تشغيل الوكيل.',
+    supportSummaryEn: 'Operator can open Help when you explicitly ask for the Help area.',
+    supportSummaryAr: 'يمكن للمشغّل فتح المساعدة عندما تطلب قسم المساعدة بشكل صريح.',
   },
 ];
 

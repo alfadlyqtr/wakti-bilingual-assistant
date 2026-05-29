@@ -1,6 +1,5 @@
 import type { MailComposerAttachment } from '@/components/email/MailComposer';
-import { buildWaktiAgentHref, stashWaktiAgentPayload } from '@/utils/waktiAgent';
-import { getWaktiCapabilityRouteLabel, getWaktiCapabilityTitle, type WaktiCapabilityId } from '@/utils/waktiCapabilities';
+import { getWaktiCapabilityGuide, getWaktiCapabilityRouteLabel, getWaktiCapabilitySteps, getWaktiCapabilitySupportSummary, getWaktiCapabilityTitle, type WaktiCapability } from '@/utils/waktiCapabilities';
 import { analyzeWaktiOperatorIntent, type WaktiOperatorIntentKind } from '@/utils/waktiOperatorIntent';
 import { saveTRPrefill, type TRPrefill, type TRReminderPrefillDraft, type TRTaskPrefillDraft } from '@/utils/trPrefill';
 
@@ -10,6 +9,7 @@ export type WaktiOperatorRisk = 'safe' | 'approval_required';
 export type WaktiOperatorStepStatus = 'pending' | 'running' | 'completed' | 'paused' | 'failed';
 export type WaktiOperatorStepKind =
   | 'open_wakti_agent'
+  | 'show_guidance'
   | 'create_task'
   | 'create_reminder'
   | 'open_image_studio'
@@ -71,10 +71,18 @@ export interface WaktiOperatorStep {
   payloadId?: string;
 }
 
+export interface WaktiOperatorAction {
+  label: string;
+  href: string;
+}
+
 export interface WaktiOperatorPlan {
   id: string;
   transcript: string;
   summary: string;
+  mode?: 'guidance' | 'navigation' | 'execution';
+  answer?: string;
+  primaryAction?: WaktiOperatorAction;
   steps: WaktiOperatorStep[];
 }
 
@@ -194,35 +202,43 @@ function buildAgentStep(href: string, label: string, description: string): Wakti
   };
 }
 
+function buildGuidanceStep(label: string): WaktiOperatorStep {
+  return {
+    id: createId('step'),
+    kind: 'show_guidance',
+    label,
+    description: '',
+    risk: 'safe',
+    status: 'pending',
+  };
+}
+
 function shouldPreferGuidanceFlow(transcript: string, kind: WaktiOperatorIntentKind) {
   if (kind === 'guidance') return true;
   if (kind !== 'mixed') return false;
   return /^(how do i|how can i|can you explain|explain|show me how|help me understand|where do i|what is|كيف|اشرح|وريني|دلني|ساعدني أفهم|ساعدني افهم)/i.test(trimSentence(transcript));
 }
 
-function buildCapabilityGuidancePlan(transcript: string, language: 'ar' | 'en', capabilityId: WaktiCapabilityId) {
-  const planId = createId('plan');
-  const payloadId = stashWaktiAgentPayload({
-    transcript,
-    summary: language === 'ar' ? 'إرشاد داخل وكتي' : 'Guidance inside Wakti',
-  });
-  const href = buildWaktiAgentHref({
-    intent: 'ask',
-    source: 'voice',
-    payloadId,
-    capabilityId,
-  });
+function buildCapabilityGuidancePlan(
+  transcript: string,
+  language: 'ar' | 'en',
+  capability: WaktiCapability,
+  includeSupportNote = false,
+) {
+  const title = getWaktiCapabilityTitle(capability, language);
+  const guide = getWaktiCapabilityGuide(capability, language);
+  const supportNote = includeSupportNote ? getWaktiCapabilitySupportSummary(capability, language) : '';
   return {
-    id: planId,
+    id: createId('plan'),
     transcript,
-    summary: language === 'ar' ? 'سأشرح لك الطريق داخل وكتي ثم أعطيك زر انتقال واضح.' : 'I will explain the path inside Wakti and give you a clear jump button.',
-    steps: [
-      buildAgentStep(
-        href,
-        language === 'ar' ? 'افتح دليل وكتي' : 'Open Wakti guide',
-        language === 'ar' ? 'سأعرض الشرح والخطوات وزر الانتقال المناسب.' : 'I will show the explanation, steps, and the right CTA.'
-      ),
-    ],
+    mode: 'guidance' as const,
+    summary: title,
+    answer: trimSentence(`${guide}${supportNote ? ` ${supportNote}` : ''}`),
+    primaryAction: {
+      label: getWaktiCapabilityRouteLabel(capability, language),
+      href: capability.route,
+    },
+    steps: getWaktiCapabilitySteps(capability, language).map((step) => buildGuidanceStep(step)),
   };
 }
 
@@ -373,14 +389,16 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
   const matchedCapability = intentAnalysis.capability;
 
   if (matchedCapability && shouldPreferGuidanceFlow(normalized, intentAnalysis.kind)) {
-    return buildCapabilityGuidancePlan(normalized, language, matchedCapability.id);
+    return buildCapabilityGuidancePlan(normalized, language, matchedCapability);
   }
 
   if (matchedCapability && intentAnalysis.kind === 'navigation') {
     return {
       id: createId('plan'),
       transcript: normalized,
-      summary: language === 'ar' ? 'سأنقلك إلى المكان الصحيح داخل وكتي.' : 'I will take you to the right place inside Wakti.',
+      mode: 'navigation',
+      summary: getWaktiCapabilityTitle(matchedCapability, language),
+      answer: language === 'ar' ? 'سأنقلك إلى المكان الصحيح داخل وكتي.' : 'I will take you to the right place inside Wakti.',
       steps: [
         buildAgentStep(
           matchedCapability.route,
@@ -394,7 +412,7 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
   }
 
   if (matchedCapability && matchedCapability.supportLevel !== 'full_operator' && (intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
-    return buildCapabilityGuidancePlan(normalized, language, matchedCapability.id);
+    return buildCapabilityGuidancePlan(normalized, language, matchedCapability, true);
   }
 
   const planId = createId('plan');
@@ -612,6 +630,7 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
   return {
     id: planId,
     transcript: normalized,
+    mode: 'execution',
     summary: language === 'ar'
       ? `فهمت طلبك وسأبدأ بالخطوات الآمنة داخل وكتي.`
       : 'I understood your request and will start the safe steps inside Wakti.',

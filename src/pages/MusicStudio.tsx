@@ -1109,6 +1109,38 @@ export default function MusicStudio() {
   }, [searchParams]);
 
   useEffect(() => {
+    if (!operatorPayload?.stepRefs?.openStepId) return;
+    if (searchParams.get('operatorTarget') === 'image' && mainTab === 'image' && imageMode === 'create') {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.openStepId,
+        status: 'completed',
+      });
+    }
+    if (searchParams.get('operatorTarget') === 'music' && mainTab === 'music' && musicSubTab === 'compose') {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.openStepId,
+        status: 'completed',
+      });
+    }
+  }, [imageMode, mainTab, musicSubTab, operatorPayload, searchParams]);
+
+  useEffect(() => {
+    const operatorTarget = searchParams.get('operatorTarget');
+    const shouldUseSubtleMode = (operatorTarget === 'image' && mainTab === 'image')
+      || (operatorTarget === 'music' && mainTab === 'music');
+    emitEvent('wakti-operator-visual-mode', {
+      mode: shouldUseSubtleMode ? 'subtle' : 'default',
+    });
+    return () => {
+      emitEvent('wakti-operator-visual-mode', {
+        mode: 'default',
+      });
+    };
+  }, [mainTab, searchParams]);
+
+  useEffect(() => {
     try {
       window.localStorage.setItem(MUSIC_VOICE_SHELLS_STORAGE_KEY, JSON.stringify(musicVoiceShells));
     } catch {}
@@ -1536,6 +1568,12 @@ export default function MusicStudio() {
               selectedMusicVoiceId={selectedMusicVoiceId}
               onSelectMusicVoice={setSelectedMusicVoiceId}
               onOpenVoices={() => setMusicSubTab('voices')}
+              operatorPayload={operatorPayload}
+              operatorMusicAutoRunRef={operatorMusicAutoRunRef}
+              searchParams={searchParams}
+              mainTab={mainTab}
+              musicSubTab={musicSubTab}
+              imageMode={imageMode}
             />
           </div>
           {editorEverVisited && (
@@ -2378,6 +2416,12 @@ function VoicesTab({
   selectedMusicVoiceId,
   onSelectMusicVoice,
   onOpenVoices,
+  operatorPayload,
+  operatorMusicAutoRunRef,
+  searchParams,
+  mainTab,
+  musicSubTab,
+  imageMode,
 }: {
   onSaved?: ()=>void;
   onQuotaChange?: (quota: { remaining: number; limit: number; used: number }) => void;
@@ -2385,6 +2429,12 @@ function VoicesTab({
   selectedMusicVoiceId: string;
   onSelectMusicVoice: (voiceId: string) => void;
   onOpenVoices: () => void;
+  operatorPayload?: any;
+  operatorMusicAutoRunRef?: React.MutableRefObject<string | null>;
+  searchParams?: URLSearchParams;
+  mainTab?: string;
+  musicSubTab?: string;
+  imageMode?: string;
 }) {
   const { language } = useTheme();
   const { user } = useAuth();
@@ -2400,37 +2450,17 @@ function VoicesTab({
 
   useEffect(() => {
     if (!operatorPayload?.music) return;
-    setMainTab('music');
-    setMusicSubTab('compose');
     setTitle((current) => current || operatorPayload.music?.title || '');
     setLyricsText((current) => current || operatorPayload.music?.lyrics || '');
     setTitleOpen(true);
     setMusicStyleOpen(false);
     setVocalsOpen(false);
     setLyricsOpen(false);
-    if (operatorPayload.music.autoGenerate) {
+    if (operatorPayload.music.autoGenerate && operatorMusicAutoRunRef) {
       operatorMusicAutoRunRef.current = operatorPayload.stepId;
     }
-  }, [operatorPayload]);
+  }, [operatorPayload, operatorMusicAutoRunRef]);
 
-  useEffect(() => {
-    if (!operatorPayload?.stepRefs?.openStepId) return;
-    if (searchParams.get('operatorTarget') === 'image' && mainTab === 'image' && imageMode === 'create') {
-      emitEvent('wakti-operator-status', {
-        runId: operatorPayload.runId,
-        stepId: operatorPayload.stepRefs.openStepId,
-        status: 'completed',
-      });
-    }
-    if (searchParams.get('operatorTarget') === 'music' && mainTab === 'music' && musicSubTab === 'compose') {
-      emitEvent('wakti-operator-status', {
-        runId: operatorPayload.runId,
-        stepId: operatorPayload.stepRefs.openStepId,
-        status: 'completed',
-      });
-    }
-  }, [imageMode, mainTab, musicSubTab, operatorPayload, searchParams]);
-  
   // Preset styles list (genres only)
   const STYLE_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
     if (language === 'ar') {
@@ -7079,6 +7109,7 @@ function VoicesTab({
 
   useEffect(() => {
     if (!operatorPayload?.music?.autoGenerate) return;
+    if (!operatorMusicAutoRunRef) return;
     if (operatorMusicAutoRunRef.current !== operatorPayload.stepId) return;
     if ((title || '').trim() !== (operatorPayload.music.title || '').trim()) return;
     if ((lyricsText || '').trim() !== (operatorPayload.music.lyrics || '').trim()) return;
@@ -7089,7 +7120,7 @@ function VoicesTab({
         console.error('Operator music generation failed:', error);
       });
     }, 180);
-  }, [handleGenerate, lyricsText, operatorPayload, submitting, title]);
+  }, [handleGenerate, lyricsText, operatorPayload, submitting, title, operatorMusicAutoRunRef]);
 
   // Position and outside-click handling for pickers
   useEffect(() => {

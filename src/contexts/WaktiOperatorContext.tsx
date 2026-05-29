@@ -143,6 +143,10 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
   }, [language]);
 
   const executePlan = useCallback(async (nextPlan: WaktiOperatorPlan) => {
+    if (nextPlan.mode === 'guidance') {
+      setStage('idle');
+      return;
+    }
     setStage('executing');
     const firstStep = nextPlan.steps.find((step) => step.risk === 'safe' && step.href);
     if (!firstStep?.href) {
@@ -151,7 +155,7 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
     }
     updateStep(firstStep.id, (current) => ({ ...current, status: 'running' }));
     navigate(firstStep.href);
-    if (nextPlan.steps.length === 1 && firstStep.kind === 'open_wakti_agent') {
+    if (nextPlan.steps.length === 1) {
       window.setTimeout(() => {
         updateStep(firstStep.id, (current) => ({ ...current, status: 'completed' }));
         setStage('idle');
@@ -287,6 +291,7 @@ export function useWaktiOperator() {
 export function WaktiOperatorOverlay() {
   const { language, theme } = useTheme();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { isOpen, stage, showIntro, transcript, plan, error, close, startRecording, stopRecording } = useWaktiOperator();
   const [isExpanded, setIsExpanded] = useState(false);
   const [visualMode, setVisualMode] = useState<'default' | 'subtle'>('default');
@@ -296,13 +301,16 @@ export function WaktiOperatorOverlay() {
   const isDark = theme === 'dark';
   const isArabic = language === 'ar';
   const hasPlanSteps = Boolean(plan?.steps?.length);
+  const isGuidancePlan = plan?.mode === 'guidance';
+  const guidanceSteps = isGuidancePlan ? (plan?.steps || []) : [];
   const runningStep = plan?.steps.find((step) => step.status === 'running') || null;
   const nextStep = plan?.steps.find((step) => step.status === 'pending') || null;
+  const hasIncompleteSteps = Boolean(plan?.steps?.some((step) => step.status !== 'completed'));
   const currentStep = runningStep || nextStep || plan?.steps[plan.steps.length - 1] || null;
   const completedSteps = plan?.steps.filter((step) => step.status === 'completed').length || 0;
-  const showReadyState = stage === 'idle' && !isRecording && !isBusy && !error && !hasPlanSteps;
+  const showReadyState = stage === 'idle' && !isRecording && !isBusy && !error && (!hasPlanSteps || !hasIncompleteSteps);
   const showCompactReadyBar = showReadyState && !showIntro;
-  const showCollapsedStepCard = !isExpanded && currentStep && (isBusy || hasPlanSteps);
+  const showCollapsedStepCard = !isExpanded && currentStep && (isBusy || (hasPlanSteps && hasIncompleteSteps && !isGuidancePlan));
   const shouldUseCompactBusyShell = isBusy && !isExpanded;
   const isSubtle = visualMode === 'subtle' && !isExpanded;
   const shellClass = isDark
@@ -329,10 +337,14 @@ export function WaktiOperatorOverlay() {
       setIsExpanded(true);
       return;
     }
+    if (isGuidancePlan && hasPlanSteps) {
+      setIsExpanded(true);
+      return;
+    }
     if (isBusy) {
       setIsExpanded(false);
     }
-  }, [isBusy, isRecording, showIntro, stage]);
+  }, [hasPlanSteps, isBusy, isGuidancePlan, isRecording, showIntro, stage]);
 
   useEffect(() => {
     return onEvent('wakti-operator-visual-mode', ({ mode }) => {
@@ -345,7 +357,7 @@ export function WaktiOperatorOverlay() {
   return (
     <div
       dir={isArabic ? 'rtl' : 'ltr'}
-      className={`fixed right-3 top-[4.55rem] z-[85] overflow-hidden rounded-[1.7rem] border backdrop-blur-2xl transition-all duration-300 ${shellClass} ${showIntro || isExpanded ? 'w-[min(24.5rem,calc(100vw-1.5rem))] p-4' : shouldUseCompactBusyShell ? 'w-[min(18.75rem,calc(100vw-1.5rem))] p-3' : 'w-[min(22.5rem,calc(100vw-1.5rem))] p-3.5'} ${isSubtle ? 'scale-[0.94] opacity-25 pointer-events-none saturate-50' : 'opacity-100'}`}
+      className={`fixed right-3 top-[4.55rem] z-[85] overflow-hidden rounded-[1.7rem] border backdrop-blur-2xl transition-all duration-300 ${shellClass} ${showIntro || isExpanded ? 'w-[min(24.5rem,calc(100vw-1.5rem))] p-4' : shouldUseCompactBusyShell ? 'w-[min(18.75rem,calc(100vw-1.5rem))] p-3' : 'w-[min(22.5rem,calc(100vw-1.5rem))] p-3.5'} ${isSubtle ? 'scale-[0.9] opacity-12 pointer-events-none saturate-50' : 'opacity-100'}`}
     >
       <div className={`pointer-events-none absolute inset-x-0 top-0 h-px ${isDark ? 'bg-white/14' : 'bg-white/75'}`} />
       <div className="relative flex items-start justify-between gap-3">
@@ -357,7 +369,9 @@ export function WaktiOperatorOverlay() {
           <p className={`mt-3 text-[1.02rem] font-extrabold leading-[1.35] tracking-[-0.015em] ${isDark ? 'text-white/96' : 'text-[#060541]'}`}>
             {showReadyState
               ? (language === 'ar' ? 'قل لي أين تريد الذهاب أو ماذا تريد إنجازه.' : 'Tell me where you want to go or what you want done.')
-              : statusLabel}
+              : isGuidancePlan && plan?.summary
+                ? plan.summary
+                : statusLabel}
           </p>
           {showIntro ? (
             <p className={`mt-2 max-w-[28ch] text-[0.92rem] leading-6 ${supportingTextClass} ${isArabic ? 'mr-0' : 'ml-0'}`}>
@@ -377,7 +391,7 @@ export function WaktiOperatorOverlay() {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          {isBusy || hasPlanSteps ? (
+          {isBusy || (hasPlanSteps && hasIncompleteSteps) ? (
             <button
               type="button"
               onClick={() => setIsExpanded((current) => !current)}
@@ -443,9 +457,47 @@ export function WaktiOperatorOverlay() {
         </div>
       ) : null}
 
-      {isExpanded && transcript ? (
+      {isExpanded && transcript && !isGuidancePlan ? (
         <div className={`mt-4 rounded-[1.3rem] border px-3.5 py-3.5 text-sm leading-6 ${secondarySurfaceClass} ${transcriptClass}`}>
           {transcript}
+        </div>
+      ) : null}
+
+      {isExpanded && isGuidancePlan ? (
+        <div className="mt-4 space-y-3">
+          {plan?.answer ? (
+            <div className={`rounded-[1.3rem] border px-3.5 py-3.5 text-sm leading-6 ${secondarySurfaceClass} ${transcriptClass}`}>
+              {plan.answer}
+            </div>
+          ) : null}
+
+          {guidanceSteps.length ? (
+            <div className={`rounded-[1.3rem] border px-3.5 py-3.5 ${secondarySurfaceClass}`}>
+              <div className="space-y-2.5">
+                {guidanceSteps.map((step, index) => (
+                  <div key={step.id} className={`flex items-start gap-3 rounded-[1rem] border px-3 py-2.5 ${isDark ? 'border-white/8 bg-black/15' : 'border-[#060541]/8 bg-white/75'}`}>
+                    <div className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${isDark ? 'bg-cyan-400/12 text-cyan-200' : 'bg-[#060541]/8 text-[#060541]'}`}>
+                      {index + 1}
+                    </div>
+                    <p className={`text-sm leading-6 ${isDark ? 'text-white/88' : 'text-[#060541]/82'}`}>{step.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {plan?.primaryAction ? (
+            <button
+              type="button"
+              onClick={() => {
+                close();
+                navigate(plan.primaryAction!.href);
+              }}
+              className={`inline-flex min-h-[3.1rem] w-full items-center justify-center rounded-[1.2rem] px-4 py-3 text-sm font-bold transition-all active:scale-[0.98] ${primaryButtonClass}`}
+            >
+              {plan.primaryAction.label}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -456,7 +508,7 @@ export function WaktiOperatorOverlay() {
         </div>
       ) : null}
 
-      {isExpanded && hasPlanSteps ? (
+      {isExpanded && hasPlanSteps && !isGuidancePlan ? (
         <div className="mt-4 space-y-2">
           {plan?.steps.map((step) => (
             <div key={step.id} className={`rounded-[1.25rem] border px-3.5 py-3.5 text-sm ${step.status === 'completed' ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-50' : step.status === 'running' ? 'border-cyan-300/20 bg-cyan-400/10 text-cyan-50' : step.status === 'paused' ? 'border-amber-300/20 bg-amber-300/10 text-amber-50' : isDark ? 'border-white/10 bg-black/15 text-white/80' : 'border-[#060541]/10 bg-white/70 text-[#060541]/78'}`}>
