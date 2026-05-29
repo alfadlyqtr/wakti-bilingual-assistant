@@ -33,6 +33,7 @@ const Settings = lazy(() => import("@/pages/Settings"));
 const TasksReminders = lazy(() => import("@/pages/TasksReminders"));
 const WaktiAi = lazy(() => import("@/pages/WaktiAi"));
 const WaktiAIV2 = lazy(() => import("@/pages/WaktiAIV2"));
+const WaktiAgent = lazy(() => import("@/pages/WaktiAgent"));
 const Calendar = lazy(() => import("@/pages/Calendar"));
 const Social = lazy(() => import("@/pages/Social"));
 const Contacts = lazy(() => import("@/pages/Contacts"));
@@ -193,6 +194,7 @@ export default function ConsumerRouter() {
           <Route path="/tr" element={<TasksReminders />} />
           <Route path="/wakti-ai" element={<WaktiAi />} />
           <Route path="/wakti-ai-v2" element={<WaktiAIV2 />} />
+          <Route path="/wakti-agent" element={<WaktiAgent />} />
           <Route path="/calendar" element={<Calendar />} />
           <Route path="/journal" element={<Journal />} />
           <Route path="/music" element={<MusicStudio />} />

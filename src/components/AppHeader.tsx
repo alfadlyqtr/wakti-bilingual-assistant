@@ -36,7 +36,7 @@ interface AppHeaderProps {
 export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   const { theme, setTheme, language, setLanguage, toggleLanguage } = useTheme();
   const { user, signOut } = useAuth();
-  const { isOpen: isOperatorOpen, stage: operatorStage, close: closeOperator, startRecording } = useWaktiOperator();
+  const { isOpen: isOperatorOpen, stage: operatorStage, open: openOperator, close: closeOperator } = useWaktiOperator();
   const { profile, loading: profileLoading, refetch: refetchProfile } = useUserProfile();
   const navigate = useNavigate();
   const location = useLocation();
@@ -567,7 +567,7 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => { if (isOperatorOpen) closeOperator(); else startRecording().catch(() => {}); }}
+                  onClick={() => { if (isOperatorOpen) closeOperator(); else openOperator(); }}
                   className={cn(
                     "relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border transition-all active:scale-95",
                     operatorBusy

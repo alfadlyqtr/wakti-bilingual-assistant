@@ -1,3 +1,5 @@
+ import type { WaktiCapabilityId } from '@/utils/waktiCapabilities';
+
 export type WaktiAgentIntent = 'ask' | 'plan-day' | 'voice-to-tasks' | 'prepare-event' | 'project-next-steps' | 'continue';
 
 const WAKTI_AGENT_PAYLOAD_PREFIX = 'wakti-agent-payload:';
@@ -7,6 +9,7 @@ export interface WaktiAgentUrlOptions {
   source?: string;
   context?: string;
   payloadId?: string;
+  capabilityId?: WaktiCapabilityId;
 }
 
 export interface WaktiAgentPayload {
@@ -68,12 +71,13 @@ export function clearWaktiAgentPayload(payloadId?: string | null) {
   window.sessionStorage.removeItem(`${WAKTI_AGENT_PAYLOAD_PREFIX}${payloadId}`);
 }
 
-export function buildWaktiAgentHref({ intent = 'ask', source, context, payloadId }: WaktiAgentUrlOptions = {}) {
+export function buildWaktiAgentHref({ intent = 'ask', source, context, payloadId, capabilityId }: WaktiAgentUrlOptions = {}) {
   const params = new URLSearchParams();
   params.set('intent', intent);
   if (source) params.set('source', source);
   if (context) params.set('context', context);
   if (payloadId) params.set('payload', payloadId);
+  if (capabilityId) params.set('capability', capabilityId);
   const query = params.toString();
   return query ? `/wakti-agent?${query}` : '/wakti-agent';
 }

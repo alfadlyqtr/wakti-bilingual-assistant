@@ -37,6 +37,9 @@ type EventMap = {
     status: 'pending' | 'running' | 'completed' | 'paused' | 'failed';
     error?: string;
   };
+  'wakti-operator-visual-mode': {
+    mode: 'default' | 'subtle';
+  };
 
   // ─── Registered for type-safety, still emitted via window.dispatchEvent ─
   // Safe to migrate incrementally — the listeners already accept these shapes.

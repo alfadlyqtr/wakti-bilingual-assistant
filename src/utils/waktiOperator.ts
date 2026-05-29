@@ -1,4 +1,8 @@
 import type { MailComposerAttachment } from '@/components/email/MailComposer';
+import { buildWaktiAgentHref, stashWaktiAgentPayload } from '@/utils/waktiAgent';
+import { getWaktiCapabilityRouteLabel, getWaktiCapabilityTitle, type WaktiCapabilityId } from '@/utils/waktiCapabilities';
+import { analyzeWaktiOperatorIntent, type WaktiOperatorIntentKind } from '@/utils/waktiOperatorIntent';
+import { saveTRPrefill, type TRPrefill, type TRReminderPrefillDraft, type TRTaskPrefillDraft } from '@/utils/trPrefill';
 
 const WAKTI_OPERATOR_PAYLOAD_PREFIX = 'wakti-operator-payload:';
 
@@ -52,6 +56,7 @@ export interface WaktiOperatorRoutePayload {
   image?: WaktiOperatorImageRequest;
   music?: WaktiOperatorMusicRequest;
   email?: WaktiOperatorEmailDraft;
+  trPrefill?: TRPrefill;
   source?: string;
 }
 
@@ -189,6 +194,153 @@ function buildAgentStep(href: string, label: string, description: string): Wakti
   };
 }
 
+function shouldPreferGuidanceFlow(transcript: string, kind: WaktiOperatorIntentKind) {
+  if (kind === 'guidance') return true;
+  if (kind !== 'mixed') return false;
+  return /^(how do i|how can i|can you explain|explain|show me how|help me understand|where do i|what is|كيف|اشرح|وريني|دلني|ساعدني أفهم|ساعدني افهم)/i.test(trimSentence(transcript));
+}
+
+function buildCapabilityGuidancePlan(transcript: string, language: 'ar' | 'en', capabilityId: WaktiCapabilityId) {
+  const planId = createId('plan');
+  const payloadId = stashWaktiAgentPayload({
+    transcript,
+    summary: language === 'ar' ? 'إرشاد داخل وكتي' : 'Guidance inside Wakti',
+  });
+  const href = buildWaktiAgentHref({
+    intent: 'ask',
+    source: 'voice',
+    payloadId,
+    capabilityId,
+  });
+  return {
+    id: planId,
+    transcript,
+    summary: language === 'ar' ? 'سأشرح لك الطريق داخل وكتي ثم أعطيك زر انتقال واضح.' : 'I will explain the path inside Wakti and give you a clear jump button.',
+    steps: [
+      buildAgentStep(
+        href,
+        language === 'ar' ? 'افتح دليل وكتي' : 'Open Wakti guide',
+        language === 'ar' ? 'سأعرض الشرح والخطوات وزر الانتقال المناسب.' : 'I will show the explanation, steps, and the right CTA.'
+      ),
+    ],
+  };
+}
+
+function stripTaskLanguage(transcript: string): string {
+  return trimSentence(
+    transcript
+      .replace(/\b(remind me to|remember to|create a task to|create task to|add a task to|add task to|make a task to|make task to|set a reminder to|create a reminder to|add a reminder to|task to|reminder to)\b/gi, ' ')
+      .replace(/\b(ذكرني أن|ذكرني بـ|أنشئ مهمة|اضف مهمة|أضف مهمة|سوي مهمة|أنشئ تذكير|اضف تذكير|أضف تذكير|سوي تذكير)\b/gi, ' ')
+      .replace(/\b(in wakti|inside wakti|using wakti)\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+  );
+}
+
+function extractRelativeMinutes(transcript: string): number | null {
+  const lower = transcript.toLowerCase();
+  const numericMatch = lower.match(/\b(?:in|after)\s+(\d{1,3})\s*(minute|minutes|min|mins)\b/);
+  if (numericMatch) {
+    const minutes = Number.parseInt(numericMatch[1], 10);
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+  }
+  const wordMap: Record<string, number> = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+    fifteen: 15,
+    twenty: 20,
+    thirty: 30,
+  };
+  const wordMatch = lower.match(/\b(?:in|after)\s+(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty)\s+minutes?\b/);
+  if (wordMatch) return wordMap[wordMatch[1]] || null;
+
+  const arabicNumericMatch = transcript.match(/بعد\s+(\d{1,3})\s*دقائق?/);
+  if (arabicNumericMatch) {
+    const minutes = Number.parseInt(arabicNumericMatch[1], 10);
+    return Number.isFinite(minutes) && minutes > 0 ? minutes : null;
+  }
+
+  const arabicWordMap: Record<string, number> = {
+    دقيقة: 1,
+    دقيقتين: 2,
+    دقيقتان: 2,
+    ثلاث: 3,
+    ثلاثة: 3,
+    أربع: 4,
+    أربعة: 4,
+    خمس: 5,
+    خمسة: 5,
+    ست: 6,
+    ستة: 6,
+    سبع: 7,
+    سبعة: 7,
+    ثمان: 8,
+    ثمانية: 8,
+    تسع: 9,
+    تسعة: 9,
+    عشر: 10,
+    عشرة: 10,
+  };
+  const arabicWordMatch = transcript.match(/بعد\s+(دقيقة|دقيقتين|دقيقتان|ثلاث|ثلاثة|أربع|أربعة|خمس|خمسة|ست|ستة|سبع|سبعة|ثمان|ثمانية|تسع|تسعة|عشر|عشرة)\s*دقائق?/);
+  if (arabicWordMatch) return arabicWordMap[arabicWordMatch[1]] || null;
+
+  return null;
+}
+
+function stripReminderTiming(text: string): string {
+  return trimSentence(
+    text
+      .replace(/\b(in|after)\s+\d{1,3}\s*(minute|minutes|min|mins)\b/gi, ' ')
+      .replace(/\b(in|after)\s+(one|two|three|four|five|six|seven|eight|nine|ten|fifteen|twenty|thirty)\s+minutes?\b/gi, ' ')
+      .replace(/\b(today|tomorrow|tonight|this evening|this afternoon|next week|next month)\b/gi, ' ')
+      .replace(/بعد\s+\d{1,3}\s*دقائق?/g, ' ')
+      .replace(/بعد\s+(دقيقة|دقيقتين|دقيقتان|ثلاث|ثلاثة|أربع|أربعة|خمس|خمسة|ست|ستة|سبع|سبعة|ثمان|ثمانية|تسع|تسعة|عشر|عشرة)\s*دقائق?/g, ' ')
+      .replace(/\b(اليوم|بكرة|غداً|غدا|الليلة|هذا المساء|الأسبوع القادم|الشهر القادم)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+  );
+}
+
+function extractTaskTitle(transcript: string): string {
+  const cleaned = stripReminderTiming(stripTaskLanguage(transcript));
+  return titleCaseFromWords(cleaned || transcript, 8).slice(0, 120);
+}
+
+function detectReminderIntent(transcript: string): boolean {
+  return /\b(remind|reminder|ذكرني|تذكير)\b/i.test(transcript);
+}
+
+function buildTaskPrefill(transcript: string): TRTaskPrefillDraft {
+  return {
+    title: extractTaskTitle(transcript),
+    description: trimSentence(transcript),
+    priority: /\b(urgent|asap|important|ضروري|عاجل|مهم)\b/i.test(transcript) ? 'urgent' : /\b(high priority|high|soon|قريب|أولوية)\b/i.test(transcript) ? 'high' : 'normal',
+    task_type: /\b(repeat|every day|daily|weekly|شهري|يومي|أسبوعي|متكرر)\b/i.test(transcript) ? 'repeated' : 'one-time',
+    is_shared: false,
+  };
+}
+
+function buildReminderPrefill(transcript: string): TRReminderPrefillDraft {
+  const relativeMinutes = extractRelativeMinutes(transcript);
+  const reminderTime = relativeMinutes
+    ? new Date(Date.now() + relativeMinutes * 60 * 1000)
+    : null;
+  return {
+    title: extractTaskTitle(transcript),
+    description: trimSentence(transcript),
+    due_date: reminderTime ? reminderTime.toISOString().split('T')[0] : undefined,
+    due_time: reminderTime
+      ? `${String(reminderTime.getHours()).padStart(2, '0')}:${String(reminderTime.getMinutes()).padStart(2, '0')}`
+      : undefined,
+  };
+}
+
 export function stashWaktiOperatorPayload(payload: WaktiOperatorRoutePayload) {
   const id = createId('payload');
   if (typeof window !== 'undefined') {
@@ -217,6 +369,34 @@ export function clearWaktiOperatorPayload(payloadId?: string | null) {
 export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en' = 'en'): WaktiOperatorPlan {
   const normalized = trimSentence(transcript);
   const lower = normalized.toLowerCase();
+  const intentAnalysis = analyzeWaktiOperatorIntent(normalized);
+  const matchedCapability = intentAnalysis.capability;
+
+  if (matchedCapability && shouldPreferGuidanceFlow(normalized, intentAnalysis.kind)) {
+    return buildCapabilityGuidancePlan(normalized, language, matchedCapability.id);
+  }
+
+  if (matchedCapability && intentAnalysis.kind === 'navigation') {
+    return {
+      id: createId('plan'),
+      transcript: normalized,
+      summary: language === 'ar' ? 'سأنقلك إلى المكان الصحيح داخل وكتي.' : 'I will take you to the right place inside Wakti.',
+      steps: [
+        buildAgentStep(
+          matchedCapability.route,
+          getWaktiCapabilityRouteLabel(matchedCapability, language),
+          language === 'ar'
+            ? `سأفتح ${getWaktiCapabilityTitle(matchedCapability, language)} داخل وكتي.`
+            : `I will open ${getWaktiCapabilityTitle(matchedCapability, language)} inside Wakti.`
+        ),
+      ],
+    };
+  }
+
+  if (matchedCapability && matchedCapability.supportLevel !== 'full_operator' && (intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
+    return buildCapabilityGuidancePlan(normalized, language, matchedCapability.id);
+  }
+
   const planId = createId('plan');
   const steps: WaktiOperatorStep[] = [];
   const wantsImage = /(image|picture|photo|poster|logo|thumbnail|cover|صورة|بوستر|شعار)/i.test(normalized);
@@ -360,11 +540,65 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
   }
 
   if (wantsTasks && steps.length === 0) {
-    steps.push(buildAgentStep(
-      '/tr',
-      language === 'ar' ? 'تحويل الصوت إلى مهام' : 'Turn voice into tasks',
-      language === 'ar' ? 'أفتح صفحة المهام والتذكيرات لتكمل الخطوات من داخل وكتي.' : 'Open Tasks & Reminders so you can continue the flow inside Wakti.'
-    ));
+    const isReminder = detectReminderIntent(normalized);
+    const openStepId = createId('step');
+    const createStepId = createId('step');
+    const trPrefill: TRPrefill = isReminder
+      ? {
+          version: 1,
+          kind: 'reminder',
+          openTab: 'reminders',
+          openModal: 'create',
+          draft: buildReminderPrefill(normalized),
+        }
+      : {
+          version: 1,
+          kind: 'task',
+          openTab: 'tasks',
+          openModal: 'create',
+          draft: buildTaskPrefill(normalized),
+        };
+    saveTRPrefill(trPrefill);
+    const taskPayload: WaktiOperatorRoutePayload = {
+      runId: planId,
+      stepId: openStepId,
+      transcript: normalized,
+      summary: isReminder
+        ? (language === 'ar' ? 'تحضير التذكير داخل المهام والتذكيرات' : 'Preparing the reminder inside Tasks & Reminders')
+        : (language === 'ar' ? 'تحضير المهمة داخل المهام والتذكيرات' : 'Preparing the task inside Tasks & Reminders'),
+      stepRefs: {
+        openStepId,
+        handoffStepId: createStepId,
+      },
+      trPrefill,
+      source: 'voice',
+    };
+    const payloadId = stashWaktiOperatorPayload(taskPayload);
+    steps.push({
+      id: openStepId,
+      kind: isReminder ? 'create_reminder' : 'create_task',
+      label: isReminder
+        ? (language === 'ar' ? 'افتح التذكيرات' : 'Open reminders')
+        : (language === 'ar' ? 'افتح المهام' : 'Open tasks'),
+      description: isReminder
+        ? (language === 'ar' ? 'أنتقل إلى صفحة التذكيرات داخل وكتي.' : 'Navigate to Tasks & Reminders inside Wakti.')
+        : (language === 'ar' ? 'أنتقل إلى صفحة المهام داخل وكتي.' : 'Navigate to Tasks & Reminders inside Wakti.'),
+      risk: 'safe',
+      status: 'pending',
+      href: `/tr?intent=create&tab=${trPrefill.openTab}&waktiOperator=${payloadId}`,
+      payloadId,
+    });
+    steps.push({
+      id: createStepId,
+      kind: isReminder ? 'create_reminder' : 'create_task',
+      label: isReminder
+        ? (language === 'ar' ? 'أنشئ التذكير' : 'Create reminder')
+        : (language === 'ar' ? 'أنشئ المهمة' : 'Create task'),
+      description: trPrefill.draft.title || normalized,
+      risk: 'safe',
+      status: 'pending',
+      payloadId,
+    });
   }
 
   if (steps.length === 0) {

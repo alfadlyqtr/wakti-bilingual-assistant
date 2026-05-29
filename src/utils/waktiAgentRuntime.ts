@@ -1,6 +1,7 @@
 import { Maw3dEvent } from '@/types/maw3d';
 import { TRReminder, TRTask } from '@/services/trService';
 import { WaktiAgentIntent, WaktiAgentPayload, getWaktiAgentPreset } from '@/utils/waktiAgent';
+import { findBestWaktiCapabilityMatch, getWaktiCapability, getWaktiCapabilityGuide, getWaktiCapabilityRouteLabel, getWaktiCapabilitySteps, getWaktiCapabilitySupportSummary, getWaktiCapabilityTitle, type WaktiCapabilityId } from '@/utils/waktiCapabilities';
 
 export interface WaktiAgentCardItem {
   id: string;
@@ -33,6 +34,14 @@ export interface WaktiAgentRunOutput {
   drafts: WaktiAgentWriteDraft[];
   approvalLabel: string;
   successLabel: string;
+  primaryAction?: {
+    label: string;
+    href: string;
+  };
+  secondaryAction?: {
+    label: string;
+    href: string;
+  };
 }
 
 interface BuildWaktiAgentRunOptions {
@@ -40,6 +49,7 @@ interface BuildWaktiAgentRunOptions {
   intent: WaktiAgentIntent;
   source?: string;
   context?: string;
+  capabilityId?: WaktiCapabilityId;
   request: string;
   payload?: WaktiAgentPayload | null;
   tasks: TRTask[];
@@ -155,6 +165,88 @@ function getUpcomingReminders(reminders: TRReminder[]) {
   return [...reminders]
     .sort((a, b) => `${a.due_date} ${a.due_time || '23:59:59'}`.localeCompare(`${b.due_date} ${b.due_time || '23:59:59'}`))
     .slice(0, 4);
+}
+
+function resolveCapability(options: BuildWaktiAgentRunOptions) {
+  const direct = getWaktiCapability(options.capabilityId);
+  if (direct) return direct;
+
+  const combined = uniqueTexts([
+    options.request,
+    options.context || '',
+    options.payload?.summary || '',
+    options.payload?.transcript || '',
+  ]).join(' ');
+
+  return findBestWaktiCapabilityMatch(combined)?.capability || null;
+}
+
+function buildCapabilityGuidanceRun(options: BuildWaktiAgentRunOptions): WaktiAgentRunOutput | null {
+  const capability = resolveCapability(options);
+  if (!capability) return null;
+
+  const language = options.language === 'ar' ? 'ar' : 'en';
+  const title = getWaktiCapabilityTitle(capability, language);
+  const steps = getWaktiCapabilitySteps(capability, language);
+  const support = getWaktiCapabilitySupportSummary(capability, language);
+  const guide = getWaktiCapabilityGuide(capability, language);
+  const sourceText = uniqueTexts([
+    options.payload?.transcript || '',
+    options.payload?.summary || '',
+    options.context || '',
+    options.request,
+  ])[0] || options.request;
+
+  return {
+    title: language === 'ar' ? `دليل ${title}` : `${title} guide`,
+    request: options.request,
+    sourceLabel: getWaktiAgentPreset(language, options.intent, options.context, options.source).sourceLabel,
+    found: [
+      guide,
+      language === 'ar' ? `فهمت أنك تسأل عن ${title}.` : `I understood that you are asking about ${title}.`,
+      support,
+    ],
+    actions: steps,
+    result: language === 'ar'
+      ? 'يمكنني الآن شرح الطريق لك أو نقلك مباشرة إلى المكان الصحيح داخل وكتي.'
+      : 'I can now explain the path or take you directly to the right place inside Wakti.',
+    cards: [
+      {
+        id: 'capability-what',
+        label: language === 'ar' ? 'ما هذا' : 'What this is',
+        title,
+        body: guide,
+        tone: 'cyan',
+      },
+      {
+        id: 'capability-how',
+        label: language === 'ar' ? 'كيف تصل إليه' : 'How to get there',
+        title: steps[0] || (language === 'ar' ? 'ابدأ من هنا' : 'Start here'),
+        body: steps.join(language === 'ar' ? ' ← ' : ' → '),
+        tone: 'amber',
+      },
+      {
+        id: 'capability-request',
+        label: language === 'ar' ? 'ما التقطته' : 'What I picked up',
+        title: language === 'ar' ? 'طلبك الحالي' : 'Your current request',
+        body: truncate(sourceText, 180),
+        tone: capability.supportLevel === 'full_operator' ? 'emerald' : 'rose',
+      },
+    ],
+    drafts: [],
+    approvalLabel: language === 'ar' ? 'فهمت' : 'Got it',
+    successLabel: language === 'ar' ? 'تم تجهيز الإرشاد.' : 'The guidance is ready.',
+    primaryAction: {
+      label: getWaktiCapabilityRouteLabel(capability, language),
+      href: capability.route,
+    },
+    secondaryAction: capability.supportLevel === 'full_operator'
+      ? {
+          label: language === 'ar' ? 'ارجع للمشغّل ونفّذها' : 'Go back and let Operator do it',
+          href: capability.route,
+        }
+      : undefined,
+  };
 }
 
 function buildPlanDayRun(options: BuildWaktiAgentRunOptions): WaktiAgentRunOutput {
@@ -443,6 +535,9 @@ export function buildWaktiAgentRun(options: BuildWaktiAgentRunOptions): WaktiAge
   if (options.intent === 'plan-day') return buildPlanDayRun(options);
   if (options.intent === 'voice-to-tasks') return buildVoiceToTasksRun(options);
   if (options.intent === 'prepare-event') return buildPrepareEventRun(options);
+
+  const capabilityGuidance = options.intent === 'ask' ? buildCapabilityGuidanceRun(options) : null;
+  if (capabilityGuidance) return capabilityGuidance;
 
   const preset = getWaktiAgentPreset(options.language, options.intent, options.context, options.source);
   return {

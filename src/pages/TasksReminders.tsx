@@ -20,6 +20,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { consumeTRPrefill, TRReminderPrefillDraft, TRTaskPrefillDraft } from '@/utils/trPrefill';
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
+import { emitEvent } from '@/utils/eventBus';
 
 export default function TasksReminders() {
   const { language } = useTheme();
@@ -68,6 +70,24 @@ export default function TasksReminders() {
   const [editingReminder, setEditingReminder] = useState<TRReminder | null>(null);
   const [taskPrefill, setTaskPrefill] = useState<TRTaskPrefillDraft | null>(null);
   const [reminderPrefill, setReminderPrefill] = useState<TRReminderPrefillDraft | null>(null);
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = operatorPayloadId ? readWaktiOperatorPayload(operatorPayloadId) : null;
+
+  const completeOperatorFlow = () => {
+    if (operatorPayload?.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'completed',
+      });
+    }
+    if (operatorPayloadId) {
+      clearWaktiOperatorPayload(operatorPayloadId);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('waktiOperator');
+      setSearchParams(nextParams, { replace: true });
+    }
+  };
 
   const openTaskCreate = (prefill: TRTaskPrefillDraft | null = null) => {
     setEditingTask(null);
@@ -84,6 +104,31 @@ export default function TasksReminders() {
     setActiveTab('reminders');
     setReminderFormOpen(true);
   };
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.openStepId,
+      status: 'completed',
+    });
+  }, [operatorPayload?.runId, operatorPayload?.stepRefs?.openStepId]);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.handoffStepId) return;
+    if (!taskFormOpen && !reminderFormOpen) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.handoffStepId,
+      status: 'running',
+    });
+  }, [operatorPayload?.runId, operatorPayload?.stepRefs?.handoffStepId, reminderFormOpen, taskFormOpen]);
+
+  useEffect(() => {
+    emitEvent('wakti-operator-visual-mode', {
+      mode: taskFormOpen || reminderFormOpen ? 'subtle' : 'default',
+    });
+  }, [reminderFormOpen, taskFormOpen]);
 
   const handleCreateTask = () => {
     openTaskCreate();
@@ -148,6 +193,7 @@ export default function TasksReminders() {
   const handleDataChanged = () => {
     console.log('T&R Page - Data changed, refreshing...');
     refresh();
+    completeOperatorFlow();
   };
 
   // Show error state if there's an authentication or loading error

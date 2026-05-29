@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { useTheme } from '@/providers/ThemeProvider';
 import { buildWaktiAgentHref, getWaktiAgentPreset, getWaktiAgentQuickActions, readWaktiAgentPayload, WaktiAgentIntent } from '@/utils/waktiAgent';
 import { buildWaktiAgentRun, WaktiAgentCardItem, WaktiAgentWriteDraft } from '@/utils/waktiAgentRuntime';
+import type { WaktiCapabilityId } from '@/utils/waktiCapabilities';
 import { useOptimizedTRData } from '@/hooks/useOptimizedTRData';
 import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
 import { TRService } from '@/services/trService';
@@ -31,11 +32,12 @@ export default function WaktiAgent() {
   const source = searchParams.get('source') || undefined;
   const context = searchParams.get('context') || undefined;
   const payloadId = searchParams.get('payload');
+  const capabilityId = (searchParams.get('capability') as WaktiCapabilityId | null) || undefined;
 
   const payload = useMemo(() => readWaktiAgentPayload(payloadId), [payloadId]);
   const preset = useMemo(() => getWaktiAgentPreset(language, intent, context, source), [context, intent, language, source]);
   const quickActions = useMemo(() => getWaktiAgentQuickActions(language), [language]);
-  const [request, setRequest] = useState(preset.input);
+  const [request, setRequest] = useState(payload?.transcript || preset.input);
   const [approved, setApproved] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
@@ -44,22 +46,23 @@ export default function WaktiAgent() {
   const { events, attendingCounts, loading: eventsLoading, error: eventsError, refetch } = useOptimizedMaw3dEvents();
 
   useEffect(() => {
-    setRequest(preset.input);
+    setRequest(payload?.transcript || preset.input);
     setApproved(false);
-  }, [preset]);
+  }, [payload?.transcript, preset]);
 
   const run = useMemo(() => buildWaktiAgentRun({
     language,
     intent,
     source,
     context,
+    capabilityId,
     request,
     payload,
     tasks,
     reminders,
     events,
     attendingCounts,
-  }), [attendingCounts, context, events, intent, language, payload, reminders, request, source, tasks]);
+  }), [attendingCounts, capabilityId, context, events, intent, language, payload, reminders, request, source, tasks]);
 
   const draftKey = run.drafts.map(draft => draft.id).join('|');
 
@@ -337,6 +340,16 @@ export default function WaktiAgent() {
               <p className="mt-2 text-sm text-white/65">{run.result}</p>
             </div>
             <div className="flex flex-wrap gap-2 md:justify-end">
+              {run.primaryAction ? (
+                <Button onClick={() => navigate(run.primaryAction!.href)} className="bg-cyan-400 text-[#060541] hover:bg-cyan-300">
+                  {run.primaryAction.label}
+                </Button>
+              ) : null}
+              {run.secondaryAction ? (
+                <Button variant="outline" onClick={() => navigate(run.secondaryAction!.href)} className="border-cyan-300/20 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/15 hover:text-cyan-50">
+                  {run.secondaryAction.label}
+                </Button>
+              ) : null}
               <Button onClick={handleApprove} disabled={isApplying || isContextLoading} className="bg-[#e9ceb0] text-[#060541] hover:bg-[#f2dcc4] disabled:opacity-60">
                 {isApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
                 {run.approvalLabel}
