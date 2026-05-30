@@ -2482,8 +2482,8 @@ function VoicesTab({
           items: ['خليجي تراثي','شيلات','سامري','جلسة','ليوان','شعبي خليجي']
         },
         {
-          title: 'عربي آخر',
-          items: ['مصري','شعبي مصري','عراقي','لبناني','مغربي','مهرجانات','شامي']
+          title: 'أنماط أخرى',
+          items: ['مصري','شعبي مصري','عراقي','لبناني','مغربي','تركي','مهرجانات','شامي']
         },
         {
           title: 'إسلامي',
@@ -2569,8 +2569,8 @@ function VoicesTab({
         items: ['Khaleeji Traditional','Sheilat','Samri','Ardah','Jalsa','Liwa','Khaleeji Shaabi','Zar','Khaleeji Trap']
       },
       {
-        title: 'Other Arabic',
-        items: ['Egyptian','Egyptian Shaabi','Iraqi Style','Lebanese Style','Moroccan Style']
+        title: 'Others',
+        items: ['Egyptian','Egyptian Shaabi','Iraqi Style','Lebanese Style','Moroccan Style','Turkish']
       },
       {
         title: 'Islamic',
@@ -2987,6 +2987,8 @@ function VoicesTab({
       'مصري':                 ['oud', 'qanun', 'ney', 'tabla', 'darbuka'],
       'Egyptian Shaabi':      ['drum machine', 'synth lead', 'bass guitar', 'darbuka'],
       'شعبي مصري':            ['drum kit', 'synth lead', 'bass guitar', 'electric guitar', 'darbuka'],
+      'Turkish':              ['saz', 'kemenche', 'zurna', 'mey', 'davul'],
+      'تركي':                 ['saz', 'kemenche', 'zurna', 'mey', 'davul'],
       'مهرجانات':             ['drum kit', 'synth lead', 'bass guitar', 'percussion'],
       'Anasheed':             ['Vocal Harmony'],
       'أناشيد':               ['Vocal Harmony'],
@@ -3005,6 +3007,7 @@ function VoicesTab({
     'oud': 'عود', 'qanun': 'قانون', 'ney': 'ناي', 'riq': 'رق', 'darbuka': 'دربوكة',
     'tabla': 'طبلة', 'mirwas': 'مرواس', 'tabl': 'طبل', 'tabl turki': 'طبل تركي',
     'frame drum': 'طار', 'daff': 'دف', 'tar': 'طار', 'tanbura': 'طنبورة',
+    'saz': 'ساز', 'kemenche': 'كمنجة تركية', 'zurna': 'زورنا', 'mey': 'مي تركي', 'cumbus': 'جومبوش', 'davul': 'داوول',
     'mijwiz': 'مجوز', 'rebab': 'رباب', 'gulf percussion': 'إيقاع خليجي',
     'violin': 'كمان', 'viola': 'فيولا', 'cello': 'تشيلو', 'contrabass': 'كونترباص', 'strings': 'وتريات',
     'piano': 'بيانو', 'electric piano': 'بيانو كهربائي', 'soft piano': 'بيانو ناعم', 'organ': 'أورغ', 'accordion': 'أكورديون',
@@ -3979,6 +3982,7 @@ function VoicesTab({
     if (language === 'ar') {
       return [
         { title: 'تراثي عربي وخليجي', items: ['oud','qanun','ney','riq','darbuka','tabla','tar','daff','mirwas','rebab','gulf percussion'] },
+        { title: 'تركية', items: ['saz','kemenche','zurna','mey','cumbus','davul'] },
         { title: 'أوتار', items: ['violin','viola','cello','contrabass','strings'] },
         { title: 'مفاتيح', items: ['piano','electric piano','soft piano','organ','accordion'] },
         { title: 'جيتارات وباص', items: ['acoustic guitar','electric guitar','bass guitar','upright bass','synth bass'] },
@@ -3991,6 +3995,7 @@ function VoicesTab({
     }
     return [
       { title: 'Arabic & Gulf Traditional', items: ['oud','qanun','ney','riq','darbuka','tabla','mirwas','tabl','tabl turki','frame drum','daff','tar','tanbura','mijwiz','rebab','gulf percussion'] },
+      { title: 'Turkish', items: ['saz','kemenche','zurna','mey','cumbus','davul'] },
       { title: 'Strings', items: ['violin','viola','cello','contrabass','strings'] },
       { title: 'Keys', items: ['piano','electric piano','soft piano','organ','accordion'] },
       { title: 'Guitars & Bass', items: ['acoustic guitar','electric guitar','bass guitar','upright bass','synth bass'] },

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { emitEvent } from "@/utils/eventBus";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -198,9 +199,19 @@ export function ContactList({
   });
 
   const handleOpenChat = (contactId: string, name: string, avatar?: string) => {
+    // If an operator chat request is still waiting for the user to pick the
+    // contact, carry the operator payload along so the draft is still placed
+    // and the operator step completes after sending.
+    const pendingOperatorChat = Boolean(operatorPayloadId && operatorPayload?.chat);
+
     if (useFullPageChat) {
       // Mobile/tablet: navigate to full-page chat
-      navigate(`/contacts/${contactId}?from=${source}`);
+      const operatorSuffix = pendingOperatorChat ? `&waktiOperator=${operatorPayloadId}` : '';
+      navigate(`/contacts/${contactId}?from=${pendingOperatorChat ? 'operator' : source}${operatorSuffix}`);
+    } else if (pendingOperatorChat) {
+      // Desktop with a pending operator request: use the full-page chat so the
+      // operator draft + step handoff work end to end.
+      navigate(`/contacts/${contactId}?from=operator&waktiOperator=${operatorPayloadId}`);
     } else {
       // Desktop: use popup
       setSelectedContact({ id: contactId, name, avatar });
@@ -208,34 +219,139 @@ export function ContactList({
     }
   };
 
+  // Tracks which operator payload we already attempted to resolve, so the
+  // matcher runs once per request and never loops.
+  const operatorMatchHandledRef = useRef<string | null>(null);
+
+  // When we cannot confidently resolve the requested contact, we must NOT hang
+  // on "Open the right chat". Instead we pause the operator step and tell the
+  // user clearly so they can tap the contact themselves.
+  const reportOperatorChatUnresolved = (requestedName?: string) => {
+    if (operatorPayload?.runId && operatorPayload.stepRefs?.openStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.openStepId,
+        status: 'paused',
+      });
+    }
+    if (requestedName) {
+      toast.message(
+        language === 'ar'
+          ? `لم أتأكد من جهة الاتصال "${requestedName}". اختر الشخص من القائمة وسأكمل.`
+          : `I couldn't confirm the contact "${requestedName}". Pick the person from the list and I'll continue.`
+      );
+    } else {
+      toast.message(
+        language === 'ar'
+          ? 'لم أفهم اسم جهة الاتصال. اختر الشخص من القائمة.'
+          : "I couldn't read the contact name. Pick the person from the list."
+      );
+    }
+  };
+
   useEffect(() => {
     const targetName = operatorPayload?.chat?.targetContactName?.trim();
-    if (!operatorPayloadId || !targetName || !contacts || contacts.length === 0) return;
+    if (!operatorPayloadId || !targetName) return;
+    if (!contacts || contacts.length === 0) return;
+    // Only attempt the operator match once per payload to avoid loops/re-triggers.
+    if (operatorMatchHandledRef.current === operatorPayloadId) return;
+    operatorMatchHandledRef.current = operatorPayloadId;
 
-    const normalize = (value: string) => value.toLowerCase().replace(/[^\p{L}\p{N}\s@._-]/gu, ' ').replace(/\s+/g, ' ').trim();
+    // Normalize text: lowercase, drop brackets/punctuation, collapse spaces.
+    const normalize = (value: string) =>
+      (value || '')
+        .toLowerCase()
+        .replace(/[()\[\]{}<>]/g, ' ')
+        .replace(/[^\p{L}\p{N}\s@._-]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
     const normalizedTarget = normalize(targetName);
-    if (!normalizedTarget) return;
+    if (!normalizedTarget) {
+      reportOperatorChatUnresolved();
+      return;
+    }
+
+    const targetTokens = normalizedTarget.split(' ').filter(Boolean);
+
+    // Levenshtein distance for small typo / transcription tolerance.
+    const editDistance = (a: string, b: string): number => {
+      if (a === b) return 0;
+      if (!a.length) return b.length;
+      if (!b.length) return a.length;
+      const prev = new Array(b.length + 1);
+      const curr = new Array(b.length + 1);
+      for (let j = 0; j <= b.length; j++) prev[j] = j;
+      for (let i = 1; i <= a.length; i++) {
+        curr[0] = i;
+        for (let j = 1; j <= b.length; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+        }
+        for (let j = 0; j <= b.length; j++) prev[j] = curr[j];
+      }
+      return prev[b.length];
+    };
+
+    // Fuzzy word match tolerant of short spelling/transcription differences.
+    const fuzzyWordMatch = (a: string, b: string) => {
+      if (!a || !b) return false;
+      if (a === b) return true;
+      if (a.length >= 3 && b.length >= 3 && (a.includes(b) || b.includes(a))) return true;
+      const maxLen = Math.max(a.length, b.length);
+      const tolerance = maxLen <= 4 ? 1 : maxLen <= 7 ? 2 : 3;
+      return editDistance(a, b) <= tolerance;
+    };
+
+    const scoreCandidate = (candidate: string) => {
+      const normalizedCandidate = normalize(candidate);
+      if (!normalizedCandidate) return 0;
+      if (normalizedCandidate === normalizedTarget) return 100;
+      if (normalizedCandidate.includes(normalizedTarget) || normalizedTarget.includes(normalizedCandidate)) return 90;
+
+      const candidateTokens = normalizedCandidate.split(' ').filter(Boolean);
+      if (targetTokens.length === 0 || candidateTokens.length === 0) return 0;
+
+      let matchedTokens = 0;
+      for (const targetToken of targetTokens) {
+        if (candidateTokens.some((candidateToken) => fuzzyWordMatch(candidateToken, targetToken))) {
+          matchedTokens += 1;
+        }
+      }
+      if (matchedTokens === 0) return 0;
+      // Reward how much of the requested name was matched.
+      const coverage = matchedTokens / targetTokens.length;
+      return Math.round(40 + coverage * 45);
+    };
 
     const scoredContacts = contacts
       .map((contact: any) => {
         const profile = contact.profile || {};
-        const username = normalize(profile.username || '');
-        const displayName = normalize(profile.display_name || '');
-        const exactDisplay = displayName && displayName === normalizedTarget;
-        const exactUsername = username && username === normalizedTarget;
-        const containsDisplay = displayName && displayName.includes(normalizedTarget);
-        const containsUsername = username && username.includes(normalizedTarget);
-        const score = exactDisplay ? 100 : exactUsername ? 96 : containsDisplay ? 88 : containsUsername ? 82 : 0;
-        return { contact, score };
+        const displayScore = scoreCandidate(profile.display_name || '');
+        const usernameScore = scoreCandidate(profile.username || '');
+        return { contact, score: Math.max(displayScore, usernameScore) };
       })
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score);
 
-    const bestMatch = scoredContacts[0]?.contact;
-    if (!bestMatch?.contact_id) return;
+    const best = scoredContacts[0];
+    const second = scoredContacts[1];
 
-    navigate(`/contacts/${bestMatch.contact_id}?waktiOperator=${operatorPayloadId}&from=operator`, { replace: true });
-  }, [contacts, navigate, operatorPayload?.chat?.targetContactName, operatorPayloadId]);
+    // Confident match: strong score, and clearly ahead of the runner-up.
+    const isConfident = Boolean(
+      best &&
+      best.score >= 70 &&
+      (!second || best.score - second.score >= 10 || best.score >= 90)
+    );
+
+    if (best && isConfident && best.contact?.contact_id) {
+      navigate(`/contacts/${best.contact.contact_id}?waktiOperator=${operatorPayloadId}&from=operator`, { replace: true });
+      return;
+    }
+
+    // No confident match — never hang. Tell the user clearly and pause the step.
+    reportOperatorChatUnresolved(targetName);
+  }, [contacts, navigate, operatorPayload?.chat?.targetContactName, operatorPayload?.runId, operatorPayload?.stepRefs?.openStepId, operatorPayloadId]);
 
   const handleToggleFavorite = (favoriteRecordId: string | null | undefined, isCurrentlyFavorite: boolean) => {
     if (!favoriteRecordId) {

@@ -136,7 +136,15 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
         setStage('error');
         return;
       }
-      const hasRemainingSafeSteps = nextPlan.steps.some((step) => step.risk === 'safe' && step.status !== 'completed');
+      // A paused step means the operator is waiting on the user (e.g. pick a
+      // contact). Drop out of the busy/executing state so the overlay does not
+      // look stuck on a spinner.
+      if (status === 'paused') {
+        setError(null);
+        setStage('idle');
+        return;
+      }
+      const hasRemainingSafeSteps = nextPlan.steps.some((step) => step.risk === 'safe' && step.status !== 'completed' && step.status !== 'paused');
       setError(null);
       setStage(hasRemainingSafeSteps ? 'executing' : 'idle');
     });

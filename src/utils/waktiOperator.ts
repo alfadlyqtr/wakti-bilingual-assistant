@@ -190,22 +190,32 @@ function extractChatTargetName(transcript: string) {
 
 function extractChatDraftMessage(transcript: string) {
   const quoted = extractQuotedText(transcript);
-  if (quoted) return quoted.slice(0, 400);
+  if (quoted) return cleanDraftMessage(quoted);
+  // IMPORTANT: do NOT match the bare word "message" here, because phrases like
+  // "send a message to ..." would then capture the instructions as the draft.
+  // Only capture what follows an explicit speech marker (say / saying / tell).
   const patterns = [
-    /(?:saying|say|that says|with(?: the)? message|message(?:\s+that)?|tell(?: him| her| them)?|to say)\s+(.+)/i,
+    /\b(?:saying|that says|that reads|tell(?:\s+(?:him|her|them))?|to say)\b\s+(.+)/i,
+    /\b(?:and\s+)?say\b\s+(.+)/i,
+    /\b(?:message|msg)\s+(?:saying|that says|that reads)\b\s+(.+)/i,
+    /\bwith(?:\s+the)?\s+message\b\s+(.+)/i,
     /(?:وقل|قل له|قل لها|قل لهم|نصها|محتواها|رسالتها|يقول|تقول)\s+(.+)/,
   ];
   for (const pattern of patterns) {
     const match = transcript.match(pattern);
-    const candidate = trimSentence(match?.[1] || '');
-    if (candidate) return candidate.slice(0, 400);
-  }
-  const colonIndex = transcript.search(/[:：]/);
-  if (colonIndex >= 0) {
-    const candidate = trimSentence(transcript.slice(colonIndex + 1));
-    if (candidate) return candidate.slice(0, 400);
+    const candidate = cleanDraftMessage(match?.[1] || '');
+    if (candidate) return candidate;
   }
   return '';
+}
+
+function cleanDraftMessage(value: string) {
+  return trimSentence(value)
+    .replace(/^[\s:،,-]+/, '')
+    .replace(/[\s]+$/, '')
+    .replace(/[.،,]+$/, '')
+    .slice(0, 400)
+    .trim();
 }
 
 function inferTextToolTab(transcript: string): SmartTextPrefillTab {
