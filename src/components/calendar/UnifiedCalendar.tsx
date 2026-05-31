@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { onEvent } from "@/utils/eventBus";
+import { emitEvent, onEvent } from "@/utils/eventBus";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, 
   isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, getDay, 
   addWeeks, subWeeks, setMonth, getMonth, startOfYear, endOfYear, 
@@ -62,17 +62,64 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useSearchParams } from "react-router-dom";
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from "@/utils/waktiOperator";
+
+function normalizeCalendarOperatorTitle(value?: string | null) {
+  return (value || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function resolveManualOperatorEntry(entries: CalendarEntry[], targetTitle?: string) {
+  const target = normalizeCalendarOperatorTitle(targetTitle);
+  if (!target) return null;
+  let bestMatch: CalendarEntry | null = null;
+  let bestScore = 0;
+  for (const entry of entries) {
+    if (entry.type !== EntryType.MANUAL_NOTE) continue;
+    const candidate = normalizeCalendarOperatorTitle(entry.title);
+    let score = 0;
+    if (candidate === target) score = 100;
+    else if (candidate.startsWith(target) || target.startsWith(candidate)) score = 85;
+    else if (candidate.includes(target)) score = 70;
+    else {
+      const words = target.split(' ').filter(Boolean);
+      if (words.length > 0 && words.every((word) => candidate.includes(word))) {
+        score = 60;
+      }
+    }
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = entry;
+    }
+  }
+  return bestScore >= 60 ? bestMatch : null;
+}
+
+function parseOperatorCalendarDate(value?: string) {
+  if (!value) return null;
+  try {
+    return parse(value, 'yyyy-MM-dd', new Date());
+  } catch {
+    return null;
+  }
+}
 
 export const UnifiedCalendar: React.FC = React.memo(() => {
   const { language, theme } = useTheme();
   const { user } = useAuth();
   const { profile: _calProfile } = useUserProfile();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date());
   const [view, setView] = useState<CalendarView>('month');
   const [agendaOpen, setAgendaOpen] = useState(false);
   const [entryDialogOpen, setEntryDialogOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<CalendarEntry | null>(null);
+  const [entryDialogPrefill, setEntryDialogPrefill] = useState<Partial<CalendarEntry> | null>(null);
   const [journalDialogOpen, setJournalDialogOpen] = useState(false);
   const [journalLatest, setJournalLatest] = useState<JournalCheckin | null>(null);
   const [journalDay, setJournalDay] = useState<JournalDay | null>(null);
@@ -110,6 +157,9 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     }
   });
   const [nativeCalendarAvailable, setNativeCalendarAvailable] = useState(false);
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = operatorPayloadId ? readWaktiOperatorPayload(operatorPayloadId) : null;
+  const handledOperatorPayloadIdRef = useRef<string | null>(null);
   
   // Check if native calendar is available on mount
   useEffect(() => {
@@ -212,6 +262,34 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     setManualEntries,
     loading,
   } = useOptimizedCalendarData();
+
+  const clearOperatorRouteState = useCallback(() => {
+    if (!operatorPayloadId) return;
+    clearWaktiOperatorPayload(operatorPayloadId);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('waktiOperator');
+    setSearchParams(nextParams, { replace: true });
+  }, [operatorPayloadId, searchParams, setSearchParams]);
+
+  const emitOperatorHandoffStatus = useCallback((status: 'running' | 'completed' | 'paused' | 'failed', error?: string) => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.handoffStepId) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.handoffStepId,
+      status,
+      error,
+    });
+  }, [operatorPayload?.runId, operatorPayload?.stepRefs?.handoffStepId]);
+
+  const completeOperatorFlow = useCallback(() => {
+    emitOperatorHandoffStatus('completed');
+    clearOperatorRouteState();
+  }, [clearOperatorRouteState, emitOperatorHandoffStatus]);
+
+  const failOperatorFlow = useCallback((message: string) => {
+    emitOperatorHandoffStatus('failed', message);
+    clearOperatorRouteState();
+  }, [clearOperatorRouteState, emitOperatorHandoffStatus]);
   
   // Get the appropriate locale based on the selected language
   const locale = language === 'ar' ? arSA : enUS;
@@ -351,6 +429,88 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     setAgendaOpen(true);
   }, []);
 
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.openStepId,
+      status: 'completed',
+    });
+  }, [operatorPayload?.runId, operatorPayload?.stepRefs?.openStepId]);
+
+  useEffect(() => {
+    emitEvent('wakti-operator-visual-mode', {
+      mode: entryDialogOpen ? 'subtle' : 'default',
+    });
+  }, [entryDialogOpen]);
+
+  useEffect(() => {
+    if (!operatorPayload?.calendar || !operatorPayloadId || handledOperatorPayloadIdRef.current === operatorPayloadId || loading) return;
+    handledOperatorPayloadIdRef.current = operatorPayloadId;
+
+    const calendarAction = operatorPayload.calendar;
+    const targetDate = parseOperatorCalendarDate(calendarAction.date);
+    if (targetDate) {
+      setCurrentDate(targetDate);
+      setSelectedDate(targetDate);
+    }
+    if (calendarAction.view) {
+      setView(calendarAction.view);
+    }
+
+    if (calendarAction.action === 'change_view') {
+      completeOperatorFlow();
+      return;
+    }
+
+    if (calendarAction.action === 'open_date') {
+      if (targetDate) {
+        setAgendaOpen(true);
+      }
+      completeOperatorFlow();
+      return;
+    }
+
+    if (calendarAction.action === 'create_note') {
+      setAgendaOpen(false);
+      setEditEntry(null);
+      setEntryDialogPrefill({
+        title: calendarAction.title,
+        description: calendarAction.description,
+        date: calendarAction.date,
+        time: calendarAction.time,
+      });
+      setEntryDialogOpen(true);
+      return;
+    }
+
+    if (calendarAction.action === 'edit_note') {
+      const targetEntry = resolveManualOperatorEntry(manualEntries, calendarAction.targetTitle);
+      if (!targetEntry) {
+        failOperatorFlow(language === 'ar' ? 'لم أجد ملاحظة التقويم المطلوبة.' : 'I could not find the requested calendar note.');
+        return;
+      }
+      setAgendaOpen(false);
+      setEditEntry(targetEntry);
+      setEntryDialogPrefill({
+        date: calendarAction.date,
+        time: calendarAction.time,
+        description: calendarAction.description,
+      });
+      setEntryDialogOpen(true);
+    }
+  }, [completeOperatorFlow, failOperatorFlow, language, loading, manualEntries, operatorPayload?.calendar, operatorPayloadId]);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.handoffStepId) return;
+    if (!entryDialogOpen) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.handoffStepId,
+      status: 'paused',
+    });
+  }, [entryDialogOpen, operatorPayload?.runId, operatorPayload?.stepRefs?.handoffStepId]);
+
   // Fetch journal data when the journal dialog opens
   useEffect(() => {
     const run = async () => {
@@ -466,8 +626,10 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     console.log('Adding new manual entry:', newEntry);
     const updatedEntries = [...manualEntries, newEntry];
     setManualEntries(updatedEntries);
+    setEntryDialogPrefill(null);
     setEntryDialogOpen(false);
-  }, [manualEntries, setManualEntries]);
+    completeOperatorFlow();
+  }, [completeOperatorFlow, manualEntries, setManualEntries]);
 
   // Edit a manual calendar entry - optimized
   const updateManualEntry = useCallback((entry: CalendarEntry) => {
@@ -475,8 +637,10 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     const updatedEntries = manualEntries.map(e => e.id === entry.id ? entry : e);
     setManualEntries(updatedEntries);
     setEditEntry(null);
+    setEntryDialogPrefill(null);
     setEntryDialogOpen(false);
-  }, [manualEntries, setManualEntries]);
+    completeOperatorFlow();
+  }, [completeOperatorFlow, manualEntries, setManualEntries]);
 
   // Delete a manual calendar entry - optimized
   const deleteManualEntry = useCallback((entryId: string) => {
@@ -484,12 +648,15 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
     const updatedEntries = manualEntries.filter(entry => entry.id !== entryId);
     setManualEntries(updatedEntries);
     setEditEntry(null);
+    setEntryDialogPrefill(null);
     setEntryDialogOpen(false);
-  }, [manualEntries, setManualEntries]);
+    completeOperatorFlow();
+  }, [completeOperatorFlow, manualEntries, setManualEntries]);
 
   // Open dialog to edit an entry
   const handleEditEntry = useCallback((entry: CalendarEntry) => {
     if (entry.type === EntryType.MANUAL_NOTE) {
+      setEntryDialogPrefill(null);
       setEditEntry(entry);
       setEntryDialogOpen(true);
     }
@@ -1419,11 +1586,14 @@ export const UnifiedCalendar: React.FC = React.memo(() => {
         onClose={() => {
           setEntryDialogOpen(false);
           setEditEntry(null);
+          setEntryDialogPrefill(null);
+          clearOperatorRouteState();
         }}
         onSave={editEntry ? updateManualEntry : addManualEntry}
         onDelete={editEntry ? deleteManualEntry : undefined}
         initialDate={selectedDate || new Date()}
         entry={editEntry}
+        prefill={entryDialogPrefill}
       />
 
       {/* Subscribe to Calendar Dialog - iOS Optimized */}

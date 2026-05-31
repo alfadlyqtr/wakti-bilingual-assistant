@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { downloadEmailAttachment, EmailMessageAttachment, EmailMessageAttachmentContent } from '@/utils/emailAttachmentDownload';
 
 export interface ImapMessage {
   uid: number;
@@ -20,6 +21,7 @@ export interface ImapMessageFull {
   date: string;
   snippet: string;
   body: { text: string; html: string };
+  attachments: EmailMessageAttachment[];
 }
 
 export interface ImapMailboxInfo {
@@ -60,6 +62,25 @@ function normalizeImapBody(body: unknown): { text: string; html: string } {
     text: typeof safeBody.text === 'string' ? safeBody.text : '',
     html: typeof safeBody.html === 'string' ? safeBody.html : '',
   };
+}
+
+function normalizeImapAttachments(value: unknown): EmailMessageAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const safeItem = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+      const id = typeof safeItem.id === 'string' ? safeItem.id : '';
+      const name = typeof safeItem.name === 'string' ? safeItem.name : '';
+      if (!id || !name) return null;
+      return {
+        id,
+        name,
+        contentType: typeof safeItem.contentType === 'string' ? safeItem.contentType : null,
+        size: typeof safeItem.size === 'number' ? safeItem.size : null,
+        inline: safeItem.inline === true,
+      } satisfies EmailMessageAttachment;
+    })
+    .filter(Boolean) as EmailMessageAttachment[];
 }
 
 function readStoredFolderCache(): Record<string, ImapFolderCache> {
@@ -219,7 +240,11 @@ export function useImapMessages(connectionId: string) {
     if (!connectionId) return null;
     const cacheKey = getMessageCacheKey(folder, uid);
     if (messageCacheRef.current[cacheKey] && !options?.forceRefresh) {
-      return messageCacheRef.current[cacheKey];
+      return {
+        ...messageCacheRef.current[cacheKey],
+        body: normalizeImapBody(messageCacheRef.current[cacheKey].body),
+        attachments: normalizeImapAttachments(messageCacheRef.current[cacheKey].attachments),
+      } satisfies ImapMessageFull;
     }
     try {
       const data = await callImapApi('get_message', {
@@ -233,6 +258,7 @@ export function useImapMessages(connectionId: string) {
       const normalized = {
         ...(data as ImapMessageFull),
         body: normalizeImapBody((data as Partial<ImapMessageFull>).body),
+        attachments: normalizeImapAttachments((data as Partial<ImapMessageFull>).attachments),
       } satisfies ImapMessageFull;
       messageCacheRef.current[cacheKey] = normalized;
       return normalized;
@@ -261,6 +287,47 @@ export function useImapMessages(connectionId: string) {
       return false;
     }
   }, [connectionId]);
+
+  const getAttachmentContent = useCallback(async (uid: number, folder: string, attachment: EmailMessageAttachment): Promise<EmailMessageAttachmentContent | null> => {
+    if (!connectionId) return null;
+    try {
+      const data = await callImapApi('download_attachment', {
+        connection_id: connectionId,
+        uid,
+        folder,
+        attachmentId: attachment.id,
+      });
+      if (!data?.content) {
+        throw new Error('Attachment download failed');
+      }
+      return {
+        content: String(data.content),
+        name: String(data.name || attachment.name || 'attachment'),
+        contentType: typeof data.contentType === 'string' ? data.contentType : attachment.contentType,
+        size: typeof data.size === 'number' ? data.size : attachment.size,
+      } satisfies EmailMessageAttachmentContent;
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to download attachment');
+      return null;
+    }
+  }, [connectionId]);
+
+  const downloadAttachment = useCallback(async (uid: number, folder: string, attachment: EmailMessageAttachment) => {
+    try {
+      const data = await getAttachmentContent(uid, folder, attachment);
+      if (!data?.content) {
+        throw new Error('Attachment download failed');
+      }
+      downloadEmailAttachment({
+        content: data.content,
+        name: data.name,
+        contentType: data.contentType,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }, [getAttachmentContent]);
 
   const markMessageAsRead = useCallback((uid: number, folder: ImapFolderName = 'INBOX') => {
     const folderKey = getFolderCacheKey(folder);
@@ -342,6 +409,8 @@ export function useImapMessages(connectionId: string) {
     fetchMessages,
     fetchMessage,
     sendMessage,
+    getAttachmentContent,
+    downloadAttachment,
     markMessageAsRead,
     deleteMessage,
     loadMore,

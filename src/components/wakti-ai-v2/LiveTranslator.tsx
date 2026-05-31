@@ -7,9 +7,12 @@ import { emitEvent } from '@/utils/eventBus';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
+import type { WaktiOperatorRoutePayload } from '@/utils/waktiOperator';
 
 interface LiveTranslatorProps {
   onBack?: () => void;
+  operatorPayload?: WaktiOperatorRoutePayload | null;
+  onOperatorConsumed?: () => void;
 }
 
 type LiveTranslatorStatus = 'idle' | 'listening' | 'processing' | 'speaking';
@@ -100,7 +103,7 @@ interface SavedTranslation {
   created_at: string;
 }
 
-export function LiveTranslator({ onBack }: LiveTranslatorProps) {
+export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: LiveTranslatorProps) {
   const { language, theme } = useTheme();
   const t = useCallback((en: string, ar: string) => (language === 'ar' ? ar : en), [language]);
 
@@ -149,11 +152,40 @@ export function LiveTranslator({ onBack }: LiveTranslatorProps) {
   const voiceRef = useRef(voice);
   const abortRef = useRef<AbortController | null>(null);
   const currentAudioBase64Ref = useRef<string | null>(null);
+  const handledOperatorPayloadIdRef = useRef<string | null>(null);
 
   // Keep refs synced + persist
   useEffect(() => { targetLangRef.current = targetLanguage; localStorage.setItem('wakti_live_translator_target', targetLanguage); }, [targetLanguage]);
   useEffect(() => { spokenLangRef.current = spokenLanguage; localStorage.setItem('wakti_live_translator_spoken', spokenLanguage); }, [spokenLanguage]);
   useEffect(() => { voiceRef.current = voice; localStorage.setItem('wakti_live_translator_voice', voice); }, [voice]);
+
+  useEffect(() => {
+    if (!operatorPayload?.voiceTool || operatorPayload.voiceTool.tab !== 'live-translator') return;
+    if (handledOperatorPayloadIdRef.current === operatorPayload.stepId) return;
+    handledOperatorPayloadIdRef.current = operatorPayload.stepId;
+    if (operatorPayload.voiceTool.spokenLanguage) {
+      setSpokenLanguage(getValidLang(operatorPayload.voiceTool.spokenLanguage, spokenLanguage));
+    }
+    if (operatorPayload.voiceTool.targetLanguage) {
+      setTargetLanguage(getValidLang(operatorPayload.voiceTool.targetLanguage, targetLanguage));
+    }
+    if (operatorPayload.voiceTool.voice) {
+      setVoice(getValidVoice(operatorPayload.voiceTool.voice));
+    }
+    setActiveTab('result');
+    setUserTranscript('');
+    setTranslatedText('');
+    currentAudioBase64Ref.current = null;
+    setCurrentAudioBase64(null);
+    if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'completed',
+      });
+    }
+    onOperatorConsumed?.();
+  }, [onOperatorConsumed, operatorPayload, spokenLanguage, targetLanguage]);
 
   // Cleanup on unmount
   useEffect(() => {

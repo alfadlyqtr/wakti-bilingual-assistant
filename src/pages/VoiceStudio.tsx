@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Tasjeel from '@/components/tasjeel/Tasjeel';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { PenLine, Loader2, Copy } from 'lucide-react';
@@ -10,6 +10,8 @@ import { LiveTranslator } from '@/components/wakti-ai-v2/LiveTranslator';
 import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { emitEvent } from '@/utils/eventBus';
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
 
 const TAB_MAP: Record<string, number> = {
   'tts': 4,
@@ -25,9 +27,20 @@ const TAB_MAP: Record<string, number> = {
 export default function VoiceStudio() {
   const { language } = useTheme();
   const { user } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
+  const handledSimpleVoicePayloadIdRef = useRef<string | null>(null);
   const [currentScreen, setCurrentScreen] = useState(0); // 0 = Welcome
   const [hasExistingVoices, setHasExistingVoices] = useState(false);
+
+  const clearOperatorFlow = useCallback(() => {
+    if (!operatorPayloadId) return;
+    clearWaktiOperatorPayload(operatorPayloadId);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('waktiOperator');
+    setSearchParams(nextParams, { replace: true });
+  }, [operatorPayloadId, searchParams, setSearchParams]);
 
   useEffect(() => {
     // On page mount, mirror popup behavior: check if user already has voices
@@ -41,6 +54,48 @@ export default function VoiceStudio() {
       setCurrentScreen(0);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId || !operatorPayload.voiceTool) return;
+    const tab = operatorPayload.voiceTool.tab;
+    const isOpenScreen = (tab === 'tts' && currentScreen === 4)
+      || (tab === 'clone' && (currentScreen === 1 || currentScreen === 2 || currentScreen === 3))
+      || (tab === 'live-translator' && currentScreen === 6)
+      || (tab === 'tasjeel' && currentScreen === 7);
+    if (!isOpenScreen) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.openStepId,
+      status: 'completed',
+    });
+  }, [currentScreen, operatorPayload]);
+
+  useEffect(() => {
+    if (!operatorPayload?.voiceTool || handledSimpleVoicePayloadIdRef.current === operatorPayloadId) return;
+    const isCloneReady = operatorPayload.voiceTool.tab === 'clone' && (currentScreen === 1 || currentScreen === 2 || currentScreen === 3);
+    const isTasjeelReady = operatorPayload.voiceTool.tab === 'tasjeel' && currentScreen === 7;
+    if (!isCloneReady && !isTasjeelReady) return;
+    handledSimpleVoicePayloadIdRef.current = operatorPayloadId;
+    if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'completed',
+      });
+    }
+    clearOperatorFlow();
+  }, [clearOperatorFlow, currentScreen, operatorPayload, operatorPayloadId]);
+
+  useEffect(() => {
+    emitEvent('wakti-operator-visual-mode', {
+      mode: operatorPayload ? 'subtle' : 'default',
+    });
+    return () => {
+      emitEvent('wakti-operator-visual-mode', {
+        mode: 'default',
+      });
+    };
+  }, [operatorPayload]);
 
   const checkExistingVoices = async () => {
     try {
@@ -154,6 +209,8 @@ export default function VoiceStudio() {
       case 4:
         return (
           <VoiceTTSScreen
+            operatorPayload={operatorPayload}
+            onOperatorConsumed={clearOperatorFlow}
             onBack={() => setCurrentScreen(1)}
           />
         );
@@ -162,6 +219,8 @@ export default function VoiceStudio() {
       case 6:
         return (
           <LiveTranslator
+            operatorPayload={operatorPayload}
+            onOperatorConsumed={clearOperatorFlow}
             onBack={() => setCurrentScreen(0)}
           />
         );
@@ -201,7 +260,7 @@ export default function VoiceStudio() {
                 type="button"
                 onClick={() => setCurrentScreen(screen)}
                 role="tab"
-                aria-selected={active}
+                aria-selected={active ? 'true' : 'false'}
                 className={`h-10 rounded-xl border text-xs font-semibold transition-all duration-200
                   ${active ? style : 'border-border/70 bg-white text-[#060541] shadow-[0_1px_4px_rgba(15,23,42,0.08)] hover:border-border hover:bg-white/95 dark:border-white/10 dark:bg-white/10 dark:text-[#f2f2f2]'}
                 `}

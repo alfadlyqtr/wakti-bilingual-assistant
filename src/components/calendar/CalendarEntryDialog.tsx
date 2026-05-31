@@ -16,6 +16,7 @@ interface CalendarEntryDialogProps {
   onDelete?: (entryId: string) => void;
   initialDate: Date;
   entry: CalendarEntry | null;
+  prefill?: Partial<CalendarEntry> | null;
 }
 
 export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
@@ -24,37 +25,49 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
   onSave,
   onDelete,
   initialDate,
-  entry
+  entry,
+  prefill
 }) => {
   const { language } = useTheme();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [date, setDate] = useState<Date | undefined>(initialDate);
+  const [time, setTime] = useState("");
   const [error, setError] = useState<string | null>(null);
   
   // Reset form when dialog opens or entry changes
   useEffect(() => {
     if (isOpen) {
       if (entry) {
-        setTitle(entry.title);
-        setDescription(entry.description || "");
+        setTitle(prefill?.title ?? entry.title);
+        setDescription(prefill?.description ?? (entry.description || ""));
+        setTime(prefill?.time ?? (entry.time || ""));
         // Manual notes now store date as 'yyyy-MM-dd' (local day).
         // Parse safely to avoid UTC shifting the day.
         try {
-          const parsed = parse(entry.date, 'yyyy-MM-dd', new Date());
+          const parsed = parse(prefill?.date ?? entry.date, 'yyyy-MM-dd', new Date());
           setDate(parsed);
         } catch {
           // Fallback for legacy ISO entries
-          setDate(new Date(entry.date));
+          setDate(new Date(prefill?.date ?? entry.date));
         }
       } else {
-        setTitle("");
-        setDescription("");
-        setDate(initialDate);
+        setTitle(prefill?.title || "");
+        setDescription(prefill?.description || "");
+        setTime(prefill?.time || "");
+        if (prefill?.date) {
+          try {
+            setDate(parse(prefill.date, 'yyyy-MM-dd', new Date()));
+          } catch {
+            setDate(initialDate);
+          }
+        } else {
+          setDate(initialDate);
+        }
       }
       setError(null);
     }
-  }, [isOpen, entry, initialDate]);
+  }, [isOpen, entry, initialDate, prefill]);
   
   const handleSave = () => {
     // Validate form
@@ -74,7 +87,9 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
       description: description.trim() || undefined,
       // Store as local day string to prevent timezone shifting one day back
       date: format(date, 'yyyy-MM-dd'),
+      time: time || undefined,
       type: EntryType.MANUAL_NOTE,
+      isAllDay: !time,
     };
     onSave(entryData);
   };
@@ -127,6 +142,19 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
                 initialFocus
               />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="time" className="text-sm font-medium">
+              {language === 'ar' ? 'الوقت' : 'Time'}
+            </label>
+            <Input
+              id="time"
+              type="time"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+              className="w-full"
+            />
           </div>
           
           <div className="space-y-2">

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { Plus, ArrowLeft, Calendar, MapPin, Users, Palette, Type, Settings, ChevronDown, Folder, FileText, Brush, Image, Lock, AlertTriangle, Mic } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,8 @@ import LocationPickerModal from '@/components/events/LocationPickerModal';
 import { t } from '@/utils/translations';
 import YouTubeAudioPlayer from '@/components/audio/YouTubeAudioPlayer';
 import { EventPreview } from '@/components/maw3d/EventPreview';
+import { emitEvent } from '@/utils/eventBus';
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
 
 // Helper utilities for shadow color application
 const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
@@ -157,9 +159,13 @@ const getTemplateTranslations = (language: string) => ({
 export default function Maw3dCreate() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { language, theme } = useTheme();
   const { user, isLoading } = useAuth();
   const templateTranslations = getTemplateTranslations(language);
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = React.useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
+  const handledOperatorPayloadIdRef = React.useRef<string | null>(null);
   
   // Form state
   const [selectedTemplate, setSelectedTemplate] = useState(null);
@@ -312,12 +318,66 @@ export default function Maw3dCreate() {
 
   const watchedValues = watch();
 
+  const clearOperatorFlow = React.useCallback(() => {
+    if (!operatorPayloadId) return;
+    clearWaktiOperatorPayload(operatorPayloadId);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('waktiOperator');
+    setSearchParams(nextParams, { replace: true });
+  }, [operatorPayloadId, searchParams, setSearchParams]);
+
   // Detect edit mode via query param ?id
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const id = params.get('id');
     setEditId(id);
   }, [location.search]);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId || !operatorPayload.maw3d) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.openStepId,
+      status: 'completed',
+    });
+  }, [operatorPayload]);
+
+  useEffect(() => {
+    if (!operatorPayload?.maw3d || handledOperatorPayloadIdRef.current === operatorPayloadId) return;
+    handledOperatorPayloadIdRef.current = operatorPayloadId;
+    const draft = operatorPayload.maw3d;
+    setDetailsOpen(true);
+    setPrivacyOpen(true);
+    setTemplatesOpen(false);
+    if (draft.title) setValue('title', draft.title, { shouldDirty: true });
+    if (draft.description) setValue('description', draft.description, { shouldDirty: true });
+    if (draft.organizer) setValue('organizer', draft.organizer, { shouldDirty: true });
+    if (draft.location) setValue('location', draft.location, { shouldDirty: true });
+    if (draft.eventDate) setValue('event_date', draft.eventDate, { shouldDirty: true });
+    if (draft.startTime) setValue('start_time', draft.startTime, { shouldDirty: true });
+    if (draft.endTime) setValue('end_time', draft.endTime, { shouldDirty: true });
+    if (typeof draft.isAllDay === 'boolean') setValue('is_all_day', draft.isAllDay, { shouldDirty: true });
+    if (typeof draft.isPublic === 'boolean') setValue('is_public', draft.isPublic, { shouldDirty: true });
+    if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'completed',
+      });
+    }
+    clearOperatorFlow();
+  }, [clearOperatorFlow, operatorPayload, operatorPayloadId, setValue]);
+
+  useEffect(() => {
+    emitEvent('wakti-operator-visual-mode', {
+      mode: operatorPayload ? 'subtle' : 'default',
+    });
+    return () => {
+      emitEvent('wakti-operator-visual-mode', {
+        mode: 'default',
+      });
+    };
+  }, [operatorPayload]);
 
   // Load event when in edit mode
   useEffect(() => {

@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Download, FileText, Sparkles, Loader2, Wand2, Palette, Zap, FilePlus2 } from 'lucide-react';
 import ShareButton from '@/components/ui/ShareButton';
 import { toast } from 'sonner';
+import { consumeSmartTextToolBridge } from '@/utils/smartTextPrefill';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -188,6 +189,15 @@ const DiagramsTab: React.FC = () => {
 
   // State for extraction loading
   const [isExtracting, setIsExtracting] = useState(false);
+
+  useEffect(() => {
+    const bridge = consumeSmartTextToolBridge();
+    if (!bridge || bridge.tab !== 'diagrams') return;
+    const nextText = (bridge.sourceText || bridge.prompt || '').trim();
+    if (!nextText) return;
+    setInputText(nextText);
+    setError(null);
+  }, []);
 
   // Convert file to base64
   const fileToBase64 = (file: File): Promise<string> => {
@@ -508,6 +518,8 @@ const DiagramsTab: React.FC = () => {
             onChange={handleFileChange}
             className="hidden"
             id="diagram-file-input"
+            title={isArabic ? 'ارفع ملفاً أو صورة للمخططات' : 'Upload a file or image for diagrams'}
+            aria-label={isArabic ? 'ارفع ملفاً أو صورة للمخططات' : 'Upload a file or image for diagrams'}
           />
           <button
             type="button"

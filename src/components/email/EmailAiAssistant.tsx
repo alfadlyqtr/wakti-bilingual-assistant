@@ -12,6 +12,8 @@ import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import { saveSmartTextPrefill } from '@/utils/smartTextPrefill';
 import { saveTRPrefill } from '@/utils/trPrefill';
 import { EmailAiAction, EmailAiLength, EmailAiSourceMessage, EmailAiTone, useEmailAi } from '@/hooks/useEmailAi';
+import { EmailMessageAttachment, EmailMessageAttachmentContent } from '@/utils/emailAttachmentDownload';
+import { extractPdfTextFromBase64, isPdfAttachment } from '@/utils/emailPdfAi';
 
 const WAKTI_LOGO_SRC = '/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png';
 
@@ -21,6 +23,8 @@ interface EmailAiAssistantProps {
   contextKey: string;
   message?: EmailAiSourceMessage | null;
   resolveRecentMessages?: () => Promise<EmailAiSourceMessage[]>;
+  attachments?: EmailMessageAttachment[];
+  resolveAttachmentContent?: (attachment: EmailMessageAttachment) => Promise<EmailMessageAttachmentContent | null>;
   canReply?: boolean;
   onUseAsReply?: (text: string) => void;
   variant?: 'panel' | 'floating';
@@ -187,6 +191,14 @@ const resultHeadingMap = {
       { key: 'deadlines', heading: 'Deadlines:', label: 'Deadlines' },
       { key: 'nextStep', heading: 'Suggested next step:', label: 'Suggested next step' },
     ],
+    summarize_email_with_pdf: [
+      { key: 'summary', heading: 'Summary:', label: 'Summary' },
+      { key: 'senderWants', heading: 'Sender wants:', label: 'Sender wants' },
+      { key: 'urgency', heading: 'Urgency:', label: 'Urgency' },
+      { key: 'tasks', heading: 'Tasks:', label: 'Tasks' },
+      { key: 'deadlines', heading: 'Deadlines:', label: 'Deadlines' },
+      { key: 'nextStep', heading: 'Suggested next step:', label: 'Suggested next step' },
+    ],
     extract_tasks: [
       { key: 'directTasks', heading: 'Direct tasks:', label: 'Direct tasks' },
       { key: 'followUp', heading: 'Suggested follow-up:', label: 'Suggested follow-up' },
@@ -208,6 +220,14 @@ const resultHeadingMap = {
   },
   ar: {
     summarize_email: [
+      { key: 'summary', heading: 'الملخص:', label: 'الملخص' },
+      { key: 'senderWants', heading: 'ماذا يريد المرسل:', label: 'ماذا يريد المرسل' },
+      { key: 'urgency', heading: 'درجة الاستعجال:', label: 'درجة الاستعجال' },
+      { key: 'tasks', heading: 'المهام:', label: 'المهام' },
+      { key: 'deadlines', heading: 'المواعيد:', label: 'المواعيد' },
+      { key: 'nextStep', heading: 'الخطوة المقترحة التالية:', label: 'الخطوة المقترحة التالية' },
+    ],
+    summarize_email_with_pdf: [
       { key: 'summary', heading: 'الملخص:', label: 'الملخص' },
       { key: 'senderWants', heading: 'ماذا يريد المرسل:', label: 'ماذا يريد المرسل' },
       { key: 'urgency', heading: 'درجة الاستعجال:', label: 'درجة الاستعجال' },
@@ -238,7 +258,7 @@ const resultHeadingMap = {
 
 function parseEmailAiSections(action: EmailAiAction, text: string, language: 'en' | 'ar'): ParsedEmailAiSection[] {
   if (action === 'draft_reply') return [];
-  const specs = resultHeadingMap[language][action as 'summarize_email' | 'extract_tasks' | 'extract_deadlines' | 'brief_recent'];
+  const specs = resultHeadingMap[language][action as 'summarize_email' | 'summarize_email_with_pdf' | 'extract_tasks' | 'extract_deadlines' | 'brief_recent'];
   if (!specs?.length) return [];
 
   const buckets = new Map<string, string[]>();
@@ -315,6 +335,8 @@ export function EmailAiAssistant({
   contextKey,
   message,
   resolveRecentMessages,
+  attachments = [],
+  resolveAttachmentContent,
   canReply = false,
   onUseAsReply,
   variant = 'panel',
@@ -327,11 +349,15 @@ export function EmailAiAssistant({
   const [openingTextTool, setOpeningTextTool] = useState(false);
   const [open, setOpen] = useState(false);
   const [replySetupOpen, setReplySetupOpen] = useState(false);
+  const [preparingPdfSummary, setPreparingPdfSummary] = useState(false);
   const resultCardRef = useRef<HTMLDivElement | null>(null);
   const shouldRevealReplyResultRef = useRef(false);
   const lang: 'en' | 'ar' = language === 'ar' ? 'ar' : 'en';
   const floatingFieldClass = 'h-9 rounded-xl border border-[#060541]/12 bg-white text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] hover:bg-[#f7f8ff] dark:border-white/10 dark:bg-background/80 dark:text-foreground dark:hover:bg-white/5';
   const floatingOutlineButtonClass = 'justify-start gap-2 rounded-xl border border-[#060541]/12 bg-white text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.05)] hover:bg-[#f7f8ff] dark:border-white/10 dark:bg-background/70 dark:text-foreground dark:hover:bg-white/5';
+  const pdfAttachments = useMemo(() => attachments.filter((attachment) => isPdfAttachment(attachment)), [attachments]);
+  const hasPdfAttachment = mode === 'message' && pdfAttachments.length > 0;
+  const busy = loading || openingTextTool || preparingPdfSummary;
 
   useEffect(() => {
     reset();
@@ -341,6 +367,7 @@ export function EmailAiAssistant({
     setOpeningTextTool(false);
     setOpen(false);
     setReplySetupOpen(false);
+    setPreparingPdfSummary(false);
     shouldRevealReplyResultRef.current = false;
   }, [contextKey, reset]);
 
@@ -361,6 +388,7 @@ export function EmailAiAssistant({
       ? (lang === 'ar' ? 'افهم الرسالة بسرعة، استخرج المطلوب، أو ابدأ الرد.' : 'Understand this email fast, pull what matters, or start the reply.')
       : (lang === 'ar' ? 'احصل على ملخص سريع لآخر الرسائل المهمة.' : 'Get a quick brief for the most recent important emails.'),
     summarize: lang === 'ar' ? 'لخّص هذه الرسالة' : 'Summarize this email',
+    summarizeWithPdf: lang === 'ar' ? 'لخّص الرسالة مع المرفق (PDF)' : 'Summarize email + attachment (PDF)',
     briefRecent: lang === 'ar' ? 'لخّص آخر 5 رسائل' : 'Brief last 5 emails',
     tasks: lang === 'ar' ? 'استخرج المهام' : 'Extract tasks',
     deadlines: lang === 'ar' ? 'استخرج المواعيد' : 'Extract deadlines',
@@ -405,6 +433,8 @@ export function EmailAiAssistant({
     short: lang === 'ar' ? 'قصير' : 'Short',
     medium: lang === 'ar' ? 'متوسط' : 'Medium',
     detailed: lang === 'ar' ? 'مفصل' : 'Detailed',
+    pdfSummaryUnavailable: lang === 'ar' ? 'تعذر قراءة نص واضح من ملف PDF المرفق.' : 'I could not read clear text from the attached PDF.',
+    pdfSummaryNeedsAttachment: lang === 'ar' ? 'لا يوجد ملف PDF مرفق جاهز للتلخيص.' : 'There is no PDF attachment ready to summarize.',
   }), [lang, mode]);
 
   const parsedSections = useMemo(() => {
@@ -490,6 +520,65 @@ export function EmailAiAssistant({
       }
     }
   }, [lang, length, loadMessages, note, runAction, tone]);
+
+  const handleSummarizeWithPdf = useCallback(async () => {
+    if (mode !== 'message' || !message || !resolveAttachmentContent || pdfAttachments.length === 0) {
+      toast.error(labels.pdfSummaryNeedsAttachment);
+      return;
+    }
+
+    shouldRevealReplyResultRef.current = false;
+    setReplySetupOpen(false);
+    setPreparingPdfSummary(true);
+
+    try {
+      const extractedSections: string[] = [];
+
+      for (const attachment of pdfAttachments.slice(0, 2)) {
+        const attachmentContent = await resolveAttachmentContent(attachment);
+        if (!attachmentContent?.content) continue;
+
+        const extracted = await extractPdfTextFromBase64(attachmentContent.content, {
+          maxPages: 10,
+          maxCharacters: 8000,
+        });
+
+        if (!extracted.text.trim()) continue;
+
+        extractedSections.push([
+          lang === 'ar' ? `ملف PDF مرفق: ${attachmentContent.name}` : `Attached PDF: ${attachmentContent.name}`,
+          extracted.text,
+        ].join('\n'));
+      }
+
+      if (extractedSections.length === 0) {
+        throw new Error(labels.pdfSummaryUnavailable);
+      }
+
+      const baseBody = (message.bodyText || '').trim() || (message.snippet || '').trim();
+      const enrichedMessage: EmailAiSourceMessage = {
+        ...message,
+        bodyText: [
+          baseBody,
+          lang === 'ar' ? 'نص ملفات PDF المرفقة:' : 'Attached PDF text:',
+          extractedSections.join('\n\n'),
+        ].filter(Boolean).join('\n\n'),
+      };
+
+      await runAction({
+        action: 'summarize_email_with_pdf',
+        messages: [enrichedMessage],
+        language: lang,
+        tone,
+        length,
+        note,
+      });
+    } catch (error: any) {
+      toast.error(error?.message || labels.pdfSummaryUnavailable);
+    } finally {
+      setPreparingPdfSummary(false);
+    }
+  }, [lang, labels.pdfSummaryNeedsAttachment, labels.pdfSummaryUnavailable, length, message, mode, note, pdfAttachments, resolveAttachmentContent, runAction, tone]);
 
   const handleStartReplyFlow = useCallback(() => {
     setReplySetupOpen(true);
@@ -710,32 +799,38 @@ export function EmailAiAssistant({
                     <div className="max-w-[460px] text-sm leading-6 text-muted-foreground">{labels.subtitle}</div>
                   </div>
                 </div>
-                {(loading || openingTextTool) ? <Loader2 className="mt-1 h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : null}
+                {busy ? <Loader2 className="mt-1 h-4 w-4 shrink-0 animate-spin text-muted-foreground" /> : null}
               </div>
 
               <div className="mt-4 grid gap-3">
                 <div className="grid gap-3">
-                  <Button type="button" variant="outline" className={`${floatingOutlineButtonClass} h-12 text-base`} onClick={() => void handleAction(mode === 'message' ? 'summarize_email' : 'brief_recent')} disabled={loading || openingTextTool}>
+                  <Button type="button" variant="outline" className={`${floatingOutlineButtonClass} h-12 text-base`} onClick={() => void handleAction(mode === 'message' ? 'summarize_email' : 'brief_recent')} disabled={busy}>
                     <FileText className="h-4 w-4" />
                     {mode === 'message' ? labels.summarize : labels.briefRecent}
                   </Button>
+                  {hasPdfAttachment ? (
+                    <Button type="button" variant="outline" className={`${floatingOutlineButtonClass} h-12 text-base`} onClick={() => void handleSummarizeWithPdf()} disabled={busy}>
+                      <FileText className="h-4 w-4" />
+                      {labels.summarizeWithPdf}
+                    </Button>
+                  ) : null}
                   <div className="grid gap-3 sm:grid-cols-2">
-                    <Button type="button" variant="outline" className={`${floatingOutlineButtonClass} h-12 text-base`} onClick={() => void handleAction('extract_tasks')} disabled={loading || openingTextTool}>
+                    <Button type="button" variant="outline" className={`${floatingOutlineButtonClass} h-12 text-base`} onClick={() => void handleAction('extract_tasks')} disabled={busy}>
                       <ListTodo className="h-4 w-4" />
                       {labels.tasks}
                     </Button>
-                    <Button type="button" variant="outline" className={`${floatingOutlineButtonClass} h-12 text-base`} onClick={() => void handleAction('extract_deadlines')} disabled={loading || openingTextTool}>
+                    <Button type="button" variant="outline" className={`${floatingOutlineButtonClass} h-12 text-base`} onClick={() => void handleAction('extract_deadlines')} disabled={busy}>
                       <CalendarClock className="h-4 w-4" />
                       {labels.deadlines}
                     </Button>
                   </div>
                   {mode === 'message' && canReply ? (
-                    <Button type="button" className="h-12 justify-start gap-2 rounded-2xl bg-[#060541] text-base text-white shadow-[0_12px_28px_rgba(6,5,65,0.3)] hover:bg-[#0a0a5c]" onClick={handleStartReplyFlow} disabled={loading || openingTextTool}>
+                    <Button type="button" className="h-12 justify-start gap-2 rounded-2xl bg-[#060541] text-base text-white shadow-[0_12px_28px_rgba(6,5,65,0.3)] hover:bg-[#0a0a5c]" onClick={handleStartReplyFlow} disabled={busy}>
                       <Reply className="h-4 w-4" />
                       {labels.reply}
                     </Button>
                   ) : null}
-                  <Button type="button" variant="outline" className={`${floatingOutlineButtonClass} h-12 text-base`} onClick={handleOpenInTextTool} disabled={loading || openingTextTool}>
+                  <Button type="button" variant="outline" className={`${floatingOutlineButtonClass} h-12 text-base`} onClick={handleOpenInTextTool} disabled={busy}>
                     <ArrowUpRight className="h-4 w-4" />
                     {labels.openTextTool}
                   </Button>
@@ -778,7 +873,7 @@ export function EmailAiAssistant({
                     <div className="mt-1 text-xs leading-5 text-muted-foreground">{labels.optionalInstructionHelper}</div>
                     <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder={labels.notesPlaceholder} className="mt-3 min-h-[92px] rounded-2xl border border-[#060541]/12 bg-white text-sm leading-6 text-[#060541] shadow-[0_1px_2px_rgba(6,5,65,0.04)] dark:border-white/10 dark:bg-background/80 dark:text-foreground" />
 
-                    <Button type="button" className="mt-3 h-11 w-full justify-center gap-2 rounded-2xl bg-[#060541] text-sm text-white shadow-[0_12px_28px_rgba(6,5,65,0.3)] hover:bg-[#0a0a5c]" onClick={() => void handleAction('draft_reply')} disabled={loading || openingTextTool}>
+                    <Button type="button" className="mt-3 h-11 w-full justify-center gap-2 rounded-2xl bg-[#060541] text-sm text-white shadow-[0_12px_28px_rgba(6,5,65,0.3)] hover:bg-[#0a0a5c]" onClick={() => void handleAction('draft_reply')} disabled={busy}>
                       <Reply className="h-4 w-4" />
                       {labels.draftFromHere}
                     </Button>
@@ -899,7 +994,7 @@ export function EmailAiAssistant({
                       {labels.copy}
                     </Button>
                     {result.action !== 'draft_reply' && canReply ? (
-                      <Button type="button" className="gap-2 rounded-xl bg-[#060541] text-white hover:bg-[#0a0a5c]" onClick={handleStartReplyFlow} disabled={loading || openingTextTool}>
+                      <Button type="button" className="gap-2 rounded-xl bg-[#060541] text-white hover:bg-[#0a0a5c]" onClick={handleStartReplyFlow} disabled={busy}>
                         <Reply className="h-4 w-4" />
                         {labels.reply}
                       </Button>
@@ -910,7 +1005,7 @@ export function EmailAiAssistant({
                         {labels.useInReply}
                       </Button>
                     ) : null}
-                    <Button type="button" variant="outline" className="gap-2 rounded-xl border border-[#060541]/12 bg-white text-[#060541] hover:bg-[#f7f8ff] dark:border-white/10 dark:bg-background dark:text-foreground dark:hover:bg-white/5" onClick={handleOpenInTextTool} disabled={openingTextTool}>
+                    <Button type="button" variant="outline" className="gap-2 rounded-xl border border-[#060541]/12 bg-white text-[#060541] hover:bg-[#f7f8ff] dark:border-white/10 dark:bg-background dark:text-foreground dark:hover:bg-white/5" onClick={handleOpenInTextTool} disabled={openingTextTool || preparingPdfSummary}>
                       <ArrowUpRight className="h-4 w-4" />
                       {labels.openTextTool}
                     </Button>
@@ -938,7 +1033,7 @@ export function EmailAiAssistant({
             </div>
           </div>
         </div>
-        {(loading || openingTextTool) ? <Loader2 className="mt-1 h-4 w-4 animate-spin text-muted-foreground" /> : null}
+        {busy ? <Loader2 className="mt-1 h-4 w-4 animate-spin text-muted-foreground" /> : null}
       </div>
 
       {!canReply && mode === 'message' ? (
@@ -949,25 +1044,31 @@ export function EmailAiAssistant({
       ) : null}
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-        <Button type="button" variant="outline" className="justify-start gap-2" onClick={() => void handleAction(mode === 'message' ? 'summarize_email' : 'brief_recent')} disabled={loading || openingTextTool}>
+        <Button type="button" variant="outline" className="justify-start gap-2" onClick={() => void handleAction(mode === 'message' ? 'summarize_email' : 'brief_recent')} disabled={busy}>
           <FileText className="h-4 w-4" />
           {mode === 'message' ? labels.summarize : labels.briefRecent}
         </Button>
-        <Button type="button" variant="outline" className="justify-start gap-2" onClick={() => void handleAction('extract_tasks')} disabled={loading || openingTextTool}>
+        {hasPdfAttachment ? (
+          <Button type="button" variant="outline" className="justify-start gap-2" onClick={() => void handleSummarizeWithPdf()} disabled={busy}>
+            <FileText className="h-4 w-4" />
+            {labels.summarizeWithPdf}
+          </Button>
+        ) : null}
+        <Button type="button" variant="outline" className="justify-start gap-2" onClick={() => void handleAction('extract_tasks')} disabled={busy}>
           <ListTodo className="h-4 w-4" />
           {labels.tasks}
         </Button>
-        <Button type="button" variant="outline" className="justify-start gap-2" onClick={() => void handleAction('extract_deadlines')} disabled={loading || openingTextTool}>
+        <Button type="button" variant="outline" className="justify-start gap-2" onClick={() => void handleAction('extract_deadlines')} disabled={busy}>
           <CalendarClock className="h-4 w-4" />
           {labels.deadlines}
         </Button>
         {mode === 'message' && canReply ? (
-          <Button type="button" className="justify-start gap-2 bg-[#060541] text-white hover:bg-[#0a0a5c]" onClick={handleStartReplyFlow} disabled={loading || openingTextTool}>
+          <Button type="button" className="justify-start gap-2 bg-[#060541] text-white hover:bg-[#0a0a5c]" onClick={handleStartReplyFlow} disabled={busy}>
             <Reply className="h-4 w-4" />
             {labels.reply}
           </Button>
         ) : (
-          <Button type="button" variant="outline" className="justify-start gap-2" onClick={handleOpenInTextTool} disabled={loading || openingTextTool}>
+          <Button type="button" variant="outline" className="justify-start gap-2" onClick={handleOpenInTextTool} disabled={busy}>
             <ArrowUpRight className="h-4 w-4" />
             {labels.openTextTool}
           </Button>
@@ -1016,7 +1117,7 @@ export function EmailAiAssistant({
               <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder={labels.notesPlaceholder} />
             </div>
           </div>
-          <Button type="button" className="mt-3 gap-2 bg-[#060541] text-white hover:bg-[#0a0a5c]" onClick={() => void handleAction('draft_reply')} disabled={loading || openingTextTool}>
+          <Button type="button" className="mt-3 gap-2 bg-[#060541] text-white hover:bg-[#0a0a5c]" onClick={() => void handleAction('draft_reply')} disabled={busy}>
             <Reply className="h-4 w-4" />
             {labels.draftFromHere}
           </Button>
@@ -1025,7 +1126,7 @@ export function EmailAiAssistant({
 
       {mode === 'message' && canReply ? (
         <div className="mt-2 flex justify-end">
-          <Button type="button" variant="outline" className="gap-2" onClick={handleOpenInTextTool} disabled={loading || openingTextTool}>
+          <Button type="button" variant="outline" className="gap-2" onClick={handleOpenInTextTool} disabled={busy}>
             <ArrowUpRight className="h-4 w-4" />
             {labels.openTextTool}
           </Button>
@@ -1058,7 +1159,7 @@ export function EmailAiAssistant({
                 {labels.useInReply}
               </Button>
             ) : null}
-            <Button type="button" variant="outline" className="gap-2" onClick={handleOpenInTextTool} disabled={openingTextTool}>
+            <Button type="button" variant="outline" className="gap-2" onClick={handleOpenInTextTool} disabled={openingTextTool || preparingPdfSummary}>
               <ArrowUpRight className="h-4 w-4" />
               {labels.openTextTool}
             </Button>

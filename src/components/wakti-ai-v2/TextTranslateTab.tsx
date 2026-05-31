@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { consumeSmartTextToolBridge } from '@/utils/smartTextPrefill';
 
 // Item #8 Batch A2: lazy-load tesseract.js (~10MB with wasm+worker) and jsPDF (~400KB).
 // Tesseract only runs when the user uploads an image that needs OCR; jsPDF only
@@ -237,6 +238,20 @@ export default function TextTranslateTab() {
     const getLabel = (l: { nameEn: string; nameAr: string }) => (language === 'ar' ? l.nameAr : l.nameEn);
     return [...LANGS].sort((a, b) => getLabel(a).localeCompare(getLabel(b)));
   }, [language]);
+
+  useEffect(() => {
+    const bridge = consumeSmartTextToolBridge();
+    if (!bridge || bridge.tab !== 'translate') return;
+    const nextText = (bridge.sourceText || bridge.prompt || '').trim();
+    if (nextText) {
+      setTtText(nextText.slice(0, TT_MAX));
+      setTtResult('');
+      setTtSectionTab('input');
+    }
+    if (bridge.targetLanguage && LANGS.some((item) => item.code === bridge.targetLanguage)) {
+      setTtTarget(bridge.targetLanguage);
+    }
+  }, []);
 
   const loadMyTranslations = async () => {
     if (!user?.id) return;
@@ -703,7 +718,7 @@ export default function TextTranslateTab() {
           type="button"
           onClick={() => setTtSectionTab('input')}
           role="tab"
-          aria-selected={ttSectionTab === 'input'}
+          aria-selected={ttSectionTab === 'input' ? 'true' : 'false'}
           className={`h-11 rounded-xl border text-sm font-medium transition-all
             ${ttSectionTab === 'input'
               ? 'btn-enhanced btn-3d-pop text-white border-transparent'
@@ -717,7 +732,7 @@ export default function TextTranslateTab() {
           type="button"
           onClick={() => setTtSectionTab('results')}
           role="tab"
-          aria-selected={ttSectionTab === 'results'}
+          aria-selected={ttSectionTab === 'results' ? 'true' : 'false'}
           className={`h-11 rounded-xl border text-sm font-medium transition-all
             ${ttSectionTab === 'results'
               ? 'btn-enhanced btn-3d-pop text-white border-transparent'
@@ -731,7 +746,7 @@ export default function TextTranslateTab() {
           type="button"
           onClick={() => setTtSectionTab('my')}
           role="tab"
-          aria-selected={ttSectionTab === 'my'}
+          aria-selected={ttSectionTab === 'my' ? 'true' : 'false'}
           className={`h-11 rounded-xl border text-sm font-medium transition-all
             ${ttSectionTab === 'my'
               ? 'btn-enhanced btn-3d-pop text-white border-transparent'

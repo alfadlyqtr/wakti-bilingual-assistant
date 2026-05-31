@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MailComposer, MailComposerPreset, MailComposerSubmitInput } from '@/components/email/MailComposer';
 import { EmailAiAssistant } from '@/components/email/EmailAiAssistant';
+import { EmailMessageAttachments } from '@/components/email/EmailMessageAttachments';
+import { EmailMessageAttachment } from '@/utils/emailAttachmentDownload';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
   Reply, Forward, Plug, Settings2, Trash2, Search, X,
@@ -88,6 +90,8 @@ interface MessageViewProps {
   onReply: () => void;
   onForward: () => void;
   onDelete: () => void;
+  onDownloadAttachment: (attachment: EmailMessageAttachment) => void;
+  downloadingAttachmentId?: string | null;
   deleting: boolean;
   language?: string;
   canReply?: boolean;
@@ -138,7 +142,7 @@ function formatPlainEmailBody(body: string, subject: string): string {
   return flattened;
 }
 
-function MessageView({ message, onBack, onReply, onForward, onDelete, deleting, language = 'en', canReply = true, aiPanel }: MessageViewProps) {
+function MessageView({ message, onBack, onReply, onForward, onDelete, onDownloadAttachment, downloadingAttachmentId = null, deleting, language = 'en', canReply = true, aiPanel }: MessageViewProps) {
   const senderName = extractName(message.from) || message.from || '—';
   const senderEmail = extractEmailAddress(message.from) || message.from || '—';
   const backLabel = language === 'ar' ? 'رجوع' : 'Back';
@@ -198,6 +202,12 @@ function MessageView({ message, onBack, onReply, onForward, onDelete, deleting, 
           </div>
         </div>
       </div>
+      <EmailMessageAttachments
+        attachments={message.attachments}
+        downloadingId={downloadingAttachmentId}
+        language={language}
+        onDownload={onDownloadAttachment}
+      />
       <div className="flex-1 min-h-0">
         <div className="h-full overflow-y-auto pt-4 pr-1">
           <div className="px-1 py-1">
@@ -271,6 +281,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
   const [selectedMessage, setSelectedMessage] = useState<ImapMessageFull | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [realFolderName, setRealFolderName] = useState('INBOX');
   const [showCompose, setShowCompose] = useState(false);
@@ -475,6 +486,16 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
     setDeletingRowUid(null);
   };
 
+  const handleDownloadAttachment = useCallback(async (attachment: EmailMessageAttachment) => {
+    if (!selectedMessage) return;
+    setDownloadingAttachmentId(attachment.id);
+    try {
+      await imap.downloadAttachment(selectedMessage.uid, currentFolderRequest, attachment);
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
+  }, [currentFolderRequest, imap, selectedMessage]);
+
   const selectedMessageAiSource = useMemo(() => {
     if (!selectedMessage) return null;
     return {
@@ -486,6 +507,11 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
       bodyText: selectedMessage.body?.text || selectedMessage.snippet || '',
     };
   }, [selectedMessage]);
+
+  const resolveSelectedAttachmentContent = useCallback(async (attachment: EmailMessageAttachment) => {
+    if (!selectedMessage) return null;
+    return await imap.getAttachmentContent(selectedMessage.uid, currentFolderRequest, attachment);
+  }, [currentFolderRequest, imap, selectedMessage]);
 
   const resolveRecentMessages = useCallback(async () => {
     const recent = imap.messages.slice(0, 5);
@@ -640,6 +666,8 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
               onReply={handleReply}
               onForward={handleForward}
               onDelete={handleDeleteMessage}
+              onDownloadAttachment={handleDownloadAttachment}
+              downloadingAttachmentId={downloadingAttachmentId}
               deleting={deletingMessage}
               language={language}
               canReply={imap.activeFolder !== 'SENT'}
@@ -649,6 +677,8 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
                   language={language}
                   contextKey={`${activeConnectionId}:${selectedMessage.uid}`}
                   message={selectedMessageAiSource}
+                  attachments={selectedMessage.attachments}
+                  resolveAttachmentContent={resolveSelectedAttachmentContent}
                   canReply={imap.activeFolder !== 'SENT'}
                   onUseAsReply={handleUseAiReply}
                   variant="floating"

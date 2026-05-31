@@ -2880,6 +2880,10 @@ function VoicesTab({
   const [styleWeightOverride, setStyleWeightOverride] = useState<number | null>(null);
   const [weirdnessOverride, setWeirdnessOverride] = useState<number | null>(null);
   const [audioWeight, setAudioWeight] = useState<number>(0.65);
+  // Option B — Spotlight: when ON and 1-2 instruments are picked, the style is
+  // rewritten to feature that instrument up front and other instruments are pushed
+  // into the negative-tag shield. Lets a single instrument truly lead.
+  const [instrumentSpotlight, setInstrumentSpotlight] = useState<boolean>(false);
   const [showAdvancedSliders, setShowAdvancedSliders] = useState<boolean>(false);
   const [showPayloadPreview, setShowPayloadPreview] = useState<boolean>(false);
   const [payloadPreview, setPayloadPreview] = useState<string>('');
@@ -5441,6 +5445,7 @@ function VoicesTab({
     moods: string[];
     tempo: string;
     key: string;
+    spotlight?: boolean;
   }): string {
     const v = FAMILY_VOCAB[opts.family];
     const label = normalizeChipForDisplay(opts.styleChipLabel);
@@ -5452,7 +5457,16 @@ function VoicesTab({
     const productionLabel = labelStartsWithPrefix
       ? label
       : `${v.s1Prefix} ${label}`.trim();
-    const s1 = `Strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock. ${selectedKhaleejiDialectContract.accentAnchor.charAt(0).toUpperCase()}${selectedKhaleejiDialectContract.accentAnchor.slice(1)}. Khaleeji production led by authentic ${selectedKhaleejiDialectContract.labelEn} identity through ${productionLabel}.`;
+    const accentSentence = `${selectedKhaleejiDialectContract.accentAnchor.charAt(0).toUpperCase()}${selectedKhaleejiDialectContract.accentAnchor.slice(1)}.`;
+    const dialectLockSentence = `Strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock. ${accentSentence}`;
+    const GULF_INSTRUMENT_RE = /oud|qanun|qanoon|darbuka|riq|mirwas|ney|tabl|daff|duff|\btar\b|frame\s*drum|sagat/i;
+    const leadInstrument = opts.instruments[0] ?? '';
+    const leadIsNonGulf = leadInstrument.length > 0 && !GULF_INSTRUMENT_RE.test(leadInstrument);
+    const s1 = opts.instruments.length === 0
+      ? `${dialectLockSentence} Authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji production through ${productionLabel}.`
+      : leadIsNonGulf
+        ? `${dialectLockSentence} The Khaleeji identity lives in the vocals and dialect; the production is modern and led by ${leadInstrument}, not a default Gulf ensemble.`
+        : `${dialectLockSentence} Authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji vocal identity through ${productionLabel}.`;
 
     const instList = opts.instruments.length > 0
       ? opts.instruments.join(', ')
@@ -5463,9 +5477,14 @@ function VoicesTab({
     const supRhythmClause = opts.supportingRhythms.length > 0
       ? ` underneath a light ${opts.supportingRhythms.join(' and ')}`
       : '';
-    const s2 = `A ${v.arrangementAdj} arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
+    const lead = opts.instruments[0] ?? 'the lead instrument';
+    const s2 = opts.spotlight
+      ? `A sparse, intimate arrangement led by ${instList}, where ${lead} carries the main melody up front${rhythmClause}. Keep the backing minimal.`
+      : `A ${v.arrangementAdj} arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
     const paletteSentence = opts.instruments.length > 0
-      ? `Featured instruments: ${instList}. ${label} only shapes the groove feel, energy, and playing style around the Khaleeji vocal lead.`
+      ? (opts.spotlight
+          ? `${instList} is the single featured lead instrument, mixed loud and clearly out front. Minimal accompaniment only — no full traditional ensemble and no other lead instruments competing with ${lead}.`
+          : `Featured instruments: ${instList}. ${label} only shapes the groove feel, energy, and playing style around the Khaleeji vocal lead.`)
       : '';
 
     // S3 — vocal sentence packed with dialect-rich keywords Suno responds to.
@@ -5506,6 +5525,7 @@ function VoicesTab({
     moods: string[];
     tempo: string;
     key: string;
+    spotlight?: boolean;
   }): string {
     const v = GENRE_VOCAB[opts.genreFamily];
     const label = normalizeChipForDisplay(opts.styleChipLabel);
@@ -5525,9 +5545,14 @@ function VoicesTab({
       ? ` underneath ${opts.supportingRhythms.join(' and ')}`
       : '';
     const arrangementAdj = v.vocalCueAdj.toLowerCase();
-    const s2 = `A ${arrangementAdj}, fusion-forward arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
+    const lead = opts.instruments[0] ?? 'the lead instrument';
+    const s2 = opts.spotlight
+      ? `A sparse, ${arrangementAdj} arrangement led by ${instList}, where ${lead} carries the main melody up front${rhythmClause}. Keep the backing minimal.`
+      : `A ${arrangementAdj}, fusion-forward arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
     const paletteSentence = opts.instruments.length > 0
-      ? `Featured instruments: ${instList}. ${label} only shapes the production shell, groove feel, and energy under the Khaleeji vocal lead.`
+      ? (opts.spotlight
+          ? `${instList} is the single featured lead instrument, mixed loud and clearly out front. Minimal accompaniment only — no full ensemble and no other lead instruments competing with ${lead}.`
+          : `Featured instruments: ${instList}. ${label} only shapes the production shell, groove feel, and energy under the Khaleeji vocal lead.`)
       : '';
 
     // S3 — Khaleeji vocal identity sentence — the heart of the fusion brief.
@@ -5659,6 +5684,8 @@ function VoicesTab({
             .slice(0, 3)
             .map((tag) => normalizeKhalijiPromptToken(tag))
         : [];
+    // Option A/B — spotlight only when the USER actually picked 1-2 instruments.
+    const spotlightActive = instrumentSpotlight && selectedInstruments.length >= 1 && selectedInstruments.length <= 2;
     const selectedRhythms = rhythmTags.map((tag) => normalizeKhalijiPromptToken(RHYTHM_LABELS[tag] ?? tag));
     const primaryRhythm = selectedRhythms[0] ?? (gccAnchor ? normalizeKhalijiPromptToken(RHYTHM_LABELS[gccAnchor.rhythm] ?? gccAnchor.rhythm) : null);
     const supportingRhythms = primaryRhythm && selectedRhythms[0] === primaryRhythm ? selectedRhythms.slice(1) : selectedRhythms;
@@ -5715,7 +5742,10 @@ function VoicesTab({
         styleParts.unshift(khaleejiToken);
       }
     }
-    const legacyStyleString = styleParts.join(', ').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
+    const baseLegacyStyleString = styleParts.join(', ').replace(/,\s*,/g, ',').replace(/^,|,$/g, '').trim();
+    const legacyStyleString = spotlightActive && instrumentLayer.length > 0
+      ? `${instrumentLayer[0]}-led, ${instrumentLayer[0]} carries the melody, sparse minimal arrangement, one featured instrument, ${baseLegacyStyleString}`
+      : baseLegacyStyleString;
 
     // ── WAKTI RECIPE V1 — when enabled and a Khaleeji chip is selected, swap
     // the comma-separated tag dump for a natural-language production brief.
@@ -5743,6 +5773,7 @@ function VoicesTab({
           moods: selectedMoods,
           tempo: tempoTag,
           key: keyTag,
+          spotlight: spotlightActive,
         })
       : useFusionRecipe && fusionGenreFamily
         ? buildKhalijiFusionBrief({
@@ -5754,6 +5785,7 @@ function VoicesTab({
             moods: selectedMoods,
             tempo: tempoTag,
             key: keyTag,
+            spotlight: spotlightActive,
           })
         : null;
     // Append free-text + dialect lock as proper capitalized sentences so the brief
@@ -6841,8 +6873,24 @@ function VoicesTab({
       if (hasGccTag && (modernFamily === 'pop' || modernFamily === 'urban') && !userPickedTraditionalInstrument) {
         traditionalAntiTokens.push('oud', 'qanun', 'darbuka', 'riq', 'mirwas', 'hand claps');
       }
+      // ── Option A/B — Spotlight instrument exclusion shield ──
+      // When spotlight is on (1-2 instruments), push the common bleed instruments the
+      // user did NOT pick to the FRONT of the negative list so they survive the hard
+      // 200-char cap and Suno keeps the chosen instrument out front.
+      const instrumentSpotlightActive = instrumentSpotlight && instrumentTags.length >= 1 && instrumentTags.length <= 2;
+      const spotlightAntiTokens: string[] = [];
+      if (instrumentSpotlightActive) {
+        const selectedLower = instrumentTags.map((t) => t.toLowerCase());
+        const bleedPool = hasGccTag
+          ? ['oud', 'qanun', 'darbuka', 'riq', 'mirwas', 'ney']
+          : ['piano', 'electric guitar', 'synth', 'strings', 'drum kit', 'brass'];
+        for (const inst of bleedPool) {
+          if (!selectedLower.some((s) => s.includes(inst) || inst.includes(s))) spotlightAntiTokens.push(inst);
+        }
+        spotlightAntiTokens.push('full ensemble');
+      }
       const finalNegativeTags = fitNegativeTags(
-        orderedDedupeNeg([...traditionalAntiTokens, ...gccPronunciationTokens, ...regionalTokens])
+        orderedDedupeNeg([...spotlightAntiTokens, ...traditionalAntiTokens, ...gccPronunciationTokens, ...regionalTokens])
       );
 
       // ── Final style string (resolved with GCC fallback) ──
@@ -6857,6 +6905,7 @@ function VoicesTab({
       const GCC_STYLE_MARKERS = /\b(khaleeji|kuwaiti|qatari|saudi|emirati|bahraini|omani|gulf|sheilat|samri|ardah|liwa|jalsa|mawwal)\b/i;
       const isGccEffective = isGccStyleSelected || GCC_STYLE_MARKERS.test(resolvedStyle);
       const recommendedParams = getRecommendedStyleParams(genreFamily, isGccEffective);
+      const customVoiceActive = vocalType === 'custom' && !!selectedMusicVoice?.kieVoiceId;
 
       const invokeBody: Record<string, unknown> = {
         title: title.trim() || (language === 'ar' ? 'موسيقى وقتي' : 'Wakti Music'),
@@ -6871,7 +6920,11 @@ function VoicesTab({
         model: 'V5_5',
         duration_seconds: durationTarget,
         // User slider overrides take precedence; otherwise genre-based recommended defaults.
-        styleWeight: styleWeightOverride ?? recommendedParams.styleWeight,
+        // Spotlight KEEPS styleWeight high (>=0.85) — even with a custom voice — because the
+        // "single featured instrument leads" instruction lives in the style text, so a high
+        // weight is what enforces the lead. Custom voice without spotlight eases the weight so
+        // the cloned voice (carried by personaId + audioWeight) stays prominent.
+        styleWeight: styleWeightOverride ?? (instrumentSpotlightActive ? Math.max(recommendedParams.styleWeight, 0.85) : (customVoiceActive ? Math.min(recommendedParams.styleWeight, 0.65) : recommendedParams.styleWeight)),
         weirdnessConstraint: weirdnessOverride ?? recommendedParams.weirdnessConstraint,
         audioWeight: 0.8,
         negativeTags: finalNegativeTags,
@@ -6890,11 +6943,6 @@ function VoicesTab({
         invokeBody.customVoiceKieVoiceId = selectedMusicVoice.kieVoiceId;
         invokeBody.customVoiceType = selectedMusicVoice.voiceType;
         invokeBody.customVoiceName = selectedMusicVoice.name;
-        if (selectedMusicVoice.voiceType === 'female') {
-          invokeBody.vocalGender = 'f';
-        } else {
-          invokeBody.vocalGender = 'm';
-        }
       } else {
         if (vocalGender) invokeBody.vocalGender = vocalGender;
       }
@@ -7199,6 +7247,7 @@ function VoicesTab({
     setRhythmTags([]);
     setMoodTags([]);
     setInstrumentTags([]);
+    setInstrumentSpotlight(false);
     setStylesCollapsed(false);
     setRhythmOpen(false);
     setMoodOpen(false);
@@ -7400,7 +7449,7 @@ function VoicesTab({
           <TrackChip />
           <>
             <div className="rounded-xl border border-sky-200 dark:border-sky-400/20 bg-sky-50/80 dark:bg-sky-500/10 px-3 py-2 text-[11px] sm:text-[10px] text-sky-700 dark:text-sky-200">
-              {isAr ? 'اختر النمط والإيقاع والمزاج والآلات. هذه الاختيارات تبني الهوية الموسيقية.' : 'Choose the style, rhythm, mood, and instruments. These selections build the musical identity.'}
+              {isAr ? 'اختر النمط والإيقاع والمزاج والآلات — هذه هي الموسيقى. أي آلة تختارها يمكن أن تتصدّر، حتى مع لهجة خليجية.' : 'Choose the style, rhythm, mood, and instruments — this is the music. Any instrument you pick can lead, even with a Khaleeji dialect.'}
             </div>
             {/* Selected tags - compact row */}
             {(includeTags.length > 0 || instrumentTags.length > 0 || rhythmTags.length > 0 || moodTags.length > 0) && (
@@ -7764,6 +7813,29 @@ function VoicesTab({
                     )}
                   </div>
                   </div>
+                  {instrumentTags.length >= 1 && instrumentTags.length <= 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setInstrumentSpotlight((v) => !v)}
+                      className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-2xl border transition-all active:scale-[0.99] ${
+                        instrumentSpotlight
+                          ? 'bg-purple-50 dark:bg-purple-500/20 border-purple-300 dark:border-purple-400/40'
+                          : 'bg-white dark:bg-white/[0.06] border-[#d9dde7] dark:border-white/15'
+                      }`}
+                    >
+                      <div className="flex flex-col items-start text-left">
+                        <span className="text-xs font-bold text-[#060541] dark:text-white/90">
+                          {isAr ? 'إبراز الآلة (دعها تتصدّر)' : 'Spotlight instrument (let it lead)'}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground/70 dark:text-muted-foreground/60">
+                          {isAr ? 'الأفضل مع آلة واحدة. يقلّل بقية الآلات.' : 'Best with 1 instrument. Minimizes the rest.'}
+                        </span>
+                      </div>
+                      <span className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${instrumentSpotlight ? 'bg-purple-500' : 'bg-[#c7cbd6] dark:bg-white/20'}`}>
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${instrumentSpotlight ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                      </span>
+                    </button>
+                  )}
                   {INSTRUMENT_GROUPS.map((group) => (
                     <div key={group.title} className="space-y-2">
                       <div className="text-[11px] font-bold uppercase tracking-widest text-[#060541]/70 dark:text-purple-200/80 px-0.5">
@@ -7812,6 +7884,9 @@ function VoicesTab({
             next={<StepNextBtn onClick={() => goToStep(4)} label={isAr ? 'التالي: الكلمات' : 'Next: Lyrics'} shortLabel={isAr ? 'التالي' : 'Next'} />}
           />
           <TrackChip />
+          <div className="rounded-xl border border-emerald-200 dark:border-emerald-400/20 bg-emerald-50/80 dark:bg-emerald-500/10 px-3 py-2 text-[11px] sm:text-[10px] text-emerald-700 dark:text-emerald-200">
+            {isAr ? 'هذه طريقة الغناء — اللهجة أو النوع أو صوتك المستنسخ. لن تغيّر الآلات التي اخترتها.' : "This is how it's sung — dialect, gender, or your cloned voice. It won't change the instruments you picked."}
+          </div>
           <div className="flex flex-wrap gap-2">
             {(['auto', 'none', 'female', 'male', 'custom'] as const).map((v) => {
               const labels: Record<string, { en: string; ar: string }> = {

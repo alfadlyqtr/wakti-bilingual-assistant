@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Images } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { ContactsContent } from "@/pages/Contacts";
 import { MyGallery } from "@/components/social/MyGallery";
+import { emitEvent } from "@/utils/eventBus";
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from "@/utils/waktiOperator";
 
 const SOCIAL_SECTION_STORAGE_KEY = "wakti_social_last_section";
 const SOCIAL_TAB_STORAGE_KEY = "wakti_social_last_tab";
@@ -53,6 +55,9 @@ const resolveSocialView = (searchParams: URLSearchParams) => {
 export default function Social() {
   const { language } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
+  const operatorPayloadId = searchParams.get("waktiOperator");
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
+  const handledOperatorPayloadIdRef = useRef<string | null>(null);
 
   const initialSection = resolveSocialSection(searchParams);
   const initialContactsTab = resolveSocialTab(searchParams);
@@ -62,6 +67,14 @@ export default function Social() {
   const [activeSection, setActiveSection] = useState(initialSection);
   const [activeContactsTab, setActiveContactsTab] = useState(initialContactsTab);
   const [contactView, setContactView] = useState<"contacts" | "cards">(initialContactView);
+
+  const clearOperatorFlow = useCallback(() => {
+    if (!operatorPayloadId) return;
+    clearWaktiOperatorPayload(operatorPayloadId);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("waktiOperator");
+    setSearchParams(nextParams, { replace: true });
+  }, [operatorPayloadId, searchParams, setSearchParams]);
 
   useEffect(() => {
     setActiveSection(resolveSocialSection(searchParams));
@@ -80,6 +93,34 @@ export default function Social() {
   useEffect(() => {
     writeStoredValue(SOCIAL_VIEW_STORAGE_KEY, contactView);
   }, [contactView]);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId || !operatorPayload.social) return;
+    emitEvent("wakti-operator-status", {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.openStepId,
+      status: "completed",
+    });
+  }, [operatorPayload]);
+
+  useEffect(() => {
+    const social = operatorPayload?.social;
+    if (!social || handledOperatorPayloadIdRef.current === operatorPayloadId) return;
+    const expectedTab = social.tab || "contacts";
+    const sectionReady = activeSection === social.section;
+    const tabReady = social.section !== "contacts" || activeContactsTab === expectedTab;
+    const viewReady = social.section !== "contacts" || expectedTab !== "contacts" || !social.view || contactView === social.view;
+    if (!sectionReady || !tabReady || !viewReady) return;
+    handledOperatorPayloadIdRef.current = operatorPayloadId;
+    if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent("wakti-operator-status", {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: "completed",
+      });
+    }
+    clearOperatorFlow();
+  }, [activeContactsTab, activeSection, clearOperatorFlow, contactView, operatorPayload, operatorPayloadId]);
 
   const handleSectionChange = (section: string) => {
     setActiveSection(section);
@@ -159,6 +200,8 @@ export default function Social() {
             openChatUserId={openChatUserId}
             clearOpenChat={clearOpenChat}
             source="social"
+            operatorPayload={operatorPayload}
+            operatorPayloadId={operatorPayloadId}
           />
         </TabsContent>
 

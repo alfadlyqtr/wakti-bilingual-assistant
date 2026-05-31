@@ -1,12 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { ChessTab } from '@/components/wakti-ai-v2/games/ChessTab';
 import { TicTacToeTab } from '@/components/wakti-ai-v2/games/TicTacToeTab';
 import { SolitaireGame } from '@/components/wakti-ai-v2/games/SolitaireGame';
 import { Gamepad2, Castle, Grid3x3, Spade, Languages, ArrowLeft } from 'lucide-react';
+import { emitEvent } from '@/utils/eventBus';
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
 
 type GameScreen = 'home' | 'chess' | 'tictactoe' | 'solitaire' | 'letters';
+
+const resolveGameScreen = (searchParams: URLSearchParams): GameScreen => {
+  const raw = (searchParams.get('screen') || 'home').toLowerCase();
+  if (['home', 'chess', 'tictactoe', 'solitaire', 'letters'].includes(raw)) {
+    return raw as GameScreen;
+  }
+  return 'home';
+};
 
 type GameInviteTargetState = {
   gameInviteTarget?: {
@@ -18,6 +28,7 @@ type GameInviteTargetState = {
 
 export default function Games() {
   const { language } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [screen, setScreen] = useState<GameScreen>('home');
   const [chessInviteCode, setChessInviteCode] = useState<string | null>(null);
   const [ticTacToeInviteCode, setTicTacToeInviteCode] = useState<string | null>(null);
@@ -38,8 +49,19 @@ export default function Games() {
   const navigate = useNavigate();
   const location = useLocation();
   const processedInviteNavigationRef = useRef<string | null>(null);
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
+  const handledOperatorPayloadIdRef = useRef<string | null>(null);
 
   const isArabic = language === 'ar';
+
+  useEffect(() => {
+    const operatorScreen = operatorPayload?.game?.screen || resolveGameScreen(searchParams);
+    if (!operatorPayload?.game || !operatorScreen) return;
+    if (screen !== operatorScreen) {
+      setScreen(operatorScreen);
+    }
+  }, [operatorPayload, screen, searchParams]);
 
   useEffect(() => {
     const routeState = location.state as GameInviteTargetState | null;
@@ -74,6 +96,36 @@ export default function Games() {
       setScreen('tictactoe');
     }
   }, [location.key, location.search, location.state]);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId || !operatorPayload.game) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.openStepId,
+      status: 'completed',
+    });
+  }, [operatorPayload]);
+
+  useEffect(() => {
+    const requestedScreen = operatorPayload?.game?.screen;
+    if (!requestedScreen || handledOperatorPayloadIdRef.current === operatorPayloadId) return;
+    if (screen !== requestedScreen) return;
+    handledOperatorPayloadIdRef.current = operatorPayloadId;
+    if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'completed',
+      });
+    }
+    if (operatorPayloadId) {
+      clearWaktiOperatorPayload(operatorPayloadId);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('waktiOperator');
+      nextParams.delete('screen');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [operatorPayload, operatorPayloadId, screen, searchParams, setSearchParams]);
 
   const gameCards = useMemo(() => ([
     {

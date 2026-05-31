@@ -12,12 +12,24 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import EnhancedAudioControls from '@/components/tasjeel/EnhancedAudioControls';
 import { Card } from '@/components/ui/card';
 import { formatDate } from '@/utils/datetime';
+import { emitEvent } from '@/utils/eventBus';
+import type { WaktiOperatorRoutePayload } from '@/utils/waktiOperator';
 
 interface VoiceClone {
   id: string;
   voice_name: string;
   voice_id: string;
   is_default?: boolean;
+}
+
+interface VoiceTTSProps {
+  operatorPayload?: WaktiOperatorRoutePayload | null;
+  onOperatorConsumed?: () => void;
+}
+
+interface VoiceOperatorRunMeta {
+  runId?: string;
+  generateStepId?: string;
 }
 
 // Language-aware default voices (English vs Arabic)
@@ -81,7 +93,7 @@ const VOICE_STYLES = {
   },
 } as const;
 
-export default function VoiceTTS() {
+export default function VoiceTTS({ operatorPayload, onOperatorConsumed }: VoiceTTSProps) {
   const { language } = useTheme();
   const defaultVoices = getDefaultVoices(language);
   const [text, setText] = useState('');
@@ -115,6 +127,9 @@ export default function VoiceTTS() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const audioPlayerRef = React.useRef<HTMLAudioElement | null>(null);
+  const handledOperatorPayloadIdRef = React.useRef<string | null>(null);
+  const operatorAutoRunStepIdRef = React.useRef<string | null>(null);
+  const operatorRunMetaRef = React.useRef<VoiceOperatorRunMeta | null>(null);
 
   const { user } = useAuth();
 
@@ -147,6 +162,29 @@ export default function VoiceTTS() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!operatorPayload?.voiceTool || operatorPayload.voiceTool.tab !== 'tts') return;
+    if (handledOperatorPayloadIdRef.current === operatorPayload.stepId) return;
+    handledOperatorPayloadIdRef.current = operatorPayload.stepId;
+    operatorRunMetaRef.current = {
+      runId: operatorPayload.runId,
+      generateStepId: operatorPayload.stepRefs?.generateStepId,
+    };
+    setActiveSubTab('create');
+    setText((current) => current || operatorPayload.voiceTool?.text || '');
+    if (operatorPayload.voiceTool.autoGenerate && operatorPayload.stepRefs?.generateStepId) {
+      operatorAutoRunStepIdRef.current = operatorPayload.stepRefs.generateStepId;
+    }
+    if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'completed',
+      });
+    }
+    onOperatorConsumed?.();
+  }, [onOperatorConsumed, operatorPayload]);
+
   const canGenerate = text.trim().length > 0 && selectedVoiceId && text.length <= totalAvailableCharacters && canUseVoice;
 
   const setAsDefaultVoice = (voiceId: string) => {
@@ -162,6 +200,13 @@ export default function VoiceTTS() {
 
   const generateSpeech = async () => {
     if (!canGenerate) return;
+    if (operatorRunMetaRef.current?.runId && operatorRunMetaRef.current?.generateStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorRunMetaRef.current.runId,
+        stepId: operatorRunMetaRef.current.generateStepId,
+        status: 'running',
+      });
+    }
     setIsGenerating(true);
     setAudioUrl(null);
     try {
@@ -203,13 +248,35 @@ export default function VoiceTTS() {
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(url);
       await loadUserVoiceQuota();
+      if (operatorRunMetaRef.current?.runId && operatorRunMetaRef.current?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorRunMetaRef.current.runId,
+          stepId: operatorRunMetaRef.current.generateStepId,
+          status: 'completed',
+        });
+      }
       toast.success(language === 'ar' ? 'تم إنشاء الصوت بنجاح' : 'Speech generated successfully');
     } catch (e: any) {
+      if (operatorRunMetaRef.current?.runId && operatorRunMetaRef.current?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorRunMetaRef.current.runId,
+          stepId: operatorRunMetaRef.current.generateStepId,
+          status: 'failed',
+          error: e?.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'),
+        });
+      }
       toast.error(e.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'));
     } finally {
       setIsGenerating(false);
     }
   };
+
+  useEffect(() => {
+    if (!operatorAutoRunStepIdRef.current) return;
+    if (!canGenerate || isGenerating || loading || isLoadingVoiceQuota) return;
+    operatorAutoRunStepIdRef.current = null;
+    void generateSpeech();
+  }, [canGenerate, generateSpeech, isGenerating, isLoadingVoiceQuota, loading]);
 
   const rewindSavedAudio = async (id: string) => {
     try {

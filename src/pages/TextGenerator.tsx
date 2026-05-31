@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import TextGeneratorPopup from '@/components/wakti-ai-v2/TextGeneratorPopup';
 import { useTheme } from '@/providers/ThemeProvider';
-import { SmartTextPrefill, consumeSmartTextPrefill } from '@/utils/smartTextPrefill';
+import { SmartTextPrefill, consumeSmartTextPrefill, saveSmartTextToolBridge } from '@/utils/smartTextPrefill';
 import { emitEvent } from '@/utils/eventBus';
 import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
 
@@ -11,6 +11,7 @@ export default function TextGenerator() {
   const [searchParams, setSearchParams] = useSearchParams();
   const operatorPayloadId = searchParams.get('waktiOperator');
   const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
+  const handledOperatorPayloadIdRef = useRef<string | null>(null);
   const [activeTab, setActiveTab] = useState<'compose' | 'reply' | 'generated' | 'diagrams' | 'presentation' | 'translate' | 'a4'>('compose');
   const [initialPrefill, setInitialPrefill] = useState<SmartTextPrefill | null>(null);
 
@@ -34,7 +35,7 @@ export default function TextGenerator() {
     const prefill = consumeSmartTextPrefill();
     if (!prefill) return;
     setInitialPrefill(prefill);
-    if (prefill.tab === 'compose' || prefill.tab === 'reply' || prefill.tab === 'generated') {
+    if (prefill.tab === 'compose' || prefill.tab === 'reply' || prefill.tab === 'generated' || prefill.tab === 'diagrams' || prefill.tab === 'presentation' || prefill.tab === 'translate' || prefill.tab === 'a4') {
       setActiveTab(prefill.tab);
     }
   }, []);
@@ -49,9 +50,13 @@ export default function TextGenerator() {
   }, [operatorPayload?.runId, operatorPayload?.stepRefs?.openStepId]);
 
   useEffect(() => {
-    if (!operatorPayload?.textTool) return;
+    if (!operatorPayload?.textTool || handledOperatorPayloadIdRef.current === operatorPayloadId) return;
+    handledOperatorPayloadIdRef.current = operatorPayloadId;
     setInitialPrefill(operatorPayload.textTool.prefill || { tab: operatorPayload.textTool.tab });
     setActiveTab(operatorPayload.textTool.tab);
+    if (operatorPayload.textTool.bridge) {
+      saveSmartTextToolBridge(operatorPayload.textTool.bridge);
+    }
     if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
       emitEvent('wakti-operator-status', {
         runId: operatorPayload.runId,
@@ -60,7 +65,7 @@ export default function TextGenerator() {
       });
     }
     clearOperatorFlow();
-  }, [operatorPayload]);
+  }, [operatorPayload, operatorPayloadId]);
 
   useEffect(() => {
     emitEvent('wakti-operator-visual-mode', {
@@ -97,7 +102,7 @@ export default function TextGenerator() {
                 key={key}
                 type="button"
                 role="tab"
-                aria-selected={activeTab === key}
+                aria-selected={activeTab === key ? 'true' : 'false'}
                 onClick={() => setActiveTab(key as any)}
                 className={`min-h-[42px] md:h-12 px-2.5 md:px-4 py-2 md:py-0 rounded-xl border text-[11px] md:text-sm font-medium transition-all whitespace-normal leading-tight text-center flex items-center justify-center
                   ${activeTab === key

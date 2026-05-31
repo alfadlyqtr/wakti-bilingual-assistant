@@ -83,6 +83,7 @@ import {
   type A4ReferenceImageRole,
 } from "./a4Service";
 import { supabase } from "@/integrations/supabase/client";
+import { consumeSmartTextToolBridge } from "@/utils/smartTextPrefill";
 
 type Stage = "pick" | "form" | "generating" | "done" | "failed";
 type PageChoice = "auto" | 1 | 2 | 3;
@@ -1642,6 +1643,8 @@ const A4Tab: React.FC = () => {
   // F14: track which row is currently being retried to disable its button.
   const [retryingRowId, setRetryingRowId] = useState<string | null>(null);
   const unsubRef = useRef<(() => void) | null>(null);
+  const operatorBridgeAppliedRef = useRef(false);
+  const pendingOperatorRawContentRef = useRef<string>("");
 
   // --- Prompt Engineer UI state ---------------------------------------------
   const [inputMode, setInputMode] = useState<A4InputMode>("content_ready");
@@ -1706,6 +1709,7 @@ const A4Tab: React.FC = () => {
   const resetAll = useCallback(() => {
     unsubRef.current?.();
     unsubRef.current = null;
+    pendingOperatorRawContentRef.current = "";
     setStage("pick");
     setThemeId(null);
     setPurposeId(null);
@@ -1736,6 +1740,9 @@ const A4Tab: React.FC = () => {
     for (const f of schema) {
       if (f.default !== undefined) initial[f.key] = f.default;
     }
+    if (pendingOperatorRawContentRef.current.trim()) {
+      initial.raw_content = pendingOperatorRawContentRef.current;
+    }
     setFormState(initial);
     setDesignSettings((prev) => ({
       ...prev,
@@ -1743,6 +1750,39 @@ const A4Tab: React.FC = () => {
     }));
     setFormMode("basic");
   }, [themeId, purposeId]);
+
+  useEffect(() => {
+    if (operatorBridgeAppliedRef.current) return;
+    const bridge = consumeSmartTextToolBridge();
+    if (!bridge || bridge.tab !== 'a4') return;
+    operatorBridgeAppliedRef.current = true;
+
+    const nextText = (bridge.sourceText || bridge.prompt || '').trim();
+    const nextInputMode = bridge.a4InputMode || 'content_ready';
+
+    if (bridge.a4ThemeId) {
+      const nextTheme = findTheme(bridge.a4ThemeId);
+      if (nextTheme) {
+        setThemeId(nextTheme.id);
+        setPurposeId(bridge.a4PurposeId || null);
+        setStage('form');
+      }
+    }
+
+    setInputMode(nextInputMode);
+
+    if (nextInputMode === 'idea') {
+      setIdeaText(nextText);
+      if (nextText) {
+        setUserWishes(nextText);
+      }
+    } else if (nextText) {
+      pendingOperatorRawContentRef.current = nextText;
+      setExpandedContent('');
+      setFormState((prev) => ({ ...prev, raw_content: nextText }));
+      setUserWishes(nextText);
+    }
+  }, []);
 
   // Cleanup subscription on unmount
   useEffect(() => () => { unsubRef.current?.(); }, []);

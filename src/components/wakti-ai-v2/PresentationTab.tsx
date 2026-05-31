@@ -48,6 +48,7 @@ import {
  import OutlineStep from '@/components/wakti-ai-v2/presentation/steps/OutlineStep';
  import TopicStep from '@/components/wakti-ai-v2/presentation/steps/TopicStep';
  import { getThemeAccent } from '@/components/wakti-ai-v2/presentation/themeHelpers';
+ import { consumeSmartTextToolBridge } from '@/utils/smartTextPrefill';
 import type { Brief, Column, ImageFocusX, ImageFocusY, ImageTransform, InputMode, InputModeFlags, LayoutVariant, Slide, SlideOutline, Step, TextStyle, ThemeKey } from '@/components/wakti-ai-v2/presentation/types';
 
 const normalizeTextForEnhancementCheck = (value: string): string => (
@@ -174,6 +175,15 @@ const PresentationTab: React.FC = () => {
   const [currentShareToken, setCurrentShareToken] = useState<string | null>(null);
   const autoSaveTimerRef = useRef<number | null>(null);
   const hasAttemptedLegacyMigrationRef = useRef(false);
+
+  useEffect(() => {
+    const bridge = consumeSmartTextToolBridge();
+    if (!bridge || bridge.tab !== 'presentation') return;
+    const nextTopic = (bridge.topic || bridge.prompt || bridge.sourceText || '').trim();
+    if (!nextTopic) return;
+    setTopic(nextTopic);
+    setCurrentStep('topic');
+  }, []);
 
   // Step state
   const [currentStep, setCurrentStep] = useState<Step>('topic');

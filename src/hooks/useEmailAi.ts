@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { SUPABASE_ANON_KEY, SUPABASE_URL, supabase } from '@/integrations/supabase/client';
 
-export type EmailAiAction = 'summarize_email' | 'extract_tasks' | 'extract_deadlines' | 'draft_reply' | 'brief_recent';
+export type EmailAiAction = 'summarize_email' | 'summarize_email_with_pdf' | 'extract_tasks' | 'extract_deadlines' | 'draft_reply' | 'brief_recent';
 export type EmailAiTone = 'professional' | 'friendly' | 'warm' | 'firm' | 'diplomatic' | 'confident' | 'empathetic' | 'concise';
 export type EmailAiLength = 'very_short' | 'short' | 'medium' | 'detailed' | 'comprehensive';
 
@@ -51,6 +51,7 @@ const lengthMap: Record<EmailAiLength, 'short' | 'medium' | 'long'> = {
 const actionTitles = {
   en: {
     summarize_email: 'Email Summary',
+    summarize_email_with_pdf: 'Email + PDF Summary',
     extract_tasks: 'Tasks Found',
     extract_deadlines: 'Deadlines Found',
     draft_reply: 'Reply Draft',
@@ -58,6 +59,7 @@ const actionTitles = {
   },
   ar: {
     summarize_email: 'ملخص البريد',
+    summarize_email_with_pdf: 'ملخص البريد والمرفق',
     extract_tasks: 'المهام المستخرجة',
     extract_deadlines: 'المواعيد المستخرجة',
     draft_reply: 'مسودة الرد',
@@ -132,6 +134,22 @@ function buildPrompt({ action, messages, language, tone, length, note }: RunEmai
       ].join('\n\n');
     }
 
+    if (action === 'summarize_email_with_pdf') {
+      return [
+        'أنت مساعد Wakti للبريد.',
+        'اقرأ البريد التالي مع النص المستخرج من ملف PDF المرفق، ثم أرجع النتيجة كنص عادي بهذه العناوين فقط:',
+        'الملخص:',
+        'ماذا يريد المرسل:',
+        'درجة الاستعجال:',
+        'المهام:',
+        'المواعيد:',
+        'الخطوة المقترحة التالية:',
+        'اعتمد فقط على الحقائق الموجودة داخل البريد أو نص ملف PDF المرفق.',
+        'إذا كانت معلومة غير موجودة اكتب: غير مذكور.',
+        context,
+      ].join('\n\n');
+    }
+
     if (action === 'extract_tasks') {
       return [
         'أنت مساعد Wakti للبريد.',
@@ -202,6 +220,21 @@ function buildPrompt({ action, messages, language, tone, length, note }: RunEmai
       'Deadlines:',
       'Suggested next step:',
       'Use only facts from the email. If something is missing, say: Not stated.',
+      context,
+    ].join('\n\n');
+  }
+
+  if (action === 'summarize_email_with_pdf') {
+    return [
+      'You are Wakti Mail Copilot.',
+      'Read the email below together with the extracted text from the attached PDF and return plain text with exactly these headings:',
+      'Summary:',
+      'Sender wants:',
+      'Urgency:',
+      'Tasks:',
+      'Deadlines:',
+      'Suggested next step:',
+      'Use only facts from the email or the attached PDF text. If something is missing, say: Not stated.',
       context,
     ].join('\n\n');
   }

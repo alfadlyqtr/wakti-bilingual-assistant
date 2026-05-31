@@ -11,11 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useTheme } from '@/providers/ThemeProvider';
 import { detectProviderSettings } from '@/hooks/useEmailConnections';
-import { Mail, Server, Save, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Mail, Server, Save, Loader2, CheckCircle2, XCircle, Apple } from 'lucide-react';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  presetProvider?: 'icloud' | null;
   onSave: (config: {
     provider: string;
     display_name: string;
@@ -31,9 +32,10 @@ interface Props {
   }) => Promise<{ success: boolean; error?: string }>;
 }
 
-export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSave }) => {
+export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, presetProvider = null, onSave }) => {
   const { language } = useTheme();
   const isAr = language === 'ar';
+  const isIcloudPreset = presetProvider === 'icloud';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,10 +54,14 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
   const [success, setSuccess] = useState(false);
 
   const t = {
-    title: isAr ? 'ربط حساب بريد إلكتروني' : 'Connect Email Account',
-    subtitle: isAr ? 'أدخل بيانات حسابك لإرسال واستقبال البريد' : 'Enter your account details to send and receive email',
-    emailLabel: isAr ? 'عنوان البريد الإلكتروني' : 'Email Address',
-    passwordLabel: isAr ? 'كلمة المرور / كلمة مرور التطبيق' : 'Password / App Password',
+    title: isIcloudPreset
+      ? (isAr ? 'ربط بريد iCloud' : 'Connect iCloud Mail')
+      : (isAr ? 'ربط حساب بريد إلكتروني' : 'Connect Email Account'),
+    subtitle: isIcloudPreset
+      ? (isAr ? 'استخدم بريد iCloud مع كلمة مرور تطبيق من حساب Apple.' : 'Use your iCloud Mail address with an Apple app-specific password.')
+      : (isAr ? 'أدخل بيانات حسابك لإرسال واستقبال البريد' : 'Enter your account details to send and receive email'),
+    emailLabel: isIcloudPreset ? (isAr ? 'عنوان iCloud Mail' : 'iCloud Mail Address') : (isAr ? 'عنوان البريد الإلكتروني' : 'Email Address'),
+    passwordLabel: isIcloudPreset ? (isAr ? 'كلمة مرور تطبيق Apple' : 'Apple App-Specific Password') : (isAr ? 'كلمة المرور / كلمة مرور التطبيق' : 'Password / App Password'),
     passwordHint: isAr
       ? 'للحسابات ذات المصادقة الثنائية، استخدم "كلمة مرور التطبيق" من إعدادات الأمان'
       : 'For 2FA accounts, use an "App Password" from your security settings',
@@ -83,15 +89,40 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
     usernameHelp: isAr ? 'في أغلب استضافات cPanel يكون اسم المستخدم هو نفس البريد الإلكتروني الكامل' : 'For most cPanel mailboxes, the username is the full email address',
     usernameMismatch: isAr ? 'اسم المستخدم الحالي مختلف عن البريد الإلكتروني. إذا كنت تستخدم cPanel أو SecureServer فالغالب أنه يجب أن يكون البريد الكامل.' : 'The username currently differs from the email. If this is a cPanel or SecureServer mailbox, it usually needs to be the full email address.',
     timeoutHint: isAr ? 'انتهت مهلة اتصال IMAP. تحقق أولاً من أن اسم المستخدم هو البريد الإلكتروني الكامل، ثم راجع كلمة المرور وعنوان الخادم والمنفذ.' : 'IMAP connection timed out. First check that the username is the full email address, then verify the password, server address, and port.',
+    icloudProvider: isAr ? 'Apple / iCloud' : 'Apple / iCloud',
+    icloudStepsTitle: isAr ? 'قبل الربط' : 'Before you connect',
+    icloudStepOne: isAr ? 'سجّل الدخول إلى account.apple.com.' : 'Sign in to account.apple.com.',
+    icloudStepTwo: isAr ? 'افتح قسم Sign-In and Security ثم App-Specific Passwords.' : 'Open Sign-In and Security, then App-Specific Passwords.',
+    icloudStepThree: isAr ? 'أنشئ كلمة مرور تطبيق جديدة والصقها هنا بدل كلمة مرور Apple العادية.' : 'Generate a new app-specific password and paste it here instead of your normal Apple password.',
+    icloudServerNote: isAr ? 'تم تجهيز إعدادات iCloud تلقائيًا. يمكنك فتح الإعدادات المتقدمة فقط إذا احتجت.' : 'The iCloud server settings are already filled in for you. Open Advanced only if you need to review them.',
   };
+
+  useEffect(() => {
+    if (!open || !isIcloudPreset) return;
+    setDetectedProvider('icloud');
+    setDisplayName((current) => current || 'iCloud');
+    setSmtpHost('smtp.mail.me.com');
+    setSmtpPort('587');
+    setSmtpSecure(false);
+    setImapHost('imap.mail.me.com');
+    setImapPort('993');
+    setImapSecure(true);
+    setShowAdvanced(false);
+  }, [isIcloudPreset, open]);
 
   // Auto-detect when email changes
   useEffect(() => {
     if (!email.includes('@')) {
-      setDetectedProvider(null);
+      if (!isIcloudPreset) {
+        setDetectedProvider(null);
+      }
       return;
     }
     if (!username.trim()) setUsername(email.trim());
+    if (isIcloudPreset) {
+      setDetectedProvider('icloud');
+      return;
+    }
     const settings = detectProviderSettings(email);
     if (settings) {
       setDetectedProvider(settings.provider);
@@ -104,7 +135,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
       if (!username) setUsername(email);
       if (!displayName) setDisplayName(settings.provider.charAt(0).toUpperCase() + settings.provider.slice(1));
     }
-  }, [email]);
+  }, [email, isIcloudPreset, username, displayName]);
 
   const handleSave = useCallback(async () => {
     setError('');
@@ -155,21 +186,44 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
   const normalizedUsername = username.trim();
   const showUsernameMismatch = Boolean(normalizedEmail && normalizedUsername && normalizedEmail !== normalizedUsername);
   const friendlyError = error.includes('IMAP timeout waiting for A0001') ? t.timeoutHint : error;
-  const lightFieldClass = 'border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(249,250,255,0.98))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.05)] placeholder:text-[#060541]/35 focus-visible:border-[#060541]/24 focus-visible:ring-[#060541]/20 dark:border-input dark:bg-background dark:text-foreground dark:shadow-none';
-  const lightOutlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-border dark:bg-background dark:text-foreground dark:hover:bg-accent';
+  const modalSurfaceClass = 'border border-[#060541]/16 bg-[radial-gradient(circle_at_top,rgba(233,206,176,0.16),transparent_26%),linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] shadow-[0_28px_80px_rgba(6,5,65,0.14)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(15,18,26,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_24px_64px_rgba(0,0,0,0.52)] dark:ring-white/5';
+  const heroCardClass = 'rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,248,255,0.94))] p-4 text-sm text-[#060541] shadow-[0_10px_24px_rgba(6,5,65,0.06)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(24,29,40,0.95),rgba(14,17,24,0.92))] dark:text-foreground dark:shadow-[0_18px_36px_rgba(0,0,0,0.34)]';
+  const innerNoteClass = 'mt-3 rounded-lg border border-[#060541]/10 bg-white/80 px-3 py-2 text-xs text-muted-foreground dark:border-white/10 dark:bg-white/5 dark:text-muted-foreground';
+  const successCardClass = 'flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2';
+  const lightFieldClass = 'border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(249,250,255,0.98))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.05)] placeholder:text-[#060541]/35 focus-visible:border-[#060541]/24 focus-visible:ring-[#060541]/20 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.96),rgba(12,15,20,0.94))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)] dark:placeholder:text-muted-foreground dark:focus-visible:border-white/20 dark:focus-visible:ring-white/10';
+  const lightOutlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(22,27,38,0.96),rgba(12,15,20,0.94))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.3)] dark:hover:bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]';
+  const advancedShellClass = 'space-y-3 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(246,248,255,0.92))] p-4 shadow-[0_10px_24px_rgba(6,5,65,0.06)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(18,22,31,0.9),rgba(11,14,21,0.88))] dark:shadow-[0_16px_32px_rgba(0,0,0,0.3)] dark:ring-white/5';
+  const advancedSectionClass = 'space-y-2 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] p-3 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-white/10 dark:bg-[linear-gradient(180deg,rgba(22,27,38,0.96),rgba(14,17,24,0.94))] dark:shadow-[0_10px_22px_rgba(0,0,0,0.24)]';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto border border-[#060541]/16 bg-[radial-gradient(circle_at_top,rgba(233,206,176,0.16),transparent_26%),linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] shadow-[0_28px_80px_rgba(6,5,65,0.14)] ring-1 ring-[#060541]/5 dark:border-border dark:bg-background dark:shadow-2xl dark:ring-0">
+      <DialogContent className={`max-w-lg max-h-[90vh] overflow-y-auto ${modalSurfaceClass}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Mail className="h-5 w-5 text-[#E9CEB0]" />
+            {isIcloudPreset ? <Apple className="h-5 w-5 text-[#E9CEB0]" /> : <Mail className="h-5 w-5 text-[#E9CEB0]" />}
             {t.title}
           </DialogTitle>
           <DialogDescription>{t.subtitle}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {isIcloudPreset ? (
+            <div className={heroCardClass}>
+              <div className="flex items-center gap-2 font-medium">
+                <Apple className="h-4 w-4 text-[#E9CEB0]" />
+                {t.icloudStepsTitle}
+              </div>
+              <div className="mt-3 space-y-1.5 text-sm text-muted-foreground">
+                <div>1. {t.icloudStepOne}</div>
+                <div>2. {t.icloudStepTwo}</div>
+                <div>3. {t.icloudStepThree}</div>
+              </div>
+              <div className={innerNoteClass}>
+                {t.icloudServerNote}
+              </div>
+            </div>
+          ) : null}
+
           {/* Email */}
           <div className="space-y-1.5">
             <Label htmlFor="conn-email">{t.emailLabel}</Label>
@@ -211,10 +265,10 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
 
           {/* Detected provider badge */}
           {detectedProvider && (
-            <div className="flex items-center gap-2 rounded-lg bg-green-500/10 border border-green-500/30 px-3 py-2">
+            <div className={successCardClass}>
               <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
               <span className="text-sm text-green-700 dark:text-green-300">
-                {t.autoDetect}: <strong>{providerDisplayName}</strong>
+                {t.autoDetect}: <strong>{isIcloudPreset ? t.icloudProvider : providerDisplayName}</strong>
               </span>
             </div>
           )}
@@ -231,8 +285,8 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
 
           {/* Advanced fields */}
           {showAdvanced && (
-            <div className="space-y-3 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,0.95),rgba(246,248,255,0.92))] p-4 shadow-[0_10px_24px_rgba(6,5,65,0.06)] ring-1 ring-[#060541]/5 dark:border-border/60 dark:bg-muted/30 dark:shadow-none dark:ring-0">
-              <div className="space-y-2 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] p-3 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
+            <div className={advancedShellClass}>
+              <div className={advancedSectionClass}>
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.loginSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.loginHint}</div>
@@ -249,7 +303,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 ) : null}
               </div>
 
-              <div className="space-y-3 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] p-3 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
+              <div className={advancedSectionClass}>
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.incomingSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.incomingHint}</div>
@@ -275,7 +329,7 @@ export const EmailConnectionModal: React.FC<Props> = ({ open, onOpenChange, onSa
                 </label>
               </div>
 
-              <div className="space-y-3 rounded-xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] p-3 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-border/60 dark:bg-background/70 dark:shadow-none">
+              <div className={advancedSectionClass}>
                 <div>
                   <div className="text-sm font-medium text-foreground">{t.outgoingSection}</div>
                   <div className="mt-1 text-xs text-muted-foreground">{t.outgoingHint}</div>

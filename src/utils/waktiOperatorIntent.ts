@@ -31,8 +31,8 @@ export function analyzeWaktiOperatorIntent(transcript: string): WaktiOperatorInt
   ];
 
   const executionSignals = [
-    /\b(create|make|generate|send|draft|compose|save|add|set|schedule|remind|write|build|start)\b/i,
-    /\b(أنشئ|انشئ|اعمل|سو|سوي|ولّد|ولد|أرسل|ارسل|احفظ|أضف|اضف|ذكرني|رتب|ابدأ|ابدا)\b/,
+    /\b(create|make|generate|send|draft|compose|save|add|set|schedule|remind|write|build|start|read aloud|say this|speak this|convert to speech|translate this|clone my voice|record)\b/i,
+    /\b(أنشئ|انشئ|اعمل|سو|سوي|ولّد|ولد|أرسل|ارسل|احفظ|أضف|اضف|ذكرني|رتب|ابدأ|ابدا|اقرأ بصوت|حوّل إلى صوت|حول إلى صوت|ترجم هذا|استنسخ صوتي|سجل|سجّل)\b/,
   ];
 
   const hasGuidance = testAny(normalized, guidanceSignals) || /\?$/.test(normalized);

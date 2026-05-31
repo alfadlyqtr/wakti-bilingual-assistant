@@ -383,23 +383,20 @@ serve(async (req) => {
       });
     }
 
-    const hasUnsupportedCustomVoiceRequest = Boolean(customVoiceKieVoiceId || customVoiceId);
-    if (hasUnsupportedCustomVoiceRequest) {
-      console.error("[music-generate] Unsupported custom voice request", {
+    // ── Custom voice → Suno Voice persona mapping ──
+    // Per the Suno API spec, a Suno Voice voiceId (stored as kie_voice_id) is applied to
+    // music generation by sending it as personaId together with personaModel='voice_persona'.
+    // The earlier block here wrongly assumed this was impossible. Voice personas require a
+    // V5-family model; the client sends V5_5.
+    const resolvedPersonaId = customVoiceKieVoiceId || personaId;
+    const resolvedPersonaModel = customVoiceKieVoiceId ? "voice_persona" : personaModel;
+    if (customVoiceKieVoiceId) {
+      console.log("[music-generate] Custom voice persona applied", {
         model,
-        customVoiceId,
         customVoiceKieVoiceId,
         customVoiceType,
         customVoiceName,
-        personaId,
-        personaModel,
-      });
-      return new Response(JSON.stringify({
-        error: "Custom voice music generation is temporarily unavailable while we update the provider mapping.",
-        detail: "KIE custom voice IDs cannot be sent to music generation as persona IDs.",
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        resolvedPersonaModel,
       });
     }
 
@@ -459,8 +456,8 @@ serve(async (req) => {
       if (styleWeight !== undefined) kiePayload.styleWeight = styleWeight;
       if (effectiveWeirdnessConstraint !== undefined) kiePayload.weirdnessConstraint = effectiveWeirdnessConstraint;
       if (effectiveAudioWeight !== undefined) kiePayload.audioWeight = effectiveAudioWeight;
-      if (personaId) kiePayload.personaId = personaId;
-      if (personaModel) kiePayload.personaModel = personaModel;
+      if (resolvedPersonaId) kiePayload.personaId = resolvedPersonaId;
+      if (resolvedPersonaModel) kiePayload.personaModel = resolvedPersonaModel;
     }
 
     if (customMode && typeof kiePayload.duration !== "number") {

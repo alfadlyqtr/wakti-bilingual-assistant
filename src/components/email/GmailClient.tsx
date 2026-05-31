@@ -4,6 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MailComposer, MailComposerPreset, MailComposerSubmitInput } from '@/components/email/MailComposer';
 import { EmailAiAssistant } from '@/components/email/EmailAiAssistant';
+import { EmailMessageAttachments } from '@/components/email/EmailMessageAttachments';
+import { EmailMessageAttachment } from '@/utils/emailAttachmentDownload';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
   ChevronDown, Reply, Forward, Trash2, MailOpen, Search, X,
@@ -104,6 +106,8 @@ interface MessageViewProps {
   onReply: () => void;
   onForward: () => void;
   onDelete: () => void;
+  onDownloadAttachment: (attachment: EmailMessageAttachment) => void;
+  downloadingAttachmentId?: string | null;
   deleting: boolean;
   language?: string;
   canReply?: boolean;
@@ -154,7 +158,7 @@ function formatPlainEmailBody(body: string, subject: string): string {
   return flattened;
 }
 
-function MessageView({ message, onBack, onReply, onForward, onDelete, deleting, language = 'en', canReply = true, aiPanel }: MessageViewProps) {
+function MessageView({ message, onBack, onReply, onForward, onDelete, onDownloadAttachment, downloadingAttachmentId = null, deleting, language = 'en', canReply = true, aiPanel }: MessageViewProps) {
   const senderName = extractName(message.from) || message.from || '—';
   const senderEmail = extractEmailAddress(message.from) || message.from || '—';
   const backLabel = language === 'ar' ? 'رجوع' : 'Back';
@@ -214,6 +218,12 @@ function MessageView({ message, onBack, onReply, onForward, onDelete, deleting, 
           </div>
         </div>
       </div>
+      <EmailMessageAttachments
+        attachments={message.attachments}
+        downloadingId={downloadingAttachmentId}
+        language={language}
+        onDownload={onDownloadAttachment}
+      />
       <div className="flex-1 min-h-0">
         <div className="h-full overflow-y-auto pt-4 pr-1">
           <div className="px-1 py-1">
@@ -261,6 +271,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
   const [selectedMessage, setSelectedMessage] = useState<GmailMessageFull | null>(null);
   const [loadingMessage, setLoadingMessage] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCompose, setShowCompose] = useState(false);
   const [replyTo, setReplyTo] = useState<{ to: string; subject: string; threadId: string } | undefined>();
@@ -420,6 +431,16 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
     setDeletingRowId(null);
   };
 
+  const handleDownloadAttachment = useCallback(async (attachment: EmailMessageAttachment) => {
+    if (!selectedMessage) return;
+    setDownloadingAttachmentId(attachment.id);
+    try {
+      await gmail.downloadAttachment(selectedMessage.id, attachment);
+    } finally {
+      setDownloadingAttachmentId(null);
+    }
+  }, [gmail, selectedMessage]);
+
   const selectedMessageAiSource = useMemo(() => {
     if (!selectedMessage) return null;
     return {
@@ -431,6 +452,11 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
       bodyText: selectedMessage.body?.text || selectedMessage.snippet || '',
     };
   }, [selectedMessage]);
+
+  const resolveSelectedAttachmentContent = useCallback(async (attachment: EmailMessageAttachment) => {
+    if (!selectedMessage) return null;
+    return await gmail.getAttachmentContent(selectedMessage.id, attachment);
+  }, [gmail, selectedMessage]);
 
   const resolveRecentMessages = useCallback(async () => {
     const recent = gmail.messages.slice(0, 5);
@@ -589,6 +615,8 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                 onReply={handleReply}
                 onForward={handleForward}
                 onDelete={handleDeleteMessage}
+                onDownloadAttachment={handleDownloadAttachment}
+                downloadingAttachmentId={downloadingAttachmentId}
                 deleting={deletingMessage}
                 language={language}
                 canReply={gmail.activeFolder !== 'SENT'}
@@ -598,6 +626,8 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                     language={language}
                     contextKey={selectedMessage.id}
                     message={selectedMessageAiSource}
+                    attachments={selectedMessage.attachments}
+                    resolveAttachmentContent={resolveSelectedAttachmentContent}
                     canReply={gmail.activeFolder !== 'SENT'}
                     onUseAsReply={handleUseAiReply}
                     variant="floating"

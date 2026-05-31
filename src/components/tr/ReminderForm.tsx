@@ -74,10 +74,10 @@ export function ReminderForm({ isOpen, onClose, reminder, prefill, onReminderSav
       if (reminder) {
         console.log('ReminderForm - Populating form with existing reminder data');
         reset({
-          title: reminder.title,
-          description: reminder.description || '',
-          due_date: reminder.due_date || '',
-          due_time: reminder.due_time || '',
+          title: prefill?.title ?? reminder.title,
+          description: prefill?.description ?? (reminder.description || ''),
+          due_date: prefill?.due_date ?? (reminder.due_date || ''),
+          due_time: prefill?.due_time ?? (reminder.due_time || ''),
         });
       } else if (prefill) {
         console.log('ReminderForm - Populating form with incoming prefill data');

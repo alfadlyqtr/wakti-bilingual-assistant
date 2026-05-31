@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Activity, Smartphone } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import HealthKitTab from '@/components/fitness/HealthKitTab';
 import FitnessHealth from './FitnessHealth';
+import { emitEvent } from '@/utils/eventBus';
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
 
 type DataSource = 'whoop' | 'healthkit';
 
@@ -12,7 +15,49 @@ type DataSource = 'whoop' | 'healthkit';
  */
 export default function Vitality() {
   const { language } = useTheme();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [dataSource, setDataSource] = useState<DataSource>('whoop');
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
+  const handledOperatorPayloadIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const requestedSource = operatorPayload?.vitality?.dataSource || ((searchParams.get('source') || '').toLowerCase() === 'healthkit' ? 'healthkit' : 'whoop');
+    if (!requestedSource) return;
+    if (dataSource !== requestedSource) {
+      setDataSource(requestedSource);
+    }
+  }, [dataSource, operatorPayload, searchParams]);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId || !operatorPayload.vitality) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.openStepId,
+      status: 'completed',
+    });
+  }, [operatorPayload]);
+
+  useEffect(() => {
+    const requestedSource = operatorPayload?.vitality?.dataSource;
+    if (!requestedSource || handledOperatorPayloadIdRef.current === operatorPayloadId) return;
+    if (dataSource !== requestedSource) return;
+    handledOperatorPayloadIdRef.current = operatorPayloadId;
+    if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'completed',
+      });
+    }
+    if (operatorPayloadId) {
+      clearWaktiOperatorPayload(operatorPayloadId);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('waktiOperator');
+      nextParams.delete('source');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [dataSource, operatorPayload, operatorPayloadId, searchParams, setSearchParams]);
 
   // If WHOOP is selected, render the original FitnessHealth page
   if (dataSource === 'whoop') {

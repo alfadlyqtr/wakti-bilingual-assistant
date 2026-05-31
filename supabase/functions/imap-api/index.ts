@@ -368,6 +368,15 @@ function stripHtml(html: string): string {
   );
 }
 
+type ParsedAttachment = {
+  id: string;
+  name: string;
+  contentType?: string;
+  size?: number;
+  inline?: boolean;
+  content?: string;
+};
+
 function splitMimeHeadersAndBody(raw: string): { headers: string; body: string } {
   const normalized = raw.replace(/\r\n?/g, "\n");
   const bodyStart = normalized.indexOf("\n\n");
@@ -385,12 +394,77 @@ function extractMimeBoundary(headers: string): string | null {
   return boundaryMatch ? boundaryMatch[1].trim() : null;
 }
 
-function parseMimeNode(rawPart: string): { text: string; html: string } {
+function extractHeaderParameter(headers: string, key: string): string | null {
+  const encodedMatch = headers.match(new RegExp(`${key}\\*=([^;\\r\\n]+)`, "i"));
+  if (encodedMatch?.[1]) {
+    const cleaned = encodedMatch[1].trim().replace(/^"|"$/g, "");
+    const value = cleaned.includes("''") ? cleaned.split("''").slice(1).join("''") : cleaned;
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  }
+
+  const quotedMatch = headers.match(new RegExp(`${key}="([^"]+)"`, "i"));
+  if (quotedMatch?.[1]) return quotedMatch[1].trim();
+
+  const plainMatch = headers.match(new RegExp(`${key}=([^;\\r\\n]+)`, "i"));
+  return plainMatch?.[1]?.trim().replace(/^"|"$/g, "") || null;
+}
+
+function extractAttachmentName(headers: string): string | null {
+  return extractHeaderParameter(headers, "filename") || extractHeaderParameter(headers, "name");
+}
+
+function decodeQuotedPrintableBytes(body: string): Uint8Array {
+  const normalized = body.replace(/=\r?\n/g, "");
+  const bytes: number[] = [];
+
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index];
+    if (char === "=" && /^[0-9A-F]{2}$/i.test(normalized.slice(index + 1, index + 3))) {
+      bytes.push(parseInt(normalized.slice(index + 1, index + 3), 16));
+      index += 2;
+      continue;
+    }
+    bytes.push(normalized.charCodeAt(index));
+  }
+
+  return new Uint8Array(bytes);
+}
+
+function encodeAttachmentContent(body: string, transferEncoding: string): string {
+  if (transferEncoding === "base64") {
+    return body.replace(/\s+/g, "");
+  }
+  if (transferEncoding === "quoted-printable") {
+    return base64Encode(decodeQuotedPrintableBytes(body));
+  }
+  return base64Encode(new TextEncoder().encode(body));
+}
+
+function estimateAttachmentSize(body: string, transferEncoding: string): number | undefined {
+  if (transferEncoding === "base64") {
+    const normalized = body.replace(/\s+/g, "");
+    if (!normalized) return undefined;
+    const padding = normalized.endsWith("==") ? 2 : normalized.endsWith("=") ? 1 : 0;
+    return Math.max(0, Math.floor((normalized.length * 3) / 4) - padding);
+  }
+  if (transferEncoding === "quoted-printable") {
+    return decodeQuotedPrintableBytes(body).length;
+  }
+  return new TextEncoder().encode(body).length;
+}
+
+function parseMimeNode(rawPart: string, path = "0", includeAttachmentContent = false): { text: string; html: string; attachments: ParsedAttachment[] } {
   const { headers, body } = splitMimeHeadersAndBody(rawPart);
   const contentTypeMatch = headers.match(/^Content-Type:\s*([^\r\n;]+)/im);
   const contentType = contentTypeMatch ? contentTypeMatch[1].trim().toLowerCase() : "text/plain";
   const transferEncodingMatch = headers.match(/^Content-Transfer-Encoding:\s*(\S+)/im);
   const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : "";
+  const dispositionMatch = headers.match(/^Content-Disposition:\s*([^\r\n;]+)/im);
+  const disposition = dispositionMatch ? dispositionMatch[1].trim().toLowerCase() : "";
   const boundary = extractMimeBoundary(headers);
 
   if (boundary) {
@@ -402,33 +476,63 @@ function parseMimeNode(rawPart: string): { text: string; html: string } {
 
     let text = "";
     let html = "";
+    const attachments: ParsedAttachment[] = [];
 
-    for (const part of parts) {
-      const parsed = parseMimeNode(part);
+    for (let index = 0; index < parts.length; index += 1) {
+      const parsed = parseMimeNode(parts[index], `${path}.${index + 1}`, includeAttachmentContent);
       if (!text && parsed.text) text = parsed.text;
       if (!html && parsed.html) html = parsed.html;
-      if (text && html) break;
+      if (parsed.attachments.length > 0) {
+        attachments.push(...parsed.attachments);
+      }
     }
 
-    return { text, html };
+    return { text, html, attachments };
+  }
+
+  const attachmentName = extractAttachmentName(headers);
+  const isAttachment = Boolean(attachmentName) || disposition.includes("attachment");
+  const isInlineAttachment = disposition.includes("inline") && Boolean(attachmentName);
+
+  if (isAttachment || isInlineAttachment) {
+    return {
+      text: "",
+      html: "",
+      attachments: [
+        {
+          id: path,
+          name: attachmentName || "attachment",
+          contentType,
+          size: estimateAttachmentSize(body, transferEncoding),
+          inline: isInlineAttachment,
+          content: includeAttachmentContent ? encodeAttachmentContent(body, transferEncoding) : undefined,
+        },
+      ],
+    };
   }
 
   const decoded = decodeBody(body, transferEncoding);
   if (contentType.includes("text/html")) {
-    return { text: "", html: decoded };
+    return { text: "", html: decoded, attachments: [] };
   }
   if (contentType.includes("text/plain")) {
-    return { text: normalizeTextContent(decoded), html: "" };
+    return { text: normalizeTextContent(decoded), html: "", attachments: [] };
   }
-  return { text: "", html: "" };
+  return { text: "", html: "", attachments: [] };
 }
 
-function extractBodyParts(raw: string): { text: string; html: string; snippet: string } {
+function extractBodyParts(raw: string): { text: string; html: string; snippet: string; attachments: ParsedAttachment[] } {
   const normalizedRaw = raw.replace(/\r\n?/g, "\n");
   const parsed = parseMimeNode(normalizedRaw);
   const text = normalizeTextContent(parsed.text || stripHtml(parsed.html));
   const html = parsed.html || "";
-  return { text, html, snippet: text.slice(0, 160).trim() };
+  return { text, html, snippet: text.slice(0, 160).trim(), attachments: parsed.attachments };
+}
+
+function findAttachmentById(raw: string, attachmentId: string): ParsedAttachment | null {
+  const normalizedRaw = raw.replace(/\r\n?/g, "\n");
+  const parsed = parseMimeNode(normalizedRaw, "0", true);
+  return parsed.attachments.find((attachment) => attachment.id === attachmentId) || null;
 }
 
 type DraftAttachment = {
@@ -810,11 +914,33 @@ type ConnectionValidationResult = {
   };
 };
 
+function isIcloudConnection(conn: Record<string, unknown>): boolean {
+  const provider = String(conn.provider || "").trim().toLowerCase();
+  if (provider === "icloud") return true;
+  const email = String(conn.email_address || "").trim().toLowerCase();
+  const domain = email.split("@")[1] || "";
+  return ["icloud.com", "me.com", "mac.com"].includes(domain);
+}
+
 function getLoginCandidates(conn: Record<string, unknown>): string[] {
-  const values = [String(conn.username || "").trim(), String(conn.email_address || "").trim()]
+  const username = String(conn.username || "").trim();
+  const email = String(conn.email_address || "").trim();
+  const usernameLocalPart = username.includes("@") ? username.split("@")[0].trim() : username;
+  const emailLocalPart = email.includes("@") ? email.split("@")[0].trim() : email;
+  const values = isIcloudConnection(conn)
+    ? [emailLocalPart, usernameLocalPart, username, email]
+    : [username, email];
+  return values
     .filter(Boolean)
     .filter((value, index, arr) => arr.indexOf(value) === index);
-  return values;
+}
+
+function formatConnectionError(conn: Record<string, unknown>, error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (isIcloudConnection(conn) && /AUTHENTICATIONFAILED|IMAP LOGIN failed/i.test(message)) {
+    return "Apple / iCloud login failed. Make sure iCloud Mail is enabled on this Apple account and use a fresh Apple app-specific password from account.apple.com.";
+  }
+  return message;
 }
 
 function createImapForLogin(conn: Record<string, unknown>, login: string) {
@@ -964,7 +1090,7 @@ function normalizeConnectionConfig(input: Record<string, unknown>): Record<strin
     smtp_host: String(input.smtp_host || "").trim(),
     smtp_port: Number(input.smtp_port || 587),
     smtp_secure: Boolean(input.smtp_secure ?? false),
-    password_encrypted: String(input.password_encrypted || input.password || ""),
+    password_encrypted: String(input.password_encrypted || input.password || "").trim(),
   };
 }
 
@@ -1074,7 +1200,12 @@ Deno.serve(async (req: Request) => {
       if (!String(conn.email_address || "") || !String(conn.username || "") || !String(conn.imap_host || "") || !String(conn.password_encrypted || "")) {
         return jsonResponse({ error: "email, username, password, and IMAP host are required" }, 400);
       }
-      const validation = await validateConnection(conn);
+      let validation: ConnectionValidationResult;
+      try {
+        validation = await validateConnection(conn);
+      } catch (error) {
+        throw new Error(formatConnectionError(conn, error));
+      }
       return jsonResponse(validation);
     }
 
@@ -1128,8 +1259,32 @@ Deno.serve(async (req: Request) => {
           }
         }
         const rawBody = await session.imap.fetchBody(uid);
-        const { text, html, snippet } = extractBodyParts(rawBody);
-        return jsonResponse({ uid, body: { text, html }, snippet });
+        const { text, html, snippet, attachments } = extractBodyParts(rawBody);
+        return jsonResponse({ uid, body: { text, html }, snippet, attachments });
+      } finally {
+        await session.imap.logout();
+      }
+    }
+
+    if (action === "download_attachment") {
+      const uid = Number(body.uid || 0);
+      const folder = String(body.folder || "INBOX");
+      const attachmentId = String(body.attachmentId || "");
+      if (!uid) return jsonResponse({ error: "uid required" }, 400);
+      if (!attachmentId) return jsonResponse({ error: "attachmentId required" }, 400);
+      const session = await openMailbox(conn, folder);
+      try {
+        const rawBody = await session.imap.fetchBody(uid);
+        const attachment = findAttachmentById(rawBody, attachmentId);
+        if (!attachment || !attachment.content) {
+          return jsonResponse({ error: "Attachment not found" }, 404);
+        }
+        return jsonResponse({
+          name: attachment.name,
+          contentType: attachment.contentType || "application/octet-stream",
+          size: attachment.size,
+          content: attachment.content,
+        });
       } finally {
         await session.imap.logout();
       }

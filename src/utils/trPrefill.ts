@@ -28,7 +28,7 @@ export interface TRReminderPrefillDraft {
 
 export interface TRPrefillSource {
   type: 'email_ai';
-  action?: 'summarize_email' | 'extract_tasks' | 'extract_deadlines' | 'brief_recent';
+  action?: 'summarize_email' | 'summarize_email_with_pdf' | 'extract_tasks' | 'extract_deadlines' | 'brief_recent';
   contextKey?: string;
   emailSubject?: string;
   emailFrom?: string;

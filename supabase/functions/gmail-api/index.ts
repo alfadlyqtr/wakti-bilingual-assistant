@@ -5,6 +5,14 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
 
+type MessageAttachment = {
+  id: string;
+  name: string;
+  contentType?: string;
+  size?: number;
+  inline?: boolean;
+};
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -114,6 +122,12 @@ function decodeBase64Url(str: string): string {
   }
 }
 
+function normalizeBase64Url(str: string): string {
+  const normalized = str.replace(/-/g, "+").replace(/_/g, "/");
+  const padLength = normalized.length % 4;
+  return padLength === 0 ? normalized : normalized + "=".repeat(4 - padLength);
+}
+
 function extractBody(payload: any): { text: string; html: string } {
   let text = "";
   let html = "";
@@ -136,6 +150,63 @@ function extractBody(payload: any): { text: string; html: string } {
 
   walk(payload);
   return { text, html };
+}
+
+function extractAttachments(payload: any): MessageAttachment[] {
+  const attachments: MessageAttachment[] = [];
+
+  function walk(part: any) {
+    if (!part) return;
+
+    const filename = typeof part.filename === "string" ? part.filename.trim() : "";
+    const attachmentId = typeof part.body?.attachmentId === "string" ? part.body.attachmentId : "";
+    const partId = typeof part.partId === "string" ? part.partId : "";
+    const mimeType = typeof part.mimeType === "string" ? part.mimeType : undefined;
+    const bodySize = typeof part.body?.size === "number" ? part.body.size : undefined;
+    const headers = Array.isArray(part.headers) ? part.headers : [];
+    const disposition = headers.find((header: any) => String(header?.name || "").toLowerCase() === "content-disposition")?.value || "";
+    const isInline = /inline/i.test(disposition);
+
+    if (filename && (attachmentId || partId)) {
+      attachments.push({
+        id: attachmentId || `part:${partId}`,
+        name: filename,
+        contentType: mimeType,
+        size: bodySize,
+        inline: isInline,
+      });
+    }
+
+    if (Array.isArray(part.parts)) {
+      for (const subPart of part.parts) walk(subPart);
+    }
+  }
+
+  walk(payload);
+  return attachments;
+}
+
+function findAttachmentPart(payload: any, attachmentId: string): any | null {
+  let match: any | null = null;
+
+  function walk(part: any) {
+    if (!part || match) return;
+
+    const directId = typeof part.body?.attachmentId === "string" ? part.body.attachmentId : "";
+    const partId = typeof part.partId === "string" ? part.partId : "";
+
+    if (directId === attachmentId || `part:${partId}` === attachmentId) {
+      match = part;
+      return;
+    }
+
+    if (Array.isArray(part.parts)) {
+      for (const subPart of part.parts) walk(subPart);
+    }
+  }
+
+  walk(payload);
+  return match;
 }
 
 function extractHeader(headers: Array<{ name: string; value: string }>, name: string): string {
@@ -471,6 +542,7 @@ Deno.serve(async (req: Request) => {
 
       const headers = msgData.payload?.headers || [];
       const { text, html } = extractBody(msgData.payload);
+      const attachments = extractAttachments(msgData.payload);
 
       await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
@@ -491,6 +563,55 @@ Deno.serve(async (req: Request) => {
         snippet: msgData.snippet || "",
         labelIds: msgData.labelIds || [],
         body: { text, html },
+        attachments,
+      });
+    }
+
+    if (action === "download_attachment") {
+      const { messageId, attachmentId } = body;
+      if (!messageId || !attachmentId) {
+        return jsonResponse({ error: "messageId and attachmentId required" }, 400);
+      }
+
+      const msgRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const msgData = await msgRes.json();
+
+      if (msgData.error) {
+        return jsonResponse({ error: msgData.error.message || "Gmail API error" }, 400);
+      }
+
+      const attachmentPart = findAttachmentPart(msgData.payload, String(attachmentId));
+      if (!attachmentPart) {
+        return jsonResponse({ error: "Attachment not found" }, 404);
+      }
+
+      let content = "";
+      if (typeof attachmentPart.body?.attachmentId === "string") {
+        const attachmentRes = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentPart.body.attachmentId}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        const attachmentData = await attachmentRes.json();
+        if (attachmentData.error) {
+          return jsonResponse({ error: attachmentData.error.message || "Failed to load attachment" }, 400);
+        }
+        content = typeof attachmentData.data === "string" ? normalizeBase64Url(attachmentData.data) : "";
+      } else if (typeof attachmentPart.body?.data === "string") {
+        content = normalizeBase64Url(attachmentPart.body.data);
+      }
+
+      if (!content) {
+        return jsonResponse({ error: "Attachment content unavailable" }, 400);
+      }
+
+      return jsonResponse({
+        name: attachmentPart.filename || "attachment",
+        contentType: attachmentPart.mimeType || "application/octet-stream",
+        size: typeof attachmentPart.body?.size === "number" ? attachmentPart.body.size : undefined,
+        content,
       });
     }
 

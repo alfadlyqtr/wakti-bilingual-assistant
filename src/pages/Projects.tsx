@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BusinessContextForm, { type ContextField, type BusinessContextData } from '@/components/projects/BusinessContextForm';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import RippleGrid from '../components/landing/RippleGrid';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -42,6 +42,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { emitEvent } from '@/utils/eventBus';
+import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
 
 interface Project {
   id: string;
@@ -944,9 +946,13 @@ export default function Projects() {
   const { language, theme } = useTheme();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isRTL = language === 'ar';
   const isDark = theme === 'dark';
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = React.useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
+  const handledOperatorPayloadIdRef = useRef<string | null>(null);
 
   // Trial user check — used to enforce 1 project limit
   const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
@@ -999,6 +1005,14 @@ export default function Projects() {
   const [isEnhancing, setIsEnhancing] = useState(false);
   const [activeTab, setActiveTab] = useState<'coder' | 'assistant'>('coder');
   const [isInBuilderMode, setIsInBuilderMode] = useState(false);
+
+  const clearOperatorFlow = React.useCallback(() => {
+    if (!operatorPayloadId) return;
+    clearWaktiOperatorPayload(operatorPayloadId);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete('waktiOperator');
+    setSearchParams(nextParams, { replace: true });
+  }, [operatorPayloadId, searchParams, setSearchParams]);
 
   // Listen for builder mode from WaktiAssistant (chatbot-builder-page class on body)
   useEffect(() => {
@@ -1060,6 +1074,43 @@ export default function Projects() {
       fetchProjects();
     }
   }, [user]);
+
+  useEffect(() => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId || !operatorPayload.project) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.openStepId,
+      status: 'completed',
+    });
+  }, [operatorPayload]);
+
+  useEffect(() => {
+    if (!operatorPayload?.project || handledOperatorPayloadIdRef.current === operatorPayloadId) return;
+    handledOperatorPayloadIdRef.current = operatorPayloadId;
+    setActiveTab(operatorPayload.project.tab === 'assistant' ? 'assistant' : 'coder');
+    if (operatorPayload.project.prompt) {
+      setPrompt(operatorPayload.project.prompt);
+    }
+    if (operatorPayload.runId && operatorPayload.stepRefs?.handoffStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.handoffStepId,
+        status: 'completed',
+      });
+    }
+    clearOperatorFlow();
+  }, [clearOperatorFlow, operatorPayload, operatorPayloadId]);
+
+  useEffect(() => {
+    emitEvent('wakti-operator-visual-mode', {
+      mode: operatorPayload ? 'subtle' : 'default',
+    });
+    return () => {
+      emitEvent('wakti-operator-visual-mode', {
+        mode: 'default',
+      });
+    };
+  }, [operatorPayload]);
 
   const fetchProjects = async () => {
     try {

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { downloadEmailAttachment, EmailMessageAttachment, EmailMessageAttachmentContent } from '@/utils/emailAttachmentDownload';
 
 export interface GmailMessage {
   id: string;
@@ -16,6 +17,7 @@ export interface GmailMessage {
 
 export interface GmailMessageFull extends GmailMessage {
   body: { text: string; html: string };
+  attachments: EmailMessageAttachment[];
 }
 
 export interface GmailLabel {
@@ -55,6 +57,25 @@ function normalizeGmailBody(body: unknown): { text: string; html: string } {
     text: typeof safeBody.text === 'string' ? safeBody.text : '',
     html: typeof safeBody.html === 'string' ? safeBody.html : '',
   };
+}
+
+function normalizeGmailAttachments(value: unknown): EmailMessageAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const safeItem = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+      const id = typeof safeItem.id === 'string' ? safeItem.id : '';
+      const name = typeof safeItem.name === 'string' ? safeItem.name : '';
+      if (!id || !name) return null;
+      return {
+        id,
+        name,
+        contentType: typeof safeItem.contentType === 'string' ? safeItem.contentType : null,
+        size: typeof safeItem.size === 'number' ? safeItem.size : null,
+        inline: safeItem.inline === true,
+      } satisfies EmailMessageAttachment;
+    })
+    .filter(Boolean) as EmailMessageAttachment[];
 }
 
 function readStoredFolderCache(): Record<string, GmailFolderCache> {
@@ -162,7 +183,11 @@ export function useGmailMessages() {
 
   const fetchMessage = useCallback(async (messageId: string, options?: { forceRefresh?: boolean }): Promise<GmailMessageFull | null> => {
     if (messageCacheRef.current[messageId] && !options?.forceRefresh) {
-      return messageCacheRef.current[messageId];
+      return {
+        ...messageCacheRef.current[messageId],
+        body: normalizeGmailBody(messageCacheRef.current[messageId].body),
+        attachments: normalizeGmailAttachments(messageCacheRef.current[messageId].attachments),
+      } satisfies GmailMessageFull;
     }
     try {
       const data = await callGmailApi('get_message', { messageId });
@@ -172,6 +197,7 @@ export function useGmailMessages() {
       const normalized = {
         ...(data as GmailMessageFull),
         body: normalizeGmailBody((data as Partial<GmailMessageFull>).body),
+        attachments: normalizeGmailAttachments((data as Partial<GmailMessageFull>).attachments),
       } satisfies GmailMessageFull;
       messageCacheRef.current[messageId] = normalized;
       return normalized;
@@ -199,6 +225,44 @@ export function useGmailMessages() {
       return false;
     }
   }, []);
+
+  const getAttachmentContent = useCallback(async (messageId: string, attachment: EmailMessageAttachment): Promise<EmailMessageAttachmentContent | null> => {
+    try {
+      const data = await callGmailApi('download_attachment', {
+        messageId,
+        attachmentId: attachment.id,
+      });
+      if (!data?.content) {
+        throw new Error('Attachment download failed');
+      }
+      return {
+        content: String(data.content),
+        name: String(data.name || attachment.name || 'attachment'),
+        contentType: typeof data.contentType === 'string' ? data.contentType : attachment.contentType,
+        size: typeof data.size === 'number' ? data.size : attachment.size,
+      } satisfies EmailMessageAttachmentContent;
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to download attachment');
+      return null;
+    }
+  }, []);
+
+  const downloadAttachment = useCallback(async (messageId: string, attachment: EmailMessageAttachment) => {
+    try {
+      const data = await getAttachmentContent(messageId, attachment);
+      if (!data?.content) {
+        throw new Error('Attachment download failed');
+      }
+      downloadEmailAttachment({
+        content: data.content,
+        name: data.name,
+        contentType: data.contentType,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }, [getAttachmentContent]);
 
   const trashMessage = useCallback(async (messageId: string): Promise<boolean> => {
     try {
@@ -251,6 +315,8 @@ export function useGmailMessages() {
     fetchMessages,
     fetchMessage,
     sendMessage,
+    getAttachmentContent,
+    downloadAttachment,
     trashMessage,
     fetchLabels,
     loadMore,

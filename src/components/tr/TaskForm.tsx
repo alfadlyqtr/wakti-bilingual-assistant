@@ -91,13 +91,13 @@ export function TaskForm({ isOpen, onClose, task, prefill, onTaskSaved }: TaskFo
 
     if (task) {
       reset({
-        title: task.title,
-        description: task.description || '',
-        due_date: task.due_date || null, // PHASE 2 FIX: Handle null dates
-        due_time: task.due_time || null, // PHASE 2 FIX: Handle null times
-        priority: task.priority,
-        task_type: task.task_type,
-        is_shared: task.is_shared,
+        title: prefill?.title ?? task.title,
+        description: prefill?.description ?? (task.description || ''),
+        due_date: prefill?.due_date ?? (task.due_date || null), // PHASE 2 FIX: Handle null dates
+        due_time: prefill?.due_time ?? (task.due_time || null), // PHASE 2 FIX: Handle null times
+        priority: prefill?.priority ?? task.priority,
+        task_type: prefill?.task_type ?? task.task_type,
+        is_shared: prefill?.is_shared ?? task.is_shared,
       });
       setSubtasks([]);
     } else if (prefill) {
@@ -898,6 +898,8 @@ export function TaskForm({ isOpen, onClose, task, prefill, onTaskSaved }: TaskFo
                         type="file"
                         accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff"
                         className="hidden"
+                        title={language === 'ar' ? 'ارفع صورة لاستخراج المهام الفرعية' : 'Upload an image to extract subtasks'}
+                        aria-label={language === 'ar' ? 'ارفع صورة لاستخراج المهام الفرعية' : 'Upload an image to extract subtasks'}
                         onChange={handleImageUpload}
                       />
                     </div>

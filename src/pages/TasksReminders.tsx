@@ -1,12 +1,12 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, ListTodo } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { t } from '@/utils/translations';
-import { TRTask, TRReminder } from '@/services/trService';
+import { TRTask, TRReminder, TRService } from '@/services/trService';
 import { TaskForm } from '@/components/tr/TaskForm';
 import { ReminderForm } from '@/components/tr/ReminderForm';
 import { TaskList } from '@/components/tr/TaskList';
@@ -22,6 +22,42 @@ import { useAuth } from '@/contexts/AuthContext';
 import { consumeTRPrefill, TRReminderPrefillDraft, TRTaskPrefillDraft } from '@/utils/trPrefill';
 import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
 import { emitEvent } from '@/utils/eventBus';
+
+function normalizeOperatorTarget(value?: string | null) {
+  return (value || '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function getOperatorTitleMatchScore(candidateTitle: string, targetTitle: string) {
+  const candidate = normalizeOperatorTarget(candidateTitle);
+  const target = normalizeOperatorTarget(targetTitle);
+  if (!candidate || !target) return 0;
+  if (candidate === target) return 100;
+  if (candidate.startsWith(target) || target.startsWith(candidate)) return 85;
+  if (candidate.includes(target)) return 70;
+  const targetWords = target.split(' ').filter(Boolean);
+  if (targetWords.length > 0 && targetWords.every((word) => candidate.includes(word))) {
+    return 55 + Math.min(targetWords.length, 4);
+  }
+  return 0;
+}
+
+function resolveOperatorTargetItem<T extends { title: string }>(items: T[], targetTitle?: string) {
+  if (!targetTitle) return null;
+  let bestMatch: T | null = null;
+  let bestScore = 0;
+  for (const item of items) {
+    const score = getOperatorTitleMatchScore(item.title, targetTitle);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMatch = item;
+    }
+  }
+  return bestScore >= 55 ? bestMatch : null;
+}
 
 export default function TasksReminders() {
   const { language } = useTheme();
@@ -71,39 +107,53 @@ export default function TasksReminders() {
   const [taskPrefill, setTaskPrefill] = useState<TRTaskPrefillDraft | null>(null);
   const [reminderPrefill, setReminderPrefill] = useState<TRReminderPrefillDraft | null>(null);
   const operatorPayloadId = searchParams.get('waktiOperator');
-  const operatorPayload = operatorPayloadId ? readWaktiOperatorPayload(operatorPayloadId) : null;
+  const operatorPayload = useMemo(() => operatorPayloadId ? readWaktiOperatorPayload(operatorPayloadId) : null, [operatorPayloadId]);
+  const handledOperatorPayloadIdRef = useRef<string | null>(null);
 
-  const completeOperatorFlow = () => {
-    if (operatorPayload?.runId && operatorPayload.stepRefs?.handoffStepId) {
-      emitEvent('wakti-operator-status', {
-        runId: operatorPayload.runId,
-        stepId: operatorPayload.stepRefs.handoffStepId,
-        status: 'completed',
-      });
-    }
+  const clearOperatorRouteState = useCallback(() => {
     if (operatorPayloadId) {
       clearWaktiOperatorPayload(operatorPayloadId);
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('waktiOperator');
       setSearchParams(nextParams, { replace: true });
     }
-  };
+  }, [operatorPayloadId, searchParams, setSearchParams]);
 
-  const openTaskCreate = (prefill: TRTaskPrefillDraft | null = null) => {
+  const emitOperatorHandoffStatus = useCallback((status: 'running' | 'completed' | 'paused' | 'failed', error?: string) => {
+    if (!operatorPayload?.runId || !operatorPayload.stepRefs?.handoffStepId) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorPayload.runId,
+      stepId: operatorPayload.stepRefs.handoffStepId,
+      status,
+      error,
+    });
+  }, [operatorPayload?.runId, operatorPayload?.stepRefs?.handoffStepId]);
+
+  const completeOperatorFlow = useCallback(() => {
+    emitOperatorHandoffStatus('completed');
+    clearOperatorRouteState();
+  }, [clearOperatorRouteState, emitOperatorHandoffStatus]);
+
+  const failOperatorFlow = useCallback((message: string) => {
+    emitOperatorHandoffStatus('failed', message);
+    clearOperatorRouteState();
+  }, [clearOperatorRouteState, emitOperatorHandoffStatus]);
+
+  const openTaskCreate = useCallback((prefill: TRTaskPrefillDraft | null = null) => {
     setEditingTask(null);
     setTaskPrefill(prefill);
     setReminderPrefill(null);
     setActiveTab('tasks');
     setTaskFormOpen(true);
-  };
+  }, []);
 
-  const openReminderCreate = (prefill: TRReminderPrefillDraft | null = null) => {
+  const openReminderCreate = useCallback((prefill: TRReminderPrefillDraft | null = null) => {
     setEditingReminder(null);
     setReminderPrefill(prefill);
     setTaskPrefill(null);
     setActiveTab('reminders');
     setReminderFormOpen(true);
-  };
+  }, []);
 
   useEffect(() => {
     if (!operatorPayload?.runId || !operatorPayload.stepRefs?.openStepId) return;
@@ -120,7 +170,7 @@ export default function TasksReminders() {
     emitEvent('wakti-operator-status', {
       runId: operatorPayload.runId,
       stepId: operatorPayload.stepRefs.handoffStepId,
-      status: 'running',
+      status: 'paused',
     });
   }, [operatorPayload?.runId, operatorPayload?.stepRefs?.handoffStepId, reminderFormOpen, taskFormOpen]);
 
@@ -154,13 +204,146 @@ export default function TasksReminders() {
     setTaskFormOpen(false);
     setEditingTask(null);
     setTaskPrefill(null);
+    clearOperatorRouteState();
   };
 
   const handleReminderFormClose = () => {
     setReminderFormOpen(false);
     setEditingReminder(null);
     setReminderPrefill(null);
+    clearOperatorRouteState();
   };
+
+  useEffect(() => {
+    if (!operatorPayloadId || handledOperatorPayloadIdRef.current === operatorPayloadId) return;
+    if (!operatorPayload?.taskAction || loading) return;
+
+    handledOperatorPayloadIdRef.current = operatorPayloadId;
+
+    const runOperatorAction = async () => {
+      const action = operatorPayload.taskAction;
+      const targetTask = resolveOperatorTargetItem(tasks, action.targetTitle);
+      const targetReminder = resolveOperatorTargetItem(reminders, action.targetTitle);
+
+      if (action.action === 'edit') {
+        if (action.kind === 'task') {
+          if (!targetTask) {
+            failOperatorFlow(language === 'ar' ? 'لم أجد المهمة المطلوبة للتعديل.' : 'I could not find the requested task to edit.');
+            return;
+          }
+          setActiveTab('tasks');
+          setReminderPrefill(null);
+          setTaskPrefill(action.taskDraft || null);
+          setEditingTask(targetTask);
+          setTaskFormOpen(true);
+          return;
+        }
+
+        if (!targetReminder) {
+          failOperatorFlow(language === 'ar' ? 'لم أجد التذكير المطلوب للتعديل.' : 'I could not find the requested reminder to edit.');
+          return;
+        }
+
+        setActiveTab('reminders');
+        setTaskPrefill(null);
+        setReminderPrefill(action.reminderDraft || null);
+        setEditingReminder(targetReminder);
+        setReminderFormOpen(true);
+        return;
+      }
+
+      if (action.action === 'complete') {
+        emitOperatorHandoffStatus('running');
+        try {
+          if (action.kind === 'task') {
+            if (!targetTask) {
+              failOperatorFlow(language === 'ar' ? 'لم أجد المهمة المطلوبة.' : 'I could not find the requested task.');
+              return;
+            }
+            setActiveTab('tasks');
+            if (!targetTask.completed) {
+              await TRService.updateTask(targetTask.id, {
+                completed: true,
+                completed_at: new Date().toISOString(),
+              });
+            }
+            await refresh();
+            toast.success(language === 'ar' ? 'تم إكمال المهمة.' : 'Task completed.');
+            completeOperatorFlow();
+            return;
+          }
+
+          if (!targetReminder) {
+            failOperatorFlow(language === 'ar' ? 'لم أجد التذكير المطلوب.' : 'I could not find the requested reminder.');
+            return;
+          }
+
+          setActiveTab('reminders');
+          await TRService.deleteReminder(targetReminder.id);
+          await refresh();
+          toast.success(language === 'ar' ? 'تم إكمال التذكير.' : 'Reminder completed.');
+          completeOperatorFlow();
+        } catch (error) {
+          console.error('Operator complete action failed:', error);
+          failOperatorFlow(language === 'ar' ? 'فشل تنفيذ الإكمال.' : 'The completion action failed.');
+        }
+        return;
+      }
+
+      if (action.action === 'snooze') {
+        if (!targetReminder) {
+          failOperatorFlow(language === 'ar' ? 'لم أجد التذكير المطلوب للتأجيل.' : 'I could not find the requested reminder to snooze.');
+          return;
+        }
+
+        emitOperatorHandoffStatus('running');
+        try {
+          setActiveTab('reminders');
+          await TRService.snoozeReminder(targetReminder.id, action.snoozeMinutes || 10);
+          await refresh();
+          toast.success(language === 'ar' ? 'تم تأجيل التذكير.' : 'Reminder snoozed.');
+          completeOperatorFlow();
+        } catch (error) {
+          console.error('Operator snooze action failed:', error);
+          failOperatorFlow(language === 'ar' ? 'فشل تأجيل التذكير.' : 'The reminder snooze action failed.');
+        }
+        return;
+      }
+
+      if (action.action === 'add_subtasks') {
+        if (!targetTask) {
+          failOperatorFlow(language === 'ar' ? 'لم أجد المهمة المطلوبة لإضافة المهام الفرعية.' : 'I could not find the requested task to add subtasks to.');
+          return;
+        }
+        if (!action.subtasks || action.subtasks.length === 0) {
+          failOperatorFlow(language === 'ar' ? 'لم أستلم أي مهام فرعية لإضافتها.' : 'I did not receive any subtasks to add.');
+          return;
+        }
+
+        emitOperatorHandoffStatus('running');
+        try {
+          setActiveTab('tasks');
+          const existingSubtasks = await TRService.getSubtasks(targetTask.id);
+          for (const [index, subtaskTitle] of action.subtasks.entries()) {
+            await TRService.createSubtask({
+              task_id: targetTask.id,
+              title: subtaskTitle,
+              completed: false,
+              order_index: existingSubtasks.length + index,
+            });
+          }
+          await refresh();
+          toast.success(language === 'ar' ? 'تمت إضافة المهام الفرعية.' : 'Subtasks added.');
+          completeOperatorFlow();
+        } catch (error) {
+          console.error('Operator add subtasks action failed:', error);
+          failOperatorFlow(language === 'ar' ? 'فشلت إضافة المهام الفرعية.' : 'Adding subtasks failed.');
+        }
+      }
+    };
+
+    runOperatorAction();
+  }, [completeOperatorFlow, emitOperatorHandoffStatus, failOperatorFlow, language, loading, operatorPayload?.taskAction, operatorPayloadId, refresh, reminders, tasks]);
 
   useEffect(() => {
     const intentParam = (searchParams.get('intent') || '').toLowerCase();

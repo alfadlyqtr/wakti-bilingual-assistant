@@ -39,6 +39,7 @@ export default function Email() {
   const signatureImageInputRef = useRef<HTMLInputElement | null>(null);
   const [activeTab, setActiveTab] = useState<EmailTab>('settings');
   const [showConnectionModal, setShowConnectionModal] = useState(false);
+  const [connectionModalPreset, setConnectionModalPreset] = useState<'icloud' | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [signatureHtmlDraft, setSignatureHtmlDraft] = useState(storedSignatureSettings.html);
   const [signaturePrompt, setSignaturePrompt] = useState(storedSignatureSettings.prompt);
@@ -55,6 +56,9 @@ export default function Email() {
   const imapLoading = emailConn.imap.loading;
   const gmailConnected = emailConn.gmail.connection.connected;
   const verifiedCustomCount = customConnections.filter(connection => emailConn.imap.health[connection.id]?.status === 'verified').length;
+  const icloudConnections = customConnections.filter((connection) => connection.provider === 'icloud');
+  const verifiedIcloudCount = icloudConnections.filter((connection) => emailConn.imap.health[connection.id]?.status === 'verified').length;
+  const primaryIcloudConnection = icloudConnections.find((connection) => connection.is_primary) || icloudConnections[0] || null;
   const operatorPayload = useMemo(() => readWaktiOperatorPayload(searchParams.get('waktiOperator')), [searchParams]);
   const operatorPreset = useMemo<MailComposerPreset | null>(() => {
     if (!operatorPayload?.email) return null;
@@ -132,7 +136,7 @@ export default function Email() {
     customMail: language === 'ar' ? 'بريد مخصص' : 'Custom Mail',
     customMailSubtitle: language === 'ar' ? 'الحسابات التي تم ربطها عبر IMAP / SMTP' : 'Accounts connected through IMAP / SMTP',
     gmailSubtitle: language === 'ar' ? 'ربط Gmail بنفس التدفق الحالي العامل' : 'Connect Gmail using the existing working flow',
-    appleSubtitle: language === 'ar' ? 'دعم Apple سيأتي لاحقًا' : 'Apple support will come later',
+    appleSubtitle: language === 'ar' ? 'اربط بريد iCloud باستخدام كلمة مرور تطبيق من Apple' : 'Connect iCloud Mail using an Apple app-specific password',
     settingsSubtitle: language === 'ar' ? 'هذا هو المكان الرئيسي لربط وإدارة البريد' : 'This is the main place to connect and manage email',
     mailSubtitle: language === 'ar' ? 'استعرض وأدر حسابات البريد المخصص' : 'Review and manage your custom mail accounts',
     connectGmail: language === 'ar' ? 'ربط Gmail' : 'Connect Gmail',
@@ -142,8 +146,8 @@ export default function Email() {
     connectedEmail: language === 'ar' ? 'البريد المتصل' : 'Connected email',
     noCustomMail: language === 'ar' ? 'لا توجد حسابات بريد مخصص بعد' : 'No custom mail accounts yet',
     noCustomMailHint: language === 'ar' ? 'استخدم تبويب إعدادات البريد لربط أول حساب.' : 'Use the Email Settings tab to connect your first account.',
-    appleUnavailable: language === 'ar' ? 'Apple / iCloud غير متاح هنا بعد' : 'Apple / iCloud is not available here yet',
-    appleUnavailableHint: language === 'ar' ? 'سنتركه ظاهرًا هنا لكن بدون ربط الآن.' : 'It stays visible here, but it is not connectable yet.',
+    appleUnavailable: language === 'ar' ? 'Apple / iCloud جاهز للربط' : 'Apple / iCloud is ready to connect',
+    appleUnavailableHint: language === 'ar' ? 'استخدم بريد iCloud مع كلمة مرور تطبيق من Apple.' : 'Use your iCloud email address with an Apple app-specific password.',
     openSettings: language === 'ar' ? 'افتح الإعدادات' : 'Open Settings',
     provider: language === 'ar' ? 'المزود' : 'Provider',
     username: language === 'ar' ? 'اسم المستخدم' : 'Username',
@@ -571,8 +575,28 @@ export default function Email() {
         <CardDescription>{t.appleSubtitle}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            {verifiedIcloudCount > 0 ? (
+              <Badge className="bg-green-600 text-white hover:bg-green-600">{verifiedIcloudCount} {t.connected}</Badge>
+            ) : (
+              <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
+            )}
+            {primaryIcloudConnection?.email_address ? (
+              <span className="text-sm text-muted-foreground break-all">{primaryIcloudConnection.email_address}</span>
+            ) : null}
+          </div>
+          <Button
+            type="button"
+            onClick={() => {
+              setConnectionModalPreset('icloud');
+              setShowConnectionModal(true);
+            }}
+            className="bg-[#060541] text-white hover:bg-[#0a0a5c] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-white dark:shadow-[0_12px_28px_rgba(0,0,0,0.38)] dark:hover:bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]"
+          >
+            <AppleLogo size={14} className="text-current" />
+            {t.connectApple}
+          </Button>
         </div>
         <div className="overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(14,17,24,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_18px_36px_rgba(0,0,0,0.4)] dark:ring-1 dark:ring-white/5">
           <div className="border-b border-[#060541]/10 px-4 py-3 dark:border-border/50 sm:px-5">
@@ -590,11 +614,24 @@ export default function Email() {
           </div>
           <div className="p-4 sm:p-5">
           <div className="flex items-center gap-2 text-base font-medium">
-            <XCircle className="h-5 w-5 text-red-400" />
-            {t.appleUnavailable}
+            {verifiedIcloudCount > 0 ? (
+              <Plug className="h-5 w-5 text-[#E9CEB0]" />
+            ) : (
+              <AppleLogo size={18} className="text-current" />
+            )}
+            {verifiedIcloudCount > 0 ? 'Apple / iCloud ready' : 'Connect Apple / iCloud with app password'}
           </div>
-          <div className="mt-2 text-sm text-muted-foreground">{t.appleUnavailableHint}</div>
-          <div className="mt-3 text-xs text-muted-foreground">{t.appleSearchHint}</div>
+          <div className="mt-2 text-sm text-muted-foreground">
+            {verifiedIcloudCount > 0
+              ? 'Your iCloud mailbox is connected through Wakti Mail. You can add another iCloud account from here any time.'
+              : 'Use your iCloud email address and an Apple app-specific password. Wakti will save it through the existing secure mail connection flow.'}
+          </div>
+          <div className="mt-3 rounded-xl border border-[#060541]/12 bg-white/80 px-4 py-3 text-sm text-muted-foreground dark:border-white/10 dark:bg-background/50">
+            <div>1. Sign in to account.apple.com.</div>
+            <div className="mt-1">2. Open Sign-In and Security, then App-Specific Passwords.</div>
+            <div className="mt-1">3. Generate a new app-specific password and paste it into Wakti.</div>
+          </div>
+          <div className="mt-3 text-xs text-muted-foreground">IMAP: imap.mail.me.com:993 · SMTP: smtp.mail.me.com:587</div>
           </div>
         </div>
       </CardContent>
@@ -652,7 +689,13 @@ export default function Email() {
 
         <EmailConnectionModal
           open={showConnectionModal}
-          onOpenChange={setShowConnectionModal}
+          onOpenChange={(open) => {
+            setShowConnectionModal(open);
+            if (!open) {
+              setConnectionModalPreset(null);
+            }
+          }}
+          presetProvider={connectionModalPreset}
           onSave={emailConn.imap.add}
         />
       </div>
