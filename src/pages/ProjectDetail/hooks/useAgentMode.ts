@@ -117,6 +117,7 @@ interface EdgeJobStatus {
   status?: 'queued' | 'running' | 'succeeded' | 'failed' | string;
   error?: string;
   result_summary?: string;
+  created_at?: string;
 }
 
 interface EdgeStatusResponse {
@@ -276,6 +277,32 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
     [],
   );
 
+  const isRecoverableStartError = useCallback((message: string): boolean => {
+    return /504|timeout|gateway|failed to fetch|err_failed|network|cors|aborted/i.test(message);
+  }, []);
+
+  const findRecentAgentJob = useCallback(async (startedAtMs: number): Promise<EdgeJobStatus | null> => {
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    const thresholdIso = new Date(startedAtMs - 15000).toISOString();
+    const { data, error } = await (supabase
+      .from('project_generation_jobs' as any)
+      .select('id, status, error, result_summary, created_at')
+      .eq('project_id', projectId)
+      .eq('mode', 'edit')
+      .gte('created_at', thresholdIso)
+      .order('created_at', { ascending: false })
+      .limit(5) as any);
+
+    if (error) {
+      console.warn('[useAgentMode] Failed to find recent fallback job:', error);
+      return null;
+    }
+
+    const rows = (data || []) as EdgeJobStatus[];
+    return rows.find((job) => typeof job.id === 'string' && job.id.length > 0) || null;
+  }, [projectId]);
+
   const runAgent = useCallback(
     async (
       prompt: string,
@@ -300,30 +327,68 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
       setIsRunning(true);
 
       try {
-        const startRes = await supabase.functions.invoke('projects-generate', {
-          body: {
-            action: 'start',
-            mode: 'agent',
-            projectId,
-            prompt,
-            currentFiles,
-            userInstructions: extras?.userInstructions,
-            lang: extras?.lang || 'en',
-            images: extras?.images,
-            assetIntent: extras?.assetIntent,
-            executionMode: extras?.executionMode,
-            uploadedAssets: extras?.uploadedAssets,
-            backendContext: extras?.backendContext,
-            debugContext: extras?.debugContext,
-            fixerMode: extras?.fixerMode,
-            fixerContext: extras?.fixerContext,
-          },
-        });
-        if (startRes.error) {
-          throw new Error(startRes.error.message || 'Failed to start agent');
-        }
+        const startAttemptedAt = Date.now();
+        let recoveredJob: EdgeJobStatus | null = null;
 
-        startData = (startRes.data || {}) as EdgeAgentStartResponse;
+        try {
+          const startRes = await supabase.functions.invoke('projects-generate', {
+            body: {
+              action: 'start',
+              mode: 'agent',
+              projectId,
+              prompt,
+              currentFiles,
+              userInstructions: extras?.userInstructions,
+              lang: extras?.lang || 'en',
+              images: extras?.images,
+              assetIntent: extras?.assetIntent,
+              executionMode: extras?.executionMode,
+              uploadedAssets: extras?.uploadedAssets,
+              backendContext: extras?.backendContext,
+              debugContext: extras?.debugContext,
+              fixerMode: extras?.fixerMode,
+              fixerContext: extras?.fixerContext,
+            },
+          });
+
+          if (startRes.error) {
+            const startMessage = startRes.error.message || 'Failed to start agent';
+            if (!isRecoverableStartError(startMessage)) {
+              throw new Error(startMessage);
+            }
+
+            recoveredJob = await findRecentAgentJob(startAttemptedAt);
+            if (!recoveredJob?.id) {
+              throw new Error(startMessage);
+            }
+
+            console.warn('[useAgentMode] Agent start request failed, but a recent job was found. Continuing with polling.', recoveredJob.id);
+            startData = {
+              ok: true,
+              jobId: recoveredJob.id,
+              message: 'Recovered agent job after temporary start failure.',
+            };
+          } else {
+            startData = (startRes.data || {}) as EdgeAgentStartResponse;
+          }
+        } catch (startErr) {
+          const startMessage = startErr instanceof Error ? startErr.message : String(startErr);
+          if (!isRecoverableStartError(startMessage)) {
+            throw startErr;
+          }
+
+          recoveredJob = await findRecentAgentJob(startAttemptedAt);
+          if (!recoveredJob?.id) {
+            throw startErr;
+          }
+
+          console.warn('[useAgentMode] Agent start threw a temporary error, but a recent job was found. Continuing with polling.', recoveredJob.id);
+          startData = {
+            ok: true,
+            jobId: recoveredJob.id,
+            message: 'Recovered agent job after temporary start failure.',
+          };
+        }
 
         if (startData.ok === false) {
           const failedPlan: AgentPlan = {
@@ -391,7 +456,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
           return completedPlan;
         }
 
-        if (startData.message) {
+        if (startData.message && !startData.jobId) {
           const completedPlan: AgentPlan = {
             ...initial,
             id: startData.jobId || `agent-${Date.now()}`,
@@ -538,7 +603,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
         throw err;
       }
     },
-    [projectId, onFilesChanged, onError, pollIntervalMs, loadProjectFiles, createAgentError],
+    [projectId, onFilesChanged, onError, pollIntervalMs, loadProjectFiles, createAgentError, findRecentAgentJob, isRecoverableStartError],
   );
 
   const cancel = useCallback(() => {

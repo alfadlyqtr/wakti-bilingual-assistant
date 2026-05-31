@@ -174,7 +174,7 @@ function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overri
   const isAccount = app.id === "account";
 
   return (
-    <button type="button" onClick={onClick} className="group flex min-w-0 flex-col items-center" style={{ gap: `${gapPx}px` }}>
+    <button type="button" onClick={onClick} className="group flex min-w-0 select-none flex-col items-center" style={{ gap: `${gapPx}px` }}>
       <span
         className="relative flex items-center justify-center rounded-full border transition-all duration-200 overflow-hidden border-white/40 group-hover:scale-105"
         style={{
@@ -192,7 +192,7 @@ function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overri
             : Icon ? <Icon style={{ color: accent, width: `${iconPx}px`, height: `${iconPx}px` }} /> : null
         }
       </span>
-      <span className={cn("text-center font-semibold leading-tight text-foreground/90", size === "compact" ? "whitespace-nowrap" : "line-clamp-2")} style={{ fontSize: `${labelPx}px` }}>
+      <span className={cn("text-center font-semibold leading-tight text-foreground/90 select-none", size === "compact" ? "whitespace-nowrap" : "line-clamp-2")} style={{ fontSize: `${labelPx}px` }}>
         {language === "ar" ? app.nameAr : app.nameEn}
       </span>
     </button>
@@ -1335,7 +1335,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
         <div className="grid items-start" style={{ gridTemplateColumns: `${topRowLeadWidth}px minmax(0, 1fr)`, gap: `${topRowGap}px` }}>
           <div className="pt-1" style={{ paddingTop: `${scalePx(4, 3)}px` }}>
             <p className={cn(
-              "text-center text-[15px] font-bold leading-tight tracking-tight",
+              "select-none text-center text-[15px] font-bold leading-tight tracking-tight",
               isDark
                 ? "bg-gradient-to-r from-blue-300 via-purple-300 to-pink-300 bg-clip-text text-transparent"
                 : "bg-gradient-to-r from-[#060541] via-indigo-600 to-purple-600 bg-clip-text text-transparent"
@@ -1373,7 +1373,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                     style={{ color: modeAccentMap[activeModeKey], width: `${modeIconSize}px`, height: `${modeIconSize}px` }}
                   />
                 </span>
-                <span className="font-semibold text-foreground/70" style={{ fontSize: `${modeLabelSize}px` }}>
+                <span className="select-none font-semibold text-foreground/70" style={{ fontSize: `${modeLabelSize}px` }}>
                   {language === "ar" ? "الأوضاع" : "Modes"}
                 </span>
               </button>
@@ -1397,7 +1397,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 >
                   <Sparkles className="text-white" style={{ width: `${modeIconSize}px`, height: `${modeIconSize}px` }} />
                 </span>
-                <span className="whitespace-nowrap font-semibold leading-none text-foreground/70" style={{ fontSize: `${modeLabelSize}px` }}>
+                <span className="select-none whitespace-nowrap font-semibold leading-none text-foreground/70" style={{ fontSize: `${modeLabelSize}px` }}>
                   WAKTI AI
                 </span>
               </button>
@@ -1425,7 +1425,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
         {/* Productivity + System */}
         <div className="grid" style={{ gridTemplateColumns: `minmax(0, 1fr) ${systemRailWidth}px`, gap: `${middleRowGap}px` }}>
           <section className={cn("border-[1.5px]", cardShell)} style={{ ...productivitySectionStyle, borderRadius: `${sectionRadius}px`, paddingLeft: `${sectionPaddingX}px`, paddingRight: `${sectionPaddingX}px`, paddingTop: `${sectionPaddingY}px`, paddingBottom: `${sectionPaddingY}px` }}>
-            <h3 className={productivityTitleClass} style={{ marginBottom: `${productivityTitleMargin}px`, fontSize: `${productivityTitleSize}px` }}>
+            <h3 className={cn(productivityTitleClass, "select-none")} style={{ marginBottom: `${productivityTitleMargin}px`, fontSize: `${productivityTitleSize}px` }}>
               {language === "ar" ? "الإنتاجية" : "Productivity"}
             </h3>
             <div className="grid grid-cols-3 md:grid-cols-4" style={{ gap: `${productivityGridGap}px` }}>
@@ -1437,7 +1437,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
           <aside className={cn("relative border-[1.5px]", cardShell)} style={{ ...systemSectionStyle, borderRadius: `${sectionRadius}px`, paddingLeft: `${systemPaddingX}px`, paddingRight: `${systemPaddingX}px`, paddingTop: `${systemPaddingTop}px`, paddingBottom: `${systemPaddingTop}px` }}>
             {language === "ar" ? (
               <>
-                <h3 className="whitespace-nowrap text-center font-black leading-none tracking-tight text-foreground" style={{ marginBottom: `${systemTitleMargin}px`, fontSize: `${systemTitleSize}px` }}>
+                <h3 className="select-none whitespace-nowrap text-center font-black leading-none tracking-tight text-foreground" style={{ marginBottom: `${systemTitleMargin}px`, fontSize: `${systemTitleSize}px` }}>
                   النظام
                 </h3>
                 <div className="flex flex-1 flex-col items-center justify-center" style={{ gap: `${systemGap}px` }}>
@@ -1465,7 +1465,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
 
         {/* Creation & Generation */}
         <section className={cn("mt-auto border-[1.5px]", cardShell)} style={{ ...creationSectionStyle, borderRadius: `${creationRadius}px`, paddingLeft: `${sectionPaddingX}px`, paddingRight: `${sectionPaddingX}px`, paddingTop: `${creationPaddingTop}px`, paddingBottom: `${creationPaddingBottom}px`, transform: `translateY(-${creationTranslateY}px)` }}>
-          <h3 className={creationTitleClass} style={{ marginBottom: `${creationTitleMargin}px`, fontSize: `${creationTitleSize}px` }}>
+          <h3 className={cn(creationTitleClass, "select-none")} style={{ marginBottom: `${creationTitleMargin}px`, fontSize: `${creationTitleSize}px` }}>
             {language === "ar" ? "الإبداع والتوليد" : "Creation & Generation"}
           </h3>
           <div className="grid grid-cols-5 md:gap-2" style={{ gap: `${creationGridGap}px` }}>

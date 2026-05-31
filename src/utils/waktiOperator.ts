@@ -1399,11 +1399,31 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
   const intentAnalysis = analyzeWaktiOperatorIntent(normalized);
   const matchedCapability = intentAnalysis.capability;
 
+  // Detect real, do-it-now requests up front. These mirror the execution
+  // builders at the bottom of this function. We compute them early so the
+  // capability-guidance gate and the section-routing blocks below can step
+  // aside whenever the user actually asked Wakti to DO something.
+  const isExecutionLikeIntent = intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed';
+  const wantsImage = /(image|picture|photo|poster|logo|thumbnail|cover|صورة|بوستر|شعار)/i.test(normalized);
+  const wantsMusic = /(music|song|track|beat|jingle|anthem|أغنية|موسيقى|مقطع)/i.test(normalized);
+  const wantsEmail = matchedCapability?.id === 'email' || /(email|mail|gmail|بريد|ايميل)/i.test(normalized) || extractEmailAddresses(normalized).length > 0;
+  const wantsTasks = /(task|todo|to do|remind|reminder|schedule|مهمة|تذكير|ذكرني|رتب)/i.test(normalized);
+  const wantsContactsChat = matchedCapability?.id === 'contacts_chat' || /\b(contact|contacts|chat|dm|direct message|conversation|group chat|جهات الاتصال|جهة الاتصال|دردشة|محادثة)\b/i.test(normalized);
+  const wantsTextTools = matchedCapability?.id === 'text_tools' || /\b(write|rewrite|reply|respond|translate|translation|diagram|presentation|summarize|document|a4|compose|text tools|text generator|اكتب|أكتب|إعادة صياغة|اعادة صياغة|رد|جاوب|ترجم|ترجمة|مخطط|عرض|مستند|لخص|لخّص)\b/i.test(normalized);
+  const wantsVoice = matchedCapability?.id === 'voice_studio' || /\b(voice|speech|audio|tts|text to speech|read aloud|say this|speak this|voice clone|clone my voice|live translator|voice translator|tasjeel|صوت|صوتي|نطق|اقرأ بصوت|تحويل النص إلى كلام|استنساخ الصوت|تسجيل|مترجم صوتي|ترجمة صوتية)\b/i.test(normalized);
+  const wantsMaw3d = matchedCapability?.id === 'maw3d' || /\b(maw3d|event|invite|invitation|rsvp|party|gathering|celebration|birthday|meeting invite|حدث|دعوة|دعوة مناسبة|حفلة|تجمع|مناسبة)\b/i.test(normalized);
+  const wantsProjects = matchedCapability?.id === 'projects' || /\b(project|projects|website|site|web app|landing page|portfolio|dashboard|build app|build website|create website|create app|مشروع|موقع|تطبيق|صفحة هبوط|بورتفوليو|لوحة تحكم)\b/i.test(normalized);
+  const wantsCalendar = matchedCapability?.id === 'calendar' || /\b(calendar|agenda|date|day view|week view|month view|year view|note)\b/i.test(normalized) || /\b(التقويم|موعد|مواعيد|أسبوع|اسبوع|شهر|سنة|ملاحظة)\b/.test(normalized);
+  const hasDirectExecution = isExecutionLikeIntent && (
+    wantsImage || wantsMusic || wantsEmail || wantsTasks || wantsContactsChat ||
+    wantsTextTools || wantsVoice || wantsMaw3d || wantsProjects || wantsCalendar
+  );
+
   if (matchedCapability && shouldPreferGuidanceFlow(normalized, intentAnalysis.kind)) {
     return buildCapabilityGuidancePlan(normalized, language, matchedCapability);
   }
 
-  if (matchedCapability?.id === 'social' && (intentAnalysis.kind === 'navigation' || intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
+  if (matchedCapability?.id === 'social' && !hasDirectExecution && (intentAnalysis.kind === 'navigation' || intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
     if (detectSocialPublishIntent(normalized)) {
       return buildCapabilityGuidancePlan(normalized, language, matchedCapability, true);
     }
@@ -1460,7 +1480,7 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
 
   const wantsGamesCapability = matchedCapability?.id === 'games';
   const wantsGamesByText = /\b(game|games|play chess|play tic tac toe|play x o|play solitaire|play letters|chess|tic[ -]?tac[ -]?toe|solitaire|letters game|لعبة|الألعاب|شطرنج|إكس-أو|اكس-او|سوليتير|الحروف)\b/i.test(normalized);
-  if ((wantsGamesCapability || wantsGamesByText) && (intentAnalysis.kind === 'navigation' || intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
+  if ((wantsGamesCapability || wantsGamesByText) && !hasDirectExecution && (intentAnalysis.kind === 'navigation' || intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
     const planId = createId('plan');
     const openStepId = createId('step');
     const handoffStepId = createId('step');
@@ -1513,7 +1533,7 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
 
   const wantsVitalityCapability = matchedCapability?.id === 'vitality';
   const wantsVitalityByText = /\b(vitality|fitness|health|whoop|healthkit|apple health|wellness|الحيوية|الصحة|اللياقة|ووب|هيلث كت|هلث كت|صحة آبل|صحة ابل)\b/i.test(normalized);
-  if ((wantsVitalityCapability || wantsVitalityByText) && (intentAnalysis.kind === 'navigation' || intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
+  if ((wantsVitalityCapability || wantsVitalityByText) && !hasDirectExecution && (intentAnalysis.kind === 'navigation' || intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
     const planId = createId('plan');
     const openStepId = createId('step');
     const handoffStepId = createId('step');
@@ -1583,22 +1603,12 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
     };
   }
 
-  if (matchedCapability && matchedCapability.supportLevel !== 'full_operator' && (intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
+  if (matchedCapability && matchedCapability.supportLevel !== 'full_operator' && !hasDirectExecution && (intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
     return buildCapabilityGuidancePlan(normalized, language, matchedCapability, true);
   }
 
   const planId = createId('plan');
   const steps: WaktiOperatorStep[] = [];
-  const wantsImage = /(image|picture|photo|poster|logo|thumbnail|cover|صورة|بوستر|شعار)/i.test(normalized);
-  const wantsMusic = /(music|song|track|beat|jingle|anthem|أغنية|موسيقى|مقطع)/i.test(normalized);
-  const wantsEmail = matchedCapability?.id === 'email' || /(email|mail|gmail|بريد|ايميل)/i.test(normalized) || extractEmailAddresses(normalized).length > 0;
-  const wantsTasks = /(task|todo|to do|remind|reminder|schedule|مهمة|تذكير|ذكرني|رتب)/i.test(normalized);
-  const wantsContactsChat = matchedCapability?.id === 'contacts_chat' || /\b(contact|contacts|chat|dm|direct message|conversation|group chat|جهات الاتصال|جهة الاتصال|دردشة|محادثة)\b/i.test(normalized);
-  const wantsTextTools = matchedCapability?.id === 'text_tools' || /\b(write|rewrite|reply|respond|translate|translation|diagram|presentation|summarize|document|a4|compose|text tools|text generator|اكتب|أكتب|إعادة صياغة|اعادة صياغة|رد|جاوب|ترجم|ترجمة|مخطط|عرض|مستند|لخص|لخّص)\b/i.test(normalized);
-  const wantsVoice = matchedCapability?.id === 'voice_studio' || /\b(voice|speech|audio|tts|text to speech|read aloud|say this|speak this|voice clone|clone my voice|live translator|voice translator|tasjeel|صوت|صوتي|نطق|اقرأ بصوت|تحويل النص إلى كلام|استنساخ الصوت|تسجيل|مترجم صوتي|ترجمة صوتية)\b/i.test(normalized);
-  const wantsMaw3d = matchedCapability?.id === 'maw3d' || /\b(maw3d|event|invite|invitation|rsvp|party|gathering|celebration|birthday|meeting invite|حدث|دعوة|دعوة مناسبة|حفلة|تجمع|مناسبة)\b/i.test(normalized);
-  const wantsProjects = matchedCapability?.id === 'projects' || /\b(project|projects|website|site|web app|landing page|portfolio|dashboard|build app|build website|create website|create app|مشروع|موقع|تطبيق|صفحة هبوط|بورتفوليو|لوحة تحكم)\b/i.test(normalized);
-  const wantsCalendar = matchedCapability?.id === 'calendar' || /\b(calendar|agenda|date|day view|week view|month view|year view|note)\b/i.test(normalized) || /\b(التقويم|موعد|مواعيد|أسبوع|اسبوع|شهر|سنة|ملاحظة)\b/.test(normalized);
 
   if (wantsImage) {
     const openStepId = createId('step');

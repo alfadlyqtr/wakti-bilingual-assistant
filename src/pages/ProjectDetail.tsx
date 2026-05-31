@@ -829,11 +829,25 @@ export default function ProjectDetail() {
   type AgentType = 'user-chat' | 'auto-fix' | 'fixer' | 'revert' | null;
   const activeAgentRef = useRef<AgentType>(null);
   const activeAgentAbortRef = useRef<AbortController | null>(null);
+  const chatSubmitInFlightRef = useRef(false);
   
   const acquireAgentLock = useCallback((agentType: AgentType): boolean => {
-    if (activeAgentRef.current && activeAgentRef.current !== agentType) {
-      console.log(`[Agent Lock] ❌ BLOCKED: ${agentType} cannot start - ${activeAgentRef.current} is running`);
+    if (activeAgentRef.current) {
+      if (activeAgentRef.current === agentType && agentType === 'user-chat') {
+        console.log(`[Agent Lock] ⏸️ DUPLICATE BLOCKED: ${agentType} is already running`);
+        return false;
+      }
+      if (activeAgentRef.current !== agentType) {
+        console.log(`[Agent Lock] ❌ BLOCKED: ${agentType} cannot start - ${activeAgentRef.current} is running`);
+        return false;
+      }
+    }
+    if (agentType === 'user-chat' && chatSubmitInFlightRef.current) {
+      console.log('[Chat] ⏸️ Duplicate submit blocked by in-flight guard');
       return false;
+    }
+    if (agentType === 'user-chat') {
+      chatSubmitInFlightRef.current = true;
     }
     console.log(`[Agent Lock] ✅ ACQUIRED: ${agentType}`);
     activeAgentRef.current = agentType;
@@ -841,6 +855,9 @@ export default function ProjectDetail() {
   }, []);
   
   const releaseAgentLock = useCallback((agentType: AgentType) => {
+    if (agentType === 'user-chat') {
+      chatSubmitInFlightRef.current = false;
+    }
     if (activeAgentRef.current === agentType) {
       console.log(`[Agent Lock] 🔓 RELEASED: ${agentType}`);
       activeAgentRef.current = null;
@@ -855,6 +872,7 @@ export default function ProjectDetail() {
     }
     activeAgentRef.current = null;
     activeAgentAbortRef.current = null;
+    chatSubmitInFlightRef.current = false;
     setAiEditing(false);
     setIsGenerating(false);
     setFixerInProgress(false);
@@ -4617,6 +4635,11 @@ ${fixInstructions}
 
   const handleChatSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (chatSubmitInFlightRef.current) {
+      console.log('[Chat] ⏸️ Ignoring rapid repeat submit while current request is starting');
+      return;
+    }
     
     // Check if there's a wizard prompt to use instead of chatInput
     const wizardPrompt = wizardPromptRef.current;
