@@ -5479,11 +5479,11 @@ function VoicesTab({
       : '';
     const lead = opts.instruments[0] ?? 'the lead instrument';
     const s2 = opts.spotlight
-      ? `A sparse, intimate arrangement led by ${instList}, where ${lead} carries the main melody up front${rhythmClause}. Keep the backing minimal.`
+      ? `A sparse, intimate arrangement built around a solo ${lead}, where ${lead} carries the main melody up front${rhythmClause}. Keep the backing minimal.`
       : `A ${v.arrangementAdj} arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
     const paletteSentence = opts.instruments.length > 0
       ? (opts.spotlight
-          ? `${instList} is the single featured lead instrument, mixed loud and clearly out front. Minimal accompaniment only — no full traditional ensemble and no other lead instruments competing with ${lead}.`
+          ? `${lead} is the single featured lead instrument, mixed loud and clearly out front. Minimal accompaniment only — no full traditional ensemble and no other lead instruments competing with ${lead}.`
           : `Featured instruments: ${instList}. ${label} only shapes the groove feel, energy, and playing style around the Khaleeji vocal lead.`)
       : '';
 
@@ -5502,7 +5502,8 @@ function VoicesTab({
     // instrumentation when the user picked a modern family with no traditional
     // instruments selected.
     const hasTraditional = opts.instruments.some((i) => /oud|qanun|darbuka|riq|mirwas|hand\s*clap/i.test(i));
-    const exclusion = v.excludeTraditional && !hasTraditional
+    const spotlightLeadChosen = !!opts.spotlight && opts.instruments.length > 0;
+    const exclusion = v.excludeTraditional && !hasTraditional && !spotlightLeadChosen
       ? ' No traditional Khaleeji instrumentation — this is a modern production.'
       : '';
     const s4 = [moodPart, tempoPart, productionPart].filter(Boolean).join(' ') + exclusion;
@@ -5547,11 +5548,11 @@ function VoicesTab({
     const arrangementAdj = v.vocalCueAdj.toLowerCase();
     const lead = opts.instruments[0] ?? 'the lead instrument';
     const s2 = opts.spotlight
-      ? `A sparse, ${arrangementAdj} arrangement led by ${instList}, where ${lead} carries the main melody up front${rhythmClause}. Keep the backing minimal.`
+      ? `A sparse, ${arrangementAdj} arrangement built around a solo ${lead}, where ${lead} carries the main melody up front${rhythmClause}. Keep the backing minimal.`
       : `A ${arrangementAdj}, fusion-forward arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`;
     const paletteSentence = opts.instruments.length > 0
       ? (opts.spotlight
-          ? `${instList} is the single featured lead instrument, mixed loud and clearly out front. Minimal accompaniment only — no full ensemble and no other lead instruments competing with ${lead}.`
+          ? `${lead} is the single featured lead instrument, mixed loud and clearly out front. Minimal accompaniment only — no full ensemble and no other lead instruments competing with ${lead}.`
           : `Featured instruments: ${instList}. ${label} only shapes the production shell, groove feel, and energy under the Khaleeji vocal lead.`)
       : '';
 
@@ -6564,7 +6565,14 @@ function VoicesTab({
       const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
       const genreFamily = getGenreFamily(effectiveIncludeTags, isGccStyleSelected, khalijiControlBlock.family);
       const khaleejiTriggerActive = hasKhaleejiTrigger(effectiveIncludeTags, rhythmTags);
-      const structuredPrompt = formatLyricsWithStructure(
+      // Option A — when Spotlight is on, lead the PROMPT with an explicit solo-instrument
+      // directive so the chosen instrument is not buried under the Khaleeji vocal text.
+      const spotlightLeadActive = instrumentSpotlight && instrumentTags.length >= 1 && instrumentTags.length <= 2 && !instrumental;
+      const soloLeadInstrument = instrumentTags[0] ?? '';
+      const soloPromptDirective = spotlightLeadActive && soloLeadInstrument
+        ? `[Instrumental direction: solo ${soloLeadInstrument} leads the whole track — ${soloLeadInstrument} carries the melody up front, sparse minimal backing, no other lead instruments]\n\n`
+        : '';
+      const structuredPrompt = soloPromptDirective + formatLyricsWithStructure(
         rawLyrics,
         instrumental,
         instrumentTags,
