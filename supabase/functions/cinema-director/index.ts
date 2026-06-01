@@ -3,6 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { inspectGenerationPrompt } from '../_shared/promptSafety.ts';
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_GENAI_API_KEY') || '';
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
@@ -89,8 +90,16 @@ serve(async (req) => {
       );
     }
 
+    const promptSafety = inspectGenerationPrompt(vision, language);
+    if (!promptSafety.allowed) {
+      return new Response(
+        JSON.stringify({ success: false, error: promptSafety.message }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Detect short prompts — strip ALL PRODUCTION BRIEF metadata to count only user's actual story words
-    let userCoreText = vision;
+    let userCoreText = promptSafety.normalizedPrompt;
     // If structured as PRODUCTION BRIEF + STORY VISION, extract only the STORY VISION part
     const storyVisionMatch = vision.match(/STORY VISION:\n([\s\S]*)/i);
     if (storyVisionMatch) {

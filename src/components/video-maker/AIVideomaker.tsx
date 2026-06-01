@@ -4,11 +4,13 @@ import InstagramPublishButton from '@/components/instagram/InstagramPublishButto
 import { SavedImagesPicker } from '@/components/dashboard/SavedImagesPicker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { PromptBlockedDialog } from '@/components/ui/prompt-blocked-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
+import { inspectGenerationPrompt } from '@/utils/generationPromptGuard';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
 import {
@@ -124,6 +126,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const fileInputRef2 = useRef<HTMLInputElement>(null);
 
   const hasArabicChars = (text: string) => /[\u0600-\u06FF]/.test(text || '');
+  const showPromptBlockedPopup = useCallback((message: string) => {
+    setPromptBlockedMessage(message);
+    setShowPromptBlockedDialog(true);
+  }, []);
 
   // State
   const [generationMode, setGenerationModeRaw] = useState<'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema'>('image_to_video');
@@ -144,6 +150,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [resolution, setResolution] = useState<'480p' | '720p'>('480p');
   const [videoStyleMode, setVideoStyleMode] = useState<'normal' | 'fun'>('normal');
+  const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
+  const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
   const [showVideoModeInfo, setShowVideoModeInfo] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -357,6 +365,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (generationMode === 'image_to_video' && !imagePreview) return;
     if (generationMode === 'text_to_video' && !prompt.trim()) return;
     if (generationMode === '2images_to_video' && (!imagePreview || !imagePreview2)) return;
+    if (prompt.trim()) {
+      const promptSafety = inspectGenerationPrompt(prompt, language);
+      if (!promptSafety.allowed) {
+        showPromptBlockedPopup(promptSafety.message);
+        return;
+      }
+    }
     setIsAmping(true);
     try {
       if (generationMode === 'image_to_video') {
@@ -809,6 +824,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (generationMode === 'cinema' && !prompt.trim()) return;
     if (!user) return;
 
+    if (prompt.trim()) {
+      const promptSafety = inspectGenerationPrompt(prompt, language);
+      if (!promptSafety.allowed) {
+        showPromptBlockedPopup(promptSafety.message);
+        return;
+      }
+    }
+
     const needsArabicTranslation =
       language === 'ar' &&
       hasArabicChars(prompt) &&
@@ -1102,6 +1125,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       ? `PRODUCTION BRIEF:\n${builtVision}\n\nSTORY VISION:\n${cinemaVision.trim()}`
       : cinemaVision.trim() || builtVision;
     if (!visionToSend || isDirecting || !user) return;
+    const promptSafety = inspectGenerationPrompt(visionToSend, language);
+    if (!promptSafety.allowed) {
+      showPromptBlockedPopup(promptSafety.message);
+      return;
+    }
     setIsDirecting(true);
     setCinemaScenes([]);
     try {
@@ -1703,6 +1731,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const visionToSend = cinemaVision.trim() && builtVision
         ? `PRODUCTION BRIEF:\n${builtVision}\n\nSTORY VISION:\n${cinemaVision.trim()}`
         : cinemaVision.trim() || builtVision;
+      const promptSafety = inspectGenerationPrompt(visionToSend, language);
+      if (!promptSafety.allowed) {
+        showPromptBlockedPopup(promptSafety.message);
+        return;
+      }
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-director`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY },
@@ -1730,6 +1763,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const handleCinemaAmp = useCallback(async () => {
     const raw = cinemaSubject.trim();
     if (!raw || isCinemaAmping || !user) return;
+    const promptSafety = inspectGenerationPrompt(raw, language);
+    if (!promptSafety.allowed) {
+      showPromptBlockedPopup(promptSafety.message);
+      return;
+    }
     setIsCinemaAmping(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -4814,6 +4852,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           </div>
         </div>
       )}
+
+      <PromptBlockedDialog
+        open={showPromptBlockedDialog}
+        onOpenChange={setShowPromptBlockedDialog}
+        message={promptBlockedMessage}
+        language={language}
+      />
     </div>
   );
 }

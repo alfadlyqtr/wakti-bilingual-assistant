@@ -143,3 +143,155 @@ export function withUserInputGuard(systemPrompt: string): string {
   if (systemPrompt.includes("UNTRUSTED INPUT NOTICE")) return systemPrompt;
   return systemPrompt + USER_INPUT_GUARD;
 }
+
+ const GENERATION_BLOCKED_WORDS = [
+   "fuck",
+   "fucking",
+   "sex",
+   "porn",
+   "porno",
+   "xxx",
+   "nude",
+   "naked",
+   "nsfw",
+   "blowjob",
+   "bj",
+   "handjob",
+   "dick",
+   "cock",
+   "penis",
+   "vagina",
+   "pussy",
+   "boobs",
+   "tits",
+   "cum",
+   "cumming",
+   "horny",
+   "slut",
+   "whore",
+   "escort",
+   "fetish",
+   "bdsm",
+   "masturbate",
+   "masturbation",
+   "anal",
+   "rape",
+   "raped",
+ ] as const;
+
+ const GENERATION_BLOCKED_PHRASES = [
+   "teen sex",
+   "child nude",
+   "kid naked",
+   "forced sex",
+ ] as const;
+
+ const GENERATION_CHAR_VARIANTS: Record<string, string> = {
+   a: "a4@",
+   b: "b8",
+   c: "c(",
+   e: "e3",
+   g: "g69",
+   i: "i1!|l",
+   o: "o0",
+   s: "s5$",
+   t: "t7+",
+   u: "u*",
+   x: "x%",
+ };
+
+ function escapeCharClass(value: string): string {
+   return value.replace(/[\\\]\-\^]/g, "\\$&");
+ }
+
+ function buildGenerationCharPattern(char: string): string {
+   const variants = GENERATION_CHAR_VARIANTS[char] || char;
+   return `[${escapeCharClass(variants)}]`;
+ }
+
+ function buildGenerationWordRegex(term: string): RegExp {
+   const body = Array.from(term.toLowerCase())
+     .map((char, index, arr) => `${buildGenerationCharPattern(char)}+${index < arr.length - 1 ? "[^a-z0-9]*" : ""}`)
+     .join("");
+
+   return new RegExp(`(^|[^a-z0-9])${body}($|[^a-z0-9])`, "i");
+ }
+
+ function buildGenerationPhraseRegex(phrase: string): RegExp {
+   const words = phrase.toLowerCase().split(/\s+/).filter(Boolean);
+   const body = words
+     .map((word, index) => {
+       const wordBody = Array.from(word)
+         .map((char, charIndex, arr) => `${buildGenerationCharPattern(char)}+${charIndex < arr.length - 1 ? "[^a-z0-9]*" : ""}`)
+         .join("");
+       return `${wordBody}${index < words.length - 1 ? "[^a-z0-9]+" : ""}`;
+     })
+     .join("");
+
+   return new RegExp(`(^|[^a-z0-9])${body}($|[^a-z0-9])`, "i");
+ }
+
+ const GENERATION_BLOCKED_WORD_PATTERNS = GENERATION_BLOCKED_WORDS.map((term) => ({
+   term,
+   regex: buildGenerationWordRegex(term),
+ }));
+
+ const GENERATION_BLOCKED_PHRASE_PATTERNS = GENERATION_BLOCKED_PHRASES.map((term) => ({
+   term,
+   regex: buildGenerationPhraseRegex(term),
+ }));
+
+ export interface GenerationPromptSafetyResult {
+   allowed: boolean;
+   normalizedPrompt: string;
+   blockedTerm: string | null;
+   message: string;
+ }
+
+ export function inspectGenerationPrompt(raw: unknown, language: string = "en"): GenerationPromptSafetyResult {
+   const normalizedPrompt = sanitizeUserInput(raw, { maxLength: 8000, label: "prompt" }).trim();
+
+   if (!normalizedPrompt) {
+     return {
+       allowed: true,
+       normalizedPrompt,
+       blockedTerm: null,
+       message: "",
+     };
+   }
+
+   const lowerPrompt = normalizedPrompt.toLowerCase();
+
+   for (const entry of GENERATION_BLOCKED_PHRASE_PATTERNS) {
+     if (entry.regex.test(lowerPrompt)) {
+       return {
+         allowed: false,
+         normalizedPrompt,
+         blockedTerm: entry.term,
+         message: language === "ar"
+           ? "يحتوي هذا الوصف على ألفاظ صريحة أو مسيئة ولا يمكن استخدامه لإنشاء الصور أو الفيديو. الرجاء إزالة هذه الكلمات ثم المحاولة مرة أخرى."
+           : "This prompt contains explicit or abusive wording and cannot be used for image or video generation. Please remove it and try again.",
+       };
+     }
+   }
+
+   for (const entry of GENERATION_BLOCKED_WORD_PATTERNS) {
+     if (entry.regex.test(lowerPrompt)) {
+       return {
+         allowed: false,
+         normalizedPrompt,
+         blockedTerm: entry.term,
+         message: language === "ar"
+           ? "يحتوي هذا الوصف على ألفاظ صريحة أو مسيئة ولا يمكن استخدامه لإنشاء الصور أو الفيديو. الرجاء إزالة هذه الكلمات ثم المحاولة مرة أخرى."
+           : "This prompt contains explicit or abusive wording and cannot be used for image or video generation. Please remove it and try again.",
+       };
+     }
+   }
+
+   return {
+     allowed: true,
+     normalizedPrompt,
+     blockedTerm: null,
+     message: "",
+   };
+ }

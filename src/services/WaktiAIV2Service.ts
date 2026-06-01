@@ -398,6 +398,7 @@ class WaktiAIV2ServiceClass {
   private async getUserLocation(userId: string, forceFresh: boolean = false): Promise<UserLocationContext> {
     const now = Date.now();
     const previousCached = this.getCachedUserLocation(now);
+    const allowApproximateLocationFallback = !forceFresh;
 
     if (!forceFresh) {
       if (previousCached) return previousCached;
@@ -438,21 +439,8 @@ class WaktiAIV2ServiceClass {
       console.warn('[WaktiAIV2Service] Native location error:', err);
     }
 
-    if (forceFresh && !hasDeviceGPS && previousCached?.latitude && previousCached?.longitude) {
-      resolved = {
-        ...resolved,
-        latitude: previousCached.latitude,
-        longitude: previousCached.longitude,
-        accuracy: previousCached.accuracy ?? resolved.accuracy,
-        city: resolved.city || previousCached.city,
-        country: resolved.country || previousCached.country,
-        timezone: previousCached.timezone || timezone,
-        source: previousCached.source || resolved.source,
-      };
-    }
-
     // Fetch from profiles as fallback for city/country text ONLY (not coordinates)
-    if (!resolved.city || !resolved.country) {
+    if (allowApproximateLocationFallback && (!resolved.city || !resolved.country)) {
       try {
         const { data: prof } = await supabase
           .from('profiles')
@@ -472,7 +460,7 @@ class WaktiAIV2ServiceClass {
     // IP-based fallback: ONLY use for city/country text when device GPS is unavailable.
     // NEVER use IP coordinates — they give wrong results (e.g., Doha instead of Al Khor)
     // due to ISP routing all traffic through a central location.
-    if (!hasDeviceGPS && (!resolved.latitude || !resolved.longitude || !resolved.city || !resolved.country)) {
+    if (allowApproximateLocationFallback && !hasDeviceGPS && (!resolved.latitude || !resolved.longitude || !resolved.city || !resolved.country)) {
       const ipLoc = await this.fetchIpLocation();
       if (ipLoc) {
         resolved = {
@@ -490,11 +478,11 @@ class WaktiAIV2ServiceClass {
     resolved.timezone = timezone;
     resolved.updatedAt = Date.now();
     const hasPreciseCoords = typeof resolved.latitude === 'number' && typeof resolved.longitude === 'number';
-    if (hasPreciseCoords || !forceFresh || !previousCached?.latitude || !previousCached?.longitude) {
+    if (hasPreciseCoords || !forceFresh) {
       this.locationCache = resolved;
       try { localStorage.setItem('wakti_user_location', JSON.stringify(resolved)); } catch {}
     } else {
-      this.locationCache = previousCached;
+      this.locationCache = null;
     }
     return resolved;
   }
@@ -1478,13 +1466,11 @@ class WaktiAIV2ServiceClass {
             new Promise<null>(r => setTimeout(() => r(null), 4200))
           ]);
           if (freshLocation?.latitude && freshLocation?.longitude) return freshLocation;
-          if (cachedLocation?.latitude && cachedLocation?.longitude) return cachedLocation;
-          if (freshLocation?.city || freshLocation?.country) return freshLocation;
         } catch {
           // fall back below
         }
 
-        return cachedLocation;
+        return null;
       };
       const locationPromise: Promise<UserLocationContext | null> = needsLocation
         ? getBestSearchLocation()

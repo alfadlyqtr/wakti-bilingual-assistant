@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { inspectGenerationPrompt } from "../_shared/promptSafety.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1407,13 +1408,20 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const promptSafety = inspectGenerationPrompt(finalPrompt, body?.language === "ar" ? "ar" : "en");
+    if (!promptSafety.allowed) {
+      return new Response(JSON.stringify({ error: promptSafety.message }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
     const aspectRatio = ["1:1", "16:9", "9:16"].includes(body?.aspect_ratio || "") ? body.aspect_ratio : "1:1";
     const callbackUrl = `${supabaseUrl}/functions/v1/webhook-visual-ads`;
 
     const requestBody = {
       model: KIE_VISUAL_ADS_MODEL,
       input: {
-        prompt: finalPrompt,
+        prompt: promptSafety.normalizedPrompt,
         input_urls: imageUrls,
         image_urls: imageUrls,
         aspect_ratio: aspectRatio,

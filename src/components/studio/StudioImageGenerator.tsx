@@ -9,6 +9,7 @@ import { emitEvent } from '@/utils/eventBus';
 import { toast } from 'sonner';
 import { ImageSharePickerDialog } from '@/components/studio/ImageSharePickerDialog';
 import { Button } from '@/components/ui/button';
+import { PromptBlockedDialog } from '@/components/ui/prompt-blocked-dialog';
 import { Textarea } from '@/components/ui/textarea';
 import ShareButton from '@/components/ui/ShareButton';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
@@ -30,6 +31,7 @@ import {
 } from 'lucide-react';
 import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
 import type { UploadedFile } from '@/types/fileUpload';
+import { inspectGenerationPrompt } from '@/utils/generationPromptGuard';
 import VisualAdsGenerator, {
   adStyleChips,
   adTopicChips,
@@ -121,6 +123,8 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const [isGenerating, setIsGenerating] = useState(false);
   const [progress, setProgress] = useState(0);
   const generateLockRef = useRef(false);
+  const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
+  const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
 
   // Result
   const [resultImageUrl, setResultImageUrl] = useState<string | null>(null);
@@ -138,6 +142,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const fileInputRef3 = useRef<HTMLInputElement>(null);
   const fileInputRef4 = useRef<HTMLInputElement>(null);
   const [showExtraReferenceImages, setShowExtraReferenceImages] = useState(false);
+
+  const showPromptBlockedPopup = useCallback((message: string) => {
+    setPromptBlockedMessage(message);
+    setShowPromptBlockedDialog(true);
+  }, []);
 
   // Draw canvas ref
   const drawCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
@@ -865,6 +874,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       return;
     }
 
+    if (submode !== 'visual-ads') {
+      const promptSafety = inspectGenerationPrompt(prompt, language);
+      if (!promptSafety.allowed) {
+        showPromptBlockedPopup(promptSafety.message);
+        return;
+      }
+    }
+
     generateLockRef.current = true;
     setIsGenerating(true);
     setResultError(null);
@@ -1044,6 +1061,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   // ─── Amp prompt ───
   const handleAmp = async () => {
     if (!prompt.trim() || isAmping) return;
+    const promptSafety = inspectGenerationPrompt(prompt, language);
+    if (!promptSafety.allowed) {
+      showPromptBlockedPopup(promptSafety.message);
+      return;
+    }
     try {
       setIsAmping(true);
       const { data, error } = await supabase.functions.invoke('prompt-amp', { body: { text: prompt, mode: submode } });
@@ -2008,6 +2030,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               promptLines.push(`Output one final ${ratio} poster only.`);
 
               const finalPromptForKie = promptLines.join('\n');
+              const promptSafety = inspectGenerationPrompt(finalPromptForKie, language);
+              if (!promptSafety.allowed) {
+                stopProgress();
+                showPromptBlockedPopup(promptSafety.message);
+                return;
+              }
               const validImages = sentAssets.map((item) => item.preparedImage);
 
               const { data: { session } } = await supabase.auth.getSession();
@@ -2731,6 +2759,13 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
           {resultError}
         </div>
       )}
+
+      <PromptBlockedDialog
+        open={showPromptBlockedDialog}
+        onOpenChange={setShowPromptBlockedDialog}
+        message={promptBlockedMessage}
+        language={language}
+      />
 
       {/* Saved Images Picker Modal */}
       {showSavedPicker && (

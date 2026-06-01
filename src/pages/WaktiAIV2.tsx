@@ -99,6 +99,9 @@ const WaktiAIV2 = () => {
   // Streaming isolation: active stream ID tracked in state (one set per message, not per token).
   // Token content goes directly to DOM via streamingBubbleRef — zero React re-renders per token.
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
+  // Flicker fix (Option A): for place/business searches we hide the streamed raw text and
+  // show a "Finding places…" loader, then reveal the cards once at completion.
+  const [streamingIsPlaceSearch, setStreamingIsPlaceSearch] = useState<boolean>(false);
   const streamingBubbleRef = useRef<StreamingBubbleHandle>(null);
   const streamedContentRef = useRef<string>(''); // closure-safe accumulator for final flush
 
@@ -817,6 +820,11 @@ const WaktiAIV2 = () => {
         // Activate streaming isolation: mount StreamingBubble, reset its DOM content
         streamedContentRef.current = '';
         streamingBubbleRef.current?.reset();
+        // Flicker fix (Option A): detect place/business searches up front so the UI shows a
+        // loader instead of streaming raw place text that would later collapse into cards.
+        const placeSearchRegex = /\b(near me|nearby|closest|nearest|restaurant|restaurants|cafe|cafes|coffee|breakfast|brunch|lunch|dinner|burger|pizza|shawarma|bakery|dessert|shop|store|mall|hotel|hospital|gym|bank|pharmacy|pharmacies|salon|spa|barber|clinic|supermarket|grocery|steak|steakhouse)\b/i;
+        const isPlaceSearch = trigger === 'search' && (placeSearchRegex.test(messageContent || '') || /\bbest\b[\s\S]*\bin\b/i.test(messageContent || ''));
+        setStreamingIsPlaceSearch(isPlaceSearch);
         setStreamingMessageId(assistantMessageId);
 
         const streamedResp = await WaktiAIV2Service.sendStreamingMessage(
@@ -993,6 +1001,7 @@ const WaktiAIV2 = () => {
     } finally {
       // Always clear streaming overlay on completion or error
       setStreamingMessageId(null);
+      setStreamingIsPlaceSearch(false);
       streamingBubbleRef.current?.reset();
       setIsLoading(false);
       
@@ -1226,6 +1235,7 @@ const WaktiAIV2 = () => {
             isNewConversation={isNewConversation}
             onReplyToMessage={handleReplyToMessage}
             streamingMessageId={streamingMessageId}
+            streamingIsPlaceSearch={streamingIsPlaceSearch}
             streamingBubbleRef={streamingBubbleRef}
           />
       </div>

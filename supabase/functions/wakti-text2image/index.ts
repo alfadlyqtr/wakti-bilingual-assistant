@@ -1,6 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialToken, checkTrialAccess } from "../_shared/trial-tracker.ts";
+import { inspectGenerationPrompt } from "../_shared/promptSafety.ts";
 
 // ─── AI Logger (inlined) ───
 interface AILogParams {
@@ -289,6 +290,11 @@ Deno.serve(async (req) => {
 
     if (!prompt.trim()) return new Response(JSON.stringify({ success: false, error: "Missing prompt" }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
 
+    const promptSafety = inspectGenerationPrompt(prompt, body?.language === "ar" ? "ar" : "en");
+    if (!promptSafety.allowed) {
+      return new Response(JSON.stringify({ success: false, error: promptSafety.message }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+    }
+
     // ── Trial Token Check ──
     if (userId && supabaseAdmin) {
       const trial = await checkTrialAccess(supabaseAdmin, userId, 't2i', 2);
@@ -301,7 +307,7 @@ Deno.serve(async (req) => {
     }
     // ── End Trial Token Check ──
 
-    const finalPrompt = prompt;
+    const finalPrompt = promptSafety.normalizedPrompt;
     usedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
     usedProvider = quality === "best_fast" ? "kie-nano-banana-2" : "runware";
 

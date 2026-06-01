@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce, checkTrialAccess } from "../_shared/trial-tracker.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { inspectGenerationPrompt } from "../_shared/promptSafety.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -194,6 +195,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    const promptSafety = prompt
+      ? inspectGenerationPrompt(prompt, body?.language === "ar" ? "ar" : "en")
+      : null;
+    if (promptSafety && !promptSafety.allowed) {
+      return new Response(JSON.stringify({ success: false, error: promptSafety.message }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (userId) {
       const trial = await checkTrialAccess(supabase, userId, "i2i", 2);
       if (!trial.allowed) {
@@ -226,7 +236,7 @@ Deno.serve(async (req) => {
     }
     console.log(`[grok-i2i] references uploaded: ${referencePublicUrls.length}`);
 
-    const finalPrompt = prompt;
+    const finalPrompt = promptSafety?.normalizedPrompt ?? prompt;
     const refMentions = referencePublicUrls.map((_, idx) => `@image${idx + 1}`).join(" ");
     const promptWithRef = finalPrompt ? `${refMentions} ${finalPrompt}` : refMentions;
     console.log(`[grok-i2i] submit prompt="${promptWithRef.slice(0, 100)}"`);

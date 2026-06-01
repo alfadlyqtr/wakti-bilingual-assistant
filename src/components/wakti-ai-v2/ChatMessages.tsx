@@ -483,6 +483,7 @@ interface ChatMessagesProps {
   onReplyToMessage?: (messageId: string, content: string) => void;
   streamingMessageId?: string | null;
   streamingText?: string;
+  streamingIsPlaceSearch?: boolean;
   streamingBubbleRef?: React.RefObject<StreamingBubbleHandle>;
 }
 
@@ -506,6 +507,7 @@ export function ChatMessages({
   onReplyToMessage,
   streamingMessageId,
   streamingText = '',
+  streamingIsPlaceSearch = false,
   streamingBubbleRef
 }: ChatMessagesProps) {
   const { language } = useTheme();
@@ -2103,7 +2105,16 @@ export function ChatMessages({
                           {getMessageBadge(message, activeTrigger)}
                         </Badge>
                       </div>
-                      <StreamingBubble ref={streamingBubbleRef} language={language} />
+                      {streamingIsPlaceSearch ? (
+                        <div className="flex items-center gap-3 py-2">
+                          <span className="inline-block w-4 h-4 rounded-full border-2 border-blue-400 border-t-transparent animate-spin" />
+                          <span className="text-sm text-muted-foreground">
+                            {language === 'ar' ? 'جاري البحث عن الأماكن…' : 'Finding places…'}
+                          </span>
+                        </div>
+                      ) : (
+                        <StreamingBubble ref={streamingBubbleRef} language={language} />
+                      )}
                     </div>
                   </div>
                 </div>

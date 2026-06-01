@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
 import { checkAndConsumeTrialToken, type TrialFeatureKey } from "../_shared/trial-tracker.ts";
-import { sanitizeUserInput } from "../_shared/promptSafety.ts";
+import { inspectGenerationPrompt, sanitizeUserInput } from "../_shared/promptSafety.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1015,31 +1015,10 @@ serve(async (req) => {
 
     // Parse request body (need it before trial check to detect generation_type)
     const body = await req.json();
-
-    // ── Trial Token Check: detect generation_type for correct key ──
-    const genType = body?.generation_type || 'image_to_video';
-    const trialKeyMap: Record<string, TrialFeatureKey> = {
-      'image_to_video': 'i2v',
-      'text_to_video': 't2v',
-      '2images_to_video': '2i2v',
-    };
-    const trialFeatureKey = trialKeyMap[genType] || 'i2v';
-    // Only check trial for generation requests (not status polls)
-    if (body?.mode !== 'status') {
-      const supabaseAdmin = createClient(
-        Deno.env.get("SUPABASE_URL") || "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
-      );
-      const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, trialFeatureKey, 1);
-      if (!trial.allowed) {
-        return new Response(
-          JSON.stringify({ error: "TRIAL_LIMIT_REACHED", feature: trialFeatureKey }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-    // ── End Trial Token Check ──
     const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode, model: modelOverride } = body;
+    const safePrompt = typeof prompt === "string"
+      ? sanitizeUserInput(prompt, { maxLength: 7000, label: "video_prompt" }).trim()
+      : "";
 
     // Mode: 'status' to check task status
     if (mode === "status") {
@@ -1074,6 +1053,15 @@ serve(async (req) => {
 
     // Parse generation type
     const generationType = generation_type || "image_to_video";
+    const promptSafety = safePrompt
+      ? inspectGenerationPrompt(safePrompt, body?.language === "ar" ? "ar" : "en")
+      : null;
+    if (promptSafety && !promptSafety.allowed) {
+      return new Response(JSON.stringify({ error: promptSafety.message }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     // Validation based on generation type
     if (generationType === "image_to_video" && !image) {
@@ -1090,12 +1078,32 @@ serve(async (req) => {
       });
     }
 
-    if (generationType === "text_to_video" && (!prompt || !prompt.trim())) {
+    if (generationType === "text_to_video" && !safePrompt.trim()) {
       return new Response(JSON.stringify({ error: "Missing prompt for text-to-video" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // ── Trial Token Check: detect generation_type for correct key ──
+    const trialKeyMap: Record<string, TrialFeatureKey> = {
+      'image_to_video': 'i2v',
+      'text_to_video': 't2v',
+      '2images_to_video': '2i2v',
+    };
+    const trialFeatureKey = trialKeyMap[generationType] || 'i2v';
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") || "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
+    );
+    const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, trialFeatureKey, 1);
+    if (!trial.allowed) {
+      return new Response(
+        JSON.stringify({ error: "TRIAL_LIMIT_REACHED", feature: trialFeatureKey }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    // ── End Trial Token Check ──
 
     // Check quota before proceeding
     const { data: quotaCheck, error: quotaError } = await supabase.rpc("can_generate_ai_video", {
@@ -1129,10 +1137,11 @@ serve(async (req) => {
     }
 
     let task: { task_id: string; status: string };
+    const finalPrompt = promptSafety?.normalizedPrompt ?? safePrompt;
 
     if (generationType === "text_to_video") {
       // Text-to-Video: no image needed
-      task = await createTextToVideoTask(prompt, reqDuration, aspect_ratio, resolution, video_style_mode);
+      task = await createTextToVideoTask(finalPrompt, reqDuration, aspect_ratio, resolution, video_style_mode);
     } else if (generationType === "2images_to_video") {
       // 2Images-to-Video: requires both image1 and image2
       let imageUrl1: string = image1;
@@ -1166,7 +1175,7 @@ serve(async (req) => {
         }
       }
       
-      task = await createVideoTask([imageUrl1, imageUrl2], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode);
+      task = await createVideoTask([imageUrl1, imageUrl2], finalPrompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode);
     } else if (generationType === "visual_ads") {
       // Visual Ads: Nano Banana 2 supports up to 14 images
       const rawImages: string[] = body.images || [];
@@ -1202,10 +1211,15 @@ serve(async (req) => {
       }
       
       // Use the pre-built, sanitized master prompt provided by the client
-      const legacyPrompt = typeof body.prompt === "string"
-        ? sanitizeUserInput(body.prompt, { maxLength: 7000, label: "visual_ads_prompt" })
-        : "";
+      const legacyPrompt = finalPrompt;
       const compiledPrompt = await compileVisualAdsPrompt(body.visual_ads_spec, legacyPrompt);
+      const compiledPromptSafety = inspectGenerationPrompt(compiledPrompt.final_prompt, body?.language === "ar" ? "ar" : "en");
+      if (!compiledPromptSafety.allowed) {
+        return new Response(JSON.stringify({ error: compiledPromptSafety.message }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       console.log(`[kie-visual-ads] Using compiled prompt source: ${compiledPrompt.source}`);
       const supabaseAdminForAds = createClient(
         Deno.env.get("SUPABASE_URL") || "",
@@ -1233,7 +1247,7 @@ serve(async (req) => {
           );
         }
       }
-      task = await createVideoTask([imageUrl], prompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode, modelOverride);
+      task = await createVideoTask([imageUrl], finalPrompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode, modelOverride);
     }
 
     // If mode is 'async', return task_id immediately for frontend polling

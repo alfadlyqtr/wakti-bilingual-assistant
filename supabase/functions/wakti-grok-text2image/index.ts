@@ -2,6 +2,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce, checkTrialAccess } from "../_shared/trial-tracker.ts";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
+import { inspectGenerationPrompt } from "../_shared/promptSafety.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,6 +138,13 @@ Deno.serve(async (req) => {
       });
     }
 
+    const promptSafety = inspectGenerationPrompt(prompt, body?.language === "ar" ? "ar" : "en");
+    if (!promptSafety.allowed) {
+      return new Response(JSON.stringify({ success: false, error: promptSafety.message }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (userId) {
       const trial = await checkTrialAccess(supabase, userId, "t2i", 2);
       if (!trial.allowed) {
@@ -146,7 +154,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const finalPrompt = prompt;
+    const finalPrompt = promptSafety.normalizedPrompt;
     console.log(`[grok-t2i] submit prompt="${finalPrompt.slice(0, 100)}" aspect=${aspectRatio}`);
 
     const submitResp = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {

@@ -38,6 +38,9 @@ const WOLFRAM_APP_ID = Deno.env.get('WOLFRAM_APP_ID') || '';
 // Controlled entirely by the Supabase secret ΓÇö no hardcoded fallbacks.
 const WOLFRAM_LLM_APP_ID = Deno.env.get('WOLFRAM_LLM_APP_ID') || WOLFRAM_APP_ID;
 const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
+// Dedicated server-side key for the Google Places API (Text Search + Details + Photos).
+// Uses the GOOGLE_PLACES secret; falls back to GOOGLE_MAPS_API_KEY if unset.
+const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES') || GOOGLE_MAPS_API_KEY;
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -1648,7 +1651,10 @@ async function streamGemini3WithSearch(
 ): Promise<string> {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
-  const useMapsGrounding = searchIntent === 'business';
+  // ARCHITECTURE: Google Maps grounding removed. All searches (including business/place
+  // queries) use Google Search grounding only. Place cards are enriched server-side via
+  // the Google Places API (Text Search + Details) in enrichGroundedPlacesWithOfficialLinks.
+  const useMapsGrounding = false;
 
   // Inject today's date into the query so Google Search grounding fetches current results
   const now = new Date();
@@ -1660,17 +1666,11 @@ async function streamGemini3WithSearch(
   const nhlSeason = `${nhlSeasonStart}-${nhlSeasonStart + 1}`;
   const isNhlLive = /\bnhl\b/i.test(query) && /(standings?|scores?|results?|schedule|wild\s*card|conference|division|points|gp|games\s*played)/i.test(query);
   const nhlHint = isNhlLive ? ` Current NHL season: ${nhlSeason}.` : '';
+  const isNearMeQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(query);
   // Inject device GPS location into the query so google_search returns hyper-local results
   let locationHint = '';
   if (userLocation?.latitude && userLocation?.longitude) {
-    const city = userLocation.city || '';
-    const country = userLocation.country || '';
-    const place = city && country ? `${city}, ${country}` : (city || country || '');
-    if (place) {
-      locationHint = ` User is at [${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}] in ${place}. Prioritize results local to ${place} for all "near me", location, and time-sensitive queries.`;
-    } else {
-      locationHint = ` User is at coordinates [${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}]. Prioritize results near these coordinates for all "near me" and location queries.`;
-    }
+    locationHint = ` User is at [${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}]. Use this only for internal ranking of nearby and time-sensitive results. Do not rewrite the user's visible query with a city name, country, or coordinates.`;
   }
   const latestQuery = `${query} (as of ${todayStr}).${nhlHint}${locationHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: "2023-24"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
   const mapsQuery = useMapsGrounding ? buildMapsGroundingQuery(query, userLocation) : query;
@@ -1821,7 +1821,7 @@ CORE RULES:
 LOCATION RULES:
 1. For any near-me or location-dependent query, open with one short natural line that helps the user orient themselves. Keep it personal and practical. Do not force a scripted greeting.
 2. Never name a neighborhood, district, compound, tower, street, or sub-area as if it is the user's exact location.
-3. You may mention the city or country only if it exists in the location context above.
+3. If the user asked "near me", "nearby", "closest", or a similar local query without naming a city, do not inject a city or country into the visible answer.
 4. If exact area is uncertain, say "near you right now" or "closest to you right now" instead of guessing. Never say "near your current coordinates".
 5. Keep recommendations tightly scoped to the user's current area.
 
@@ -2382,6 +2382,7 @@ type GroundedPlaceCard = {
   tiktokUrl?: string;
   whatsappUrl?: string;
   photoUrl?: string;
+  openingHours?: string[];
 };
 
 const BUSINESS_LINK_STOPWORDS = new Set([
@@ -2647,6 +2648,7 @@ function createGroundedPlaceCard(seed: Partial<GroundedPlaceCard> = {}): Grounde
     tiktokUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.tiktokUrl)),
     whatsappUrl: normalizeLikelyExternalUrl(toTrimmedString(seed.whatsappUrl)),
     photoUrl: toTrimmedString(seed.photoUrl),
+    openingHours: Array.isArray(seed.openingHours) ? seed.openingHours.filter((h) => typeof h === 'string' && h.trim()) : [],
   };
 }
 
@@ -2656,24 +2658,7 @@ function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
 
   const commit = () => {
     if (!current) return;
-    const hasMeaningfulField = Boolean(
-      current.rating !== null
-      || current.userRatingCount !== null
-      || current.phone
-      || current.email
-      || current.websiteUrl
-      || current.mapsUrl
-      || current.instagramUrl
-      || current.facebookUrl
-      || current.tiktokUrl
-      || current.whatsappUrl
-      || current.reason
-      || current.vibe
-      || current.mustTry
-      || current.reviewSnippets.length > 0
-      || current.editorialSummary
-    );
-    if (current.name && hasMeaningfulField) {
+    if (current.name) {
       places.push(current);
     }
     current = null;
@@ -2800,6 +2785,153 @@ function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
   return places;
 }
 
+function parseGroundedPlacesFromTextLoose(text: string): GroundedPlaceCard[] {
+  const places: GroundedPlaceCard[] = [];
+  let current: GroundedPlaceCard | null = null;
+  const knownLabelPattern = /^(Reason|Vibe|Must-?Try|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/i;
+  const segmentPattern = /(Reason|Vibe|Must-?Try|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/gi;
+
+  const commit = () => {
+    if (!current) return;
+    if (current.name) {
+      places.push(current);
+    }
+    current = null;
+  };
+
+  const extractSegments = (value: string) => {
+    const matches = Array.from(value.matchAll(segmentPattern));
+    if (matches.length === 0) return [] as Array<{ label: string; value: string }>;
+    return matches.map((match, index) => {
+      const start = match.index ?? 0;
+      const label = match[1] || '';
+      const valueStart = start + match[0].length;
+      const valueEnd = index + 1 < matches.length ? (matches[index + 1].index ?? value.length) : value.length;
+      return {
+        label: label.toLowerCase(),
+        value: value.slice(valueStart, valueEnd).trim(),
+      };
+    });
+  };
+
+  for (const rawLine of (text || '').split('\n')) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const bulletMatch = line.match(/^(?:[-*â€¢]|\d+\.)\s+(.*)$/);
+    const rawValue = (bulletMatch?.[1] || line).trim();
+    const segmentSource = rawValue.replace(/\*\*([^*]+)\*\*/g, '$1').trim();
+    const plainLine = toTrimmedString(segmentSource);
+    if (!plainLine) continue;
+
+    if (bulletMatch && !knownLabelPattern.test(plainLine) && !plainLine.includes(':')) {
+      commit();
+      current = createGroundedPlaceCard({ name: plainLine });
+      continue;
+    }
+
+    const boldHeadingMatch = line.match(/^\*\*([^*:]+)\*\*\s*$/);
+    if (boldHeadingMatch && !knownLabelPattern.test(boldHeadingMatch[1].trim())) {
+      commit();
+      current = createGroundedPlaceCard({ name: toTrimmedString(boldHeadingMatch[1]) });
+      continue;
+    }
+
+    const segments = extractSegments(segmentSource);
+    if (!current || segments.length === 0) continue;
+
+    for (const segment of segments) {
+      const segmentRawValue = segment.value.replace(/^[-–—]\s*/, '').trim();
+      const plain = toTrimmedString(segmentRawValue);
+      if (!plain) continue;
+
+      const links = extractMarkdownLinks(segmentRawValue);
+      const directUrls = extractDirectUrls(segmentRawValue);
+      const firstUrl = normalizeLikelyExternalUrl(links[0]?.url || directUrls[0] || plain);
+      const field = segment.label;
+      applyExtractedLinksToPlace(current, segmentRawValue);
+
+      if (field === 'reason') {
+        current.reason = current.reason || plain;
+        continue;
+      }
+
+      if (field === 'vibe') {
+        current.vibe = current.vibe || plain;
+        continue;
+      }
+
+      if (field === 'must-try' || field === 'must try' || field === 'musttry') {
+        current.mustTry = current.mustTry || plain;
+        continue;
+      }
+
+      if (field === 'rating') {
+        const match = plain.match(/(\d+(?:\.\d+)?)/);
+        const parsed = match ? toFiniteNumber(match[1]) : null;
+        if (parsed !== null) current.rating = parsed;
+        continue;
+      }
+
+      if (field === 'google reviews' || field === 'reviews') {
+        const match = plain.match(/([\d,]+)/);
+        const parsed = match ? Number(match[1].replace(/,/g, '')) : NaN;
+        if (Number.isFinite(parsed)) current.userRatingCount = parsed;
+        continue;
+      }
+
+      if (field === 'google maps' || field === 'google maps link' || field === 'maps' || field === 'maps link' || field === 'location') {
+        current.mapsUrl = current.mapsUrl || firstUrl;
+        continue;
+      }
+
+      if (field === 'phone') {
+        const telLink = links.find((entry) => /^tel:/i.test(entry.url));
+        if (telLink?.label) {
+          current.phone = current.phone || telLink.label;
+        } else {
+          const match = plain.match(/(\+\d[\d\s()\-]{5,}\d)/);
+          if (match?.[1]) current.phone = current.phone || match[1].replace(/\s+/g, ' ').trim();
+        }
+        continue;
+      }
+
+      if (field === 'website') {
+        current.websiteUrl = current.websiteUrl || firstUrl;
+        continue;
+      }
+
+      if (field === 'instagram') {
+        current.instagramUrl = current.instagramUrl || firstUrl;
+        continue;
+      }
+
+      if (field === 'facebook') {
+        current.facebookUrl = current.facebookUrl || firstUrl;
+        continue;
+      }
+
+      if (field === 'tiktok') {
+        current.tiktokUrl = current.tiktokUrl || firstUrl;
+        continue;
+      }
+
+      if (field === 'whatsapp') {
+        current.whatsappUrl = current.whatsappUrl || firstUrl;
+        continue;
+      }
+
+      if (field === 'email') {
+        const mailtoLink = links.find((entry) => /^mailto:/i.test(entry.url));
+        current.email = normalizeEmail(current.email || mailtoLink?.label || plain);
+      }
+    }
+  }
+
+  commit();
+  return places;
+}
+
 function mergeGroundedPlaceCard(base: GroundedPlaceCard, patch: Partial<GroundedPlaceCard>): GroundedPlaceCard {
   return {
     ...base,
@@ -2825,20 +2957,23 @@ function mergeGroundedPlaceCard(base: GroundedPlaceCard, patch: Partial<Grounded
     tiktokUrl: base.tiktokUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.tiktokUrl)),
     whatsappUrl: base.whatsappUrl || normalizeLikelyExternalUrl(toTrimmedString(patch.whatsappUrl)),
     photoUrl: base.photoUrl || toTrimmedString(patch.photoUrl),
+    openingHours: (Array.isArray(base.openingHours) && base.openingHours.length > 0)
+      ? base.openingHours
+      : (Array.isArray(patch.openingHours) ? patch.openingHours : []),
   };
 }
 
 async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partial<GroundedPlaceCard>> {
-  if (!GOOGLE_MAPS_API_KEY || !place.placeId) return {};
+  if (!GOOGLE_PLACES_API_KEY || !place.placeId) return {};
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1800);
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const response = await fetch(`https://places.googleapis.com/v1/places/${encodeURIComponent(place.placeId)}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
-        'X-Goog-Api-Key': GOOGLE_MAPS_API_KEY,
+        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
         'X-Goog-FieldMask': 'id,displayName,formattedAddress,location,googleMapsUri,websiteUri,internationalPhoneNumber,nationalPhoneNumber,rating,userRatingCount,businessStatus,currentOpeningHours,regularOpeningHours,reviews,editorialSummary,photos',
       },
       signal: controller.signal,
@@ -2905,7 +3040,7 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
 
     const photos = Array.isArray(data.photos) ? data.photos : [];
     const firstPhoto = photos[0] && typeof photos[0] === 'object' ? photos[0] as Record<string, unknown> : null;
-    const photoUrl = firstPhoto?.name ? `https://places.googleapis.com/v1/${firstPhoto.name}/media?key=${GOOGLE_MAPS_API_KEY}&maxWidthPx=400` : '';
+    const photoUrl = firstPhoto?.name ? `https://places.googleapis.com/v1/${firstPhoto.name}/media?key=${GOOGLE_PLACES_API_KEY}&maxWidthPx=400` : '';
 
     return {
       name: toTrimmedString(displayName?.text),
@@ -2921,10 +3056,150 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
         : (typeof regularOpeningHours?.openNow === 'boolean' ? regularOpeningHours.openNow as boolean : null),
       businessStatus: toTrimmedString(data.businessStatus),
       editorialSummary: toTrimmedString(editorialSummary?.text),
+      openingHours: Array.isArray(regularOpeningHours?.weekdayDescriptions)
+        ? (regularOpeningHours.weekdayDescriptions as string[])
+        : (Array.isArray(currentOpeningHours?.weekdayDescriptions) ? (currentOpeningHours.weekdayDescriptions as string[]) : []),
       mapsUrl: placeMapsUrl,
       reviewSnippets,
       photoUrl,
     };
+  } catch {
+    return {};
+  }
+}
+
+// Map a Places API v1 place object (from Details or Text Search) into our card shape.
+function mapPlaceV1ToCard(data: Record<string, unknown>): Partial<GroundedPlaceCard> & { placeId?: string } {
+  const displayName = data.displayName && typeof data.displayName === 'object' ? data.displayName as Record<string, unknown> : null;
+  const editorialSummary = data.editorialSummary && typeof data.editorialSummary === 'object' ? data.editorialSummary as Record<string, unknown> : null;
+  const location = data.location && typeof data.location === 'object' ? data.location as Record<string, unknown> : null;
+  const currentOpeningHours = data.currentOpeningHours && typeof data.currentOpeningHours === 'object' ? data.currentOpeningHours as Record<string, unknown> : null;
+  const regularOpeningHours = data.regularOpeningHours && typeof data.regularOpeningHours === 'object' ? data.regularOpeningHours as Record<string, unknown> : null;
+
+  const mappedReviews = (Array.isArray(data.reviews) ? data.reviews : [])
+    .map((entry) => {
+      const review = entry && typeof entry === 'object' ? entry as Record<string, unknown> : null;
+      if (!review) return null;
+      const authorAttribution = review.authorAttribution && typeof review.authorAttribution === 'object'
+        ? review.authorAttribution as Record<string, unknown>
+        : null;
+      const reviewText = review.text && typeof review.text === 'object' ? review.text as Record<string, unknown> : null;
+      const originalText = review.originalText && typeof review.originalText === 'object' ? review.originalText as Record<string, unknown> : null;
+      const authorName = toTrimmedString(authorAttribution?.displayName);
+      const relativeTime = toTrimmedString(review.relativePublishTimeDescription);
+      const rating = toFiniteNumber(review.rating);
+      const snippet = toTrimmedString(reviewText?.text) || toTrimmedString(originalText?.text);
+      const googleMapsUri = normalizeExternalUrl(toTrimmedString(review.googleMapsUri));
+      const titleParts = [
+        authorName,
+        typeof rating === 'number' ? `${rating.toFixed(1)}★` : '',
+        relativeTime,
+      ].filter(Boolean);
+      return {
+        publishedAt: Date.parse(toTrimmedString(review.publishTime)) || 0,
+        review: {
+          uri: googleMapsUri,
+          googleMapsUri,
+          title: titleParts.join(' · '),
+          reviewId: toTrimmedString(review.name),
+          snippet,
+        },
+      };
+    })
+    .filter((entry) => !!entry && (!!entry.review.snippet || !!entry.review.googleMapsUri || !!entry.review.uri));
+
+  const reviewSnippets: GroundedPlaceCard['reviewSnippets'] = [];
+  mappedReviews
+    .sort((a, b) => (b?.publishedAt || 0) - (a?.publishedAt || 0))
+    .forEach((entry) => {
+      if (!entry?.review || reviewSnippets.length >= 4) return;
+      reviewSnippets.push(entry.review);
+    });
+
+  const placeId = toTrimmedString(data.id);
+  const placeLabel = toTrimmedString(displayName?.text) || toTrimmedString(data.formattedAddress);
+  const placeMapsUrl = normalizeExternalUrl(toTrimmedString(data.googleMapsUri))
+    || (placeId
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeLabel)}&query_place_id=${encodeURIComponent(placeId)}`
+      : (toFiniteNumber(location?.latitude) !== null && toFiniteNumber(location?.longitude) !== null
+          ? `https://www.google.com/maps/search/?api=1&query=${toFiniteNumber(location?.latitude)},${toFiniteNumber(location?.longitude)}`
+          : (placeLabel ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(placeLabel)}` : '')));
+
+  const photos = Array.isArray(data.photos) ? data.photos : [];
+  const firstPhoto = photos[0] && typeof photos[0] === 'object' ? photos[0] as Record<string, unknown> : null;
+  const photoUrl = (firstPhoto?.name && GOOGLE_PLACES_API_KEY) ? `https://places.googleapis.com/v1/${firstPhoto.name}/media?key=${GOOGLE_PLACES_API_KEY}&maxWidthPx=400` : '';
+
+  return {
+    placeId,
+    name: toTrimmedString(displayName?.text),
+    address: toTrimmedString(data.formattedAddress),
+    latitude: toFiniteNumber(location?.latitude),
+    longitude: toFiniteNumber(location?.longitude),
+    rating: toFiniteNumber(data.rating),
+    userRatingCount: toFiniteNumber(data.userRatingCount),
+    websiteUrl: normalizeExternalUrl(toTrimmedString(data.websiteUri)),
+    phone: toTrimmedString(data.internationalPhoneNumber) || toTrimmedString(data.nationalPhoneNumber),
+    openNow: typeof currentOpeningHours?.openNow === 'boolean'
+      ? currentOpeningHours.openNow as boolean
+      : (typeof regularOpeningHours?.openNow === 'boolean' ? regularOpeningHours.openNow as boolean : null),
+    businessStatus: toTrimmedString(data.businessStatus),
+    editorialSummary: toTrimmedString(editorialSummary?.text),
+    openingHours: Array.isArray(regularOpeningHours?.weekdayDescriptions)
+      ? (regularOpeningHours.weekdayDescriptions as string[])
+      : (Array.isArray(currentOpeningHours?.weekdayDescriptions) ? (currentOpeningHours.weekdayDescriptions as string[]) : []),
+    mapsUrl: placeMapsUrl,
+    reviewSnippets,
+    photoUrl,
+  } as Partial<GroundedPlaceCard> & { placeId?: string };
+}
+
+// Resolve a place by free-text (name + area/city) via Places API Text Search and return
+// rich details in ONE call. Used when we have no placeId (Google Search grounding path).
+async function fetchGooglePlaceByText(place: GroundedPlaceCard, locationBias?: { latitude: number; longitude: number } | null): Promise<Partial<GroundedPlaceCard>> {
+  if (!GOOGLE_PLACES_API_KEY) return {};
+  const name = toTrimmedString(place.name);
+  if (!name) return {};
+  const textQuery = [name, toTrimmedString(place.address)].filter(Boolean).join(' ');
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3800);
+    const body: Record<string, unknown> = { textQuery, maxResultCount: 1 };
+    if (locationBias?.latitude != null && locationBias?.longitude != null) {
+      body.locationBias = { circle: { center: { latitude: locationBias.latitude, longitude: locationBias.longitude }, radius: 30000 } };
+    }
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.websiteUri,places.internationalPhoneNumber,places.nationalPhoneNumber,places.rating,places.userRatingCount,places.businessStatus,places.currentOpeningHours,places.regularOpeningHours,places.reviews,places.editorialSummary,places.photos',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error('❌ PLACES TEXT SEARCH ERROR:', response.status, errText.slice(0, 300));
+      return {};
+    }
+    const data = await response.json().catch(() => null) as Record<string, unknown> | null;
+    const results = data && Array.isArray(data.places) ? data.places : [];
+    const first = results[0] && typeof results[0] === 'object' ? results[0] as Record<string, unknown> : null;
+    if (!first) {
+      console.log('🔎 PLACES TEXT SEARCH: no match for', textQuery);
+      return {};
+    }
+    const mapped = mapPlaceV1ToCard(first);
+    let resolved: Partial<GroundedPlaceCard> = mapped;
+    if ((!Array.isArray(mapped.reviewSnippets) || mapped.reviewSnippets.length === 0) && mapped.placeId) {
+      const detailTarget = mergeGroundedPlaceCard(place, mapped);
+      const detailData = await fetchGooglePlaceDetails(detailTarget);
+      resolved = mergeGroundedPlaceCard(detailTarget, detailData);
+    }
+    console.log('🔎 PLACES TEXT SEARCH OK', textQuery, '| rating=', resolved.rating, '| reviews=', (resolved.reviewSnippets || []).length, '| photo=', resolved.photoUrl ? 'yes' : 'no', '| hours=', (resolved.openingHours || []).length);
+    return resolved;
   } catch {
     return {};
   }
@@ -3024,8 +3299,16 @@ async function enrichGroundedPlacesWithOfficialLinks(places: GroundedPlaceCard[]
     places.slice(0, 6).map(async (place) => {
       if (!place?.name && !place?.placeId) return place;
 
-      // Step 1: Enrich with Google Places API (reviews, opening hours, phone, website)
-      let enrichedPlace = mergeGroundedPlaceCard(place, await fetchGooglePlaceDetails(place));
+      // Step 1: Enrich with Google Places API (reviews, opening hours, phone, website, photos).
+      // If we already have a placeId, fetch Details directly. Otherwise (Google Search grounding
+      // path provides no placeId) resolve the place by name+area via Text Search in one call.
+      const locationBias = (typeof place.latitude === 'number' && typeof place.longitude === 'number')
+        ? { latitude: place.latitude, longitude: place.longitude }
+        : null;
+      const placesApiData = place.placeId
+        ? await fetchGooglePlaceDetails(place)
+        : await fetchGooglePlaceByText(place, locationBias);
+      let enrichedPlace = mergeGroundedPlaceCard(place, placesApiData);
 
       // Step 2: If we have a website URL, scrape its HTML for social profile links
       if (enrichedPlace.websiteUrl) {
@@ -4016,10 +4299,13 @@ serve(async (req) => {
           }
           
           if (userCity || userCountry || (userLat && userLng)) {
+            const locationQueryIsNearMe = /\b(near me|nearby|around me|closest|nearest)\b/i.test(message || '');
             const parts: string[] = [];
-            if (userCity && userCountry) parts.push(`City: ${userCity}, ${userCountry}`);
-            else if (userCity) parts.push(`City: ${userCity}`);
-            else if (userCountry) parts.push(`Country: ${userCountry}`);
+            if (!locationQueryIsNearMe) {
+              if (userCity && userCountry) parts.push(`City: ${userCity}, ${userCountry}`);
+              else if (userCity) parts.push(`City: ${userCity}`);
+              else if (userCountry) parts.push(`Country: ${userCountry}`);
+            }
             if (userLat && userLng) {
               parts.push(`Coordinates: ${userLat.toFixed(4)}┬░N, ${userLng.toFixed(4)}┬░E`);
             }
@@ -4034,7 +4320,7 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
    - "Near you right nowΓÇª"
    - (Arabic) "╪º╪│╪¬┘å╪º╪»╪º┘ï ╪Ñ┘ä┘ë ┘à┘ê┘é╪╣┘â ╪º┘ä╪¡╪º┘ä┘èΓÇª" / "╪¡╪│╪¿ ┘à┘ê┘é╪╣┘â ╪º┘ä╪ó┘åΓÇª"
 2. NEVER name the user's neighborhood, district, compound, tower, street, or sub-area as if you just knew it (examples of forbidden phrasing: "you are positioned in Fox Hills district", "since you're in Lusail Marina", "as you are at West Bay"). Even if web search results contain a neighborhood name, DO NOT attribute it to the user.
-3. You MAY name the broad city or country in a neutral way (e.g. "here in <City>") ONLY after opener rule #1, and only if the city is present in LOCATION CONTEXT above. Do not invent one.
+3. If the user did not explicitly name a city or country in the request, DO NOT inject one into the visible answer even if it exists in LOCATION CONTEXT above.
 4. If the user's exact area is uncertain, say "near you right now" or "closest to you right now" ΓÇö never guess a neighborhood and never say "near your current coordinates".
 5. Keep all recommendations tightly scoped to this location. Do not list places from unrelated cities or countries.
 6. These rules override any tone/style preferences when they conflict.`;
@@ -4234,15 +4520,20 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
             // Always reverse-geocode from GPS to avoid Doha/profile anchoring.
             let userCity = '';
             let userCountry = '';
+            const explicitNearMeRequest = /\b(near me|nearby|around me|closest|nearest)\b/i.test(message || '');
             if (requestLocation?.latitude && requestLocation?.longitude) {
-              try {
-                const geocoded = await reverseGeocode(requestLocation.latitude, requestLocation.longitude);
-                userCity = (geocoded.city || '').toString().trim();
-                userCountry = (geocoded.country || '').toString().trim();
-              } catch {}
+              if (!explicitNearMeRequest) {
+                try {
+                  const geocoded = await reverseGeocode(requestLocation.latitude, requestLocation.longitude);
+                  userCity = (geocoded.city || '').toString().trim();
+                  userCountry = (geocoded.country || '').toString().trim();
+                } catch {}
+              }
             } else {
-              userCity = ((requestLocation?.city as string | undefined) || '').toString().trim();
-              userCountry = ((requestLocation?.country as string | undefined) || '').toString().trim();
+              if (!explicitNearMeRequest) {
+                userCity = ((requestLocation?.city as string | undefined) || '').toString().trim();
+                userCountry = ((requestLocation?.country as string | undefined) || '').toString().trim();
+              }
             }
 
             // Build location context string (GPS-only)
@@ -4711,7 +5002,12 @@ If you are running out of space, keep this order and drop the rest:
 
                 const allGroundedWebResults: Array<Record<string, unknown>> = allGroundingLinkResults;
 
-                for (const parsedPlace of parseGroundedPlacesFromText(fullResponseText)) {
+                const parsedPlacesFromText = parseGroundedPlacesFromText(fullResponseText);
+                const parsedPlaces = parsedPlacesFromText.length > 0
+                  ? parsedPlacesFromText
+                  : parseGroundedPlacesFromTextLoose(fullResponseText);
+
+                for (const parsedPlace of parsedPlaces) {
                   const parsedKey = normalizePlaceMatchKey(parsedPlace.name, parsedPlace.address);
                   const verifiedLinks = pickVerifiedBusinessLinks(parsedPlace.placeId ? (groundedWebResultsByPlaceId.get(parsedPlace.placeId) || allGroundedWebResults) : allGroundedWebResults, parsedPlace);
                   const mergedParsedPlace = mergeGroundedPlaceCard(parsedPlace, verifiedLinks);
@@ -4773,15 +5069,19 @@ If you are running out of space, keep this order and drop the rest:
 
                   return Array.from(byUrl.values()).slice(0, 12);
                 })();
+                const cleanMapSearchQuery = typeof message === 'string' ? message.trim() : '';
+                const isNearMeSearchQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanMapSearchQuery);
                 const metaPayload = {
                   metadata: {
                     geminiSearch: {
                       queries: gm.webSearchQueries || [],
+                      mapSearchQuery: cleanMapSearchQuery,
+                      isNearMeQuery: isNearMeSearchQuery,
                       sources: builtSources,
                       supports: gm.groundingSupports || [],
                       places: groundedPlaces,
                       googleMapsWidgetContextToken: gm.googleMapsWidgetContextToken || null,
-                      searchEntryPointHtml: gm.searchEntryPoint?.renderedContent || ''
+                      searchEntryPointHtml: isNearMeSearchQuery ? '' : (gm.searchEntryPoint?.renderedContent || '')
                     }
                   }
                 };

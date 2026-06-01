@@ -23,6 +23,12 @@ export function resolveGroundedBrowsingData(message: MessageLike | null | undefi
     if (!merged.googleMapsWidgetContextToken && typeof candidate.googleMapsWidgetContextToken === 'string' && candidate.googleMapsWidgetContextToken.trim()) {
       merged.googleMapsWidgetContextToken = candidate.googleMapsWidgetContextToken;
     }
+    if (!merged.mapSearchQuery && typeof candidate.mapSearchQuery === 'string' && candidate.mapSearchQuery.trim()) {
+      merged.mapSearchQuery = candidate.mapSearchQuery;
+    }
+    if (typeof merged.isNearMeQuery !== 'boolean' && typeof candidate.isNearMeQuery === 'boolean') {
+      merged.isNearMeQuery = candidate.isNearMeQuery;
+    }
     if (!merged.searchEntryPointHtml && typeof candidate.searchEntryPointHtml === 'string' && candidate.searchEntryPointHtml.trim()) {
       merged.searchEntryPointHtml = candidate.searchEntryPointHtml;
     }
@@ -408,57 +414,38 @@ function mergeGroundedPlaceData(existingPlace: any, parsedPlace: any) {
 }
 
 export function getGroundedPlaces(message: MessageLike | null | undefined): any[] {
+  // SINGLE SOURCE OF TRUTH: the backend (Google Search grounding + Google Places API) builds
+  // the place cards with reviews, photos, rating, phone, website, hours and socials. The
+  // frontend text parser is kept ONLY as a fallback for the rare case the backend returns
+  // no structured places at all. This removes the previous dual-parser conflict.
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
   const backendPlaces = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
-  const parsedPlaces = parsePlacesFromMessageContent(message?.content);
 
-  if (backendPlaces.length === 0 && parsedPlaces.length === 0) return [];
-  if (backendPlaces.length === 0) return parsedPlaces;
-  if (parsedPlaces.length === 0) return backendPlaces;
-
-  // Check if backendPlaces are mostly empty shells (no AI-generated fields)
-  const backendHasRichData = backendPlaces.some((p: any) =>
-    (p.reason && p.reason.trim()) || (p.vibe && p.vibe.trim()) || (p.mustTry && p.mustTry.trim())
-  );
-
-  if (!backendHasRichData) {
-    // Backend places are empty shells (just name + mapsUrl from Gemini grounding).
-    // Use parsedPlaces as the primary list — they have all the AI-generated rich data.
-    // Enrich each parsed place with backend data (mapsUrl, placeId, address, rating, reviewSnippets).
-    return parsedPlaces.map((parsedPlace: any) => {
-      const parsedKey = normalizePlaceKey(parsedPlace?.name);
-      const backendMatch = backendPlaces.find((bp: any) => {
-        const backendKey = normalizePlaceKey(bp?.name);
+  if (backendPlaces.length > 0) {
+    // Backend is authoritative. Only fill AI-written reason/vibe/mustTry from the text when
+    // the backend card lacks them (these are narrative fields the Places API does not provide).
+    const parsedPlaces = parsePlacesFromMessageContent(message?.content);
+    if (parsedPlaces.length === 0) return backendPlaces;
+    return backendPlaces.map((backendPlace: any) => {
+      const backendKey = normalizePlaceKey(backendPlace?.name);
+      const parsedMatch = parsedPlaces.find((pp: any) => {
+        const parsedKey = normalizePlaceKey(pp?.name);
         return Boolean(parsedKey && backendKey && (
-          parsedKey === backendKey ||
-          parsedKey.includes(backendKey) ||
-          backendKey.includes(parsedKey)
+          parsedKey === backendKey || parsedKey.includes(backendKey) || backendKey.includes(parsedKey)
         ));
       });
-      if (!backendMatch) return parsedPlace;
-      // Merge: parsedPlace fields win for AI content; backendMatch fills in maps/placeId/address/rating
-      return mergeGroundedPlaceData(backendMatch, parsedPlace);
+      if (!parsedMatch) return backendPlace;
+      return {
+        ...backendPlace,
+        reason: (backendPlace.reason && backendPlace.reason.trim()) ? backendPlace.reason : toCleanString(parsedMatch.reason),
+        vibe: (backendPlace.vibe && backendPlace.vibe.trim()) ? backendPlace.vibe : toCleanString(parsedMatch.vibe),
+        mustTry: (backendPlace.mustTry && backendPlace.mustTry.trim()) ? backendPlace.mustTry : toCleanString(parsedMatch.mustTry),
+      };
     });
   }
 
-  // Backend has rich data — use it as primary, fill gaps with parsedPlaces
-  const mergedPlaces = [...backendPlaces];
-  for (const parsedPlace of parsedPlaces) {
-    const parsedKey = normalizePlaceKey(parsedPlace?.name);
-    const matchIndex = mergedPlaces.findIndex((existingPlace: any) => {
-      const existingKey = normalizePlaceKey(existingPlace?.name);
-      return Boolean(parsedKey && existingKey && (parsedKey === existingKey || parsedKey.includes(existingKey) || existingKey.includes(parsedKey)));
-    });
-
-    if (matchIndex >= 0) {
-      mergedPlaces[matchIndex] = mergeGroundedPlaceData(mergedPlaces[matchIndex], parsedPlace);
-      continue;
-    }
-
-    mergedPlaces.push(parsedPlace);
-  }
-
-  return mergedPlaces;
+  // Fallback only: backend produced nothing — parse the written text.
+  return parsePlacesFromMessageContent(message?.content);
 }
 
 export function hasGroundedPlaces(message: MessageLike | null | undefined) {
@@ -538,6 +525,10 @@ function extractPlacesIntro(content?: string) {
 }
 
 function getGoogleMapsSearchUrl(resolvedBrowsingData: any, groundedPlaces: any[]) {
+  const rawMapSearchQuery = typeof resolvedBrowsingData?.mapSearchQuery === 'string' ? resolvedBrowsingData.mapSearchQuery.trim() : '';
+  if (rawMapSearchQuery) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(rawMapSearchQuery)}`;
+  }
   const queries = Array.isArray(resolvedBrowsingData?.queries) ? resolvedBrowsingData.queries : [];
   const query = queries.find((value: unknown) => typeof value === 'string' && value.trim()) as string | undefined;
   if (query && query.trim()) {
@@ -636,7 +627,8 @@ export function GroundedPlacesBlock({
 
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
   const groundedPlaces = getGroundedPlaces(message);
-  const searchEntryPointHtml = typeof resolvedBrowsingData?.searchEntryPointHtml === 'string'
+  const isNearMeQuery = typeof resolvedBrowsingData?.isNearMeQuery === 'boolean' ? resolvedBrowsingData.isNearMeQuery : false;
+  const searchEntryPointHtml = !isNearMeQuery && typeof resolvedBrowsingData?.searchEntryPointHtml === 'string'
     ? resolvedBrowsingData.searchEntryPointHtml.trim()
     : '';
   const googleMapsSearchUrl = getGoogleMapsSearchUrl(resolvedBrowsingData, groundedPlaces);
@@ -909,6 +901,19 @@ export function GroundedPlacesBlock({
                           </a>
                         </div>
                       )}
+                    </div>
+                  )}
+                  {/* Opening hours */}
+                  {Array.isArray(place.openingHours) && place.openingHours.length > 0 && (
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2 mb-3`}>
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'ساعات العمل' : 'Opening hours'}</div>
+                      <div className="space-y-0.5">
+                        {place.openingHours.map((line: string, hoursIndex: number) => (
+                          <div key={`${place.placeId || place.name || 'place'}-hours-${hoursIndex}`} className={`text-[12px] ${textVal} leading-snug`}>
+                            {toCleanString(line)}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
 import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialToken, checkTrialAccess } from "../_shared/trial-tracker.ts";
+import { inspectGenerationPrompt } from "../_shared/promptSafety.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -330,6 +331,14 @@ serve(async (req: Request) => {
       );
     }
 
+    const promptSafety = inspectGenerationPrompt(user_prompt, body?.language === "ar" ? "ar" : "en");
+    if (!promptSafety.allowed) {
+      return new Response(
+        JSON.stringify({ error: promptSafety.message, code: "UNSAFE_PROMPT_BLOCKED" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // ── Trial Token Check: i2i ──
     const trial = await checkTrialAccess(supabase, user_id, 'i2i', 2);
     if (!trial.allowed) {
@@ -367,7 +376,7 @@ serve(async (req: Request) => {
       }
     }
 
-    const finalPrompt = user_prompt;
+    const finalPrompt = promptSafety.normalizedPrompt;
     if (quality === "best_fast") {
       const stableUrl = await generateBestWithKie(finalPrompt, referenceUrls);
 
