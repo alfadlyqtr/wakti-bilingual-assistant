@@ -2,25 +2,27 @@ import React, { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
-import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { 
+  Activity,
+  BookOpen,
   Calendar,
   CalendarClock,
-  Mic,
-  AudioLines,
-  HeartPulse,
-  Sparkles,
-  ListTodo,
-  NotebookPen,
   ChevronLeft,
   ChevronRight,
-  Home,
-  LucideIcon,
-  Gamepad2,
-  Aperture,
+  CircleHelp,
   Code2,
-  FolderOpen
+  FolderOpen,
+  Gamepad2,
+  Home,
+  Mail,
+  MessageCircle,
+  Mic,
+  NotebookPen,
+  Aperture,
+  Settings,
+  Sparkles,
+  ListTodo
 } from "lucide-react";
 
 type IconComponent = React.ComponentType<{ 
@@ -29,13 +31,13 @@ type IconComponent = React.ComponentType<{
 }>;
 import { t } from "@/utils/translations";
 import { Logo3D } from "@/components/Logo3D";
-import { UnreadBadge } from "./UnreadBadge";
 import { useUnreadContext } from "@/contexts/UnreadContext";
 import { QuickActionsPanel } from "./wakti-ai-v2/QuickActionsPanel";
 
 interface NavItemProps {
   icon: IconComponent;
-  label: string;
+  labelEn: string;
+  labelAr: string;
   path: string;
   badge?: number;
 }
@@ -45,22 +47,26 @@ export function DesktopSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useTheme();
-  const { user } = useAuth();
-  const { maw3dEventCount, contactCount } = useUnreadContext();
+  const { maw3dEventCount } = useUnreadContext();
 
   const navItems: NavItemProps[] = [
-    { icon: Home, label: "dashboard", path: "/dashboard" },
-    { icon: Calendar, label: "calendar", path: "/calendar" },
-    { icon: NotebookPen as unknown as IconComponent, label: "journal", path: "/journal" },
-    { icon: CalendarClock, label: "events", path: "/maw3d", badge: maw3dEventCount },
-    { icon: ListTodo, label: "tasks", path: "/tr", badge: 0 },
-    { icon: Sparkles, label: "wakti_ai", path: "/wakti-ai" },
-    { icon: HeartPulse, label: "vitality", path: "/fitness" },
-    { icon: AudioLines as unknown as IconComponent, label: "tasjeel", path: "/tools/voice-studio?tab=tasjeel" },
-    { icon: FolderOpen as unknown as IconComponent, label: "my_warranty", path: "/my-warranty" },
-    { icon: Aperture as unknown as IconComponent, label: "music", path: "/music" },
-    { icon: Code2 as unknown as IconComponent, label: "projects", path: "/projects" },
-    { icon: Gamepad2 as unknown as IconComponent, label: "games", path: "/games" },
+    { icon: Home, labelEn: "Dashboard", labelAr: "لوحة التحكم", path: "/dashboard" },
+    { icon: Calendar, labelEn: "Calendar", labelAr: "التقويم", path: "/calendar" },
+    { icon: NotebookPen as unknown as IconComponent, labelEn: "Journal", labelAr: "اليومية", path: "/journal" },
+    { icon: CalendarClock, labelEn: "Maw3d", labelAr: "مواعيد", path: "/maw3d", badge: maw3dEventCount },
+    { icon: ListTodo, labelEn: "Tasks", labelAr: "المهام", path: "/tr", badge: 0 },
+    { icon: Sparkles, labelEn: "WAKTI AI", labelAr: "WAKTI AI", path: "/wakti-ai" },
+    { icon: Mail, labelEn: "Email", labelAr: "البريد", path: "/tools/email" },
+    { icon: MessageCircle, labelEn: "Social", labelAr: "سوشيال", path: "/social" },
+    { icon: Activity, labelEn: "Health", labelAr: "الصحة", path: "/fitness" },
+    { icon: FolderOpen as unknown as IconComponent, labelEn: "My Files", labelAr: "ملفاتي", path: "/my-warranty" },
+    { icon: BookOpen as unknown as IconComponent, labelEn: "Deen", labelAr: "دين", path: "/deen" },
+    { icon: Aperture as unknown as IconComponent, labelEn: "Studio", labelAr: "الاستوديو", path: "/music" },
+    { icon: Code2 as unknown as IconComponent, labelEn: "Code", labelAr: "البرمجة", path: "/projects" },
+    { icon: Mic, labelEn: "Voice", labelAr: "الصوت", path: "/tools/voice-studio?tab=tasjeel" },
+    { icon: Settings, labelEn: "Settings", labelAr: "الإعدادات", path: "/settings" },
+    { icon: CircleHelp, labelEn: "Help", labelAr: "المساعدة", path: "/help" },
+    { icon: Gamepad2 as unknown as IconComponent, labelEn: "Games", labelAr: "الألعاب", path: "/games" },
   ];
 
   const handleNavigation = (path: string) => {
@@ -219,7 +225,15 @@ export function DesktopSidebar() {
               const isActive = location.pathname === item.path || 
                 (item.path === '/maw3d' && location.pathname.startsWith('/maw3d')) || 
                 (item.path === '/tr' && location.pathname.startsWith('/tr')) ||
-                (item.path === '/games' && location.pathname.startsWith('/games'));
+                (item.path === '/games' && location.pathname.startsWith('/games')) ||
+                (item.path === '/social' && location.pathname.startsWith('/social')) ||
+                (item.path === '/tools/email' && location.pathname.startsWith('/tools/email')) ||
+                (item.path === '/music' && location.pathname.startsWith('/music')) ||
+                (item.path === '/projects' && location.pathname.startsWith('/projects')) ||
+                (item.path === '/deen' && location.pathname.startsWith('/deen')) ||
+                (item.path === '/help' && location.pathname.startsWith('/help')) ||
+                (item.path === '/settings' && location.pathname.startsWith('/settings')) ||
+                (item.path === '/tools/voice-studio?tab=tasjeel' && (location.pathname === '/tasjeel' || location.pathname.startsWith('/tools/voice-studio')));
               
               // Define color classes and glow effects matching mobile nav
               const getColorClass = (path: string) => {
@@ -229,9 +243,15 @@ export function DesktopSidebar() {
                   case '/maw3d': return 'nav-icon-maw3d text-purple-500';
                   case '/tr': return 'nav-icon-tr text-emerald-500';
                   case '/wakti-ai': return 'nav-icon-ai text-amber-500';
+                  case '/tools/email': return 'text-yellow-400';
+                  case '/social': return 'text-cyan-400';
+                  case '/fitness': return 'text-lime-400';
+                  case '/deen': return 'text-violet-400';
                   case '/music': return 'text-fuchsia-500';
+                  case '/settings': return 'text-sky-400';
+                  case '/help': return 'text-green-400';
                   case '/games': return 'text-indigo-500';
-                  case '/tasjeel': return 'text-cyan-500';
+                  case '/tools/voice-studio?tab=tasjeel': return 'text-cyan-500';
                   case '/my-warranty': return 'text-emerald-500';
                   case '/projects': return 'text-indigo-500';
                   default: return 'text-gray-500';
@@ -245,9 +265,15 @@ export function DesktopSidebar() {
                   case '/maw3d': return 'shadow-[0_0_15px_rgba(168,85,247,0.7)]';
                   case '/tr': return 'shadow-[0_0_15px_rgba(16,185,129,0.7)]';
                   case '/wakti-ai': return 'shadow-[0_0_15px_rgba(245,158,11,0.7)]';
+                  case '/tools/email': return 'shadow-[0_0_15px_rgba(250,204,21,0.7)]';
+                  case '/social': return 'shadow-[0_0_15px_rgba(34,211,238,0.7)]';
+                  case '/fitness': return 'shadow-[0_0_15px_rgba(163,230,53,0.7)]';
+                  case '/deen': return 'shadow-[0_0_15px_rgba(167,139,250,0.7)]';
                   case '/music': return 'shadow-[0_0_15px_rgba(217,70,239,0.7)]';
+                  case '/settings': return 'shadow-[0_0_15px_rgba(56,189,248,0.7)]';
+                  case '/help': return 'shadow-[0_0_15px_rgba(74,222,128,0.7)]';
                   case '/games': return 'shadow-[0_0_15px_rgba(99,102,241,0.7)]';
-                  case '/tasjeel': return 'shadow-[0_0_15px_rgba(6,182,212,0.7)]';
+                  case '/tools/voice-studio?tab=tasjeel': return 'shadow-[0_0_15px_rgba(6,182,212,0.7)]';
                   case '/my-warranty': return 'shadow-[0_0_15px_rgba(16,185,129,0.7)]';
                   case '/projects': return 'shadow-[0_0_15px_rgba(99,102,241,0.7)]';
                   default: return 'shadow-[0_0_15px_rgba(156,163,175,0.7)]';
@@ -261,9 +287,15 @@ export function DesktopSidebar() {
                   case '/maw3d': return 'border-purple-500/40';
                   case '/tr': return 'border-emerald-500/40';
                   case '/wakti-ai': return 'border-amber-500/40';
+                  case '/tools/email': return 'border-yellow-400/40';
+                  case '/social': return 'border-cyan-400/40';
+                  case '/fitness': return 'border-lime-400/40';
+                  case '/deen': return 'border-violet-400/40';
                   case '/music': return 'border-fuchsia-500/40';
+                  case '/settings': return 'border-sky-400/40';
+                  case '/help': return 'border-green-400/40';
                   case '/games': return 'border-indigo-500/40';
-                  case '/tasjeel': return 'border-cyan-500/40';
+                  case '/tools/voice-studio?tab=tasjeel': return 'border-cyan-500/40';
                   case '/my-warranty': return 'border-emerald-500/40';
                   case '/projects': return 'border-indigo-500/40';
                   default: return 'border-gray-400/30';
@@ -272,7 +304,7 @@ export function DesktopSidebar() {
               
               return (
                 <motion.button
-                  key={item.label}
+                  key={item.path}
                   className={`w-full ${isCollapsed ? 'h-12 px-1' : 'h-11 px-3'} justify-start rounded-xl group ${
                     isActive
                       ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowColor(item.path)} border ${getBorderClass(item.path)}`
@@ -309,14 +341,14 @@ export function DesktopSidebar() {
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: -10 }}
                           className={`text-sm font-medium transition-all duration-300 ${
-                            item.path === '/tasjeel' ? "text-cyan-500" : ""
+                            item.path === '/tools/voice-studio?tab=tasjeel' ? "text-cyan-500" : ""
                           } ${
                             isActive 
                               ? "text-foreground font-semibold" 
                               : "text-muted-foreground group-hover:text-foreground"
                           }`}
                         >
-                          {t(item.label as any, language)}
+                          {language === "ar" ? item.labelAr : item.labelEn}
                         </motion.span>
                       )}
                       {/* In collapsed mode, hide labels entirely (icon-only). */}
@@ -342,7 +374,7 @@ export function DesktopSidebar() {
               const getBorderClass = () => 'border-indigo-500/40';
               return (
                 <motion.button
-                  key={item.label}
+                  key={item.path}
                   className={`w-full ${isCollapsed ? 'h-14 px-1' : 'h-12 px-3'} justify-start rounded-xl group ${
                     isActive
                       ? `bg-white/10 dark:bg-white/5 shadow-lg backdrop-blur-sm ${getGlowColor()} border ${getBorderClass()}`
@@ -373,7 +405,7 @@ export function DesktopSidebar() {
                             isActive ? 'text-foreground font-semibold' : 'text-muted-foreground group-hover:text-foreground'
                           }`}
                         >
-                          {t(item.label as any, language)}
+                          {language === "ar" ? item.labelAr : item.labelEn}
                         </motion.span>
                       )}
                     </AnimatePresence>

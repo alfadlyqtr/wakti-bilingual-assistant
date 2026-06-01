@@ -629,6 +629,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                     attachments={selectedMessage.attachments}
                     resolveAttachmentContent={resolveSelectedAttachmentContent}
                     canReply={gmail.activeFolder !== 'SENT'}
+                    onStartReply={handleReply}
                     onUseAsReply={handleUseAiReply}
                     variant="floating"
                   />

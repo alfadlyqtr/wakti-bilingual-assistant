@@ -680,6 +680,7 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
                   attachments={selectedMessage.attachments}
                   resolveAttachmentContent={resolveSelectedAttachmentContent}
                   canReply={imap.activeFolder !== 'SENT'}
+                  onStartReply={handleReply}
                   onUseAsReply={handleUseAiReply}
                   variant="floating"
                 />

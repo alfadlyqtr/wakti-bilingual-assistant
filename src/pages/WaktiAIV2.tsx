@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { WaktiAIV2Service, AIMessage } from '@/services/WaktiAIV2Service';
 import { ConversationMetaUpdate, normalizeConversationTitle, SavedConversationsService } from '@/services/SavedConversationsService';
@@ -56,6 +57,7 @@ function stripTrailingActionJSON(text: string): string {
 
 const WaktiAIV2 = () => {
   const { user: authUser } = useAuth();
+  const location = useLocation();
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   // Initialize from localStorage cache — instant render of previous messages
@@ -104,6 +106,7 @@ const WaktiAIV2 = () => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const visionInFlightRef = useRef<boolean>(false);
   const lastTriggerRef = useRef<string>('chat');
+  const pendingHomescreenPayloadHandledRef = useRef<string | null>(null);
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveInFlightRef = useRef<boolean>(false);
   const saveDebounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -1056,31 +1059,66 @@ const WaktiAIV2 = () => {
     return () => window.removeEventListener('wakti-search-confirm', handler as EventListener);
   }, [handleSendMessage]);
 
-  // One-shot: handle messages/mode/plus-drawer injected from the homescreen chat bar
+  // Handle messages/mode/plus-drawer injected from the homescreen chat bar.
+  // Important: only consume once the page is actually ready, otherwise search handoff can disappear.
   useEffect(() => {
+    if (isLoading) return;
+    if (!(authUser?.id || userProfile?.id)) return;
+
     try {
-      const pending = localStorage.getItem('wakti_pending_message');
-      const pendingTrigger = localStorage.getItem('wakti_active_trigger');
+      const routeState = ((location.state || {}) as {
+        pendingMessage?: string;
+        pendingTrigger?: string;
+        pendingChatSubmode?: 'chat' | 'study';
+        pendingSearchSubmode?: 'web' | 'youtube';
+      });
+
+      const pending = (routeState.pendingMessage || localStorage.getItem('wakti_pending_message') || '').trim();
+      const pendingTrigger = routeState.pendingTrigger || localStorage.getItem('wakti_active_trigger') || 'chat';
+      const pendingSubmode = (routeState.pendingChatSubmode || localStorage.getItem('wakti_chat_submode') || null) as 'chat' | 'study' | null;
+      const pendingSearchSubmode = routeState.pendingSearchSubmode || localStorage.getItem('wakti_search_submode');
       const openPlus = localStorage.getItem('wakti_open_plus');
-      const pendingSubmode = localStorage.getItem('wakti_chat_submode') as 'chat' | 'study' | null;
-      if (pendingSubmode) { setChatSubmode(pendingSubmode); localStorage.removeItem('wakti_chat_submode'); }
+      const payloadKey = JSON.stringify({ pending, pendingTrigger, pendingSubmode, pendingSearchSubmode, openPlus });
+
+      if (pendingHomescreenPayloadHandledRef.current === payloadKey) return;
+
+      if (pendingSearchSubmode === 'youtube' || pendingSearchSubmode === 'web') {
+        localStorage.setItem('wakti_search_submode', pendingSearchSubmode);
+      }
+
+      if (pendingSubmode) {
+        setChatSubmode(pendingSubmode);
+        localStorage.removeItem('wakti_chat_submode');
+      }
+
       if (pending && pending.trim()) {
+        pendingHomescreenPayloadHandledRef.current = payloadKey;
         localStorage.removeItem('wakti_pending_message');
-        if (pendingTrigger) { setActiveTrigger(pendingTrigger); localStorage.removeItem('wakti_active_trigger'); }
-        setTimeout(() => { handleSendMessage(pending.trim(), pendingTrigger || 'chat', [], undefined, undefined, pendingSubmode || 'chat'); }, 600);
-      } else if (pendingTrigger) {
+        localStorage.removeItem('wakti_active_trigger');
+        setActiveTrigger(pendingTrigger);
+        window.setTimeout(() => {
+          handleSendMessage(pending, pendingTrigger, [], undefined, undefined, pendingSubmode || 'chat');
+        }, 150);
+      } else if (pendingTrigger && pendingTrigger !== 'chat') {
+        pendingHomescreenPayloadHandledRef.current = payloadKey;
         setActiveTrigger(pendingTrigger);
         localStorage.removeItem('wakti_active_trigger');
       }
-      if (openPlus === '1') { localStorage.removeItem('wakti_open_plus'); setTimeout(() => setIsSidebarOpen(true), 400); }
+
+      if (openPlus === '1') {
+        pendingHomescreenPayloadHandledRef.current = payloadKey;
+        localStorage.removeItem('wakti_open_plus');
+        setTimeout(() => setIsSidebarOpen(true), 400);
+      }
+
       // Re-dispatch files selected via homescreen PlusMenu
       const pendingVisionRaw = sessionStorage.getItem('wakti_pending_vision_files');
       if (pendingVisionRaw) {
+        pendingHomescreenPayloadHandledRef.current = payloadKey;
         sessionStorage.removeItem('wakti_pending_vision_files');
         try {
           const stored: { name: string; type: string; data: string }[] = JSON.parse(pendingVisionRaw);
           if (stored.length > 0) {
-            // Build a DataTransfer-like FileList substitute and dispatch wakti-file-selected
             const dt = new DataTransfer();
             for (const f of stored) {
               const byteStr = atob(f.data.split(',')[1] || '');
@@ -1095,8 +1133,7 @@ const WaktiAIV2 = () => {
         } catch { /* ignore */ }
       }
     } catch { /* ignore */ }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // intentionally empty — run once on mount only
+  }, [authUser?.id, userProfile?.id, isLoading, location.state, handleSendMessage]);
 
   const handleConfirmTask = (taskData: any) => { console.log('Task confirmed:', taskData); setShowTaskConfirmation(false); };
   const handleDeclineTask = () => { console.log('Task declined'); setShowTaskConfirmation(false); };

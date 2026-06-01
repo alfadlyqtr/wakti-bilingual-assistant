@@ -928,9 +928,16 @@ const MODES: { key: ModeKey; labelEn: string; labelAr: string; pill: string; Ico
   { key: "study",  labelEn: "Study",  labelAr: "دراسة", pill: "bg-purple-600", Icon: BookOpen },
 ];
 
+type WaktiAiNavigationState = {
+  pendingMessage?: string;
+  pendingTrigger?: "chat" | "search";
+  pendingChatSubmode?: "chat" | "study";
+  pendingSearchSubmode?: "web" | "youtube";
+};
+
 function HomescreenChatBar({
   language, isDark, cardShell, navigate, triggerOpenModePicker,
-}: { language: "en" | "ar"; isDark: boolean; cardShell: string; navigate: (p: string) => void; triggerOpenModePicker?: number }) {
+}: { language: "en" | "ar"; isDark: boolean; cardShell: string; navigate: (p: string, options?: { state?: WaktiAiNavigationState }) => void; triggerOpenModePicker?: number }) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<ModeKey>(() => {
     try {
@@ -972,15 +979,23 @@ function HomescreenChatBar({
 
   const sendMessage = () => {
     const msg = text.trim();
+    const finalMsg = (mode === "search" && searchSubmode === "youtube" && msg) ? `yt: ${msg}` : msg;
+    const pendingTrigger = mode === "study" ? "chat" : mode;
+    const pendingChatSubmode = mode === "study" ? "study" : "chat";
     try {
-      // YouTube search: prefix with "yt: " exactly like the real WAKTI AI chat
-      const finalMsg = (mode === "search" && searchSubmode === "youtube" && msg) ? `yt: ${msg}` : msg;
       if (finalMsg) localStorage.setItem("wakti_pending_message", finalMsg);
-      localStorage.setItem("wakti_active_trigger", mode === "study" ? "chat" : mode);
+      localStorage.setItem("wakti_active_trigger", pendingTrigger);
       if (mode === "study") localStorage.setItem("wakti_chat_submode", "study");
       localStorage.setItem("wakti_search_submode", searchSubmode);
     } catch { /* ignore */ }
-    navigate("/wakti-ai");
+    navigate("/wakti-ai", {
+      state: {
+        pendingMessage: finalMsg,
+        pendingTrigger,
+        pendingChatSubmode,
+        pendingSearchSubmode: searchSubmode,
+      }
+    });
   };
 
   // Listen for files selected via PlusMenu, store as base64 in sessionStorage, then navigate to WAKTI AI in vision mode
@@ -1408,7 +1423,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             <Carousel opts={{ align: "start", dragFree: true, direction: "ltr" }} className="w-full" dir="ltr">
               <CarouselContent className="sm:-ml-2">
                 {visibleModernWidgetOrder.map((key) => (
-                  <CarouselItem key={key} className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-[70%]">
+                  <CarouselItem key={key} className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-full">
                     <div style={{ height: `${widgetCardHeight}px` }}>
                       {modernWidgetCards[key]}
                     </div>

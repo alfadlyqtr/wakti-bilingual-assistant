@@ -27,6 +27,7 @@ interface EmailAiAssistantProps {
   resolveAttachmentContent?: (attachment: EmailMessageAttachment) => Promise<EmailMessageAttachmentContent | null>;
   canReply?: boolean;
   onUseAsReply?: (text: string) => void;
+  onStartReply?: () => void;
   variant?: 'panel' | 'floating';
 }
 
@@ -339,6 +340,7 @@ export function EmailAiAssistant({
   resolveAttachmentContent,
   canReply = false,
   onUseAsReply,
+  onStartReply,
   variant = 'panel',
 }: EmailAiAssistantProps) {
   const navigate = useNavigate();
@@ -581,8 +583,14 @@ export function EmailAiAssistant({
   }, [lang, labels.pdfSummaryNeedsAttachment, labels.pdfSummaryUnavailable, length, message, mode, note, pdfAttachments, resolveAttachmentContent, runAction, tone]);
 
   const handleStartReplyFlow = useCallback(() => {
+    if (onStartReply) {
+      setReplySetupOpen(false);
+      setOpen(false);
+      onStartReply();
+      return;
+    }
     setReplySetupOpen(true);
-  }, []);
+  }, [onStartReply]);
 
   const handleCopy = useCallback(async () => {
     if (!result?.text) return;

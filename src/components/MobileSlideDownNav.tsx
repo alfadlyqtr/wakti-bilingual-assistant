@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { cn } from "@/lib/utils";
-import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, NotebookPen, Music, Aperture, AudioLines, Shield, Code2, FolderOpen, Gift } from "lucide-react";
+import { Calendar, CalendarClock, Mic, Sparkles, ListTodo, LayoutDashboard, PenTool, Gamepad2, NotebookPen, Music, Aperture, Shield, Code2, FolderOpen, Gift, Mail, MessageCircle, Settings, HelpCircle, BookOpen } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { useUnreadContext } from "@/contexts/UnreadContext";
 import { waktiBadges } from "@/services/waktiBadges";
@@ -86,7 +86,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       badgeType: 'event',
     },
     {
-      name: language === 'ar' ? 'المذكرات' : 'Journal',
+      name: language === 'ar' ? 'اليومية' : 'Journal',
       path: '/journal',
       icon: 'notebook-pen',
       colorClass: 'text-pink-500',
@@ -99,7 +99,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       badgeType: 'event',
     },
     {
-      name: language === 'ar' ? 'م & ت' : 'T & R',
+      name: language === 'ar' ? 'المهام' : 'Tasks',
       path: '/tr',
       icon: 'list-todo', 
       colorClass: 'nav-icon-tr',
@@ -118,16 +118,10 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'text-fuchsia-500',
     },
     {
-      name: language === 'ar' ? 'الحيوية' : 'Vitality',
+      name: language === 'ar' ? 'الصحة' : 'Health',
       path: '/fitness',
       icon: 'wakti',
       colorClass: 'text-rose-500',
-    },
-    {
-      name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
-      path: '/tools/voice-studio?tab=tasjeel', 
-      icon: 'audio-lines',
-      colorClass: 'text-cyan-500',
     },
     {
       name: t('my_warranty', language),
@@ -136,16 +130,40 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'text-emerald-500',
     },
     {
-      name: language === 'ar' ? 'مشاريع' : 'Projects',
+      name: language === 'ar' ? 'البريد' : 'Email',
+      path: '/tools/email',
+      icon: 'mail',
+      colorClass: 'text-yellow-500',
+    },
+    {
+      name: language === 'ar' ? 'سوشيال' : 'Social',
+      path: '/social',
+      icon: 'message-circle',
+      colorClass: 'text-cyan-500',
+    },
+    {
+      name: language === 'ar' ? 'دين' : 'Deen',
+      path: '/deen',
+      icon: 'book-open',
+      colorClass: 'text-indigo-400',
+    },
+    {
+      name: language === 'ar' ? 'البرمجة' : 'Code',
       path: '/projects',
       icon: 'code2',
       colorClass: 'text-indigo-500',
     },
     {
-      name: language === 'ar' ? 'رغباتي' : 'Wishlists',
-      path: '/wishlists',
-      icon: 'gift',
-      colorClass: 'text-pink-400',
+      name: language === 'ar' ? 'الإعدادات' : 'Settings',
+      path: '/settings',
+      icon: 'settings',
+      colorClass: 'text-blue-400',
+    },
+    {
+      name: language === 'ar' ? 'المساعدة' : 'Help',
+      path: '/help',
+      icon: 'help-circle',
+      colorClass: 'text-green-400',
     }
   ];
 
@@ -164,7 +182,7 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
       colorClass: 'text-pink-500',
     },
     {
-      name: language === 'ar' ? 'لعبة' : 'Game',
+      name: language === 'ar' ? 'الألعاب' : 'Games',
       path: '/tools/game',
       icon: 'gamepad',
       colorClass: 'text-red-500',
@@ -184,11 +202,14 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
     'notebook-pen': NotebookPen,
     music: Music,
     aperture: Aperture,
-    'audio-lines': AudioLines,
     'shield': Shield,
     'folder-open': FolderOpen,
     'code2': Code2,
-    'gift': Gift,
+    'mail': Mail,
+    'message-circle': MessageCircle,
+    'settings': Settings,
+    'help-circle': HelpCircle,
+    'book-open': BookOpen,
   };
 
   const handleNavigation = (path: string, badgeType?: string) => {
@@ -303,7 +324,13 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
               const IconComponent = iconMap[item.icon] || Calendar;
               const isActive = pathname === item.path || 
                 (item.path === '/maw3d' && pathname.startsWith('/maw3d')) || 
-                (item.path === '/tr' && pathname.startsWith('/tr'));
+                (item.path === '/tr' && pathname.startsWith('/tr')) ||
+                (item.path === '/tools/email' && pathname.startsWith('/tools/email')) ||
+                (item.path === '/social' && pathname.startsWith('/social')) ||
+                (item.path === '/deen' && pathname.startsWith('/deen')) ||
+                (item.path === '/settings' && pathname.startsWith('/settings')) ||
+                (item.path === '/help' && pathname.startsWith('/help')) ||
+                (item.path === '/projects' && pathname.startsWith('/projects'));
               
               return (
                 <button
@@ -324,12 +351,15 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                     isActive && item.path === '/tr' && "from-green-500/20 to-green-600/20 shadow-green-500/40 border border-green-500/30",
                     isActive && item.path === '/wakti-ai' && "from-orange-500/20 to-orange-600/20 shadow-orange-500/40 border border-orange-500/30",
                     isActive && item.path === '/journal' && "from-pink-500/20 to-pink-600/20 shadow-pink-500/40 border border-pink-500/30",
-                    isActive && item.path === '/tasjeel' && "from-cyan-500/20 to-cyan-600/20 shadow-cyan-500/40 border border-cyan-500/30",
                     isActive && item.path === '/my-warranty' && "from-emerald-500/20 to-emerald-600/20 shadow-emerald-500/40 border border-emerald-500/30",
                     isActive && item.path === '/music' && "from-fuchsia-500/20 to-fuchsia-600/20 shadow-fuchsia-500/40 border border-fuchsia-500/30",
                     isActive && item.path === '/fitness' && "from-rose-500/20 to-rose-600/20 shadow-rose-500/40 border border-rose-500/30",
                     isActive && item.path === '/projects' && "from-indigo-500/20 to-indigo-600/20 shadow-indigo-500/40 border border-indigo-500/30",
-                    isActive && item.path === '/wishlists' && "from-pink-400/20 to-pink-500/20 shadow-pink-400/40 border border-pink-400/30",
+                    isActive && item.path === '/tools/email' && "from-yellow-500/20 to-yellow-600/20 shadow-yellow-500/40 border border-yellow-500/30",
+                    isActive && item.path === '/social' && "from-cyan-500/20 to-cyan-600/20 shadow-cyan-500/40 border border-cyan-500/30",
+                    isActive && item.path === '/deen' && "from-indigo-400/20 to-indigo-500/20 shadow-indigo-400/40 border border-indigo-400/30",
+                    isActive && item.path === '/settings' && "from-blue-400/20 to-blue-500/20 shadow-blue-400/40 border border-blue-400/30",
+                    isActive && item.path === '/help' && "from-green-400/20 to-green-500/20 shadow-green-400/40 border border-green-400/30",
                     // Initial off-screen state until icons stage
                     animationStage === 'icons' ? "opacity-100 translate-y-0 scale-100" : "opacity-0 translate-y-3 scale-[0.98]"
                   )}
@@ -360,11 +390,15 @@ export function MobileSlideDownNav({ isOpen, onClose, logoPosition }: MobileSlid
                             item.path === '/tr' ? 'hsl(var(--accent-green))' :
                             item.path === '/wakti-ai' ? 'hsl(var(--accent-orange))' :
                             item.path === '/music' ? '#d946ef' :
-                            item.path === '/tasjeel' ? '#06b6d4' :
                             item.path === '/fitness' ? '#f43f5e' :
                             item.path === '/journal' ? '#ec4899' :
                             item.path === '/my-warranty' ? '#10b981' :
-                            item.path === '/projects' ? '#6366f1' : '#3b82f6',
+                            item.path === '/projects' ? '#6366f1' :
+                            item.path === '/tools/email' ? '#fbbf24' :
+                            item.path === '/social' ? '#22d3ee' :
+                            item.path === '/deen' ? '#818cf8' :
+                            item.path === '/settings' ? '#60a5fa' :
+                            item.path === '/help' ? '#4ade80' : '#3b82f6',
                         }}
                       />
                     )}

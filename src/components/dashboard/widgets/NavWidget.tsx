@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { 
   Calendar, 
   CalendarClock, 
+  Mail,
+  MessageCircle,
   Mic, 
   Sparkles, 
   ListTodo, 
@@ -12,11 +14,12 @@ import {
   PenTool, 
   Gamepad2, 
   NotebookPen, 
-  Music, 
   Aperture,
-  AudioLines, 
   FolderOpen, 
-  Code2
+  Code2,
+  Settings,
+  HelpCircle,
+  BookOpen
 } from "lucide-react";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { t } from "@/utils/translations";
@@ -49,7 +52,7 @@ export function NavWidget({ language: propLanguage }: NavWidgetProps) {
       glowColor: '#38bdf8',
     },
     {
-      name: language === 'ar' ? 'المذكرات' : 'Journal',
+      name: language === 'ar' ? 'اليومية' : 'Journal',
       path: '/journal',
       icon: NotebookPen,
       colorClass: 'text-pink-500',
@@ -63,7 +66,7 @@ export function NavWidget({ language: propLanguage }: NavWidgetProps) {
       glowColor: '#a855f7',
     },
     {
-      name: language === 'ar' ? 'م & ت' : 'T & R',
+      name: language === 'ar' ? 'المهام' : 'Tasks',
       path: '/tr',
       icon: ListTodo,
       colorClass: 'text-green-500',
@@ -84,18 +87,11 @@ export function NavWidget({ language: propLanguage }: NavWidgetProps) {
       glowColor: '#d946ef',
     },
     {
-      name: language === 'ar' ? 'الحيوية' : 'Vitality',
+      name: language === 'ar' ? 'الصحة' : 'Health',
       path: '/fitness',
       icon: WaktiIcon,
       colorClass: 'text-rose-500',
       glowColor: '#f43f5e',
-    },
-    {
-      name: language === 'ar' ? 'تسجيل' : 'Tasjeel',
-      path: '/tools/voice-studio?tab=tasjeel',
-      icon: AudioLines,
-      colorClass: 'text-cyan-500',
-      glowColor: '#06b6d4',
     },
     {
       name: t('my_warranty', language),
@@ -105,7 +101,28 @@ export function NavWidget({ language: propLanguage }: NavWidgetProps) {
       glowColor: '#10b981',
     },
     {
-      name: language === 'ar' ? 'مشاريع' : 'Projects',
+      name: language === 'ar' ? 'البريد' : 'Email',
+      path: '/tools/email',
+      icon: Mail,
+      colorClass: 'text-yellow-500',
+      glowColor: '#fbbf24',
+    },
+    {
+      name: language === 'ar' ? 'سوشيال' : 'Social',
+      path: '/social',
+      icon: MessageCircle,
+      colorClass: 'text-cyan-500',
+      glowColor: '#22d3ee',
+    },
+    {
+      name: language === 'ar' ? 'دين' : 'Deen',
+      path: '/deen',
+      icon: BookOpen,
+      colorClass: 'text-indigo-400',
+      glowColor: '#818cf8',
+    },
+    {
+      name: language === 'ar' ? 'البرمجة' : 'Code',
       path: '/projects',
       icon: Code2,
       colorClass: 'text-indigo-500',
@@ -126,11 +143,25 @@ export function NavWidget({ language: propLanguage }: NavWidgetProps) {
       glowColor: '#f472b6',
     },
     {
-      name: language === 'ar' ? 'لعبة' : 'Game',
+      name: language === 'ar' ? 'الألعاب' : 'Games',
       path: '/tools/game',
       icon: Gamepad2,
       colorClass: 'text-red-500',
       glowColor: '#ef4444',
+    },
+    {
+      name: language === 'ar' ? 'الإعدادات' : 'Settings',
+      path: '/settings',
+      icon: Settings,
+      colorClass: 'text-blue-400',
+      glowColor: '#60a5fa',
+    },
+    {
+      name: language === 'ar' ? 'المساعدة' : 'Help',
+      path: '/help',
+      icon: HelpCircle,
+      colorClass: 'text-green-400',
+      glowColor: '#4ade80',
     },
   ];
 
@@ -187,7 +218,14 @@ export function NavWidget({ language: propLanguage }: NavWidgetProps) {
           const isActive = pathname === item.path || 
             (item.path === '/maw3d' && pathname.startsWith('/maw3d')) || 
             (item.path === '/tr' && pathname.startsWith('/tr')) ||
-            (item.path === '/dashboard' && pathname === '/dashboard');
+            (item.path === '/dashboard' && pathname === '/dashboard') ||
+            (item.path === '/tools/email' && pathname.startsWith('/tools/email')) ||
+            (item.path === '/social' && pathname.startsWith('/social')) ||
+            (item.path === '/deen' && pathname.startsWith('/deen')) ||
+            (item.path === '/settings' && pathname.startsWith('/settings')) ||
+            (item.path === '/help' && pathname.startsWith('/help')) ||
+            (item.path === '/projects' && pathname.startsWith('/projects')) ||
+            (item.path === '/tools/voice-studio' && pathname.startsWith('/tools/voice-studio'));
 
           return (
             <button
