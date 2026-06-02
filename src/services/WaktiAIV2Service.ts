@@ -422,7 +422,7 @@ class WaktiAIV2ServiceClass {
     // If forceFresh, request fresh location with skipCache
     let hasDeviceGPS = false;
     try {
-      const nativeLoc = await getNativeLocation({ skipCache: forceFresh, timeoutMs: forceFresh ? 3500 : 1800 });
+      const nativeLoc = await getNativeLocation({ skipCache: forceFresh, timeoutMs: forceFresh ? 8000 : 2500 });
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
         hasDeviceGPS = true;
         resolved = {
@@ -1499,6 +1499,7 @@ class WaktiAIV2ServiceClass {
             next.browsingUsed = true;
             next.browsingData = {
               provider: 'gemini-search',
+              searchType: typeof geminiSearch.searchType === 'string' ? geminiSearch.searchType : undefined,
               queries: Array.isArray(geminiSearch.queries) ? geminiSearch.queries : [],
               mapSearchQuery: typeof geminiSearch.mapSearchQuery === 'string' ? geminiSearch.mapSearchQuery : undefined,
               isNearMeQuery: typeof geminiSearch.isNearMeQuery === 'boolean' ? geminiSearch.isNearMeQuery : undefined,

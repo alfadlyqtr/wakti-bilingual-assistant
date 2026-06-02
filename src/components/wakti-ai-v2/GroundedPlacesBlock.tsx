@@ -20,6 +20,9 @@ export function resolveGroundedBrowsingData(message: MessageLike | null | undefi
 
   for (const candidate of candidates) {
     if (!merged.provider && typeof candidate.provider === 'string') merged.provider = candidate.provider;
+    if (!merged.searchType && typeof candidate.searchType === 'string' && candidate.searchType.trim()) {
+      merged.searchType = candidate.searchType;
+    }
     if (!merged.googleMapsWidgetContextToken && typeof candidate.googleMapsWidgetContextToken === 'string' && candidate.googleMapsWidgetContextToken.trim()) {
       merged.googleMapsWidgetContextToken = candidate.googleMapsWidgetContextToken;
     }
@@ -449,6 +452,8 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
 
 export function hasGroundedPlaces(message: MessageLike | null | undefined) {
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
+  const searchType = typeof resolvedBrowsingData?.searchType === 'string' ? resolvedBrowsingData.searchType.trim().toLowerCase() : '';
+  if (searchType === 'business') return true;
   const places = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
   if (places.length === 0) return false;
   return places.some((p: any) => Boolean(

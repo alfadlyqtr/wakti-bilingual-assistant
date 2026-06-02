@@ -24,6 +24,7 @@ import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { GroundedPlacesBlock, hasGroundedPlaces, resolveGroundedBrowsingData } from './GroundedPlacesBlock';
+import { SearchCardsBlock } from './SearchCardsBlock';
 
 type SearchSource = { url: string; title: string };
 
@@ -186,6 +187,7 @@ function SearchMessageCard({
   const resolvedBrowsingData = resolveGroundedBrowsingData(message as any);
   const sources: SearchSource[] = Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : [];
   const hasGroundedPlaceCards = hasGroundedPlaces(message as any);
+  const isPlaceSearch = typeof resolvedBrowsingData?.searchType === 'string' && resolvedBrowsingData.searchType.trim().toLowerCase() === 'business';
   const rawContent = message.content || '';
   // Strip reminder blocks before displaying
   const cleanedContent = stripReminderBlocks(rawContent);
@@ -208,10 +210,21 @@ function SearchMessageCard({
     : cleanedContent;
 
   const content = repairMarkdownTables(textToShow);
+  const introOnly = (() => {
+    const paragraphs = cleanedContent
+      .split(/\n\s*\n/)
+      .map((part) => part.replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    return paragraphs[0] || '';
+  })();
 
   return (
     <div className="w-full space-y-4">
-      {content.trim() && (
+      {!hasGroundedPlaceCards && !isPlaceSearch && (
+        <SearchCardsBlock message={message as any} language={language} introText={introOnly} />
+      )}
+
+      {(hasGroundedPlaceCards || isPlaceSearch) && content.trim() && (
         <div 
           className="search-result-content prose prose-sm sm:prose-base max-w-none dark:prose-invert" 
           dir="auto"
@@ -291,11 +304,11 @@ function SearchMessageCard({
         </div>
       )}
  
-      {hasGroundedPlaceCards && (
+      {(hasGroundedPlaceCards || isPlaceSearch) && (
         <GroundedPlacesBlock message={message as any} language={language} />
       )}
 
-      {sources.length > 0 && (
+      {(hasGroundedPlaceCards || isPlaceSearch) && sources.length > 0 && (
         <details className="rounded-xl border border-border/40 bg-muted/10 dark:bg-white/5 p-3">
           <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
             {language === 'ar' ? `المصادر (${sources.length})` : `Sources (${sources.length})`}

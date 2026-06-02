@@ -1646,7 +1646,7 @@ async function streamGemini3WithSearch(
   onToken: (token: string) => void,
   onGroundingMetadata: (meta: Gemini3SearchResult['groundingMetadata']) => void,
   userLocation?: { latitude: number; longitude: number; city?: string; country?: string } | null,
-  searchIntent: 'business' | 'news' | 'url' | 'general' = 'general',
+  searchIntent: 'business' | 'news' | 'sports' | 'url' | 'general' = 'general',
   model: string = 'gemini-3.1-pro-preview'
 ): Promise<string> {
   const key = getGeminiApiKey();
@@ -4044,12 +4044,13 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult
 }
 
 // Detect search intent from user query
-function detectSearchIntent(query: string): 'business' | 'news' | 'url' | 'general' {
+function detectSearchIntent(query: string): 'business' | 'news' | 'sports' | 'url' | 'general' {
   const lower = query.toLowerCase();
   const hasBusinessKeyword = /\b(near me|nearby|closest|nearest|location|address|phone|email|hours|open|closed|directions|map|restaurant|restaurants|cafe|cafes|coffee|breakfast|brunch|lunch|dinner|burger|pizza|shawarma|bakery|dessert|shop|store|mall|hotel|hospital|gym|bank|pharmacy|pharmacies|salon|spa|barber|clinic|supermarket|grocery)\b/i.test(lower);
   const hasBusinessDiscoveryPhrase = /\b(best|top|recommend|recommended|suggest|suggested|find|looking for|where is|where can i|where do i|get me|show me|authentic|good|great)\b/i.test(lower);
   const hasArabicBusinessKeyword = /\u0642\u0631\u064a\u0628|\u0628\u0627\u0644\u0642\u0631\u0628|\u0627\u0644\u0623\u0642\u0631\u0628|\u0627\u0642\u0631\u0628|\u0645\u0648\u0642\u0639|\u0639\u0646\u0648\u0627\u0646|\u0647\u0627\u062a\u0641|\u0631\u0642\u0645|\u0633\u0627\u0639\u0627\u062a|\u0645\u0641\u062a\u0648\u062d|\u0645\u063a\u0644\u0642|\u0627\u062a\u062c\u0627\u0647\u0627\u062a|\u062e\u0631\u064a\u0637\u0629|\u0645\u0637\u0639\u0645|\u0645\u0637\u0627\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0648\u0641\u064a|\u0641\u0637\u0648\u0631|\u0625\u0641\u0637\u0627\u0631|\u063a\u062f\u0627\u0621|\u0639\u0634\u0627\u0621|\u0645\u062d\u0644|\u0645\u062a\u062c\u0631|\u0645\u0648\u0644|\u0641\u0646\u062f\u0642|\u0645\u0633\u062a\u0634\u0641\u0649|\u0635\u064a\u062f\u0644\u064a\u0629|\u0628\u0646\u0643|\u0635\u0627\u0644\u0648\u0646|\u0633\u0628\u0627|\u062d\u0644\u0627\u0642|\u0639\u064a\u0627\u062f\u0629|\u0633\u0648\u0628\u0631\u0645\u0627\u0631\u0643\u062a/.test(query);
   const hasArabicDiscoveryPhrase = /\u0623\u0641\u0636\u0644|\u0627\u062d\u0633\u0646|\u0631\u0634\u062d|\u0627\u0642\u062a\u0631\u062d|\u0648\u064a\u0646|\u0623\u064a\u0646|\u0623\u0628\u063a\u0649|\u0627\u0628\u064a|\u0623\u0631\u064a\u062f|\u0627\u062f\u0648\u0631|\u0623\u062f\u0648\u0631|\u062f\u0644\u0646\u064a|\u062f\u0644\u0651\u0646\u064a|\u0644\u0642\u0650|\u0644\u0642\u064a\u062a/.test(query);
+  const hasSportsKeyword = /\b(score|scores|match|matches|fixture|fixtures|standings|table|league|cup|goal|goals|assist|assists|playoff|playoffs|nba|nfl|mlb|nhl|fifa|uefa|champions league|premier league|la liga|serie a|bundesliga|tennis|formula 1|f1|cricket|world cup|vs\.?|result|results)\b/i.test(lower);
   
   if (/https?:\/\//.test(query) || /www\./i.test(query)) return 'url';
   if (hasBusinessKeyword) return 'business';
@@ -4057,8 +4058,8 @@ function detectSearchIntent(query: string): 'business' | 'news' | 'url' | 'gener
   if (/\b(where is|how to get to|find|search for)\b/i.test(lower) && /\b(place|business|store|restaurant|cafe|hotel)\b/i.test(lower)) return 'business';
   if (hasArabicBusinessKeyword) return 'business';
   if (hasArabicBusinessKeyword && hasArabicDiscoveryPhrase) return 'business';
+  if (hasSportsKeyword) return 'sports';
   if (/\b(news|latest|breaking|update|today|yesterday|recent|current events|what happened|headlines)\b/i.test(lower)) return 'news';
-  if (/\b(research|study|paper|article|learn about|explain|what is|who is|history of)\b/i.test(lower)) return 'news';
   
   return 'general';
 }
@@ -4922,6 +4923,7 @@ If you are running out of space, keep this order and drop the rest:
 
             // Stream tokens to client
             const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3.1-flash-lite';
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: { searchType: searchIntent, queries: message.trim() ? [message.trim()] : [] } } })}\n\n`));
 
             await streamGemini3WithSearch(
               message,
@@ -5169,6 +5171,7 @@ If you are running out of space, keep this order and drop the rest:
                 const metaPayload = {
                   metadata: {
                     geminiSearch: {
+                      searchType: searchIntent,
                       queries: Array.isArray(gm.webSearchQueries) && gm.webSearchQueries.length > 0 ? gm.webSearchQueries : (cleanMapSearchQuery ? [cleanMapSearchQuery] : []),
                       mapSearchQuery: cleanMapSearchQuery,
                       isNearMeQuery: isNearMeSearchQuery,
@@ -5237,6 +5240,7 @@ If you are running out of space, keep this order and drop the rest:
                   const fallbackPayload = {
                     metadata: {
                       geminiSearch: {
+                        searchType: searchIntent,
                         queries: cleanFallbackQuery ? [cleanFallbackQuery] : [],
                         mapSearchQuery: cleanFallbackQuery,
                         isNearMeQuery: isNearMeFallbackQuery,
