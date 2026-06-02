@@ -922,7 +922,41 @@ const WaktiAIV2 = () => {
         };
         
         const cleanedStreamed = stripTrailingActionJSON(streamed);
-        const resolvedBrowsingData = streamMeta?.browsingData || streamMeta?.geminiSearch || undefined;
+        const returnedBrowsingData = (streamedResp as any)?.browsingData && typeof (streamedResp as any).browsingData === 'object'
+          ? (streamedResp as any).browsingData
+          : undefined;
+        const callbackBrowsingData = streamMeta?.browsingData && typeof streamMeta.browsingData === 'object'
+          ? streamMeta.browsingData
+          : (streamMeta?.geminiSearch && typeof streamMeta.geminiSearch === 'object' ? streamMeta.geminiSearch : undefined);
+        const mergedPlaces = [
+          ...(Array.isArray(callbackBrowsingData?.places) ? callbackBrowsingData.places : []),
+          ...(Array.isArray(returnedBrowsingData?.places) ? returnedBrowsingData.places : []),
+        ];
+        const resolvedBrowsingData = (callbackBrowsingData || returnedBrowsingData)
+          ? {
+              ...(returnedBrowsingData || {}),
+              ...(callbackBrowsingData || {}),
+              queries: Array.from(new Set([
+                ...(Array.isArray(returnedBrowsingData?.queries) ? returnedBrowsingData.queries : []),
+                ...(Array.isArray(callbackBrowsingData?.queries) ? callbackBrowsingData.queries : []),
+              ].map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))),
+              sources: [
+                ...(Array.isArray(returnedBrowsingData?.sources) ? returnedBrowsingData.sources : []),
+                ...(Array.isArray(callbackBrowsingData?.sources) ? callbackBrowsingData.sources : []),
+              ],
+              supports: [
+                ...(Array.isArray(returnedBrowsingData?.supports) ? returnedBrowsingData.supports : []),
+                ...(Array.isArray(callbackBrowsingData?.supports) ? callbackBrowsingData.supports : []),
+              ],
+              places: mergedPlaces,
+              mapSearchQuery: typeof callbackBrowsingData?.mapSearchQuery === 'string'
+                ? callbackBrowsingData.mapSearchQuery
+                : (typeof returnedBrowsingData?.mapSearchQuery === 'string' ? returnedBrowsingData.mapSearchQuery : undefined),
+              isNearMeQuery: typeof callbackBrowsingData?.isNearMeQuery === 'boolean'
+                ? callbackBrowsingData.isNearMeQuery
+                : (typeof returnedBrowsingData?.isNearMeQuery === 'boolean' ? returnedBrowsingData.isNearMeQuery : undefined),
+            }
+          : undefined;
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
           content: (streamedResp?.response || cleanedStreamed),

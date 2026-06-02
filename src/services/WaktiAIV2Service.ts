@@ -1500,6 +1500,8 @@ class WaktiAIV2ServiceClass {
             next.browsingData = {
               provider: 'gemini-search',
               queries: Array.isArray(geminiSearch.queries) ? geminiSearch.queries : [],
+              mapSearchQuery: typeof geminiSearch.mapSearchQuery === 'string' ? geminiSearch.mapSearchQuery : undefined,
+              isNearMeQuery: typeof geminiSearch.isNearMeQuery === 'boolean' ? geminiSearch.isNearMeQuery : undefined,
               sources: Array.isArray(geminiSearch.sources) ? geminiSearch.sources : [],
               supports: Array.isArray(geminiSearch.supports) ? geminiSearch.supports : [],
               places: Array.isArray(geminiSearch.places) ? geminiSearch.places : [],

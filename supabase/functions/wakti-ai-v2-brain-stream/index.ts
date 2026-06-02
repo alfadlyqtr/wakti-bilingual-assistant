@@ -5209,26 +5209,38 @@ If you are running out of space, keep this order and drop the rest:
 
                   return Array.from(byUrl.values()).slice(0, 12);
                 })();
-
-                if (fallbackSources.length > 0) {
-                  const cleanFallbackQuery = typeof message === 'string' ? message.trim() : '';
-                  const isNearMeFallbackQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanFallbackQuery);
-                  let fallbackPlaces: GroundedPlaceCard[] = [];
-                  if (searchIntent === 'business' && cleanFallbackQuery) {
-                    fallbackPlaces = await searchGooglePlacesForQuery(
-                      cleanFallbackQuery,
-                      userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
-                      { strictNearby: Boolean(isNearMeFallbackQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
-                    );
-                    fallbackPlaces = await enrichGroundedPlacesWithOfficialLinks(fallbackPlaces);
+                const cleanFallbackQuery = typeof message === 'string' ? message.trim() : '';
+                const isNearMeFallbackQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanFallbackQuery);
+                let fallbackPlaces: GroundedPlaceCard[] = [];
+                if (searchIntent === 'business' && cleanFallbackQuery) {
+                  fallbackPlaces = await searchGooglePlacesForQuery(
+                    cleanFallbackQuery,
+                    userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
+                    { strictNearby: Boolean(isNearMeFallbackQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
+                  );
+                  fallbackPlaces = await enrichGroundedPlacesWithOfficialLinks(fallbackPlaces);
+                }
+                const fallbackSourcePayload = (() => {
+                  if (fallbackSources.length > 0) return fallbackSources;
+                  const byUrl = new Map<string, { url: string; title: string }>();
+                  for (const place of fallbackPlaces) {
+                    const mapsUrl = normalizeLikelyExternalUrl(typeof place?.mapsUrl === 'string' ? place.mapsUrl : '');
+                    const websiteUrl = normalizeLikelyExternalUrl(typeof place?.websiteUrl === 'string' ? place.websiteUrl : '');
+                    const title = typeof place?.name === 'string' ? place.name.trim() : '';
+                    if (mapsUrl && !byUrl.has(mapsUrl)) byUrl.set(mapsUrl, { url: mapsUrl, title: title || mapsUrl });
+                    if (websiteUrl && !byUrl.has(websiteUrl)) byUrl.set(websiteUrl, { url: websiteUrl, title: title || websiteUrl });
                   }
+                  return Array.from(byUrl.values()).slice(0, 12);
+                })();
+
+                if (fallbackSourcePayload.length > 0 || fallbackPlaces.length > 0) {
                   const fallbackPayload = {
                     metadata: {
                       geminiSearch: {
                         queries: cleanFallbackQuery ? [cleanFallbackQuery] : [],
                         mapSearchQuery: cleanFallbackQuery,
                         isNearMeQuery: isNearMeFallbackQuery,
-                        sources: fallbackSources,
+                        sources: fallbackSourcePayload,
                         supports: [],
                         places: fallbackPlaces,
                         googleMapsWidgetContextToken: null,
