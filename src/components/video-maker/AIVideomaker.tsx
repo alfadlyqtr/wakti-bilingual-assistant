@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { inspectGenerationPrompt } from '@/utils/generationPromptGuard';
+import { emitEvent } from '@/utils/eventBus';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
 import {
@@ -61,6 +62,22 @@ interface LatestVideo {
   duration_seconds: number | null;
   created_at: string;
   signedUrl?: string | null;
+}
+
+interface VideoInvokeErrorPayload {
+  error?: string;
+  code?: string;
+  feature?: string;
+  reason?: 'feature_locked' | 'limit_reached' | 'trial_expired';
+  message?: string;
+  consumed?: number;
+  limit?: number;
+  remaining?: number;
+  quota?: {
+    used?: number;
+    limit?: number;
+    extra?: number;
+  };
 }
 
 // Image compression helper
@@ -114,6 +131,54 @@ const cleanSignedUrl = (url: string): string => {
   }
 };
 
+const parseInvokeErrorPayload = async (error: unknown): Promise<VideoInvokeErrorPayload | null> => {
+  if (!error || typeof error !== 'object' || !('context' in error)) {
+    return null;
+  }
+
+  try {
+    const context = (error as { context?: Response }).context;
+    if (!context) return null;
+    const response = context.clone();
+    const contentType = response.headers.get('content-type') || '';
+
+    if (contentType.includes('application/json')) {
+      return await response.json();
+    }
+
+    const text = await response.text();
+    if (!text) return null;
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { message: text, error: text };
+    }
+  } catch {
+    return null;
+  }
+};
+
+const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null, language: string): string | null => {
+  if (!payload) return null;
+
+  if (payload.code === 'MONTHLY_VIDEO_LIMIT_REACHED' || payload.error === 'MONTHLY_VIDEO_LIMIT_REACHED') {
+    return language === 'ar'
+      ? 'لقد وصلت إلى الحد الشهري للفيديوهات بالذكاء الاصطناعي.'
+      : 'You reached your monthly AI video limit.';
+  }
+
+  if (payload.message) {
+    return payload.message;
+  }
+
+  if (payload.error && !payload.error.startsWith('TRIAL_')) {
+    return payload.error;
+  }
+
+  return null;
+};
+
 // Video Ads v5.0 — hard-locked 4-scene / 32-second format
 const AD_DURATIONS = [6, 10, 10, 6] as const;
 const AD_SCENE_COUNT = 4;
@@ -124,6 +189,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const { stitchClips, isLoading: isFFmpegLoading, progress: ffmpegProgress, status: ffmpegStatus } = useFFmpegVideo();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
+  const emitTrialBlocked = useCallback((payload: VideoInvokeErrorPayload | null, fallbackFeature: string) => {
+    emitEvent('wakti-trial-limit-reached', {
+      feature: payload?.feature || fallbackFeature,
+      reason: payload?.reason,
+      code: payload?.code as 'TRIAL_LIMIT_REACHED' | 'TRIAL_FEATURE_LOCKED' | 'TRIAL_EXPIRED' | undefined,
+      consumed: payload?.consumed,
+      limit: payload?.limit,
+      remaining: payload?.remaining,
+    });
+  }, []);
 
   const hasArabicChars = (text: string) => /[\u0600-\u06FF]/.test(text || '');
   const showPromptBlockedPopup = useCallback((message: string) => {
@@ -1042,19 +1117,33 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       });
 
       if (error) {
-        throw new Error(error.message || 'Failed to start video generation');
+        const errorPayload = await parseInvokeErrorPayload(error);
+        if (errorPayload?.error === 'TRIAL_LIMIT_REACHED') {
+          emitTrialBlocked(errorPayload, requestBody.generation_type === 'text_to_video' ? 't2v' : requestBody.generation_type === '2images_to_video' ? '2i2v' : 'i2v');
+          setIsGenerating(false);
+          setGenerationProgress(0);
+          setGenerationStatus('');
+          return;
+        }
+
+        const friendlyMessage = getVideoGenerationErrorMessage(errorPayload, language);
+        throw new Error(friendlyMessage || error.message || 'Failed to start video generation');
       }
 
       if (data?.error === 'TRIAL_LIMIT_REACHED') {
-        window.dispatchEvent(new CustomEvent('wakti-trial-limit-reached', { detail: { feature: data?.feature || 'i2v' } }));
+        emitTrialBlocked(data, requestBody.generation_type === 'text_to_video' ? 't2v' : requestBody.generation_type === '2images_to_video' ? '2i2v' : 'i2v');
         setIsGenerating(false);
         setGenerationProgress(0);
         setGenerationStatus('');
         return;
       }
 
+      if (data?.error === 'MONTHLY_VIDEO_LIMIT_REACHED' || data?.code === 'MONTHLY_VIDEO_LIMIT_REACHED') {
+        throw new Error(getVideoGenerationErrorMessage(data, language) || (language === 'ar' ? 'لقد وصلت إلى الحد الشهري للفيديوهات بالذكاء الاصطناعي.' : 'You reached your monthly AI video limit.'));
+      }
+
       if (!data?.ok || !data?.task_id) {
-        throw new Error(data?.error || 'Failed to create video task');
+        throw new Error(getVideoGenerationErrorMessage(data, language) || data?.error || 'Failed to create video task');
       }
 
       const tid = data.task_id;

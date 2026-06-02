@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { checkAndConsumeTrialToken, type TrialFeatureKey } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, checkAndConsumeTrialToken, type TrialFeatureKey } from "../_shared/trial-tracker.ts";
 import { inspectGenerationPrompt, sanitizeUserInput } from "../_shared/promptSafety.ts";
 
 const corsHeaders = {
@@ -34,7 +34,7 @@ type VisualAdsJobInsertClient = {
   };
 };
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
-const KIE_IMAGE2VIDEO_MODEL = "grok-imagine/image-to-video";
+const KIE_IMAGE2VIDEO_MODEL = "grok-imagine-video-1-5-preview";
 const KIE_TEXT2VIDEO_MODEL = "grok-imagine/text-to-video";
 const KIE_2IMAGES_MODEL = "bytedance/seedance-1.5-pro";
 const KIE_VISUAL_ADS_MODEL = "gpt-image-2-image-to-image";
@@ -715,16 +715,23 @@ async function createVideoTask(
 ): Promise<{ task_id: string; status: string }> {
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
+  void videoStyleMode;
+  const parsedSingleImageDuration = Number.parseInt(duration || "", 10);
   const validDuration = isTwoImages
     ? (["4", "8", "12"].includes(duration || "") ? duration! : "8")
-    : (["6", "10"].includes(duration || "") ? duration! : "6");
-  const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
-    ? aspectRatio!
-    : "9:16";
+    : (Number.isFinite(parsedSingleImageDuration) && parsedSingleImageDuration >= 1 && parsedSingleImageDuration <= 15)
+      ? String(parsedSingleImageDuration)
+      : "6";
+  const validAspectRatio = isTwoImages
+    ? (["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
+      ? aspectRatio!
+      : "9:16")
+    : (["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "auto"].includes(aspectRatio || "")
+      ? aspectRatio!
+      : "auto");
   const validResolution = isTwoImages
     ? (["480p", "720p"].includes(resolution || "") ? resolution! : "480p")
-    : (["480p", "720p"].includes(resolution || "") ? resolution! : "720p");
-  const validMode = ["normal", "fun"].includes(videoStyleMode || "") ? videoStyleMode! : "normal";
+    : (["480p", "720p"].includes(resolution || "") ? resolution! : "480p");
 
   const model = isTwoImages ? KIE_2IMAGES_MODEL : (modelOverride || KIE_IMAGE2VIDEO_MODEL);
 
@@ -741,13 +748,12 @@ async function createVideoTask(
         generate_audio: generateAudio || false,
       }
     : {
-        // Grok Imagine API: image_urls array, supports mode.
-        // Mirror under input_urls for provider variants that expect that key.
+        // Grok Imagine Video 1.5 Preview API: image_urls + aspect_ratio + resolution + duration.
         image_urls: sanitizedImageUrls,
-        input_urls: sanitizedImageUrls,
-        duration: validDuration,
+        aspect_ratio: validAspectRatio,
         resolution: validResolution,
-        mode: validMode,
+        duration: Number.parseInt(validDuration, 10),
+        nsfw_checker: false,
       };
 
   if (isTwoImages) {
@@ -1099,7 +1105,7 @@ serve(async (req) => {
     const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, trialFeatureKey, 1);
     if (!trial.allowed) {
       return new Response(
-        JSON.stringify({ error: "TRIAL_LIMIT_REACHED", feature: trialFeatureKey }),
+        JSON.stringify({ ok: false, ...buildTrialErrorPayload(trialFeatureKey, trial) }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -1122,7 +1128,11 @@ serve(async (req) => {
     if (!quota?.can_generate) {
       return new Response(
         JSON.stringify({
-          error: "Monthly AI video limit reached",
+          ok: false,
+          error: "MONTHLY_VIDEO_LIMIT_REACHED",
+          code: "MONTHLY_VIDEO_LIMIT_REACHED",
+          feature: trialFeatureKey,
+          message: "Monthly AI video limit reached",
           quota: {
             used: quota?.videos_generated || 0,
             limit: quota?.videos_limit || 60,

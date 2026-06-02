@@ -1651,10 +1651,7 @@ async function streamGemini3WithSearch(
 ): Promise<string> {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
-  // ARCHITECTURE: Google Maps grounding removed. All searches (including business/place
-  // queries) use Google Search grounding only. Place cards are enriched server-side via
-  // the Google Places API (Text Search + Details) in enrichGroundedPlacesWithOfficialLinks.
-  const useMapsGrounding = false;
+  const useMapsGrounding = searchIntent === 'business';
 
   // Inject today's date into the query so Google Search grounding fetches current results
   const now = new Date();
@@ -1667,6 +1664,7 @@ async function streamGemini3WithSearch(
   const isNhlLive = /\bnhl\b/i.test(query) && /(standings?|scores?|results?|schedule|wild\s*card|conference|division|points|gp|games\s*played)/i.test(query);
   const nhlHint = isNhlLive ? ` Current NHL season: ${nhlSeason}.` : '';
   const isNearMeQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(query);
+  const hasUserCoords = typeof userLocation?.latitude === 'number' && typeof userLocation?.longitude === 'number';
   // Inject device GPS location into the query so google_search returns hyper-local results
   let locationHint = '';
   if (userLocation?.latitude && userLocation?.longitude) {
@@ -1682,7 +1680,7 @@ async function streamGemini3WithSearch(
       ? [{ googleMaps: { enableWidget: true } }]
       : [{ google_search: {} }],
   };
-  if (useMapsGrounding && userLocation?.latitude && userLocation?.longitude) {
+  if (useMapsGrounding && hasUserCoords) {
     body.toolConfig = {
       retrievalConfig: {
         latLng: {
@@ -3205,6 +3203,99 @@ async function fetchGooglePlaceByText(place: GroundedPlaceCard, locationBias?: {
   }
 }
 
+async function searchGooglePlacesForQuery(
+  query: string,
+  locationContext?: { latitude: number; longitude: number } | null,
+  options?: { strictNearby?: boolean }
+): Promise<GroundedPlaceCard[]> {
+  if (!GOOGLE_PLACES_API_KEY) return [];
+  const textQuery = toTrimmedString(query);
+  if (!textQuery) return [];
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4200);
+    const body: Record<string, unknown> = { textQuery, maxResultCount: 6 };
+    if (locationContext?.latitude != null && locationContext?.longitude != null) {
+      const circle = {
+        center: { latitude: locationContext.latitude, longitude: locationContext.longitude },
+        radius: options?.strictNearby ? 25000 : 30000,
+      };
+      if (options?.strictNearby) {
+        body.locationRestriction = { circle };
+        body.rankPreference = 'DISTANCE';
+      } else {
+        body.locationBias = { circle };
+      }
+    }
+
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.websiteUri,places.internationalPhoneNumber,places.nationalPhoneNumber,places.rating,places.userRatingCount,places.businessStatus,places.currentOpeningHours,places.regularOpeningHours,places.reviews,places.editorialSummary,places.photos',
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error('❌ PLACES QUERY SEARCH ERROR:', response.status, errText.slice(0, 300));
+      return [];
+    }
+
+    const data = await response.json().catch(() => null) as Record<string, unknown> | null;
+    const results = data && Array.isArray(data.places) ? data.places : [];
+    return results
+      .map((entry) => {
+        if (!entry || typeof entry !== 'object') return null;
+        const placeData = entry as Record<string, unknown>;
+        const mapped = mapPlaceV1ToCard(placeData);
+        const placeId = toTrimmedString(mapped.placeId);
+        const fallbackName = toTrimmedString(mapped.name) || toTrimmedString(placeData.formattedAddress) || 'Place';
+        const latitude = typeof mapped.latitude === 'number' ? mapped.latitude : null;
+        const longitude = typeof mapped.longitude === 'number' ? mapped.longitude : null;
+        const defaultMapsUrl = placeId
+          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackName)}&query_place_id=${encodeURIComponent(placeId)}`
+          : (latitude != null && longitude != null
+              ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackName)}`);
+
+        return {
+          placeId,
+          name: fallbackName,
+          address: toTrimmedString(mapped.address),
+          latitude,
+          longitude,
+          rating: typeof mapped.rating === 'number' ? mapped.rating : null,
+          userRatingCount: typeof mapped.userRatingCount === 'number' ? mapped.userRatingCount : null,
+          websiteUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.websiteUrl)),
+          phone: toTrimmedString(mapped.phone),
+          email: normalizeEmail(mapped.email),
+          openNow: typeof mapped.openNow === 'boolean' ? mapped.openNow : null,
+          businessStatus: toTrimmedString(mapped.businessStatus),
+          reason: '',
+          vibe: '',
+          mustTry: '',
+          editorialSummary: toTrimmedString(mapped.editorialSummary),
+          reviewSnippets: Array.isArray(mapped.reviewSnippets) ? mapped.reviewSnippets : [],
+          mapsUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.mapsUrl)) || defaultMapsUrl,
+          instagramUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.instagramUrl)),
+          facebookUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.facebookUrl)),
+          tiktokUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.tiktokUrl)),
+          whatsappUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.whatsappUrl)),
+          photoUrl: toTrimmedString(mapped.photoUrl),
+          openingHours: Array.isArray(mapped.openingHours) ? mapped.openingHours : [],
+        } as GroundedPlaceCard;
+      })
+      .filter((place): place is GroundedPlaceCard => Boolean(place && (place.name || place.placeId)));
+  } catch {
+    return [];
+  }
+}
+
 function extractSocialLinksFromHtml(html: string, baseUrl: string): Partial<GroundedPlaceCard> {
   const links: Partial<GroundedPlaceCard> = {};
   const candidates = new Set<string>();
@@ -4269,23 +4360,12 @@ serve(async (req) => {
           resolvedEffective: effectiveTimezone
         });
 
-        const ipLocationLine = (() => {
-          if (!ipGeo) return '';
-          const parts: string[] = [];
-          if (ipGeo.city) parts.push(ipGeo.city);
-          if (ipGeo.region) parts.push(ipGeo.region);
-          if (ipGeo.country) parts.push(ipGeo.country);
-          const label = parts.length > 0 ? parts.join(', ') : '';
-          if (!label) return '';
-          return `User Location (via IP): ${label}${ipGeo.timezone ? ` | Timezone: ${ipGeo.timezone}` : ''}`;
-        })();
-
         // Build full location context (for Chat + Search modes)
         // Device GPS only ΓÇö no IP geo fallback for city/coordinates
         let fullLocationContext = '';
         {
-          let userCity = requestLocation?.latitude && requestLocation?.longitude ? '' : (requestLocation?.city || '');
-          let userCountry = requestLocation?.latitude && requestLocation?.longitude ? '' : (requestLocation?.country || '');
+          let userCity = '';
+          let userCountry = '';
           const userLat = requestLocation?.latitude;
           const userLng = requestLocation?.longitude;
           
@@ -4521,6 +4601,16 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
             let userCity = '';
             let userCountry = '';
             const explicitNearMeRequest = /\b(near me|nearby|around me|closest|nearest)\b/i.test(message || '');
+            if (explicitNearMeRequest && !(requestLocation?.latitude && requestLocation?.longitude)) {
+              const locationRequiredResponse = language === 'ar'
+                ? 'لا أستطيع تنفيذ هذا البحث القريب بدون الوصول إلى موقعك الحالي من الجهاز. فعّل إذن الموقع ثم أعد المحاولة، وسأستخدم GPS الجهاز أولاً ثم متصفحك كخطة احتياطية فقط.'
+                : 'I could not access your live location for this nearby search. Please allow location access and try again. I will use your device GPS first, then browser geolocation only as the fallback.';
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: locationRequiredResponse, content: locationRequiredResponse })}\n\n`));
+              await emitAiChatTrialFinished(locationRequiredResponse);
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+              return;
+            }
             if (requestLocation?.latitude && requestLocation?.longitude) {
               if (!explicitNearMeRequest) {
                 try {
@@ -4531,8 +4621,8 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
               }
             } else {
               if (!explicitNearMeRequest) {
-                userCity = ((requestLocation?.city as string | undefined) || '').toString().trim();
-                userCountry = ((requestLocation?.country as string | undefined) || '').toString().trim();
+                userCity = '';
+                userCountry = '';
               }
             }
 
@@ -4561,7 +4651,7 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
 
             const personalSection = _promptPersonalSection((personalTouch || {}) as Record<string, unknown>);
 
-            const searchLocationContext = locationContext || (ipLocationLine ? `USER LOCATION CONTEXT:\n${ipLocationLine}` : '');
+            const searchLocationContext = locationContext;
             const searchHelpfulMemoryContext = helpfulMemoryContext;
             const searchContinuityContext = buildContinuityContext({
               conversationSummary: rollingConversationSummary,
@@ -5031,11 +5121,18 @@ If you are running out of space, keep this order and drop the rest:
                     groundedPlaceById.set(matchedKey, mergeGroundedPlaceCard(existing, mergedParsedPlace));
                     continue;
                   }
-
-                  groundedPlaceById.set(mergedParsedPlace.placeId || parsedKey || mergedParsedPlace.name, mergedParsedPlace);
                 }
 
                 let groundedPlaces: GroundedPlaceCard[] = Array.from(groundedPlaceById.values());
+                const cleanMapSearchQuery = typeof message === 'string' ? message.trim() : '';
+                const isNearMeSearchQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanMapSearchQuery);
+                if (searchIntent === 'business' && groundedPlaces.length === 0) {
+                  groundedPlaces = await searchGooglePlacesForQuery(
+                    cleanMapSearchQuery,
+                    userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
+                    { strictNearby: Boolean(isNearMeSearchQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
+                  );
+                }
                 groundedPlaces = await enrichGroundedPlacesWithOfficialLinks(groundedPlaces);
                 const builtSources = (() => {
                   const byUrl = new Map<string, { url: string; title: string }>();
@@ -5069,12 +5166,10 @@ If you are running out of space, keep this order and drop the rest:
 
                   return Array.from(byUrl.values()).slice(0, 12);
                 })();
-                const cleanMapSearchQuery = typeof message === 'string' ? message.trim() : '';
-                const isNearMeSearchQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanMapSearchQuery);
                 const metaPayload = {
                   metadata: {
                     geminiSearch: {
-                      queries: gm.webSearchQueries || [],
+                      queries: Array.isArray(gm.webSearchQueries) && gm.webSearchQueries.length > 0 ? gm.webSearchQueries : (cleanMapSearchQuery ? [cleanMapSearchQuery] : []),
                       mapSearchQuery: cleanMapSearchQuery,
                       isNearMeQuery: isNearMeSearchQuery,
                       sources: builtSources,
@@ -5116,13 +5211,26 @@ If you are running out of space, keep this order and drop the rest:
                 })();
 
                 if (fallbackSources.length > 0) {
+                  const cleanFallbackQuery = typeof message === 'string' ? message.trim() : '';
+                  const isNearMeFallbackQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanFallbackQuery);
+                  let fallbackPlaces: GroundedPlaceCard[] = [];
+                  if (searchIntent === 'business' && cleanFallbackQuery) {
+                    fallbackPlaces = await searchGooglePlacesForQuery(
+                      cleanFallbackQuery,
+                      userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
+                      { strictNearby: Boolean(isNearMeFallbackQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
+                    );
+                    fallbackPlaces = await enrichGroundedPlacesWithOfficialLinks(fallbackPlaces);
+                  }
                   const fallbackPayload = {
                     metadata: {
                       geminiSearch: {
-                        queries: [],
+                        queries: cleanFallbackQuery ? [cleanFallbackQuery] : [],
+                        mapSearchQuery: cleanFallbackQuery,
+                        isNearMeQuery: isNearMeFallbackQuery,
                         sources: fallbackSources,
                         supports: [],
-                        places: [],
+                        places: fallbackPlaces,
                         googleMapsWidgetContextToken: null,
                         searchEntryPointHtml: ''
                       }

@@ -69,7 +69,7 @@ type UserLocationContext = {
   longitude: number | null;
   accuracy?: number | null;
   timezone?: string | null;
-  source?: 'native' | 'ip' | 'profile';
+  source?: 'native' | 'browser' | 'unknown';
   updatedAt?: number;
 };
 
@@ -350,7 +350,9 @@ class WaktiAIV2ServiceClass {
   // If forceFresh is true, skip cache and get fresh location (for "near me" queries)
   private getCachedUserLocation(now: number = Date.now()): UserLocationContext | null {
     if (this.locationCache?.updatedAt && (now - this.locationCache.updatedAt) < LOCATION_CACHE_TTL) {
-      return this.locationCache;
+      if (typeof this.locationCache.latitude === 'number' && typeof this.locationCache.longitude === 'number') {
+        return this.locationCache;
+      }
     }
 
     try {
@@ -362,6 +364,7 @@ class WaktiAIV2ServiceClass {
       parsed.updatedAt = parsed.updatedAt || now;
       const isFresh = parsed.updatedAt && (now - parsed.updatedAt) < LOCATION_CACHE_TTL;
       if (!isFresh) return null;
+      if (typeof parsed.latitude !== 'number' || typeof parsed.longitude !== 'number') return null;
       this.locationCache = parsed;
       return parsed;
     } catch {
@@ -398,7 +401,6 @@ class WaktiAIV2ServiceClass {
   private async getUserLocation(userId: string, forceFresh: boolean = false): Promise<UserLocationContext> {
     const now = Date.now();
     const previousCached = this.getCachedUserLocation(now);
-    const allowApproximateLocationFallback = !forceFresh;
 
     if (!forceFresh) {
       if (previousCached) return previousCached;
@@ -430,7 +432,7 @@ class WaktiAIV2ServiceClass {
           accuracy: nativeLoc.accuracy ?? null,
           city: nativeLoc.city || resolved.city,
           country: nativeLoc.country || resolved.country,
-          source: nativeLoc.source === 'browser' ? 'native' : 'native',
+          source: nativeLoc.source === 'browser' ? 'browser' : 'native',
         };
       } else {
         // Native location returned null or invalid — will try fallbacks
@@ -439,50 +441,15 @@ class WaktiAIV2ServiceClass {
       console.warn('[WaktiAIV2Service] Native location error:', err);
     }
 
-    // Fetch from profiles as fallback for city/country text ONLY (not coordinates)
-    if (allowApproximateLocationFallback && (!resolved.city || !resolved.country)) {
-      try {
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('country, city')
-          .eq('id', userId)
-          .maybeSingle();
-        if (prof) {
-          resolved.city = resolved.city || (prof as any)?.city || null;
-          resolved.country = resolved.country || (prof as any)?.country || null;
-          resolved.source = resolved.source || 'profile';
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    // IP-based fallback: ONLY use for city/country text when device GPS is unavailable.
-    // NEVER use IP coordinates — they give wrong results (e.g., Doha instead of Al Khor)
-    // due to ISP routing all traffic through a central location.
-    if (allowApproximateLocationFallback && !hasDeviceGPS && (!resolved.latitude || !resolved.longitude || !resolved.city || !resolved.country)) {
-      const ipLoc = await this.fetchIpLocation();
-      if (ipLoc) {
-        resolved = {
-          ...resolved,
-          // Only use IP coordinates if we have absolutely nothing (non-search fallback)
-          latitude: resolved.latitude ?? (forceFresh ? null : (ipLoc.latitude ?? null)),
-          longitude: resolved.longitude ?? (forceFresh ? null : (ipLoc.longitude ?? null)),
-          city: resolved.city || ipLoc.city || null,
-          country: resolved.country || ipLoc.country || null,
-          source: resolved.source || 'ip',
-        };
-      }
-    }
-
     resolved.timezone = timezone;
     resolved.updatedAt = Date.now();
     const hasPreciseCoords = typeof resolved.latitude === 'number' && typeof resolved.longitude === 'number';
-    if (hasPreciseCoords || !forceFresh) {
+    if (hasPreciseCoords && hasDeviceGPS) {
       this.locationCache = resolved;
       try { localStorage.setItem('wakti_user_location', JSON.stringify(resolved)); } catch {}
     } else {
       this.locationCache = null;
+      try { localStorage.removeItem('wakti_user_location'); } catch {}
     }
     return resolved;
   }
@@ -503,27 +470,6 @@ class WaktiAIV2ServiceClass {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
     } catch {
       return 'UTC';
-    }
-  }
-
-  private async fetchIpLocation(): Promise<Partial<UserLocationContext> | null> {
-    if (typeof fetch === 'undefined') return null;
-    try {
-      const resp = await fetch('https://ipapi.co/json/');
-      if (!resp.ok) return null;
-      const data = await resp.json();
-      const latitude = typeof data.latitude === 'number' ? data.latitude : (typeof data.lat === 'number' ? data.lat : null);
-      const longitude = typeof data.longitude === 'number' ? data.longitude : (typeof data.lon === 'number' ? data.lon : null);
-      return {
-        latitude,
-        longitude,
-        city: data.city || null,
-        country: data.country_name || data.country || null,
-        source: 'ip',
-      };
-    } catch (err) {
-      console.warn('[WaktiAIV2Service] IP location lookup failed:', err);
-      return null;
     }
   }
 
@@ -1461,10 +1407,7 @@ class WaktiAIV2ServiceClass {
         }
 
         try {
-          const freshLocation = await Promise.race<UserLocationContext | null>([
-            this.getUserLocation(userId || '', true),
-            new Promise<null>(r => setTimeout(() => r(null), 4200))
-          ]);
+          const freshLocation = await this.getUserLocation(userId || '', true);
           if (freshLocation?.latitude && freshLocation?.longitude) return freshLocation;
         } catch {
           // fall back below

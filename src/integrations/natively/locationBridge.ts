@@ -475,15 +475,10 @@ async function _doGetNativeLocation(options?: {
     }
   }
 
-  console.log(`[NativelyLocation] � Racing browser + native (budget: ${timeoutMs}ms, first valid wins)`);
+  console.log(`[NativelyLocation] Trying Natively SDK first (budget: ${timeoutMs}ms)`);
 
-  // ── Fire BOTH location sources in parallel ──
-  const browserPromise: Promise<NativeLocationResult | null> = getBrowserLocation(timeoutMs).catch((err) => {
-    console.warn('[NativelyLocation] Browser geolocation threw:', err);
-    return null;
-  });
-
-  const nativePromise: Promise<NativeLocationResult | null> = (async () => {
+  const startedAt = Date.now();
+  const nativeResult: Promise<NativeLocationResult | null> = (async () => {
     const bridgeReady = await waitForNativeBridge(Math.min(BRIDGE_READY_TIMEOUT, timeoutMs));
     if (!bridgeReady) {
       console.warn('[NativelyLocation] Native bridge not available');
@@ -520,38 +515,28 @@ async function _doGetNativeLocation(options?: {
     return null;
   });
 
-  // ── First-truthy race with hard timeout ──
-  const winner = await new Promise<NativeLocationResult | null>((resolve) => {
-    let settled = false;
-    let remaining = 2;
-    const done = (v: NativeLocationResult | null) => {
-      if (settled) return;
-      settled = true;
-      resolve(v);
-    };
-    const onResult = (r: NativeLocationResult | null) => {
-      if (settled) return;
-      if (r && typeof r.latitude === 'number' && typeof r.longitude === 'number') {
-        done(r);
-        return;
-      }
-      remaining--;
-      if (remaining <= 0) done(null);
-    };
-
-    browserPromise.then(onResult);
-    nativePromise.then(onResult);
-
-    setTimeout(() => done(null), timeoutMs);
-  });
-
-  if (winner) {
-    console.log('[NativelyLocation] ✅ Race winner:', winner.source, winner.latitude, winner.longitude);
-    setCachedLocation(winner);
-    return winner;
+  const nativeWinner = await nativeResult;
+  if (nativeWinner && typeof nativeWinner.latitude === 'number' && typeof nativeWinner.longitude === 'number') {
+    console.log('[NativelyLocation] ✅ Native SDK location:', nativeWinner.latitude, nativeWinner.longitude);
+    setCachedLocation(nativeWinner);
+    return nativeWinner;
   }
 
-  console.warn('[NativelyLocation] ❌ Race ended with no winner — returning null');
+  const remainingTimeout = Math.max(1000, timeoutMs - (Date.now() - startedAt));
+  console.log(`[NativelyLocation] Native SDK unavailable, falling back to browser geolocation (${remainingTimeout}ms)`);
+
+  const browserWinner = await getBrowserLocation(remainingTimeout).catch((err) => {
+    console.warn('[NativelyLocation] Browser geolocation threw:', err);
+    return null;
+  });
+
+  if (browserWinner && typeof browserWinner.latitude === 'number' && typeof browserWinner.longitude === 'number') {
+    console.log('[NativelyLocation] ✅ Browser fallback location:', browserWinner.latitude, browserWinner.longitude);
+    setCachedLocation(browserWinner);
+    return browserWinner;
+  }
+
+  console.warn('[NativelyLocation] ❌ No location from Natively SDK or browser fallback');
   return null;
 }
 

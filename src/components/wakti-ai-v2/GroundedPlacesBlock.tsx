@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MapPin, Phone, Globe, Navigation, Star, MessageCircle, Mail, ChevronDown, ChevronUp } from 'lucide-react';
+import { MapPin, Phone, Globe, Navigation, Star, MessageCircle, Mail, ChevronDown } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type MessageLike = {
@@ -444,30 +444,17 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
     });
   }
 
-  // Fallback only: backend produced nothing — parse the written text.
-  return parsePlacesFromMessageContent(message?.content);
+  return [];
 }
 
 export function hasGroundedPlaces(message: MessageLike | null | undefined) {
-  const places = getGroundedPlaces(message);
+  const resolvedBrowsingData = resolveGroundedBrowsingData(message);
+  const places = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
   if (places.length === 0) return false;
-  return places.some((p: any) => {
-    const phoneHref = normalizePhoneHref(p.phone);
-    const emailHref = normalizeEmailHref(p.email);
-    const hasRating = typeof p.rating === 'number';
-    const hasPhone = Boolean(phoneHref);
-    const hasEmail = Boolean(emailHref);
-    const hasAddress = Boolean(p.address && p.address.trim());
-    const hasPlaceId = Boolean(p.placeId && p.placeId.trim());
-    const hasWebsite = Boolean(p.websiteUrl && p.websiteUrl.trim());
-    const hasMaps = Boolean(p.mapsUrl && p.mapsUrl.trim());
-    const hasReason = Boolean(p.reason && p.reason.trim());
-    const hasVibe = Boolean(p.vibe && p.vibe.trim());
-    const hasMustTry = Boolean(p.mustTry && p.mustTry.trim());
-    const hasSocials = Boolean(p.instagramUrl || p.facebookUrl || p.tiktokUrl || p.whatsappUrl);
-    const hasReviews = Array.isArray(p.reviewSnippets) && p.reviewSnippets.some((r: any) => r?.snippet);
-    return hasRating || hasPhone || hasEmail || hasWebsite || hasMaps || hasReason || hasVibe || hasMustTry || (hasPlaceId && hasAddress) || (hasSocials && hasAddress) || (hasReviews && hasAddress);
-  });
+  return places.some((p: any) => Boolean(
+    (typeof p?.name === 'string' && p.name.trim()) ||
+    (typeof p?.placeId === 'string' && p.placeId.trim())
+  ));
 }
 
 function normalizePhoneHref(value?: string) {
@@ -497,6 +484,10 @@ function getWebsiteLabel(value?: string) {
 function formatReviewCount(count?: number | null, language?: string) {
   if (typeof count !== 'number' || !Number.isFinite(count)) return '';
   return new Intl.NumberFormat(language === 'ar' ? 'ar-QA' : 'en-US').format(count);
+}
+
+function getUnavailableText(language?: string) {
+  return language === 'ar' ? 'غير متوفر' : 'Not available';
 }
 
 function truncateReviewText(value?: string, max = 200) {
@@ -632,11 +623,11 @@ export function GroundedPlacesBlock({
     ? resolvedBrowsingData.searchEntryPointHtml.trim()
     : '';
   const googleMapsSearchUrl = getGoogleMapsSearchUrl(resolvedBrowsingData, groundedPlaces);
-  const introText = extractPlacesIntro(message?.content);
 
   if (groundedPlaces.length === 0) return null;
 
   const isAr = language === 'ar';
+  const unavailableText = getUnavailableText(language);
 
   const [expandedIndices, setExpandedIndices] = useState<Record<number, boolean>>({});
   const toggleExpand = (idx: number) => {
@@ -656,53 +647,17 @@ export function GroundedPlacesBlock({
     : 'border-slate-200/70 shadow-[0_15px_42px_rgba(0,0,0,0.05)]';
   
   const textTitle = isDark ? 'text-white' : 'text-[#060541] font-bold text-base';
-  const textBody = isDark ? 'text-white/75' : 'text-slate-700';
-  const textMuted = isDark ? 'text-white/40' : 'text-slate-400';
-  const textMutedLight = isDark ? 'text-white/50' : 'text-slate-600 font-semibold';
-  const badgeBg = isDark ? 'bg-white/6 ring-1 ring-white/10' : 'bg-slate-50/80 border border-slate-200/60 shadow-[0_2px_8px_rgba(0,0,0,0.015)]';
   const infoBlockBg = isDark ? 'bg-white/6 ring-1 ring-white/8' : 'bg-slate-50 border border-slate-200 shadow-[0_1px_2px_rgba(0,0,0,0.02)]';
   const labelText = isDark ? 'text-white/35 font-medium' : 'text-slate-400 font-bold tracking-widest text-[9.5px]';
   const linkText = isDark ? 'text-blue-300 hover:text-blue-200' : 'text-blue-600 hover:text-blue-700 font-semibold';
   const textVal = isDark ? 'text-white/75' : 'text-slate-800 font-normal leading-relaxed text-[13.5px]';
 
-  // Only show cards that have at least one meaningful field beyond just name+mapsUrl
-  const richPlaces = groundedPlaces.slice(0, 6).filter((place: any) => {
-    const phoneHref = normalizePhoneHref(place.phone);
-    const emailHref = normalizeEmailHref(place.email);
-    const hasRating = typeof place.rating === 'number';
-    const hasAddress = Boolean(place.address && place.address.trim());
-    const hasPhone = Boolean(phoneHref);
-    const hasEmail = Boolean(emailHref);
-    const hasWeb = Boolean(place.websiteUrl && place.websiteUrl.trim());
-    const hasMaps = Boolean(place.mapsUrl && place.mapsUrl.trim());
-    const hasReason = Boolean(place.reason && place.reason.trim());
-    const hasVibe = Boolean(place.vibe && place.vibe.trim());
-    const hasMustTry = Boolean(place.mustTry && place.mustTry.trim());
-    const hasSocials = Boolean(place.instagramUrl || place.facebookUrl || place.tiktokUrl || place.whatsappUrl);
-    const hasReviews = Array.isArray(place.reviewSnippets) && place.reviewSnippets.some((r: any) => r?.snippet);
-    const hasEditorial = Boolean(place.editorialSummary && place.editorialSummary.trim());
-    // Must have meaningful data — rating or phone is ideal, but placeId+address is enough
-    // (fetchGooglePlaceDetails will have enriched it if GOOGLE_MAPS_API_KEY is set)
-    const hasPlaceId = Boolean(place.placeId && place.placeId.trim());
-    // hasMaps alone is NOT enough — a card must have meaningful content to display
-    return hasRating || hasPhone || hasEmail || hasWeb || hasReason || hasVibe || hasMustTry || hasEditorial || (hasPlaceId && hasAddress) || (hasSocials && hasAddress) || (hasReviews && hasAddress);
-  });
-  const displayPlaces = richPlaces.length > 0
-    ? richPlaces
-    : groundedPlaces.slice(0, 6).filter((place: any) => {
-        const hasName = Boolean(place?.name && String(place.name).trim());
-        const hasAddress = Boolean(place?.address && String(place.address).trim());
-        const hasMaps = Boolean(place?.mapsUrl && String(place.mapsUrl).trim());
-        const hasWeb = Boolean(place?.websiteUrl && String(place.websiteUrl).trim());
-        const hasPhone = Boolean(normalizePhoneHref(place?.phone));
-        const hasEmail = Boolean(normalizeEmailHref(place?.email));
-        const hasSocials = Boolean(place?.instagramUrl || place?.facebookUrl || place?.tiktokUrl || place?.whatsappUrl);
-        return hasName && (hasAddress || hasMaps || hasWeb || hasPhone || hasEmail || hasSocials);
-      });
+  const displayPlaces = groundedPlaces.slice(0, 6).filter((place: any) => Boolean(
+    (place?.name && String(place.name).trim()) ||
+    (place?.placeId && String(place.placeId).trim())
+  ));
 
-  // If no place has rich data, skip the entire block — the written text is enough
   if (displayPlaces.length === 0) {
-    // Still show the Maps bottom block if we have it
     if (!searchEntryPointHtml && !googleMapsSearchUrl) return null;
     return (
       <div className="space-y-3 pt-2">
@@ -745,10 +700,14 @@ export function GroundedPlacesBlock({
         const emailText = toCleanString(place.email);
         const mapsUrl = toCleanString(place.mapsUrl);
         const websiteUrl = toCleanString(place.websiteUrl);
+        const photoUrl = toCleanString(place.photoUrl);
         const ratingValue = typeof place.rating === 'number' ? place.rating.toFixed(1) : null;
         const reviewCountValue = typeof place.userRatingCount === 'number'
           ? formatReviewCount(place.userRatingCount, language)
           : null;
+        const openingHours = Array.isArray(place.openingHours)
+          ? place.openingHours.map((line: string) => toCleanString(line)).filter(Boolean)
+          : [];
 
         let socialLinks = [
           place.instagramUrl ? { label: 'Instagram', url: toCleanString(place.instagramUrl) } : null,
@@ -775,9 +734,9 @@ export function GroundedPlacesBlock({
               onClick={() => toggleExpand(index)}
             >
               <div className="flex items-center gap-3 min-w-0 flex-1">
-                {place.photoUrl ? (
+                {photoUrl ? (
                   <img 
-                    src={place.photoUrl} 
+                    src={photoUrl} 
                     alt={placeName} 
                     className="w-10 h-10 rounded-xl object-cover shrink-0 border border-slate-100 dark:border-white/10"
                     onError={(e) => {
@@ -837,85 +796,84 @@ export function GroundedPlacesBlock({
                     </p>
                   )}
 
-                  {(reasonText || vibeText || mustTryText) && (
-                    <div className="space-y-2 mb-3">
-                      {reasonText && (
-                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'السبب' : 'Reason'}</div>
-                          <div className={`text-[13px] ${textVal} leading-relaxed`}>{reasonText}</div>
-                        </div>
-                      )}
-                      {vibeText && (
-                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الأجواء' : 'Vibe'}</div>
-                          <div className={`text-[13px] ${textVal} leading-relaxed`}>{vibeText}</div>
-                        </div>
-                      )}
-                      {mustTryText && (
-                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'لازم تجربه' : 'Must-try'}</div>
-                          <div className={`text-[13px] ${textVal} leading-relaxed`}>{mustTryText}</div>
-                        </div>
+                  <div className="space-y-2 mb-3">
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'السبب' : 'Reason'}</div>
+                      <div className={`text-[13px] ${textVal} leading-relaxed`}>{reasonText || unavailableText}</div>
+                    </div>
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الأجواء' : 'Vibe'}</div>
+                      <div className={`text-[13px] ${textVal} leading-relaxed`}>{vibeText || unavailableText}</div>
+                    </div>
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'لازم تجربه' : 'Must-try'}</div>
+                      <div className={`text-[13px] ${textVal} leading-relaxed`}>{mustTryText || unavailableText}</div>
+                    </div>
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'التقييم' : 'Rating'}</div>
+                      <div className={`text-[13px] ${textVal} leading-relaxed`}>{ratingValue ? `${ratingValue}/5` : unavailableText}</div>
+                    </div>
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الصور' : 'Photo'}</div>
+                      {photoUrl ? (
+                        <img src={photoUrl} alt={placeName} className="w-full max-h-48 rounded-xl object-cover border border-slate-100 dark:border-white/10" />
+                      ) : (
+                        <div className={`text-[13px] ${textVal} leading-relaxed`}>{unavailableText}</div>
                       )}
                     </div>
-                  )}
-
-                  {typeof place.userRatingCount === 'number' && typeof place.rating !== 'number' && (
-                    <div className={`mb-3 inline-flex items-center rounded-full ${badgeBg} px-2.5 py-1 text-[11px] ${textMutedLight}`}>
-                      {formatReviewCount(place.userRatingCount, language)} {isAr ? 'مراجعة Google' : 'Google reviews'}
-                    </div>
-                  )}
-
-                  {/* Contact details list — only render rows that have real data */}
-                  {(hasCall || hasEmail || hasWeb || hasMaps) && (
-                    <div className="space-y-2 mb-3">
-                      {hasCall && (
-                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الهاتف' : 'Phone'}</div>
-                          <a href={phoneHref} className={`text-[13px] font-medium ${linkText} transition-colors`}>
-                            {phoneText}
-                          </a>
-                        </div>
-                      )}
-                      {hasEmail && (
-                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الإيميل' : 'Email'}</div>
-                          <a href={emailHref} className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
-                            {emailText}
-                          </a>
-                        </div>
-                      )}
-                      {hasWeb && (
-                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الموقع الإلكتروني' : 'Website'}</div>
-                          <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
-                            {websiteLabel || websiteUrl}
-                          </a>
-                        </div>
-                      )}
-                      {hasMaps && (
-                        <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                          <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>Google Maps</div>
-                          <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
-                            {isAr ? 'افتح في Google Maps' : 'Open in Google Maps'}
-                          </a>
-                        </div>
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>Google Maps</div>
+                      {hasMaps ? (
+                        <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
+                          {isAr ? 'افتح في Google Maps' : 'Open in Google Maps'}
+                        </a>
+                      ) : (
+                        <div className={`text-[13px] ${textVal} leading-relaxed`}>{unavailableText}</div>
                       )}
                     </div>
-                  )}
-                  {/* Opening hours */}
-                  {Array.isArray(place.openingHours) && place.openingHours.length > 0 && (
-                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2 mb-3`}>
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الموقع الإلكتروني' : 'Website'}</div>
+                      {hasWeb ? (
+                        <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
+                          {websiteLabel || websiteUrl}
+                        </a>
+                      ) : (
+                        <div className={`text-[13px] ${textVal} leading-relaxed`}>{unavailableText}</div>
+                      )}
+                    </div>
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الهاتف' : 'Phone'}</div>
+                      {hasCall ? (
+                        <a href={phoneHref} className={`text-[13px] font-medium ${linkText} transition-colors`}>
+                          {phoneText}
+                        </a>
+                      ) : (
+                        <div className={`text-[13px] ${textVal} leading-relaxed`}>{unavailableText}</div>
+                      )}
+                    </div>
+                    <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
                       <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'ساعات العمل' : 'Opening hours'}</div>
-                      <div className="space-y-0.5">
-                        {place.openingHours.map((line: string, hoursIndex: number) => (
-                          <div key={`${place.placeId || place.name || 'place'}-hours-${hoursIndex}`} className={`text-[12px] ${textVal} leading-snug`}>
-                            {toCleanString(line)}
-                          </div>
-                        ))}
-                      </div>
+                      {openingHours.length > 0 ? (
+                        <div className="space-y-0.5">
+                          {openingHours.map((line: string, hoursIndex: number) => (
+                            <div key={`${place.placeId || place.name || 'place'}-hours-${hoursIndex}`} className={`text-[12px] ${textVal} leading-snug`}>
+                              {line}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className={`text-[13px] ${textVal} leading-relaxed`}>{unavailableText}</div>
+                      )}
                     </div>
-                  )}
+                    {hasEmail && (
+                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
+                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الإيميل' : 'Email'}</div>
+                        <a href={emailHref} className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
+                          {emailText}
+                        </a>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* ── Action buttons ── */}
@@ -965,58 +923,61 @@ export function GroundedPlacesBlock({
                 )}
 
                 {/* ── Social follow badges ── */}
-                {socialLinks.length > 0 && (
-                  <div className={`px-4 pb-3 flex flex-wrap items-center gap-2 border-t ${isDark ? 'border-white/8' : 'border-slate-100'} pt-3`}>
-                    <span className={`text-[11px] ${labelText} font-medium mr-1`}>{isAr ? 'روابط السوشال:' : 'Social links:'}</span>
-                    {socialLinks.map((social) => (
-                      <a key={social.label} href={social.url} target="_blank" rel="noopener noreferrer"
-                        className={`inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 ${isDark ? 'text-white/85' : 'text-slate-700'} text-xs`}
-                        style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }} title={social.label}>
-                        {social.label === 'Instagram' ? <InstagramIcon size={22} /> : null}
-                        {social.label === 'Facebook' ? <FacebookIcon size={22} /> : null}
-                        {social.label === 'TikTok' ? <TikTokIcon size={22} /> : null}
-                        {social.label === 'WhatsApp' ? <WhatsAppIcon size={22} /> : null}
-                        <span>{social.label}</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
+                <div className={`px-4 pb-3 flex flex-wrap items-center gap-2 border-t ${isDark ? 'border-white/8' : 'border-slate-100'} pt-3`}>
+                  <span className={`text-[11px] ${labelText} font-medium mr-1`}>{isAr ? 'روابط السوشال:' : 'Social links:'}</span>
+                  {socialLinks.length > 0 ? socialLinks.map((social) => (
+                    <a key={social.label} href={social.url} target="_blank" rel="noopener noreferrer"
+                      className={`inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 ${isDark ? 'text-white/85' : 'text-slate-700'} text-xs`}
+                      style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }} title={social.label}>
+                      {social.label === 'Instagram' ? <InstagramIcon size={22} /> : null}
+                      {social.label === 'Facebook' ? <FacebookIcon size={22} /> : null}
+                      {social.label === 'TikTok' ? <TikTokIcon size={22} /> : null}
+                      {social.label === 'WhatsApp' ? <WhatsAppIcon size={22} /> : null}
+                      <span>{social.label}</span>
+                    </a>
+                  )) : (
+                    <span className={`text-[13px] ${textVal} leading-relaxed`}>{unavailableText}</span>
+                  )}
+                </div>
 
                 {/* ── Recent Reviews ── */}
-                {displayReviews.length > 0 && (
-                  <div className={`border-t ${isDark ? 'border-white/8' : 'border-slate-100'} px-4 py-3 space-y-3`}
-                    style={{ background: isDark ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.02)' }}>
-                    <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-widest ${labelText} font-semibold`}>
-                      <MessageCircle size={11} />
-                      {isAr ? 'مراجعات Google' : 'Google Reviews'}
-                    </div>
-                    {displayReviews.map((review: any, reviewIndex: number) => {
-                      const parsed = parseReviewTitle(review.title);
-                      return (
-                        <div key={`${place.placeId || place.name || 'place'}-review-${reviewIndex}`} className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {parsed.author ? (
-                              <span className={`text-xs font-semibold ${isDark ? 'text-white/80' : 'text-slate-800'}`}>{parsed.author}</span>
-                            ) : review.title ? (
-                              <span className={`text-xs font-semibold ${isDark ? 'text-white/80' : 'text-slate-800'}`}>{toCleanString(review.title)}</span>
-                            ) : null}
-                            {typeof parsed.rating === 'number' && (
-                              <span className={`text-[11px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>{parsed.rating.toFixed(1)}/5</span>
-                            )}
-                            {parsed.relTime && (
-                              <span className={`text-[11px] ${isDark ? 'text-white/35' : 'text-slate-400'}`}>{parsed.relTime}</span>
-                            )}
-                          </div>
-                          {review.snippet && (
-                            <p className={`text-[12px] ${isDark ? 'text-white/55' : 'text-slate-600'} leading-relaxed`}>
-                              {truncateReviewText(toCleanString(review.snippet), 200)}
-                            </p>
+                <div className={`border-t ${isDark ? 'border-white/8' : 'border-slate-100'} px-4 py-3 space-y-3`}
+                  style={{ background: isDark ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.02)' }}>
+                  <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-widest ${labelText} font-semibold`}>
+                    <MessageCircle size={11} />
+                    {isAr ? 'مراجعات Google' : 'Google Reviews'}
+                  </div>
+                  <div className={`text-[13px] ${textVal} leading-relaxed`}>
+                    {reviewCountValue ? `${reviewCountValue} ${isAr ? 'مراجعة Google' : 'Google reviews'}` : unavailableText}
+                  </div>
+                  {displayReviews.length > 0 ? displayReviews.map((review: any, reviewIndex: number) => {
+                    const parsed = parseReviewTitle(review.title);
+                    return (
+                      <div key={`${place.placeId || place.name || 'place'}-review-${reviewIndex}`} className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {parsed.author ? (
+                            <span className={`text-xs font-semibold ${isDark ? 'text-white/80' : 'text-slate-800'}`}>{parsed.author}</span>
+                          ) : review.title ? (
+                            <span className={`text-xs font-semibold ${isDark ? 'text-white/80' : 'text-slate-800'}`}>{toCleanString(review.title)}</span>
+                          ) : null}
+                          {typeof parsed.rating === 'number' && (
+                            <span className={`text-[11px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>{parsed.rating.toFixed(1)}/5</span>
+                          )}
+                          {parsed.relTime && (
+                            <span className={`text-[11px] ${isDark ? 'text-white/35' : 'text-slate-400'}`}>{parsed.relTime}</span>
                           )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        {review.snippet && (
+                          <p className={`text-[12px] ${isDark ? 'text-white/55' : 'text-slate-600'} leading-relaxed`}>
+                            {truncateReviewText(toCleanString(review.snippet), 200)}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  }) : (
+                    <div className={`text-[13px] ${textVal} leading-relaxed`}>{unavailableText}</div>
+                  )}
+                </div>
               </div>
             )}
           </div>
