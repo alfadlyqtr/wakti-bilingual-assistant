@@ -2649,11 +2649,7 @@ function buildStructuredSearchCards(params: {
     return {
       cardType,
       summary,
-      cards: cards.length > 0 ? cards : [{
-        title: language === 'ar' ? 'نتائج الأماكن' : 'Place results',
-        summary: summary || (language === 'ar' ? 'جاري تجهيز أفضل الخيارات لك.' : 'Finding the strongest nearby options for you.'),
-        badge: language === 'ar' ? 'أماكن' : 'Places',
-      }],
+      cards,
     };
   }
 
@@ -5333,8 +5329,14 @@ If you are running out of space, keep this order and drop the rest:
                 .catch(() => {});
             }
 
+            const searchModelQuery = searchIntent === 'business'
+              ? (language === 'ar'
+                  ? `${message}\n\n[قاعدة تنسيق إلزامية — يجب الالتزام بها]: يجب عليك تنسيق كل مكان مقترح بدقة كقائمة مهيكلة. ابدأ كل مكان بـ "**[الرقم]. [الاسم]** ([المنطقة])"، متبوعاً بوصف قصير، ثم هذه النقاط التفصيلية تماماً:\n- **Vibe:** [الكلمات المفتاحية]\n- **Must Try:** [التوصية]\n- **Status:** [مفتوح / مغلق]\n- **Google Maps:** [الرابط]\nلا تكتب فقرات عادية بدون هذه الحقول النقطية المصممة للبطاقات.`
+                  : `${message}\n\n[MANDATORY FORMATTING RULE — MUST COMPLY]: You MUST format each recommended place precisely as a structured list. Start each place with "**[Number]. [Name]** ([Area])", followed by a short description, and then exactly these bullet points:\n- **Vibe:** [keywords]\n- **Must Try:** [recommendation]\n- **Status:** [verified hours]\n- **Google Maps:** [link]\nDO NOT use plain paragraph style without these bullet fields designed for the cards.`)
+              : message;
+
             await streamGemini3WithSearch(
-              message,
+              searchModelQuery,
               searchSystemPrompt,
               { temperature: 0.3, maxOutputTokens: 8000 },
               recentMessages,

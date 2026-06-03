@@ -241,22 +241,26 @@ class ImapClient {
   }
 
   async fetchBody(uid: number): Promise<string> {
+    return this.fetchBodySection(uid);
+  }
+
+  async fetchBodySection(uid: number, section = ""): Promise<string> {
     const tag = this.nextTag();
-    await this.send(`${tag} UID FETCH ${uid} (BODY.PEEK[])`);
+    const sectionTarget = section ? `BODY.PEEK[${section}]` : "BODY.PEEK[]";
+    await this.send(`${tag} UID FETCH ${uid} (${sectionTarget})`);
     const lines = await this.readUntilTagged(tag, 30000);
-    let collecting = false;
-    let body = "";
-    for (const line of lines) {
-      if (line.match(/^\* \d+ FETCH/)) {
-        collecting = true;
-        continue;
-      }
-      if (collecting) {
-        if (line === ")") break;
-        body += line + "\n";
-      }
+    return extractFetchBodyContent(lines);
+  }
+
+  async fetchBodyStructure(uid: number): Promise<string> {
+    const tag = this.nextTag();
+    await this.send(`${tag} UID FETCH ${uid} (BODYSTRUCTURE)`);
+    const lines = await this.readUntilTagged(tag, 20000);
+    const payload = extractBodyStructurePayload(lines);
+    if (!payload) {
+      throw new Error("BODYSTRUCTURE not found in IMAP response");
     }
-    return body;
+    return payload;
   }
 
   async copy(uid: number, mailbox: string): Promise<void> {
@@ -373,6 +377,297 @@ function parseSearchUids(lines: string[]): number[] {
   }
 
   return matches;
+}
+
+function extractFetchBodyContent(lines: string[]): string {
+  let collecting = false;
+  let body = "";
+  for (const line of lines) {
+    if (line.match(/^\* \d+ FETCH/)) {
+      collecting = true;
+      continue;
+    }
+    if (collecting) {
+      if (line === ")") break;
+      body += line + "\n";
+    }
+  }
+  return body;
+}
+
+function extractBodyStructurePayload(lines: string[]): string | null {
+  const joined = lines.join(" ");
+  const markerIndex = joined.toUpperCase().indexOf("BODYSTRUCTURE");
+  if (markerIndex === -1) return null;
+  const startIndex = joined.indexOf("(", markerIndex);
+  if (startIndex === -1) return null;
+  return extractBalancedImapList(joined, startIndex);
+}
+
+function extractBalancedImapList(value: string, startIndex: number): string | null {
+  let depth = 0;
+  let inQuotes = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < value.length; index += 1) {
+    const char = value[index];
+    if (inQuotes) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inQuotes = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inQuotes = true;
+      continue;
+    }
+    if (char === "(") {
+      depth += 1;
+      continue;
+    }
+    if (char === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return value.slice(startIndex, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+type ImapListValue = string | number | null | ImapListValue[];
+
+type ParsedBodyStructurePart = {
+  id: string;
+  fetchSection: string;
+  type: string;
+  subtype: string;
+  contentType: string;
+  encoding: string;
+  size?: number;
+  inline: boolean;
+  isAttachment: boolean;
+  name: string | null;
+  children?: ParsedBodyStructurePart[];
+};
+
+function parseImapListValue(input: string): ImapListValue {
+  let cursor = 0;
+
+  const skipWhitespace = () => {
+    while (cursor < input.length && /\s/.test(input[cursor])) {
+      cursor += 1;
+    }
+  };
+
+  const readValue = (): ImapListValue => {
+    skipWhitespace();
+    if (input[cursor] === "(") {
+      cursor += 1;
+      const list: ImapListValue[] = [];
+      while (cursor < input.length) {
+        skipWhitespace();
+        if (input[cursor] === ")") {
+          cursor += 1;
+          break;
+        }
+        list.push(readValue());
+      }
+      return list;
+    }
+
+    if (input[cursor] === '"') {
+      cursor += 1;
+      let value = "";
+      while (cursor < input.length) {
+        const char = input[cursor];
+        cursor += 1;
+        if (char === "\\") {
+          if (cursor < input.length) {
+            value += input[cursor];
+            cursor += 1;
+          }
+          continue;
+        }
+        if (char === '"') {
+          break;
+        }
+        value += char;
+      }
+      return value;
+    }
+
+    const start = cursor;
+    while (cursor < input.length && !/[()\s]/.test(input[cursor])) {
+      cursor += 1;
+    }
+    const token = input.slice(start, cursor);
+    if (/^NIL$/i.test(token)) return null;
+    if (/^\d+$/.test(token)) return Number(token);
+    return token;
+  };
+
+  return readValue();
+}
+
+function parseBodyStructureParams(value: ImapListValue): Record<string, string> {
+  if (!Array.isArray(value)) return {};
+  const params: Record<string, string> = {};
+  for (let index = 0; index < value.length; index += 2) {
+    const key = value[index];
+    const rawValue = value[index + 1];
+    if (typeof key !== "string") continue;
+    if (typeof rawValue !== "string" && typeof rawValue !== "number") continue;
+    params[key.toLowerCase()] = String(rawValue);
+  }
+  return params;
+}
+
+function parseBodyStructureDisposition(value: ImapListValue): { type: string; params: Record<string, string> } | null {
+  if (!Array.isArray(value) || value.length === 0) return null;
+  const rawType = value[0];
+  if (typeof rawType !== "string") return null;
+  return {
+    type: rawType.toLowerCase(),
+    params: parseBodyStructureParams(value[1]),
+  };
+}
+
+function getBodyStructureDispositionIndex(type: string, subtype: string): number {
+  if (type === "text") return 9;
+  if (type === "message" && subtype === "rfc822") return 11;
+  return 8;
+}
+
+function buildBodyStructureTree(value: ImapListValue, id = "0", section = ""): ParsedBodyStructurePart | null {
+  if (!Array.isArray(value) || value.length < 2) return null;
+
+  if (Array.isArray(value[0])) {
+    let childCount = 0;
+    while (childCount < value.length && Array.isArray(value[childCount])) {
+      childCount += 1;
+    }
+    const subtype = typeof value[childCount] === "string" ? value[childCount].toLowerCase() : "mixed";
+    const children = value
+      .slice(0, childCount)
+      .map((child, index) => buildBodyStructureTree(
+        child,
+        `${id}.${index + 1}`,
+        section ? `${section}.${index + 1}` : `${index + 1}`,
+      ))
+      .filter(Boolean) as ParsedBodyStructurePart[];
+
+    return {
+      id,
+      fetchSection: section || "TEXT",
+      type: "multipart",
+      subtype,
+      contentType: `multipart/${subtype}`,
+      encoding: "",
+      inline: false,
+      isAttachment: false,
+      name: null,
+      children,
+    };
+  }
+
+  const type = typeof value[0] === "string" ? value[0].toLowerCase() : "application";
+  const subtype = typeof value[1] === "string" ? value[1].toLowerCase() : "octet-stream";
+  const params = parseBodyStructureParams(value[2]);
+  const encoding = typeof value[5] === "string" ? value[5].toLowerCase() : "7bit";
+  const size = typeof value[6] === "number" ? value[6] : undefined;
+  const disposition = parseBodyStructureDisposition(value[getBodyStructureDispositionIndex(type, subtype)]);
+  const name = disposition?.params.filename || disposition?.params.name || params.name || null;
+  const inline = disposition?.type === "inline";
+  const isAttachment = disposition?.type === "attachment" || Boolean(name) || (inline && Boolean(name));
+
+  return {
+    id,
+    fetchSection: section || "TEXT",
+    type,
+    subtype,
+    contentType: `${type}/${subtype}`,
+    encoding,
+    size,
+    inline,
+    isAttachment,
+    name,
+  };
+}
+
+function parseBodyStructureTree(payload: string): ParsedBodyStructurePart | null {
+  try {
+    const parsed = parseImapListValue(payload);
+    return buildBodyStructureTree(parsed);
+  } catch {
+    return null;
+  }
+}
+
+function collectBodyStructureContent(root: ParsedBodyStructurePart): {
+  textPart: ParsedBodyStructurePart | null;
+  htmlPart: ParsedBodyStructurePart | null;
+  attachments: ParsedAttachment[];
+} {
+  let textPart: ParsedBodyStructurePart | null = null;
+  let htmlPart: ParsedBodyStructurePart | null = null;
+  const attachments: ParsedAttachment[] = [];
+
+  const visit = (part: ParsedBodyStructurePart) => {
+    if (part.children?.length) {
+      part.children.forEach(visit);
+      return;
+    }
+
+    if (part.isAttachment) {
+      attachments.push({
+        id: part.id,
+        name: part.name || "attachment",
+        contentType: part.contentType,
+        size: part.size,
+        inline: part.inline,
+      });
+      return;
+    }
+
+    if (part.type === "text" && part.subtype === "plain" && !textPart) {
+      textPart = part;
+      return;
+    }
+    if (part.type === "text" && part.subtype === "html" && !htmlPart) {
+      htmlPart = part;
+    }
+  };
+
+  visit(root);
+  return { textPart, htmlPart, attachments };
+}
+
+function findBodyStructurePartById(root: ParsedBodyStructurePart, id: string): ParsedBodyStructurePart | null {
+  if (root.id === id) return root;
+  for (const child of root.children || []) {
+    const match = findBodyStructurePartById(child, id);
+    if (match) return match;
+  }
+  return null;
+}
+
+function decodeFetchedBodyPart(content: string, encoding: string, contentType: string): string {
+  const decoded = decodeBody(content, encoding).replace(/\r\n?/g, "\n");
+  if (contentType === "text/plain") {
+    return normalizeTextContent(decoded);
+  }
+  return decoded;
 }
 
 function decodeMimeWords(str: string): string {
@@ -602,6 +897,56 @@ function findAttachmentById(raw: string, attachmentId: string): ParsedAttachment
   const normalizedRaw = raw.replace(/\r\n?/g, "\n");
   const parsed = parseMimeNode(normalizedRaw, "0", true);
   return parsed.attachments.find((attachment) => attachment.id === attachmentId) || null;
+}
+
+async function extractOptimizedMessage(imap: ImapClient, uid: number): Promise<{ text: string; html: string; snippet: string; attachments: ParsedAttachment[] } | null> {
+  const structurePayload = await imap.fetchBodyStructure(uid);
+  const structureTree = parseBodyStructureTree(structurePayload);
+  if (!structureTree) return null;
+
+  const { textPart, htmlPart, attachments } = collectBodyStructureContent(structureTree);
+  let text = "";
+  let html = "";
+
+  if (textPart) {
+    const rawText = await imap.fetchBodySection(uid, textPart.fetchSection);
+    text = decodeFetchedBodyPart(rawText, textPart.encoding, textPart.contentType);
+  }
+
+  if (htmlPart) {
+    const rawHtml = await imap.fetchBodySection(uid, htmlPart.fetchSection);
+    html = decodeFetchedBodyPart(rawHtml, htmlPart.encoding, htmlPart.contentType);
+  }
+
+  if (!text && html) {
+    text = normalizeTextContent(stripHtml(html));
+  }
+
+  return {
+    text,
+    html,
+    snippet: text.slice(0, 160).trim(),
+    attachments,
+  };
+}
+
+async function downloadAttachmentFromStructure(imap: ImapClient, uid: number, attachmentId: string): Promise<ParsedAttachment | null> {
+  const structurePayload = await imap.fetchBodyStructure(uid);
+  const structureTree = parseBodyStructureTree(structurePayload);
+  if (!structureTree) return null;
+
+  const attachmentPart = findBodyStructurePartById(structureTree, attachmentId);
+  if (!attachmentPart || !attachmentPart.isAttachment) return null;
+
+  const rawAttachment = await imap.fetchBodySection(uid, attachmentPart.fetchSection);
+  return {
+    id: attachmentPart.id,
+    name: attachmentPart.name || "attachment",
+    contentType: attachmentPart.contentType,
+    size: attachmentPart.size,
+    inline: attachmentPart.inline,
+    content: encodeAttachmentContent(rawAttachment, attachmentPart.encoding),
+  };
 }
 
 type DraftAttachment = {
@@ -1363,8 +1708,35 @@ Deno.serve(async (req: Request) => {
             });
           }
         }
-        const rawBody = await session.imap.fetchBody(uid);
-        const { text, html, snippet, attachments } = extractBodyParts(rawBody);
+        let text = "";
+        let html = "";
+        let snippet = "";
+        let attachments: ParsedAttachment[] = [];
+
+        try {
+          const optimized = await extractOptimizedMessage(session.imap, uid);
+          if (optimized) {
+            text = optimized.text;
+            html = optimized.html;
+            snippet = optimized.snippet;
+            attachments = optimized.attachments;
+          } else {
+            throw new Error("Optimized body extraction unavailable");
+          }
+        } catch (optimizedError) {
+          console.log("[imap-api] optimized message fetch fallback", {
+            login: session.login,
+            uid,
+            folder,
+            error: optimizedError instanceof Error ? optimizedError.message : String(optimizedError),
+          });
+          const rawBody = await session.imap.fetchBody(uid);
+          const parsed = extractBodyParts(rawBody);
+          text = parsed.text;
+          html = parsed.html;
+          snippet = parsed.snippet;
+          attachments = parsed.attachments;
+        }
         return jsonResponse({ uid, body: { text, html }, snippet, attachments });
       } finally {
         await session.imap.logout();
@@ -1379,8 +1751,22 @@ Deno.serve(async (req: Request) => {
       if (!attachmentId) return jsonResponse({ error: "attachmentId required" }, 400);
       const session = await openMailbox(conn, folder);
       try {
-        const rawBody = await session.imap.fetchBody(uid);
-        const attachment = findAttachmentById(rawBody, attachmentId);
+        let attachment: ParsedAttachment | null = null;
+        try {
+          attachment = await downloadAttachmentFromStructure(session.imap, uid, attachmentId);
+        } catch (optimizedError) {
+          console.log("[imap-api] optimized attachment fetch fallback", {
+            login: session.login,
+            uid,
+            folder,
+            attachmentId,
+            error: optimizedError instanceof Error ? optimizedError.message : String(optimizedError),
+          });
+        }
+        if (!attachment) {
+          const rawBody = await session.imap.fetchBody(uid);
+          attachment = findAttachmentById(rawBody, attachmentId);
+        }
         if (!attachment || !attachment.content) {
           return jsonResponse({ error: "Attachment not found" }, 404);
         }
