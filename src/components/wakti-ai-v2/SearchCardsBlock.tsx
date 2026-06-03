@@ -226,13 +226,15 @@ function buildCards(message: MessageLike | null | undefined, language: string) {
   const bulletCards = extractBulletCards(content);
 
   const sourceCards: SearchCardItem[] = sources.slice(0, 6).map((source: any, index: number) => {
-    const sourceLabel = getHostLabel(typeof source?.url === 'string' ? source.url : '') || (language === 'ar' ? 'مصدر' : 'Source');
-    const specificContent = bulletCards[index]?.summary || supportSnippets[index] || '';
-    const fallbackSummary = specificContent || (index === 0 ? summary : '') || '';
+    const sourceUrl = typeof source?.url === 'string' ? source.url : '';
+    const sourceLabel = getHostLabel(sourceUrl) || (language === 'ar' ? 'مصدر' : 'Source');
+    const aiTitle = bulletCards[index]?.title || '';
+    const aiSummary = bulletCards[index]?.summary || (index === 0 ? summary : '') || '';
+    const rawSourceTitle = cleanSearchText(typeof source?.title === 'string' ? source.title : '');
     return {
-      title: cleanSearchText(typeof source?.title === 'string' ? source.title : '') || `${language === 'ar' ? 'مصدر' : 'Source'} ${index + 1}`,
-      summary: truncate(fallbackSummary, 160),
-      url: typeof source?.url === 'string' ? source.url : undefined,
+      title: aiTitle || rawSourceTitle || `${language === 'ar' ? 'مصدر' : 'Source'} ${index + 1}`,
+      summary: truncate(aiSummary, 160),
+      url: sourceUrl || undefined,
       sourceLabel,
     };
   });
@@ -306,7 +308,9 @@ function buildCards(message: MessageLike | null | undefined, language: string) {
 
 function SourceChip({ source, index }: { source: any; index: number }) {
   const url = typeof source?.url === 'string' ? source.url : '';
-  const label = getHostLabel(url) || (typeof source?.title === 'string' ? truncate(source.title, 20) : `Source ${index + 1}`);
+  const rawTitle = typeof source?.title === 'string' ? source.title.trim() : '';
+  const hostLabel = getHostLabel(url);
+  const label = (rawTitle && rawTitle !== hostLabel) ? truncate(rawTitle, 24) : (hostLabel || rawTitle || `Source ${index + 1}`);
   const favicon = getFaviconUrl(url);
 
   return (

@@ -36,10 +36,12 @@ type VisualAdsJobInsertClient = {
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
 const KIE_IMAGE2VIDEO_MODEL = "grok-imagine-video-1-5-preview";
 const KIE_TEXT2VIDEO_MODEL = "grok-imagine/text-to-video";
-const KIE_2IMAGES_MODEL = "bytedance/seedance-1.5-pro";
+const KIE_2IMAGES_MODEL = "veo3_lite";
 const KIE_VISUAL_ADS_MODEL = "gpt-image-2-image-to-image";
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_STATUS_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
+const KIE_VEO_CREATE_URL = "https://api.kie.ai/api/v1/veo/generate";
+const KIE_VEO_STATUS_URL = "https://api.kie.ai/api/v1/veo/record-info";
 
 // Poll interval and max attempts
 const POLL_INTERVAL_MS = 5000; // 5 seconds
@@ -70,6 +72,36 @@ interface KieStatusResponse {
     costTime?: number;
     completeTime?: number;
     createTime?: number;
+  };
+}
+
+interface VeoCreateResponse {
+  code: number;
+  msg?: string;
+  message?: string;
+  data?: {
+    taskId: string;
+  };
+}
+
+interface VeoStatusResponse {
+  code: number;
+  msg?: string;
+  message?: string;
+  data?: {
+    taskId?: string;
+    successFlag?: number;
+    errorCode?: string | number | null;
+    errorMessage?: string | null;
+    createTime?: string;
+    completeTime?: string;
+    response?: {
+      taskId?: string;
+      resultUrls?: string[];
+      originUrls?: string[];
+      fullResultUrls?: string[];
+      resolution?: string;
+    } | null;
   };
 }
 
@@ -718,22 +750,68 @@ async function createVideoTask(
   void videoStyleMode;
   const parsedSingleImageDuration = Number.parseInt(duration || "", 10);
   const validDuration = isTwoImages
-    ? (["4", "8", "12"].includes(duration || "") ? duration! : "8")
+    ? (["6", "8"].includes(duration || "") ? duration! : "8")
     : (Number.isFinite(parsedSingleImageDuration) && parsedSingleImageDuration >= 1 && parsedSingleImageDuration <= 15)
       ? String(parsedSingleImageDuration)
       : "6";
   const validAspectRatio = isTwoImages
-    ? (["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "")
+    ? (["16:9", "9:16", "Auto"].includes(aspectRatio || "")
       ? aspectRatio!
       : "9:16")
     : (["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "auto"].includes(aspectRatio || "")
       ? aspectRatio!
       : "auto");
   const validResolution = isTwoImages
-    ? (["480p", "720p"].includes(resolution || "") ? resolution! : "480p")
+    ? (["720p", "1080p"].includes(resolution || "") ? resolution! : "720p")
     : (["480p", "720p"].includes(resolution || "") ? resolution! : "480p");
 
   const model = isTwoImages ? KIE_2IMAGES_MODEL : (modelOverride || KIE_IMAGE2VIDEO_MODEL);
+
+  if (isTwoImages) {
+    const frameDirective = "FRAME RULE: The FIRST uploaded image is the OPENING START FRAME. The SECOND uploaded image is the CLOSING END FRAME. Create a smooth transition that clearly begins on image 1 and clearly ends on image 2.";
+    const userPromptPart = prompt ? prompt.slice(0, 2000) : "";
+    const veoPrompt = userPromptPart
+      ? `${frameDirective}\n\n${userPromptPart}`
+      : frameDirective;
+
+    const requestBody = {
+      prompt: veoPrompt,
+      imageUrls: sanitizedImageUrls,
+      model,
+      generationType: "FIRST_AND_LAST_FRAMES_2_VIDEO",
+      aspect_ratio: validAspectRatio,
+      resolution: validResolution,
+      duration: Number.parseInt(validDuration, 10),
+      enableTranslation: true,
+    };
+
+    console.log("[kie-2images2video] Creating Veo task, model:", model);
+
+    const response = await fetch(KIE_VEO_CREATE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${KIE_API_KEY}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[kie-2images2video] Create Veo task failed:", response.status, errorText);
+      throw new Error(`Video generation service error ${response.status}`);
+    }
+
+    const result: VeoCreateResponse = await response.json();
+    console.log("[kie-2images2video] Create Veo response:", JSON.stringify(result));
+
+    if (result.code !== 200 || !result.data?.taskId) {
+      throw new Error(sanitizeError(result.msg || result.message || "Failed to create task"));
+    }
+
+    console.log("[kie-2images2video] Veo task created, taskId:", result.data.taskId);
+    return { task_id: result.data.taskId, status: "waiting" };
+  }
 
   const input: Record<string, unknown> = isTwoImages
     ? {
@@ -818,7 +896,59 @@ function mapKieState(state: string): string {
   }
 }
 
+async function getVeoTaskStatus(taskId: string): Promise<TaskStatusData> {
+  const statusUrl = `${KIE_VEO_STATUS_URL}?taskId=${encodeURIComponent(taskId)}`;
+  console.log("[kie-2images2video] Checking Veo status for task:", taskId);
+
+  const statusRes = await fetch(statusUrl, {
+    method: "GET",
+    headers: { "Authorization": `Bearer ${KIE_API_KEY}` },
+  });
+
+  if (!statusRes.ok) {
+    const errorText = await statusRes.text();
+    console.error("[kie-2images2video] Get Veo status failed:", statusRes.status, errorText);
+    throw new Error(`Video status check error ${statusRes.status}`);
+  }
+
+  const statusData: VeoStatusResponse = await statusRes.json();
+  console.log("[kie-2images2video] Veo status response:", JSON.stringify(statusData));
+
+  if (statusData.code !== 200 || !statusData.data) {
+    throw new Error(sanitizeError(statusData.msg || statusData.message || "Failed to get status"));
+  }
+
+  const resultUrls = statusData.data.response?.resultUrls || [];
+  const videoUrl = resultUrls[0];
+
+  if (statusData.data.successFlag === 1 && videoUrl) {
+    return {
+      task_id: taskId,
+      status: "COMPLETED",
+      generated: [videoUrl],
+      video: { url: videoUrl },
+    };
+  }
+
+  if (statusData.data.errorCode || (statusData.data.errorMessage && statusData.data.errorMessage.trim().length > 0)) {
+    return {
+      task_id: taskId,
+      status: "FAILED",
+      error: statusData.data.errorMessage || "Video generation failed",
+    };
+  }
+
+  return {
+    task_id: taskId,
+    status: "IN_PROGRESS",
+  };
+}
+
 async function getTaskStatus(taskId: string): Promise<TaskStatusData> {
+  if (taskId.startsWith("veo_task_")) {
+    return getVeoTaskStatus(taskId);
+  }
+
   const statusUrl = `${KIE_STATUS_URL}?taskId=${encodeURIComponent(taskId)}`;
   console.log("[kie-image2video] Checking status for task:", taskId);
 

@@ -447,13 +447,12 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
     });
   }
 
-  return [];
+  return parsePlacesFromMessageContent(message?.content);
 }
 
 export function hasGroundedPlaces(message: MessageLike | null | undefined) {
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
   const searchType = typeof resolvedBrowsingData?.searchType === 'string' ? resolvedBrowsingData.searchType.trim().toLowerCase() : '';
-  if (searchType === 'business') return true;
   const places = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
   if (places.length === 0) return false;
   return places.some((p: any) => Boolean(

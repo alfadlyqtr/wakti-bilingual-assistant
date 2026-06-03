@@ -266,15 +266,16 @@ function AccountSelector({ connections, health, activeId, onChange }: AccountSel
 interface CustomMailClientProps {
   connections: ImapConnection[];
   health: Record<string, ImapConnectionHealth>;
+  preferredConnectionId?: string | null;
   onOpenSettings: () => void;
   language?: string;
   operatorPreset?: MailComposerPreset | null;
   onOperatorPresetConsumed?: () => void;
 }
 
-export function CustomMailClient({ connections, health, onOpenSettings, language = 'en', operatorPreset = null, onOperatorPresetConsumed }: CustomMailClientProps) {
+export function CustomMailClient({ connections, health, preferredConnectionId = null, onOpenSettings, language = 'en', operatorPreset = null, onOperatorPresetConsumed }: CustomMailClientProps) {
   const [activeConnectionId, setActiveConnectionId] = useState(
-    connections.find(c => c.is_primary)?.id || connections[0]?.id || ''
+    preferredConnectionId || connections.find(c => c.is_primary)?.id || connections[0]?.id || ''
   );
   const imap = useImapMessages(activeConnectionId);
 
@@ -340,6 +341,14 @@ export function CustomMailClient({ connections, health, onOpenSettings, language
     if (imap.activeFolder !== 'INBOX') return 0;
     return imap.messages.filter((message) => message.isUnread).length;
   }, [imap.activeFolder, imap.messages]);
+
+  useEffect(() => {
+    if (!preferredConnectionId || preferredConnectionId === activeConnectionId) return;
+    if (!connections.find(c => c.id === preferredConnectionId)) return;
+    setSelectedMessage(null);
+    setRealFolderName('INBOX');
+    setActiveConnectionId(preferredConnectionId);
+  }, [activeConnectionId, connections, preferredConnectionId]);
 
   useEffect(() => {
     if (connections.length > 0 && !connections.find(c => c.id === activeConnectionId)) {

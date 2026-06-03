@@ -212,8 +212,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setGenerationModeRaw(mode);
     if (mode === '2images_to_video') {
       setDuration('8');
+      setResolution('720p');
     } else {
       setDuration('6');
+      if (resolution === '1080p') setResolution('480p');
     }
   };
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -223,7 +225,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [prompt, setPrompt] = useState('');
   const [duration, setDuration] = useState<'4' | '6' | '8' | '10' | '12'>('8');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
-  const [resolution, setResolution] = useState<'480p' | '720p'>('480p');
+  const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('480p');
   const [videoStyleMode, setVideoStyleMode] = useState<'normal' | 'fun'>('normal');
   const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
   const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
@@ -2239,15 +2241,15 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 {generationMode === '2images_to_video' ? (
                   <>
                     <button
-                      onClick={() => !isGenerating && setDuration('4')}
+                      onClick={() => !isGenerating && setDuration('6')}
                       disabled={isGenerating}
                       className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
-                        duration === '4'
+                        duration === '6'
                           ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
                           : 'text-muted-foreground hover:text-primary'
                       }`}
                     >
-                      {language === 'ar' ? '4 ث' : '4s'}
+                      {language === 'ar' ? '6 ث' : '6s'}
                     </button>
                     <button
                       onClick={() => !isGenerating && setDuration('8')}
@@ -2259,20 +2261,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       }`}
                     >
                       {language === 'ar' ? '8 ث' : '8s'}
-                    </button>
-                    <button
-                      onClick={() => !isGenerating && !(resolution === '720p') && setDuration('12')}
-                      disabled={isGenerating || resolution === '720p'}
-                      title={resolution === '720p' ? (language === 'ar' ? 'غير متاح في 720p' : 'Not available at 720p') : undefined}
-                      className={`px-2.5 py-1.5 text-xs font-medium transition-all mr-0.5 ${
-                        duration === '12'
-                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                          : resolution === '720p'
-                            ? 'text-muted-foreground/30 cursor-not-allowed'
-                            : 'text-muted-foreground hover:text-primary'
-                      }`}
-                    >
-                      {language === 'ar' ? '12 ث' : '12s'}
                     </button>
                   </>
                 ) : (
@@ -4594,35 +4582,68 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                 {/* Resolution picker - all modes */}
                 <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
-                  <button
-                    onClick={() => {
-                      if (!isGenerating) setResolution('480p');
-                    }}
-                    disabled={isGenerating}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                      resolution === '480p'
-                        ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                    }`}
-                  >
-                    480p
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!isGenerating) {
-                        setResolution('720p');
-                        if (duration === '12') setDuration('8');
-                      }
-                    }}
-                    disabled={isGenerating}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                      resolution === '720p'
-                        ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                    }`}
-                  >
-                    720p
-                  </button>
+                  {generationMode === '2images_to_video' ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating) setResolution('720p');
+                        }}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          resolution === '720p'
+                            ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        720p
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating) setResolution('1080p');
+                        }}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          resolution === '1080p'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        1080p
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating) setResolution('480p');
+                        }}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          resolution === '480p'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        480p
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating) {
+                            setResolution('720p');
+                            if (duration === '12') setDuration('8');
+                          }
+                        }}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          resolution === '720p'
+                            ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        720p
+                      </button>
+                    </>
+                  )}
                 </div>
                 {(generationMode === 'image_to_video' || generationMode === 'text_to_video') && (
                   <div className="relative flex items-center gap-1">

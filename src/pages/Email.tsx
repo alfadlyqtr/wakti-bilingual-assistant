@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useEmailConnections, ImapConnectionHealth } from '@/hooks/useEmailConnections';
@@ -48,6 +48,8 @@ export default function Email() {
   const [signatureUpdatedAt, setSignatureUpdatedAt] = useState(storedSignatureSettings.updatedAt);
   const [generatingSignature, setGeneratingSignature] = useState(false);
   const [processingSignatureImage, setProcessingSignatureImage] = useState(false);
+  const [pendingAppleMailboxOpen, setPendingAppleMailboxOpen] = useState(false);
+  const [preferredMailConnectionId, setPreferredMailConnectionId] = useState<string | null>(null);
   const pageCardClass = 'rounded-[26px] border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,0.995),rgba(249,250,255,0.98))] shadow-[0_18px_48px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(12,15,20,0.98),rgba(18,22,31,0.96))] dark:shadow-[0_20px_48px_rgba(0,0,0,0.45)] dark:ring-1 dark:ring-white/5';
   const panelClass = 'rounded-[22px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] shadow-[0_10px_28px_rgba(6,5,65,0.07)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(15,18,26,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_12px_30px_rgba(0,0,0,0.36)] dark:ring-1 dark:ring-white/5';
   const outlineButtonClass = 'border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.34)] dark:hover:!bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]';
@@ -59,6 +61,15 @@ export default function Email() {
   const icloudConnections = customConnections.filter((connection) => connection.provider === 'icloud');
   const verifiedIcloudCount = icloudConnections.filter((connection) => emailConn.imap.health[connection.id]?.status === 'verified').length;
   const primaryIcloudConnection = icloudConnections.find((connection) => connection.is_primary) || icloudConnections[0] || null;
+  const latestIcloudConnection = useMemo(() => {
+    if (icloudConnections.length === 0) return null;
+    return [...icloudConnections].sort((a, b) => {
+      const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return bTime - aTime;
+    })[0] || null;
+  }, [icloudConnections]);
+  const preferredAppleConnectionId = latestIcloudConnection?.id || primaryIcloudConnection?.id || null;
   const operatorPayload = useMemo(() => readWaktiOperatorPayload(searchParams.get('waktiOperator')), [searchParams]);
   const operatorPreset = useMemo<MailComposerPreset | null>(() => {
     if (!operatorPayload?.email) return null;
@@ -76,6 +87,26 @@ export default function Email() {
     if (!operatorPreset) return;
     setPendingOperatorPreset(operatorPreset);
   }, [operatorPreset]);
+
+  const handleConnectionSave = useCallback(async (config: {
+    provider: string;
+    display_name: string;
+    email_address: string;
+    smtp_host: string;
+    smtp_port: number;
+    smtp_secure: boolean;
+    username: string;
+    password: string;
+    imap_host?: string;
+    imap_port?: number;
+    imap_secure?: boolean;
+  }) => {
+    const result = await emailConn.imap.add(config);
+    if (result.success && connectionModalPreset === 'icloud') {
+      setPendingAppleMailboxOpen(true);
+    }
+    return result;
+  }, [connectionModalPreset, emailConn.imap]);
 
   const handleOperatorPresetConsumed = () => {
     setPendingOperatorPreset(null);
@@ -119,6 +150,30 @@ export default function Email() {
     }
     setActiveTab('settings');
   }, [customConnections.length, gmailConnected, imapLoading, operatorPayload]);
+
+  useEffect(() => {
+    if (!pendingAppleMailboxOpen) return;
+    const targetConnectionId = preferredAppleConnectionId;
+    if (!targetConnectionId) return;
+    if (emailConn.imap.health[targetConnectionId]?.status !== 'verified') return;
+    setPreferredMailConnectionId(targetConnectionId);
+    setActiveTab('mail');
+    setPendingAppleMailboxOpen(false);
+  }, [emailConn.imap.health, pendingAppleMailboxOpen, preferredAppleConnectionId]);
+
+  const handleTabChange = useCallback((nextTab: EmailTab) => {
+    if (nextTab === 'apple' && verifiedIcloudCount > 0 && preferredAppleConnectionId) {
+      setPreferredMailConnectionId(preferredAppleConnectionId);
+      setActiveTab('mail');
+      return;
+    }
+    setActiveTab(nextTab);
+  }, [preferredAppleConnectionId, verifiedIcloudCount]);
+
+  useEffect(() => {
+    if (activeTab !== 'mail' || !preferredMailConnectionId) return;
+    setPreferredMailConnectionId(null);
+  }, [activeTab, preferredMailConnectionId]);
 
   const t = useMemo(() => ({
     title: language === 'ar' ? 'البريد' : 'Email',
@@ -643,6 +698,7 @@ export default function Email() {
       <CustomMailClient
         connections={customConnections}
         health={emailConn.imap.health}
+        preferredConnectionId={preferredMailConnectionId}
         onOpenSettings={() => setActiveTab('settings')}
         language={language}
         operatorPreset={activeTab === 'mail' ? pendingOperatorPreset : null}
@@ -672,7 +728,7 @@ export default function Email() {
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => handleTabChange(tab.key)}
                 className={`flex min-h-[46px] items-center justify-center gap-2 rounded-[18px] border px-2 py-2 text-[11px] font-medium transition-all md:text-sm ${activeTab === tab.key ? 'border-[#060541] bg-[#060541] text-white shadow-[0_14px_28px_rgba(6,5,65,0.3)] ring-1 ring-[#060541]/35 dark:border-white/15 dark:bg-[linear-gradient(180deg,rgba(34,40,56,0.98),rgba(16,20,29,0.96))] dark:text-white dark:shadow-[0_16px_30px_rgba(0,0,0,0.45)] dark:ring-white/10' : 'border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] text-[#060541]/88 shadow-[0_4px_12px_rgba(6,5,65,0.06)] hover:border-[#060541]/22 hover:bg-[#f3f5ff] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.96),rgba(11,14,21,0.94))] dark:text-foreground dark:shadow-[0_10px_22px_rgba(0,0,0,0.32)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))]'}`}
               >
                 <span className="flex items-center gap-1">{tab.icon}</span>
@@ -696,7 +752,7 @@ export default function Email() {
             }
           }}
           presetProvider={connectionModalPreset}
-          onSave={emailConn.imap.add}
+          onSave={handleConnectionSave}
         />
       </div>
     </div>

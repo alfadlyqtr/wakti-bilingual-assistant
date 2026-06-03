@@ -1662,7 +1662,7 @@ export function ChatMessages({
     // Render assistant content using ReactMarkdown (tables, code, images)
     if (message.role === 'assistant') {
       // Search: render the dedicated mobile-first Search UI
-      if (message.intent === 'search') {
+      if (message.intent === 'search' || (message.browsingUsed && resolveGroundedBrowsingData(message))) {
         return <SearchMessageCard message={message} language={language} />;
       }
 

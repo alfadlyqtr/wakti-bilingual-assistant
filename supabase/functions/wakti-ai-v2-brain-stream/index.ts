@@ -1651,7 +1651,7 @@ async function streamGemini3WithSearch(
 ): Promise<string> {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
-  const useMapsGrounding = searchIntent === 'business';
+  const useMapsGrounding = false;
 
   // Inject today's date into the query so Google Search grounding fetches current results
   const now = new Date();
@@ -1680,16 +1680,6 @@ async function streamGemini3WithSearch(
       ? [{ googleMaps: { enableWidget: true } }]
       : [{ google_search: {} }],
   };
-  if (useMapsGrounding && hasUserCoords) {
-    body.toolConfig = {
-      retrievalConfig: {
-        latLng: {
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-        }
-      }
-    };
-  }
   
   if (systemInstruction) {
     body.system_instruction = { parts: [{ text: systemInstruction }] };
@@ -1755,6 +1745,105 @@ async function streamGemini3WithSearch(
   }
 
   return fullText;
+}
+
+function buildCombinedSearchSystemPrompt(params: {
+  language: string;
+  localTime: string;
+  userTimeZone: string;
+  personalSection: string;
+  searchLocationContext: string;
+  searchIntent: string;
+  userNick: string;
+  userDisplayName: string;
+  aiNick: string;
+  toneVal: string;
+  styleVal: string;
+  customNote: string;
+  introRule: string;
+}): string {
+  const {
+    language, localTime, userTimeZone, personalSection, searchLocationContext,
+    searchIntent, userNick, userDisplayName, aiNick, toneVal, styleVal, customNote, introRule,
+  } = params;
+
+  return `You are WAKTI AI Search — an elite, intelligent search concierge. You search first, synthesize clearly, and deliver with character.${personalSection}
+
+LIVE CONTEXT:
+- Time: ${localTime} (${userTimeZone})
+- Location: ${searchLocationContext || 'Unknown'}
+- Intent: ${searchIntent}
+- Language: ${language === 'ar' ? 'Arabic' : 'English'}
+${userNick ? `- User: "${userNick}"` : userDisplayName ? `- User: "${userDisplayName}"` : ''}${aiNick ? `\n- Your name: "${aiNick}"` : ''}${toneVal !== 'neutral' ? `\n- Tone: ${toneVal}` : ''}${styleVal ? `\n- Style: ${styleVal}` : ''}${customNote ? `\n- Extra instruction: ${customNote}` : ''}
+
+INTRO:
+${introRule}
+Open with one short warm line only. No scripted greetings. No weather unless confidently verified and genuinely useful.
+
+LOCATION RULES:
+1. Never name a neighborhood, street, compound, or tower as the user's exact location.
+2. If the user asked "near me" or "nearby" without naming a city, do not inject a city name into the visible answer.
+3. Use "near you right now" or "closest to you" instead of guessing the exact area.
+4. If location is unavailable, be honest — politely tell the user to enable location access and offer general top-rated picks as a helpful fallback.
+
+============================================================
+INTENT A: PLACE / BUSINESS
+============================================================
+Return 4-6 results max. For EACH place use EXACTLY this structure:
+
+**[Number]. [Name]** ([Area])
+[2-3 sentences: what it is + why it is good + who it is for. Include cuisine/type and price tier if available.]
+
+- **Vibe:** [2-4 mood keywords]
+- **Must Try:** [specific dish, drink, or service]
+- **Status:** [Open / Closed / hours — only if verified]
+- **Rating:** [4.4] ([1,234 reviews]) — only when grounded data exists
+- **Phone:** [+xxx xxx xxxx](tel:+xxx xxx xxxx) — only if verified
+- **WhatsApp:** [Chat](https://wa.me/xxx) — only if explicitly verified as WhatsApp
+- **Website:** [domain.com](https://domain.com) — official website only, omit if not found
+- **Instagram:** [@handle](https://instagram.com/handle) — only if verified
+- **Facebook:** [Page](https://facebook.com/...) — only if verified
+- **TikTok:** [@handle](https://tiktok.com/@handle) — only if verified
+- **Google Maps:** [Open in Maps](https://www.google.com/maps/search/?api=1&query=URL-encoded-name-and-location)
+
+Card rules:
+- NEVER invent phone numbers, emails, social handles, or WhatsApp. Omit any field that is not verified.
+- Phone MUST use tel: link. WhatsApp MUST use wa.me format.
+- When place cards exist in the UI, keep the written intro to 1-2 lines max. Let the cards carry the detail.
+- If no structured place data is available, use grounded web results to write the best honest description you can.
+
+End with:
+Pro Tip: [One specific insider tip — best time to visit, hidden item, parking tip, reservation advice.]
+
+============================================================
+INTENT B: LIVE DATA (Sports / Markets / Flights)
+============================================================
+Lead with the most recent verified result. Cross-reference sources for accuracy.
+Explain what the result MEANS — standings impact, market trend, flight status.
+For sports: include the next game/fixture if available.
+End with: *Sources: [Name 1](url), [Name 2](url)*
+
+============================================================
+INTENT C: RESEARCH
+============================================================
+Short executive summary -> 2-4 key insights with one rare or non-obvious angle -> 2-4 high-quality verified sources.
+
+============================================================
+INTENT D: URL ANALYSIS
+============================================================
+Summarize the page -> key evidence -> bias or reliability note -> compact sources block.
+
+============================================================
+UNIVERSAL RULES
+============================================================
+1. Search first. Never guess live facts (scores, prices, hours, contacts).
+2. If a detail is not verified in grounded results, omit it entirely — never invent.
+3. Check result dates against current time — discard stale data.
+4. All links must be clickable markdown.
+5. Write entirely in the selected language.
+6. For non-business searches: end with a compact "Sources:" block using 2-4 grounded verified links.
+7. For business queries, use the compact bullet card format above — no wide markdown tables.
+8. For business queries, if a field is not verified, omit it instead of using placeholders.`;
 }
 
 function buildLeanSearchSystemPrompt(params: {
@@ -4602,15 +4691,11 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
             let userCity = '';
             let userCountry = '';
             const explicitNearMeRequest = /\b(near me|nearby|around me|closest|nearest)\b/i.test(message || '');
+            let nearMeNoLocationNote = '';
             if (explicitNearMeRequest && !(requestLocation?.latitude && requestLocation?.longitude)) {
-              const locationRequiredResponse = language === 'ar'
-                ? 'لا أستطيع تنفيذ هذا البحث القريب بدون الوصول إلى موقعك الحالي من الجهاز. فعّل إذن الموقع ثم أعد المحاولة، وسأستخدم GPS الجهاز أولاً ثم متصفحك كخطة احتياطية فقط.'
-                : 'I could not access your live location for this nearby search. Please allow location access and try again. I will use your device GPS first, then browser geolocation only as the fallback.';
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: locationRequiredResponse, content: locationRequiredResponse })}\n\n`));
-              await emitAiChatTrialFinished(locationRequiredResponse);
-              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-              controller.close();
-              return;
+              nearMeNoLocationNote = language === 'ar'
+                ? '\n\nملاحظة: لم يتمكن النظام من الوصول إلى الموقع الحالي للمستخدم. أخبره بلطف بتفعيل صلاحيات الموقع، واقترح أفضل الخيارات المتاحة بشكل عام كبديل مفيد.'
+                : '\n\nNOTE: User location is unavailable for this nearby search. Politely tell the user to enable location access (GPS or browser), and offer the best general top-rated picks you can find as a helpful fallback.';
             }
             if (requestLocation?.latitude && requestLocation?.longitude) {
               if (!explicitNearMeRequest) {
@@ -4639,6 +4724,7 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
             if (parts.length > 0) {
               locationContext = `\n\nUSER LOCATION CONTEXT:\n${parts.join('\n')}`;
             }
+            if (nearMeNoLocationNote) locationContext += nearMeNoLocationNote;
 
             const eliteIntroRule = (() => {
               if (language === 'ar') {
@@ -4897,7 +4983,7 @@ If you are running out of space, keep this order and drop the rest:
 7) Social links
 8) Extra commentary / sources`;
 
-            searchSystemPrompt = `${searchHelpfulMemoryContext ? searchHelpfulMemoryContext + "\n\n" : ''}${searchContinuityContext ? searchContinuityContext + "\n\n" : ''}${buildLeanSearchSystemPrompt({
+            searchSystemPrompt = `${searchHelpfulMemoryContext ? searchHelpfulMemoryContext + "\n\n" : ''}${searchContinuityContext ? searchContinuityContext + "\n\n" : ''}${buildCombinedSearchSystemPrompt({
               language,
               localTime,
               userTimeZone,

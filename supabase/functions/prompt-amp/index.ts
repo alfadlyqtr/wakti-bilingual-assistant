@@ -738,7 +738,7 @@ CRITICAL RULES (MUST FOLLOW):
 3. **Strong Image 2 presence**: Image 2 must be clearly visible and held at the end. Explicitly describe it settling into focus, glowing, or being revealed as the final hero. The viewer should clearly SEE Image 2 for a noticeable portion of the video.
 4. **Visual constraints**: Clean background, subtle glow, premium 3D lighting, minimal camera motion.
 5. **Output language**: ALWAYS output in English, even if the user's text is in Arabic or another language.
-6. **Duration & aspect ratio**: Respect the provided duration (4s, 8s, or 12s) and aspect ratio (9:16 or 16:9).
+6. **Duration & aspect ratio**: Respect the provided duration (6s or 8s) and aspect ratio (9:16 or 16:9).
 
 Output format:
 - Start with the user's original intent (translated to English if needed)
@@ -1095,7 +1095,8 @@ serve(async (req) => {
       const imageUrl1 = decodeURIComponent(rawImageUrl1).trim();
       const imageUrl2 = decodeURIComponent(rawImageUrl2).trim();
       const userText = (body?.user_text ?? "").toString();
-      const duration = (body?.duration ?? "8").toString();
+      const requestedDuration = (body?.duration ?? "").toString();
+      const duration = ["6", "8"].includes(requestedDuration) ? requestedDuration : "8";
       const aspectRatio = (body?.aspect_ratio ?? "9:16").toString();
       
       inputText = `[2images2video] user: ${userText}, dur: ${duration}, ar: ${aspectRatio}`;
