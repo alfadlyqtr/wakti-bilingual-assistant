@@ -160,6 +160,48 @@ class ImapClient {
     return this.parseHeaders(lines);
   }
 
+  async fetchHeadersByUids(uids: number[]): Promise<{ uid: number; headers: string; isUnread: boolean }[]> {
+    if (uids.length === 0) return [];
+    const tag = this.nextTag();
+    await this.send(`${tag} UID FETCH ${uids.join(",")} (UID FLAGS BODY.PEEK[HEADER.FIELDS (FROM TO SUBJECT DATE MESSAGE-ID)])`);
+    const lines = await this.readUntilTagged(tag, 20000);
+    return this.parseHeaders(lines);
+  }
+
+  async searchHeaderUids(field: "FROM" | "TO" | "SUBJECT", query: string): Promise<number[]> {
+    const escapedQuery = escapeImapQuotedString(query);
+    const attempts = [
+      `${this.nextTag()} UID SEARCH CHARSET UTF-8 HEADER ${field} "${escapedQuery}"`,
+      `${this.nextTag()} UID SEARCH HEADER ${field} "${escapedQuery}"`,
+    ];
+    let lastError: Error | null = null;
+
+    for (const command of attempts) {
+      const tag = command.split(" ")[0];
+      await this.send(command);
+      const lines = await this.readUntilTagged(tag, 20000);
+      const last = lines[lines.length - 1] || "";
+      if (last.includes("OK")) {
+        return parseSearchUids(lines);
+      }
+      lastError = new Error(`SEARCH ${field} failed: ${last}`);
+      if (!/BADCHARSET|CHARSET|UTF-8|utf-8/i.test(last)) {
+        break;
+      }
+    }
+
+    throw lastError || new Error(`SEARCH ${field} failed`);
+  }
+
+  async searchMessageUids(query: string): Promise<number[]> {
+    const fromMatches = await this.searchHeaderUids("FROM", query);
+    const toMatches = await this.searchHeaderUids("TO", query);
+    const subjectMatches = await this.searchHeaderUids("SUBJECT", query);
+
+    return Array.from(new Set([...fromMatches, ...toMatches, ...subjectMatches]))
+      .sort((a, b) => b - a);
+  }
+
   private parseHeaders(lines: string[]): { uid: number; headers: string; isUnread: boolean }[] {
     const results: { uid: number; headers: string; isUnread: boolean }[] = [];
     let currentUid = 0;
@@ -304,6 +346,33 @@ function parseHeader(raw: string, name: string): string {
     i++;
   }
   return decodeMimeWords(val.trim());
+}
+
+function escapeImapQuotedString(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function parseSearchUids(lines: string[]): number[] {
+  const seen = new Set<number>();
+  const matches: number[] = [];
+
+  for (const line of lines) {
+    const searchMatch = line.match(/^\* SEARCH(?:\s+(.*))?$/i);
+    if (!searchMatch) continue;
+    const values = (searchMatch[1] || "")
+      .trim()
+      .split(/\s+/)
+      .map((value) => Number(value))
+      .filter((value) => Number.isInteger(value) && value > 0);
+
+    for (const value of values) {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      matches.push(value);
+    }
+  }
+
+  return matches;
 }
 
 function decodeMimeWords(str: string): string {
@@ -1229,6 +1298,42 @@ Deno.serve(async (req: Request) => {
           messages,
           hasMore: session.exists > page * pageSize,
           total: session.exists,
+          folder: session.selectedFolder,
+          mailbox: {
+            login: session.login,
+            exists: session.exists,
+          },
+        });
+      } finally {
+        await session.imap.logout();
+      }
+    }
+
+    if (action === "search_messages") {
+      const requestedFolder = body.folder === "SENT" ? "SENT" : "INBOX";
+      const query = String(body.query || "").trim();
+      const page = Math.max(1, Number(body.page || 1));
+      const pageSize = 20;
+      if (!query) return jsonResponse({ error: "query required" }, 400);
+      const session = await openMailbox(conn, requestedFolder);
+      try {
+        const matchedUids = await session.imap.searchMessageUids(query);
+        const start = (page - 1) * pageSize;
+        const headers = await session.imap.fetchHeadersByUids(matchedUids.slice(start, start + pageSize));
+        const messages = headers.map((h) => ({
+          uid: h.uid,
+          subject: parseHeader(h.headers, "Subject") || "(no subject)",
+          from: parseHeader(h.headers, "From"),
+          to: parseHeader(h.headers, "To"),
+          date: parseHeader(h.headers, "Date"),
+          snippet: "",
+          isUnread: requestedFolder === "INBOX" ? h.isUnread : false,
+        }));
+        return jsonResponse({
+          messages,
+          hasMore: matchedUids.length > page * pageSize,
+          total: matchedUids.length,
+          page,
           folder: session.selectedFolder,
           mailbox: {
             login: session.login,

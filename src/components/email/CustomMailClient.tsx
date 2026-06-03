@@ -291,8 +291,12 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
   const [activePreset, setActivePreset] = useState<MailComposerPreset | null>(operatorPreset);
   const [deletingMessage, setDeletingMessage] = useState(false);
   const [deletingRowUid, setDeletingRowUid] = useState<number | null>(null);
+  const [searchResults, setSearchResults] = useState<ImapMessage[] | null>(null);
+  const [searchPage, setSearchPage] = useState(1);
+  const [searchHasMore, setSearchHasMore] = useState(false);
+  const [searchTotal, setSearchTotal] = useState<number | null>(null);
   const [searchingFolder, setSearchingFolder] = useState(false);
-  const searchLoadRef = useRef<string | null>(null);
+  const searchRequestRef = useRef(0);
 
   const activeConn = connections.find(c => c.id === activeConnectionId);
   const activeHealth = activeConnectionId ? health[activeConnectionId] : undefined;
@@ -321,25 +325,17 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
       ? activeHealth.proof.inboxCount
       : null;
   const currentFolderRequest = imap.activeFolder === 'SENT' ? 'SENT' : (realFolderName || 'INBOX');
-  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const normalizedSearch = searchQuery.trim();
   const hasInboxCache = imap.hasCachedFolder('INBOX');
   const surfaceCardClass = 'space-y-3 rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] p-3 text-[#060541] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 sm:p-4 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(16,20,29,0.98),rgba(10,12,18,0.96))] dark:text-card-foreground dark:shadow-[0_18px_36px_rgba(0,0,0,0.4)] dark:ring-1 dark:ring-white/5';
   const iconShellClass = 'flex h-10 w-10 items-center justify-center rounded-2xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]';
   const chipClass = 'rounded-full border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] px-3 py-1 text-[11px] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]';
   const iconButtonClass = 'rounded-xl border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-2.5 text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] transition-colors hover:bg-[#f3f5ff] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))] dark:hover:text-accent-foreground';
   const folderButtonBaseClass = 'border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] text-[#060541]/76 shadow-[0_4px_12px_rgba(6,5,65,0.05)] hover:border-[#060541]/24 hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:text-muted-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))] dark:hover:text-accent-foreground';
-  const filteredMessages = useMemo(() => {
-    if (!normalizedSearch) return imap.messages;
-
-    return imap.messages.filter((message) => {
-      const searchableText = [message.from, message.to, message.subject]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
-      return searchableText.includes(normalizedSearch);
-    });
-  }, [imap.messages, normalizedSearch]);
+  const filteredMessages = normalizedSearch ? (searchResults || []) : imap.messages;
+  const shownCountLabel = normalizedSearch && searchTotal !== null
+    ? `${filteredMessages.length} of ${searchTotal} shown`
+    : `${filteredMessages.length} shown`;
   const unreadCount = useMemo(() => {
     if (imap.activeFolder !== 'INBOX') return 0;
     return imap.messages.filter((message) => message.isUnread).length;
@@ -347,33 +343,102 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
 
   useEffect(() => {
     if (!normalizedSearch) {
-      searchLoadRef.current = null;
+      searchRequestRef.current += 1;
+      setSearchResults(null);
+      setSearchPage(1);
+      setSearchHasMore(false);
+      setSearchTotal(null);
       setSearchingFolder(false);
       return;
     }
-    if (!imap.hasMore) {
-      setSearchingFolder(false);
-      return;
-    }
-    if (searchLoadRef.current) return;
 
-    let cancelled = false;
-    searchLoadRef.current = `${activeConnectionId}:${imap.activeFolder}:${normalizedSearch}`;
-    setSearchingFolder(true);
-
-    imap.loadAllMessages(imap.activeFolder)
-      .catch(() => {})
-      .finally(() => {
-        searchLoadRef.current = null;
-        if (!cancelled) {
-          setSearchingFolder(false);
-        }
-      });
+    const requestId = searchRequestRef.current + 1;
+    searchRequestRef.current = requestId;
+    const timerId = window.setTimeout(() => {
+      setSearchingFolder(true);
+      imap.searchMessages(normalizedSearch, imap.activeFolder, 1, { quiet: true })
+        .then((result) => {
+          if (searchRequestRef.current !== requestId) return;
+          setSearchResults(result?.messages || []);
+          setSearchPage(Number(result?.page || 1));
+          setSearchHasMore(Boolean(result?.hasMore));
+          setSearchTotal(typeof result?.total === 'number' ? result.total : 0);
+          if (result?.folder) {
+            setRealFolderName(result.folder);
+          }
+        })
+        .catch(() => {
+          if (searchRequestRef.current !== requestId) return;
+          setSearchResults([]);
+          setSearchPage(1);
+          setSearchHasMore(false);
+          setSearchTotal(0);
+        })
+        .finally(() => {
+          if (searchRequestRef.current === requestId) {
+            setSearchingFolder(false);
+          }
+        });
+    }, 250);
 
     return () => {
-      cancelled = true;
+      window.clearTimeout(timerId);
+      if (searchRequestRef.current === requestId) {
+        searchRequestRef.current += 1;
+        setSearchingFolder(false);
+      }
     };
-  }, [activeConnectionId, imap.activeFolder, imap.hasMore, imap.loadAllMessages, normalizedSearch]);
+  }, [activeConnectionId, imap.activeFolder, imap.searchMessages, normalizedSearch]);
+
+  useEffect(() => {
+    setSearchResults(null);
+    setSearchPage(1);
+    setSearchHasMore(false);
+    setSearchTotal(null);
+    setSearchingFolder(false);
+  }, [activeConnectionId, imap.activeFolder]);
+
+  const updateSearchResultMessage = useCallback((uid: number, updater: (message: ImapMessage) => ImapMessage | null) => {
+    setSearchResults((current) => {
+      if (!current) return current;
+      let changed = false;
+      const nextMessages = current
+        .map((message) => {
+          if (message.uid !== uid) return message;
+          changed = true;
+          return updater(message);
+        })
+        .filter(Boolean) as ImapMessage[];
+      return changed ? nextMessages : current;
+    });
+  }, []);
+
+  const handleLoadMore = useCallback(() => {
+    if (!normalizedSearch) {
+      return imap.loadMore();
+    }
+    if (searchingFolder || !searchHasMore) {
+      return Promise.resolve(null);
+    }
+
+    const nextPage = searchPage + 1;
+    setSearchingFolder(true);
+    return imap.searchMessages(normalizedSearch, imap.activeFolder, nextPage, { quiet: true })
+      .then((result) => {
+        if (!result) return null;
+        setSearchResults((current) => ([...(current || []), ...(result.messages || [])]));
+        setSearchPage(Number(result.page || nextPage));
+        setSearchHasMore(Boolean(result.hasMore));
+        setSearchTotal(typeof result.total === 'number' ? result.total : null);
+        if (result.folder) {
+          setRealFolderName(result.folder);
+        }
+        return result;
+      })
+      .finally(() => {
+        setSearchingFolder(false);
+      });
+  }, [imap, normalizedSearch, searchHasMore, searchPage, searchingFolder]);
 
   useEffect(() => {
     if (!preferredConnectionId || preferredConnectionId === activeConnectionId) return;
@@ -432,6 +497,7 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
     if (full) {
       if (imap.activeFolder === 'INBOX' && msg.isUnread) {
         imap.markMessageAsRead(msg.uid, 'INBOX');
+        updateSearchResultMessage(msg.uid, (message) => ({ ...message, isUnread: false }));
       }
       setSelectedMessage({
         ...full,
@@ -491,11 +557,13 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
   const handleAccountChange = (id: string) => {
     setSelectedMessage(null);
     setRealFolderName('INBOX');
+    setSearchQuery('');
     setActiveConnectionId(id);
   };
 
   const handleFolderSwitch = (folder: 'INBOX' | 'SENT') => {
     setSelectedMessage(null);
+    setSearchQuery('');
     imap.fetchMessages(folder, 1).then((result: any) => {
       if (result?.folder) setRealFolderName(result.folder);
     }).catch(() => {});
@@ -505,6 +573,19 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
     setRefreshing(true);
     imap.fetchMessages(imap.activeFolder, 1, { forceRefresh: true }).then((result: any) => {
       if (result?.folder) setRealFolderName(result.folder);
+      if (!normalizedSearch) return null;
+      setSearchingFolder(true);
+      return imap.searchMessages(normalizedSearch, imap.activeFolder, 1, { quiet: true }).then((searchResult) => {
+        setSearchResults(searchResult?.messages || []);
+        setSearchPage(Number(searchResult?.page || 1));
+        setSearchHasMore(Boolean(searchResult?.hasMore));
+        setSearchTotal(typeof searchResult?.total === 'number' ? searchResult.total : 0);
+        if (searchResult?.folder) {
+          setRealFolderName(searchResult.folder);
+        }
+      }).finally(() => {
+        setSearchingFolder(false);
+      });
     }).catch(() => {}).finally(() => {
       setRefreshing(false);
     });
@@ -515,6 +596,8 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
     setDeletingMessage(true);
     const deleted = await imap.deleteMessage(selectedMessage.uid, currentFolderRequest);
     if (deleted) {
+      updateSearchResultMessage(selectedMessage.uid, () => null);
+      setSearchTotal((current) => (current === null ? current : Math.max(0, current - 1)));
       setSelectedMessage(null);
       const result = await imap.fetchMessages(imap.activeFolder, 1, { forceRefresh: true });
       if (result?.folder) setRealFolderName(result.folder);
@@ -525,6 +608,8 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
   const handleDeleteFromList = async (message: ImapMessage) => {
     setDeletingRowUid(message.uid);
     await imap.deleteMessage(message.uid, currentFolderRequest);
+    updateSearchResultMessage(message.uid, () => null);
+    setSearchTotal((current) => (current === null ? current : Math.max(0, current - 1)));
     setDeletingRowUid(null);
   };
 
@@ -654,7 +739,7 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
                 </div>
               ) : null}
               <div className={`${chipClass} text-muted-foreground`}>
-                {searchingFolder ? searchingFolderLabel : `${filteredMessages.length} shown`}
+                {searchingFolder ? searchingFolderLabel : shownCountLabel}
               </div>
             </div>
             {activeHealth?.status === 'failed' && activeHealth.error ? (
@@ -774,12 +859,12 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
                   No messages in {imap.activeFolder === 'INBOX' ? 'Inbox' : 'Sent'}
                 </span>
               </div>
-            ) : searchingFolder && filteredMessages.length === 0 ? (
+            ) : normalizedSearch && searchingFolder && filteredMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 <span className="text-sm text-muted-foreground">{searchingFolderLabel}</span>
               </div>
-            ) : filteredMessages.length === 0 ? (
+            ) : normalizedSearch && filteredMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2 text-center px-4">
                 <Search className="h-8 w-8 text-muted-foreground/50" />
                 <span className="text-sm text-muted-foreground">{noSearchResultsLabel}</span>
@@ -796,16 +881,16 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
                     onDelete={() => handleDeleteFromList(msg)}
                   />
                 ))}
-                {imap.hasMore && (
+                {(normalizedSearch ? searchHasMore : imap.hasMore) && (
                   <div className="px-4 py-3 flex justify-center">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={imap.loadMore}
-                      disabled={imap.loading}
+                      onClick={handleLoadMore}
+                      disabled={normalizedSearch ? searchingFolder : imap.loading}
                       className="border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-xs text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.05)] hover:bg-[#f3f5ff] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))]"
                     >
-                      {imap.loading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                      {(normalizedSearch ? searchingFolder : imap.loading) ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
                       Load more
                     </Button>
                   </div>

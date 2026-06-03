@@ -401,6 +401,42 @@ export function useImapMessages(connectionId: string) {
     return lastResult;
   }, [activeFolder, connectionId, fetchMessages, getFolderCacheKey, hasMore, page]);
 
+  const searchMessages = useCallback(async (
+    query: string,
+    folder: ImapFolderName = activeFolder,
+    pageNum = 1,
+    options?: { quiet?: boolean }
+  ) => {
+    if (!connectionId) return null;
+    try {
+      const data = await callImapApi('search_messages', {
+        connection_id: connectionId,
+        folder,
+        query,
+        page: pageNum,
+      });
+      const matchedMessages = Array.isArray(data.messages) ? data.messages as ImapMessage[] : [];
+      return {
+        messages: matchedMessages,
+        hasMore: Boolean(data.hasMore),
+        page: Number(data.page || pageNum),
+        total: Number(data.total || matchedMessages.length),
+        folder: typeof data.folder === 'string' ? data.folder : folder,
+        mailbox: data.mailbox
+          ? {
+              login: String(data.mailbox.login || ''),
+              exists: Number(data.mailbox.exists || 0),
+            }
+          : undefined,
+      };
+    } catch (err: any) {
+      if (!options?.quiet) {
+        toast.error(err.message || 'Failed to search messages');
+      }
+      return null;
+    }
+  }, [activeFolder, connectionId]);
+
   const deleteMessage = useCallback(async (uid: number, folder: string): Promise<boolean> => {
     if (!connectionId) return false;
     try {
@@ -468,6 +504,7 @@ export function useImapMessages(connectionId: string) {
     markMessageAsRead,
     deleteMessage,
     loadAllMessages,
+    searchMessages,
     loadMore,
   };
 }
