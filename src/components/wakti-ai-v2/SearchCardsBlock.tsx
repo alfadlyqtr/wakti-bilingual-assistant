@@ -23,7 +23,7 @@ type SearchCardsBlockProps = {
   introText?: string;
 };
 
-type SearchType = 'sports' | 'news' | 'url' | 'general' | 'places';
+type SearchType = 'sports' | 'news' | 'url' | 'general' | 'places' | 'research';
 
 const TYPE_CONFIG: Record<SearchType, {
   Icon: React.ElementType;
@@ -88,6 +88,22 @@ const TYPE_CONFIG: Record<SearchType, {
     openBtnBorder: 'border-violet-500/30',
     label: { en: 'Page', ar: 'صفحة' },
     sub: { en: 'URL analysis', ar: 'تحليل الرابط' },
+  },
+  research: {
+    Icon: Sparkles,
+    accentColor: 'text-fuchsia-500',
+    headerBadgeBg: 'bg-fuchsia-500/15',
+    headerBadgeText: 'text-fuchsia-600 dark:text-fuchsia-400',
+    cardAccentBar: 'bg-fuchsia-500',
+    cardBg: 'bg-fuchsia-500/5 dark:bg-fuchsia-500/8',
+    cardBorder: 'border-fuchsia-500/20',
+    badgeBg: 'bg-fuchsia-500/15',
+    badgeText: 'text-fuchsia-600 dark:text-fuchsia-400',
+    openBtnBg: 'bg-fuchsia-500/15 hover:bg-fuchsia-500/25',
+    openBtnText: 'text-fuchsia-600 dark:text-fuchsia-400',
+    openBtnBorder: 'border-fuchsia-500/30',
+    label: { en: 'Research', ar: 'بحث عميق' },
+    sub: { en: 'Deep analysis', ar: 'تحليل أعمق' },
   },
   general: {
     Icon: Sparkles,
@@ -158,10 +174,12 @@ function getFaviconUrl(url?: string) {
 }
 
 function normalizeSearchType(raw?: string): SearchType {
+  if (raw === 'places') return 'places';
   if (raw === 'business') return 'places';
   if (raw === 'news') return 'news';
   if (raw === 'sports') return 'sports';
   if (raw === 'url') return 'url';
+  if (raw === 'research') return 'research';
   return 'general';
 }
 
@@ -214,16 +232,38 @@ function extractBulletCards(content: string): SearchCardItem[] {
 
 function buildCards(message: MessageLike | null | undefined, language: string) {
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
-  const searchType = normalizeSearchType(typeof resolvedBrowsingData?.searchType === 'string' ? resolvedBrowsingData.searchType : undefined);
+  const searchType = normalizeSearchType(
+    typeof resolvedBrowsingData?.cardType === 'string'
+      ? resolvedBrowsingData.cardType
+      : (typeof resolvedBrowsingData?.searchType === 'string' ? resolvedBrowsingData.searchType : undefined)
+  );
   const rawContent = typeof message?.content === 'string' ? message.content : '';
   const content = rawContent.replace(/^\s*Sources?:[\s\S]*$/im, '').trim();
-  const summary = extractSummary(content);
+  const summary = typeof resolvedBrowsingData?.summary === 'string' && resolvedBrowsingData.summary.trim()
+    ? cleanSearchText(resolvedBrowsingData.summary)
+    : extractSummary(content);
   const sources: any[] = Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : [];
-  const supports: any[] = Array.isArray(resolvedBrowsingData?.supports) ? resolvedBrowsingData.supports : [];
-  const supportSnippets = supports
-    .map((entry: any) => cleanSearchText(typeof entry?.segment?.text === 'string' ? entry.segment.text : ''))
-    .filter(Boolean);
   const bulletCards = extractBulletCards(content);
+  const structuredCards: SearchCardItem[] = Array.isArray(resolvedBrowsingData?.cards)
+    ? resolvedBrowsingData.cards
+        .map((card: any) => ({
+          title: cleanSearchText(typeof card?.title === 'string' ? card.title : ''),
+          summary: truncate(cleanSearchText(typeof card?.summary === 'string' ? card.summary : ''), 160),
+          url: typeof card?.url === 'string' ? card.url : undefined,
+          sourceLabel: cleanSearchText(typeof card?.sourceLabel === 'string' ? card.sourceLabel : ''),
+          badge: cleanSearchText(typeof card?.badge === 'string' ? card.badge : ''),
+        }))
+        .filter((card: SearchCardItem) => card.title || card.summary)
+    : [];
+
+  if (structuredCards.length > 0) {
+    return {
+      searchType,
+      summary,
+      sources,
+      cards: structuredCards,
+    };
+  }
 
   const sourceCards: SearchCardItem[] = sources.slice(0, 6).map((source: any, index: number) => {
     const sourceUrl = typeof source?.url === 'string' ? source.url : '';
@@ -266,14 +306,16 @@ function buildCards(message: MessageLike | null | undefined, language: string) {
     };
   }
 
-  if (searchType === 'news' || searchType === 'sports') {
+  if (searchType === 'news' || searchType === 'sports' || searchType === 'research') {
     const leadCards = (sourceCards.length > 0 ? sourceCards : bulletCards).slice(0, 6).map((card, index) => ({
       ...card,
       badge: index === 0
         ? (searchType === 'sports'
             ? (language === 'ar' ? 'التحديث الأهم' : 'Top update')
+            : searchType === 'research'
+              ? (language === 'ar' ? 'الفكرة الأساسية' : 'Key insight')
             : (language === 'ar' ? 'العنوان الأهم' : 'Top story'))
-        : (language === 'ar' ? 'تحديث' : 'Update'),
+        : (searchType === 'research' ? (language === 'ar' ? 'نقطة' : 'Insight') : (language === 'ar' ? 'تحديث' : 'Update')),
     }));
     return {
       searchType,
@@ -282,9 +324,15 @@ function buildCards(message: MessageLike | null | undefined, language: string) {
       cards: leadCards.length > 0 ? leadCards : [{
         title: searchType === 'sports'
           ? (language === 'ar' ? 'تحديث رياضي' : 'Sports update')
+          : searchType === 'research'
+            ? (language === 'ar' ? 'ملخص بحث' : 'Research summary')
           : (language === 'ar' ? 'آخر الأخبار' : 'Latest news'),
         summary: summary || '',
-        badge: searchType === 'sports' ? (language === 'ar' ? 'رياضة' : 'Sports') : (language === 'ar' ? 'أخبار' : 'News'),
+        badge: searchType === 'sports'
+          ? (language === 'ar' ? 'رياضة' : 'Sports')
+          : searchType === 'research'
+            ? (language === 'ar' ? 'بحث' : 'Research')
+            : (language === 'ar' ? 'أخبار' : 'News'),
       }],
     };
   }

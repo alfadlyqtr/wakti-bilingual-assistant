@@ -1402,7 +1402,7 @@ class WaktiAIV2ServiceClass {
           if (cachedLocation) return cachedLocation;
           return await Promise.race([
             this.getUserLocation(userId || '', false),
-            new Promise<null>(r => setTimeout(() => r(null), 900))
+            new Promise<null>(r => setTimeout(() => r(null), 5000))
           ]);
         }
 
@@ -1500,12 +1500,17 @@ class WaktiAIV2ServiceClass {
             next.browsingData = {
               provider: 'gemini-search',
               searchType: typeof geminiSearch.searchType === 'string' ? geminiSearch.searchType : undefined,
+              cardType: typeof geminiSearch.cardType === 'string' ? geminiSearch.cardType : undefined,
               queries: Array.isArray(geminiSearch.queries) ? geminiSearch.queries : [],
               mapSearchQuery: typeof geminiSearch.mapSearchQuery === 'string' ? geminiSearch.mapSearchQuery : undefined,
               isNearMeQuery: typeof geminiSearch.isNearMeQuery === 'boolean' ? geminiSearch.isNearMeQuery : undefined,
+              summary: typeof geminiSearch.summary === 'string' ? geminiSearch.summary : undefined,
               sources: Array.isArray(geminiSearch.sources) ? geminiSearch.sources : [],
               supports: Array.isArray(geminiSearch.supports) ? geminiSearch.supports : [],
+              cards: Array.isArray(geminiSearch.cards) ? geminiSearch.cards : [],
               places: Array.isArray(geminiSearch.places) ? geminiSearch.places : [],
+              finishReason: typeof geminiSearch.finishReason === 'string' ? geminiSearch.finishReason : undefined,
+              truncated: typeof geminiSearch.truncated === 'boolean' ? geminiSearch.truncated : undefined,
               googleMapsWidgetContextToken: typeof geminiSearch.googleMapsWidgetContextToken === 'string'
                 ? geminiSearch.googleMapsWidgetContextToken
                 : undefined,

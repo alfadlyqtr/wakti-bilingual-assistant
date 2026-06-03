@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Gift, Search, Plus, Mic, Music, X, Loader2, Zap, ArrowUpRight, CheckCircle } from "lucide-react";
+import { Gift, Search, Plus, Mic, Music, Video, X, Loader2, Zap, ArrowUpRight, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,13 @@ interface MusicUsage {
   total_limit: number;
 }
 
+interface VideoUsage {
+  generated: number;
+  extra_videos: number;
+  base_limit: number;
+  total_limit: number;
+}
+
 function currentYearMonth() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
@@ -38,11 +45,14 @@ export default function AdminQuotas() {
   const [hasSearched, setHasSearched] = useState(false);
 
   const [selectedUser, setSelectedUser] = useState<UserQuota | null>(null);
-  const [featureType, setFeatureType] = useState<"voice" | "music">("voice");
+  const [featureType, setFeatureType] = useState<"voice" | "music" | "video">("voice");
   const [voiceUsageMonth, setVoiceUsageMonth] = useState(currentYearMonth);
   const [musicUsageMonth, setMusicUsageMonth] = useState(currentYearMonth);
   const [musicUsage, setMusicUsage] = useState<MusicUsage | null>(null);
   const [isMusicLoading, setIsMusicLoading] = useState(false);
+  const [videoUsageMonth, setVideoUsageMonth] = useState(currentYearMonth);
+  const [videoUsage, setVideoUsage] = useState<VideoUsage | null>(null);
+  const [isVideoLoading, setIsVideoLoading] = useState(false);
 
   const [quotaAmount, setQuotaAmount] = useState("");
   const [isGifting, setIsGifting] = useState(false);
@@ -96,6 +106,35 @@ export default function AdminQuotas() {
     })();
     return () => { cancelled = true; };
   }, [featureType, selectedUser?.id, musicUsageMonth]);
+
+  useEffect(() => {
+    if (featureType !== "video" || !selectedUser) {
+      setVideoUsage(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setIsVideoLoading(true);
+      try {
+        await ensurePassport();
+        const { data, error } = await (supabase as any).rpc(
+          "admin_get_ai_video_monthly",
+          { p_user_id: selectedUser.id, p_month: videoUsageMonth }
+        );
+        if (!cancelled) {
+          setVideoUsage(
+            error ? { generated: 0, extra_videos: 0, base_limit: 30, total_limit: 30 } : (data as VideoUsage)
+          );
+        }
+      } catch {
+        if (!cancelled)
+          setVideoUsage({ generated: 0, extra_videos: 0, base_limit: 30, total_limit: 30 });
+      } finally {
+        if (!cancelled) setIsVideoLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [featureType, selectedUser?.id, videoUsageMonth]);
 
   const runSearch = async (term: string) => {
     setIsSearching(true);
@@ -184,7 +223,7 @@ export default function AdminQuotas() {
           p_reason: amount > 0 ? "Admin gifted music generations" : "Admin revoked music generations",
         });
         err = error;
-      } else {
+      } else if (featureType === "voice") {
         const { error } = await (supabase as any).rpc("admin_adjust_voice_characters", {
           p_user_id: selectedUser.id,
           p_month: voiceUsageMonth,
@@ -193,6 +232,17 @@ export default function AdminQuotas() {
             amount > 0
               ? "Admin gifted voice characters (monthly)"
               : "Admin revoked voice characters (monthly)",
+        });
+        err = error;
+      } else {
+        const { error } = await (supabase as any).rpc("admin_adjust_ai_video_quota", {
+          p_user_id: selectedUser.id,
+          p_month: videoUsageMonth,
+          p_delta: amount,
+          p_reason:
+            amount > 0
+              ? "Admin gifted AI video generations"
+              : "Admin revoked AI video generations",
         });
         err = error;
       }
@@ -222,10 +272,19 @@ export default function AdminQuotas() {
           setMusicUsage(mu as MusicUsage);
         } catch { /* silent */ }
       }
+      if (featureType === "video") {
+        try {
+          const { data: vu } = await (supabase as any).rpc("admin_get_ai_video_monthly", {
+            p_user_id: selectedUser.id,
+            p_month: videoUsageMonth,
+          });
+          setVideoUsage(vu as VideoUsage);
+        } catch { /* silent */ }
+      }
 
       toast.success(
         amount > 0
-          ? `Gifted ${amount} ${featureType === "music" ? "generations" : "characters"} to ${selectedUser.email}`
+          ? `Gifted ${amount} ${featureType === "music" ? "generations" : featureType === "video" ? "video generations" : "characters"} to ${selectedUser.email}`
           : `Revoked ${Math.abs(amount)} from ${selectedUser.email}`
       );
       setQuotaAmount("");
@@ -253,6 +312,10 @@ export default function AdminQuotas() {
   const musicPct =
     musicUsage && musicUsage.total_limit > 0
       ? Math.min((musicUsage.generated / musicUsage.total_limit) * 100, 100)
+      : 0;
+  const videoPct =
+    videoUsage && videoUsage.total_limit > 0
+      ? Math.min((videoUsage.generated / videoUsage.total_limit) * 100, 100)
       : 0;
 
   return (
@@ -357,7 +420,7 @@ export default function AdminQuotas() {
             </div>
 
             {/* Usage bars — bento pair */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 
               {/* Voice bar */}
               <div className="relative rounded-2xl border border-white/8 bg-[#0e1119] p-4 overflow-hidden">
@@ -418,6 +481,40 @@ export default function AdminQuotas() {
                   <p className="text-white/25 text-sm py-3">Select Music type to load</p>
                 )}
               </div>
+
+              <div className="relative rounded-2xl border border-white/8 bg-[#0e1119] p-4 overflow-hidden">
+                <div className="pointer-events-none absolute -bottom-6 -right-6 w-28 h-28 rounded-full bg-emerald-500/8 blur-2xl" />
+                <div className="flex items-center gap-2 mb-3">
+                  <Video className="h-3.5 w-3.5 text-emerald-400" />
+                  <span className="text-xs font-medium text-white/50 uppercase tracking-widest">Video</span>
+                  <span className="ml-auto text-[11px] text-white/30">{videoUsageMonth}</span>
+                </div>
+                {isVideoLoading ? (
+                  <div className="flex items-center gap-2 text-white/30 text-sm py-3">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading…
+                  </div>
+                ) : videoUsage ? (
+                  <>
+                    <p className="text-2xl font-bold text-white mb-1">
+                      {videoUsage.generated}
+                      <span className="text-sm font-normal text-white/30 ml-1">/ {videoUsage.total_limit} videos</span>
+                    </p>
+                    <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden mt-2">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-500"
+                        style={{ width: `${videoPct}%` }}
+                      />
+                    </div>
+                    {videoUsage.extra_videos > 0 && (
+                      <p className="text-[11px] text-emerald-400 mt-1.5">
+                        +{videoUsage.extra_videos} gifted videos active
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-white/25 text-sm py-3">Select Video type to load</p>
+                )}
+              </div>
             </div>
 
             {/* ── GIFT CARD — the star ── */}
@@ -460,14 +557,22 @@ export default function AdminQuotas() {
                   >
                     <Music className="h-3 w-3" /> Music
                   </button>
+                  <button
+                    onClick={() => setFeatureType("video")}
+                    className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${featureType === "video" ? "bg-emerald-500/20 text-emerald-300" : "text-white/40 hover:text-white/60"}`}
+                  >
+                    <Video className="h-3 w-3" /> Video
+                  </button>
                 </div>
 
                 <Input
                   type="month"
-                  value={featureType === "music" ? musicUsageMonth : voiceUsageMonth}
+                  value={featureType === "music" ? musicUsageMonth : featureType === "video" ? videoUsageMonth : voiceUsageMonth}
                   onChange={(e) =>
                     featureType === "music"
                       ? setMusicUsageMonth(e.target.value)
+                      : featureType === "video"
+                        ? setVideoUsageMonth(e.target.value)
                       : setVoiceUsageMonth(e.target.value)
                   }
                   className="h-9 w-36 rounded-xl border-white/10 bg-white/5 text-xs text-white/70 px-3 focus:border-violet-500/50"
@@ -478,13 +583,13 @@ export default function AdminQuotas() {
               <div className="flex gap-3 items-end">
                 <div className="flex-1">
                   <Label className="text-[11px] text-white/40 uppercase tracking-widest mb-1.5 block">
-                    {featureType === "music" ? "Generations (+ to gift, − to revoke)" : "Characters (+ to gift, − to revoke)"}
+                    {featureType === "music" ? "Generations (+ to gift, − to revoke)" : featureType === "video" ? "Videos (+ to gift, − to revoke)" : "Characters (+ to gift, − to revoke)"}
                   </Label>
                   <div className="relative">
                     <Zap className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-violet-400/60" />
                     <Input
                       type="number"
-                      placeholder={featureType === "music" ? "e.g. 5" : "e.g. 5000"}
+                      placeholder={featureType === "music" ? "e.g. 5" : featureType === "video" ? "e.g. 3" : "e.g. 5000"}
                       value={quotaAmount}
                       onChange={(e) => { setQuotaAmount(e.target.value); setGiftDone(false); }}
                       className="pl-9 h-11 rounded-xl border-white/10 bg-white/5 text-white placeholder-white/20 focus:border-violet-500/50 text-sm"

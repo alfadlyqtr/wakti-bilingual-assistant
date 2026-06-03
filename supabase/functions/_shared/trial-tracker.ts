@@ -5,6 +5,7 @@ export type TrialFeatureKey =
   | 'i2i'
   | 'bg_removal'
   | 'music'
+  | 'ai_video'
   | 'i2v'
   | 't2v'
   | '2i2v'

@@ -59,16 +59,22 @@ export default function Email() {
   const gmailConnected = emailConn.gmail.connection.connected;
   const verifiedCustomCount = customConnections.filter(connection => emailConn.imap.health[connection.id]?.status === 'verified').length;
   const icloudConnections = customConnections.filter((connection) => connection.provider === 'icloud');
-  const verifiedIcloudCount = icloudConnections.filter((connection) => emailConn.imap.health[connection.id]?.status === 'verified').length;
-  const primaryIcloudConnection = icloudConnections.find((connection) => connection.is_primary) || icloudConnections[0] || null;
+  const verifiedIcloudConnections = icloudConnections.filter((connection) => emailConn.imap.health[connection.id]?.status === 'verified');
+  const verifiedIcloudCount = verifiedIcloudConnections.length;
+  const primaryIcloudConnection = verifiedIcloudConnections.find((connection) => connection.is_primary)
+    || verifiedIcloudConnections[0]
+    || icloudConnections.find((connection) => connection.is_primary)
+    || icloudConnections[0]
+    || null;
   const latestIcloudConnection = useMemo(() => {
-    if (icloudConnections.length === 0) return null;
-    return [...icloudConnections].sort((a, b) => {
+    const source = verifiedIcloudConnections.length > 0 ? verifiedIcloudConnections : icloudConnections;
+    if (source.length === 0) return null;
+    return [...source].sort((a, b) => {
       const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
       const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
       return bTime - aTime;
     })[0] || null;
-  }, [icloudConnections]);
+  }, [icloudConnections, verifiedIcloudConnections]);
   const preferredAppleConnectionId = latestIcloudConnection?.id || primaryIcloudConnection?.id || null;
   const operatorPayload = useMemo(() => readWaktiOperatorPayload(searchParams.get('waktiOperator')), [searchParams]);
   const operatorPreset = useMemo<MailComposerPreset | null>(() => {
@@ -157,21 +163,20 @@ export default function Email() {
     if (!targetConnectionId) return;
     if (emailConn.imap.health[targetConnectionId]?.status !== 'verified') return;
     setPreferredMailConnectionId(targetConnectionId);
-    setActiveTab('mail');
+    setActiveTab('apple');
     setPendingAppleMailboxOpen(false);
   }, [emailConn.imap.health, pendingAppleMailboxOpen, preferredAppleConnectionId]);
 
   const handleTabChange = useCallback((nextTab: EmailTab) => {
-    if (nextTab === 'apple' && verifiedIcloudCount > 0 && preferredAppleConnectionId) {
+    if (nextTab === 'apple' && preferredAppleConnectionId) {
       setPreferredMailConnectionId(preferredAppleConnectionId);
-      setActiveTab('mail');
-      return;
     }
     setActiveTab(nextTab);
-  }, [preferredAppleConnectionId, verifiedIcloudCount]);
+  }, [preferredAppleConnectionId]);
 
   useEffect(() => {
-    if (activeTab !== 'mail' || !preferredMailConnectionId) return;
+    if (!preferredMailConnectionId) return;
+    if (activeTab !== 'mail' && activeTab !== 'apple') return;
     setPreferredMailConnectionId(null);
   }, [activeTab, preferredMailConnectionId]);
 
@@ -621,76 +626,88 @@ export default function Email() {
   );
 
   const renderAppleTab = () => (
-    <Card className={pageCardClass}>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <AppleLogo size={18} className="text-current" />
-          Apple
-        </CardTitle>
-        <CardDescription>{t.appleSubtitle}</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 flex-wrap">
-            {verifiedIcloudCount > 0 ? (
-              <Badge className="bg-green-600 text-white hover:bg-green-600">{verifiedIcloudCount} {t.connected}</Badge>
-            ) : (
-              <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
-            )}
-            {primaryIcloudConnection?.email_address ? (
-              <span className="text-sm text-muted-foreground break-all">{primaryIcloudConnection.email_address}</span>
-            ) : null}
-          </div>
-          <Button
-            type="button"
-            onClick={() => {
-              setConnectionModalPreset('icloud');
-              setShowConnectionModal(true);
-            }}
-            className="bg-[#060541] text-white hover:bg-[#0a0a5c] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-white dark:shadow-[0_12px_28px_rgba(0,0,0,0.38)] dark:hover:bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]"
-          >
-            <AppleLogo size={14} className="text-current" />
-            {t.connectApple}
-          </Button>
-        </div>
-        <div className="overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(14,17,24,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_18px_36px_rgba(0,0,0,0.4)] dark:ring-1 dark:ring-white/5">
-          <div className="border-b border-[#060541]/10 px-4 py-3 dark:border-border/50 sm:px-5">
-            <div className="flex items-center gap-2 rounded-2xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] px-3 py-2.5 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
-              <Search className="h-4 w-4 shrink-0 text-[#060541]/45 dark:text-muted-foreground" />
-              <input
-                type="text"
-                value=""
-                readOnly
-                disabled
-                placeholder={t.searchPlaceholder}
-                className="h-5 w-full bg-transparent text-sm text-[#060541]/60 outline-none placeholder:text-[#060541]/36 disabled:cursor-not-allowed dark:text-foreground/70 dark:placeholder:text-muted-foreground"
-              />
+    <div className="space-y-2">
+      <Card className={pageCardClass}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AppleLogo size={18} className="text-current" />
+            Apple
+          </CardTitle>
+          <CardDescription>{t.appleSubtitle}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              {verifiedIcloudCount > 0 ? (
+                <Badge className="bg-green-600 text-white hover:bg-green-600">{verifiedIcloudCount} {t.connected}</Badge>
+              ) : (
+                <Badge variant="outline" className="border-red-400/40 bg-red-50 text-red-500 dark:bg-transparent dark:text-red-400">{t.notConnected}</Badge>
+              )}
+              {primaryIcloudConnection?.email_address ? (
+                <span className="text-sm text-muted-foreground break-all">{primaryIcloudConnection.email_address}</span>
+              ) : null}
             </div>
+            <Button
+              type="button"
+              onClick={() => {
+                setConnectionModalPreset('icloud');
+                setShowConnectionModal(true);
+              }}
+              className="bg-[#060541] text-white hover:bg-[#0a0a5c] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(11,14,21,0.96))] dark:text-white dark:shadow-[0_12px_28px_rgba(0,0,0,0.38)] dark:hover:bg-[linear-gradient(180deg,rgba(28,33,46,0.98),rgba(15,18,26,0.96))]"
+            >
+              <AppleLogo size={14} className="text-current" />
+              {t.connectApple}
+            </Button>
           </div>
-          <div className="p-4 sm:p-5">
-          <div className="flex items-center gap-2 text-base font-medium">
-            {verifiedIcloudCount > 0 ? (
-              <Plug className="h-5 w-5 text-[#E9CEB0]" />
-            ) : (
-              <AppleLogo size={18} className="text-current" />
-            )}
-            {verifiedIcloudCount > 0 ? 'Apple / iCloud ready' : 'Connect Apple / iCloud with app password'}
-          </div>
-          <div className="mt-2 text-sm text-muted-foreground">
-            {verifiedIcloudCount > 0
-              ? 'Your iCloud mailbox is connected through Wakti Mail. You can add another iCloud account from here any time.'
-              : 'Use your iCloud email address and an Apple app-specific password. Wakti will save it through the existing secure mail connection flow.'}
-          </div>
-          <div className="mt-3 rounded-xl border border-[#060541]/12 bg-white/80 px-4 py-3 text-sm text-muted-foreground dark:border-white/10 dark:bg-background/50">
-            <div>1. Sign in to account.apple.com.</div>
-            <div className="mt-1">2. Open Sign-In and Security, then App-Specific Passwords.</div>
-            <div className="mt-1">3. Generate a new app-specific password and paste it into Wakti.</div>
-          </div>
-          <div className="mt-3 text-xs text-muted-foreground">IMAP: imap.mail.me.com:993 · SMTP: smtp.mail.me.com:587</div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+          {verifiedIcloudCount > 0 ? (
+            <div className="rounded-2xl border border-[#060541]/12 bg-white/80 px-4 py-3 text-sm text-muted-foreground dark:border-white/10 dark:bg-background/50">
+              Your Apple / iCloud mailbox is open below. You can add another iCloud account any time.
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(246,248,255,0.98))] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(14,17,24,0.98),rgba(10,12,18,0.96))] dark:shadow-[0_18px_36px_rgba(0,0,0,0.4)] dark:ring-1 dark:ring-white/5">
+              <div className="border-b border-[#060541]/10 px-4 py-3 dark:border-border/50 sm:px-5">
+                <div className="flex items-center gap-2 rounded-2xl border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(248,249,255,0.98))] px-3 py-2.5 shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
+                  <Search className="h-4 w-4 shrink-0 text-[#060541]/45 dark:text-muted-foreground" />
+                  <input
+                    type="text"
+                    value=""
+                    readOnly
+                    disabled
+                    placeholder={t.searchPlaceholder}
+                    className="h-5 w-full bg-transparent text-sm text-[#060541]/60 outline-none placeholder:text-[#060541]/36 disabled:cursor-not-allowed dark:text-foreground/70 dark:placeholder:text-muted-foreground"
+                  />
+                </div>
+              </div>
+              <div className="p-4 sm:p-5">
+                <div className="flex items-center gap-2 text-base font-medium">
+                  <AppleLogo size={18} className="text-current" />
+                  Connect Apple / iCloud with app password
+                </div>
+                <div className="mt-2 text-sm text-muted-foreground">
+                  Use your iCloud email address and an Apple app-specific password. Wakti will save it through the existing secure mail connection flow.
+                </div>
+                <div className="mt-3 rounded-xl border border-[#060541]/12 bg-white/80 px-4 py-3 text-sm text-muted-foreground dark:border-white/10 dark:bg-background/50">
+                  <div>1. Sign in to account.apple.com.</div>
+                  <div className="mt-1">2. Open Sign-In and Security, then App-Specific Passwords.</div>
+                  <div className="mt-1">3. Generate a new app-specific password and paste it into Wakti.</div>
+                </div>
+                <div className="mt-3 text-xs text-muted-foreground">IMAP: imap.mail.me.com:993 · SMTP: smtp.mail.me.com:587</div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {verifiedIcloudCount > 0 ? (
+        <CustomMailClient
+          connections={icloudConnections}
+          health={emailConn.imap.health}
+          preferredConnectionId={preferredMailConnectionId || preferredAppleConnectionId}
+          onOpenSettings={() => setActiveTab('settings')}
+          language={language}
+        />
+      ) : null}
+    </div>
   );
 
   const renderMailTab = () => (

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useImapMessages, ImapMessage, ImapMessageFull } from '@/hooks/useImapMessages';
 import { ImapConnection, ImapConnectionHealth } from '@/hooks/useEmailConnections';
 import { Button } from '@/components/ui/button';
@@ -291,6 +291,8 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
   const [activePreset, setActivePreset] = useState<MailComposerPreset | null>(operatorPreset);
   const [deletingMessage, setDeletingMessage] = useState(false);
   const [deletingRowUid, setDeletingRowUid] = useState<number | null>(null);
+  const [searchingFolder, setSearchingFolder] = useState(false);
+  const searchLoadRef = useRef<string | null>(null);
 
   const activeConn = connections.find(c => c.id === activeConnectionId);
   const activeHealth = activeConnectionId ? health[activeConnectionId] : undefined;
@@ -305,6 +307,7 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
   const searchPlaceholder = language === 'ar' ? 'ابحث في المرسل أو الموضوع' : 'Search sender or subject';
   const noSearchResultsLabel = language === 'ar' ? 'لا توجد نتائج مطابقة' : 'No matching results';
   const unreadLabel = language === 'ar' ? 'غير مقروءة' : 'unread';
+  const searchingFolderLabel = language === 'ar' ? 'جارٍ البحث في الصندوق بالكامل...' : 'Searching the whole mailbox...';
   const folderLabel = imap.activeFolder === 'SENT' ? sentLabel : inboxLabel;
   const activeEmail = activeConn?.email_address || activeHealth?.proof?.emailAddress || activeConn?.username || '';
   const activeMailboxLogin = imap.mailboxInfo?.login || activeHealth?.proof?.login || activeEmail || null;
@@ -341,6 +344,36 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
     if (imap.activeFolder !== 'INBOX') return 0;
     return imap.messages.filter((message) => message.isUnread).length;
   }, [imap.activeFolder, imap.messages]);
+
+  useEffect(() => {
+    if (!normalizedSearch) {
+      searchLoadRef.current = null;
+      setSearchingFolder(false);
+      return;
+    }
+    if (!imap.hasMore) {
+      setSearchingFolder(false);
+      return;
+    }
+    if (searchLoadRef.current) return;
+
+    let cancelled = false;
+    searchLoadRef.current = `${activeConnectionId}:${imap.activeFolder}:${normalizedSearch}`;
+    setSearchingFolder(true);
+
+    imap.loadAllMessages(imap.activeFolder)
+      .catch(() => {})
+      .finally(() => {
+        searchLoadRef.current = null;
+        if (!cancelled) {
+          setSearchingFolder(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeConnectionId, imap.activeFolder, imap.hasMore, imap.loadAllMessages, normalizedSearch]);
 
   useEffect(() => {
     if (!preferredConnectionId || preferredConnectionId === activeConnectionId) return;
@@ -621,7 +654,7 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
                 </div>
               ) : null}
               <div className={`${chipClass} text-muted-foreground`}>
-                {filteredMessages.length} shown
+                {searchingFolder ? searchingFolderLabel : `${filteredMessages.length} shown`}
               </div>
             </div>
             {activeHealth?.status === 'failed' && activeHealth.error ? (
@@ -725,6 +758,9 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
                   </button>
                 ) : null}
               </div>
+              {searchingFolder ? (
+                <div className="mt-2 text-xs text-muted-foreground">{searchingFolderLabel}</div>
+              ) : null}
             </div>
             {imap.loading && imap.messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-3">
@@ -737,6 +773,11 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
                 <span className="text-sm text-muted-foreground">
                   No messages in {imap.activeFolder === 'INBOX' ? 'Inbox' : 'Sent'}
                 </span>
+              </div>
+            ) : searchingFolder && filteredMessages.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 gap-3">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">{searchingFolderLabel}</span>
               </div>
             ) : filteredMessages.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2 text-center px-4">

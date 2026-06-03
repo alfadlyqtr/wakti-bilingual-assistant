@@ -187,10 +187,11 @@ function SearchMessageCard({
   const resolvedBrowsingData = resolveGroundedBrowsingData(message as any);
   const sources: SearchSource[] = Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : [];
   const hasGroundedPlaceCards = hasGroundedPlaces(message as any);
-  const isPlaceSearch = typeof resolvedBrowsingData?.searchType === 'string' && resolvedBrowsingData.searchType.trim().toLowerCase() === 'business';
   const rawContent = message.content || '';
-  // Strip reminder blocks before displaying
   const cleanedContent = stripReminderBlocks(rawContent);
+  const isPlaceTextFormat = /^##\s+\d+\.\s+.+|\*\*(Vibe|Must.?Try|Reason):/im.test(cleanedContent);
+  const isPlaceSearch = (typeof resolvedBrowsingData?.searchType === 'string' && resolvedBrowsingData.searchType.trim().toLowerCase() === 'business') || isPlaceTextFormat;
+  const hasStructuredSearchCards = Array.isArray(resolvedBrowsingData?.cards) && resolvedBrowsingData.cards.length > 0;
 
   // When place cards are present, only show the intro line(s) before the first bullet —
   // everything else (place names, ratings, phone, maps, etc.) lives inside the cards.
@@ -220,7 +221,7 @@ function SearchMessageCard({
 
   return (
     <div className="w-full space-y-4">
-      {!hasGroundedPlaceCards && !isPlaceSearch && (
+      {!hasGroundedPlaceCards && (!isPlaceSearch || hasStructuredSearchCards) && (
         <SearchCardsBlock message={message as any} language={language} introText={introOnly} />
       )}
 
@@ -1662,7 +1663,7 @@ export function ChatMessages({
     // Render assistant content using ReactMarkdown (tables, code, images)
     if (message.role === 'assistant') {
       // Search: render the dedicated mobile-first Search UI
-      if (message.intent === 'search' || (message.browsingUsed && resolveGroundedBrowsingData(message))) {
+      if (message.intent === 'search' || message.browsingUsed) {
         return <SearchMessageCard message={message} language={language} />;
       }
 

@@ -55,6 +55,26 @@ type ImapFolderCache = {
 };
 
 const IMAP_FOLDER_CACHE_STORAGE_KEY = 'wakti-imap-folder-cache-v1';
+const IMAP_PAGE_SIZE = 20;
+
+function mergeImapMessages(primary: ImapMessage[], secondary: ImapMessage[]): ImapMessage[] {
+  const seen = new Set<number>();
+  const merged: ImapMessage[] = [];
+
+  for (const message of primary) {
+    if (seen.has(message.uid)) continue;
+    seen.add(message.uid);
+    merged.push(message);
+  }
+
+  for (const message of secondary) {
+    if (seen.has(message.uid)) continue;
+    seen.add(message.uid);
+    merged.push(message);
+  }
+
+  return merged;
+}
 
 function normalizeImapBody(body: unknown): { text: string; html: string } {
   const safeBody = body && typeof body === 'object' ? body as Record<string, unknown> : {};
@@ -194,9 +214,13 @@ export function useImapMessages(connectionId: string) {
         folder,
         page: pageNum,
       });
+      const incomingMessages = Array.isArray(data.messages) ? data.messages as ImapMessage[] : [];
+      const shouldPreserveLoadedPages = pageNum === 1 && Boolean(options?.forceRefresh && cached?.page && cached.page > 1);
       const nextMessages = pageNum === 1
-        ? (data.messages || [])
-        : [...(folderCacheRef.current[cacheKey]?.messages || []), ...(data.messages || [])];
+        ? (shouldPreserveLoadedPages
+          ? mergeImapMessages(incomingMessages, cached?.messages || [])
+          : incomingMessages)
+        : mergeImapMessages(folderCacheRef.current[cacheKey]?.messages || [], incomingMessages);
       const nextMailboxInfo = data.mailbox
         ? {
             login: data.mailbox.login,
@@ -204,22 +228,32 @@ export function useImapMessages(connectionId: string) {
             folder: data.folder || folder,
           }
         : folderCacheRef.current[cacheKey]?.mailboxInfo || null;
+      const nextPage = shouldPreserveLoadedPages ? Number(cached?.page || pageNum) : pageNum;
+      const totalMessages = Number(data.total || nextMailboxInfo?.exists || 0);
+      const nextHasMore = shouldPreserveLoadedPages
+        ? totalMessages > nextPage * IMAP_PAGE_SIZE
+        : Boolean(data.hasMore);
 
       if (!options?.background) {
         setMessages(nextMessages);
-        setHasMore(data.hasMore || false);
-        setPage(pageNum);
+        setHasMore(nextHasMore);
+        setPage(nextPage);
         setActiveFolder(folder);
         setMailboxInfo(nextMailboxInfo);
       }
       folderCacheRef.current[cacheKey] = {
         messages: nextMessages,
-        hasMore: Boolean(data.hasMore),
-        page: pageNum,
+        hasMore: nextHasMore,
+        page: nextPage,
         mailboxInfo: nextMailboxInfo,
       };
       writeStoredFolderCache(folderCacheRef.current);
-      return data;
+      return {
+        ...data,
+        messages: nextMessages,
+        hasMore: nextHasMore,
+        page: nextPage,
+      };
     } catch (err: any) {
       if (!options?.quiet) {
         toast.error(err.message || 'Failed to load messages');
@@ -349,6 +383,24 @@ export function useImapMessages(connectionId: string) {
     }
   }, [activeFolder, getFolderCacheKey, messages]);
 
+  const loadAllMessages = useCallback(async (folder: ImapFolderName = activeFolder) => {
+    if (!connectionId) return null;
+    const cacheKey = getFolderCacheKey(folder);
+    let nextPage = folder === activeFolder ? page : (folderCacheRef.current[cacheKey]?.page || 1);
+    let nextHasMore = folder === activeFolder ? hasMore : Boolean(folderCacheRef.current[cacheKey]?.hasMore);
+    let lastResult: Awaited<ReturnType<typeof fetchMessages>> = null;
+
+    while (nextHasMore) {
+      const result = await fetchMessages(folder, nextPage + 1, { quiet: true });
+      if (!result) break;
+      lastResult = result;
+      nextPage = Number(result.page || nextPage + 1);
+      nextHasMore = Boolean(result.hasMore);
+    }
+
+    return lastResult;
+  }, [activeFolder, connectionId, fetchMessages, getFolderCacheKey, hasMore, page]);
+
   const deleteMessage = useCallback(async (uid: number, folder: string): Promise<boolean> => {
     if (!connectionId) return false;
     try {
@@ -395,14 +447,16 @@ export function useImapMessages(connectionId: string) {
 
   const loadMore = useCallback(() => {
     if (hasMore && !loading) {
-      fetchMessages(activeFolder, page + 1);
+      return fetchMessages(activeFolder, page + 1);
     }
+    return Promise.resolve(null);
   }, [hasMore, loading, activeFolder, page, fetchMessages]);
 
   return {
     messages,
     loading,
     hasMore,
+    page,
     activeFolder,
     mailboxInfo,
     hasCachedFolder,
@@ -413,6 +467,7 @@ export function useImapMessages(connectionId: string) {
     downloadAttachment,
     markMessageAsRead,
     deleteMessage,
+    loadAllMessages,
     loadMore,
   };
 }

@@ -35,7 +35,7 @@ type VisualAdsJobInsertClient = {
 };
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
 const KIE_IMAGE2VIDEO_MODEL = "grok-imagine-video-1-5-preview";
-const KIE_TEXT2VIDEO_MODEL = "grok-imagine/text-to-video";
+const KIE_TEXT2VIDEO_MODEL = "gemini-omni-video";
 const KIE_2IMAGES_MODEL = "veo3_lite";
 const KIE_VISUAL_ADS_MODEL = "gpt-image-2-image-to-image";
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
@@ -689,16 +689,15 @@ async function createTextToVideoTask(
   resolution?: string,
   videoStyleMode?: string,
 ): Promise<{ task_id: string; status: string }> {
-  const validDuration = ["6", "10"].includes(duration || "") ? duration! : "6";
-  const validResolution = ["480p", "720p"].includes(resolution || "") ? resolution! : "720p";
-  const validAspectRatio = ["1:1", "21:9", "4:3", "3:4", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
-  const validMode = ["normal", "fun"].includes(videoStyleMode || "") ? videoStyleMode! : "normal";
+  void videoStyleMode;
+  const validDuration = ["4", "6", "8"].includes(duration || "") ? duration! : "6";
+  const validResolution = ["720p", "1080p"].includes(resolution || "") ? resolution! : "720p";
+  const validAspectRatio = ["16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
   const input: Record<string, unknown> = {
     prompt: prompt.slice(0, 2500),
     aspect_ratio: validAspectRatio,
     duration: validDuration,
     resolution: validResolution,
-    mode: validMode,
   };
 
   const requestBody = {
@@ -1222,12 +1221,7 @@ serve(async (req) => {
     }
 
     // ── Trial Token Check: detect generation_type for correct key ──
-    const trialKeyMap: Record<string, TrialFeatureKey> = {
-      'image_to_video': 'i2v',
-      'text_to_video': 't2v',
-      '2images_to_video': '2i2v',
-    };
-    const trialFeatureKey = trialKeyMap[generationType] || 'i2v';
+    const trialFeatureKey: TrialFeatureKey = 'ai_video';
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") || "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
@@ -1265,7 +1259,7 @@ serve(async (req) => {
           message: "Monthly AI video limit reached",
           quota: {
             used: quota?.videos_generated || 0,
-            limit: quota?.videos_limit || 60,
+            limit: quota?.videos_limit || 30,
             extra: quota?.extra_videos || 0,
           },
         }),

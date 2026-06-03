@@ -23,14 +23,26 @@ export function resolveGroundedBrowsingData(message: MessageLike | null | undefi
     if (!merged.searchType && typeof candidate.searchType === 'string' && candidate.searchType.trim()) {
       merged.searchType = candidate.searchType;
     }
+    if (!merged.cardType && typeof candidate.cardType === 'string' && candidate.cardType.trim()) {
+      merged.cardType = candidate.cardType;
+    }
     if (!merged.googleMapsWidgetContextToken && typeof candidate.googleMapsWidgetContextToken === 'string' && candidate.googleMapsWidgetContextToken.trim()) {
       merged.googleMapsWidgetContextToken = candidate.googleMapsWidgetContextToken;
     }
     if (!merged.mapSearchQuery && typeof candidate.mapSearchQuery === 'string' && candidate.mapSearchQuery.trim()) {
       merged.mapSearchQuery = candidate.mapSearchQuery;
     }
+    if (!merged.summary && typeof candidate.summary === 'string' && candidate.summary.trim()) {
+      merged.summary = candidate.summary;
+    }
     if (typeof merged.isNearMeQuery !== 'boolean' && typeof candidate.isNearMeQuery === 'boolean') {
       merged.isNearMeQuery = candidate.isNearMeQuery;
+    }
+    if (typeof merged.truncated !== 'boolean' && typeof candidate.truncated === 'boolean') {
+      merged.truncated = candidate.truncated;
+    }
+    if (!merged.finishReason && typeof candidate.finishReason === 'string' && candidate.finishReason.trim()) {
+      merged.finishReason = candidate.finishReason;
     }
     if (!merged.searchEntryPointHtml && typeof candidate.searchEntryPointHtml === 'string' && candidate.searchEntryPointHtml.trim()) {
       merged.searchEntryPointHtml = candidate.searchEntryPointHtml;
@@ -42,6 +54,21 @@ export function resolveGroundedBrowsingData(message: MessageLike | null | undefi
 
     if (Array.isArray(candidate.supports)) {
       merged.supports = [...(Array.isArray(merged.supports) ? merged.supports : []), ...candidate.supports];
+    }
+
+    if (Array.isArray(candidate.cards)) {
+      const nextCards = Array.isArray(merged.cards) ? [...merged.cards] : [];
+      const seenCardKeys = new Set(nextCards.map((card: any) => [card?.title, card?.url, card?.badge].map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean).join('|')));
+      for (const card of candidate.cards) {
+        const cardKey = [card?.title, card?.url, card?.badge]
+          .map((item) => (typeof item === 'string' ? item.trim() : ''))
+          .filter(Boolean)
+          .join('|');
+        if (!cardKey || seenCardKeys.has(cardKey)) continue;
+        seenCardKeys.add(cardKey);
+        nextCards.push(card);
+      }
+      merged.cards = nextCards;
     }
 
     if (Array.isArray(candidate.sources)) {

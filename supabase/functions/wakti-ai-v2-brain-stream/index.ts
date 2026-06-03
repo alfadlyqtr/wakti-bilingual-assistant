@@ -1645,8 +1645,9 @@ async function streamGemini3WithSearch(
   recentMessages: unknown[] | undefined,
   onToken: (token: string) => void,
   onGroundingMetadata: (meta: Gemini3SearchResult['groundingMetadata']) => void,
+  onFinishReason: (finishReason?: string) => void,
   userLocation?: { latitude: number; longitude: number; city?: string; country?: string } | null,
-  searchIntent: 'business' | 'news' | 'sports' | 'url' | 'general' = 'general',
+  searchIntent: 'business' | 'news' | 'sports' | 'url' | 'research' | 'general' = 'general',
   model: string = 'gemini-3.1-pro-preview'
 ): Promise<string> {
   const key = getGeminiApiKey();
@@ -1710,6 +1711,7 @@ async function streamGemini3WithSearch(
   let buffer = '';
   let fullText = '';
   let groundingMeta: Gemini3SearchResult['groundingMetadata'] = undefined;
+  let finalFinishReason = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -1730,6 +1732,9 @@ async function streamGemini3WithSearch(
           const { delta, nextText } = extractGeminiDelta(parts, fullText);
           fullText = nextText;
           if (delta) onToken(delta);
+          if (typeof cands[0]?.finishReason === 'string' && cands[0].finishReason.trim()) {
+            finalFinishReason = cands[0].finishReason.trim();
+          }
           // Capture grounding metadata from final chunk
           if (cands[0]?.groundingMetadata) {
             groundingMeta = cands[0].groundingMetadata;
@@ -1743,6 +1748,7 @@ async function streamGemini3WithSearch(
   if (groundingMeta) {
     onGroundingMetadata(groundingMeta);
   }
+  onFinishReason(finalFinishReason || undefined);
 
   return fullText;
 }
@@ -2472,9 +2478,268 @@ type GroundedPlaceCard = {
   openingHours?: string[];
 };
 
+type SearchCardType = 'places' | 'news' | 'sports' | 'url' | 'research' | 'general';
+
+type SearchCardItem = {
+  title: string;
+  summary: string;
+  url?: string;
+  sourceLabel?: string;
+  badge?: string;
+};
+
 const BUSINESS_LINK_STOPWORDS = new Set([
   'the', 'and', 'for', 'cafe', 'cafes', 'coffee', 'restaurant', 'restaurants', 'shop', 'store', 'market', 'hospital', 'street', 'road', 'mall', 'center', 'centre', 'branch', 'official'
 ]);
+
+function normalizeSearchCardType(searchIntent: string): SearchCardType {
+  if (searchIntent === 'business') return 'places';
+  if (searchIntent === 'news') return 'news';
+  if (searchIntent === 'sports') return 'sports';
+  if (searchIntent === 'url') return 'url';
+  if (searchIntent === 'research') return 'research';
+  return 'general';
+}
+
+function cleanSearchCardText(value?: string): string {
+  return typeof value === 'string'
+    ? value
+        .replace(/\[([^\]]+)\]\(((?:https?:\/\/|mailto:|tel:)[^)]+)\)/gi, '$1')
+        .replace(/^#{1,6}\s+/gm, '')
+        .replace(/^\s*(?:[-*•]|\d+\.)\s+/gm, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/__(.*?)__/g, '$1')
+        .replace(/`([^`]+)`/g, '$1')
+        .replace(/\s+/g, ' ')
+        .trim()
+    : '';
+}
+
+function truncateSearchCardText(value: string, max = 180): string {
+  if (value.length <= max) return value;
+  return `${value.slice(0, Math.max(0, max - 3)).trim()}...`;
+}
+
+function extractSearchSummaryText(content: string): string {
+  const paragraphs = content
+    .split(/\n\s*\n/)
+    .map((part) => cleanSearchCardText(part))
+    .filter((part) => part && !/^sources?\s*:/i.test(part));
+  const first = paragraphs.find((part) => part.length > 30) || paragraphs[0] || '';
+  return truncateSearchCardText(first, 240);
+}
+
+function extractSearchBulletCards(content: string): SearchCardItem[] {
+  const lines = content.split('\n');
+  const cards: SearchCardItem[] = [];
+  let current: { title: string; lines: string[] } | null = null;
+
+  const flush = () => {
+    if (!current) return;
+    const summary = truncateSearchCardText(cleanSearchCardText(current.lines.join(' ')), 160);
+    if (current.title || summary) {
+      cards.push({
+        title: truncateSearchCardText(current.title || summary || 'Result', 100),
+        summary: summary || current.title || '',
+      });
+    }
+    current = null;
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/^#{1,6}\s+/, '').trim();
+    if (!line || /^sources?\s*:/i.test(line)) continue;
+    const bulletMatch = line.match(/^(?:[-*•]|\d+\.)\s+(.+)$/);
+    if (bulletMatch) {
+      flush();
+      const cleaned = cleanSearchCardText(bulletMatch[1]);
+      const divider = cleaned.match(/^([^:–—-]{3,100})\s*[:–—-]\s*(.+)$/);
+      current = {
+        title: divider?.[1]?.trim() || truncateSearchCardText(cleaned, 100),
+        lines: divider?.[2] ? [divider[2]] : [],
+      };
+      continue;
+    }
+    if (current) current.lines.push(line);
+  }
+
+  flush();
+  return cards.slice(0, 6);
+}
+
+function getSearchSourceLabel(url?: string): string {
+  if (!url) return '';
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function buildSearchSourcesFromPlaces(places: GroundedPlaceCard[]): Array<{ url: string; title: string }> {
+  const byUrl = new Map<string, { url: string; title: string }>();
+  for (const place of places) {
+    const title = typeof place?.name === 'string' ? place.name.trim() : '';
+    const mapsUrl = normalizeLikelyExternalUrl(typeof place?.mapsUrl === 'string' ? place.mapsUrl : '');
+    const websiteUrl = normalizeLikelyExternalUrl(typeof place?.websiteUrl === 'string' ? place.websiteUrl : '');
+    if (mapsUrl && !byUrl.has(mapsUrl)) byUrl.set(mapsUrl, { url: mapsUrl, title: title || mapsUrl });
+    if (websiteUrl && !byUrl.has(websiteUrl)) byUrl.set(websiteUrl, { url: websiteUrl, title: title || websiteUrl });
+  }
+  return Array.from(byUrl.values()).slice(0, 12);
+}
+
+function buildSearchSourceCards(
+  sources: Array<{ url?: string; title?: string }>,
+  summary: string,
+  bulletCards: SearchCardItem[],
+  language: string,
+): SearchCardItem[] {
+  return sources.slice(0, 6).map((source, index) => {
+    const sourceUrl = typeof source?.url === 'string' ? source.url : '';
+    const sourceLabel = getSearchSourceLabel(sourceUrl) || (language === 'ar' ? 'مصدر' : 'Source');
+    const aiTitle = bulletCards[index]?.title || '';
+    const aiSummary = bulletCards[index]?.summary || (index === 0 ? summary : '') || '';
+    const rawSourceTitle = cleanSearchCardText(typeof source?.title === 'string' ? source.title : '');
+    return {
+      title: aiTitle || rawSourceTitle || `${language === 'ar' ? 'مصدر' : 'Source'} ${index + 1}`,
+      summary: truncateSearchCardText(aiSummary, 160),
+      url: sourceUrl || undefined,
+      sourceLabel,
+    };
+  });
+}
+
+function buildPlaceSearchCards(places: GroundedPlaceCard[], language: string): SearchCardItem[] {
+  return places.slice(0, 6).map((place, index) => {
+    const summary = truncateSearchCardText(
+      [place.reason, place.vibe, place.mustTry]
+        .map((item) => cleanSearchCardText(item || ''))
+        .filter(Boolean)
+        .join(' · ') || cleanSearchCardText(place.editorialSummary || place.address || ''),
+      180,
+    );
+    return {
+      title: cleanSearchCardText(place.name || place.address || `${language === 'ar' ? 'مكان' : 'Place'} ${index + 1}`),
+      summary,
+      url: normalizeLikelyExternalUrl(place.mapsUrl || place.websiteUrl || '') || undefined,
+      sourceLabel: place.address ? truncateSearchCardText(cleanSearchCardText(place.address), 42) : (language === 'ar' ? 'خرائط جوجل' : 'Google Maps'),
+      badge: typeof place.openNow === 'boolean'
+        ? (place.openNow ? (language === 'ar' ? 'مفتوح الآن' : 'Open now') : (language === 'ar' ? 'مغلق الآن' : 'Closed now'))
+        : (language === 'ar' ? 'أفضل اختيار' : 'Top pick'),
+    };
+  });
+}
+
+function buildStructuredSearchCards(params: {
+  searchIntent: string;
+  responseText: string;
+  sources: Array<{ url?: string; title?: string }>;
+  places: GroundedPlaceCard[];
+  language: string;
+}): { cardType: SearchCardType; summary: string; cards: SearchCardItem[] } {
+  const { searchIntent, responseText, sources, places, language } = params;
+  const cardType = normalizeSearchCardType(searchIntent);
+  const content = (responseText || '').replace(/^\s*Sources?:[\s\S]*$/im, '').trim();
+  const summary = extractSearchSummaryText(content);
+  const bulletCards = extractSearchBulletCards(content);
+  const sourceCards = buildSearchSourceCards(sources, summary, bulletCards, language);
+
+  if (cardType === 'places') {
+    const cards = buildPlaceSearchCards(places, language);
+    return {
+      cardType,
+      summary,
+      cards: cards.length > 0 ? cards : [{
+        title: language === 'ar' ? 'نتائج الأماكن' : 'Place results',
+        summary: summary || (language === 'ar' ? 'جاري تجهيز أفضل الخيارات لك.' : 'Finding the strongest nearby options for you.'),
+        badge: language === 'ar' ? 'أماكن' : 'Places',
+      }],
+    };
+  }
+
+  if (cardType === 'url') {
+    const primarySource = sources[0];
+    const primaryUrl = typeof primarySource?.url === 'string' ? primarySource.url : '';
+    const primaryTitle = cleanSearchCardText(typeof primarySource?.title === 'string' ? primarySource.title : '') || getSearchSourceLabel(primaryUrl) || (language === 'ar' ? 'ملخص الصفحة' : 'Page summary');
+    const detailCards = (bulletCards.length > 0 ? bulletCards : sourceCards).slice(0, 4).map((card, index) => ({
+      ...card,
+      badge: index === 0 ? (language === 'ar' ? 'أهم نقطة' : 'Key point') : (language === 'ar' ? 'تفصيل' : 'Detail'),
+      url: card.url || primaryUrl || undefined,
+      sourceLabel: card.sourceLabel || getSearchSourceLabel(primaryUrl),
+    }));
+    return {
+      cardType,
+      summary,
+      cards: [
+        {
+          title: primaryTitle,
+          summary: summary || (language === 'ar' ? 'تم تحليل الرابط.' : 'The page was analyzed.'),
+          url: primaryUrl || undefined,
+          sourceLabel: getSearchSourceLabel(primaryUrl),
+          badge: language === 'ar' ? 'ملخص الرابط' : 'URL summary',
+        },
+        ...detailCards,
+      ].slice(0, 5),
+    };
+  }
+
+  if (cardType === 'news' || cardType === 'sports' || cardType === 'research') {
+    const cards = (sourceCards.length > 0 ? sourceCards : bulletCards).slice(0, 6).map((card, index) => ({
+      ...card,
+      badge: index === 0
+        ? cardType === 'sports'
+          ? (language === 'ar' ? 'التحديث الأهم' : 'Top update')
+          : cardType === 'research'
+            ? (language === 'ar' ? 'الفكرة الأساسية' : 'Key insight')
+            : (language === 'ar' ? 'العنوان الأهم' : 'Top story')
+        : cardType === 'research'
+          ? (language === 'ar' ? 'نقطة' : 'Insight')
+          : (language === 'ar' ? 'تحديث' : 'Update'),
+    }));
+    return {
+      cardType,
+      summary,
+      cards: cards.length > 0 ? cards : [{
+        title: cardType === 'sports'
+          ? (language === 'ar' ? 'تحديث رياضي' : 'Sports update')
+          : cardType === 'research'
+            ? (language === 'ar' ? 'ملخص بحث' : 'Research summary')
+            : (language === 'ar' ? 'آخر الأخبار' : 'Latest news'),
+        summary: summary || '',
+        badge: cardType === 'sports'
+          ? (language === 'ar' ? 'رياضة' : 'Sports')
+          : cardType === 'research'
+            ? (language === 'ar' ? 'بحث' : 'Research')
+            : (language === 'ar' ? 'أخبار' : 'News'),
+      }],
+    };
+  }
+
+  const generalCards = (bulletCards.length > 0 ? bulletCards : sourceCards).slice(0, 6).map((card, index) => ({
+    ...card,
+    badge: index === 0 ? (language === 'ar' ? 'الخلاصة' : 'Top insight') : (language === 'ar' ? 'نتيجة' : 'Result'),
+  }));
+  return {
+    cardType,
+    summary,
+    cards: generalCards.length > 0 ? generalCards : [{
+      title: language === 'ar' ? 'نتيجة البحث' : 'Search result',
+      summary: summary || '',
+      badge: language === 'ar' ? 'ملخص' : 'Summary',
+    }],
+  };
+}
+
+function trimIncompleteSearchResponse(text: string, finishReason?: string): string {
+  const cleaned = (text || '').trim();
+  if (!cleaned) return cleaned;
+  if (finishReason !== 'MAX_TOKENS' && finishReason !== 'SAFETY') return cleaned;
+  const lastParagraphBreak = cleaned.lastIndexOf('\n\n');
+  if (lastParagraphBreak > 120) return cleaned.slice(0, lastParagraphBreak).trim();
+  const lastSentenceBreak = Math.max(cleaned.lastIndexOf('. '), cleaned.lastIndexOf('! '), cleaned.lastIndexOf('? '), cleaned.lastIndexOf('。'), cleaned.lastIndexOf('!'), cleaned.lastIndexOf('?'));
+  if (lastSentenceBreak > 80) return cleaned.slice(0, lastSentenceBreak + 1).trim();
+  return cleaned;
+}
 
 function normalizeBusinessLookupText(value: string): string {
   return (value || '')
@@ -3050,6 +3315,23 @@ function mergeGroundedPlaceCard(base: GroundedPlaceCard, patch: Partial<Grounded
   };
 }
 
+function mergeGroundedPlaceLists(primary: GroundedPlaceCard[], secondary: GroundedPlaceCard[]): GroundedPlaceCard[] {
+  const merged = new Map<string, GroundedPlaceCard>();
+  const addPlace = (place: GroundedPlaceCard) => {
+    const key = [place.placeId, place.name, place.mapsUrl, place.websiteUrl]
+      .map((item) => (typeof item === 'string' ? item.trim() : ''))
+      .filter(Boolean)
+      .join('|');
+    if (!key) return;
+    const existing = merged.get(key);
+    merged.set(key, existing ? mergeGroundedPlaceCard(existing, place) : place);
+  };
+
+  for (const place of primary) addPlace(place);
+  for (const place of secondary) addPlace(place);
+  return Array.from(merged.values());
+}
+
 async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partial<GroundedPlaceCard>> {
   if (!GOOGLE_PLACES_API_KEY || !place.placeId) return {};
 
@@ -3488,15 +3770,8 @@ async function enrichGroundedPlacesWithOfficialLinks(places: GroundedPlaceCard[]
       const placesApiData = place.placeId
         ? await fetchGooglePlaceDetails(place)
         : await fetchGooglePlaceByText(place, locationBias);
-      let enrichedPlace = mergeGroundedPlaceCard(place, placesApiData);
+      const enrichedPlace = mergeGroundedPlaceCard(place, placesApiData);
 
-      // Step 2: If we have a website URL, scrape its HTML for social profile links
-      if (enrichedPlace.websiteUrl) {
-        enrichedPlace = mergeGroundedPlaceCard(enrichedPlace, await extractOfficialSocialLinksFromWebsite(enrichedPlace.websiteUrl));
-      }
-
-      // No Tavily. Google grounding web chunks already ran pickVerifiedBusinessLinks
-      // earlier in the pipeline before this function is called.
       return enrichedPlace;
     })
   );
@@ -4133,22 +4408,26 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult
 }
 
 // Detect search intent from user query
-function detectSearchIntent(query: string): 'business' | 'news' | 'sports' | 'url' | 'general' {
+ function detectSearchIntent(query: string): 'business' | 'news' | 'sports' | 'url' | 'research' | 'general' {
   const lower = query.toLowerCase();
-  const hasBusinessKeyword = /\b(near me|nearby|closest|nearest|location|address|phone|email|hours|open|closed|directions|map|restaurant|restaurants|cafe|cafes|coffee|breakfast|brunch|lunch|dinner|burger|pizza|shawarma|bakery|dessert|shop|store|mall|hotel|hospital|gym|bank|pharmacy|pharmacies|salon|spa|barber|clinic|supermarket|grocery)\b/i.test(lower);
+  const hasBusinessKeyword = /\b(near me|nearby|closest|nearest|location|address|phone|email|hours|open|closed|directions|map|restaurant|restaurants|cafe|cafes|coffee|breakfast|brunch|lunch|dinner|burger|pizza|shawarma|bakery|dessert|ice cream|icecream|gelato|soft serve|boba|tea|juice|smoothie|sushi|shawerma|sweet|sweets|pastry|shop|store|mall|hotel|hospital|gym|bank|pharmacy|pharmacies|salon|spa|barber|clinic|supermarket|grocery|bookstore|library)\b/i.test(lower);
   const hasBusinessDiscoveryPhrase = /\b(best|top|recommend|recommended|suggest|suggested|find|looking for|where is|where can i|where do i|get me|show me|authentic|good|great)\b/i.test(lower);
   const hasArabicBusinessKeyword = /\u0642\u0631\u064a\u0628|\u0628\u0627\u0644\u0642\u0631\u0628|\u0627\u0644\u0623\u0642\u0631\u0628|\u0627\u0642\u0631\u0628|\u0645\u0648\u0642\u0639|\u0639\u0646\u0648\u0627\u0646|\u0647\u0627\u062a\u0641|\u0631\u0642\u0645|\u0633\u0627\u0639\u0627\u062a|\u0645\u0641\u062a\u0648\u062d|\u0645\u063a\u0644\u0642|\u0627\u062a\u062c\u0627\u0647\u0627\u062a|\u062e\u0631\u064a\u0637\u0629|\u0645\u0637\u0639\u0645|\u0645\u0637\u0627\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0648\u0641\u064a|\u0641\u0637\u0648\u0631|\u0625\u0641\u0637\u0627\u0631|\u063a\u062f\u0627\u0621|\u0639\u0634\u0627\u0621|\u0645\u062d\u0644|\u0645\u062a\u062c\u0631|\u0645\u0648\u0644|\u0641\u0646\u062f\u0642|\u0645\u0633\u062a\u0634\u0641\u0649|\u0635\u064a\u062f\u0644\u064a\u0629|\u0628\u0646\u0643|\u0635\u0627\u0644\u0648\u0646|\u0633\u0628\u0627|\u062d\u0644\u0627\u0642|\u0639\u064a\u0627\u062f\u0629|\u0633\u0648\u0628\u0631\u0645\u0627\u0631\u0643\u062a/.test(query);
   const hasArabicDiscoveryPhrase = /\u0623\u0641\u0636\u0644|\u0627\u062d\u0633\u0646|\u0631\u0634\u062d|\u0627\u0642\u062a\u0631\u062d|\u0648\u064a\u0646|\u0623\u064a\u0646|\u0623\u0628\u063a\u0649|\u0627\u0628\u064a|\u0623\u0631\u064a\u062f|\u0627\u062f\u0648\u0631|\u0623\u062f\u0648\u0631|\u062f\u0644\u0646\u064a|\u062f\u0644\u0651\u0646\u064a|\u0644\u0642\u0650|\u0644\u0642\u064a\u062a/.test(query);
   const hasSportsKeyword = /\b(score|scores|match|matches|fixture|fixtures|standings|table|league|cup|goal|goals|assist|assists|playoff|playoffs|nba|nfl|mlb|nhl|fifa|uefa|champions league|premier league|la liga|serie a|bundesliga|tennis|formula 1|f1|cricket|world cup|vs\.?|result|results)\b/i.test(lower);
+  const hasResearchKeyword = /\b(explain|comparison|compare|history|historical|science|scientific|research|why|how does|how do|pros and cons|advantages|disadvantages|guide|tutorial|what is|what are|best way to|difference between)\b/i.test(lower);
+  const looksLikePlaceDiscovery = /\b(best|top|good|great|authentic|famous)\b[\s\S]{0,40}\b(in|near|around)\b/i.test(lower) && !hasSportsKeyword;
   
   if (/https?:\/\//.test(query) || /www\./i.test(query)) return 'url';
   if (hasBusinessKeyword) return 'business';
   if (hasBusinessKeyword && hasBusinessDiscoveryPhrase) return 'business';
+  if (looksLikePlaceDiscovery) return 'business';
   if (/\b(where is|how to get to|find|search for)\b/i.test(lower) && /\b(place|business|store|restaurant|cafe|hotel)\b/i.test(lower)) return 'business';
   if (hasArabicBusinessKeyword) return 'business';
   if (hasArabicBusinessKeyword && hasArabicDiscoveryPhrase) return 'business';
   if (hasSportsKeyword) return 'sports';
   if (/\b(news|latest|breaking|update|today|yesterday|recent|current events|what happened|headlines)\b/i.test(lower)) return 'news';
+  if (hasResearchKeyword) return 'research';
   
   return 'general';
 }
@@ -5001,15 +5280,58 @@ If you are running out of space, keep this order and drop the rest:
 
             let fullResponseText = '';
             let groundingMetadata: Gemini3SearchResult['groundingMetadata'] | null = null;
+            let searchFinishReason = '';
 
             // Prepare device GPS location for search query injection (all queries, not just business)
             const userLocationForSearch = (requestLocation?.latitude && requestLocation?.longitude) 
               ? { latitude: requestLocation.latitude, longitude: requestLocation.longitude, city: userCity || '', country: userCountry || '' }
               : null;
+            const cleanSearchQuery = typeof message === 'string' ? message.trim() : '';
+            const isNearMeSearchQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanSearchQuery);
+            const parallelPlacesPromise = searchIntent === 'business' && cleanSearchQuery
+              ? (async () => {
+                  const foundPlaces = await searchGooglePlacesForQuery(
+                    cleanSearchQuery,
+                    userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
+                    { strictNearby: Boolean(isNearMeSearchQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
+                  );
+                  return await enrichGroundedPlacesWithOfficialLinks(foundPlaces);
+                })()
+              : null;
 
             // Stream tokens to client
             const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3.1-flash-lite';
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: { searchType: searchIntent, queries: message.trim() ? [message.trim()] : [] } } })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: { searchType: searchIntent, cardType: normalizeSearchCardType(searchIntent), queries: cleanSearchQuery ? [cleanSearchQuery] : [], cards: [], summary: '' } } })}\n\n`));
+
+            if (parallelPlacesPromise) {
+              parallelPlacesPromise
+                .then((parallelPlaces) => {
+                  if (!Array.isArray(parallelPlaces) || parallelPlaces.length === 0) return;
+                  const earlySources = buildSearchSourcesFromPlaces(parallelPlaces);
+                  const earlyCardPayload = buildStructuredSearchCards({
+                    searchIntent,
+                    responseText: '',
+                    sources: earlySources,
+                    places: parallelPlaces,
+                    language,
+                  });
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: {
+                    searchType: searchIntent,
+                    cardType: earlyCardPayload.cardType,
+                    queries: cleanSearchQuery ? [cleanSearchQuery] : [],
+                    mapSearchQuery: cleanSearchQuery,
+                    isNearMeQuery: isNearMeSearchQuery,
+                    sources: earlySources,
+                    supports: [],
+                    places: parallelPlaces,
+                    summary: earlyCardPayload.summary,
+                    cards: earlyCardPayload.cards,
+                    googleMapsWidgetContextToken: null,
+                    searchEntryPointHtml: ''
+                  } } })}\n\n`));
+                })
+                .catch(() => {});
+            }
 
             await streamGemini3WithSearch(
               message,
@@ -5023,10 +5345,14 @@ If you are running out of space, keep this order and drop the rest:
               (meta: Gemini3SearchResult['groundingMetadata']) => {
                 groundingMetadata = meta;
               },
+              (finishReason?: string) => {
+                searchFinishReason = typeof finishReason === 'string' ? finishReason : '';
+              },
               userLocationForSearch,
               searchIntent,
               searchModel
             );
+            fullResponseText = trimIncompleteSearchResponse(fullResponseText, searchFinishReason);
 
             // Emit grounding metadata for frontend citation injection
             if (groundingMetadata) {
@@ -5212,16 +5538,12 @@ If you are running out of space, keep this order and drop the rest:
                 }
 
                 let groundedPlaces: GroundedPlaceCard[] = Array.from(groundedPlaceById.values());
-                const cleanMapSearchQuery = typeof message === 'string' ? message.trim() : '';
-                const isNearMeSearchQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanMapSearchQuery);
                 if (searchIntent === 'business' && groundedPlaces.length === 0) {
-                  groundedPlaces = await searchGooglePlacesForQuery(
-                    cleanMapSearchQuery,
-                    userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
-                    { strictNearby: Boolean(isNearMeSearchQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
-                  );
+                  groundedPlaces = parallelPlacesPromise ? await parallelPlacesPromise.catch(() => []) : [];
+                } else if (parallelPlacesPromise) {
+                  const parallelPlaces = await parallelPlacesPromise.catch(() => []);
+                  groundedPlaces = mergeGroundedPlaceLists(groundedPlaces, parallelPlaces);
                 }
-                groundedPlaces = await enrichGroundedPlacesWithOfficialLinks(groundedPlaces);
                 const builtSources = (() => {
                   const byUrl = new Map<string, { url: string; title: string }>();
                   const addSource = (rawUrl?: string, rawTitle?: string) => {
@@ -5254,16 +5576,28 @@ If you are running out of space, keep this order and drop the rest:
 
                   return Array.from(byUrl.values()).slice(0, 12);
                 })();
+                const cardPayload = buildStructuredSearchCards({
+                  searchIntent,
+                  responseText: fullResponseText,
+                  sources: builtSources,
+                  places: groundedPlaces,
+                  language,
+                });
                 const metaPayload = {
                   metadata: {
                     geminiSearch: {
                       searchType: searchIntent,
-                      queries: Array.isArray(gm.webSearchQueries) && gm.webSearchQueries.length > 0 ? gm.webSearchQueries : (cleanMapSearchQuery ? [cleanMapSearchQuery] : []),
-                      mapSearchQuery: cleanMapSearchQuery,
+                      cardType: cardPayload.cardType,
+                      queries: Array.isArray(gm.webSearchQueries) && gm.webSearchQueries.length > 0 ? gm.webSearchQueries : (cleanSearchQuery ? [cleanSearchQuery] : []),
+                      mapSearchQuery: cleanSearchQuery,
                       isNearMeQuery: isNearMeSearchQuery,
                       sources: builtSources,
                       supports: gm.groundingSupports || [],
                       places: groundedPlaces,
+                      summary: cardPayload.summary,
+                      cards: cardPayload.cards,
+                      finishReason: searchFinishReason || null,
+                      truncated: searchFinishReason === 'MAX_TOKENS',
                       googleMapsWidgetContextToken: gm.googleMapsWidgetContextToken || null,
                       searchEntryPointHtml: isNearMeSearchQuery ? '' : (gm.searchEntryPoint?.renderedContent || '')
                     }
@@ -5302,37 +5636,45 @@ If you are running out of space, keep this order and drop the rest:
                 const isNearMeFallbackQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanFallbackQuery);
                 let fallbackPlaces: GroundedPlaceCard[] = [];
                 if (searchIntent === 'business' && cleanFallbackQuery) {
-                  fallbackPlaces = await searchGooglePlacesForQuery(
-                    cleanFallbackQuery,
-                    userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
-                    { strictNearby: Boolean(isNearMeFallbackQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
-                  );
-                  fallbackPlaces = await enrichGroundedPlacesWithOfficialLinks(fallbackPlaces);
+                  fallbackPlaces = parallelPlacesPromise
+                    ? await parallelPlacesPromise.catch(() => [])
+                    : await (async () => {
+                        const foundPlaces = await searchGooglePlacesForQuery(
+                          cleanFallbackQuery,
+                          userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
+                          { strictNearby: Boolean(isNearMeFallbackQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
+                        );
+                        return await enrichGroundedPlacesWithOfficialLinks(foundPlaces);
+                      })();
                 }
                 const fallbackSourcePayload = (() => {
                   if (fallbackSources.length > 0) return fallbackSources;
-                  const byUrl = new Map<string, { url: string; title: string }>();
-                  for (const place of fallbackPlaces) {
-                    const mapsUrl = normalizeLikelyExternalUrl(typeof place?.mapsUrl === 'string' ? place.mapsUrl : '');
-                    const websiteUrl = normalizeLikelyExternalUrl(typeof place?.websiteUrl === 'string' ? place.websiteUrl : '');
-                    const title = typeof place?.name === 'string' ? place.name.trim() : '';
-                    if (mapsUrl && !byUrl.has(mapsUrl)) byUrl.set(mapsUrl, { url: mapsUrl, title: title || mapsUrl });
-                    if (websiteUrl && !byUrl.has(websiteUrl)) byUrl.set(websiteUrl, { url: websiteUrl, title: title || websiteUrl });
-                  }
-                  return Array.from(byUrl.values()).slice(0, 12);
+                  return buildSearchSourcesFromPlaces(fallbackPlaces);
                 })();
 
                 if (fallbackSourcePayload.length > 0 || fallbackPlaces.length > 0) {
+                  const fallbackCardPayload = buildStructuredSearchCards({
+                    searchIntent,
+                    responseText: fullResponseText,
+                    sources: fallbackSourcePayload,
+                    places: fallbackPlaces,
+                    language,
+                  });
                   const fallbackPayload = {
                     metadata: {
                       geminiSearch: {
                         searchType: searchIntent,
+                        cardType: fallbackCardPayload.cardType,
                         queries: cleanFallbackQuery ? [cleanFallbackQuery] : [],
                         mapSearchQuery: cleanFallbackQuery,
                         isNearMeQuery: isNearMeFallbackQuery,
                         sources: fallbackSourcePayload,
                         supports: [],
                         places: fallbackPlaces,
+                        summary: fallbackCardPayload.summary,
+                        cards: fallbackCardPayload.cards,
+                        finishReason: searchFinishReason || null,
+                        truncated: searchFinishReason === 'MAX_TOKENS',
                         googleMapsWidgetContextToken: null,
                         searchEntryPointHtml: ''
                       }

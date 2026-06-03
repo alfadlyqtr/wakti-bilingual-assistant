@@ -866,6 +866,61 @@ const WaktiAIV2 = () => {
           },
           (metadata: any) => { 
             streamMeta = metadata || {};
+            const liveBrowsingData = metadata?.browsingData && typeof metadata.browsingData === 'object'
+              ? metadata.browsingData
+              : (metadata?.geminiSearch && typeof metadata.geminiSearch === 'object' ? metadata.geminiSearch : undefined);
+            if (liveBrowsingData) {
+              setSessionMessages(prev => prev.map(m => {
+                if (m.id !== assistantMessageId) return m;
+                const currentBrowsingData = m.browsingData && typeof m.browsingData === 'object' ? m.browsingData : {};
+                return {
+                  ...m,
+                  browsingUsed: true,
+                  browsingData: {
+                    ...currentBrowsingData,
+                    ...liveBrowsingData,
+                    queries: Array.from(new Set([
+                      ...(Array.isArray(currentBrowsingData?.queries) ? currentBrowsingData.queries : []),
+                      ...(Array.isArray(liveBrowsingData?.queries) ? liveBrowsingData.queries : []),
+                    ].map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))),
+                    sources: [
+                      ...(Array.isArray(currentBrowsingData?.sources) ? currentBrowsingData.sources : []),
+                      ...(Array.isArray(liveBrowsingData?.sources) ? liveBrowsingData.sources : []),
+                    ],
+                    supports: [
+                      ...(Array.isArray(currentBrowsingData?.supports) ? currentBrowsingData.supports : []),
+                      ...(Array.isArray(liveBrowsingData?.supports) ? liveBrowsingData.supports : []),
+                    ],
+                    cards: [
+                      ...(Array.isArray(currentBrowsingData?.cards) ? currentBrowsingData.cards : []),
+                      ...(Array.isArray(liveBrowsingData?.cards) ? liveBrowsingData.cards : []),
+                    ],
+                    places: [
+                      ...(Array.isArray(currentBrowsingData?.places) ? currentBrowsingData.places : []),
+                      ...(Array.isArray(liveBrowsingData?.places) ? liveBrowsingData.places : []),
+                    ],
+                    cardType: typeof liveBrowsingData?.cardType === 'string'
+                      ? liveBrowsingData.cardType
+                      : currentBrowsingData?.cardType,
+                    summary: typeof liveBrowsingData?.summary === 'string' && liveBrowsingData.summary.trim()
+                      ? liveBrowsingData.summary
+                      : currentBrowsingData?.summary,
+                    finishReason: typeof liveBrowsingData?.finishReason === 'string' && liveBrowsingData.finishReason.trim()
+                      ? liveBrowsingData.finishReason
+                      : currentBrowsingData?.finishReason,
+                    truncated: typeof liveBrowsingData?.truncated === 'boolean'
+                      ? liveBrowsingData.truncated
+                      : currentBrowsingData?.truncated,
+                  },
+                  metadata: {
+                    ...(m.metadata || {}),
+                    ...metadata,
+                    loading: false,
+                  }
+                };
+              }));
+              setIsLoading(false);
+            }
             // Handle search confirmation request - show Yes/No card
             if (metadata?.searchConfirmation) {
               const conf = metadata.searchConfirmation;
@@ -936,10 +991,16 @@ const WaktiAIV2 = () => {
           ? {
               ...(returnedBrowsingData || {}),
               ...(callbackBrowsingData || {}),
+              cardType: typeof callbackBrowsingData?.cardType === 'string'
+                ? callbackBrowsingData.cardType
+                : (typeof returnedBrowsingData?.cardType === 'string' ? returnedBrowsingData.cardType : undefined),
               queries: Array.from(new Set([
                 ...(Array.isArray(returnedBrowsingData?.queries) ? returnedBrowsingData.queries : []),
                 ...(Array.isArray(callbackBrowsingData?.queries) ? callbackBrowsingData.queries : []),
               ].map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))),
+              summary: typeof callbackBrowsingData?.summary === 'string' && callbackBrowsingData.summary.trim()
+                ? callbackBrowsingData.summary
+                : (typeof returnedBrowsingData?.summary === 'string' ? returnedBrowsingData.summary : undefined),
               sources: [
                 ...(Array.isArray(returnedBrowsingData?.sources) ? returnedBrowsingData.sources : []),
                 ...(Array.isArray(callbackBrowsingData?.sources) ? callbackBrowsingData.sources : []),
@@ -948,7 +1009,17 @@ const WaktiAIV2 = () => {
                 ...(Array.isArray(returnedBrowsingData?.supports) ? returnedBrowsingData.supports : []),
                 ...(Array.isArray(callbackBrowsingData?.supports) ? callbackBrowsingData.supports : []),
               ],
+              cards: [
+                ...(Array.isArray(returnedBrowsingData?.cards) ? returnedBrowsingData.cards : []),
+                ...(Array.isArray(callbackBrowsingData?.cards) ? callbackBrowsingData.cards : []),
+              ],
               places: mergedPlaces,
+              finishReason: typeof callbackBrowsingData?.finishReason === 'string'
+                ? callbackBrowsingData.finishReason
+                : (typeof returnedBrowsingData?.finishReason === 'string' ? returnedBrowsingData.finishReason : undefined),
+              truncated: typeof callbackBrowsingData?.truncated === 'boolean'
+                ? callbackBrowsingData.truncated
+                : (typeof returnedBrowsingData?.truncated === 'boolean' ? returnedBrowsingData.truncated : undefined),
               mapSearchQuery: typeof callbackBrowsingData?.mapSearchQuery === 'string'
                 ? callbackBrowsingData.mapSearchQuery
                 : (typeof returnedBrowsingData?.mapSearchQuery === 'string' ? returnedBrowsingData.mapSearchQuery : undefined),

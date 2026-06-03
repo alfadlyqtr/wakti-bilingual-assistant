@@ -80,6 +80,76 @@ interface VideoInvokeErrorPayload {
   };
 }
 
+const generateVideoTitle = (raw: string): string => {
+  if (!raw || !raw.trim()) return 'AI Video';
+  let t = raw.trim();
+  t = t.replace(/^\{?\s*"?description"?\s*:\s*"?/i, '');
+  t = t.replace(/^(Style|Camera|Lighting|Environment|Elements|Motion|Ending|Keywords):\s*/i, '');
+  const sentenceEnd = t.search(/[.!?]/);
+  if (sentenceEnd > 0 && sentenceEnd <= 80) {
+    t = t.slice(0, sentenceEnd + 1);
+  } else {
+    t = t.slice(0, 60);
+    const lastSpace = t.lastIndexOf(' ');
+    if (lastSpace > 30) t = t.slice(0, lastSpace);
+  }
+  t = t.replace(/["{}]+$/g, '').trim();
+  return t || 'AI Video';
+};
+
+const getVideoWaitHint = (
+  language: string,
+  generationMode: 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema',
+  resolution: '480p' | '720p' | '1080p'
+) => {
+  if (generationMode === 'text_to_video' && resolution === '1080p') {
+    return language === 'ar'
+      ? 'عادةً 3-6 دقائق. دقة 1080p أبطأ لكنها أوضح.'
+      : 'Usually 3-6 minutes. 1080p is slower, but sharper.';
+  }
+
+  if ((generationMode === 'text_to_video' || generationMode === '2images_to_video') && resolution === '720p') {
+    return language === 'ar'
+      ? 'عادةً 2-4 دقائق. دقة 720p أسرع.'
+      : 'Usually 2-4 minutes. 720p is the faster option.';
+  }
+
+  if (generationMode === '2images_to_video' && resolution === '1080p') {
+    return language === 'ar'
+      ? 'عادةً 3-5 دقائق. دقة 1080p قد تستغرق وقتاً أطول.'
+      : 'Usually 3-5 minutes. 1080p can take longer.';
+  }
+
+  if (generationMode === 'image_to_video' && resolution === '720p') {
+    return language === 'ar'
+      ? 'عادةً 1-3 دقائق. دقة 720p أسرع.'
+      : 'Usually 1-3 minutes. 720p is the faster option.';
+  }
+
+  return language === 'ar'
+    ? 'قد يستغرق الأمر 1-3 دقائق حسب الضغط والجودة.'
+    : 'This usually takes 1-3 minutes, depending on load and quality.';
+};
+
+const getResolutionSpeedHint = (
+  language: string,
+  generationMode: 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema'
+) => {
+  if (generationMode === 'text_to_video' || generationMode === '2images_to_video') {
+    return language === 'ar'
+      ? '720p أسرع • 1080p أبطأ لكنه أوضح'
+      : '720p is faster • 1080p is slower but sharper';
+  }
+
+  if (generationMode === 'image_to_video') {
+    return language === 'ar'
+      ? '480p الأسرع • 720p أوضح لكنه أبطأ'
+      : '480p is fastest • 720p is sharper but slower';
+  }
+
+  return '';
+};
+
 // Image compression helper
 const compressImage = (file: File, maxWidth = 1024, quality = 0.8): Promise<Blob> => {
   return new Promise((resolve, reject) => {
@@ -213,6 +283,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (mode === '2images_to_video') {
       setDuration('8');
       setResolution('720p');
+    } else if (mode === 'text_to_video') {
+      setDuration('6');
+      setResolution('720p');
     } else {
       setDuration('6');
       if (resolution === '1080p') setResolution('480p');
@@ -240,6 +313,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [loadingQuota, setLoadingQuota] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
+  const [saveErrorMessage, setSaveErrorMessage] = useState<string | null>(null);
   const [sourceImageUrl, setSourceImageUrl] = useState<string | null>(null);
   const [sourceImagePath, setSourceImagePath] = useState<string | null>(null);
   const [latestVideo, setLatestVideo] = useState<LatestVideo | null>(null);
@@ -652,7 +726,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const q = data?.[0] || data;
       setQuota({
         used: q?.videos_generated || 0,
-        limit: q?.videos_limit || 80,
+        limit: q?.videos_limit || 30,
         extra: q?.extra_videos || 0,
         canGenerate: q?.can_generate ?? true,
       });
@@ -834,6 +908,69 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     };
   }, []);
 
+  const saveGeneratedVideoToMyVideos = useCallback(async (
+    videoUrl: string,
+    options?: { auto?: boolean; navigateAfterSave?: boolean }
+  ) => {
+    if (!videoUrl || !user || isSaving || isSaved) return false;
+
+    setIsSaving(true);
+    setSaveErrorMessage(null);
+    try {
+      const { data: importData, error: importError } = await supabase.functions.invoke('import-external-video', {
+        body: {
+          sourceUrl: videoUrl,
+          filenameHint: prompt.trim().slice(0, 40) || 'ai-video',
+        },
+      });
+      if (importError) throw importError;
+      const storagePath = importData?.storagePath as string | undefined;
+      if (!storagePath) {
+        throw new Error(importData?.error || 'Failed to save video');
+      }
+
+      const { error } = await (supabase as any).from('user_videos').insert({
+        user_id: user.id,
+        title: generateVideoTitle(prompt),
+        description: prompt.trim() || null,
+        storage_path: storagePath,
+        video_url: null,
+        thumbnail_url: generationMode === 'image_to_video'
+          ? (sourceImagePath || sourceImageUrl || null)
+          : null,
+        duration_seconds: parseInt(duration, 10),
+        aspect_ratio: aspectRatio,
+        style_template: 'ai',
+        is_public: false,
+      });
+
+      if (error) throw error;
+
+      setIsSaved(true);
+      setSaveErrorMessage(null);
+      toast.success(
+        options?.auto
+          ? (language === 'ar' ? 'تم الحفظ تلقائياً في فيديوهاتي!' : 'Auto-saved to My Videos!')
+          : (language === 'ar' ? 'تم الحفظ في فيديوهاتي!' : 'Saved to My Videos!')
+      );
+      await loadLatestVideo();
+      if (options?.navigateAfterSave && onSaveSuccess) {
+        setTimeout(() => onSaveSuccess(), 1000);
+      }
+      return true;
+    } catch (e: any) {
+      console.error('Save failed:', e);
+      const fallbackMessage = options?.auto
+        ? (language === 'ar' ? 'فشل الحفظ التلقائي — يمكنك الضغط على زر الحفظ أدناه' : 'Auto-save failed — you can tap Save below')
+        : (language === 'ar' ? 'فشل الحفظ' : 'Failed to save');
+      setSaveErrorMessage(fallbackMessage);
+      toast.error(fallbackMessage);
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [user, isSaving, isSaved, prompt, generationMode, sourceImagePath, sourceImageUrl, duration, aspectRatio, language, loadLatestVideo, onSaveSuccess]);
+
   // Poll for task status
   const pollTaskStatus = useCallback(async (tid: string) => {
     try {
@@ -859,10 +996,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         if (videoUrl) {
           setGeneratedVideoUrl(videoUrl);
           setIsSaved(false);
+          setSaveErrorMessage(null);
           setGenerationProgress(100);
-          setGenerationStatus(language === 'ar' ? 'تم!' : 'Done!');
+          setGenerationStatus(language === 'ar' ? 'جاري الحفظ في فيديوهاتي...' : 'Auto-saving to My Videos...');
           toast.success(language === 'ar' ? 'تم إنشاء الفيديو!' : 'Video generated!');
           await loadQuota();
+          await saveGeneratedVideoToMyVideos(videoUrl, { auto: true, navigateAfterSave: false });
           await loadLatestVideo();
         } else {
           throw new Error('Video URL not found');
@@ -891,7 +1030,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [language, loadQuota, loadLatestVideo]);
+  }, [language, loadQuota, loadLatestVideo, saveGeneratedVideoToMyVideos]);
 
   const handleGenerate = async () => {
     // Validate based on mode
@@ -941,6 +1080,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsGenerating(true);
     setGenerationProgress(5);
     setGeneratedVideoUrl(null);
+    setSaveErrorMessage(null);
+    setIsSaved(false);
     usageIncrementedRef.current = false;
 
     try {
@@ -961,7 +1102,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           duration,
           aspect_ratio: aspectRatio,
           resolution,
-          video_style_mode: videoStyleMode,
           mode: 'async',
         };
       } else if (generationMode === 'image_to_video') {
@@ -1121,7 +1261,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       if (error) {
         const errorPayload = await parseInvokeErrorPayload(error);
         if (errorPayload?.error === 'TRIAL_LIMIT_REACHED') {
-          emitTrialBlocked(errorPayload, requestBody.generation_type === 'text_to_video' ? 't2v' : requestBody.generation_type === '2images_to_video' ? '2i2v' : 'i2v');
+          emitTrialBlocked(errorPayload, requestBody.generation_type === 'cinema' ? 'cinema' : 'ai_video');
           setIsGenerating(false);
           setGenerationProgress(0);
           setGenerationStatus('');
@@ -1133,7 +1273,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       }
 
       if (data?.error === 'TRIAL_LIMIT_REACHED') {
-        emitTrialBlocked(data, requestBody.generation_type === 'text_to_video' ? 't2v' : requestBody.generation_type === '2images_to_video' ? '2i2v' : 'i2v');
+        emitTrialBlocked(data, requestBody.generation_type === 'cinema' ? 'cinema' : 'ai_video');
         setIsGenerating(false);
         setGenerationProgress(0);
         setGenerationStatus('');
@@ -2094,79 +2234,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   const handleSaveToMyVideos = async () => {
     if (!generatedVideoUrl || !user || isSaved) return;
-    setIsSaving(true);
-    try {
-      const { data: importData, error: importError } = await supabase.functions.invoke('import-external-video', {
-        body: {
-          sourceUrl: generatedVideoUrl,
-          filenameHint: prompt.trim().slice(0, 40) || 'ai-video',
-        },
-      });
-      if (importError) throw importError;
-      const storagePath = importData?.storagePath as string | undefined;
-      if (!storagePath) {
-        throw new Error(importData?.error || 'Failed to save video');
-      }
-
-      // Generate a clean short title from the prompt
-      const generateTitle = (raw: string): string => {
-        if (!raw || !raw.trim()) return 'AI Video';
-        let t = raw.trim();
-        // Strip JSON-like prefixes
-        t = t.replace(/^\{?\s*"?description"?\s*:\s*"?/i, '');
-        // Strip leading "Style:", "Camera:", etc labels if that's all we have
-        t = t.replace(/^(Style|Camera|Lighting|Environment|Elements|Motion|Ending|Keywords):\s*/i, '');
-        // Take first sentence or up to 60 chars
-        const sentenceEnd = t.search(/[.!?]/);
-        if (sentenceEnd > 0 && sentenceEnd <= 80) {
-          t = t.slice(0, sentenceEnd + 1);
-        } else {
-          t = t.slice(0, 60);
-          // Don't cut mid-word
-          const lastSpace = t.lastIndexOf(' ');
-          if (lastSpace > 30) t = t.slice(0, lastSpace);
-        }
-        // Clean up trailing quotes/braces
-        t = t.replace(/["{}]+$/g, '').trim();
-        return t || 'AI Video';
-      };
-
-      // Save into unified user_videos table
-      const { error } = await (supabase as any).from('user_videos').insert({
-        user_id: user.id,
-        title: generateTitle(prompt),
-        description: prompt.trim() || null,
-        storage_path: storagePath,
-        video_url: null,
-        thumbnail_url: generationMode === 'image_to_video'
-          ? (sourceImagePath || sourceImageUrl || null)
-          : null,
-        duration_seconds: parseInt(duration, 10),
-        aspect_ratio: aspectRatio,
-        style_template: 'ai',
-        is_public: false,
-      });
-
-      if (error) throw error;
-
-      setIsSaved(true);
-      toast.success(language === 'ar' ? 'تم الحفظ في فيديوهاتي!' : 'Saved to My Videos!');
-      await loadLatestVideo();
-      // Navigate to My AI Videos tab after successful save
-      if (onSaveSuccess) {
-        setTimeout(() => onSaveSuccess(), 1000);
-      }
-    } catch (e: any) {
-      console.error('Save failed:', e);
-      toast.error(language === 'ar' ? 'فشل الحفظ' : 'Failed to save');
-    } finally {
-      setIsSaving(false);
-    }
+    await saveGeneratedVideoToMyVideos(generatedVideoUrl, { auto: false, navigateAfterSave: true });
   };
 
-  const remaining = quota ? quota.limit - quota.used + quota.extra : 60;
+  const remaining = quota ? quota.limit - quota.used + quota.extra : 30;
   const used = quota?.used || 0;
-  const limit = quota?.limit || 60;
+  const limit = quota?.limit || 30;
   const limitReached = quota !== null && !quota.canGenerate;
   // Video Ads v5.0: each 32s ad costs 4 credits; quota tracks individual credits
   const canAffordVideoAd = remaining >= AD_SCENE_COUNT;
@@ -2199,9 +2272,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   // Map generationMode to trial feature key/limit/label
   const videoTrialMap: Record<string, { key: string; limit: number; en: string; ar: string }> = {
-    'image_to_video':    { key: 'i2v',  limit: 1, en: 'Image to Video',    ar: 'صورة إلى فيديو' },
-    'text_to_video':     { key: 't2v',  limit: 1, en: 'Text to Video',     ar: 'نص إلى فيديو' },
-    '2images_to_video':  { key: '2i2v', limit: 1, en: '2 Images to Video', ar: 'صورتان إلى فيديو' },
+    'image_to_video':    { key: 'ai_video', limit: 1, en: 'AI Video', ar: 'فيديو الذكاء' },
+    'text_to_video':     { key: 'ai_video', limit: 1, en: 'AI Video', ar: 'فيديو الذكاء' },
+    '2images_to_video':  { key: 'ai_video', limit: 1, en: 'AI Video', ar: 'فيديو الذكاء' },
     'cinema':            { key: 'cinema', limit: 1, en: 'Cinema',            ar: 'سينما' },
   };
   const activeVideoTrial = videoTrialMap[generationMode] || videoTrialMap['image_to_video'];
@@ -2240,6 +2313,42 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 <Clock className="h-3.5 w-3.5 text-primary ml-2.5" />
                 {generationMode === '2images_to_video' ? (
                   <>
+                    <button
+                      onClick={() => !isGenerating && setDuration('6')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '6'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '6 ث' : '6s'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setDuration('8')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '8'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '8 ث' : '8s'}
+                    </button>
+                  </>
+                ) : generationMode === 'text_to_video' ? (
+                  <>
+                    <button
+                      onClick={() => !isGenerating && setDuration('4')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '4'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '4 ث' : '4s'}
+                    </button>
                     <button
                       onClick={() => !isGenerating && setDuration('6')}
                       disabled={isGenerating}
@@ -4611,6 +4720,35 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         1080p
                       </button>
                     </>
+                  ) : generationMode === 'text_to_video' ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating) setResolution('720p');
+                        }}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          resolution === '720p'
+                            ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        720p
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating) setResolution('1080p');
+                        }}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          resolution === '1080p'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        1080p
+                      </button>
+                    </>
                   ) : (
                     <>
                       <button
@@ -4645,7 +4783,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     </>
                   )}
                 </div>
-                {(generationMode === 'image_to_video' || generationMode === 'text_to_video') && (
+                {generationMode !== 'cinema' && (
+                  <p className="w-full px-1 text-[10px] text-muted-foreground/80">
+                    {getResolutionSpeedHint(language, generationMode)}
+                  </p>
+                )}
+                {generationMode === 'image_to_video' && (
                   <div className="relative flex items-center gap-1">
                     <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
                       <button
@@ -4731,7 +4874,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <span className="font-medium text-primary">{generationProgress}%</span>
                   </div>
                   <p className="text-[10px] text-muted-foreground/70 text-center">
-                    {language === 'ar' ? 'قد يستغرق الأمر 1-3 دقائق...' : 'This may take 1-3 minutes...'}
+                    {getVideoWaitHint(language, generationMode, resolution)}
                   </p>
                 </div>
               )}
@@ -4780,6 +4923,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 <p className="text-center text-sm font-medium text-green-600 dark:text-green-400">
                   {language === 'ar' ? 'تم إنشاء الفيديو بنجاح!' : 'Video generated successfully!'}
                 </p>
+                <p className="text-center text-xs text-muted-foreground">
+                  {isSaving
+                    ? (language === 'ar' ? 'جاري الحفظ تلقائياً في فيديوهاتي...' : 'Auto-saving to My Videos...')
+                    : isSaved
+                      ? (language === 'ar' ? 'تم الحفظ تلقائياً في فيديوهاتي.' : 'Auto-saved to My Videos.')
+                      : saveErrorMessage || (language === 'ar' ? 'إذا لزم الأمر يمكنك الضغط على زر الحفظ أدناه.' : 'If needed, you can still tap Save below.')}
+                </p>
                 
                 <div className="grid grid-cols-3 gap-2">
                   <Button 
@@ -4799,7 +4949,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       <Save className="h-5 w-5" />
                     )}
                     <span className="text-[10px] font-medium">
-                      {isSaved ? (language === 'ar' ? 'تم!' : 'Saved!') : (language === 'ar' ? 'حفظ' : 'Save')}
+                      {isSaving
+                        ? (language === 'ar' ? 'جاري الحفظ' : 'Saving')
+                        : isSaved
+                          ? (language === 'ar' ? 'تم الحفظ' : 'Saved!')
+                          : (language === 'ar' ? 'حفظ' : 'Save')}
                     </span>
                   </Button>
                   
