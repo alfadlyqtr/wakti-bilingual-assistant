@@ -33,13 +33,21 @@ export interface TrialCheckResult {
   trialActive?: boolean;
 }
 
-interface TrialProfileShape {
+export interface TrialProfileShape {
   trial_usage?: Record<string, unknown> | null;
   is_subscribed?: boolean | null;
   payment_method?: string | null;
   next_billing_date?: string | null;
   admin_gifted?: boolean | null;
   free_access_start_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface TrialTimerState {
+  started: boolean;
+  active: boolean;
+  expired: boolean;
+  startAt: number | null;
 }
 
 const TRIAL_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -126,6 +134,42 @@ function buildBlockedResult(
   };
 }
 
+export function getTrialTimerState(profile: TrialProfileShape | null | undefined): TrialTimerState {
+  const rawStart = profile?.free_access_start_at;
+  if (!rawStart) {
+    return {
+      started: false,
+      active: false,
+      expired: false,
+      startAt: null,
+    };
+  }
+
+  const startAt = Date.parse(rawStart);
+  if (!Number.isFinite(startAt)) {
+    return {
+      started: false,
+      active: false,
+      expired: false,
+      startAt: null,
+    };
+  }
+
+  const elapsed = Date.now() - startAt;
+  const active = elapsed >= 0 && elapsed < TRIAL_WINDOW_MS;
+
+  return {
+    started: true,
+    active,
+    expired: !active,
+    startAt,
+  };
+}
+
+export function isTrialTimerActive(profile: TrialProfileShape | null | undefined): boolean {
+  return getTrialTimerState(profile).active;
+}
+
 function resolveTrialAccess(
   profile: TrialProfileShape,
   featureKey: TrialFeatureKey,
@@ -144,12 +188,13 @@ function resolveTrialAccess(
     return { allowed: true, consumed: 0, limit: maxLimit, remaining: maxLimit, isVip: true, trialActive: false };
   }
 
-  if (profile.free_access_start_at == null) {
-    return { allowed: true, consumed: 0, limit: maxLimit, remaining: maxLimit, isVip: true, trialActive: false };
+  const timerState = getTrialTimerState(profile);
+
+  if (!timerState.started) {
+    return { allowed: true, consumed: 0, limit: maxLimit, remaining: maxLimit, trialActive: false };
   }
 
-  const startAt = Date.parse(profile.free_access_start_at);
-  if (!Number.isFinite(startAt) || (Date.now() - startAt) >= TRIAL_WINDOW_MS) {
+  if (timerState.expired) {
     return buildBlockedResult(profile, featureKey, maxLimit, 'trial_expired');
   }
 
@@ -181,7 +226,7 @@ async function fetchTrialProfile(
 ): Promise<TrialProfileShape | null> {
   const { data: profile, error: fetchError } = await supabaseClient
     .from('profiles')
-    .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
+    .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at, updated_at')
     .eq('id', userId)
     .single();
 
@@ -247,6 +292,36 @@ export async function checkTrialAccess(
   return resolveTrialAccess(profile, featureKey, maxLimit);
 }
 
+async function tryUpdateTrialUsage(
+  // deno-lint-ignore no-explicit-any
+  supabaseClient: any,
+  userId: string,
+  profile: TrialProfileShape,
+  updatedUsage: Record<string, unknown>,
+): Promise<boolean> {
+  let query = supabaseClient
+    .from('profiles')
+    .update({ trial_usage: updatedUsage })
+    .eq('id', userId);
+
+  if (profile.updated_at == null) {
+    query = query.is('updated_at', null);
+  } else {
+    query = query.eq('updated_at', profile.updated_at);
+  }
+
+  const { data, error } = await query
+    .select('id')
+    .maybeSingle();
+
+  if (error) {
+    console.error('[trial-tracker] Failed to update usage row:', error);
+    return false;
+  }
+
+  return !!data;
+}
+
 /**
  * Checks whether a trial user has quota remaining for a feature, then atomically
  * increments the counter if they do.
@@ -269,41 +344,40 @@ export async function checkAndConsumeTrialToken(
   featureKey: TrialFeatureKey,
   maxLimit: number
 ): Promise<TrialCheckResult> {
-  const profile = await fetchTrialProfile(supabaseClient, userId);
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const profile = await fetchTrialProfile(supabaseClient, userId);
 
-  if (!profile) {
-    return buildBlockedResult(null, featureKey, maxLimit, 'profile_unavailable');
+    if (!profile) {
+      return buildBlockedResult(null, featureKey, maxLimit, 'profile_unavailable');
+    }
+
+    const access = resolveTrialAccess(profile, featureKey, maxLimit);
+
+    if (!access.allowed || access.isVip || access.trialActive !== true) {
+      return access;
+    }
+
+    const usage = normalizeUsage(profile);
+    const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
+    const newValue = current + 1;
+    const updatedUsage = buildUpdatedTrialUsage(profile, featureKey, newValue);
+    const updated = await tryUpdateTrialUsage(supabaseClient, userId, profile, updatedUsage);
+
+    if (!updated) {
+      continue;
+    }
+
+    return {
+      allowed: true,
+      consumed: newValue,
+      limit: maxLimit,
+      remaining: Math.max(0, maxLimit - newValue),
+      justExhausted: newValue >= maxLimit,
+      trialActive: true,
+    };
   }
 
-  const access = resolveTrialAccess(profile, featureKey, maxLimit);
-
-  if (!access.allowed || access.isVip) {
-    return access;
-  }
-
-  const usage = normalizeUsage(profile);
-  const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
-  const newValue = current + 1;
-  const updatedUsage = buildUpdatedTrialUsage(profile, featureKey, newValue);
-
-  const { error: updateError } = await supabaseClient
-    .from('profiles')
-    .update({ trial_usage: updatedUsage })
-    .eq('id', userId);
-
-  if (updateError) {
-    console.error('[trial-tracker] Failed to increment usage:', updateError);
-    return buildBlockedResult(profile, featureKey, maxLimit, 'profile_unavailable');
-  }
-
-  return {
-    allowed: true,
-    consumed: newValue,
-    limit: maxLimit,
-    remaining: Math.max(0, maxLimit - newValue),
-    justExhausted: newValue >= maxLimit,
-    trialActive: true,
-  };
+  return buildBlockedResult(null, featureKey, maxLimit, 'profile_unavailable');
 }
 
 export async function checkAndConsumeTrialTokenOnce(
@@ -319,52 +393,53 @@ export async function checkAndConsumeTrialTokenOnce(
     return checkAndConsumeTrialToken(supabaseClient, userId, featureKey, maxLimit);
   }
 
-  const profile = await fetchTrialProfile(supabaseClient, userId);
-
-  if (!profile) {
-    return buildBlockedResult(null, featureKey, maxLimit, 'profile_unavailable');
-  }
-
-  const usage = normalizeUsage(profile);
-  const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
   const ledgerKey = `${featureKey}:${normalizedOnceKey}`;
-  const ledger = getConsumptionLedger(profile);
 
-  if (ledger[ledgerKey] === true) {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const profile = await fetchTrialProfile(supabaseClient, userId);
+
+    if (!profile) {
+      return buildBlockedResult(null, featureKey, maxLimit, 'profile_unavailable');
+    }
+
+    const usage = normalizeUsage(profile);
+    const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
+    const ledger = getConsumptionLedger(profile);
+    const timerState = getTrialTimerState(profile);
+
+    if (ledger[ledgerKey] === true) {
+      return {
+        allowed: true,
+        consumed: current,
+        limit: maxLimit,
+        remaining: Math.max(0, maxLimit - current),
+        justExhausted: current >= maxLimit,
+        trialActive: timerState.active,
+      };
+    }
+
+    const access = resolveTrialAccess(profile, featureKey, maxLimit);
+    if (!access.allowed || access.isVip || access.trialActive !== true) {
+      return access;
+    }
+
+    const newValue = current + 1;
+    const updatedUsage = buildUpdatedTrialUsage(profile, featureKey, newValue, ledgerKey);
+    const updated = await tryUpdateTrialUsage(supabaseClient, userId, profile, updatedUsage);
+
+    if (!updated) {
+      continue;
+    }
+
     return {
       allowed: true,
-      consumed: current,
+      consumed: newValue,
       limit: maxLimit,
-      remaining: Math.max(0, maxLimit - current),
-      justExhausted: current >= maxLimit,
-      trialActive: profile.free_access_start_at != null,
+      remaining: Math.max(0, maxLimit - newValue),
+      justExhausted: newValue >= maxLimit,
+      trialActive: true,
     };
   }
 
-  const access = resolveTrialAccess(profile, featureKey, maxLimit);
-  if (!access.allowed || access.isVip) {
-    return access;
-  }
-
-  const newValue = current + 1;
-  const updatedUsage = buildUpdatedTrialUsage(profile, featureKey, newValue, ledgerKey);
-
-  const { error: updateError } = await supabaseClient
-    .from('profiles')
-    .update({ trial_usage: updatedUsage })
-    .eq('id', userId);
-
-  if (updateError) {
-    console.error('[trial-tracker] Failed to increment usage once:', updateError);
-    return buildBlockedResult(profile, featureKey, maxLimit, 'profile_unavailable');
-  }
-
-  return {
-    allowed: true,
-    consumed: newValue,
-    limit: maxLimit,
-    remaining: Math.max(0, maxLimit - newValue),
-    justExhausted: newValue >= maxLimit,
-    trialActive: true,
-  };
+  return buildBlockedResult(null, featureKey, maxLimit, 'profile_unavailable');
 }

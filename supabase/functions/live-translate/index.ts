@@ -11,7 +11,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-request-id",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -28,6 +28,7 @@ serve(async (req: Request) => {
 
   try {
     const authHeader = req.headers.get("Authorization");
+    const requestId = (req.headers.get("x-request-id") || "").trim() || crypto.randomUUID();
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Missing authorization header" }), {
         status: 401,
@@ -212,7 +213,7 @@ serve(async (req: Request) => {
     }
 
     // Consume trial token
-    const consume = await checkAndConsumeTrialTokenOnce(supabase, user.id, "interpreter", 5, "ok");
+    const consume = await checkAndConsumeTrialTokenOnce(supabase, user.id, "interpreter", 5, requestId);
     const trialPayload = consume.allowed ? buildTrialSuccessPayload("interpreter", consume) : null;
 
     console.log("[live-translate] Done. Returning transcript + translation + audio.");

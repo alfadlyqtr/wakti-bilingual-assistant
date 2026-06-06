@@ -4,6 +4,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { inspectGenerationPrompt } from '../_shared/promptSafety.ts';
+import { isTrialTimerActive, type TrialProfileShape } from '../_shared/trial-tracker.ts';
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_GENAI_API_KEY') || '';
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
@@ -70,7 +71,7 @@ serve(async (req) => {
       const isGifted = profile.admin_gifted === true;
       const pm = profile.payment_method;
       const hasActivePaid = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
-      const isOn24hTrial = profile.free_access_start_at != null;
+      const isOn24hTrial = isTrialTimerActive(profile as TrialProfileShape);
       if (!isPaid && !isGifted && !hasActivePaid && isOn24hTrial) {
         return new Response(
           JSON.stringify({ success: false, error: 'Cinema is not available during the 24-hour trial.' }),

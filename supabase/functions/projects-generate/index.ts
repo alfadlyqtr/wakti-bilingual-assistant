@@ -1,6 +1,7 @@
 ﻿import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildTrialErrorPayload, checkAndConsumeTrialToken } from "../_shared/trial-tracker.ts";
 
 // Declare EdgeRuntime for background task support
 declare const EdgeRuntime: { waitUntil: (promise: Promise<unknown>) => void } | undefined;
@@ -3644,33 +3645,11 @@ serve(async (req: Request) => {
       const SUPA_URL = Deno.env.get('SUPABASE_URL')!;
       const SUPA_SVC = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
       const adminForTrial = createClient(SUPA_URL, SUPA_SVC);
-      const trial = await (async () => {
-        try {
-          const { data: profile } = await adminForTrial
-            .from('profiles')
-            .select('trial_usage, is_subscribed, payment_method, next_billing_date, admin_gifted, free_access_start_at')
-            .eq('id', userId)
-            .single();
-          if (!profile) return { allowed: true };
-          const isPaid = profile.is_subscribed === true;
-          const isGifted = profile.admin_gifted === true;
-          const pm = profile.payment_method;
-          const isGift = pm && pm !== 'manual' && profile.next_billing_date && new Date(profile.next_billing_date) > new Date();
-          if (isPaid || isGift || isGifted) return { allowed: true };
-          if (profile.free_access_start_at == null) return { allowed: true };
-          const usage: Record<string, number> = (profile.trial_usage as Record<string, number>) ?? {};
-          const current = typeof usage['ai_coder'] === 'number' ? usage['ai_coder'] : 0;
-          if (current >= 5) return { allowed: false };
-          const updated = { ...usage, ai_coder: current + 1 };
-          await adminForTrial.from('profiles').update({ trial_usage: updated }).eq('id', userId);
-          return { allowed: true };
-        } catch { return { allowed: true }; }
-      })();
+      const trial = await checkAndConsumeTrialToken(adminForTrial, userId, 'ai_coder', 5);
       if (!trial.allowed) {
         return new Response(JSON.stringify({
           ok: false,
-          error: 'TRIAL_LIMIT_REACHED',
-          feature: 'ai_coder',
+          ...buildTrialErrorPayload('ai_coder', trial),
           message: 'Free trial allows 5 prompts. Subscribe for unlimited access!',
           messageAr: 'التجربة المجانية تسمح بـ 5 أوامر فقط. اشترك للحصول على وصول غير محدود!',
         }), {

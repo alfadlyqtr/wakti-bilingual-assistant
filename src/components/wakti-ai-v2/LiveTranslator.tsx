@@ -287,11 +287,15 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
       form.append('voice', voiceRef.current);
 
       abortRef.current = new AbortController();
+      const requestId = crypto.randomUUID();
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/live-translate`,
         {
           method: 'POST',
-          headers: { Authorization: `Bearer ${accessToken}` },
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'x-request-id': requestId,
+          },
           body: form,
           signal: abortRef.current.signal,
         }

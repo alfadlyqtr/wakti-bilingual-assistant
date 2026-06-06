@@ -1548,6 +1548,8 @@ class WaktiAIV2ServiceClass {
           return next;
         };
 
+        const requestId = crypto.randomUUID();
+
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
             const pt_version = pt?.pt_version ?? null;
@@ -1562,7 +1564,8 @@ class WaktiAIV2ServiceClass {
                 'Authorization': `Bearer ${session.access_token}`,
                 'Content-Type': 'application/json',
                 'Accept': 'text/event-stream',
-                'apikey': maybeAnonKey
+                'apikey': maybeAnonKey,
+                'x-request-id': requestId
               },
               body: JSON.stringify({
                 message,

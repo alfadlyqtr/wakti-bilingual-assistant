@@ -4610,6 +4610,8 @@ serve(async (req) => {
           return;
         }
 
+        const trialRequestId = (req.headers.get('x-request-id') || '').trim() || crypto.randomUUID();
+
         // Trial gate: ai_chat ΓÇö 15 messages for free users
         if (userId) {
           const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -4798,7 +4800,7 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
 
           // Emit the response text
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: promoText, content: promoText })}\n\n`));
-          await emitAiChatTrialFinished(promoText);
+          await emitAiChatTrialFinished(trialRequestId);
           controller.enqueue(encoder.encode('data: [DONE]\n\n'));
           controller.close();
           return;
@@ -5712,7 +5714,7 @@ If you are running out of space, keep this order and drop the rest:
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
             }
 
-            await emitAiChatTrialFinished(fullResponseText || message);
+            await emitAiChatTrialFinished(trialRequestId);
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
             controller.close();
             return; // Exit early - search handled completely by Gemini
@@ -5825,7 +5827,7 @@ If you are running out of space, keep this order and drop the rest:
               // Intercept + schedule any reminder JSON embedded in the response
               await interceptAndScheduleReminder(fullResponseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset);
 
-              await emitAiChatTrialFinished(fullResponseText || message);
+              await emitAiChatTrialFinished(trialRequestId);
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
               controller.close();
               return;
@@ -6299,7 +6301,7 @@ If you are running out of space, keep this order and drop the rest:
           costCredits: cost
         });
 
-        await emitAiChatTrialFinished(responseText || requestMessage);
+        await emitAiChatTrialFinished(trialRequestId);
 
         controller.close();
       } catch (error) {
