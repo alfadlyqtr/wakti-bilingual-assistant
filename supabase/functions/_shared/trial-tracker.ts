@@ -155,8 +155,13 @@ export function getTrialTimerState(profile: TrialProfileShape | null | undefined
     };
   }
 
-  const elapsed = Date.now() - startAt;
-  const active = elapsed >= 0 && elapsed < TRIAL_WINDOW_MS;
+  const now = Date.now();
+  const elapsed = now - startAt;
+  // Guarded rollout:
+  // - Trials that are still within 24h (including all new trials) get a 48h window
+  // - Trials that already passed 24h remain expired (window stays 24h)
+  const windowMs = elapsed < TRIAL_WINDOW_MS ? (2 * TRIAL_WINDOW_MS) : TRIAL_WINDOW_MS;
+  const active = elapsed >= 0 && elapsed < windowMs;
 
   return {
     started: true,

@@ -634,7 +634,7 @@ function CustomPaywallModal({ open, onOpenChange, variant }: CustomPaywallModalP
                   {language === 'ar' ? 'ابدأ مجاناً ✨' : 'Start Free ✨'}
                 </Button>
                 <p className="text-center text-sm font-medium text-cyan-400 mt-3">
-                  {language === 'ar' ? '24 ساعة مجاناً — لا بطاقة مطلوبة' : '24 hours free — no card required'}
+                  {language === 'ar' ? '48 ساعة مجاناً — لا حاجة لبطاقة' : '48 hours free — no card required'}
                 </p>
               </div>
             </div>

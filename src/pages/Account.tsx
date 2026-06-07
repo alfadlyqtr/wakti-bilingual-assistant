@@ -40,7 +40,7 @@ import { isStudentEligibleForQU } from "@/utils/studentVerification";
 import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
 
 
-// TrialCountdown Component - Shows remaining time of 24-hour trial
+// TrialCountdown Component - Shows remaining time of the trial window (guarded 48h rollout)
 // When trial ends, shows friendly message with subscribe CTA
 // Includes its own header - parent should NOT show "Free Trial Active" separately
 const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: string; language: string; onSubscribeClick?: () => void }) => {
@@ -50,8 +50,11 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
   useEffect(() => {
     const calculateTimeLeft = () => {
       const start = new Date(startAt).getTime();
-      const trialEnd = start + (24 * 60 * 60 * 1000); // 24 hours
       const now = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const elapsed = now - start;
+      const windowMs = elapsed < dayMs ? (2 * dayMs) : dayMs; // extend to 48h if still within 24h; else keep 24h
+      const trialEnd = start + windowMs;
       const diff = trialEnd - now;
       
       if (diff <= 0) {
@@ -60,11 +63,10 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
       }
       
       setIsExpired(false);
-      const days = Math.floor(diff / 86400000);
-      const hours = Math.floor((diff % 86400000) / 3600000);
+      const totalHours = Math.floor(diff / 3600000);
       const minutes = Math.floor((diff % 3600000) / 60000);
       const seconds = Math.floor((diff % 60000) / 1000);
-      setTimeLeft(days > 0 ? `${days}d ${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}` : `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
+      setTimeLeft(`${totalHours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
     };
     
     calculateTimeLeft();
@@ -98,13 +100,13 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
     );
   }
   
-  // When trial is active, show "24-Hour Trial Active" header + countdown
+  // When trial is active, show header + countdown
   return (
     <div className="text-center space-y-3 py-4">
       <div className="flex items-center justify-center gap-2 text-amber-500">
         <Clock className="h-5 w-5" />
         <span className="font-medium">
-          {language === 'en' ? '24-Hour Trial Active' : 'الفترة التجريبية (24 ساعة) نشطة'}
+          {language === 'en' ? 'Trial Active' : 'الفترة التجريبية نشطة'}
         </span>
       </div>
       <div className="text-3xl font-bold text-center tabular-nums">
@@ -1244,7 +1246,10 @@ export default function Account() {
                     {billingProfile && !hasActiveBillingAccess && hasBillingTrialStarted && (() => {
                       // Calculate if trial is still active
                       const start = new Date(billingProfile.free_access_start_at!).getTime();
-                      const trialEnd = start + (24 * 60 * 60 * 1000); // 24 hours
+                      const dayMs = 24 * 60 * 60 * 1000;
+                      const elapsed = Date.now() - start;
+                      const windowMs = elapsed < dayMs ? (2 * dayMs) : dayMs; // guarded 48h rollout
+                      const trialEnd = start + windowMs;
                       const isTrialActive = Date.now() < trialEnd;
                       
                       return (

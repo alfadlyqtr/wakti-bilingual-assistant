@@ -98,9 +98,16 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
       const cachedIsSubscribed = profileForStamp.is_subscribed === true;
       const cachedIsAdminGifted = profileForStamp.admin_gifted === true;
       const cachedFreeAccessStart = profileForStamp.free_access_start_at;
-      const cachedInGracePeriod = cachedFreeAccessStart
-        ? (Date.now() - new Date(cachedFreeAccessStart).getTime()) < 24 * 60 * 60 * 1000
-        : false;
+      const cachedInGracePeriod = (() => {
+        if (!cachedFreeAccessStart) return false;
+        const start = new Date(cachedFreeAccessStart).getTime();
+        if (!Number.isFinite(start)) return false;
+        const now = Date.now();
+        const elapsed = now - start;
+        const dayMs = 24 * 60 * 60 * 1000;
+        const windowMs = elapsed < dayMs ? (2 * dayMs) : dayMs; // extend to 48h if still within 24h
+        return elapsed < windowMs;
+      })();
       if (cachedIsSubscribed) accessStampRef.current = 'subscribed';
       else if (cachedIsAdminGifted) accessStampRef.current = 'admin_gifted';
       else if (cachedInGracePeriod) accessStampRef.current = 'trial_active';

@@ -363,9 +363,11 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
     const pm = profile?.payment_method;
     if (pm && pm !== 'manual' && profile?.next_billing_date && new Date(profile.next_billing_date) > new Date()) return false;
     const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
-    if (start == null) return false;
-    const elapsedMin = Math.floor((Date.now() - start) / 60000);
-    return elapsedMin < 1440;
+    if (start == null || !Number.isFinite(start)) return false;
+    const now = Date.now();
+    const elapsedMin = Math.floor((now - start) / 60000);
+    const windowMin = elapsedMin < 1440 ? 2880 : 1440; // <24h → extend to 48h; otherwise keep 24h window
+    return elapsedMin < windowMin;
   })();
 
   const hasTrialStarted = profile?.free_access_start_at != null;
@@ -378,9 +380,11 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
     const pm = profile?.payment_method;
     if (pm && pm !== 'manual' && profile?.next_billing_date && new Date(profile.next_billing_date) > new Date()) return false;
     const start = profile?.free_access_start_at ? Date.parse(profile.free_access_start_at) : null;
-    if (start == null) return false;
-    const elapsedMin = Math.floor((Date.now() - start) / 60000);
-    return elapsedMin >= 1440;
+    if (start == null || !Number.isFinite(start)) return false;
+    const now = Date.now();
+    const elapsedMin = Math.floor((now - start) / 60000);
+    const windowMin = elapsedMin < 1440 ? 2880 : 1440;
+    return elapsedMin >= windowMin;
   })();
 
   const isNewUser = !profile?.free_access_start_at && !profile?.is_subscribed && !profile?.plan_name;

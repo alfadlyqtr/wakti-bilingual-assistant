@@ -10,19 +10,19 @@ type StartTrialBody = {
 
 const PUSH_MESSAGES = [
   {
-    delayHours: 12,
-    en: '12 hours left of your Wakti trial subscribe now and get 3 more free days',
-    ar: 'باقي 12 ساعة على انتهاء تجربتك في وقتي اشترك الآن واحصل على 3 أيام مجانية إضافية',
-  },
-  {
-    delayHours: 22,
-    en: '2 hours left of your Wakti trial subscribe now and get 3 more free days',
-    ar: 'باقي ساعتين على انتهاء تجربتك في وقتي اشترك الآن واحصل على 3 أيام مجانية إضافية',
-  },
-  {
     delayHours: 24,
-    en: 'Your Wakti trial has ended. Subscribe to continue guess what you still get 3 more free days',
-    ar: 'انتهت تجربتك في وقتي. اشترك للمتابعة والمفاجأة، لا تزال تحصل على 3 أيام مجانية',
+    en: '24 hours left of your Wakti trial — subscribe now and get 3 more free days',
+    ar: 'باقي 24 ساعة على انتهاء تجربتك في وقتي — اشترك الآن واحصل على 3 أيام مجانية إضافية',
+  },
+  {
+    delayHours: 46,
+    en: '2 hours left of your Wakti trial — subscribe now and get 3 more free days',
+    ar: 'باقي ساعتين على انتهاء تجربتك في وقتي — اشترك الآن واحصل على 3 أيام مجانية إضافية',
+  },
+  {
+    delayHours: 48,
+    en: 'Your Wakti trial has ended. Subscribe to continue — you still get 3 more free days',
+    ar: 'انتهت تجربتك في وقتي. اشترك للمتابعة — لا تزال تحصل على 3 أيام مجانية',
   },
 ] as const;
 
