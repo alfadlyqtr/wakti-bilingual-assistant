@@ -114,6 +114,14 @@ interface TaskStatusData {
   error?: string;
 }
 
+type VideoStatusProvider = "kie" | "veo";
+
+type VideoTaskCreateResult = {
+  task_id: string;
+  status: string;
+  status_provider?: VideoStatusProvider;
+};
+
 type StorageBucketClient = {
   upload: (
     path: string,
@@ -688,7 +696,7 @@ async function createTextToVideoTask(
   aspectRatio?: string,
   resolution?: string,
   videoStyleMode?: string,
-): Promise<{ task_id: string; status: string }> {
+): Promise<VideoTaskCreateResult> {
   void videoStyleMode;
   const validDuration = ["4", "6", "8"].includes(duration || "") ? duration! : "6";
   const validResolution = ["720p", "1080p"].includes(resolution || "") ? resolution! : "720p";
@@ -730,7 +738,7 @@ async function createTextToVideoTask(
   }
 
   console.log("[kie-text2video] Task created, taskId:", result.data.taskId);
-  return { task_id: result.data.taskId, status: "waiting" };
+  return { task_id: result.data.taskId, status: "waiting", status_provider: "kie" };
 }
 
 async function createVideoTask(
@@ -743,7 +751,7 @@ async function createVideoTask(
   resolution?: string,
   videoStyleMode?: string,
   modelOverride?: string,
-): Promise<{ task_id: string; status: string }> {
+): Promise<VideoTaskCreateResult> {
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
   void videoStyleMode;
@@ -809,7 +817,7 @@ async function createVideoTask(
     }
 
     console.log("[kie-2images2video] Veo task created, taskId:", result.data.taskId);
-    return { task_id: result.data.taskId, status: "waiting" };
+    return { task_id: result.data.taskId, status: "waiting", status_provider: "veo" };
   }
 
   const input: Record<string, unknown> = isTwoImages
@@ -875,7 +883,7 @@ async function createVideoTask(
   }
 
   console.log("[kie-image2video] Task created, taskId:", result.data.taskId);
-  return { task_id: result.data.taskId, status: "waiting" };
+  return { task_id: result.data.taskId, status: "waiting", status_provider: "kie" };
 }
 
 // Map KIE state to frontend-expected status
@@ -943,11 +951,7 @@ async function getVeoTaskStatus(taskId: string): Promise<TaskStatusData> {
   };
 }
 
-async function getTaskStatus(taskId: string): Promise<TaskStatusData> {
-  if (taskId.startsWith("veo_task_")) {
-    return getVeoTaskStatus(taskId);
-  }
-
+async function getKieTaskStatus(taskId: string): Promise<TaskStatusData> {
   const statusUrl = `${KIE_STATUS_URL}?taskId=${encodeURIComponent(taskId)}`;
   console.log("[kie-image2video] Checking status for task:", taskId);
 
@@ -1014,11 +1018,37 @@ async function getTaskStatus(taskId: string): Promise<TaskStatusData> {
   };
 }
 
-async function pollUntilComplete(taskId: string): Promise<{ videoUrl: string } | { error: string }> {
+async function getTaskStatus(taskId: string, providerHint?: string): Promise<TaskStatusData> {
+  if (providerHint === "veo") {
+    return getVeoTaskStatus(taskId);
+  }
+
+  if (providerHint === "kie") {
+    return getKieTaskStatus(taskId);
+  }
+
+  if (taskId.startsWith("veo_task_")) {
+    try {
+      return await getVeoTaskStatus(taskId);
+    } catch (veoError) {
+      console.warn("[kie-image2video] Veo status lookup failed, falling back to KIE status lookup:", veoError);
+      return await getKieTaskStatus(taskId);
+    }
+  }
+
+  try {
+    return await getKieTaskStatus(taskId);
+  } catch (kieError) {
+    console.warn("[kie-image2video] KIE status lookup failed, falling back to Veo status lookup:", kieError);
+    return await getVeoTaskStatus(taskId);
+  }
+}
+
+async function pollUntilComplete(taskId: string, providerHint?: string): Promise<{ videoUrl: string } | { error: string }> {
   for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
     console.log(`[kie-image2video] Poll attempt ${attempt + 1}/${MAX_POLL_ATTEMPTS} for task ${taskId}`);
 
-    const status = await getTaskStatus(taskId);
+    const status = await getTaskStatus(taskId, providerHint);
     console.log(`[kie-image2video] Status: ${status.status}`);
 
     if (status.status === "COMPLETED") {
@@ -1114,7 +1144,7 @@ async function createVisualAdsTask(
   return { task_id: taskId, status: "waiting" };
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -1157,7 +1187,7 @@ serve(async (req) => {
 
     // Mode: 'status' to check task status
     if (mode === "status") {
-      const { task_id, increment_usage } = body;
+      const { task_id, increment_usage, task_provider } = body;
       if (!task_id) {
         return new Response(JSON.stringify({ error: "Missing task_id" }), {
           status: 400,
@@ -1165,7 +1195,7 @@ serve(async (req) => {
         });
       }
 
-      const status = await getTaskStatus(task_id);
+      const status = await getTaskStatus(task_id, task_provider === "veo" ? "veo" : task_provider === "kie" ? "kie" : undefined);
       if (
         increment_usage &&
         (status.status === "COMPLETED" ||
@@ -1270,7 +1300,7 @@ serve(async (req) => {
       );
     }
 
-    let task: { task_id: string; status: string };
+    let task: VideoTaskCreateResult;
     const finalPrompt = promptSafety?.normalizedPrompt ?? safePrompt;
 
     if (generationType === "text_to_video") {
@@ -1391,13 +1421,14 @@ serve(async (req) => {
           ok: true,
           task_id: task.task_id,
           status: task.status,
+          task_provider: task.status_provider ?? null,
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Default: poll until complete (synchronous)
-    const result = await pollUntilComplete(task.task_id);
+    const result = await pollUntilComplete(task.task_id, task.status_provider);
 
     if ("error" in result) {
       return new Response(JSON.stringify({ ok: false, error: result.error }), {

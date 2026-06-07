@@ -123,6 +123,27 @@ function normalizePlaceKey(value?: unknown) {
     .trim();
 }
 
+function isNameMatch(name1?: string, name2?: string): boolean {
+  const k1 = normalizePlaceKey(name1);
+  const k2 = normalizePlaceKey(name2);
+  if (!k1 || !k2) return false;
+  
+  if (k1 === k2 || k1.includes(k2) || k2.includes(k1)) return true;
+  
+  const stopWords = new Set(['cafe', 'coffee', 'restaurant', 'shop', 'lounge', 'the', 'and', 'bar', 'kitchen', 'co', 'bistro', 'specialty', 'speciality', 'doha', 'qatar']);
+  const t1 = k1.split(/\s+/).filter(t => t.length >= 3 && !stopWords.has(t));
+  const t2 = k2.split(/\s+/).filter(t => t.length >= 3 && !stopWords.has(t));
+  
+  if (t1.length === 0 || t2.length === 0) {
+    const firstWord1 = k1.split(/\s+/)[0];
+    const firstWord2 = k2.split(/\s+/)[0];
+    return Boolean(firstWord1 && firstWord2 && firstWord1 === firstWord2 && firstWord1.length >= 3);
+  }
+  
+  const common = t1.filter(t => t2.includes(t));
+  return common.length > 0;
+}
+
 function extractFirstLink(value: string) {
   const markdownMatch = value.match(/\[[^\]]+\]\(((?:https?:\/\/|mailto:|tel:)[^)]+)\)/i);
   if (markdownMatch?.[1]) return markdownMatch[1].trim();
@@ -256,7 +277,7 @@ function formatPhoneDisplay(value?: string) {
 }
 
 function extractSegments(value: string) {
-  const matches = Array.from(value.matchAll(/(Reason|Vibe|Must-?Try|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/gi));
+  const matches = Array.from(value.matchAll(/(Reason|Vibe|Must-?\s*Try|Status|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/gi));
   if (matches.length === 0) return [] as Array<{ label: string; value: string }>;
   return matches.map((match, index) => {
     const start = match.index ?? 0;
@@ -264,7 +285,7 @@ function extractSegments(value: string) {
     const valueStart = start + match[0].length;
     const valueEnd = index + 1 < matches.length ? (matches[index + 1].index ?? value.length) : value.length;
     return {
-      label: label.toLowerCase(),
+      label: label.toLowerCase().replace(/\s+/g, ''),
       value: value.slice(valueStart, valueEnd).trim(),
     };
   });
@@ -300,7 +321,7 @@ function createFallbackPlace(seed: Record<string, unknown>) {
 function parsePlacesFromMessageContent(content?: string) {
   const places: any[] = [];
   let current: any = null;
-  const knownLabelPattern = /^(Reason|Vibe|Must-?Try|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/i;
+  const knownLabelPattern = /^(?:(?:[-*•]|\d+\.)\s+)?(Reason|Vibe|Must-?\s*Try|Status|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/i;
 
   const commit = () => {
     if (!current?.name) return;
@@ -313,8 +334,62 @@ function parsePlacesFromMessageContent(content?: string) {
     if (!trimmedLine) continue;
 
     const bulletMatch = trimmedLine.match(/^(?:[-*•]|\d+\.)\s+(.*)$/);
-    const rawValue = (bulletMatch?.[1] || trimmedLine).trim();
-    const segmentSource = rawValue.replace(/\*\*([^*]+)\*\*/g, '$1').trim();
+    const isSegment = knownLabelPattern.test(trimmedLine.replace(/\*/g, '').trim());
+    
+    if (!isSegment) {
+      const rawClean = trimmedLine.replace(/\*\*/g, '').trim();
+      const startsWithBullet = /^(?:[-*•]|\d+\.)\s+(.*)$/.test(rawClean);
+      
+      if (startsWithBullet) {
+        commit();
+        
+        let placeName = '';
+        let address = '';
+        let description = '';
+        
+        const boldMatches = trimmedLine.match(/\*\*([^*]+)\*\//g);
+        const boldMatchesStandard = trimmedLine.match(/\*\*([^*]+)\*\*/g);
+        const bestBoldMatches = boldMatchesStandard || boldMatches;
+        
+        if (bestBoldMatches && bestBoldMatches.length > 0) {
+          const firstBold = bestBoldMatches[0].replace(/\*\*/g, '').trim();
+          placeName = firstBold.replace(/^(?:[-*•]|\d+\.)\s+/, '').trim();
+        }
+        
+        if (!placeName) {
+          const contentWithoutBullet = rawClean.replace(/^(?:[-*•]|\d+\.)\s+/, '').trim();
+          const parenIdx = contentWithoutBullet.indexOf('(');
+          if (parenIdx !== -1) {
+            placeName = contentWithoutBullet.slice(0, parenIdx).trim();
+          } else {
+            const parts = contentWithoutBullet.split(/[-–—,]/);
+            placeName = parts[0].trim();
+          }
+        }
+        
+        const parenMatch = trimmedLine.match(/\(([^)]+)\)/);
+        address = parenMatch ? parenMatch[1].trim() : '';
+        
+        const cleanContentLine = rawClean.replace(/^(?:[-*•]|\d+\.)\s+/, '').trim();
+        description = cleanContentLine
+          .replace(placeName, '')
+          .replace(`(${address})`, '')
+          .replace(/^[–-—\s,]+/, '')
+          .trim();
+          
+        current = createFallbackPlace({
+          name: toCleanString(placeName),
+          address: toCleanString(address),
+        });
+        if (description) {
+          current.editorialSummary = toCleanString(description);
+        }
+        continue;
+      }
+    }
+
+    const rawValue = trimmedLine.trim();
+    const segmentSource = rawValue.replace(/\*\*([^*]+)\*\//g, '$1').replace(/\*\*/g, '').trim();
     const line = toCleanString(segmentSource);
     if (!line) continue;
 
@@ -457,12 +532,8 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
     const parsedPlaces = parsePlacesFromMessageContent(message?.content);
     if (parsedPlaces.length === 0) return backendPlaces;
     return backendPlaces.map((backendPlace: any) => {
-      const backendKey = normalizePlaceKey(backendPlace?.name);
       const parsedMatch = parsedPlaces.find((pp: any) => {
-        const parsedKey = normalizePlaceKey(pp?.name);
-        return Boolean(parsedKey && backendKey && (
-          parsedKey === backendKey || parsedKey.includes(backendKey) || backendKey.includes(parsedKey)
-        ));
+        return isNameMatch(backendPlace?.name, pp?.name);
       });
       if (!parsedMatch) return backendPlace;
       return {
@@ -470,6 +541,10 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
         reason: (backendPlace.reason && backendPlace.reason.trim()) ? backendPlace.reason : toCleanString(parsedMatch.reason),
         vibe: (backendPlace.vibe && backendPlace.vibe.trim()) ? backendPlace.vibe : toCleanString(parsedMatch.vibe),
         mustTry: (backendPlace.mustTry && backendPlace.mustTry.trim()) ? backendPlace.mustTry : toCleanString(parsedMatch.mustTry),
+        instagramUrl: toCleanString(backendPlace.instagramUrl) || toCleanString(parsedMatch.instagramUrl),
+        facebookUrl: toCleanString(backendPlace.facebookUrl) || toCleanString(parsedMatch.facebookUrl),
+        tiktokUrl: toCleanString(backendPlace.tiktokUrl) || toCleanString(parsedMatch.tiktokUrl),
+        whatsappUrl: toCleanString(backendPlace.whatsappUrl) || toCleanString(parsedMatch.whatsappUrl),
       };
     });
   }
@@ -478,9 +553,7 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
 }
 
 export function hasGroundedPlaces(message: MessageLike | null | undefined) {
-  const resolvedBrowsingData = resolveGroundedBrowsingData(message);
-  const searchType = typeof resolvedBrowsingData?.searchType === 'string' ? resolvedBrowsingData.searchType.trim().toLowerCase() : '';
-  const places = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
+  const places = getGroundedPlaces(message);
   if (places.length === 0) return false;
   return places.some((p: any) => Boolean(
     (typeof p?.name === 'string' && p.name.trim()) ||

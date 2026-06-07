@@ -2967,8 +2967,25 @@ function applyExtractedLinksToPlace(place: GroundedPlaceCard, value: string) {
   }
 }
 
-function normalizePlaceMatchKey(name: string, address: string): string {
-  return normalizeBusinessLookupText(`${toTrimmedString(name)} ${toTrimmedString(address)}`);
+function isBusinessNameMatch(name1: string, name2: string): boolean {
+  const k1 = normalizeBusinessLookupText(name1);
+  const k2 = normalizeBusinessLookupText(name2);
+  if (!k1 || !k2) return false;
+  
+  if (k1 === k2 || k1.includes(k2) || k2.includes(k1)) return true;
+  
+  const stopWords = new Set(['cafe', 'coffee', 'restaurant', 'shop', 'lounge', 'the', 'and', 'bar', 'kitchen', 'co', 'bistro', 'specialty', 'speciality', 'doha', 'qatar']);
+  const t1 = k1.split(/\s+/).filter(t => t.length >= 3 && !stopWords.has(t));
+  const t2 = k2.split(/\s+/).filter(t => t.length >= 3 && !stopWords.has(t));
+  
+  if (t1.length === 0 || t2.length === 0) {
+    const firstWord1 = k1.split(/\s+/)[0];
+    const firstWord2 = k2.split(/\s+/)[0];
+    return Boolean(firstWord1 && firstWord2 && firstWord1 === firstWord2 && firstWord1.length >= 3);
+  }
+  
+  const common = t1.filter(t => t2.includes(t));
+  return common.length > 0;
 }
 
 function createGroundedPlaceCard(seed: Partial<GroundedPlaceCard> = {}): GroundedPlaceCard {
@@ -5516,7 +5533,6 @@ If you are running out of space, keep this order and drop the rest:
                   : parseGroundedPlacesFromTextLoose(fullResponseText);
 
                 for (const parsedPlace of parsedPlaces) {
-                  const parsedKey = normalizePlaceMatchKey(parsedPlace.name, parsedPlace.address);
                   const verifiedLinks = pickVerifiedBusinessLinks(parsedPlace.placeId ? (groundedWebResultsByPlaceId.get(parsedPlace.placeId) || allGroundedWebResults) : allGroundedWebResults, parsedPlace);
                   const mergedParsedPlace = mergeGroundedPlaceCard(parsedPlace, verifiedLinks);
                   let matchedKey = '';
@@ -5526,8 +5542,7 @@ If you are running out of space, keep this order and drop the rest:
                       matchedKey = existingKey;
                       break;
                     }
-                    const existingMatchKey = normalizePlaceMatchKey(existingPlace.name, existingPlace.address);
-                    if (parsedKey && existingMatchKey && (parsedKey === existingMatchKey || parsedKey.includes(existingMatchKey) || existingMatchKey.includes(parsedKey))) {
+                    if (isBusinessNameMatch(mergedParsedPlace.name, existingPlace.name)) {
                       matchedKey = existingKey;
                       break;
                     }

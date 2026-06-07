@@ -54,6 +54,16 @@ type ImapFolderCache = {
   mailboxInfo: ImapMailboxInfo | null;
 };
 
+type ImapMailboxCacheRow = {
+  folder?: unknown;
+  real_folder?: unknown;
+  mailbox_login?: unknown;
+  total_messages?: unknown;
+  cached_page?: unknown;
+  has_more?: unknown;
+  messages?: unknown;
+};
+
 const IMAP_FOLDER_CACHE_STORAGE_KEY = 'wakti-imap-folder-cache-v1';
 const IMAP_PAGE_SIZE = 20;
 
@@ -101,6 +111,44 @@ function normalizeImapAttachments(value: unknown): EmailMessageAttachment[] {
       } satisfies EmailMessageAttachment;
     })
     .filter(Boolean) as EmailMessageAttachment[];
+}
+
+function normalizeImapMessages(value: unknown): ImapMessage[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const safeItem = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+      const uid = Number(safeItem.uid || 0);
+      if (!Number.isInteger(uid) || uid <= 0) return null;
+      return {
+        uid,
+        subject: typeof safeItem.subject === 'string' ? safeItem.subject : '',
+        from: typeof safeItem.from === 'string' ? safeItem.from : '',
+        to: typeof safeItem.to === 'string' ? safeItem.to : '',
+        date: typeof safeItem.date === 'string' ? safeItem.date : '',
+        snippet: typeof safeItem.snippet === 'string' ? safeItem.snippet : '',
+        isUnread: safeItem.isUnread === true,
+      } satisfies ImapMessage;
+    })
+    .filter(Boolean) as ImapMessage[];
+}
+
+function normalizeMailboxCacheRow(row: ImapMailboxCacheRow, fallbackFolder: ImapFolderName): ImapFolderCache | null {
+  const messages = normalizeImapMessages(row.messages);
+  const totalMessages = Number(row.total_messages || messages.length || 0);
+  const folder = typeof row.real_folder === 'string' && row.real_folder
+    ? row.real_folder
+    : (typeof row.folder === 'string' && row.folder ? row.folder : fallbackFolder);
+  return {
+    messages,
+    hasMore: row.has_more === true,
+    page: Math.max(1, Number(row.cached_page || 1)),
+    mailboxInfo: {
+      login: typeof row.mailbox_login === 'string' ? row.mailbox_login : '',
+      exists: totalMessages,
+      folder,
+    },
+  };
 }
 
 function readStoredFolderCache(): Record<string, ImapFolderCache> {
@@ -152,6 +200,7 @@ export function useImapMessages(connectionId: string) {
   const [mailboxInfo, setMailboxInfo] = useState<ImapMailboxInfo | null>(null);
   const folderCacheRef = useRef<Record<string, ImapFolderCache>>(globalFolderCache);
   const messageCacheRef = useRef<Record<string, ImapMessageFull>>(globalMessageCache);
+  const supabaseAny = supabase as any;
 
   const getFolderCacheKey = useCallback((folder: ImapFolderName) => `${connectionId}:${folder}`, [connectionId]);
   const getMessageCacheKey = useCallback((folder: string, uid: number) => `${connectionId}:${folder}:${uid}`, [connectionId]);
@@ -159,6 +208,42 @@ export function useImapMessages(connectionId: string) {
     if (!connectionId) return false;
     return Boolean(folderCacheRef.current[getFolderCacheKey(folder)]);
   }, [connectionId, getFolderCacheKey]);
+
+  const hydrateFolderCache = useCallback((folder: ImapFolderName, nextCache: ImapFolderCache, options?: { background?: boolean }) => {
+    const cacheKey = getFolderCacheKey(folder);
+    folderCacheRef.current[cacheKey] = nextCache;
+    writeStoredFolderCache(folderCacheRef.current);
+    if (!options?.background) {
+      setMessages(nextCache.messages);
+      setHasMore(nextCache.hasMore);
+      setPage(nextCache.page);
+      setActiveFolder(folder);
+      setMailboxInfo(nextCache.mailboxInfo);
+    }
+    return {
+      messages: nextCache.messages,
+      hasMore: nextCache.hasMore,
+      page: nextCache.page,
+      folder: nextCache.mailboxInfo?.folder || folder,
+      mailbox: nextCache.mailboxInfo
+        ? { login: nextCache.mailboxInfo.login, exists: nextCache.mailboxInfo.exists }
+        : undefined,
+    };
+  }, [getFolderCacheKey]);
+
+  const readMailboxCacheFromDb = useCallback(async (folder: ImapFolderName, options?: { background?: boolean }) => {
+    if (!connectionId) return null;
+    const { data, error } = await supabaseAny
+      .from('imap_mailbox_cache')
+      .select('folder, real_folder, mailbox_login, total_messages, cached_page, has_more, messages')
+      .eq('connection_id', connectionId)
+      .eq('folder', folder)
+      .maybeSingle();
+    if (error || !data) return null;
+    const normalized = normalizeMailboxCacheRow(data as ImapMailboxCacheRow, folder);
+    if (!normalized) return null;
+    return hydrateFolderCache(folder, normalized, options);
+  }, [connectionId, hydrateFolderCache, supabaseAny]);
 
   useEffect(() => {
     if (!connectionId) {
@@ -178,6 +263,35 @@ export function useImapMessages(connectionId: string) {
     setMailboxInfo(cached?.mailboxInfo || null);
   }, [connectionId]);
 
+  useEffect(() => {
+    if (!connectionId) return;
+    readMailboxCacheFromDb('INBOX').catch(() => {});
+  }, [connectionId, readMailboxCacheFromDb]);
+
+  useEffect(() => {
+    if (!connectionId) return;
+    const channel = supabase
+      .channel(`imap-mailbox-cache:${connectionId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'imap_mailbox_cache',
+        filter: `connection_id=eq.${connectionId}`,
+      }, (payload: any) => {
+        const nextRow = payload?.new;
+        if (!nextRow || typeof nextRow !== 'object') return;
+        const folder = String(nextRow.folder || 'INBOX').toUpperCase() === 'SENT' ? 'SENT' : 'INBOX';
+        const normalized = normalizeMailboxCacheRow(nextRow as ImapMailboxCacheRow, folder);
+        if (!normalized) return;
+        hydrateFolderCache(folder, normalized, { background: activeFolder !== folder });
+      })
+      .subscribe();
+
+    return () => {
+      try { supabase.removeChannel(channel); } catch {}
+    };
+  }, [activeFolder, connectionId, hydrateFolderCache]);
+
   const fetchMessages = useCallback(async (
     folder: ImapFolderName = 'INBOX',
     pageNum = 1,
@@ -194,6 +308,7 @@ export function useImapMessages(connectionId: string) {
         setPage(cached.page);
         setActiveFolder(folder);
         setMailboxInfo(cached.mailboxInfo);
+        void fetchMessages(folder, 1, { forceRefresh: true, background: true, quiet: true });
       }
       return {
         messages: cached.messages,
@@ -203,6 +318,14 @@ export function useImapMessages(connectionId: string) {
           ? { login: cached.mailboxInfo.login, exists: cached.mailboxInfo.exists }
           : undefined,
       };
+    }
+
+    if (pageNum === 1 && !options?.forceRefresh) {
+      const cachedFromDb = await readMailboxCacheFromDb(folder, options);
+      if (cachedFromDb) {
+        void fetchMessages(folder, 1, { forceRefresh: true, background: true, quiet: true });
+        return cachedFromDb;
+      }
     }
 
     if (!options?.background) {
@@ -234,25 +357,16 @@ export function useImapMessages(connectionId: string) {
         ? totalMessages > nextPage * IMAP_PAGE_SIZE
         : Boolean(data.hasMore);
 
-      if (!options?.background) {
-        setMessages(nextMessages);
-        setHasMore(nextHasMore);
-        setPage(nextPage);
-        setActiveFolder(folder);
-        setMailboxInfo(nextMailboxInfo);
-      }
-      folderCacheRef.current[cacheKey] = {
+      const nextCache = {
         messages: nextMessages,
         hasMore: nextHasMore,
         page: nextPage,
         mailboxInfo: nextMailboxInfo,
       };
-      writeStoredFolderCache(folderCacheRef.current);
+      const response = hydrateFolderCache(folder, nextCache, options);
       return {
         ...data,
-        messages: nextMessages,
-        hasMore: nextHasMore,
-        page: nextPage,
+        ...response,
       };
     } catch (err: any) {
       if (!options?.quiet) {
@@ -264,7 +378,7 @@ export function useImapMessages(connectionId: string) {
         setLoading(false);
       }
     }
-  }, [connectionId, getFolderCacheKey]);
+  }, [connectionId, getFolderCacheKey, hydrateFolderCache, readMailboxCacheFromDb]);
 
   const fetchMessage = useCallback(async (
     uid: number,
@@ -289,7 +403,16 @@ export function useImapMessages(connectionId: string) {
       if (!data || typeof data !== 'object') {
         return null;
       }
+      const folderKey = getFolderCacheKey(folder.toUpperCase() === 'SENT' ? 'SENT' : 'INBOX');
+      const headerMatch = folderCacheRef.current[folderKey]?.messages.find((message) => message.uid === uid)
+        || messages.find((message) => message.uid === uid)
+        || null;
       const normalized = {
+        uid,
+        subject: headerMatch?.subject || '',
+        from: headerMatch?.from || '',
+        to: headerMatch?.to || '',
+        date: headerMatch?.date || '',
         ...(data as ImapMessageFull),
         body: normalizeImapBody((data as Partial<ImapMessageFull>).body),
         attachments: normalizeImapAttachments((data as Partial<ImapMessageFull>).attachments),
@@ -300,7 +423,7 @@ export function useImapMessages(connectionId: string) {
       toast.error(err.message || 'Failed to load message');
       return null;
     }
-  }, [connectionId, getMessageCacheKey]);
+  }, [connectionId, getFolderCacheKey, getMessageCacheKey, messages]);
 
   const sendMessage = useCallback(async ({ to, cc, subject, body, htmlBody, attachments }: ImapDraftInput): Promise<boolean> => {
     if (!connectionId) return false;

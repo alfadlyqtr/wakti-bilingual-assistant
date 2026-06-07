@@ -324,6 +324,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const pollInFlightRef = useRef(false);
   const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const taskProviderRef = useRef<'kie' | 'veo' | null>(null);
 
   // Trial access check — Ads Creator is locked for 24-hour trial users
   const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
@@ -972,12 +973,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   }, [user, isSaving, isSaved, prompt, generationMode, sourceImagePath, sourceImageUrl, duration, aspectRatio, language, loadLatestVideo, onSaveSuccess]);
 
   // Poll for task status
-  const pollTaskStatus = useCallback(async (tid: string) => {
+  const pollTaskStatus = useCallback(async (tid: string, providerHint?: 'kie' | 'veo' | null) => {
     try {
       if (pollInFlightRef.current) return;
       pollInFlightRef.current = true;
       const { data, error } = await supabase.functions.invoke('freepik-image2video', {
-        body: { mode: 'status', task_id: tid, increment_usage: !usageIncrementedRef.current },
+        body: {
+          mode: 'status',
+          task_id: tid,
+          task_provider: providerHint ?? taskProviderRef.current ?? undefined,
+          increment_usage: !usageIncrementedRef.current,
+        },
       });
 
       if (error) throw error;
@@ -1008,6 +1014,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         }
         setIsGenerating(false);
         setTaskId(null);
+        taskProviderRef.current = null;
       } else if (status === 'failed' || status === 'error') {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         throw new Error(data?.data?.error || 'Video generation failed');
@@ -1020,9 +1027,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       setIsGenerating(false);
       setTaskId(null);
+      taskProviderRef.current = null;
       setGenerationProgress(0);
       setGenerationStatus('');
-      const msg = e?.message || '';
+      const errorPayload = await parseInvokeErrorPayload(e);
+      const friendlyMessage = getVideoGenerationErrorMessage(errorPayload, language);
+      const msg = friendlyMessage || errorPayload?.error || errorPayload?.message || e?.message || '';
       const userMsg = msg.includes('generation failed')
         ? (language === 'ar' ? 'فشل إنشاء الفيديو. حاول بصورة أو وصف مختلف.' : 'Video generation failed. Try a different image or prompt.')
         : (msg || (language === 'ar' ? 'فشل إنشاء الفيديو' : 'Failed to generate video'));
@@ -1082,6 +1092,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setGeneratedVideoUrl(null);
     setSaveErrorMessage(null);
     setIsSaved(false);
+    taskProviderRef.current = null;
     usageIncrementedRef.current = false;
 
     try {
@@ -1289,17 +1300,23 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       }
 
       const tid = data.task_id;
+      const taskProvider = data?.task_provider === 'veo'
+        ? 'veo'
+        : data?.task_provider === 'kie'
+          ? 'kie'
+          : null;
+      taskProviderRef.current = taskProvider;
       setTaskId(tid);
       setGenerationProgress(15);
       setGenerationStatus(language === 'ar' ? 'جاري إنشاء الفيديو...' : 'Generating video...');
 
       // Start polling every 5 seconds
       pollIntervalRef.current = setInterval(() => {
-        pollTaskStatus(tid);
+        pollTaskStatus(tid, taskProvider);
       }, 5000);
 
       // Also poll immediately after a short delay
-      setTimeout(() => pollTaskStatus(tid), 3000);
+      setTimeout(() => pollTaskStatus(tid, taskProvider), 3000);
 
     } catch (e: any) {
       console.error('AI Video generation error:', e);
@@ -1307,6 +1324,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setIsGenerating(false);
       setGenerationProgress(0);
       setGenerationStatus('');
+      taskProviderRef.current = null;
     }
   };
 

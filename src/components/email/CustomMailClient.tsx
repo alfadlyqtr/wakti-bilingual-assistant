@@ -457,25 +457,24 @@ export function CustomMailClient({ connections, health, preferredConnectionId = 
 
   useEffect(() => {
     if (!activeConnectionId) return;
-    const hasInboxCache = imap.hasCachedFolder('INBOX');
-    imap.fetchMessages('INBOX', 1, hasInboxCache ? { forceRefresh: true, quiet: true } : undefined)
+    imap.fetchMessages('INBOX', 1, { quiet: true })
       .then((result: any) => {
         if (result?.folder) setRealFolderName(result.folder);
       })
       .catch(() => {});
-  }, [activeConnectionId, hasInboxCache, imap.fetchMessages]);
+  }, [activeConnectionId, imap.fetchMessages]);
 
   useEffect(() => {
     if (!activeConnectionId) return;
     const intervalId = window.setInterval(() => {
-      imap.fetchMessages(imap.activeFolder, 1, { forceRefresh: true, quiet: true })
+      imap.fetchMessages(imap.activeFolder, 1, { forceRefresh: true, background: true, quiet: true })
         .then((result: any) => {
           if (imap.activeFolder === 'SENT' && result?.folder) {
             setRealFolderName(result.folder);
           }
         })
         .catch(() => {});
-    }, 15000);
+    }, 30000);
 
     return () => window.clearInterval(intervalId);
   }, [activeConnectionId, imap.activeFolder, imap.fetchMessages]);

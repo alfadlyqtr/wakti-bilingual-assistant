@@ -3,6 +3,8 @@ import { encode as base64Encode } from "https://deno.land/std@0.208.0/encoding/b
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const IMAP_PAGE_SIZE = 20;
+const IMAP_MESSAGE_CACHE_TTL_MS = 1000 * 60 * 20;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +28,16 @@ async function verifyUser(req: Request): Promise<string | null> {
   if (error || !user) return null;
   return user.id;
 }
+
+type MailboxListMessage = {
+  uid: number;
+  subject: string;
+  from: string;
+  to: string;
+  date: string;
+  snippet: string;
+  isUnread: boolean;
+};
 
 class ImapClient {
   private conn: Deno.Conn | null = null;
@@ -1315,6 +1327,19 @@ type MailboxSession = {
   exists: number;
 };
 
+type CachedMailboxState = {
+  messages: MailboxListMessage[];
+  hasMore: boolean;
+  page: number;
+  total: number;
+  folder: string;
+  mailbox: {
+    login: string;
+    exists: number;
+  };
+  unreadCount: number;
+};
+
 type ConnectionValidationResult = {
   verified: true;
   proof: {
@@ -1328,6 +1353,301 @@ type ConnectionValidationResult = {
   };
 };
 
+function mergeMailboxMessages(primary: MailboxListMessage[], secondary: MailboxListMessage[]): MailboxListMessage[] {
+  const seen = new Set<number>();
+  const merged: MailboxListMessage[] = [];
+
+  for (const message of primary) {
+    if (!Number.isInteger(message.uid) || message.uid <= 0 || seen.has(message.uid)) continue;
+    seen.add(message.uid);
+    merged.push(message);
+  }
+
+  for (const message of secondary) {
+    if (!Number.isInteger(message.uid) || message.uid <= 0 || seen.has(message.uid)) continue;
+    seen.add(message.uid);
+    merged.push(message);
+  }
+
+  return merged;
+}
+
+function normalizeCachedMailboxMessages(value: unknown): MailboxListMessage[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const safeItem = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      const uid = Number(safeItem.uid || 0);
+      if (!Number.isInteger(uid) || uid <= 0) return null;
+      return {
+        uid,
+        subject: typeof safeItem.subject === "string" ? safeItem.subject : "",
+        from: typeof safeItem.from === "string" ? safeItem.from : "",
+        to: typeof safeItem.to === "string" ? safeItem.to : "",
+        date: typeof safeItem.date === "string" ? safeItem.date : "",
+        snippet: typeof safeItem.snippet === "string" ? safeItem.snippet : "",
+        isUnread: safeItem.isUnread === true,
+      } satisfies MailboxListMessage;
+    })
+    .filter(Boolean) as MailboxListMessage[];
+}
+
+function normalizeCachedAttachments(value: unknown): ParsedAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const safeItem = item && typeof item === "object" ? item as Record<string, unknown> : {};
+      const id = typeof safeItem.id === "string" ? safeItem.id : "";
+      const name = typeof safeItem.name === "string" ? safeItem.name : "";
+      if (!id || !name) return null;
+      return {
+        id,
+        name,
+        contentType: typeof safeItem.contentType === "string" ? safeItem.contentType : undefined,
+        size: typeof safeItem.size === "number" ? safeItem.size : undefined,
+        inline: safeItem.inline === true,
+      } satisfies ParsedAttachment;
+    })
+    .filter(Boolean) as ParsedAttachment[];
+}
+
+function buildMailboxMessages(headers: { uid: number; headers: string; isUnread: boolean }[], requestedFolder: string): MailboxListMessage[] {
+  return headers.map((header) => ({
+    uid: header.uid,
+    subject: parseHeader(header.headers, "Subject") || "(no subject)",
+    from: parseHeader(header.headers, "From"),
+    to: parseHeader(header.headers, "To"),
+    date: parseHeader(header.headers, "Date"),
+    snippet: "",
+    isUnread: requestedFolder === "INBOX" ? header.isUnread : false,
+  }));
+}
+
+async function readMailboxCache(supabase: any, userId: string, connectionId: string, folder: string): Promise<CachedMailboxState | null> {
+  const { data, error } = await supabase
+    .from("imap_mailbox_cache")
+    .select("messages, has_more, cached_page, total_messages, real_folder, mailbox_login, unread_count")
+    .eq("user_id", userId)
+    .eq("connection_id", connectionId)
+    .eq("folder", folder)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const messages = normalizeCachedMailboxMessages(data.messages);
+  const total = Number(data.total_messages || messages.length || 0);
+  return {
+    messages,
+    hasMore: Boolean(data.has_more),
+    page: Math.max(1, Number(data.cached_page || 1)),
+    total,
+    folder: typeof data.real_folder === "string" && data.real_folder ? data.real_folder : folder,
+    mailbox: {
+      login: typeof data.mailbox_login === "string" ? data.mailbox_login : "",
+      exists: total,
+    },
+    unreadCount: Math.max(0, Number(data.unread_count || 0)),
+  };
+}
+
+async function writeMailboxCache(
+  supabase: any,
+  userId: string,
+  connectionId: string,
+  folder: string,
+  mailbox: { login: string; exists: number; folder: string },
+  incomingMessages: MailboxListMessage[],
+  page: number,
+  pageSize: number,
+  hasMore: boolean,
+): Promise<CachedMailboxState> {
+  const existing = await readMailboxCache(supabase, userId, connectionId, folder);
+  const shouldPreserveLoadedPages = page === 1 && Boolean(existing?.page && existing.page > 1);
+  const total = Math.max(0, Number(mailbox.exists || 0));
+  const nextMessages = page === 1
+    ? (shouldPreserveLoadedPages
+      ? mergeMailboxMessages(incomingMessages, existing?.messages || [])
+      : incomingMessages)
+    : mergeMailboxMessages(existing?.messages || [], incomingMessages);
+  const nextPage = shouldPreserveLoadedPages ? Number(existing?.page || page) : page;
+  const nextHasMore = shouldPreserveLoadedPages ? total > nextPage * pageSize : hasMore;
+  const unreadCount = folder === "INBOX" ? nextMessages.filter((message) => message.isUnread).length : 0;
+
+  await supabase
+    .from("imap_mailbox_cache")
+    .upsert({
+      user_id: userId,
+      connection_id: connectionId,
+      folder,
+      real_folder: mailbox.folder || folder,
+      mailbox_login: mailbox.login,
+      total_messages: total,
+      cached_page: nextPage,
+      page_size: pageSize,
+      has_more: nextHasMore,
+      unread_count: unreadCount,
+      messages: nextMessages,
+      synced_at: new Date().toISOString(),
+    }, { onConflict: "connection_id,folder" });
+
+  return {
+    messages: nextMessages,
+    hasMore: nextHasMore,
+    page: nextPage,
+    total,
+    folder: mailbox.folder || folder,
+    mailbox: {
+      login: mailbox.login,
+      exists: total,
+    },
+    unreadCount,
+  };
+}
+
+async function markMailboxMessageRead(supabase: any, userId: string, connectionId: string, folder: string, uid: number) {
+  const existing = await readMailboxCache(supabase, userId, connectionId, folder);
+  if (!existing || folder !== "INBOX") return;
+  let changed = false;
+  const nextMessages = existing.messages.map((message) => {
+    if (message.uid !== uid || !message.isUnread) return message;
+    changed = true;
+    return { ...message, isUnread: false };
+  });
+  if (!changed) return;
+  await supabase
+    .from("imap_mailbox_cache")
+    .update({
+      messages: nextMessages,
+      unread_count: Math.max(0, nextMessages.filter((message) => message.isUnread).length),
+      synced_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("connection_id", connectionId)
+    .eq("folder", folder);
+}
+
+async function removeMailboxMessage(supabase: any, userId: string, connectionId: string, folder: string, uid: number) {
+  const existing = await readMailboxCache(supabase, userId, connectionId, folder);
+  if (!existing) return;
+  const nextMessages = existing.messages.filter((message) => message.uid !== uid);
+  const removedCount = existing.messages.length - nextMessages.length;
+  if (!removedCount && existing.total === 0) return;
+  const nextTotal = Math.max(0, existing.total - removedCount);
+  await supabase
+    .from("imap_mailbox_cache")
+    .update({
+      messages: nextMessages,
+      total_messages: nextTotal,
+      has_more: nextTotal > Math.max(1, existing.page) * IMAP_PAGE_SIZE,
+      unread_count: folder === "INBOX" ? nextMessages.filter((message) => message.isUnread).length : 0,
+      synced_at: new Date().toISOString(),
+    })
+    .eq("user_id", userId)
+    .eq("connection_id", connectionId)
+    .eq("folder", folder);
+}
+
+async function readMessageCache(supabase: any, userId: string, connectionId: string, folder: string, uid: number) {
+  const { data, error } = await supabase
+    .from("imap_message_cache")
+    .select("uid, subject, sender, recipient, sent_at, snippet, body_text, body_html, attachments, expires_at")
+    .eq("user_id", userId)
+    .eq("connection_id", connectionId)
+    .eq("folder", folder)
+    .eq("uid", uid)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const expiresAt = typeof data.expires_at === "string" ? new Date(data.expires_at).getTime() : 0;
+  if (expiresAt && expiresAt <= Date.now()) return null;
+  return {
+    uid: Number(data.uid || uid),
+    subject: typeof data.subject === "string" ? data.subject : "",
+    from: typeof data.sender === "string" ? data.sender : "",
+    to: typeof data.recipient === "string" ? data.recipient : "",
+    date: typeof data.sent_at === "string" ? data.sent_at : "",
+    snippet: typeof data.snippet === "string" ? data.snippet : "",
+    body: {
+      text: typeof data.body_text === "string" ? data.body_text : "",
+      html: typeof data.body_html === "string" ? data.body_html : "",
+    },
+    attachments: normalizeCachedAttachments(data.attachments),
+  };
+}
+
+async function writeMessageCache(
+  supabase: any,
+  userId: string,
+  connectionId: string,
+  folder: string,
+  payload: {
+    uid: number;
+    subject: string;
+    from: string;
+    to: string;
+    date: string;
+    snippet: string;
+    body: { text: string; html: string };
+    attachments: ParsedAttachment[];
+  },
+) {
+  await supabase
+    .from("imap_message_cache")
+    .upsert({
+      user_id: userId,
+      connection_id: connectionId,
+      folder,
+      uid: payload.uid,
+      subject: payload.subject,
+      sender: payload.from,
+      recipient: payload.to,
+      sent_at: payload.date,
+      snippet: payload.snippet,
+      body_text: payload.body.text,
+      body_html: payload.body.html,
+      attachments: payload.attachments.map((attachment) => ({
+        id: attachment.id,
+        name: attachment.name,
+        contentType: attachment.contentType,
+        size: attachment.size,
+        inline: attachment.inline,
+      })),
+      synced_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + IMAP_MESSAGE_CACHE_TTL_MS).toISOString(),
+    }, { onConflict: "connection_id,folder,uid" });
+}
+
+async function deleteMessageCache(supabase: any, userId: string, connectionId: string, folder: string, uid: number) {
+  await supabase
+    .from("imap_message_cache")
+    .delete()
+    .eq("user_id", userId)
+    .eq("connection_id", connectionId)
+    .eq("folder", folder)
+    .eq("uid", uid);
+}
+
+async function persistConnectionHints(
+  supabase: any,
+  connectionId: string,
+  conn: Record<string, unknown>,
+  session: MailboxSession,
+  requestedFolder: string,
+) {
+  if (!connectionId) return;
+  const updates: Record<string, unknown> = {};
+  if (String(conn.preferred_imap_login || "") !== session.login) {
+    updates.preferred_imap_login = session.login;
+  }
+  if (requestedFolder === "SENT" && String(conn.preferred_sent_folder || "") !== session.selectedFolder) {
+    updates.preferred_sent_folder = session.selectedFolder;
+  }
+  if (Object.keys(updates).length === 0) return;
+  await supabase
+    .from("email_connections")
+    .update(updates)
+    .eq("id", connectionId);
+}
+
 function isIcloudConnection(conn: Record<string, unknown>): boolean {
   const provider = String(conn.provider || "").trim().toLowerCase();
   if (provider === "icloud") return true;
@@ -1339,11 +1659,12 @@ function isIcloudConnection(conn: Record<string, unknown>): boolean {
 function getLoginCandidates(conn: Record<string, unknown>): string[] {
   const username = String(conn.username || "").trim();
   const email = String(conn.email_address || "").trim();
+  const preferredLogin = String(conn.preferred_imap_login || "").trim();
   const usernameLocalPart = username.includes("@") ? username.split("@")[0].trim() : username;
   const emailLocalPart = email.includes("@") ? email.split("@")[0].trim() : email;
   const values = isIcloudConnection(conn)
-    ? [emailLocalPart, usernameLocalPart, username, email]
-    : [username, email];
+    ? [preferredLogin, emailLocalPart, usernameLocalPart, username, email]
+    : [preferredLogin, username, email];
   return values
     .filter(Boolean)
     .filter((value, index, arr) => arr.indexOf(value) === index);
@@ -1391,6 +1712,8 @@ async function detectTrashFolder(imap: ImapClient): Promise<string | null> {
 
 async function openMailbox(conn: Record<string, unknown>, requestedFolder: string): Promise<MailboxSession> {
   const candidates = getLoginCandidates(conn);
+  const preferredLogin = String(conn.preferred_imap_login || "").trim();
+  const preferredSentFolder = String(conn.preferred_sent_folder || "").trim();
   let lastError: Error | null = null;
   let bestSession: MailboxSession | null = null;
   for (const login of candidates) {
@@ -1398,10 +1721,33 @@ async function openMailbox(conn: Record<string, unknown>, requestedFolder: strin
     try {
       await imap.connect();
       await imap.login();
-      const selectedFolder = requestedFolder === "SENT" ? await detectSentFolder(imap) : requestedFolder || "INBOX";
-      const { exists } = await imap.select(selectedFolder);
+      let selectedFolder = requestedFolder || "INBOX";
+      let exists = 0;
+      if (requestedFolder === "SENT") {
+        if (preferredSentFolder) {
+          try {
+            const selected = await imap.select(preferredSentFolder);
+            selectedFolder = preferredSentFolder;
+            exists = selected.exists;
+          } catch {
+            selectedFolder = await detectSentFolder(imap);
+            const selected = await imap.select(selectedFolder);
+            exists = selected.exists;
+          }
+        } else {
+          selectedFolder = await detectSentFolder(imap);
+          const selected = await imap.select(selectedFolder);
+          exists = selected.exists;
+        }
+      } else {
+        const selected = await imap.select(selectedFolder);
+        exists = selected.exists;
+      }
       const currentSession = { imap, login, selectedFolder, exists };
       console.log("[imap-api] mailbox opened", { login, requestedFolder, selectedFolder, exists });
+      if (preferredLogin && login === preferredLogin) {
+        return currentSession;
+      }
       if (!bestSession) {
         bestSession = currentSession;
         continue;
@@ -1588,6 +1934,7 @@ Deno.serve(async (req: Request) => {
   try {
     const userId = await verifyUser(req);
     if (!userId) return jsonResponse({ error: "Unauthorized" }, 401);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const body = await req.json();
     const { action, connection_id } = body;
@@ -1598,7 +1945,6 @@ Deno.serve(async (req: Request) => {
 
     if (!conn) {
       if (!connection_id) return jsonResponse({ error: "connection_id required" }, 400);
-      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const { data, error: connErr } = await supabase
         .from("email_connections")
         .select("*")
@@ -1626,25 +1972,34 @@ Deno.serve(async (req: Request) => {
     if (action === "list_messages") {
       const requestedFolder = body.folder === "SENT" ? "SENT" : "INBOX";
       const page = Number(body.page || 1);
-      const pageSize = 20;
+      const pageSize = IMAP_PAGE_SIZE;
       const session = await openMailbox(conn, requestedFolder);
       try {
         const headers = await session.imap.fetchHeaders(page, pageSize, session.exists);
-        const messages = headers.map((h) => ({
-          uid: h.uid,
-          subject: parseHeader(h.headers, "Subject") || "(no subject)",
-          from: parseHeader(h.headers, "From"),
-          to: parseHeader(h.headers, "To"),
-          date: parseHeader(h.headers, "Date"),
-          snippet: "",
-          isUnread: requestedFolder === "INBOX" ? h.isUnread : false,
-        }));
+        const messages = buildMailboxMessages(headers, requestedFolder);
+        const cached = connection_id
+          ? await writeMailboxCache(
+            supabase,
+            userId,
+            String(connection_id),
+            requestedFolder,
+            { login: session.login, exists: session.exists, folder: session.selectedFolder },
+            messages,
+            page,
+            pageSize,
+            session.exists > page * pageSize,
+          )
+          : null;
+        if (connection_id) {
+          await persistConnectionHints(supabase, String(connection_id), conn, session, requestedFolder);
+        }
         return jsonResponse({
-          messages,
-          hasMore: session.exists > page * pageSize,
-          total: session.exists,
-          folder: session.selectedFolder,
-          mailbox: {
+          messages: cached?.messages || messages,
+          hasMore: cached?.hasMore ?? (session.exists > page * pageSize),
+          total: cached?.total ?? session.exists,
+          page: cached?.page ?? page,
+          folder: cached?.folder || session.selectedFolder,
+          mailbox: cached?.mailbox || {
             login: session.login,
             exists: session.exists,
           },
@@ -1658,22 +2013,17 @@ Deno.serve(async (req: Request) => {
       const requestedFolder = body.folder === "SENT" ? "SENT" : "INBOX";
       const query = String(body.query || "").trim();
       const page = Math.max(1, Number(body.page || 1));
-      const pageSize = 20;
+      const pageSize = IMAP_PAGE_SIZE;
       if (!query) return jsonResponse({ error: "query required" }, 400);
       const session = await openMailbox(conn, requestedFolder);
       try {
         const matchedUids = await session.imap.searchMessageUids(query);
         const start = (page - 1) * pageSize;
         const headers = await session.imap.fetchHeadersByUids(matchedUids.slice(start, start + pageSize));
-        const messages = headers.map((h) => ({
-          uid: h.uid,
-          subject: parseHeader(h.headers, "Subject") || "(no subject)",
-          from: parseHeader(h.headers, "From"),
-          to: parseHeader(h.headers, "To"),
-          date: parseHeader(h.headers, "Date"),
-          snippet: "",
-          isUnread: requestedFolder === "INBOX" ? h.isUnread : false,
-        }));
+        const messages = buildMailboxMessages(headers, requestedFolder);
+        if (connection_id) {
+          await persistConnectionHints(supabase, String(connection_id), conn, session, requestedFolder);
+        }
         return jsonResponse({
           messages,
           hasMore: matchedUids.length > page * pageSize,
@@ -1694,6 +2044,15 @@ Deno.serve(async (req: Request) => {
       const uid = Number(body.uid || 0);
       const folder = String(body.folder || "INBOX");
       if (!uid) return jsonResponse({ error: "uid required" }, 400);
+      if (connection_id) {
+        const cached = await readMessageCache(supabase, userId, String(connection_id), folder, uid);
+        if (cached) {
+          if (folder.toUpperCase() === "INBOX") {
+            await markMailboxMessageRead(supabase, userId, String(connection_id), "INBOX", uid);
+          }
+          return jsonResponse(cached);
+        }
+      }
       const session = await openMailbox(conn, folder);
       try {
         if (folder.toUpperCase() === "INBOX") {
@@ -1737,7 +2096,28 @@ Deno.serve(async (req: Request) => {
           snippet = parsed.snippet;
           attachments = parsed.attachments;
         }
-        return jsonResponse({ uid, body: { text, html }, snippet, attachments });
+        const cachedMailbox = connection_id
+          ? await readMailboxCache(supabase, userId, String(connection_id), folder.toUpperCase() === "SENT" ? "SENT" : "INBOX")
+          : null;
+        const headerMatch = cachedMailbox?.messages.find((message) => message.uid === uid) || null;
+        const payload = {
+          uid,
+          subject: headerMatch?.subject || "",
+          from: headerMatch?.from || "",
+          to: headerMatch?.to || "",
+          date: headerMatch?.date || "",
+          snippet,
+          body: { text, html },
+          attachments,
+        };
+        if (connection_id) {
+          await writeMessageCache(supabase, userId, String(connection_id), folder, payload);
+          if (folder.toUpperCase() === "INBOX") {
+            await markMailboxMessageRead(supabase, userId, String(connection_id), "INBOX", uid);
+          }
+          await persistConnectionHints(supabase, String(connection_id), conn, session, folder);
+        }
+        return jsonResponse(payload);
       } finally {
         await session.imap.logout();
       }
@@ -1824,6 +2204,10 @@ Deno.serve(async (req: Request) => {
       const folder = String(body.folder || "INBOX");
       if (!uid) return jsonResponse({ error: "uid required" }, 400);
       const result = await deleteMessage(conn, folder, uid);
+      if (connection_id) {
+        await removeMailboxMessage(supabase, userId, String(connection_id), folder === "SENT" ? "SENT" : "INBOX", uid);
+        await deleteMessageCache(supabase, userId, String(connection_id), folder, uid);
+      }
       return jsonResponse(result);
     }
 

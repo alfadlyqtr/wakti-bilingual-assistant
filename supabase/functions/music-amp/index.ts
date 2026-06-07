@@ -78,6 +78,45 @@ function hasArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text || "");
 }
 
+ type InputLanguage = "ar" | "en" | "mixed";
+
+ function hasLatin(text: string) {
+   return /[A-Za-z]/.test(text || "");
+ }
+
+ function detectInputLanguage(text: string): InputLanguage {
+   const arabic = hasArabic(text);
+   const latin = hasLatin(text);
+
+   if (arabic && latin) return "mixed";
+   if (arabic) return "ar";
+   return "en";
+ }
+
+ function buildLanguageInstruction(inputLanguage: InputLanguage): string {
+   if (inputLanguage === "ar") {
+     return "OUTPUT LANGUAGE LOCK: ARABIC ONLY. Write the lyrics in Arabic script only. Do not switch to English unless the user input already contains English.";
+   }
+
+   if (inputLanguage === "mixed") {
+     return "OUTPUT LANGUAGE LOCK: MIXED LANGUAGE. Preserve every language already present in the user input. Do not collapse the song into a single language.";
+   }
+
+   return "OUTPUT LANGUAGE LOCK: ENGLISH ONLY. Write the full lyric in natural English only. Do not write Arabic script. If the track uses Khaleeji or GCC style, keep that identity in the mood, imagery, groove, and vocal attitude without switching the lyric language into Arabic.";
+ }
+
+ function sanitizeControlBlockForLanguage(controlBlock: string | undefined, inputLanguage: InputLanguage): string {
+   if (!controlBlock) return "";
+   if (inputLanguage !== "en") return controlBlock;
+
+   return controlBlock
+     .split("\n")
+     .map((line) => line.trimEnd())
+     .filter((line) => !/^(Dialect lock:|Accent anchor:|Pronunciation target:|Phrasing target:|Dialect identity:)/i.test(line))
+     .join("\n")
+     .trim();
+ }
+
 const MUSIC_LYRICS_SYSTEM_PROMPT = `You are a Musical Creative Director and professional lyricist for Suno V5_5. You generate singable lyric content sized for the engine, but the app itself owns the final visible section labels.
 
 ═══════════════════════════════════════════════
@@ -295,6 +334,7 @@ Clean lyrics only. Ready to paste directly into Suno V5_5.`;
 
 interface LyricsBlueprint {
   text: string;
+  inputLanguage: InputLanguage;
   ampMode: string;
   durationSeconds: number;
   style: string;
@@ -359,8 +399,20 @@ function buildTagLine(label: string, values: string[]): string | null {
   return values.length > 0 ? `${label}: ${values.join(", ")}` : null;
 }
 
-function buildKhaleejiDialectInstruction(khaleejiDialectLabel?: string, khaleejiAccentAnchor?: string): string {
+function buildKhaleejiDialectInstruction(inputLanguage: InputLanguage, khaleejiDialectLabel?: string, khaleejiAccentAnchor?: string): string {
   if (!khaleejiDialectLabel && !khaleejiAccentAnchor) return "";
+
+   if (inputLanguage === "en") {
+     const parts = [
+       "KHALEEJI IDENTITY LOCK: Keep the requested Khaleeji or GCC identity in the musical feel and vocal attitude only.",
+       "Do not switch the lyric language away from English.",
+       "Do not write Arabic script.",
+       khaleejiDialectLabel ? `Khaleeji identity reference: ${khaleejiDialectLabel}.` : null,
+       khaleejiAccentAnchor ? `Accent color reference: ${khaleejiAccentAnchor}.` : null,
+     ].filter(Boolean);
+
+     return parts.join(" ");
+   }
 
   const parts = [
     khaleejiDialectLabel ? `TARGET DIALECT LOCK: ${khaleejiDialectLabel}.` : null,
@@ -378,15 +430,18 @@ async function ampMusicLyricsWithOpenAI(
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
 
-  const { text, ampMode, durationSeconds, style, styleTags, rhythm, rhythmTags, instruments, instrumentTags, mood, moodTags, vocalType, title, controlBlock, structurePlan, tempoHint, musicalKeyHint, khaleejiDialect, khaleejiDialectLabel, khaleejiAccentAnchor } = blueprint;
+  const { text, inputLanguage, ampMode, durationSeconds, style, styleTags, rhythm, rhythmTags, instruments, instrumentTags, mood, moodTags, vocalType, title, controlBlock, structurePlan, tempoHint, musicalKeyHint, khaleejiDialect, khaleejiDialectLabel, khaleejiAccentAnchor } = blueprint;
   const normalizedDuration = normalizeAmpDuration(durationSeconds);
-  const dialectInstruction = buildKhaleejiDialectInstruction(khaleejiDialectLabel, khaleejiAccentAnchor);
+  const languageInstruction = buildLanguageInstruction(inputLanguage);
+  const dialectInstruction = buildKhaleejiDialectInstruction(inputLanguage, khaleejiDialectLabel, khaleejiAccentAnchor);
+  const safeControlBlock = sanitizeControlBlockForLanguage(controlBlock, inputLanguage);
 
   const modeInstruction = ampMode === "idea"
     ? "MODE: IDEA — Generate completely fresh lyrics from scratch using this blueprint. The user gave you a concept, not existing lyrics."
     : "MODE: EXPAND — The user provided existing lyrics below. Preserve their EXACT words. Expand AROUND them — add new sections to fill the duration target. Do NOT rewrite their lines.";
 
   const blueprintBlock = [
+    `Input language: ${inputLanguage}`,
     title      ? `Title: ${title}`       : null,
     style      ? `Style: ${style}`       : null,
     buildTagLine("Style tags", styleTags),
@@ -397,14 +452,20 @@ async function ampMusicLyricsWithOpenAI(
     mood       ? `Mood: ${mood}`         : null,
     buildTagLine("Mood tags", moodTags),
     vocalType  ? `Vocal type: ${vocalType}` : null,
-    khaleejiDialect ? `Target dialect key: ${khaleejiDialect}` : null,
-    khaleejiDialectLabel ? `Target dialect: ${khaleejiDialectLabel}` : null,
-    khaleejiAccentAnchor ? `Accent anchor: ${khaleejiAccentAnchor}` : null,
+    inputLanguage === "en"
+      ? (khaleejiDialect ? `Khaleeji identity key: ${khaleejiDialect}` : null)
+      : (khaleejiDialect ? `Target dialect key: ${khaleejiDialect}` : null),
+    inputLanguage === "en"
+      ? (khaleejiDialectLabel ? `Khaleeji identity reference: ${khaleejiDialectLabel}` : null)
+      : (khaleejiDialectLabel ? `Target dialect: ${khaleejiDialectLabel}` : null),
+    inputLanguage === "en"
+      ? (khaleejiAccentAnchor ? `Accent color reference: ${khaleejiAccentAnchor}` : null)
+      : (khaleejiAccentAnchor ? `Accent anchor: ${khaleejiAccentAnchor}` : null),
     structurePlan ? `Structure plan: ${structurePlan}` : null,
     tempoHint ? `Tempo hint: ${tempoHint}` : null,
     musicalKeyHint ? `Key hint: ${musicalKeyHint}` : null,
     `Duration: ${buildDurationLabel(normalizedDuration)} (${normalizedDuration}s requested bucket from ${durationSeconds}s)`,
-    controlBlock ? `Control block:\n${controlBlock}` : null,
+    safeControlBlock ? `Control block:\n${safeControlBlock}` : null,
   ].filter(Boolean).join("\n");
 
   const userMessage = [
@@ -424,7 +485,7 @@ async function ampMusicLyricsWithOpenAI(
     temperature: 0.7,
     max_tokens: durationSeconds >= 90 ? 2000 : 1200,
     messages: [
-      { role: "system", content: [MUSIC_LYRICS_SYSTEM_PROMPT, dialectInstruction].filter(Boolean).join("\n\n") },
+      { role: "system", content: [MUSIC_LYRICS_SYSTEM_PROMPT, languageInstruction, dialectInstruction].filter(Boolean).join("\n\n") },
       { role: "user",   content: userMessage },
     ],
   };
@@ -457,10 +518,10 @@ async function ampMusicLyricsWithOpenAI(
   return content.trim();
 }
 
-async function ampGccEnhanceWithAnthropic(input: string, khaleejiDialectLabel?: string, khaleejiAccentAnchor?: string): Promise<string> {
+async function ampGccEnhanceWithAnthropic(input: string, inputLanguage: InputLanguage, khaleejiDialectLabel?: string, khaleejiAccentAnchor?: string): Promise<string> {
   const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
   if (!ANTHROPIC_API_KEY) throw new Error("CONFIG: Missing ANTHROPIC_API_KEY");
-  const dialectInstruction = buildKhaleejiDialectInstruction(khaleejiDialectLabel, khaleejiAccentAnchor);
+  const dialectInstruction = buildKhaleejiDialectInstruction(inputLanguage, khaleejiDialectLabel, khaleejiAccentAnchor);
 
   const payload = {
     model: "claude-haiku-4-5-20251001",
@@ -539,6 +600,7 @@ serve(async (req) => {
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const text = (body?.text ?? "").toString();
+    const inputLanguage = detectInputLanguage(text);
     mode = typeof body?.mode === "string" ? (body.mode as string) : undefined;
     inputText = text;
 
@@ -580,6 +642,7 @@ serve(async (req) => {
 
       const improved = await ampMusicLyricsWithOpenAI({
         text,
+        inputLanguage,
         ampMode,
         durationSeconds: normalizedDuration,
         style,
@@ -630,7 +693,7 @@ serve(async (req) => {
           khaleejiDialect,
           khaleejiDialectLabel,
           khaleejiAccentAnchor,
-          language: hasArabic(text) ? "ar" : "en",
+          language: inputLanguage,
         },
       });
 
@@ -638,7 +701,7 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           text: improved,
-          language: hasArabic(text) ? "ar" : "en",
+          language: inputLanguage,
           mode: "music-lyrics",
         }),
         {
@@ -687,7 +750,7 @@ serve(async (req) => {
         : "";
       const gccInput = gccContext + text;
 
-      const improved = await ampGccEnhanceWithAnthropic(gccInput, khaleejiDialectLabel, khaleejiAccentAnchor);
+      const improved = await ampGccEnhanceWithAnthropic(gccInput, inputLanguage, khaleejiDialectLabel, khaleejiAccentAnchor);
 
       await logAI({
         functionName: "prompt-amp",
@@ -717,7 +780,7 @@ serve(async (req) => {
           khaleejiDialect,
           khaleejiDialectLabel,
           khaleejiAccentAnchor,
-          language: hasArabic(text) ? "ar" : "en",
+          language: inputLanguage,
         },
       });
 
@@ -725,7 +788,7 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           text: improved,
-          language: hasArabic(text) ? "ar" : "en",
+          language: inputLanguage,
           mode: "gcc-enhance",
         }),
         {
