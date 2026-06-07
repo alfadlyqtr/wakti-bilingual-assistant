@@ -509,6 +509,30 @@ const FIELD_RAW_CONTENT = (label_en: string, label_ar: string, required = true):
     search_aliases: ["report", "brief", "corporate", "business", "quarterly", "تقرير", "موجز"],
   },
 
+  {
+    id: "contract",
+    name_en: "Contract",
+    name_ar: "عقد",
+    aspect_ratio: "2:3",
+    per_page_char_budget: 1500,
+    max_pages_override: 3,
+    form_schema: [
+      { key: "contract_title", label_en: "Contract Title", label_ar: "عنوان العقد", type: "text", required: false },
+      { key: "party_one", label_en: "Between (Party 1)", label_ar: "بين (الطرف الأول)", type: "text", required: false },
+      { key: "party_two", label_en: "And (Party 2)", label_ar: "و (الطرف الثاني)", type: "text", required: false },
+      { key: "effective_date", label_en: "Effective Date", label_ar: "تاريخ السريان", type: "date", required: false },
+      { key: "contract_reference", label_en: "Reference Number", label_ar: "رقم المرجع", type: "text", required: false },
+      FIELD_LOGO,
+      FIELD_BILINGUAL,
+      FIELD_RAW_CONTENT("Paste the contract details, terms, and clauses", "الصق تفاصيل العقد والشروط والبنود"),
+    ],
+    style_block:
+      "Formal agreement-document aesthetic. Crisp white paper, premium legal-style hierarchy, restrained accent use, disciplined spacing, and a serious professional tone suitable for business and service contracts.",
+    layout_blueprint:
+      "Top zone: centered contract title with optional logo above or beside it. A small reference line may appear near the upper-right when provided. Opening section: a clear agreement line naming the two parties and the effective date when available. Body zone: numbered clauses and sub-clauses arranged in a clean vertical flow with strong heading hierarchy, generous margins, and clear paragraph spacing. Lower zone: a clean signature area with space for both parties when party names are provided.",
+    search_aliases: ["contract", "agreement", "terms", "legal", "service agreement", "عقد", "اتفاقية", "شروط"],
+  },
+
   // 4. CERTIFICATE / DIPLOMA ---------------------------------------------------
   {
     id: "certificate",
@@ -1006,6 +1030,7 @@ export function getThemeDocumentLane(themeId: string, purposeId?: string | null)
     themeId === "study_handout" ||
     themeId === "research_poster" ||
     themeId === "corporate_brief" ||
+    themeId === "contract" ||
     themeId === "invoice_receipt" ||
     themeId === "menu_price_list" ||
     themeId === "resume_cv"

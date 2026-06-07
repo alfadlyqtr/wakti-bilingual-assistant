@@ -108,6 +108,11 @@ const BASIC_FIELD_KEYS_BY_THEME: Record<string, string[]> = {
     "bilingual",
     "raw_content",
   ],
+  contract: [
+    "raw_content",
+    "logo",
+    "bilingual",
+  ],
   certificate: [
     "issuer_name",
     "recipient_name",

@@ -167,6 +167,13 @@ const THEME_VISUALS: Record<string, ThemeVisual> = {
     border: "hover:border-blue-500/50",
     ring: "group-hover:shadow-blue-500/20",
   },
+  contract: {
+    icon: FileText,
+    bg: "from-slate-500/10 via-blue-500/5 to-transparent",
+    text: "text-slate-700 dark:text-slate-300",
+    border: "hover:border-slate-500/50",
+    ring: "group-hover:shadow-slate-500/20",
+  },
   certificate: {
     icon: Award,
     bg: "from-amber-500/15 via-yellow-500/5 to-transparent",
@@ -244,6 +251,7 @@ const THEME_BADGES: Record<string, ThemeBadgeLabel> = {
   official_exam: { en: "School Exam", ar: "اختبار مدرسي" },
   school_project: { en: "School Project", ar: "مشروع مدرسي" },
   corporate_brief: { en: "Corporate Report", ar: "تقرير مؤسسي" },
+  contract: { en: "Agreement", ar: "اتفاقية" },
   certificate: { en: "Certificate", ar: "شهادة" },
   event_flyer: { en: "Event Flyer", ar: "ملصق فعالية" },
   craft_infographic: { en: "Infographic", ar: "إنفوجرافيك" },
@@ -2148,6 +2156,14 @@ const A4Tab: React.FC = () => {
                     "هذا النموذج يساعد في توجيه التصميم — املأ فقط الأجزاء التي تهمك."
                   )}
                 </div>
+                {theme.id === "contract" && formMode === "basic" && (
+                  <div className="mb-3 rounded-xl border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-foreground/80">
+                    {t(
+                      "Best simple flow: paste the full contract below, optionally add a logo, choose the language and page count, then generate. Use Advanced only if you want to fill extra contract fields manually.",
+                      "أفضل مسار بسيط: الصق العقد كاملًا بالأسفل، وأضف شعارًا إذا أردت، ثم اختر اللغة وعدد الصفحات واضغط إنشاء. استخدم المتقدم فقط إذا أردت تعبئة حقول إضافية يدويًا."
+                    )}
+                  </div>
+                )}
                 {isPurposeMissing && (
                   <div className="mb-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
                     {t(
@@ -2551,7 +2567,7 @@ const A4Tab: React.FC = () => {
                 )}
 
               {/* Page count chip row */}
-              {formMode === "advanced" && maxPages > 1 && (
+              {(maxPages > 1 && (formMode === "advanced" || theme.id === "contract")) && (
                 <div className="pt-3 border-t">
                   <div className="text-xs font-medium mb-2 text-foreground/70">
                     {t("Number of pages", "عدد الصفحات")}

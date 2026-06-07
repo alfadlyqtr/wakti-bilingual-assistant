@@ -337,6 +337,25 @@ function _getHeaderBlock(
       if (meta.length) lines.push(`Meta row: ${meta.join(" | ")}. CRITICAL: All default labels must render in the active document language.`);
       return `Header: ${lines.join(" ")}`;
     }
+    case "contract": {
+      const title = String(formState.contract_title ?? formState.title ?? "").trim();
+      const partyOne = String(formState.party_one ?? "").trim();
+      const partyTwo = String(formState.party_two ?? "").trim();
+      const effectiveDate = String(formState.effective_date ?? formState.date ?? "").trim();
+      const reference = String(formState.contract_reference ?? "").trim();
+      const lblAgreement = L("Agreement", "اتفاقية");
+      const lines: string[] = [];
+      if (logoClause) lines.push(logoClause);
+      lines.push(title ? `Large centered contract title: "${title}".` : `Large centered heading: "${lblAgreement}".`);
+      if (reference) lines.push(`Small reference line near the upper-right: "${reference}".`);
+      if (partyOne || partyTwo) {
+        lines.push(`Opening agreement line naming the parties: "${partyOne || "Party 1"}" and "${partyTwo || "Party 2"}".`);
+      }
+      if (effectiveDate) lines.push(`Show the effective date clearly near the opening section: "${effectiveDate}".`);
+      lines.push("Body structure: render the contract in clear numbered clauses and sub-clauses with strong hierarchy, generous spacing, and a clean signature area near the bottom.");
+      lines.push("CRITICAL: Default labels must render in the active document language.");
+      return `Header: ${lines.join(" ")}`;
+    }
     case "certificate": {
       const issuer = String(formState.issuer_name ?? "").trim();
       const recipient = String(formState.recipient_name ?? "").trim();
