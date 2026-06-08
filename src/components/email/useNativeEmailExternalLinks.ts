@@ -1,5 +1,5 @@
 import { RefObject, useEffect } from 'react';
-import { isInNativeApp, openInSafari } from '@/integrations/natively/browserBridge';
+import { isInNativeApp } from '@/integrations/natively/browserBridge';
 
 function shouldOpenOutside(url: URL): boolean {
   const protocol = url.protocol.toLowerCase();
@@ -36,10 +36,24 @@ export function useNativeEmailExternalLinks(containerRef: RefObject<HTMLElement>
 
       if (!shouldOpenOutside(url)) return;
 
+      const nativeWindow = window as Window & typeof globalThis & {
+        natively?: { openExternalURL?: (url: string, useExternal?: boolean) => void };
+        Natively?: { openExternalURL?: (url: string, useExternal?: boolean) => void };
+      };
+      const natively = nativeWindow.natively || nativeWindow.Natively;
+
+      anchor.rel = 'noopener noreferrer';
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        anchor.target = '_blank';
+      }
+
+      if (!natively || typeof natively.openExternalURL !== 'function') {
+        return;
+      }
+
       event.preventDefault();
       event.stopPropagation();
-
-      openInSafari(url.toString());
+      natively.openExternalURL(url.toString(), true);
     };
 
     container.addEventListener('click', handleClick, true);
