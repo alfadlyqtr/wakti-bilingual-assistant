@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useGmailMessages, GmailMessage, GmailMessageFull, GmailLabel } from '@/hooks/useGmailMessages';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MailComposer, MailComposerPreset, MailComposerSubmitInput } from '@/components/email/MailComposer';
 import { EmailAiAssistant } from '@/components/email/EmailAiAssistant';
 import { EmailMessageAttachments } from '@/components/email/EmailMessageAttachments';
+import { useNativeEmailExternalLinks } from '@/components/email/useNativeEmailExternalLinks';
 import { EmailMessageAttachment } from '@/utils/emailAttachmentDownload';
 import {
   Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
@@ -170,6 +171,8 @@ function MessageView({ message, onBack, onReply, onForward, onDelete, onDownload
   const dateLabel = language === 'ar' ? 'التاريخ' : 'Date';
   const bodyHtml = message.body?.html || '';
   const bodyText = formatPlainEmailBody(message.body?.text || message.snippet || '', message.subject || '');
+  const htmlBodyRef = useRef<HTMLDivElement | null>(null);
+  useNativeEmailExternalLinks(htmlBodyRef, Boolean(bodyHtml));
 
   return (
     <div className="flex flex-col h-full">
@@ -229,6 +232,7 @@ function MessageView({ message, onBack, onReply, onForward, onDelete, onDownload
           <div className="px-1 py-1">
             {bodyHtml ? (
               <div
+                ref={htmlBodyRef}
                 className="email-message-html text-sm text-foreground"
                 dangerouslySetInnerHTML={{ __html: bodyHtml }}
               />

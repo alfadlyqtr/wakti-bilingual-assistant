@@ -13,6 +13,8 @@ site_url = "http://localhost:8080"
 additional_redirect_urls = ["http://localhost:8080/*", "http://localhost:8080/auth/confirm", "https://wakti.qa/*", "https://wakti.qa/auth/confirm"]
 jwt_expiry = 3600
 enable_signup = true
+enable_manual_linking = true
+enable_anonymous_sign_ins = true
 
 [auth.email]
 enable_signup = true
@@ -101,7 +103,7 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.wakti-ai-v2-brain-stream]
-verify_jwt = false
+verify_jwt = true
 
 [functions.wakti-co-draw]
 verify_jwt = false

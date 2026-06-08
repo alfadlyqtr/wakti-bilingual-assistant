@@ -44,6 +44,9 @@ const GOOGLE_PLACES_API_KEY = Deno.env.get('GOOGLE_PLACES') || GOOGLE_MAPS_API_K
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
+const AI_CHAT_TRIAL_LIMIT = 15;
+const ANONYMOUS_AI_CHAT_LIMIT = 7;
+
 type IpGeoLite = {
   city?: string;
   region?: string;
@@ -53,14 +56,159 @@ type IpGeoLite = {
   longitude?: number;
 };
 
+type RequestIdentity = {
+  token: string | null;
+  userId: string | null;
+  email: string | null;
+  isAnonymous: boolean;
+  verified: boolean;
+};
+
 const ipGeoCache = new Map<string, { at: number; geo: IpGeoLite | null }>();
+
+function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return null;
+  }
+
+  const token = authHeader.slice(7).trim();
+  return token || null;
+}
+
+function decodeJwtUserId(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return typeof payload?.sub === 'string' && payload.sub.trim() ? payload.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveRequestIdentity(
+  req: Request,
+  // deno-lint-ignore no-explicit-any
+  supabaseClient: any,
+): Promise<RequestIdentity> {
+  const token = getBearerToken(req);
+  if (!token) {
+    return { token: null, userId: null, email: null, isAnonymous: false, verified: false };
+  }
+
+  const { data: { user }, error } = await supabaseClient.auth.getUser(token);
+  if (error || !user) {
+    return { token, userId: decodeJwtUserId(token), email: null, isAnonymous: false, verified: false };
+  }
+
+  return {
+    token,
+    userId: user.id,
+    email: user.email ?? null,
+    isAnonymous: user.is_anonymous === true,
+    verified: true,
+  };
+}
+
+function isAnonymousChatOnlyRequest(
+  activeTrigger: string,
+  chatSubmode: string,
+  attachedFiles: unknown[],
+) {
+  return activeTrigger === 'chat' && chatSubmode === 'chat' && attachedFiles.length === 0;
+}
+
+function buildAnonymousChatOnlyPayload() {
+  return {
+    error: 'ANONYMOUS_CHAT_ONLY',
+    code: 'ANONYMOUS_CHAT_ONLY',
+    feature: 'ai_chat',
+    reason: 'feature_locked',
+    consumed: 0,
+    limit: ANONYMOUS_AI_CHAT_LIMIT,
+    remaining: ANONYMOUS_AI_CHAT_LIMIT,
+    anonymousChatOnly: true,
+  };
+}
+
+async function ensureAnonymousTrialReady(
+  // deno-lint-ignore no-explicit-any
+  supabaseClient: any,
+  identity: RequestIdentity,
+) {
+  if (!identity.userId || !identity.isAnonymous) {
+    return;
+  }
+
+  const { data: profile } = await supabaseClient
+    .from('profiles')
+    .select('id, email, free_access_start_at')
+    .eq('id', identity.userId)
+    .maybeSingle();
+
+  if (profile?.free_access_start_at) {
+    return;
+  }
+
+  const nowIso = new Date().toISOString();
+  const shortId = identity.userId.slice(0, 8);
+  const email = identity.email && identity.email.trim() ? identity.email : null;
+
+  if (profile?.id) {
+    const updatePayload: Record<string, unknown> = {
+      free_access_start_at: nowIso,
+      trial_popup_shown: true,
+    };
+
+    if (!profile.email && email) {
+      updatePayload.email = email;
+    }
+
+    const { error } = await supabaseClient
+      .from('profiles')
+      .update(updatePayload)
+      .eq('id', identity.userId);
+
+    if (error) {
+      throw error;
+    }
+    return;
+  }
+
+  const { error: upsertError } = await supabaseClient
+    .from('profiles')
+    .upsert({
+      id: identity.userId,
+      username: `guest${shortId}`,
+      display_name: `Guest ${shortId}`,
+      email,
+      free_access_start_at: nowIso,
+      trial_popup_shown: true,
+    }, { onConflict: 'id', ignoreDuplicates: false });
+
+  if (!upsertError) {
+    return;
+  }
+
+  const { error: updateError } = await supabaseClient
+    .from('profiles')
+    .update({
+      free_access_start_at: nowIso,
+      trial_popup_shown: true,
+    })
+    .eq('id', identity.userId);
+
+  if (updateError) {
+    throw updateError;
+  }
+}
 
 function checkAiChatTrialAccess(
   // deno-lint-ignore no-explicit-any
   supabaseClient: any,
   userId: string,
+  maxLimit: number = AI_CHAT_TRIAL_LIMIT,
 ) {
-  return checkTrialAccess(supabaseClient, userId, 'ai_chat', 15);
+  return checkTrialAccess(supabaseClient, userId, 'ai_chat', maxLimit);
 }
 
 function consumeAiChatTrialSuccess(
@@ -68,8 +216,9 @@ function consumeAiChatTrialSuccess(
   supabaseClient: any,
   userId: string,
   onceKey: string,
+  maxLimit: number = AI_CHAT_TRIAL_LIMIT,
 ) {
-  return checkAndConsumeTrialTokenOnce(supabaseClient, userId, 'ai_chat', 15, onceKey);
+  return checkAndConsumeTrialTokenOnce(supabaseClient, userId, 'ai_chat', maxLimit, onceKey);
 }
 
 function extractClientIp(req: Request): string {
@@ -1800,6 +1949,7 @@ Return 4-6 results max. For EACH place use EXACTLY this structure:
 **[Number]. [Name]** ([Area])
 [2-3 sentences: what it is + why it is good + who it is for. Include cuisine/type and price tier if available.]
 
+- **Reason:** [why it made the list / compelling reason to visit]
 - **Vibe:** [2-4 mood keywords]
 - **Must Try:** [specific dish, drink, or service]
 - **Status:** [Open / Closed / hours — only if verified]
@@ -4519,17 +4669,8 @@ serve(async (req) => {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
 
-  // Extract user ID from auth header for logging
-  let userId: string | undefined;
-  try {
-    const authHeader = req.headers.get('authorization');
-    if (authHeader?.startsWith('Bearer ')) {
-      const token = authHeader.slice(7);
-      // Decode JWT payload (middle part) to get user id
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      userId = payload.sub;
-    }
-  } catch { /* ignore auth parsing errors */ }
+  const authToken = getBearerToken(req);
+  let userId: string | undefined = authToken ? decodeJwtUserId(authToken) ?? undefined : undefined;
 
   const startTime = Date.now();
   let requestMessage = '';
@@ -4571,6 +4712,15 @@ serve(async (req) => {
 
       try {
         const body = parsedBody;
+        const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const identity = await resolveRequestIdentity(req, supabaseAdmin);
+        if (!identity.verified || !identity.userId) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: 'Unauthorized', code: 'UNAUTHORIZED' })}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+          return;
+        }
+        userId = identity.userId;
 
         const { 
           message, 
@@ -4594,6 +4744,7 @@ serve(async (req) => {
           : null;
         const rollingConversationSummary = normalizeContinuityText(conversationSummary, 700);
         const normalizedDurableMemory = normalizeDurableMemoryItems(durableMemory);
+        const normalizedAttachedFiles = Array.isArray(attachedFiles) ? attachedFiles : [];
 
         // Resolve engineTier from personalTouch payload ('speed' | 'intelligence', default 'speed')
         const engineTier: 'speed' | 'intelligence' =
@@ -4606,7 +4757,7 @@ serve(async (req) => {
         let effectiveTrigger = activeTrigger;
         // LAZY: classifySearchIntent only for chat mode ΓÇö run async, resolved before we need effectiveTrigger
         // for the search path. For chat path it resolves in background while we build context.
-        const shouldCheckSearchIntent = activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '');
+        const shouldCheckSearchIntent = !identity.isAnonymous && activeTrigger === 'chat' && chatSubmode === 'chat' && !isWaktiInvolved(message || '');
         const intentGatePromise = shouldCheckSearchIntent
           ? classifySearchIntent(message || '', language).catch(() => null)
           : Promise.resolve(null);
@@ -4627,12 +4778,22 @@ serve(async (req) => {
           return;
         }
 
+        if (identity.isAnonymous && !isAnonymousChatOnlyRequest(activeTrigger, chatSubmode, normalizedAttachedFiles)) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(buildAnonymousChatOnlyPayload())}\n\n`));
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+          controller.close();
+          return;
+        }
+
         const trialRequestId = (req.headers.get('x-request-id') || '').trim() || crypto.randomUUID();
+        const aiChatTrialLimit = identity.isAnonymous ? ANONYMOUS_AI_CHAT_LIMIT : AI_CHAT_TRIAL_LIMIT;
 
         // Trial gate: ai_chat ΓÇö 15 messages for free users
         if (userId) {
-          const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-          const trial = await checkAiChatTrialAccess(supabaseAdmin, userId);
+          if (identity.isAnonymous) {
+            await ensureAnonymousTrialReady(supabaseAdmin, identity);
+          }
+          const trial = await checkAiChatTrialAccess(supabaseAdmin, userId, aiChatTrialLimit);
           if (!trial.allowed) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ...buildTrialErrorPayload('ai_chat', trial), trialLimitReached: true })}\n\n`));
             controller.enqueue(encoder.encode('data: [DONE]\n\n'));
@@ -4653,10 +4814,9 @@ serve(async (req) => {
           ? await lookupIpGeo(clientIp)
           : null;
 
-        const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
         const emitAiChatTrialFinished = async (onceKey: string) => {
           if (!userId) return;
-          const trial = await consumeAiChatTrialSuccess(supabaseAdmin, userId, onceKey);
+          const trial = await consumeAiChatTrialSuccess(supabaseAdmin, userId, onceKey, aiChatTrialLimit);
           const trialPayload = buildTrialSuccessPayload('ai_chat', trial);
           if (!trialPayload) return;
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { trialQuotaFinished: trialPayload } })}\n\n`));
@@ -5131,6 +5291,7 @@ For EACH result use EXACTLY this structure:
 [2ΓÇô3 sentences max: what it is + why it's good + who it's for.
 Include cuisine/type, price ($/$$/$$$), and rating if available.]
 
+- **${language === 'ar' ? 'السبب' : 'Reason'}:** [why it's recommended]
 - **${language === 'ar' ? '╪º┘ä╪ú╪¼┘ê╪º╪í' : 'Vibe'}:** [2ΓÇô4 keywords]
 - **${language === 'ar' ? '╪¼╪▒┘æ╪¿' : 'Must Try'}:** [specific dish/service]
 - **${language === 'ar' ? '╪º┘ä╪░┘â╪º╪í' : 'Intelligence'}:** [Status (e.g., Open for another 2 hours / Closed Now) | Nearest Metro | Parking availability]
@@ -5350,8 +5511,8 @@ If you are running out of space, keep this order and drop the rest:
 
             const searchModelQuery = searchIntent === 'business'
               ? (language === 'ar'
-                  ? `${message}\n\n[قاعدة تنسيق إلزامية — يجب الالتزام بها]: يجب عليك تنسيق كل مكان مقترح بدقة كقائمة مهيكلة. ابدأ كل مكان بـ "**[الرقم]. [الاسم]** ([المنطقة])"، متبوعاً بوصف قصير، ثم هذه النقاط التفصيلية تماماً:\n- **Vibe:** [الكلمات المفتاحية]\n- **Must Try:** [التوصية]\n- **Status:** [مفتوح / مغلق]\n- **Google Maps:** [الرابط]\nلا تكتب فقرات عادية بدون هذه الحقول النقطية المصممة للبطاقات.`
-                  : `${message}\n\n[MANDATORY FORMATTING RULE — MUST COMPLY]: You MUST format each recommended place precisely as a structured list. Start each place with "**[Number]. [Name]** ([Area])", followed by a short description, and then exactly these bullet points:\n- **Vibe:** [keywords]\n- **Must Try:** [recommendation]\n- **Status:** [verified hours]\n- **Google Maps:** [link]\nDO NOT use plain paragraph style without these bullet fields designed for the cards.`)
+                  ? `${message}\n\n[قاعدة تنسيق إلزامية — يجب الالتزام بها]: يجب عليك تنسيق كل مكان مقترح بدقة كقائمة مهيكلة. ابدأ كل مكان بـ "**[الرقم]. [الاسم]** ([المنطقة])"، متبوعاً بوصف قصير، ثم هذه النقاط التفصيلية تماماً:\n- **Reason:** [سبب وجيه ومحدد لاختيار هذا المكان]\n- **Vibe:** [الكلمات المفتاحية]\n- **Must Try:** [التوصية]\n- **Status:** [مفتوح / مغلق]\n- **Google Maps:** [الرابط]\nلا تكتب فقرات عادية بدون هذه الحقول النقطية المصممة للبطاقات.`
+                  : `${message}\n\n[MANDATORY FORMATTING RULE — MUST COMPLY]: You MUST format each recommended place precisely as a structured list. Start each place with "**[Number]. [Name]** ([Area])", followed by a short description, and then exactly these bullet points:\n- **Reason:** [compelling reason to visit / why it made the list]\n- **Vibe:** [keywords]\n- **Must Try:** [recommendation]\n- **Status:** [verified hours]\n- **Google Maps:** [link]\nDO NOT use plain paragraph style without these bullet fields designed for the cards.`)
               : message;
 
             await streamGemini3WithSearch(
