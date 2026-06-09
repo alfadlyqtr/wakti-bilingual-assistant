@@ -116,19 +116,93 @@ Deno.serve(async (req: Request) => {
         }
 
         let account = data;
-        if (account?.access_token) {
+        let isExpired = false;
+
+        if (account?.token_expires_at) {
+          const expiresAt = new Date(account.token_expires_at).getTime();
+          if (Date.now() > expiresAt) {
+            isExpired = true;
+          } else if (expiresAt - Date.now() < 30 * 24 * 60 * 60 * 1000) {
+            // Less than 30 days left — try to refresh in the background!
+            console.log(`[instagram-connect-user] Token expires in < 30 days. Attempting auto-refresh...`);
+            try {
+              const refreshParams = new URLSearchParams({
+                grant_type: "ig_refresh_token",
+                access_token: account.access_token,
+              });
+              const refreshRes = await fetch(`https://graph.instagram.com/refresh_access_token?${refreshParams}`);
+              const refreshData = await refreshRes.json();
+              if (refreshData.access_token) {
+                const oldToken = account.access_token;
+                const newToken = refreshData.access_token;
+                const newExpiresIn = refreshData.expires_in || 5183944;
+                const newTokenExpiresAt = new Date(Date.now() + newExpiresIn * 1000).toISOString();
+                
+                // Update in user_instagram_accounts
+                const { error: updateAcctErr } = await supabase
+                  .from("user_instagram_accounts")
+                  .update({
+                    access_token: newToken,
+                    token_expires_at: newTokenExpiresAt,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", account.id);
+
+                if (updateAcctErr) {
+                  console.error("[instagram-connect-user] Failed to update refreshed token in DB:", updateAcctErr);
+                } else {
+                  console.log("[instagram-connect-user] Successfully refreshed Instagram token!");
+                  account.access_token = newToken;
+                  account.token_expires_at = newTokenExpiresAt;
+
+                  // Also update in chatbot_bots where this old token was stored
+                  const { error: updateBotErr } = await supabase
+                    .from("chatbot_bots")
+                    .update({
+                      instagram_access_token: newToken,
+                      updated_at: new Date().toISOString(),
+                    })
+                    .eq("user_id", userId)
+                    .eq("instagram_access_token", oldToken);
+
+                  if (updateBotErr) {
+                    console.error("[instagram-connect-user] Failed to update token in chatbot_bots:", updateBotErr);
+                  }
+                }
+              } else {
+                console.error("[instagram-connect-user] Refresh response missing access_token:", refreshData);
+              }
+            } catch (refreshErr) {
+              console.error("[instagram-connect-user] Error auto-refreshing Instagram token:", refreshErr);
+            }
+          }
+        }
+
+        if (account?.access_token && !isExpired) {
           const liveInfo = await fetchIGUserInfo(account.access_token);
           if (liveInfo?.account_type) {
             account = {
               ...account,
               account_type: liveInfo.account_type,
             };
+          } else {
+            // Meta returned an error — meaning the token was revoked or invalidated upstream
+            isExpired = true;
           }
         }
 
-        if (account) {
+        if (account && !isExpired) {
           const { access_token: _accessToken, ...safeAccount } = account;
           return jsonResponse({ connected: true, account: safeAccount });
+        }
+
+        // If it's expired or revoked, deactivate it so we don't try to use it again
+        if (account && isExpired) {
+          console.log(`[instagram-connect-user] Deactivating expired/invalid account ID=${account.id}`);
+          await supabase
+            .from("user_instagram_accounts")
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .eq("id", account.id);
         }
 
         return jsonResponse({ connected: false, account: null });
