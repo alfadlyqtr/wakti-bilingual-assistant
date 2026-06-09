@@ -45,6 +45,7 @@ export default function GroupChatPage() {
   const [aiSearchEnabled, setAiSearchEnabled] = useState(true);
   const [attachedImage, setAttachedImage] = useState<{ url: string; type: string; size: number } | null>(null);
   const [waktiTyping, setWaktiTyping] = useState(false);
+  const [pendingWaktiSince, setPendingWaktiSince] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
@@ -212,10 +213,15 @@ export default function GroupChatPage() {
   // Turn off Wakti typing indicator when a new Wakti message arrives
   useEffect(() => {
     const lastMsg = messages[messages.length - 1];
-    if (lastMsg?.sender_id === WAKTI_AI_ID && waktiTyping) {
+    if (
+      lastMsg?.sender_id === WAKTI_AI_ID &&
+      waktiTyping &&
+      (!pendingWaktiSince || new Date(lastMsg.created_at).getTime() >= new Date(pendingWaktiSince).getTime())
+    ) {
       setWaktiTyping(false);
+      setPendingWaktiSince(null);
     }
-  }, [messages, waktiTyping]);
+  }, [messages, pendingWaktiSince, waktiTyping]);
 
   // Welcome back summary after long absence
   useEffect(() => {
@@ -342,7 +348,9 @@ export default function GroupChatPage() {
         setAttachedImage(null);
         // If @wakti was mentioned and Wakti IS in the group, trigger AI response
         if (hasMention && waktiInGroup && data?.id) {
+          const typingStartedAt = new Date().toISOString();
           setWaktiTyping(true);
+          setPendingWaktiSince(typingStartedAt);
           const triggerPayload: any = {
             trigger_type: "mention",
             message_id: data.id,
@@ -355,14 +363,37 @@ export default function GroupChatPage() {
             if (senderLoc) triggerPayload.sender_location = senderLoc;
           }
           triggerWaktiAI(conversationId!, triggerPayload)
-            .then(() => {
-              // Typing indicator will be hidden by useEffect when new message arrives
-              // But set a max display time just in case
-              setTimeout(() => setWaktiTyping(false), 30000);
+            .then(async () => {
+              const startTime = Date.now();
+              const maxWaitMs = 30000;
+              const pollIntervalMs = 1500;
+
+              while (Date.now() - startTime < maxWaitMs) {
+                await queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
+                await queryClient.refetchQueries({ queryKey: ["groupConversationMessages", conversationId], exact: true });
+
+                const refreshedMessages = (queryClient.getQueryData(["groupConversationMessages", conversationId]) as any[]) || [];
+                const refreshedLastWakti = [...refreshedMessages].reverse().find((message: any) => message.sender_id === WAKTI_AI_ID);
+
+                if (
+                  refreshedLastWakti?.created_at &&
+                  new Date(refreshedLastWakti.created_at).getTime() >= new Date(typingStartedAt).getTime()
+                ) {
+                  setWaktiTyping(false);
+                  setPendingWaktiSince(null);
+                  return;
+                }
+
+                await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+              }
+
+              setWaktiTyping(false);
+              setPendingWaktiSince(null);
             })
             .catch((err: any) => {
               console.error("Wakti AI trigger failed:", err);
               setWaktiTyping(false);
+              setPendingWaktiSince(null);
             });
         }
       },

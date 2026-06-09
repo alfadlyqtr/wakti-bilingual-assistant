@@ -3167,6 +3167,27 @@ function createGroundedPlaceCard(seed: Partial<GroundedPlaceCard> = {}): Grounde
   };
 }
 
+function normalizeLabel(label: string): string {
+  const clean = label.trim().toLowerCase();
+  
+  if (clean === 'reason' || clean === 'السبب') return 'reason';
+  if (clean === 'vibe' || clean === 'الأجواء' || clean === 'الجو' || clean === 'أجواء' || clean.includes('أجواء') || clean.includes('vibe')) return 'vibe';
+  if (clean === 'must-try' || clean === 'must try' || clean === 'musttry' || clean === 'جرّب' || clean === 'جرب' || clean === 'لا تفوت' || clean === 'لازم تجربه' || clean === 'لازم تجرب') return 'must-try';
+  if (clean === 'status' || clean === 'الحالة' || clean === 'الحاله' || clean === 'الذكاء') return 'status';
+  if (clean === 'rating' || clean === 'التقييم' || clean === 'التقيم') return 'rating';
+  if (clean === 'google reviews' || clean === 'reviews' || clean === 'مراجعات' || clean === 'الآراء' || clean === 'آراء') return 'reviews';
+  if (clean === 'google maps' || clean === 'maps' || clean === 'maps link' || clean === 'location' || clean === 'خرائط' || clean === 'موقع' || clean === 'الموقع' || clean === 'العنوان' || clean === 'خرائط جوجل') return 'maps';
+  if (clean === 'phone' || clean === 'الهاتف' || clean === 'رقم' || clean === 'تلفون') return 'phone';
+  if (clean === 'website' || clean === 'الموقع الإلكتروني' || clean === 'الموقع الالكتروني' || clean === 'الموقع') return 'website';
+  if (clean === 'instagram' || clean === 'إنستغرام' || clean === 'انستغرام' || clean === 'إنستقرام' || clean === 'انستقرام') return 'instagram';
+  if (clean === 'facebook' || clean === 'فيسبوك') return 'facebook';
+  if (clean === 'tiktok' || clean === 'تيك توك' || clean === 'تيكتوك') return 'tiktok';
+  if (clean === 'whatsapp' || clean === 'واتساب') return 'whatsapp';
+  if (clean === 'email' || clean === 'البريد' || clean === 'البريد الإلكتروني' || clean === 'البريد الالكتروني' || clean === 'إيميل' || clean === 'ايميل') return 'email';
+  
+  return clean;
+}
+
 function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
   const places: GroundedPlaceCard[] = [];
   let current: GroundedPlaceCard | null = null;
@@ -3183,6 +3204,16 @@ function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
     const line = rawLine.trim();
     if (!line) continue;
 
+    const headingMatch = line.match(/^##+\s+(?:\d+\.\s+)?\*?\*?([^*:(]+)\*?\*?\s*(?:\(([^)]+)\))?/);
+    if (headingMatch) {
+      commit();
+      current = createGroundedPlaceCard({
+        name: toTrimmedString(headingMatch[1]),
+        address: headingMatch[2] ? toTrimmedString(headingMatch[2]) : ''
+      });
+      continue;
+    }
+
     const bulletBoldMatch = line.match(/^(?:[-*â€¢]|\d+\.)\s+\*\*([^*]+)\*\*\s*(.*)$/);
     if (!bulletBoldMatch) continue;
 
@@ -3197,7 +3228,7 @@ function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
 
     if (!current) continue;
 
-    const field = boldText.slice(0, -1).trim().toLowerCase();
+    const field = normalizeLabel(boldText.slice(0, -1));
     const links = extractMarkdownLinks(rest);
     const plain = stripMarkdownLinks(rest);
     applyExtractedLinksToPlace(current, rest);
@@ -3303,8 +3334,8 @@ function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
 function parseGroundedPlacesFromTextLoose(text: string): GroundedPlaceCard[] {
   const places: GroundedPlaceCard[] = [];
   let current: GroundedPlaceCard | null = null;
-  const knownLabelPattern = /^(Reason|Vibe|Must-?Try|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/i;
-  const segmentPattern = /(Reason|Vibe|Must-?Try|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/gi;
+  const knownLabelPattern = /^(Reason|السبب|Vibe|الأجواء|الجو|أجواء|Must-?Try|Must Try|Must-?Try|جرّب|جرب|لا تفوت|لازم تجربه|Status|الحالة|الحاله|الذكاء|Rating|التقييم|التقيم|Google Reviews|Reviews|مراجعات|الآراء|Google Maps|Maps(?: Link)?|Location|خرائط|الموقع|موقع|العنوان|Phone|الهاتف|رقم|تلفون|Website|الموقع الإلكتروني|الموقع الالكتروني|Instagram|إنستغرام|انستغرام|إنستقرام|Facebook|فيسبوك|TikTok|تيك توك|WhatsApp|واتساب|Email|البريد|إيميل|ايميل)\s*:/i;
+  const segmentPattern = /(Reason|السبب|Vibe|الأجواء|الجو|أجواء|Must-?Try|Must Try|Must-?Try|جرّب|جرب|لا تفوت|لازم تجربه|Status|الحالة|الحاله|الذكاء|Rating|التقييم|التقيم|Google Reviews|Reviews|مراجعات|الآراء|Google Maps|Maps(?: Link)?|Location|خرائط|الموقع|موقع|العنوان|Phone|الهاتف|رقم|تلفون|Website|الموقع الإلكتروني|الموقع الالكتروني|Instagram|إنستغرام|انستغرام|إنستقرام|Facebook|فيسبوك|TikTok|تيك توك|WhatsApp|واتساب|Email|البريد|إيميل|ايميل)\s*:/gi;
 
   const commit = () => {
     if (!current) return;
@@ -3332,6 +3363,16 @@ function parseGroundedPlacesFromTextLoose(text: string): GroundedPlaceCard[] {
   for (const rawLine of (text || '').split('\n')) {
     const line = rawLine.trim();
     if (!line) continue;
+
+    const headingMatch = line.match(/^##+\s+(?:\d+\.\s+)?\*?\*?([^*:(]+)\*?\*?\s*(?:\(([^)]+)\))?/);
+    if (headingMatch && !knownLabelPattern.test(line)) {
+      commit();
+      current = createGroundedPlaceCard({
+        name: toTrimmedString(headingMatch[1]),
+        address: headingMatch[2] ? toTrimmedString(headingMatch[2]) : ''
+      });
+      continue;
+    }
 
     const bulletMatch = line.match(/^(?:[-*â€¢]|\d+\.)\s+(.*)$/);
     const rawValue = (bulletMatch?.[1] || line).trim();
@@ -3363,7 +3404,7 @@ function parseGroundedPlacesFromTextLoose(text: string): GroundedPlaceCard[] {
       const links = extractMarkdownLinks(segmentRawValue);
       const directUrls = extractDirectUrls(segmentRawValue);
       const firstUrl = normalizeLikelyExternalUrl(links[0]?.url || directUrls[0] || plain);
-      const field = segment.label;
+      const field = normalizeLabel(segment.label);
       applyExtractedLinksToPlace(current, segmentRawValue);
 
       if (field === 'reason') {
@@ -3479,20 +3520,28 @@ function mergeGroundedPlaceCard(base: GroundedPlaceCard, patch: Partial<Grounded
 }
 
 function mergeGroundedPlaceLists(primary: GroundedPlaceCard[], secondary: GroundedPlaceCard[]): GroundedPlaceCard[] {
-  const merged = new Map<string, GroundedPlaceCard>();
+  const merged: GroundedPlaceCard[] = [];
+  
   const addPlace = (place: GroundedPlaceCard) => {
-    const key = [place.placeId, place.name, place.mapsUrl, place.websiteUrl]
-      .map((item) => (typeof item === 'string' ? item.trim() : ''))
-      .filter(Boolean)
-      .join('|');
-    if (!key) return;
-    const existing = merged.get(key);
-    merged.set(key, existing ? mergeGroundedPlaceCard(existing, place) : place);
+    if (!place || !place.name) return;
+    
+    // Check if we already have a place matching by placeId OR by business name match
+    const existingIndex = merged.findIndex((existing) => {
+      if (place.placeId && existing.placeId && place.placeId === existing.placeId) return true;
+      if (isBusinessNameMatch(place.name, existing.name)) return true;
+      return false;
+    });
+    
+    if (existingIndex !== -1) {
+      merged[existingIndex] = mergeGroundedPlaceCard(merged[existingIndex], place);
+    } else {
+      merged.push(place);
+    }
   };
 
   for (const place of primary) addPlace(place);
   for (const place of secondary) addPlace(place);
-  return Array.from(merged.values());
+  return merged;
 }
 
 async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partial<GroundedPlaceCard>> {
@@ -4573,10 +4622,13 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult
 // Detect search intent from user query
  function detectSearchIntent(query: string): 'business' | 'news' | 'sports' | 'url' | 'research' | 'general' {
   const lower = query.toLowerCase();
-  const hasBusinessKeyword = /\b(near me|nearby|closest|nearest|location|address|phone|email|hours|open|closed|directions|map|restaurant|restaurants|cafe|cafes|coffee|breakfast|brunch|lunch|dinner|burger|pizza|shawarma|bakery|dessert|ice cream|icecream|gelato|soft serve|boba|tea|juice|smoothie|sushi|shawerma|sweet|sweets|pastry|shop|store|mall|hotel|hospital|gym|bank|pharmacy|pharmacies|salon|spa|barber|clinic|supermarket|grocery|bookstore|library)\b/i.test(lower);
+  const hasBusinessKeyword = /\b(near me|nearby|closest|nearest|location|address|phone|email|hours|open|closed|directions|map|restaurant|restaurants|cafe|cafes|coffee|breakfast|brunch|lunch|dinner|burger|pizza|shawarma|bakery|dessert|ice cream|icecream|gelato|soft serve|boba|tea|juice|smoothie|sushi|shawerma|sweet|sweets|pastry|shop|store|mall|hotel|hotels|hospital|hospitals|gym|gyms|bank|banks|pharmacy|pharmacies|salon|salons|spa|spas|barber|barbers|clinic|clinics|supermarket|supermarkets|grocery|groceries|bookstore|library)\b/i.test(lower);
   const hasBusinessDiscoveryPhrase = /\b(best|top|recommend|recommended|suggest|suggested|find|looking for|where is|where can i|where do i|get me|show me|authentic|good|great)\b/i.test(lower);
-  const hasArabicBusinessKeyword = /\u0642\u0631\u064a\u0628|\u0628\u0627\u0644\u0642\u0631\u0628|\u0627\u0644\u0623\u0642\u0631\u0628|\u0627\u0642\u0631\u0628|\u0645\u0648\u0642\u0639|\u0639\u0646\u0648\u0627\u0646|\u0647\u0627\u062a\u0641|\u0631\u0642\u0645|\u0633\u0627\u0639\u0627\u062a|\u0645\u0641\u062a\u0648\u062d|\u0645\u063a\u0644\u0642|\u0627\u062a\u062c\u0627\u0647\u0627\u062a|\u062e\u0631\u064a\u0637\u0629|\u0645\u0637\u0639\u0645|\u0645\u0637\u0627\u0639\u0645|\u0645\u0642\u0647\u0649|\u0643\u0648\u0641\u064a|\u0641\u0637\u0648\u0631|\u0625\u0641\u0637\u0627\u0631|\u063a\u062f\u0627\u0621|\u0639\u0634\u0627\u0621|\u0645\u062d\u0644|\u0645\u062a\u062c\u0631|\u0645\u0648\u0644|\u0641\u0646\u062f\u0642|\u0645\u0633\u062a\u0634\u0641\u0649|\u0635\u064a\u062f\u0644\u064a\u0629|\u0628\u0646\u0643|\u0635\u0627\u0644\u0648\u0646|\u0633\u0628\u0627|\u062d\u0644\u0627\u0642|\u0639\u064a\u0627\u062f\u0629|\u0633\u0648\u0628\u0631\u0645\u0627\u0631\u0643\u062a/.test(query);
-  const hasArabicDiscoveryPhrase = /\u0623\u0641\u0636\u0644|\u0627\u062d\u0633\u0646|\u0631\u0634\u062d|\u0627\u0642\u062a\u0631\u062d|\u0648\u064a\u0646|\u0623\u064a\u0646|\u0623\u0628\u063a\u0649|\u0627\u0628\u064a|\u0623\u0631\u064a\u062f|\u0627\u062f\u0648\u0631|\u0623\u062f\u0648\u0631|\u062f\u0644\u0646\u064a|\u062f\u0644\u0651\u0646\u064a|\u0644\u0642\u0650|\u0644\u0642\u064a\u062a/.test(query);
+  
+  const hasArabicBusinessKeyword = /(قريب|بالقرب|الأقرب|اقرب|موقع|عنوان|هاتف|رقم|ساعات|مفتوح|مغلق|اتجاهات|خريطة|خرائط|مطعم|مطاعم|مقهى|مقاهي|كوفي|كافيه|كافيهات|كوفيهات|فطور|إفطار|غداء|عشاء|محل|محلات|متجر|متاجر|دكان|دكاكين|مول|مولات|مجمع|مجمعات|فندق|فنادق|مستشفى|مستشفيات|مركز طبي|صيدلية|صيدليات|بنك|بنوك|مصرف|مصارف|صالون|صالونات|مشغل|سبا|حلاق|حلاقين|عيادة|عيادات|سوبرماركت|سوبرماركتات|بقالة|بقالات|الميرة|ميرة|نادي|نوادي|جيم)/i.test(query);
+  const hasArabicDiscoveryPhrase = /(أفضل|افضل|أحسن|احسن|أشهر|اشهر|ممتاز|جميل|حلو|أرخص|ارخص|يرشح|ترشيح|اقتراح|وين|أين|اين|أبغا|أبغي|أبقى|ابغى|ابي|أريد|اريد|بدي|بدّي|أدور|ادور|نبحث|دلي|دلني|دلينا|لقي|لقيت)/i.test(query);
+  const looksLikeArabicPlaceDiscovery = /(أفضل|افضل|أحسن|احسن|أشهر|اشهر|ممتاز|جميل|حلو|أرخص|ارخص)\s+([^\s]+){1,3}\s+(في|بـ|قرب|حول|داخل|عند)/i.test(query);
+
   const hasSportsKeyword = /\b(score|scores|match|matches|fixture|fixtures|standings|table|league|cup|goal|goals|assist|assists|playoff|playoffs|nba|nfl|mlb|nhl|fifa|uefa|champions league|premier league|la liga|serie a|bundesliga|tennis|formula 1|f1|cricket|world cup|vs\.?|result|results)\b/i.test(lower);
   const hasResearchKeyword = /\b(explain|comparison|compare|history|historical|science|scientific|research|why|how does|how do|pros and cons|advantages|disadvantages|guide|tutorial|what is|what are|best way to|difference between)\b/i.test(lower);
   const looksLikePlaceDiscovery = /\b(best|top|good|great|authentic|famous)\b[\s\S]{0,40}\b(in|near|around)\b/i.test(lower) && !hasSportsKeyword;
@@ -4588,6 +4640,7 @@ async function reverseGeocode(lat: number, lng: number): Promise<GeocodingResult
   if (/\b(where is|how to get to|find|search for)\b/i.test(lower) && /\b(place|business|store|restaurant|cafe|hotel)\b/i.test(lower)) return 'business';
   if (hasArabicBusinessKeyword) return 'business';
   if (hasArabicBusinessKeyword && hasArabicDiscoveryPhrase) return 'business';
+  if (looksLikeArabicPlaceDiscovery) return 'business';
   if (hasSportsKeyword) return 'sports';
   if (/\b(news|latest|breaking|update|today|yesterday|recent|current events|what happened|headlines)\b/i.test(lower)) return 'news';
   if (hasResearchKeyword) return 'research';

@@ -189,7 +189,7 @@ function SearchMessageCard({
   const hasGroundedPlaceCards = hasGroundedPlaces(message as any);
   const rawContent = message.content || '';
   const cleanedContent = stripReminderBlocks(rawContent);
-  const isPlaceTextFormat = /^##\s+\d+\.\s+.+|\*\*(Vibe|Must.?Try|Reason):/im.test(cleanedContent);
+  const isPlaceTextFormat = /^##\s+\d+\.\s+.+|\*\*(Vibe|Must.?Try|Reason|السبب|الأجواء|الجو|أجواء|جرّب|جرب|لا تفوت|لازم تجربه|الموقع|خرائط)\s*:/im.test(cleanedContent);
   const isPlaceSearch = (typeof resolvedBrowsingData?.searchType === 'string' && resolvedBrowsingData.searchType.trim().toLowerCase() === 'business') || isPlaceTextFormat;
   const hasStructuredSearchCards = Array.isArray(resolvedBrowsingData?.cards) && resolvedBrowsingData.cards.length > 0;
 

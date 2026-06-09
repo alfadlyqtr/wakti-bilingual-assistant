@@ -55,6 +55,65 @@ function stripTrailingActionJSON(text: string): string {
   return text.trim();
 }
 
+function deduplicateAndMergePlaces(list: any[]): any[] {
+  const merged: any[] = [];
+  for (const place of list) {
+    if (!place || !place.name) continue;
+    const existingIndex = merged.findIndex((existing) => {
+      if (place.placeId && existing.placeId && place.placeId === existing.placeId) return true;
+      const n1 = place.name.trim().toLowerCase();
+      const n2 = existing.name.trim().toLowerCase();
+      return n1 === n2 || n1.includes(n2) || n2.includes(n1);
+    });
+    if (existingIndex !== -1) {
+      const existing = merged[existingIndex];
+      merged[existingIndex] = {
+        ...existing,
+        ...place,
+        placeId: existing.placeId || place.placeId || '',
+        name: existing.name || place.name || '',
+        address: existing.address || place.address || '',
+        latitude: existing.latitude ?? place.latitude ?? null,
+        longitude: existing.longitude ?? place.longitude ?? null,
+        rating: existing.rating ?? place.rating ?? null,
+        userRatingCount: existing.userRatingCount ?? place.userRatingCount ?? null,
+        websiteUrl: existing.websiteUrl || place.websiteUrl || '',
+        phone: existing.phone || place.phone || '',
+        email: existing.email || place.email || '',
+        openNow: existing.openNow ?? place.openNow ?? null,
+        businessStatus: existing.businessStatus || place.businessStatus || '',
+        reason: existing.reason || place.reason || '',
+        vibe: existing.vibe || place.vibe || '',
+        mustTry: existing.mustTry || place.mustTry || '',
+        editorialSummary: existing.editorialSummary || place.editorialSummary || '',
+        mapsUrl: existing.mapsUrl || place.mapsUrl || '',
+        instagramUrl: existing.instagramUrl || place.instagramUrl || '',
+        facebookUrl: existing.facebookUrl || place.facebookUrl || '',
+        tiktokUrl: existing.tiktokUrl || place.tiktokUrl || '',
+        whatsappUrl: existing.whatsappUrl || place.whatsappUrl || '',
+        photoUrl: existing.photoUrl || place.photoUrl || '',
+        reviewSnippets: (Array.isArray(existing.reviewSnippets) && existing.reviewSnippets.length > 0)
+          ? existing.reviewSnippets
+          : (Array.isArray(place.reviewSnippets) ? place.reviewSnippets : []),
+      };
+    } else {
+      merged.push(place);
+    }
+  }
+  return merged;
+}
+
+function deduplicateCards(list: any[]): any[] {
+  const seen = new Set<string>();
+  return list.filter((card) => {
+    if (!card || !card.title) return false;
+    const key = card.title.trim().toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 const WaktiAIV2 = () => {
   const { user: authUser } = useAuth();
   const location = useLocation();
@@ -891,14 +950,14 @@ const WaktiAIV2 = () => {
                       ...(Array.isArray(currentBrowsingData?.supports) ? currentBrowsingData.supports : []),
                       ...(Array.isArray(liveBrowsingData?.supports) ? liveBrowsingData.supports : []),
                     ],
-                    cards: [
+                    cards: deduplicateCards([
                       ...(Array.isArray(currentBrowsingData?.cards) ? currentBrowsingData.cards : []),
                       ...(Array.isArray(liveBrowsingData?.cards) ? liveBrowsingData.cards : []),
-                    ],
-                    places: [
+                    ]),
+                    places: deduplicateAndMergePlaces([
                       ...(Array.isArray(currentBrowsingData?.places) ? currentBrowsingData.places : []),
                       ...(Array.isArray(liveBrowsingData?.places) ? liveBrowsingData.places : []),
-                    ],
+                    ]),
                     cardType: typeof liveBrowsingData?.cardType === 'string'
                       ? liveBrowsingData.cardType
                       : currentBrowsingData?.cardType,
@@ -983,10 +1042,10 @@ const WaktiAIV2 = () => {
         const callbackBrowsingData = streamMeta?.browsingData && typeof streamMeta.browsingData === 'object'
           ? streamMeta.browsingData
           : (streamMeta?.geminiSearch && typeof streamMeta.geminiSearch === 'object' ? streamMeta.geminiSearch : undefined);
-        const mergedPlaces = [
+        const mergedPlaces = deduplicateAndMergePlaces([
           ...(Array.isArray(callbackBrowsingData?.places) ? callbackBrowsingData.places : []),
           ...(Array.isArray(returnedBrowsingData?.places) ? returnedBrowsingData.places : []),
-        ];
+        ]);
         const resolvedBrowsingData = (callbackBrowsingData || returnedBrowsingData)
           ? {
               ...(returnedBrowsingData || {}),
@@ -1009,10 +1068,10 @@ const WaktiAIV2 = () => {
                 ...(Array.isArray(returnedBrowsingData?.supports) ? returnedBrowsingData.supports : []),
                 ...(Array.isArray(callbackBrowsingData?.supports) ? callbackBrowsingData.supports : []),
               ],
-              cards: [
+              cards: deduplicateCards([
                 ...(Array.isArray(returnedBrowsingData?.cards) ? returnedBrowsingData.cards : []),
                 ...(Array.isArray(callbackBrowsingData?.cards) ? callbackBrowsingData.cards : []),
-              ],
+              ]),
               places: mergedPlaces,
               finishReason: typeof callbackBrowsingData?.finishReason === 'string'
                 ? callbackBrowsingData.finishReason

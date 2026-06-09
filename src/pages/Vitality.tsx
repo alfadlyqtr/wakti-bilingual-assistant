@@ -9,6 +9,22 @@ import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/wak
 
 type DataSource = 'whoop' | 'healthkit';
 
+function resolveRequestedSource(
+  searchParams: URLSearchParams,
+  operatorPayload: ReturnType<typeof readWaktiOperatorPayload>
+): DataSource | null {
+  const operatorSource = operatorPayload?.vitality?.dataSource;
+  if (operatorSource === 'whoop' || operatorSource === 'healthkit') {
+    return operatorSource;
+  }
+
+  const sourceParam = (searchParams.get('source') || '').toLowerCase();
+  if (sourceParam === 'whoop' || sourceParam === 'healthkit') {
+    return sourceParam;
+  }
+
+  return null;
+}
 /**
  * Vitality Page - Main entry point for health data
  * Provides top-level tabs for switching between WHOOP and HealthKit
@@ -22,7 +38,7 @@ export default function Vitality() {
   const handledOperatorPayloadIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    const requestedSource = operatorPayload?.vitality?.dataSource || ((searchParams.get('source') || '').toLowerCase() === 'healthkit' ? 'healthkit' : 'whoop');
+    const requestedSource = resolveRequestedSource(searchParams, operatorPayload);
     if (!requestedSource) return;
     if (dataSource !== requestedSource) {
       setDataSource(requestedSource);
@@ -143,3 +159,4 @@ function FitnessHealthInner() {
   // The duplicate header is acceptable for MVP - can be refined later
   return <FitnessHealth />;
 }
+

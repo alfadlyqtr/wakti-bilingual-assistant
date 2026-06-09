@@ -276,8 +276,29 @@ function formatPhoneDisplay(value?: string) {
   return digits.match(/.{1,4}/g)?.join(' ') || digits;
 }
 
+function normalizeLabel(label: string): string {
+  const clean = label.trim().toLowerCase();
+  
+  if (clean === 'reason' || clean === 'السبب') return 'reason';
+  if (clean === 'vibe' || clean === 'الأجواء' || clean === 'الجو' || clean === 'أجواء' || clean.includes('أجواء') || clean.includes('vibe')) return 'vibe';
+  if (clean === 'must-try' || clean === 'must try' || clean === 'musttry' || clean === 'جرّب' || clean === 'جرب' || clean === 'لا تفوت' || clean === 'لازم تجربه' || clean === 'لازم تجرب') return 'must-try';
+  if (clean === 'status' || clean === 'الحالة' || clean === 'الحاله' || clean === 'الذكاء') return 'status';
+  if (clean === 'rating' || clean === 'التقييم' || clean === 'التقيم') return 'rating';
+  if (clean === 'google reviews' || clean === 'reviews' || clean === 'مراجعات' || clean === 'الآراء' || clean === 'آراء') return 'reviews';
+  if (clean === 'google maps' || clean === 'maps' || clean === 'maps link' || clean === 'location' || clean === 'خرائط' || clean === 'موقع' || clean === 'الموقع' || clean === 'العنوان' || clean === 'خرائط جوجل') return 'maps';
+  if (clean === 'phone' || clean === 'الهاتف' || clean === 'رقم' || clean === 'تلفون') return 'phone';
+  if (clean === 'website' || clean === 'الموقع الإلكتروني' || clean === 'الموقع الالكتروني' || clean === 'الموقع') return 'website';
+  if (clean === 'instagram' || clean === 'إنستغرام' || clean === 'انستغرام' || clean === 'إنستقرام' || clean === 'انستقرام') return 'instagram';
+  if (clean === 'facebook' || clean === 'فيسبوك') return 'facebook';
+  if (clean === 'tiktok' || clean === 'تيك توك' || clean === 'تيكتوك') return 'tiktok';
+  if (clean === 'whatsapp' || clean === 'واتساب') return 'whatsapp';
+  if (clean === 'email' || clean === 'البريد' || clean === 'البريد الإلكتروني' || clean === 'البريد الالكتروني' || clean === 'إيميل' || clean === 'ايميل') return 'email';
+  
+  return clean;
+}
+
 function extractSegments(value: string) {
-  const matches = Array.from(value.matchAll(/(Reason|Vibe|Must-?\s*Try|Status|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/gi));
+  const matches = Array.from(value.matchAll(/(Reason|السبب|Vibe|الأجواء|الجو|أجواء|Must-?Try|Must Try|Must-?Try|جرّب|جرب|لا تفوت|لازم تجربه|Status|الحالة|الحاله|الذكاء|Rating|التقييم|التقيم|Google Reviews|Reviews|مراجعات|الآراء|Google Maps|Maps(?: Link)?|Location|خرائط|الموقع|موقع|العنوان|Phone|الهاتف|رقم|تلفون|Website|الموقع الإلكتروني|الموقع الالكتروني|Instagram|إنستغرام|انستغرام|إنستقرام|Facebook|فيسبوك|TikTok|تيك توك|WhatsApp|واتساب|Email|البريد|إيميل|ايميل)\s*:/gi));
   if (matches.length === 0) return [] as Array<{ label: string; value: string }>;
   return matches.map((match, index) => {
     const start = match.index ?? 0;
@@ -285,7 +306,7 @@ function extractSegments(value: string) {
     const valueStart = start + match[0].length;
     const valueEnd = index + 1 < matches.length ? (matches[index + 1].index ?? value.length) : value.length;
     return {
-      label: label.toLowerCase().replace(/\s+/g, ''),
+      label: normalizeLabel(label),
       value: value.slice(valueStart, valueEnd).trim(),
     };
   });
@@ -321,7 +342,7 @@ function createFallbackPlace(seed: Record<string, unknown>) {
 function parsePlacesFromMessageContent(content?: string) {
   const places: any[] = [];
   let current: any = null;
-  const knownLabelPattern = /^(?:(?:[-*•]|\d+\.)\s+)?(Reason|Vibe|Must-?\s*Try|Status|Google Maps|Maps(?: Link)?|Location|Phone|Website|Instagram|Facebook|TikTok|WhatsApp|Email|Rating|Google Reviews|Reviews|Social(?: Links?)?|Socials?)\s*:/i;
+  const knownLabelPattern = /^(?:(?:[-*•]|\d+\.)\s+)?(Reason|السبب|Vibe|الأجواء|الجو|أجواء|Must-?Try|Must Try|Must-?Try|جرّب|جرب|لا تفوت|لازم تجربه|Status|الحالة|الحاله|الذكاء|Rating|التقييم|التقيم|Google Reviews|Reviews|مراجعات|الآراء|Google Maps|Maps(?: Link)?|Location|خرائط|الموقع|موقع|العنوان|Phone|الهاتف|رقم|تلفون|Website|الموقع الإلكتروني|الموقع الالكتروني|Instagram|إنستغرام|انستغرام|إنستقرام|Facebook|فيسبوك|TikTok|تيك توك|WhatsApp|واتساب|Email|البريد|إيميل|ايميل)\s*:/i;
 
   const commit = () => {
     if (!current?.name) return;
@@ -332,6 +353,18 @@ function parsePlacesFromMessageContent(content?: string) {
   for (const rawLine of (content || '').split('\n')) {
     const trimmedLine = rawLine.trim();
     if (!trimmedLine) continue;
+
+    const headingMatch = trimmedLine.match(/^##+\s+(?:\d+\.\s+)?\*?\*?([^*:(]+)\*?\*?\s*(?:\(([^)]+)\))?/);
+    if (headingMatch && !knownLabelPattern.test(trimmedLine)) {
+      commit();
+      const placeName = headingMatch[1].trim();
+      const address = headingMatch[2] ? headingMatch[2].trim() : '';
+      current = createFallbackPlace({
+        name: toCleanString(placeName),
+        address: toCleanString(address)
+      });
+      continue;
+    }
 
     const bulletMatch = trimmedLine.match(/^(?:[-*•]|\d+\.)\s+(.*)$/);
     const isSegment = knownLabelPattern.test(trimmedLine.replace(/\*/g, '').trim());
@@ -531,9 +564,13 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
     // the backend card lacks them (these are narrative fields the Places API does not provide).
     const parsedPlaces = parsePlacesFromMessageContent(message?.content);
     if (parsedPlaces.length === 0) return backendPlaces;
-    return backendPlaces.map((backendPlace: any) => {
+    
+    const matchedParsedNames = new Set<string>();
+    const mapped = backendPlaces.map((backendPlace: any) => {
       const parsedMatch = parsedPlaces.find((pp: any) => {
-        return isNameMatch(backendPlace?.name, pp?.name);
+        const match = isNameMatch(backendPlace?.name, pp?.name);
+        if (match && pp?.name) matchedParsedNames.add(pp.name.toLowerCase());
+        return match;
       });
       if (!parsedMatch) return backendPlace;
       return {
@@ -547,6 +584,10 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
         whatsappUrl: toCleanString(backendPlace.whatsappUrl) || toCleanString(parsedMatch.whatsappUrl),
       };
     });
+    
+    // Append unmatched parsed fallback places so the user doesn't lose them if Google Places search missed them!
+    const unmatched = parsedPlaces.filter((pp: any) => pp?.name && !matchedParsedNames.has(pp.name.toLowerCase()));
+    return [...mapped, ...unmatched];
   }
 
   return parsePlacesFromMessageContent(message?.content);

@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { generateGemini } from "../_shared/gemini.ts";
 
 // CORS headers
 const corsHeaders = {
@@ -35,31 +36,55 @@ async function callGemini(
   systemInstruction?: string,
   useGrounding = false,
 ): Promise<any> {
+  const stableModel = "gemini-2.5-flash-lite";
+
+  if (!useGrounding) {
+    return await generateGemini(
+      stableModel,
+      contents,
+      systemInstruction,
+      { temperature: 0.7, maxOutputTokens: 1024 }
+    );
+  }
+
   const key = getGeminiApiKey();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-  const body: any = { contents };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${stableModel}:generateContent`;
+  const body: Record<string, unknown> = {
+    contents,
+    tools: [{ google_search: {} }],
+    generationConfig: { temperature: 0.7, maxOutputTokens: 1024 },
+  };
+
   if (systemInstruction) {
-    body.system_instruction = { parts: [{ text: systemInstruction }] };
+    body.systemInstruction = { parts: [{ text: systemInstruction }] };
   }
-  if (useGrounding) {
-    body.tools = [{ googleSearch: {} }];
-  }
-  body.generationConfig = { temperature: 0.7, maxOutputTokens: 1024 };
 
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": key,
-    },
-    body: JSON.stringify(body),
-  });
+  try {
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": key,
+      },
+      body: JSON.stringify(body),
+    });
 
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Gemini error ${resp.status}: ${text}`);
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Gemini error ${resp.status}: ${text}`);
+    }
+
+    return await resp.json();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("Gemini grounded request failed, retrying without search:", message);
+    return await generateGemini(
+      stableModel,
+      contents,
+      systemInstruction,
+      { temperature: 0.7, maxOutputTokens: 1024 }
+    );
   }
-  return await resp.json();
 }
 
 function extractGeminiText(result: any): string {
@@ -69,6 +94,19 @@ function extractGeminiText(result: any): string {
     .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
     .join("")
     .trim();
+}
+
+function shouldUseSearchGrounding(searchEnabled: boolean, triggerType: string, triggerMessage?: { content?: string } | null): boolean {
+  if (!searchEnabled || triggerType !== "mention") return false;
+  const text = triggerMessage?.content?.trim();
+  if (!text) return false;
+  return /(weather|news|score|scores|result|results|near me|nearby|closest|nearest|open now|search|find|latest|today|traffic|restaurant|cafe|coffee|hotel|pharmacy|hospital|airport|map|maps|directions|where|price|prices|stock|الطقس|أخبار|نتائج|بالقرب|قريب|ابحث|ابحثي|ابحث عن|أقرب|وين|أين|مطعم|كافيه|مقهى|فندق|صيدلية|مستشفى|مطار)/i.test(text);
+}
+
+function buildFallbackReply(language: string): string {
+  return language === "ar"
+    ? "سامحني، صار عندي خطأ مؤقت الآن. أرسلها مرة ثانية بعد لحظة وأنا أرد عليك."
+    : "Sorry, I hit a temporary issue just now. Send it again in a moment and I’ll reply.";
 }
 
 type AiSettings = {
@@ -398,6 +436,9 @@ async function insertAiMessage(conversationId: string, text: string) {
 
 // Main handler
 serve(async (req) => {
+  let conversationIdForFallback: string | null = null;
+  let languageForFallback = "en";
+
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
   }
@@ -412,6 +453,9 @@ serve(async (req) => {
       sender_id,
       sender_location,
     } = body;
+
+    conversationIdForFallback = conversation_id || null;
+    languageForFallback = typeof language === "string" ? language : "en";
 
     if (!conversation_id) {
       return new Response(
@@ -482,11 +526,12 @@ serve(async (req) => {
     }
 
     // Call Gemini 2.0 Flash — search grounding only if creator enabled it
+    const useGrounding = shouldUseSearchGrounding(aiSettings.searchEnabled, trigger_type, triggerMessage);
     const geminiResult = await callGemini(
-      "gemini-2.0-flash",
+      "gemini-2.5-flash-lite",
       contents,
       systemPrompt,
-      aiSettings.searchEnabled // enable search grounding based on creator setting
+      useGrounding
     );
 
     let aiText = extractGeminiText(geminiResult);
@@ -501,7 +546,7 @@ serve(async (req) => {
     aiText = aiText.replace(/\s{2,}/g, " ").trim();
 
     // Append Google Maps link if we have sender location and it's a mention
-    if (senderLoc && triggerMessage?.content) {
+    if (useGrounding && senderLoc && triggerMessage?.content) {
       const cleanQuery = triggerMessage.content.replace(/@wakti\s*/i, "").trim();
       if (cleanQuery) {
         const searchQuery = encodeURIComponent(cleanQuery + (language === "ar" ? " بالقرب مني" : " near me"));
@@ -535,6 +580,27 @@ serve(async (req) => {
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error("Wakti Group AI Error:", msg);
+
+    if (conversationIdForFallback) {
+      try {
+        const fallbackReply = buildFallbackReply(languageForFallback);
+        await insertAiMessage(conversationIdForFallback, fallbackReply);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: fallbackReply,
+            fallback: true,
+            search_used: false,
+            search_queries: [],
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (fallbackError: unknown) {
+        const fallbackMsg = fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
+        console.error("Wakti Group AI Fallback Insert Error:", fallbackMsg);
+      }
+    }
+
     return new Response(
       JSON.stringify({ error: msg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
