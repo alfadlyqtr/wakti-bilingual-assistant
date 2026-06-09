@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { Instagram, Loader2, Check, X, Sparkles, Clapperboard, RectangleHorizontal, Smartphone } from 'lucide-react';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { isNativelyApp } from '@/integrations/natively/browserBridge';
 import {
   analyzeInstagramImage,
   prepareImageForInstagramTarget,
@@ -196,6 +197,24 @@ export default function InstagramPublishButton({
     });
   }, [checkConnection]);
 
+  // Re-check connection when returning to the app (regaining focus)
+  useEffect(() => {
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        checkConnection();
+      }
+    };
+    const handleFocus = () => {
+      checkConnection();
+    };
+    document.addEventListener('visibilitychange', handleVisible);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisible);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [checkConnection]);
+
   useEffect(() => {
     setCaption(defaultCaption);
   }, [defaultCaption]);
@@ -370,13 +389,40 @@ export default function InstagramPublishButton({
       toast.error(ar ? 'معرّف تطبيق Meta غير متوفر' : 'Meta App ID not configured');
       return;
     }
+
+    const inNatively = isNativelyApp();
+    const isMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
+    const origin = (inNatively && isMobile) ? 'https://wakti.qa' : window.location.origin;
+    const redirectUri = `${origin}/instagram-connect-callback`;
+
     const state = btoa(JSON.stringify({
-      origin: window.location.origin,
+      origin,
       source: 'media_publish',
       return_to: `${window.location.pathname}${window.location.search}`,
     }));
-    const oauthUrl = `https://www.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&scope=${IG_SCOPES}&response_type=code&state=${state}`;
-    window.location.href = oauthUrl;
+
+    const oauthUrl = `https://www.instagram.com/oauth/authorize?client_id=${META_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${IG_SCOPES}&response_type=code&state=${state}`;
+
+    if (inNatively && isMobile) {
+      const saveTokenAndOpen = async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.access_token) {
+            localStorage.setItem('wakti_oauth_token', session.access_token);
+          }
+        } catch { /* ignore */ }
+        
+        const nativelyObj = (window as any).natively || (window as any).Natively;
+        if (nativelyObj && typeof nativelyObj.openExternalURL === 'function') {
+          nativelyObj.openExternalURL(oauthUrl, true);
+        } else {
+          window.location.href = oauthUrl;
+        }
+      };
+      void saveTokenAndOpen();
+    } else {
+      window.location.href = oauthUrl;
+    }
   };
 
   const handleDisconnect = async () => {
