@@ -3,6 +3,14 @@
 import { supabase, ensurePassport, getCurrentUserId } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+export interface MessageReaction {
+  id: string;
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+}
+
 export interface DirectMessage {
   id: string;
   sender_id: string;
@@ -15,6 +23,14 @@ export interface DirectMessage {
   file_size?: number;
   created_at: string;
   is_read: boolean;
+  reply_to_id?: string | null;
+  reply_to?: {
+    id: string;
+    content?: string;
+    sender_id: string;
+    message_type: 'text' | 'image' | 'voice' | 'pdf';
+  } | null;
+  reactions?: MessageReaction[];
   sender?: {
     display_name?: string;
     username?: string;
@@ -46,7 +62,9 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
       voice_duration,
       file_size,
       created_at,
-      is_read
+      is_read,
+      reply_to_id,
+      reply_to:reply_to_id(id, content, sender_id, message_type)
     `)
     .or(`and(sender_id.eq.${userId},recipient_id.eq.${contactId}),and(sender_id.eq.${contactId},recipient_id.eq.${userId})`)
     .order("created_at", { ascending: true });
@@ -87,7 +105,24 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
     });
   }
 
-  // Combine messages with sender profiles
+  // Fetch reactions for all messages
+  const messageIds = messagesData.map(m => m.id);
+  let reactionsMap: Map<string, MessageReaction[]> = new Map();
+  if (messageIds.length > 0) {
+    const { data: reactionsData, error: reactionsError } = await supabase
+      .from("message_reactions")
+      .select("id, message_id, user_id, emoji, created_at")
+      .in("message_id", messageIds);
+    if (!reactionsError && reactionsData) {
+      reactionsData.forEach(r => {
+        const list = reactionsMap.get(r.message_id) || [];
+        list.push(r);
+        reactionsMap.set(r.message_id, list);
+      });
+    }
+  }
+
+  // Combine messages with sender profiles and reactions
   const messagesWithProfiles = messagesData.map(message => {
     const senderProfile = profilesMap.get(message.sender_id);
     console.log(`📝 Message ${message.id}: sender=${message.sender_id}, profile=`, senderProfile);
@@ -98,7 +133,8 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
         display_name: "Unknown User",
         username: "unknown",
         avatar_url: ""
-      }
+      },
+      reactions: reactionsMap.get(message.id) || []
     };
   });
 
@@ -258,6 +294,42 @@ export async function uploadMessageAttachment(file: File, type: 'image' | 'voice
 }
 
 // Send a message to a contact
+export async function addReaction(messageId: string, emoji: string): Promise<MessageReaction> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { data, error } = await supabase
+    .from("message_reactions")
+    .insert({ message_id: messageId, user_id: userId, emoji })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("❌ Error adding reaction:", error);
+    throw error;
+  }
+  return data;
+}
+
+export async function removeReaction(messageId: string, emoji: string): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { error } = await supabase
+    .from("message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji);
+
+  if (error) {
+    console.error("❌ Error removing reaction:", error);
+    throw error;
+  }
+}
+
 export async function sendMessage(recipientId: string, messageData: {
   message_type: 'text' | 'image' | 'voice' | 'pdf';
   content?: string;
@@ -265,6 +337,7 @@ export async function sendMessage(recipientId: string, messageData: {
   media_type?: string;
   voice_duration?: number;
   file_size?: number;
+  reply_to_id?: string | null;
 }): Promise<DirectMessage> {
   const userId = await getCurrentUserId();
   if (!userId) {
@@ -289,7 +362,8 @@ export async function sendMessage(recipientId: string, messageData: {
       media_url: messageData.media_url,
       media_type: messageData.media_type,
       voice_duration: messageData.voice_duration,
-      file_size: messageData.file_size
+      file_size: messageData.file_size,
+      reply_to_id: messageData.reply_to_id || null
     })
     .select()
     .single();

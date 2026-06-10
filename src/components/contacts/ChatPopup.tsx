@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Image, FileText, X, Download, Play, Pause, Expand, Save, Bookmark, BookmarkCheck, CheckCheck } from "lucide-react";
+import { Send, Image, FileText, X, Download, Play, Pause, Expand, Save, CheckCheck, Reply } from "lucide-react";
+import type { DirectMessage } from "@/services/messageService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMessages, sendMessage, markAsRead, uploadMessageAttachment } from "@/services/messageService";
-import { saveMessage, unsaveMessage, isMessageSaved as checkMessageSaved } from "@/services/savedMessagesService";
+import { getMessages, sendMessage, markAsRead, uploadMessageAttachment, addReaction, removeReaction } from "@/services/messageService";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder } from "./VoiceRecorder";
@@ -42,6 +42,10 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<DirectMessage | null>(null);
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
 
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
@@ -49,7 +53,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   // Presence and typing indicators
   const { isOnline, isTyping, getLastSeen, setUserTyping, setExternalLastSeen } = usePresence(currentUserId);
   const [isContactTyping, setIsContactTyping] = useState(false);
-  const [savedMessages, setSavedMessages] = useState<Set<string>>(new Set());
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const isContactOnline = isOnline(contactId);
 
@@ -148,24 +151,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     }
   }, [allMessages, isOpen]);
 
-  // Check saved status for messages
-  useEffect(() => {
-    const checkSavedStatuses = async () => {
-      if (!currentUserId || !allMessages?.length) return;
-      
-      const savedSet = new Set<string>();
-      for (const message of allMessages) {
-        const isSaved = await checkMessageSaved(currentUserId, message.id);
-        if (isSaved) {
-          savedSet.add(message.id);
-        }
-      }
-      setSavedMessages(savedSet);
-    };
-    
-    checkSavedStatuses();
-  }, [currentUserId, allMessages]);
-
   // Handle typing indicator
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value;
@@ -186,39 +171,45 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     }, 2000);
   };
   
-  // Clean up typing indicator on unmount
-  useEffect(() => {
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-      }
-      setUserTyping(false);
-    };
-  }, []);
-  
-  // Toggle save message
-  const toggleSaveMessage = async (messageId: string) => {
+  // Reaction helpers
+  const handleReaction = async (messageId: string, emoji: string) => {
     if (!currentUserId) return;
-    
+    const msg = allMessages?.find((m: any) => m.id === messageId);
+    if (!msg) return;
+    const hasReacted = msg.reactions?.some((r: any) => r.user_id === currentUserId && r.emoji === emoji);
     try {
-      const isCurrentlySaved = savedMessages.has(messageId);
-      
-      if (isCurrentlySaved) {
-        await unsaveMessage(currentUserId, messageId);
-        setSavedMessages(prev => {
-          const next = new Set(prev);
-          next.delete(messageId);
-          return next;
-        });
-        toast.success("Message removed from saved");
+      if (hasReacted) {
+        await removeReaction(messageId, emoji);
       } else {
-        await saveMessage(currentUserId, messageId, contactId);
-        setSavedMessages(prev => new Set(prev).add(messageId));
-        toast.success("Message saved");
+        await addReaction(messageId, emoji);
       }
-    } catch (error) {
-      console.error("Error toggling save status:", error);
-      toast.error("Error saving message");
+      queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
+    } catch (e) {
+      console.error("Reaction error:", e);
+    }
+    setReactionPickerFor(null);
+    setSelectedMessageId(null);
+  };
+
+  const handleReplyTo = (message: DirectMessage) => {
+    setReplyingTo(message);
+    setSelectedMessageId(null);
+  };
+
+  const cancelReply = () => setReplyingTo(null);
+
+  // Long press handlers
+  const startLongPress = (messageId: string) => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => {
+      setSelectedMessageId(messageId);
+      setReactionPickerFor(messageId);
+    }, 500);
+  };
+  const endLongPress = () => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
     }
   };
 
@@ -259,7 +250,9 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
         media_url: url,
         media_type: file.type,
         file_size: file.size,
+        reply_to_id: replyingTo?.id || null,
       });
+      setReplyingTo(null);
     } catch (error) {
       console.error("Error uploading image:", error);
       toast.error("Error uploading file");
@@ -289,7 +282,9 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
         media_url: url,
         media_type: file.type,
         file_size: file.size,
+        reply_to_id: replyingTo?.id || null,
       });
+      setReplyingTo(null);
     } catch (error) {
       console.error("Error uploading PDF:", error);
       toast.error("Error uploading file");
@@ -326,7 +321,9 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
         media_type: recordedType,
         voice_duration: Math.max(0, Math.round(duration || 0)),
         file_size: file.size,
+        reply_to_id: replyingTo?.id || null,
       });
+      setReplyingTo(null);
     } catch (error) {
       console.error("Error uploading voice:", error);
       toast.error("Error uploading file");
@@ -341,8 +338,10 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       sendMessageMutation.mutate({
         message_type: "text",
         content: messageText.trim(),
+        reply_to_id: replyingTo?.id || null,
       });
       setMessageText("");
+      setReplyingTo(null);
     }
   };
 
@@ -438,14 +437,27 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     const isSentByMe = message.sender_id === currentUserId;
     const showAvatar = !isSentByMe && (index === 0 || messages[index - 1]?.sender_id !== message.sender_id);
     const isLastOfGroup = index === messages.length - 1 || messages[index + 1]?.sender_id !== message.sender_id;
-    
+    const isSelected = selectedMessageId === message.id;
+    const reactionEmojis = ['👍','❤️','😂','😮','😢'];
+
     return (
-      <motion.div 
+      <motion.div
         key={message.id}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className={`flex mb-2 ${isSentByMe ? 'justify-end' : 'justify-start'}`}
+        className={`flex mb-2 ${isSentByMe ? 'justify-end' : 'justify-start'} ${isSelected ? 'opacity-90' : ''}`}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setSelectedMessageId(message.id);
+          setReactionPickerFor(message.id);
+        }}
+        onTouchStart={() => startLongPress(message.id)}
+        onTouchEnd={endLongPress}
+        onTouchMove={endLongPress}
+        onMouseDown={() => startLongPress(message.id)}
+        onMouseUp={endLongPress}
+        onMouseLeave={endLongPress}
       >
         <div className={`flex ${isSentByMe ? 'flex-row-reverse' : 'flex-row'} items-end gap-2 max-w-[80%]`}>
           {/* Avatar for other user messages */}
@@ -463,13 +475,28 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           
           <div className="flex flex-col">
             {/* Message bubble */}
-            <div 
+            <div
               className={`px-4 py-3 rounded-2xl ${
                 isSentByMe
                   ? `bg-gradient-to-br from-blue-500 to-blue-600 text-white ${isLastOfGroup ? 'rounded-br-sm' : ''}`
                   : `${isDark ? 'bg-dark-secondary/60 text-white' : 'bg-light-secondary/40 text-light-primary'} ${isLastOfGroup ? 'rounded-bl-sm' : ''}`
               } backdrop-blur-sm shadow-sm`}
             >
+              {/* Quoted reply */}
+              {message.reply_to && (
+                <div className={`mb-2 rounded-lg px-2 py-1 text-xs border-l-2 ${
+                  isSentByMe
+                    ? 'bg-white/20 border-white/40 text-white/90'
+                    : isDark ? 'bg-black/20 border-gray-400 text-gray-300' : 'bg-black/5 border-gray-400 text-gray-600'
+                }`}>
+                  <div className="truncate">
+                    {message.reply_to.message_type === 'image' ? '📷 Image' :
+                     message.reply_to.message_type === 'voice' ? '🎤 Voice' :
+                     message.reply_to.message_type === 'pdf' ? '📄 PDF' :
+                     message.reply_to.content || '...'}
+                  </div>
+                </div>
+              )}
               {message.message_type === 'image' ? (
                 <div className="relative group">
                   <img 
@@ -510,30 +537,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     >
                       <Download className="h-3 w-3" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSaveMessage(message.id);
-                      }}
-                      className={`h-7 w-7 p-0 rounded-full ${
-                        savedMessages.has(message.id) 
-                          ? 'bg-green-600 hover:bg-green-700 text-white' 
-                          : 'bg-black/60 hover:bg-black/80 text-white'
-                      } border-0`}
-                      title={
-                        savedMessages.has(message.id) 
-                          ? "Unsave message"
-                          : "Save message"
-                      }
-                    >
-                      {savedMessages.has(message.id) ? (
-                        <BookmarkCheck className="h-3 w-3" />
-                      ) : (
-                        <Bookmark className="h-3 w-3" />
-                      )}
-                    </Button>
                   </div>
                 </div>
               ) : message.message_type === 'voice' ? (
@@ -554,30 +557,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                       {formatDuration(message.voice_duration || 0)}
                     </span>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleSaveMessage(message.id);
-                    }}
-                    className={`h-7 w-7 p-0 rounded-full ${
-                      savedMessages.has(message.id) 
-                        ? 'text-green-500 hover:text-green-600' 
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                    title={
-                      savedMessages.has(message.id) 
-                        ? "Unsave message"
-                        : "Save message"
-                    }
-                  >
-                    {savedMessages.has(message.id) ? (
-                      <BookmarkCheck className="h-3.5 w-3.5" />
-                    ) : (
-                      <Bookmark className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
                 </div>
               ) : message.message_type === 'pdf' ? (
                 <div className="flex items-center justify-between gap-2">
@@ -595,30 +574,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     >
                       <Download className="h-3 w-3" />
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSaveMessage(message.id);
-                      }}
-                      className={`h-7 w-7 p-0 rounded-full ${
-                        savedMessages.has(message.id) 
-                          ? 'text-green-500 hover:text-green-600' 
-                          : 'text-gray-500 hover:text-gray-700'
-                      }`}
-                      title={
-                        savedMessages.has(message.id) 
-                          ? "Unsave message"
-                          : "Save message"
-                      }
-                    >
-                      {savedMessages.has(message.id) ? (
-                        <BookmarkCheck className="h-3.5 w-3.5" />
-                      ) : (
-                        <Bookmark className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
                   </div>
                 </div>
               ) : (
@@ -626,32 +581,42 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
                     {linkifyText(message.content, isSentByMe)}
                   </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => toggleSaveMessage(message.id)}
-                    className={`absolute -right-2 -top-2 h-6 w-6 p-0 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${
-                      savedMessages.has(message.id) 
-                        ? 'text-green-500 hover:text-green-600' 
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                    title={
-                      savedMessages.has(message.id) 
-                        ? "Unsave message"
-                        : "Save message"
-                    }
-                  >
-                    {savedMessages.has(message.id) ? (
-                      <BookmarkCheck className="h-3.5 w-3.5" />
-                    ) : (
-                      <Bookmark className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
+                </div>
+              )}
+
+              {/* Reactions row inside bubble */}
+              {message.reactions && message.reactions.length > 0 && (
+                <div className={`flex flex-wrap gap-1 pt-1.5 ${isSentByMe ? 'justify-end' : 'justify-start'}`}>
+                  {Object.entries(
+                    message.reactions.reduce((acc: Record<string, number>, r: any) => {
+                      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                      return acc;
+                    }, {})
+                  ).map(([emoji, count]) => {
+                    const userReacted = message.reactions?.some((r: any) => r.user_id === currentUserId && r.emoji === emoji);
+                    return (
+                      <button
+                        key={emoji}
+                        onClick={(e) => { e.stopPropagation(); handleReaction(message.id, emoji); }}
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
+                          isSentByMe
+                            ? userReacted
+                              ? 'bg-white/30 border-white/40 text-white'
+                              : 'bg-white/15 border-white/25 text-white/90'
+                            : userReacted
+                              ? isDark ? 'bg-blue-500/25 border-blue-400/35 text-blue-300' : 'bg-blue-500/12 border-blue-400/25 text-blue-600'
+                              : isDark ? 'bg-black/25 border-gray-500/25 text-gray-300' : 'bg-black/8 border-gray-400/25 text-gray-500'
+                        }`}
+                      >
+                        {emoji} {count as number}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
-            
-            {/* Timestamp + saved indicator */}
+
+            {/* Timestamp */}
             <div className={`text-[11px] mt-1 ${
               isSentByMe ? 'self-end mr-1' : 'self-start ml-1'
             } ${isDark ? 'text-gray-300' : 'text-gray-600'} flex items-center gap-1`}>
@@ -661,15 +626,39 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   <CheckCheck className={`h-3.5 w-3.5 ${message.is_read ? 'text-green-500' : 'text-gray-400'}`} />
                 </span>
               )}
-              {savedMessages.has(message.id) && (
-                <span title="Saved" className="inline-flex items-center">
-                  <BookmarkCheck
-                    className="h-3.5 w-3.5 text-green-500"
-                    style={{ filter: 'drop-shadow(0 0 6px rgba(34,197,94,0.8))' }}
-                  />
-                </span>
-              )}
             </div>
+
+            {/* Reaction picker + Reply (visible when message is selected) */}
+            {selectedMessageId === message.id && (
+              <div className={`flex flex-wrap gap-1 mt-1 ${isSentByMe ? 'self-end mr-1' : 'self-start ml-1'}`}>
+                {reactionPickerFor === message.id && reactionEmojis.map(emoji => (
+                  <button
+                    key={emoji}
+                    onClick={() => handleReaction(message.id, emoji)}
+                    className={`text-base px-1.5 py-0.5 rounded-full transition-transform active:scale-90 ${
+                      isDark ? 'hover:bg-dark-secondary/80' : 'hover:bg-light-secondary/60'
+                    }`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+                <button
+                  onClick={() => handleReplyTo(message)}
+                  className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full ${
+                    isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20'
+                  }`}
+                >
+                  <Reply className="h-3 w-3" />
+                  {language === 'ar' ? 'رد' : 'Reply'}
+                </button>
+                <button
+                  onClick={() => { setSelectedMessageId(null); setReactionPickerFor(null); }}
+                  className={`text-[11px] px-2 py-1 rounded-full ${isDark ? 'text-gray-400 hover:bg-dark-secondary/80' : 'text-gray-500 hover:bg-light-secondary/60'}`}
+                >
+                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </motion.div>
@@ -779,22 +768,34 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           </ScrollArea>
 
           {/* Floating composer (auto height) */}
-          <div 
-            className="p-1 border-t"
+          <div
+            className="px-1 pt-1 border-t"
             style={{
               borderColor: `${colors.secondary}30`,
-              background: isDark ? 
-                `linear-gradient(to top, ${colors.surfaceDark}, transparent)` : 
-                `linear-gradient(to top, ${colors.surfaceLight}, transparent)`,
-              paddingBottom: 'env(safe-area-inset-bottom, 0px)'
+              background: isDark ?
+                `linear-gradient(to top, ${colors.surfaceDark}, transparent)` :
+                `linear-gradient(to top, ${colors.surfaceLight}, transparent)`
             }}
           >
-            {/* single notice above input */}
-            <div className="mb-1 text-center text-[11px] text-gray-500 dark:text-gray-400">
-              {language === 'ar' ? 'الرسائل غير المحفوظة تُحذف بعد 72 ساعة' : 'Messages not saved are deleted after 72 hours'}
-            </div>
+            <div className="space-y-1">
+              {/* Reply preview */}
+              {replyingTo && (
+                <div className={`flex items-center gap-2 px-2 py-1 rounded-lg text-xs ${
+                  isDark ? 'bg-dark-secondary/40 text-gray-300' : 'bg-light-secondary/30 text-gray-600'
+                }`}>
+                  <Reply className="h-3 w-3 flex-shrink-0" />
+                  <span className="truncate flex-1">
+                    {replyingTo.message_type === 'image' ? '📷 Image' :
+                     replyingTo.message_type === 'voice' ? '🎤 Voice' :
+                     replyingTo.message_type === 'pdf' ? '📄 PDF' :
+                     replyingTo.content || '...'}
+                  </span>
+                  <button onClick={cancelReply} className="flex-shrink-0 hover:opacity-70">
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
 
-            <div className="space-y-2">
               {/* Top: attachment buttons */}
               <div className="flex items-center gap-1 text-gray-500 px-1">
                 <Button
@@ -829,15 +830,16 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   <Textarea
                     value={messageText}
                     onChange={(e) => {
-                      // auto-expand
+                      // auto-expand (max ~4 lines)
                       e.currentTarget.style.height = 'auto';
-                      const nextH = Math.min(e.currentTarget.scrollHeight, 140);
+                      const nextH = Math.min(e.currentTarget.scrollHeight, 100);
                       e.currentTarget.style.height = `${nextH}px`;
                       handleInputChange(e as any);
                     }}
                     placeholder={t('typeMessage', language)}
                     maxLength={MAX_CHARS}
-                    className={`min-h-[32px] max-h-[140px] h-auto px-2 py-1 text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                    rows={1}
+                    className={`min-h-[32px] max-h-[100px] h-[32px] px-2 py-[5px] text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
                     disabled={sendMessageMutation.isPending || isUploading}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {

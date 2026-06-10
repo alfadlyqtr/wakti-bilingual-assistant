@@ -67,6 +67,7 @@ export function MessageNotificationProvider({ children }: MessageNotificationPro
 
   // Track IDs we've already shown/dismissed this session to prevent re-show on reconnect
   const seenMessageIdsRef = useRef<Set<string>>(new Set());
+  const senderProfileCacheRef = useRef<Map<string, { senderName: string; senderAvatar?: string }>>(new Map());
 
   // Cached preference — read from profiles.notification_preferences.message_popups.
   // Defaults to true if missing. Written by NotificationSettings.
@@ -155,6 +156,20 @@ export function MessageNotificationProvider({ children }: MessageNotificationPro
           // Mark as seen immediately to avoid races with rapid duplicates
           seenMessageIdsRef.current.add(row.id);
 
+          const fallbackSenderName = language === 'ar' ? 'مستخدم' : 'Someone';
+          const cachedSender = senderProfileCacheRef.current.get(row.sender_id);
+
+          setCurrentMessage({
+            messageId: row.id,
+            senderId: row.sender_id,
+            senderName: cachedSender?.senderName || fallbackSenderName,
+            senderAvatar: cachedSender?.senderAvatar,
+            preview: buildPreview(row, language === 'ar'),
+            messageType: row.message_type,
+            createdAt: row.created_at,
+          });
+          setIsOpen(true);
+
           // Fetch sender profile for name + avatar
           let senderName = '';
           let senderAvatar: string | undefined;
@@ -166,21 +181,23 @@ export function MessageNotificationProvider({ children }: MessageNotificationPro
               .maybeSingle();
             senderName = profile?.display_name || profile?.username || (language === 'ar' ? 'مستخدم' : 'Someone');
             senderAvatar = profile?.avatar_url || undefined;
+            senderProfileCacheRef.current.set(row.sender_id, { senderName, senderAvatar });
           } catch (e) {
             console.error('[MsgPopup] Failed to fetch sender profile', e);
             senderName = language === 'ar' ? 'مستخدم' : 'Someone';
           }
 
-          setCurrentMessage({
-            messageId: row.id,
-            senderId: row.sender_id,
-            senderName,
-            senderAvatar,
-            preview: buildPreview(row, language === 'ar'),
-            messageType: row.message_type,
-            createdAt: row.created_at,
+          setCurrentMessage((prev) => {
+            if (!prev || prev.messageId !== row.id) {
+              return prev;
+            }
+
+            return {
+              ...prev,
+              senderName,
+              senderAvatar,
+            };
           });
-          setIsOpen(true);
         },
       )
       .subscribe();
