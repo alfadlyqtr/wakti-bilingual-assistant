@@ -37,6 +37,7 @@ type ToastSound = 'chime' | 'ding' | 'beep';
 
 const NOTIFICATION_CONFIG: Record<string, { toastType: ToastType; sound: ToastSound; priority: ToastPriority }> = {
   message_received: { toastType: 'message', sound: 'chime', priority: 'normal' },
+  group_message_received: { toastType: 'message', sound: 'chime', priority: 'normal' },
   contact_request: { toastType: 'contact', sound: 'ding', priority: 'normal' },
   maw3d_rsvp: { toastType: 'event', sound: 'beep', priority: 'normal' },
   event_rsvp: { toastType: 'event', sound: 'beep', priority: 'normal' },

@@ -3191,6 +3191,8 @@ function normalizeLabel(label: string): string {
 function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
   const places: GroundedPlaceCard[] = [];
   let current: GroundedPlaceCard | null = null;
+  const knownLabelPattern = /^(Reason|السبب|Vibe|الأجواء|الجو|أجواء|Must-?Try|Must Try|Must-?Try|جرّب|جرب|لا تفوت|لازم تجربه|Status|الحالة|الحاله|الذكاء|Rating|التقييم|التقيم|Google Reviews|Reviews|مراجعات|الآراء|Google Maps|Maps(?: Link)?|Location|خرائط|الموقع|موقع|العنوان|Phone|الهاتف|رقم|تلفون|Website|الموقع الإلكتروني|الموقع الالكتروني|Instagram|إنستغرام|انستغرام|إنستقرام|Facebook|فيسبوك|TikTok|تيك توك|WhatsApp|واتساب|Email|البريد|إيميل|ايميل)\s*:/i;
+  const segmentPattern = /(Reason|السبب|Vibe|الأجواء|الجو|أجواء|Must-?Try|Must Try|Must-?Try|جرّب|جرب|لا تفوت|لازم تجربه|Status|الحالة|الحاله|الذكاء|Rating|التقييم|التقيم|Google Reviews|Reviews|مراجعات|الآراء|Google Maps|Maps(?: Link)?|Location|خرائط|الموقع|موقع|العنوان|Phone|الهاتف|رقم|تلفون|Website|الموقع الإلكتروني|الموقع الالكتروني|Instagram|إنستغرام|انستغرام|إنستقرام|Facebook|فيسبوك|TikTok|تيك توك|WhatsApp|واتساب|Email|البريد|إيميل|ايميل)\s*:/gi;
 
   const commit = () => {
     if (!current) return;
@@ -3200,12 +3202,27 @@ function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
     current = null;
   };
 
+  const extractSegments = (value: string) => {
+    const matches = Array.from(value.matchAll(segmentPattern));
+    if (matches.length === 0) return [] as Array<{ label: string; value: string }>;
+    return matches.map((match, index) => {
+      const start = match.index ?? 0;
+      const label = match[1] || '';
+      const valueStart = start + match[0].length;
+      const valueEnd = index + 1 < matches.length ? (matches[index + 1].index ?? value.length) : value.length;
+      return {
+        label: label.toLowerCase(),
+        value: value.slice(valueStart, valueEnd).trim(),
+      };
+    });
+  };
+
   for (const rawLine of (text || '').split('\n')) {
     const line = rawLine.trim();
     if (!line) continue;
 
     const headingMatch = line.match(/^##+\s+(?:\d+\.\s+)?\*?\*?([^*:(]+)\*?\*?\s*(?:\(([^)]+)\))?/);
-    if (headingMatch) {
+    if (headingMatch && !knownLabelPattern.test(line)) {
       commit();
       current = createGroundedPlaceCard({
         name: toTrimmedString(headingMatch[1]),
@@ -3214,116 +3231,174 @@ function parseGroundedPlacesFromText(text: string): GroundedPlaceCard[] {
       continue;
     }
 
-    const bulletBoldMatch = line.match(/^(?:[-*â€¢]|\d+\.)\s+\*\*([^*]+)\*\*\s*(.*)$/);
-    if (!bulletBoldMatch) continue;
+    const bulletMatch = line.match(/^(?:[-*•]|\d+\.)\s+(.*)$/);
+    const isSegment = knownLabelPattern.test(line.replace(/\*/g, '').trim());
 
-    const boldText = toTrimmedString(bulletBoldMatch[1]);
-    const rest = toTrimmedString(bulletBoldMatch[2]);
+    if (!isSegment) {
+      const rawClean = line.replace(/\*\*/g, '').trim();
+      const startsWithBullet = /^(?:[-*•]|\d+\.)\s+(.*)$/.test(rawClean);
 
-    if (!boldText.endsWith(':')) {
-      commit();
-      current = createGroundedPlaceCard({ name: boldText });
-      continue;
-    }
+      if (startsWithBullet) {
+        commit();
 
-    if (!current) continue;
+        let placeName = '';
+        let address = '';
+        let description = '';
 
-    const field = normalizeLabel(boldText.slice(0, -1));
-    const links = extractMarkdownLinks(rest);
-    const plain = stripMarkdownLinks(rest);
-    applyExtractedLinksToPlace(current, rest);
+        const boldMatches = line.match(/\*\*([^*]+)\*\//g);
+        const boldMatchesStandard = line.match(/\*\*([^*]+)\*\*/g);
+        const bestBoldMatches = boldMatchesStandard || boldMatches;
 
-    if (field === 'reason') {
-      current.reason = plain;
-      continue;
-    }
+        if (bestBoldMatches && bestBoldMatches.length > 0) {
+          const firstBold = bestBoldMatches[0].replace(/\*\*/g, '').trim();
+          placeName = firstBold.replace(/^(?:[-*•]|\d+\.)\s+/, '').trim();
+        }
 
-    if (field === 'vibe') {
-      current.vibe = plain;
-      continue;
-    }
+        if (!placeName) {
+          const contentWithoutBullet = rawClean.replace(/^(?:[-*•]|\d+\.)\s+/, '').trim();
+          const parenIdx = contentWithoutBullet.indexOf('(');
+          if (parenIdx !== -1) {
+            placeName = contentWithoutBullet.slice(0, parenIdx).trim();
+          } else {
+            const parts = contentWithoutBullet.split(/[-–—,]/);
+            placeName = parts[0].trim();
+          }
+        }
 
-    if (field === 'must-try' || field === 'must try') {
-      current.mustTry = plain;
-      continue;
-    }
+        const parenMatch = line.match(/\(([^)]+)\)/);
+        address = parenMatch ? parenMatch[1].trim() : '';
 
-    if (field === 'summary' || field === 'description' || field === 'editorial summary') {
-      current.editorialSummary = current.editorialSummary
-        ? `${current.editorialSummary} ${plain}`.trim()
-        : plain;
-      continue;
-    }
+        const cleanContentLine = rawClean.replace(/^(?:[-*•]|\d+\.)\s+/, '').trim();
+        description = cleanContentLine
+          .replace(placeName, '')
+          .replace(`(${address})`, '')
+          .replace(/^[–-—\s,]+/, '')
+          .trim();
 
-    if (field === 'status') {
-      current.businessStatus = plain;
-      if (/\bopen\b/i.test(plain)) current.openNow = true;
-      if (/\bclosed\b/i.test(plain)) current.openNow = false;
-      continue;
-    }
-
-    if (field === 'rating') {
-      const match = plain.match(/(\d+(?:\.\d+)?)/);
-      const parsed = match ? toFiniteNumber(match[1]) : null;
-      if (parsed !== null) current.rating = parsed;
-      continue;
-    }
-
-    if (field === 'google reviews' || field === 'reviews') {
-      const match = plain.match(/([\d,]+)/);
-      const parsed = match ? Number(match[1].replace(/,/g, '')) : NaN;
-      if (Number.isFinite(parsed)) current.userRatingCount = parsed;
-      continue;
-    }
-
-    if (field === 'google maps' || field === 'google maps link' || field === 'maps' || field === 'maps link' || field === 'location') {
-      current.mapsUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
-      continue;
-    }
-
-    if (field === 'phone') {
-      const telLink = links.find((entry) => /^tel:/i.test(entry.url));
-      if (telLink?.label) {
-        current.phone = telLink.label;
-      } else {
-        const match = plain.match(/(\+\d[\d\s()\-]{5,}\d)/);
-        if (match?.[1]) current.phone = match[1].replace(/\s+/g, ' ').trim();
+        current = createGroundedPlaceCard({
+          name: toTrimmedString(placeName),
+          address: toTrimmedString(address),
+        });
+        if (description) {
+          current.editorialSummary = toTrimmedString(description);
+        }
+        continue;
       }
+    }
+
+    const rawValue = line.trim();
+    const segmentSource = rawValue.replace(/\*\*([^*]+)\*\//g, '$1').replace(/\*\*/g, '').trim();
+    const cleanLine = toTrimmedString(segmentSource);
+    if (!cleanLine) continue;
+
+    if (bulletMatch && !knownLabelPattern.test(cleanLine) && !cleanLine.includes(':')) {
+      commit();
+      current = createGroundedPlaceCard({ name: cleanLine });
       continue;
     }
 
-    if (field === 'website') {
-      current.websiteUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
+    const boldHeadingMatch = line.match(/^\*\*([^*:]+)\*\*\s*$/);
+    if (boldHeadingMatch && !knownLabelPattern.test(boldHeadingMatch[1].trim())) {
+      commit();
+      current = createGroundedPlaceCard({ name: toTrimmedString(boldHeadingMatch[1]) });
       continue;
     }
 
-    if (field === 'instagram') {
-      current.instagramUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
-      continue;
-    }
+    const segments = extractSegments(segmentSource);
+    if (!current || segments.length === 0) continue;
 
-    if (field === 'whatsapp') {
-      current.whatsappUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
-      continue;
-    }
+    for (const segment of segments) {
+      const segmentRawValue = segment.value.replace(/^[-–—]\s*/, '').trim();
+      const segmentValue = toTrimmedString(segmentRawValue);
+      if (!segmentValue) continue;
 
-    if (field === 'facebook') {
-      current.facebookUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
-      continue;
-    }
+      const field = normalizeLabel(segment.label);
+      const links = extractMarkdownLinks(segmentRawValue);
 
-    if (field === 'tiktok') {
-      current.tiktokUrl = normalizeLikelyExternalUrl(links[0]?.url || plain);
-      continue;
-    }
+      if (field === 'reason') {
+        current.reason = segmentValue;
+        applyExtractedLinksToPlace(current, segmentRawValue);
+        continue;
+      }
 
-    if (field === 'social' || field === 'socials' || field === 'social link' || field === 'social links') {
-      continue;
-    }
+      if (field === 'vibe') {
+        current.vibe = segmentValue;
+        applyExtractedLinksToPlace(current, segmentRawValue);
+        continue;
+      }
 
-    if (field === 'email') {
-      const mailtoLink = links.find((entry) => /^mailto:/i.test(entry.url));
-      current.email = normalizeEmail(mailtoLink?.label || plain);
+      if (field === 'must-try' || field === 'must try') {
+        current.mustTry = segmentValue;
+        applyExtractedLinksToPlace(current, segmentRawValue);
+        continue;
+      }
+
+      if (field === 'summary' || field === 'description' || field === 'editorial summary') {
+        current.editorialSummary = current.editorialSummary
+          ? `${current.editorialSummary} ${segmentValue}`.trim()
+          : segmentValue;
+        continue;
+      }
+
+      if (field === 'status') {
+        current.businessStatus = segmentValue;
+        if (/\bopen\b/i.test(segmentValue)) current.openNow = true;
+        if (/\bclosed\b/i.test(segmentValue)) current.openNow = false;
+        continue;
+      }
+
+      if (field === 'google maps' || field === 'google maps link' || field === 'maps' || field === 'maps link' || field === 'location') {
+        current.mapsUrl = normalizeLikelyExternalUrl(links[0]?.url || segmentValue);
+        applyExtractedLinksToPlace(current, segmentRawValue);
+        continue;
+      }
+
+      if (field === 'phone') {
+        const telLink = links.find((entry) => /^tel:/i.test(entry.url));
+        if (telLink?.label) {
+          current.phone = telLink.label;
+        } else {
+          const match = segmentValue.match(/(\+\d[\d\s()\-]{5,}\d)/);
+          if (match?.[1]) current.phone = match[1].replace(/\s+/g, ' ').trim();
+        }
+        continue;
+      }
+
+      if (field === 'website') {
+        current.websiteUrl = normalizeLikelyExternalUrl(links[0]?.url || segmentValue);
+        applyExtractedLinksToPlace(current, segmentRawValue);
+        continue;
+      }
+
+      if (field === 'instagram') {
+        current.instagramUrl = normalizeLikelyExternalUrl(links[0]?.url || segmentValue);
+        continue;
+      }
+
+      if (field === 'whatsapp') {
+        current.whatsappUrl = normalizeLikelyExternalUrl(links[0]?.url || segmentValue);
+        continue;
+      }
+
+      if (field === 'facebook') {
+        current.facebookUrl = normalizeLikelyExternalUrl(links[0]?.url || segmentValue);
+        continue;
+      }
+
+      if (field === 'tiktok') {
+        current.tiktokUrl = normalizeLikelyExternalUrl(links[0]?.url || segmentValue);
+        continue;
+      }
+
+      if (field === 'social' || field === 'socials' || field === 'social link' || field === 'social links') {
+        applyExtractedLinksToPlace(current, segmentRawValue);
+        continue;
+      }
+
+      if (field === 'email') {
+        const mailtoLink = links.find((entry) => /^mailto:/i.test(entry.url));
+        current.email = normalizeEmail(mailtoLink?.label || segmentValue);
+      }
     }
   }
 
@@ -5746,6 +5821,8 @@ If you are running out of space, keep this order and drop the rest:
                   ? parsedPlacesFromText
                   : parseGroundedPlacesFromTextLoose(fullResponseText);
 
+                const lookupPromises: Array<Promise<void>> = [];
+
                 for (const parsedPlace of parsedPlaces) {
                   const verifiedLinks = pickVerifiedBusinessLinks(parsedPlace.placeId ? (groundedWebResultsByPlaceId.get(parsedPlace.placeId) || allGroundedWebResults) : allGroundedWebResults, parsedPlace);
                   const mergedParsedPlace = mergeGroundedPlaceCard(parsedPlace, verifiedLinks);
@@ -5764,10 +5841,40 @@ If you are running out of space, keep this order and drop the rest:
 
                   if (matchedKey) {
                     const existing = groundedPlaceById.get(matchedKey);
-                    if (!existing) continue;
-                    groundedPlaceById.set(matchedKey, mergeGroundedPlaceCard(existing, mergedParsedPlace));
-                    continue;
+                    if (existing) {
+                      groundedPlaceById.set(matchedKey, mergeGroundedPlaceCard(existing, mergedParsedPlace));
+                    }
+                  } else {
+                    // This recommended place was NOT found in the broad initial search.
+                    // Let's run a targeted parallel search on Google Places specifically for this place name + area!
+                    const areaSegment = mergedParsedPlace.address || (userLocationForSearch?.city ? `${userLocationForSearch.city}` : 'Doha');
+                    const lookupQuery = `${mergedParsedPlace.name} ${areaSegment}`;
+                    
+                    const p = (async () => {
+                      try {
+                        const searchResults = await searchGooglePlacesForQuery(
+                          lookupQuery,
+                          userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null
+                        );
+                        if (searchResults.length > 0) {
+                          const firstResult = searchResults[0];
+                          const mergedWithApi = mergeGroundedPlaceCard(firstResult, mergedParsedPlace);
+                          groundedPlaceById.set(firstResult.placeId || mergedWithApi.name, mergedWithApi);
+                        } else {
+                          // No direct place found, store as fallback so user doesn't lose it
+                          groundedPlaceById.set(mergedParsedPlace.name, mergedParsedPlace);
+                        }
+                      } catch (err) {
+                        console.error('❌ TARGETED PLACES LOOKUP FAILED FOR:', lookupQuery, err);
+                        groundedPlaceById.set(mergedParsedPlace.name, mergedParsedPlace);
+                      }
+                    })();
+                    lookupPromises.push(p);
                   }
+                }
+
+                if (lookupPromises.length > 0) {
+                  await Promise.all(lookupPromises).catch(() => {});
                 }
 
                 let groundedPlaces: GroundedPlaceCard[] = Array.from(groundedPlaceById.values());

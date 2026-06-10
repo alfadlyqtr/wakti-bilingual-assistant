@@ -129,6 +129,7 @@ serve(async (req) => {
           ...(notif.data || {}),
           notification_id: notif.id,
           type: notif.type,
+          deep_link: notif.deep_link,
         };
 
         console.log(`Sending push for notification ${notif.id} to user ${notif.user_id}`);

@@ -151,13 +151,18 @@ export function setupNotificationClickHandler(navigate: (path: string) => void) 
       
       // Extract data from the notification payload
       const data = notification?.additionalData || notification?.data || {};
+      const conversationId = data.conversation_id;
       const senderId = data.sender_id;
       const type = data.type;
       
-      console.log('[NativelyNotifications] Notification data:', { senderId, type, data });
+      console.log('[NativelyNotifications] Notification data:', { conversationId, senderId, type, data });
       
-      // Handle message notifications - navigate to contacts with openChat param
-      if ((type === 'message_received' || type === 'message' || type === 'messages') && senderId) {
+      // Handle group message notifications first
+      if ((type === 'group_message_received' || type === 'group_message' || type === 'group_messages') && conversationId) {
+        console.log('[NativelyNotifications] Navigating to group chat:', conversationId);
+        navigate(`/group-chats/${conversationId}`);
+      } else if ((type === 'message_received' || type === 'message' || type === 'messages') && senderId) {
+        // Handle direct message notifications - navigate to contacts with openChat param
         console.log('[NativelyNotifications] Navigating to chat with:', senderId);
         navigate(`/social?section=contacts&openChat=${senderId}`);
       } else if (data.deep_link) {
