@@ -458,6 +458,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setActiveScopedUserId(signInData.session.user.id);
       setSession(signInData.session);
       setUser(signInData.session.user);
+
+      // Clear stale guest profile cache so UserProfileContext fetches fresh data
+      try {
+        localStorage.removeItem(`wakti_profile_${signInData.session.user.id}`);
+      } catch {}
+      try {
+        window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+      } catch {}
     }
 
     return { error: null };

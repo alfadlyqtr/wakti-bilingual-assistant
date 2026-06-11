@@ -111,7 +111,8 @@ serve(async (req: Request) => {
         email_confirm: true,
         app_metadata: mergedAppMetadata,
         user_metadata: mergedUserMetadata,
-      },
+        is_anonymous: false,
+      } as any,
     );
 
     if (updateError) {
@@ -122,6 +123,8 @@ serve(async (req: Request) => {
       email,
       display_name: displayName,
       updated_at: new Date().toISOString(),
+      trial_usage: {},
+      free_access_start_at: new Date().toISOString(),
     };
 
     if (username) {
