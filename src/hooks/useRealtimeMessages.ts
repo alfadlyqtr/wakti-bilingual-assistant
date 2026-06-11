@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { DirectMessage } from '@/services/messageService';
 
 /**
  * Item #8 Batch B2: Direct-message Realtime subscription.
@@ -44,6 +45,17 @@ export function useRealtimeMessages(
       queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
     };
 
+    const isReactionForActiveChat = (payload: any) => {
+      const row = payload?.new || payload?.old;
+      const messageId = row?.message_id;
+      if (!messageId) return false;
+
+      const cachedMessages = queryClient.getQueryData<DirectMessage[]>(['directMessages', contactId]);
+      if (!cachedMessages || cachedMessages.length === 0) return false;
+
+      return cachedMessages.some((message) => message.id === messageId);
+    };
+
     const isRelevantPayload = (payload: any) => {
       const row = payload?.new || payload?.old;
       if (!row) return false;
@@ -67,6 +79,11 @@ export function useRealtimeMessages(
         'postgres_changes' as any,
         { event: '*', schema: 'public', table: 'messages', filter: `sender_id=eq.${currentUserId}` },
         (payload: any) => { if (isRelevantPayload(payload)) invalidate(); },
+      )
+      .on(
+        'postgres_changes' as any,
+        { event: '*', schema: 'public', table: 'message_reactions' },
+        (payload: any) => { if (isReactionForActiveChat(payload)) invalidate(); },
       )
       .subscribe();
 

@@ -205,7 +205,7 @@ export default function ChatPage() {
   const handleReaction = async (messageId: string, emoji: string) => {
     if (!currentUserId) return;
     const msg = allMessages?.find(m => m.id === messageId);
-    if (!msg) return;
+    if (!msg || msg.is_deleted) return;
     const hasReacted = msg.reactions?.some(r => r.user_id === currentUserId && r.emoji === emoji);
     try {
       if (hasReacted) {
@@ -541,7 +541,7 @@ export default function ChatPage() {
     const isSentByMe = message.sender_id === currentUserId;
     const showAvatar = !isSentByMe && (index === 0 || messages[index - 1]?.sender_id !== message.sender_id);
     const isLastOfGroup = index === messages.length - 1 || messages[index + 1]?.sender_id !== message.sender_id;
-    const displayedReaction = message.reactions && message.reactions.length > 0
+    const displayedReaction = !message.is_deleted && message.reactions && message.reactions.length > 0
       ? [...message.reactions].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
       : null;
 
@@ -553,13 +553,18 @@ export default function ChatPage() {
         transition={{ duration: 0.3 }}
         className={`flex select-none mb-2 ${isSentByMe ? 'justify-end' : 'justify-start'}`}
         onContextMenu={(e) => {
+          if (message.is_deleted) return;
           e.preventDefault();
           openMessageActions(message, isSentByMe);
         }}
-        onTouchStart={() => startLongPress(message, isSentByMe)}
+        onTouchStart={() => {
+          if (message.is_deleted) return;
+          startLongPress(message, isSentByMe);
+        }}
         onTouchEnd={endLongPress}
         onTouchMove={endLongPress}
         onMouseDown={(e) => {
+          if (message.is_deleted) return;
           if (e.button !== 0) return;
           e.preventDefault();
           startLongPress(message, isSentByMe);
@@ -582,35 +587,40 @@ export default function ChatPage() {
           {/* Invisible placeholder to align sent messages */}
           {!isSentByMe && !showAvatar && <div className="w-8 flex-shrink-0"></div>}
           
-          <div className="flex flex-col">
+          <div className={`flex flex-col ${displayedReaction ? 'pb-4' : ''}`}>
             {/* Message bubble */}
-            <div
-              ref={(element) => {
-                messageBubbleRefs.current[message.id] = element;
-              }}
-              className={`select-none px-4 py-3 rounded-2xl ${
-                isSentByMe
-                  ? `bg-gradient-to-br from-blue-500 to-blue-600 text-white ${isLastOfGroup ? 'rounded-br-sm' : ''}`
-                  : `${isDark ? 'bg-dark-secondary/60 text-white' : 'bg-light-secondary/40 text-light-primary'} ${isLastOfGroup ? 'rounded-bl-sm' : ''}`
-              } backdrop-blur-sm shadow-sm`}
-              style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
-            >
+            <div className="relative inline-block">
+              <div
+                ref={(element) => {
+                  messageBubbleRefs.current[message.id] = element;
+                }}
+                className={`select-none px-4 ${displayedReaction ? 'pt-5 pb-3' : 'py-3'} rounded-2xl ${
+                  isSentByMe
+                    ? `bg-gradient-to-br from-blue-500 to-blue-600 text-white ${isLastOfGroup ? 'rounded-br-sm' : ''}`
+                    : `${isDark ? 'bg-dark-secondary/60 text-white' : 'bg-light-secondary/40 text-light-primary'} ${isLastOfGroup ? 'rounded-bl-sm' : ''}`
+                } backdrop-blur-sm shadow-sm`}
+                style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+              >
               {/* Quoted reply */}
-              {message.reply_to && (
+              {message.is_deleted ? (
+                <div className={`text-sm italic ${isDark ? 'text-gray-300' : 'text-gray-500'}`}>
+                  {language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted'}
+                </div>
+              ) : message.reply_to && (
                 <div className={`mb-2 rounded-lg px-2 py-1 text-xs border-l-2 ${
                   isSentByMe
                     ? 'bg-white/20 border-white/40 text-white/90'
                     : isDark ? 'bg-black/20 border-gray-400 text-gray-300' : 'bg-black/5 border-gray-400 text-gray-600'
                 }`}>
                   <div className="truncate">
-                    {message.reply_to.message_type === 'image' ? '📷 Image' :
+                    {message.reply_to.is_deleted ? (language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted') : message.reply_to.message_type === 'image' ? '📷 Image' :
                      message.reply_to.message_type === 'voice' ? '🎤 Voice' :
                      message.reply_to.message_type === 'pdf' ? '📄 PDF' :
                      message.reply_to.content || '...'}
                   </div>
                 </div>
               )}
-              {message.message_type === 'image' ? (
+              {!message.is_deleted && message.message_type === 'image' ? (
                 <div className="relative group">
                   <img 
                     src={cleanMediaUrl(message.media_url)} 
@@ -640,7 +650,7 @@ export default function ChatPage() {
                     </Button>
                   </div>
                 </div>
-              ) : message.message_type === 'voice' ? (
+              ) : !message.is_deleted && message.message_type === 'voice' ? (
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <Button
@@ -659,7 +669,7 @@ export default function ChatPage() {
                     </span>
                   </div>
                 </div>
-              ) : message.message_type === 'pdf' ? (
+              ) : !message.is_deleted && message.message_type === 'pdf' ? (
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <FileText className="h-4 w-4 flex-shrink-0" />
@@ -676,29 +686,28 @@ export default function ChatPage() {
                     </Button>
                   </div>
                 </div>
-              ) : (
+              ) : !message.is_deleted ? (
                 <div className="group relative">
                   <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
                     {linkifyText(message.content, isSentByMe)}
                   </div>
                 </div>
-              )}
+              ) : null}
 
-            </div>
+              </div>
 
-            {displayedReaction && (
-              <div className={`mt-1 flex ${isSentByMe ? 'justify-end pr-2' : 'justify-start pl-2'}`}>
+              {displayedReaction && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleReaction(message.id, displayedReaction.emoji); }}
-                  className={`flex h-8 min-w-8 items-center justify-center rounded-full border px-2 text-base shadow-md ${isDark ? 'border-white/10 bg-[#1f1f1f] text-white' : 'border-black/10 bg-white text-gray-900'}`}
+                  className={`absolute -top-2 right-2 z-10 flex h-7 min-w-7 items-center justify-center rounded-full border px-1.5 text-sm shadow-md ${isDark ? 'border-white/10 bg-[#1f1f1f] text-white' : 'border-black/10 bg-white text-gray-900'}`}
                 >
                   <span>{displayedReaction.emoji}</span>
                 </button>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Timestamp */}
-            <div className={`text-[11px] mt-1 ${
+            <div className={`text-[11px] mt-2 ${
               isSentByMe ? 'self-end mr-1' : 'self-start ml-1'
             } ${isDark ? 'text-gray-300' : 'text-gray-600'} flex items-center gap-1`}>
               <span>{formatMessageTime(message.created_at)}</span>
@@ -741,21 +750,25 @@ export default function ChatPage() {
       } backdrop-blur-sm shadow-2xl`}
       style={{ width: messagePreviewWidth, WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
     >
-      {message.reply_to && (
+      {message.is_deleted ? (
+        <div className={`text-sm italic ${isDark ? 'text-gray-300' : 'text-gray-500'}`}>
+          {language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted'}
+        </div>
+      ) : message.reply_to && (
         <div className={`mb-2 rounded-lg px-2 py-1 text-xs border-l-2 ${
           isSentByMe
             ? 'bg-white/20 border-white/40 text-white/90'
             : isDark ? 'bg-black/20 border-gray-400 text-gray-300' : 'bg-black/5 border-gray-400 text-gray-600'
         }`}>
           <div className="truncate">
-            {message.reply_to.message_type === 'image' ? '📷 Image' :
+            {message.reply_to.is_deleted ? (language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted') : message.reply_to.message_type === 'image' ? '📷 Image' :
              message.reply_to.message_type === 'voice' ? '🎤 Voice' :
              message.reply_to.message_type === 'pdf' ? '📄 PDF' :
              message.reply_to.content || '...'}
           </div>
         </div>
       )}
-      {message.message_type === 'image' ? (
+      {!message.is_deleted && message.message_type === 'image' ? (
         <img
           src={cleanMediaUrl(message.media_url)}
           alt="Image message"
@@ -764,7 +777,7 @@ export default function ChatPage() {
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"
         />
-      ) : message.message_type === 'voice' ? (
+      ) : !message.is_deleted && message.message_type === 'voice' ? (
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Button
@@ -778,16 +791,16 @@ export default function ChatPage() {
             <span className="text-sm">{formatDuration(message.voice_duration || 0)}</span>
           </div>
         </div>
-      ) : message.message_type === 'pdf' ? (
+      ) : !message.is_deleted && message.message_type === 'pdf' ? (
         <div className="flex items-center gap-2 min-w-0">
           <FileText className="h-4 w-4 flex-shrink-0" />
           <span className="text-sm truncate">{message.content}</span>
         </div>
-      ) : (
+      ) : !message.is_deleted ? (
         <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
           {linkifyText(message.content || '', isSentByMe)}
         </div>
-      )}
+      ) : null}
     </div>
   );
 
@@ -905,7 +918,7 @@ export default function ChatPage() {
             }`}>
               <Reply className="h-3 w-3 flex-shrink-0" />
               <span className="truncate flex-1">
-                {replyingTo.message_type === 'image' ? '📷 Image' :
+                {replyingTo.is_deleted ? (language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted') : replyingTo.message_type === 'image' ? '📷 Image' :
                  replyingTo.message_type === 'voice' ? '🎤 Voice' :
                  replyingTo.message_type === 'pdf' ? '📄 PDF' :
                  replyingTo.content || '...'}

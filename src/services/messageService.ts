@@ -23,12 +23,15 @@ export interface DirectMessage {
   file_size?: number;
   created_at: string;
   is_read: boolean;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
   reply_to_id?: string | null;
   reply_to?: {
     id: string;
     content?: string;
     sender_id: string;
     message_type: 'text' | 'image' | 'voice' | 'pdf';
+    is_deleted?: boolean;
   } | null;
   reactions?: MessageReaction[];
   sender?: {
@@ -63,8 +66,10 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
       file_size,
       created_at,
       is_read,
+      is_deleted,
+      deleted_at,
       reply_to_id,
-      reply_to:reply_to_id(id, content, sender_id, message_type)
+      reply_to:reply_to_id(id, content, sender_id, message_type, is_deleted)
     `)
     .or(`and(sender_id.eq.${userId},recipient_id.eq.${contactId}),and(sender_id.eq.${contactId},recipient_id.eq.${userId})`)
     .order("created_at", { ascending: true });
@@ -346,13 +351,9 @@ export async function deleteMessage(messageId: string): Promise<void> {
   if (!userId) throw new Error("User not authenticated");
   await ensurePassport();
 
-  const { data, error } = await supabase
-    .from("messages")
-    .delete()
-    .select("id")
-    .eq("id", messageId)
-    .eq("sender_id", userId)
-    .maybeSingle();
+  const { data, error } = await supabase.rpc("soft_delete_message", {
+    p_message_id: messageId,
+  });
 
   if (error) {
     console.error("❌ Error deleting message:", error);
