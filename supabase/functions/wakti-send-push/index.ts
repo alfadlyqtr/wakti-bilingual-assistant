@@ -28,6 +28,8 @@ interface OneSignalPayload {
   headings: { en: string };
   contents: { en: string };
   data?: Record<string, any>;
+  large_icon?: string;
+  ios_attachments?: Record<string, string>;
   url?: string;
 }
 
@@ -115,20 +117,36 @@ serve(async (req) => {
 
     for (const notif of notifications) {
       try {
+        const isMessagePush = notif.type === "message_received";
+        const senderName = typeof notif.data?.sender_name === "string" && notif.data.sender_name.trim().length > 0
+          ? notif.data.sender_name.trim()
+          : notif.title;
+        const senderAvatarUrl = typeof notif.data?.sender_avatar_url === "string" && notif.data.sender_avatar_url.trim().startsWith("https://")
+          ? notif.data.sender_avatar_url.trim()
+          : undefined;
+
         // Build OneSignal payload
         const payload: OneSignalPayload = {
           app_id: ONESIGNAL_APP_ID,
           include_aliases: { external_id: [notif.user_id] },
           target_channel: "push",
-          headings: { en: notif.title },
+          headings: { en: isMessagePush ? senderName : notif.title },
           contents: { en: notif.body },
         };
+
+        if (isMessagePush && senderAvatarUrl) {
+          payload.large_icon = senderAvatarUrl;
+          payload.ios_attachments = {
+            sender_avatar: senderAvatarUrl,
+          };
+        }
 
         // Add data payload (no URL - tapping notification just opens the app)
         payload.data = {
           ...(notif.data || {}),
           notification_id: notif.id,
           type: notif.type,
+          notification_style: isMessagePush ? "chat_message" : notif.type,
         };
 
         console.log(`Sending push for notification ${notif.id} to user ${notif.user_id}`);
