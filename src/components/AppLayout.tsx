@@ -64,8 +64,9 @@ function AppLayoutInner({ children }: AppLayoutProps) {
       });
     });
 
-    const offQuotaFinished = onEvent('wakti-trial-quota-finished', ({ feature }) => {
+    const offQuotaFinished = onEvent('wakti-trial-quota-finished', ({ feature, justExhausted }) => {
       if (isGuest) return;
+      if (justExhausted !== true) return;
       const msg = language === 'ar'
         ? 'استخدمت آخر محاولة مجانية لهذه الميزة. للاستخدام القادم اشترك من الحساب والفوترة.'
         : 'You just used your last free try for this feature. For the next one, subscribe in Account & Billing.';

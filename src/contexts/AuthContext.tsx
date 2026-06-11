@@ -466,6 +466,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
       } catch {}
+
+      // Force Wakti AI service to pick up the new JWT (old guest token still says is_anonymous=true)
+      try {
+        const { clearCachedSession } = await import('@/services/WaktiAIV2Service');
+        clearCachedSession();
+      } catch {}
     }
 
     return { error: null };

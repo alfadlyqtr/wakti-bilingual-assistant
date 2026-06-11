@@ -339,6 +339,7 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
           consumed: json.trial?.consumed,
           limit: json.trial?.limit,
           remaining: json.trial?.remaining,
+          justExhausted: true,
         });
       }
 

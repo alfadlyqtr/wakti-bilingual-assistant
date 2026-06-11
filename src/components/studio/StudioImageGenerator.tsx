@@ -200,6 +200,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         consumed: payload?.trial?.consumed,
         limit: payload?.trial?.limit,
         remaining: payload?.trial?.remaining,
+        justExhausted: true,
       });
     }
   }, []);

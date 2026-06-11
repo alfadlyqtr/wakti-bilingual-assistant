@@ -78,7 +78,8 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
       }
     });
 
-    const offQuotaFinished = onEvent('wakti-trial-quota-finished', ({ feature, consumed, limit: eventLimit }) => {
+    const offQuotaFinished = onEvent('wakti-trial-quota-finished', ({ feature, consumed, limit: eventLimit, justExhausted }) => {
+      if (justExhausted !== true) return;
       if (feature === featureKey) {
         openFinished(consumed, eventLimit);
       }
