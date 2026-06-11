@@ -8,10 +8,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Image, FileText, X, Download, Play, Pause, Expand, Save, CheckCheck, Reply } from "lucide-react";
+import { Send, Image, FileText, X, Download, Play, Pause, Expand, Save, CheckCheck, Reply, Trash2 } from "lucide-react";
 import type { DirectMessage } from "@/services/messageService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMessages, sendMessage, markAsRead, uploadMessageAttachment, addReaction, removeReaction } from "@/services/messageService";
+import { getMessages, sendMessage, markAsRead, uploadMessageAttachment, addReaction, removeReaction, deleteMessage } from "@/services/messageService";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder } from "./VoiceRecorder";
@@ -44,8 +44,12 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<DirectMessage | null>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
+  const [selectedActionMessage, setSelectedActionMessage] = useState<DirectMessage | null>(null);
+  const [selectedActionIsSentByMe, setSelectedActionIsSentByMe] = useState(false);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
+  const [selectedMessageRect, setSelectedMessageRect] = useState<{ top: number; left: number; width: number; height: number; right: number; } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
@@ -187,23 +191,63 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     } catch (e) {
       console.error("Reaction error:", e);
     }
-    setReactionPickerFor(null);
-    setSelectedMessageId(null);
+    closeMessageActions();
   };
 
   const handleReplyTo = (message: DirectMessage) => {
     setReplyingTo(message);
-    setSelectedMessageId(null);
+    closeMessageActions();
   };
 
   const cancelReply = () => setReplyingTo(null);
+  const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
+
+  const closeMessageActions = useCallback(() => {
+    setReactionPickerFor(null);
+    setSelectedMessageId(null);
+    setSelectedActionMessage(null);
+    setSelectedActionIsSentByMe(false);
+    setSelectedMessageRect(null);
+  }, []);
+
+  const openMessageActions = useCallback((message: DirectMessage, isSentByMe: boolean) => {
+    const bubble = messageBubbleRefs.current[message.id];
+    if (!bubble) return;
+    const rect = bubble.getBoundingClientRect();
+    setSelectedMessageRect({
+      top: rect.top,
+      left: rect.left,
+      width: rect.width,
+      height: rect.height,
+      right: rect.right,
+    });
+    setSelectedMessageId(message.id);
+    setSelectedActionMessage(message);
+    setSelectedActionIsSentByMe(isSentByMe);
+    setReactionPickerFor(message.id);
+  }, []);
+
+  const handleDeleteSelectedMessage = async (message: DirectMessage) => {
+    if (message.sender_id !== currentUserId) {
+      toast.error(language === 'ar' ? 'يمكنك حذف رسائلك فقط' : 'You can delete only your own message');
+      return;
+    }
+    try {
+      await deleteMessage(message.id);
+      toast.success(language === 'ar' ? 'تم حذف الرسالة' : 'Message deleted');
+      closeMessageActions();
+      queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
+    } catch (error) {
+      console.error("Error deleting message:", error);
+      toast.error(language === 'ar' ? 'تعذر حذف الرسالة' : 'Could not delete message');
+    }
+  };
 
   // Long press handlers
-  const startLongPress = (messageId: string) => {
+  const startLongPress = (message: DirectMessage, isSentByMe: boolean) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     longPressTimer.current = setTimeout(() => {
-      setSelectedMessageId(messageId);
-      setReactionPickerFor(messageId);
+      openMessageActions(message, isSentByMe);
     }, 500);
   };
   const endLongPress = () => {
@@ -437,8 +481,9 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     const isSentByMe = message.sender_id === currentUserId;
     const showAvatar = !isSentByMe && (index === 0 || messages[index - 1]?.sender_id !== message.sender_id);
     const isLastOfGroup = index === messages.length - 1 || messages[index + 1]?.sender_id !== message.sender_id;
-    const isSelected = selectedMessageId === message.id;
-    const reactionEmojis = ['👍','❤️','😂','😮','😢'];
+    const displayedReaction = message.reactions && message.reactions.length > 0
+      ? [...message.reactions].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+      : null;
 
     return (
       <motion.div
@@ -446,18 +491,22 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className={`flex mb-2 ${isSentByMe ? 'justify-end' : 'justify-start'} ${isSelected ? 'opacity-90' : ''}`}
+        className={`flex select-none mb-2 ${isSentByMe ? 'justify-end' : 'justify-start'}`}
         onContextMenu={(e) => {
           e.preventDefault();
-          setSelectedMessageId(message.id);
-          setReactionPickerFor(message.id);
+          openMessageActions(message, isSentByMe);
         }}
-        onTouchStart={() => startLongPress(message.id)}
+        onTouchStart={() => startLongPress(message, isSentByMe)}
         onTouchEnd={endLongPress}
         onTouchMove={endLongPress}
-        onMouseDown={() => startLongPress(message.id)}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          startLongPress(message, isSentByMe);
+        }}
         onMouseUp={endLongPress}
         onMouseLeave={endLongPress}
+        style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
       >
         <div className={`flex ${isSentByMe ? 'flex-row-reverse' : 'flex-row'} items-end gap-2 max-w-[80%]`}>
           {/* Avatar for other user messages */}
@@ -476,11 +525,15 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           <div className="flex flex-col">
             {/* Message bubble */}
             <div
-              className={`px-4 py-3 rounded-2xl ${
+              ref={(element) => {
+                messageBubbleRefs.current[message.id] = element;
+              }}
+              className={`select-none px-4 py-3 rounded-2xl ${
                 isSentByMe
                   ? `bg-gradient-to-br from-blue-500 to-blue-600 text-white ${isLastOfGroup ? 'rounded-br-sm' : ''}`
                   : `${isDark ? 'bg-dark-secondary/60 text-white' : 'bg-light-secondary/40 text-light-primary'} ${isLastOfGroup ? 'rounded-bl-sm' : ''}`
               } backdrop-blur-sm shadow-sm`}
+              style={{ WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
             >
               {/* Quoted reply */}
               {message.reply_to && (
@@ -584,37 +637,18 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 </div>
               )}
 
-              {/* Reactions row inside bubble */}
-              {message.reactions && message.reactions.length > 0 && (
-                <div className={`flex flex-wrap gap-1 pt-1.5 ${isSentByMe ? 'justify-end' : 'justify-start'}`}>
-                  {Object.entries(
-                    message.reactions.reduce((acc: Record<string, number>, r: any) => {
-                      acc[r.emoji] = (acc[r.emoji] || 0) + 1;
-                      return acc;
-                    }, {})
-                  ).map(([emoji, count]) => {
-                    const userReacted = message.reactions?.some((r: any) => r.user_id === currentUserId && r.emoji === emoji);
-                    return (
-                      <button
-                        key={emoji}
-                        onClick={(e) => { e.stopPropagation(); handleReaction(message.id, emoji); }}
-                        className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
-                          isSentByMe
-                            ? userReacted
-                              ? 'bg-white/30 border-white/40 text-white'
-                              : 'bg-white/15 border-white/25 text-white/90'
-                            : userReacted
-                              ? isDark ? 'bg-blue-500/25 border-blue-400/35 text-blue-300' : 'bg-blue-500/12 border-blue-400/25 text-blue-600'
-                              : isDark ? 'bg-black/25 border-gray-500/25 text-gray-300' : 'bg-black/8 border-gray-400/25 text-gray-500'
-                        }`}
-                      >
-                        {emoji} {count as number}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
             </div>
+
+            {displayedReaction && (
+              <div className={`mt-1 flex ${isSentByMe ? 'justify-end pr-2' : 'justify-start pl-2'}`}>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleReaction(message.id, displayedReaction.emoji); }}
+                  className={`flex h-8 min-w-8 items-center justify-center rounded-full border px-2 text-base shadow-md ${isDark ? 'border-white/10 bg-[#1f1f1f] text-white' : 'border-black/10 bg-white text-gray-900'}`}
+                >
+                  <span>{displayedReaction.emoji}</span>
+                </button>
+              </div>
+            )}
 
             {/* Timestamp */}
             <div className={`text-[11px] mt-1 ${
@@ -627,43 +661,88 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 </span>
               )}
             </div>
-
-            {/* Reaction picker + Reply (visible when message is selected) */}
-            {selectedMessageId === message.id && (
-              <div className={`flex flex-wrap gap-1 mt-1 ${isSentByMe ? 'self-end mr-1' : 'self-start ml-1'}`}>
-                {reactionPickerFor === message.id && reactionEmojis.map(emoji => (
-                  <button
-                    key={emoji}
-                    onClick={() => handleReaction(message.id, emoji)}
-                    className={`text-base px-1.5 py-0.5 rounded-full transition-transform active:scale-90 ${
-                      isDark ? 'hover:bg-dark-secondary/80' : 'hover:bg-light-secondary/60'
-                    }`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-                <button
-                  onClick={() => handleReplyTo(message)}
-                  className={`flex items-center gap-1 text-[11px] px-2 py-1 rounded-full ${
-                    isDark ? 'bg-blue-500/20 text-blue-400 hover:bg-blue-500/30' : 'bg-blue-500/10 text-blue-600 hover:bg-blue-500/20'
-                  }`}
-                >
-                  <Reply className="h-3 w-3" />
-                  {language === 'ar' ? 'رد' : 'Reply'}
-                </button>
-                <button
-                  onClick={() => { setSelectedMessageId(null); setReactionPickerFor(null); }}
-                  className={`text-[11px] px-2 py-1 rounded-full ${isDark ? 'text-gray-400 hover:bg-dark-secondary/80' : 'text-gray-500 hover:bg-light-secondary/60'}`}
-                >
-                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
-                </button>
-              </div>
-            )}
           </div>
         </div>
       </motion.div>
     );
   };
+
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 390;
+  const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 844;
+  const reactionBarWidth = 312;
+  const actionMenuWidth = 220;
+  const messagePreviewWidth = selectedMessageRect ? Math.min(selectedMessageRect.width, viewportWidth - 32) : 0;
+  const messagePreviewLeft = selectedMessageRect
+    ? clamp(selectedActionIsSentByMe ? selectedMessageRect.right - messagePreviewWidth : selectedMessageRect.left, 16, Math.max(16, viewportWidth - messagePreviewWidth - 16))
+    : 16;
+  const reactionBarLeft = selectedMessageRect
+    ? clamp(selectedMessageRect.left + (selectedMessageRect.width / 2) - (reactionBarWidth / 2), 16, Math.max(16, viewportWidth - reactionBarWidth - 16))
+    : 16;
+  const actionMenuLeft = selectedMessageRect
+    ? clamp(selectedActionIsSentByMe ? selectedMessageRect.right - actionMenuWidth : selectedMessageRect.left, 16, Math.max(16, viewportWidth - actionMenuWidth - 16))
+    : 16;
+  const messagePreviewTop = selectedMessageRect ? clamp(selectedMessageRect.top, 96, Math.max(96, viewportHeight - selectedMessageRect.height - 210)) : 96;
+  const reactionBarTop = selectedMessageRect ? Math.max(20, messagePreviewTop - 58) : 20;
+  const actionMenuTop = selectedMessageRect ? Math.min(viewportHeight - (selectedActionIsSentByMe ? 136 : 84), messagePreviewTop + selectedMessageRect.height + 10) : 150;
+
+  const renderPopupMessagePreview = (message: DirectMessage, isSentByMe: boolean) => (
+    <div
+      className={`select-none px-4 py-3 rounded-2xl ${
+        isSentByMe
+          ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-br-sm'
+          : `${isDark ? 'bg-dark-secondary/95 text-white' : 'bg-light-secondary/95 text-light-primary'} rounded-bl-sm`
+      } backdrop-blur-sm shadow-2xl`}
+      style={{ width: messagePreviewWidth, WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
+    >
+      {message.reply_to && (
+        <div className={`mb-2 rounded-lg px-2 py-1 text-xs border-l-2 ${
+          isSentByMe
+            ? 'bg-white/20 border-white/40 text-white/90'
+            : isDark ? 'bg-black/20 border-gray-400 text-gray-300' : 'bg-black/5 border-gray-400 text-gray-600'
+        }`}>
+          <div className="truncate">
+            {message.reply_to.message_type === 'image' ? '📷 Image' :
+             message.reply_to.message_type === 'voice' ? '🎤 Voice' :
+             message.reply_to.message_type === 'pdf' ? '📄 PDF' :
+             message.reply_to.content || '...'}
+          </div>
+        </div>
+      )}
+      {message.message_type === 'image' ? (
+        <img
+          src={cleanMediaUrl(message.media_url)}
+          alt="Image message"
+          className="max-w-full h-auto rounded-lg"
+          loading="lazy"
+          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+        />
+      ) : message.message_type === 'voice' ? (
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={isSentByMe ? "ghost" : "secondary"}
+              onClick={() => toggleAudioPlayback(message.id, cleanMediaUrl(message.media_url))}
+              className={`h-8 w-8 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
+            >
+              {playingAudio === message.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            </Button>
+            <span className="text-sm">{formatDuration(message.voice_duration || 0)}</span>
+          </div>
+        </div>
+      ) : message.message_type === 'pdf' ? (
+        <div className="flex items-center gap-2 min-w-0">
+          <FileText className="h-4 w-4 flex-shrink-0" />
+          <span className="text-sm truncate">{message.content}</span>
+        </div>
+      ) : (
+        <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">
+          {linkifyText(message.content || '', isSentByMe)}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -749,13 +828,17 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 ))}
               </div>
             ) : allMessages && allMessages.length > 0 ? (
-              <div className="space-y-1 py-2">
-                <AnimatePresence>
-                  {allMessages.map((message, index) => (
-                    renderMessage(message, index, allMessages)
-                  ))}
-                </AnimatePresence>
-                <div ref={messageEndRef} />
+              <div className="min-h-full flex flex-col">
+                <div className="mt-auto">
+                  <div className="space-y-1 py-2">
+                    <AnimatePresence>
+                      {allMessages.map((message, index) => (
+                        renderMessage(message, index, allMessages)
+                      ))}
+                    </AnimatePresence>
+                    <div ref={messageEndRef} />
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col justify-center items-center h-48 text-center py-8">
@@ -769,7 +852,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
           {/* Floating composer (auto height) */}
           <div
-            className="px-1 pt-1 border-t"
+            className="px-1 pt-1 pb-3 border-t"
             style={{
               borderColor: `${colors.secondary}30`,
               background: isDark ?
@@ -872,6 +955,88 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               </div>
             </div>
           </div>
+          <AnimatePresence>
+            {selectedActionMessage && selectedMessageRect && (
+              <>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.18 }}
+                  className="fixed inset-0 z-40 bg-black/68 backdrop-blur-[1px]"
+                  onClick={closeMessageActions}
+                />
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.18 }}
+                  className="fixed z-50"
+                  style={{
+                    top: messagePreviewTop,
+                    left: messagePreviewLeft,
+                  }}
+                >
+                  {renderPopupMessagePreview(selectedActionMessage, !!selectedActionIsSentByMe)}
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.18 }}
+                  className="fixed z-50 flex items-center justify-between gap-1 rounded-full px-3 py-2 shadow-2xl"
+                  style={{
+                    top: reactionBarTop,
+                    left: reactionBarLeft,
+                    width: reactionBarWidth,
+                    background: 'rgba(28,28,30,0.98)',
+                    boxShadow: '0 14px 40px rgba(0,0,0,0.38)',
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  {reactionPickerFor === selectedActionMessage.id && ['👍','❤️','😂','😮','😢','🙏'].map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => handleReaction(selectedActionMessage.id, emoji)}
+                      className="flex h-11 w-11 items-center justify-center rounded-full text-[28px] leading-none transition-transform hover:scale-110 active:scale-95"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.18 }}
+                  className="fixed z-50 overflow-hidden rounded-[28px] shadow-2xl"
+                  style={{
+                    top: actionMenuTop,
+                    left: actionMenuLeft,
+                    width: actionMenuWidth,
+                    background: 'rgba(36,36,38,0.98)',
+                    boxShadow: '0 14px 40px rgba(0,0,0,0.42)',
+                  }}
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <button
+                    onClick={() => handleReplyTo(selectedActionMessage)}
+                    className="flex w-full items-center gap-3 px-5 py-4 text-left text-base text-white hover:bg-white/5"
+                  >
+                    <Reply className="h-4 w-4" />
+                    <span>{language === 'ar' ? 'رد' : 'Reply'}</span>
+                  </button>
+                  <button
+                    onClick={() => handleDeleteSelectedMessage(selectedActionMessage)}
+                    className={`flex w-full items-center gap-3 border-t border-white/10 px-5 py-4 text-left text-base ${selectedActionIsSentByMe ? 'text-red-400 hover:bg-red-500/10' : 'text-red-300/75 hover:bg-white/5'}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>{language === 'ar' ? 'حذف' : 'Delete'}</span>
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>
           </div>
         </DialogContent>
       </Dialog>

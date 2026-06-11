@@ -299,6 +299,17 @@ export async function addReaction(messageId: string, emoji: string): Promise<Mes
   if (!userId) throw new Error("User not authenticated");
   await ensurePassport();
 
+  const { error: clearError } = await supabase
+    .from("message_reactions")
+    .delete()
+    .eq("message_id", messageId)
+    .eq("user_id", userId);
+
+  if (clearError) {
+    console.error("❌ Error clearing old reactions:", clearError);
+    throw clearError;
+  }
+
   const { data, error } = await supabase
     .from("message_reactions")
     .insert({ message_id: messageId, user_id: userId, emoji })
@@ -327,6 +338,29 @@ export async function removeReaction(messageId: string, emoji: string): Promise<
   if (error) {
     console.error("❌ Error removing reaction:", error);
     throw error;
+  }
+}
+
+export async function deleteMessage(messageId: string): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { data, error } = await supabase
+    .from("messages")
+    .delete()
+    .select("id")
+    .eq("id", messageId)
+    .eq("sender_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("❌ Error deleting message:", error);
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Message could not be deleted");
   }
 }
 
