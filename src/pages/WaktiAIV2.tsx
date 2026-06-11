@@ -21,6 +21,9 @@ import { HelpfulMemoryService } from '@/services/HelpfulMemoryService';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { useIsDesktop } from '@/hooks/use-mobile';
+import { Button } from '@/components/ui/button';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
+import { isGuestRestrictionCode } from '@/utils/guestAuth';
 
 /** Strip trailing action JSON block (e.g. {"action":"schedule_reminder",...}) from AI responses.
  *  Only removes the LAST occurrence so mid-response mentions of '{"action"' don't nuke content.
@@ -113,10 +116,12 @@ function deduplicateCards(list: any[]): any[] {
     return true;
   });
 }
+const WAKTI_AI_GUEST_DRAFT_KEY = 'wakti_ai_guest_upgrade_draft_v1';
 
 const WaktiAIV2 = () => {
-  const { user: authUser } = useAuth();
+  const { user: authUser, isGuest } = useAuth();
   const location = useLocation();
+  const locationState = location.state as { guestUpgradeCompleted?: boolean } | null;
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   // Initialize from localStorage cache — instant render of previous messages
@@ -155,6 +160,7 @@ const WaktiAIV2 = () => {
   const reminderShownRef = useRef<boolean>(false);
   const [replyContext, setReplyContext] = useState<ReplyContext | null>(null);
   const [chatTrialLimitReached, setChatTrialLimitReached] = useState(false);
+  const [guestUpgradeOpen, setGuestUpgradeOpen] = useState(false);
   // Streaming isolation: active stream ID tracked in state (one set per message, not per token).
   // Token content goes directly to DOM via streamingBubbleRef — zero React re-renders per token.
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
@@ -172,6 +178,7 @@ const WaktiAIV2 = () => {
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveInFlightRef = useRef<boolean>(false);
   const saveDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const guestPromptCountRef = useRef<number>(0);
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
   const { isDesktop } = useIsDesktop();
@@ -190,6 +197,39 @@ const WaktiAIV2 = () => {
 
     return normalizeConversationTitle(activeConversation.title, language === 'ar' ? 'محادثة جديدة' : 'New Chat');
   }, [archivedConversations, currentConversationId, isNewConversation, language]);
+
+  const openGuestUpgradeDialog = useCallback((_messageOverride?: string) => {
+    setGuestUpgradeOpen(true);
+  }, []);
+
+  const isGuestBlockedAction = useCallback((trigger: string, nextChatSubmode: ChatSubmode, files?: any[]) => {
+    if (!isGuest) return false;
+    if (trigger !== 'chat') return true;
+    if (nextChatSubmode !== 'chat') return true;
+    if (Array.isArray(files) && files.length > 0) return true;
+    return false;
+  }, [isGuest]);
+
+  const getGuestBlockedMessage = useCallback((trigger: string, nextChatSubmode: ChatSubmode, files?: any[]) => {
+    if (Array.isArray(files) && files.length > 0) {
+      return language === 'ar'
+        ? 'رفع الصور والمرفقات يحتاج إلى حساب كامل. كضيف، يمكنك متابعة الدردشة النصية فقط.'
+        : 'Images and attachments need a full account. As a guest, you can continue with text chat only.';
+    }
+    if (nextChatSubmode === 'study') {
+      return language === 'ar'
+        ? 'وضع الدراسة يحتاج إلى حساب كامل. كضيف، يمكنك متابعة وضع الدردشة فقط.'
+        : 'Study mode needs a full account. As a guest, you can continue in chat mode only.';
+    }
+    if (trigger === 'search') {
+      return language === 'ar'
+        ? 'البحث الذكي غير متاح في وضع الضيف. كضيف، يمكنك متابعة دردشة وقتي فقط.'
+        : 'Smart search is not available in guest mode. As a guest, you can continue with Wakti chat only.';
+    }
+    return language === 'ar'
+      ? 'هذه الميزة تحتاج إلى حساب كامل. كضيف، يمكنك متابعة دردشة وقتي فقط.'
+      : 'This feature needs a full account. As a guest, you can continue with Wakti chat only.';
+  }, [language]);
 
   const canSendMessage = useMemo(() => !isLoading && !chatTrialLimitReached && !!(authUser?.id || userProfile?.id), [isLoading, chatTrialLimitReached, authUser?.id, userProfile?.id]);
 
@@ -287,6 +327,46 @@ const WaktiAIV2 = () => {
     }
   }, [activeTrigger]);
 
+  useEffect(() => {
+    if (!isGuest) return;
+    try {
+      if (!message.trim() && activeTrigger === 'chat' && chatSubmode === 'chat') {
+        localStorage.removeItem(WAKTI_AI_GUEST_DRAFT_KEY);
+        return;
+      }
+      localStorage.setItem(WAKTI_AI_GUEST_DRAFT_KEY, JSON.stringify({
+        message,
+        activeTrigger,
+        chatSubmode,
+      }));
+    } catch {}
+  }, [activeTrigger, chatSubmode, isGuest, message]);
+
+  useEffect(() => {
+    if (!locationState?.guestUpgradeCompleted) return;
+    try {
+      const raw = localStorage.getItem(WAKTI_AI_GUEST_DRAFT_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        message?: string;
+        activeTrigger?: string;
+        chatSubmode?: ChatSubmode;
+      };
+      if (typeof parsed.message === 'string') {
+        setMessage(parsed.message);
+      }
+      if (typeof parsed.activeTrigger === 'string' && parsed.activeTrigger.trim()) {
+        setActiveTrigger(parsed.activeTrigger);
+      }
+      if (parsed.chatSubmode === 'chat' || parsed.chatSubmode === 'study') {
+        setChatSubmode(parsed.chatSubmode);
+      }
+    } catch {}
+    try {
+      localStorage.removeItem(WAKTI_AI_GUEST_DRAFT_KEY);
+    } catch {}
+  }, [locationState?.guestUpgradeCompleted]);
+
 
   useEffect(() => {
     loadPersonalTouch();
@@ -337,6 +417,7 @@ const WaktiAIV2 = () => {
 
   // One-time Helpful Memory onboarding popup — shows exactly once per user.
   useEffect(() => {
+    if (isGuest) return;
     const userId = authUser?.id || userProfile?.id;
     if (!userId) return;
     let cancelled = false;
@@ -349,11 +430,12 @@ const WaktiAIV2 = () => {
       } catch {}
     })();
     return () => { cancelled = true; };
-  }, [authUser?.id, userProfile?.id]);
+  }, [authUser?.id, userProfile?.id, isGuest]);
 
   // Subtle reminder nudge: if user has sent >= 15 messages and memory is still empty,
   // show a one-time toast pointing to Helpful Memory. Triggers once per user lifetime.
   useEffect(() => {
+    if (isGuest) return;
     const userId = authUser?.id || userProfile?.id;
     if (!userId) return;
     if (reminderShownRef.current) return;
@@ -391,7 +473,7 @@ const WaktiAIV2 = () => {
         await AnnouncementService.mark(userId, 'helpful_memory_empty_reminder_v1', 'seen');
       } catch {}
     })();
-  }, [sessionMessages, authUser?.id, userProfile?.id, showMemoryOnboarding, language]);
+  }, [sessionMessages, authUser?.id, userProfile?.id, showMemoryOnboarding, language, isGuest]);
 
   const handleMemoryOnboardingQuickSetup = useCallback(async () => {
     const userId = authUser?.id || userProfile?.id;
@@ -608,6 +690,15 @@ const WaktiAIV2 = () => {
       showError('Please enter a message or attach a file.');
       return;
     }
+    const requestedSubmode: ChatSubmode = chatSubmodeParam || chatSubmode;
+    if (isGuest && guestPromptCountRef.current >= 3) {
+      openGuestUpgradeDialog();
+      return;
+    }
+    if (isGuestBlockedAction(trigger, requestedSubmode, attachedFiles)) {
+      openGuestUpgradeDialog(getGuestBlockedMessage(trigger, requestedSubmode, attachedFiles));
+      return;
+    }
     // Prevent double-submit for Vision to avoid aborting a request while body is still uploading
     if (trigger === 'vision') {
       if (visionInFlightRef.current) {
@@ -630,8 +721,11 @@ const WaktiAIV2 = () => {
       setCurrentConversationId(convId);
       setIsNewConversation(false);
     }
+    if (isGuest) {
+      guestPromptCountRef.current += 1;
+    }
 
-    const effectiveChatSubmode: ChatSubmode = chatSubmodeParam || chatSubmode;
+    const effectiveChatSubmode: ChatSubmode = requestedSubmode;
     const usedStudyThisRequest = effectiveChatSubmode === 'study';
 
     // Route to Vision path if: explicit vision trigger (NOT Study mode - Study uses brain-stream with OCR→Wolfram)
@@ -1003,6 +1097,11 @@ const WaktiAIV2 = () => {
               setSessionMessages(prev => prev.filter(m => m.id !== assistantMessageId));
               return;
             }
+            if (err === 'ANONYMOUS_CHAT_ONLY') {
+              setSessionMessages(prev => prev.filter(m => m.id !== assistantMessageId));
+              openGuestUpgradeDialog(getGuestBlockedMessage(trigger, effectiveChatSubmode, attachedFiles));
+              return;
+            }
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { 
               ...m, 
               metadata: { ...(m.metadata || {}), loading: false, error: true }
@@ -1118,6 +1217,17 @@ const WaktiAIV2 = () => {
 
     } catch (error: any) {
       console.error('Error sending message:', error);
+      const errorCode = typeof error?.message === 'string' && isGuestRestrictionCode(error.message)
+        ? error.message
+        : (typeof error?.code === 'string' && isGuestRestrictionCode(error.code) ? error.code : null);
+      if (errorCode === 'ANONYMOUS_CHAT_ONLY') {
+        setSessionMessages(prev => prev.filter(m => m.id !== assistantMessageId));
+        setIsLoading(false);
+        setStreamingMessageId(null);
+        streamingBubbleRef.current?.reset();
+        openGuestUpgradeDialog(getGuestBlockedMessage(trigger, effectiveChatSubmode, attachedFiles));
+        return;
+      }
       // Trial limit: remove placeholder silently — overlay handles the UX
       if (error?.message === 'TRIAL_LIMIT_REACHED' || String(error?.message).includes('TRIAL_LIMIT')) {
         setSessionMessages(prev => prev.filter(m => m.id !== assistantMessageId));
@@ -1203,7 +1313,7 @@ const WaktiAIV2 = () => {
       }
       // Study mode only persists when user explicitly stays in chat trigger
     }
-  }, [currentConversationId, language, sessionMessages, authUser, userProfile]);
+  }, [authUser, chatSubmode, currentConversationId, getGuestBlockedMessage, isGuestBlockedAction, language, openGuestUpgradeDialog, sessionMessages, userProfile]);
 
   // Listen for search confirmation Yes/No card responses
   useEffect(() => {
@@ -1334,6 +1444,12 @@ const WaktiAIV2 = () => {
   return (
     <div className="wakti-ai-page-container" style={{ position: 'relative' }}>
       {chatTrialLimitReached ? <TrialGateOverlay featureKey="ai_chat" limit={15} featureLabel={{ en: 'WAKTI AI Chat', ar: 'دردشة وقتي AI' }} /> : null}
+      <StudioGuestLoginDialog
+        open={guestUpgradeOpen}
+        onOpenChange={setGuestUpgradeOpen}
+        redirectTo={typeof window === 'undefined' ? '/wakti-ai-v2' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
       <HelpfulMemoryOnboardingPopup
         open={showMemoryOnboarding}
         onQuickSetup={handleMemoryOnboardingQuickSetup}
@@ -1417,13 +1533,27 @@ const WaktiAIV2 = () => {
               onOpenPlusDrawer={() => setIsSidebarOpen(true)}
               onOpenConversations={() => setShowConversations(true)}
               activeTrigger={activeTrigger}
-              onTriggerChange={setActiveTrigger}
+              onTriggerChange={(nextTrigger) => {
+                if (isGuest && nextTrigger !== 'chat') {
+                  openGuestUpgradeDialog(getGuestBlockedMessage(nextTrigger, chatSubmode));
+                  return;
+                }
+                setActiveTrigger(nextTrigger);
+              }}
               chatSubmode={chatSubmode}
-              onChatSubmodeChange={setChatSubmode}
+              onChatSubmodeChange={(nextSubmode) => {
+                if (isGuest && nextSubmode !== 'chat') {
+                  openGuestUpgradeDialog(getGuestBlockedMessage('chat', nextSubmode));
+                  return;
+                }
+                setChatSubmode(nextSubmode);
+              }}
               onAddTalkMessage={handleAddTalkMessage}
               replyContext={replyContext}
               onClearReply={handleClearReply}
               onStop={handleStop}
+              isGuest={isGuest}
+              onGuestBlockedAction={openGuestUpgradeDialog}
             />
           </div>,
           portalRoot
@@ -1440,13 +1570,27 @@ const WaktiAIV2 = () => {
               onOpenPlusDrawer={() => setIsSidebarOpen(true)}
               onOpenConversations={() => setShowConversations(true)}
               activeTrigger={activeTrigger}
-              onTriggerChange={setActiveTrigger}
+              onTriggerChange={(nextTrigger) => {
+                if (isGuest && nextTrigger !== 'chat') {
+                  openGuestUpgradeDialog(getGuestBlockedMessage(nextTrigger, chatSubmode));
+                  return;
+                }
+                setActiveTrigger(nextTrigger);
+              }}
               chatSubmode={chatSubmode}
-              onChatSubmodeChange={setChatSubmode}
+              onChatSubmodeChange={(nextSubmode) => {
+                if (isGuest && nextSubmode !== 'chat') {
+                  openGuestUpgradeDialog(getGuestBlockedMessage('chat', nextSubmode));
+                  return;
+                }
+                setChatSubmode(nextSubmode);
+              }}
               onAddTalkMessage={handleAddTalkMessage}
               replyContext={replyContext}
               onClearReply={handleClearReply}
               onStop={handleStop}
+              isGuest={isGuest}
+              onGuestBlockedAction={openGuestUpgradeDialog}
             />
           </div>
         )}

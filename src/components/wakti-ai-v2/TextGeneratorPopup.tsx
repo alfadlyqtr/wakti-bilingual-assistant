@@ -11,6 +11,8 @@ import { AppleLogo } from '@/components/calendar/AppleLogo';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { safeCopyToClipboard } from '@/utils/clipboardUtils';
 import { extractSmartTextEmailParts, normalizeSmartText, readSavedSmartTexts, writeSavedSmartTexts, type SavedSmartTextItem } from '@/utils/smartTextUtils';
 import { SmartTextPrefill } from '@/utils/smartTextPrefill';
@@ -457,6 +459,8 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   const [generatedSubTab, setGeneratedSubTab] = useState<'current' | 'saved'>('current');
   const [mode, setMode] = useState<Mode>('compose');
   const { language } = useTheme();
+  const { isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const { initiateGmailAuth } = useGmailConnection();
   const [modelPreference, setModelPreference] = useState<ModelPreference>('auto');
   const [temperature, setTemperature] = useState<number>(0.7);
@@ -1209,8 +1213,12 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
   }, [buildGuidedRegeneratePrompt, handleGenerate]);
 
   const handleStandardGenerateClick = useCallback(() => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     void handleGenerate();
-  }, [handleGenerate]);
+  }, [handleGenerate, isGuest]);
 
   const [isFetchingUrl, setIsFetchingUrl] = useState(false);
 
@@ -2367,6 +2375,13 @@ const TextGeneratorPopup: React.FC<TextGeneratorPopupProps> = ({
               </button>
             </div>
           )}
+
+          <StudioGuestLoginDialog
+            open={guestDialogOpen}
+            onOpenChange={setGuestDialogOpen}
+            redirectTo={typeof window === 'undefined' ? '/text-generator' : `${window.location.pathname}${window.location.search}`}
+            language={language === 'ar' ? 'ar' : 'en'}
+          />
         </div>
   );
 

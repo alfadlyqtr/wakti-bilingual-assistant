@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { ChessTab } from '@/components/wakti-ai-v2/games/ChessTab';
 import { TicTacToeTab } from '@/components/wakti-ai-v2/games/TicTacToeTab';
 import { SolitaireGame } from '@/components/wakti-ai-v2/games/SolitaireGame';
@@ -28,6 +30,7 @@ type GameInviteTargetState = {
 
 export default function Games() {
   const { language } = useTheme();
+  const { isGuest } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [screen, setScreen] = useState<GameScreen>('home');
   const [chessInviteCode, setChessInviteCode] = useState<string | null>(null);
@@ -46,6 +49,7 @@ export default function Games() {
     [],
   );
   const [isNavigatingBack, setIsNavigatingBack] = useState(false);
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const processedInviteNavigationRef = useRef<string | null>(null);
@@ -253,10 +257,22 @@ export default function Games() {
             <div className="rounded-2xl border border-[#E9CEB0]/30 bg-white p-6 shadow-[0_8px_32px_rgba(6,5,65,0.08)] dark:border-white/10 dark:bg-gradient-to-br dark:from-[#1a1d26] dark:via-[#141720] dark:to-[#0f1118] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]">
               <h2 className="mb-4 text-xl font-bold text-[#060541] dark:text-white">{isArabic ? 'لعبة الحروف' : 'Letters Game'}</h2>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <button onClick={() => navigate('/games/letters/create')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-3 text-sm font-medium text-white shadow-[0_4px_14px_rgba(37,99,235,0.3)] transition-all duration-200 hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] hover:-translate-y-0.5">
+                <button onClick={() => {
+                  if (isGuest) {
+                    setGuestDialogOpen(true);
+                    return;
+                  }
+                  navigate('/games/letters/create');
+                }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-500 px-6 py-3 text-sm font-medium text-white shadow-[0_4px_14px_rgba(37,99,235,0.3)] transition-all duration-200 hover:shadow-[0_6px_20px_rgba(37,99,235,0.4)] hover:-translate-y-0.5">
                   {isArabic ? 'إنشاء لعبة مشتركة' : 'Create shared game'}
                 </button>
-                <button onClick={() => navigate('/games/letters/join')} className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[#E9CEB0] bg-[#E9CEB0]/10 px-6 py-3 text-sm font-medium text-[#060541] transition-all duration-200 hover:bg-[#E9CEB0]/20 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10">
+                <button onClick={() => {
+                  if (isGuest) {
+                    setGuestDialogOpen(true);
+                    return;
+                  }
+                  navigate('/games/letters/join');
+                }} className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[#E9CEB0] bg-[#E9CEB0]/10 px-6 py-3 text-sm font-medium text-[#060541] transition-all duration-200 hover:bg-[#E9CEB0]/20 dark:border-white/20 dark:bg-white/5 dark:text-white dark:hover:bg-white/10">
                   {isArabic ? 'الانضمام إلى لعبة مشتركة' : 'Join shared game'}
                 </button>
                 <button onClick={() => navigate('/games/letters/ai')} className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-6 py-3 text-sm font-medium text-white shadow-[0_4px_14px_rgba(16,185,129,0.3)] transition-all duration-200 hover:shadow-[0_6px_20px_rgba(16,185,129,0.4)] hover:-translate-y-0.5">
@@ -266,6 +282,12 @@ export default function Games() {
             </div>
           )}
         </div>
+        <StudioGuestLoginDialog
+          open={guestDialogOpen}
+          onOpenChange={setGuestDialogOpen}
+          redirectTo={typeof window === 'undefined' ? '/games' : `${window.location.pathname}${window.location.search}`}
+          language={language === 'ar' ? 'ar' : 'en'}
+        />
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { callEdgeFunctionWithRetry, supabase } from '@/integrations/supabase/client';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
@@ -132,7 +133,8 @@ const getCanonicalEnhancementState = (slideList: Slide[]) => {
 
 const PresentationTab: React.FC = () => {
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   const dragRef = useRef<{
     active: boolean;
@@ -554,6 +556,10 @@ const PresentationTab: React.FC = () => {
   }, [effectiveResearchMode, researchModeType]);
 
   const handleGenerateBrief = useCallback(async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     setIsLoading(true);
     setError('');
 
@@ -610,9 +616,13 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [effectiveResearchMode, inputMode, presentationLanguage, selectedTheme, slideCount, topic]);
+  }, [effectiveResearchMode, inputMode, presentationLanguage, selectedTheme, slideCount, topic, isGuest]);
 
   const handleGenerateOutline = useCallback(async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (!brief) return;
 
     setIsLoading(true);
@@ -651,9 +661,13 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [brief, effectiveResearchMode, inputMode, presentationLanguage, researchModeType, selectedTheme, slideCount, topic]);
+  }, [brief, effectiveResearchMode, inputMode, presentationLanguage, researchModeType, selectedTheme, slideCount, topic, isGuest]);
 
   const handleGenerateSlides = useCallback(async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (outline.length === 0) return;
     setIsLoading(true);
     setError('');
@@ -765,7 +779,7 @@ const PresentationTab: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [outline, selectedTheme, brief, presentationLanguage, applyPerSlideResearchBlanks, effectiveResearchMode, researchModeType, slideCount, aiGenerateImagesByMode, inputMode]);
+  }, [outline, selectedTheme, brief, presentationLanguage, applyPerSlideResearchBlanks, effectiveResearchMode, researchModeType, slideCount, aiGenerateImagesByMode, inputMode, isGuest]);
 
   // Regenerate image for current slide using AI (simple auto-only)
   const handleRegenerateImage = useCallback(async () => {
@@ -5084,6 +5098,13 @@ const PresentationTab: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/tools/text' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 };

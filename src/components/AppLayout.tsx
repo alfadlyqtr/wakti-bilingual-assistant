@@ -34,7 +34,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
 function AppLayoutInner({ children }: AppLayoutProps) {
   const unreadData = useUnreadContext();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
 
   const { language } = useTheme();
   const navigate = useNavigate();
@@ -65,6 +65,7 @@ function AppLayoutInner({ children }: AppLayoutProps) {
     });
 
     const offQuotaFinished = onEvent('wakti-trial-quota-finished', ({ feature }) => {
+      if (isGuest) return;
       const msg = language === 'ar'
         ? 'استخدمت آخر محاولة مجانية لهذه الميزة. للاستخدام القادم اشترك من الحساب والفوترة.'
         : 'You just used your last free try for this feature. For the next one, subscribe in Account & Billing.';

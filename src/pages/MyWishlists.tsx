@@ -63,6 +63,7 @@ import {
 import { cn } from "@/lib/utils";
 import { safeCopyToClipboard } from "@/utils/clipboardUtils";
 import { getContacts } from "@/services/contactsService";
+import { GuestUpgradeDialog } from "@/components/guest/GuestUpgradeDialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -176,7 +177,7 @@ const privacyConfig = {
 // ─── Main Component ────────────────────────────────────────────────────────────
 export default function MyWishlists() {
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isAr = language === "ar";
@@ -260,6 +261,8 @@ export default function MyWishlists() {
   const [showAddItemSheet, setShowAddItemSheet] = useState(false);
   const [showEditListDialog, setShowEditListDialog] = useState(false);
   const [editingList, setEditingList] = useState<Wishlist | null>(null);
+  const [guestUpgradeOpen, setGuestUpgradeOpen] = useState(false);
+  const [guestUpgradeMessage, setGuestUpgradeMessage] = useState("");
 
   // New list form
   const [newListTitle, setNewListTitle] = useState("");
@@ -284,6 +287,13 @@ export default function MyWishlists() {
   const [isAnalyzingImage, setIsAnalyzingImage] = useState(false);
   const [isAddingItem, setIsAddingItem] = useState(false);
   const itemImageInputRef = React.useRef<HTMLInputElement>(null);
+
+  const openGuestUpgradeDialog = (message?: string) => {
+    setGuestUpgradeMessage(message || (isAr
+      ? "ميزات الذكاء الاصطناعي في قوائم الأمنيات تحتاج إلى حساب كامل. كضيف، يمكنك التصفح فقط حالياً."
+      : "AI wishlist features need a full account. As a guest, you can browse for now, then upgrade to use the smart tools."));
+    setGuestUpgradeOpen(true);
+  };
 
   useEffect(() => {
     return () => {
@@ -759,6 +769,10 @@ export default function MyWishlists() {
 
   // ── AI Extract from URL ─────────────────────────────────────────────────────
   const handleAIExtractURL = async () => {
+    if (isGuest) {
+      openGuestUpgradeDialog(isAr ? "استخراج تفاصيل المنتج بالذكاء الاصطناعي يحتاج إلى حساب كامل." : "AI product extraction needs a full account.");
+      return;
+    }
     if (!itemUrl.trim()) {
       toast.error(isAr ? "أدخل رابط المنتج" : "Enter a product URL");
       return;
@@ -816,6 +830,10 @@ export default function MyWishlists() {
   };
 
   const handleAnalyzeManualImage = async () => {
+    if (isGuest) {
+      openGuestUpgradeDialog(isAr ? "تحليل الصور بالذكاء الاصطناعي يحتاج إلى حساب كامل." : "AI image analysis needs a full account.");
+      return;
+    }
     if (!itemImageFile) {
       toast.error(isAr ? "ارفع صورة أولاً" : "Upload a photo first");
       return;
@@ -862,6 +880,10 @@ export default function MyWishlists() {
 
   // ── AI Generate Thank You ───────────────────────────────────────────────────
   const handleGenerateThankYou = async (claimerName: string, itemTitle: string) => {
+    if (isGuest) {
+      openGuestUpgradeDialog(isAr ? "توليد رسائل الشكر بالذكاء الاصطناعي يحتاج إلى حساب كامل." : "AI thank-you generation needs a full account.");
+      return "";
+    }
     try {
       const { data, error } = await supabase.functions.invoke("wakti-ai-v2-brain-stream", {
         body: {
@@ -1457,6 +1479,10 @@ export default function MyWishlists() {
       if (!onGenerateThankYou) return;
       setGeneratingTY(true);
       const msg = await onGenerateThankYou();
+      if (!msg?.trim()) {
+        setGeneratingTY(false);
+        return;
+      }
       setThankYouMsg(msg);
       setGeneratingTY(false);
       setShowThankYou(true);
@@ -1697,6 +1723,12 @@ export default function MyWishlists() {
   // ─── PAGE LAYOUT ─────────────────────────────────────────────────────────────
   return (
     <div className={cn("flex flex-col p-4 pb-28 min-h-screen", isAr && "rtl")}>
+      <GuestUpgradeDialog
+        open={guestUpgradeOpen}
+        onOpenChange={setGuestUpgradeOpen}
+        language={isAr ? "ar" : "en"}
+        description={guestUpgradeMessage}
+      />
       {/* Page Header */}
       <div className="flex items-center justify-between mb-5">
         <div className="flex items-start gap-3">

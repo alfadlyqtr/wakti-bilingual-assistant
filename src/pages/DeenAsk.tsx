@@ -7,6 +7,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useAuth } from "@/contexts/AuthContext";
+import { StudioGuestLoginDialog } from "@/components/studio/StudioGuestLoginDialog";
 import { supabase } from "@/integrations/supabase/client";
 
 function cleanSummary(raw: string): string {
@@ -310,6 +312,7 @@ function SourceGroup({
 export default function DeenAsk() {
   const navigate = useNavigate();
   const { language, theme } = useTheme();
+  const { isGuest } = useAuth();
   const isAr = language === "ar";
   const isDark = theme === "dark";
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -321,6 +324,7 @@ export default function DeenAsk() {
   const turnCounter = useRef(0);
   const [showPopup, setShowPopup] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState("");
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   useEffect(() => {
     // Always show friendly popup on entry
@@ -368,6 +372,10 @@ export default function DeenAsk() {
   const handleSend = async () => {
     const q = question.trim();
     if (!q) return;
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
 
     const id = ++turnCounter.current;
     const newTurn: ChatTurn = { id, query: q, results: null, explanation: null, explaining: false };
@@ -478,6 +486,7 @@ export default function DeenAsk() {
 
 
   return (
+    <>
     <div
       className="flex flex-col h-full min-h-0"
       style={{ background: bg, height: "100%", minHeight: 0, overflow: "hidden" }}
@@ -762,5 +771,12 @@ export default function DeenAsk() {
         </div>
       </div>
     </div>
+    <StudioGuestLoginDialog
+      open={guestDialogOpen}
+      onOpenChange={setGuestDialogOpen}
+      redirectTo={typeof window === 'undefined' ? '/deen/ask' : `${window.location.pathname}${window.location.search}`}
+      language={language === 'ar' ? 'ar' : 'en'}
+    />
+    </>
   );
 }

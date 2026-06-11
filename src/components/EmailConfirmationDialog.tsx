@@ -14,29 +14,37 @@ import { useTheme } from "@/providers/ThemeProvider";
 interface EmailConfirmationDialogProps {
   open: boolean;
   onClose: () => void;
+  mode?: "signup" | "guest_upgrade";
 }
 
 export const EmailConfirmationDialog: React.FC<EmailConfirmationDialogProps> = ({
   open,
   onClose,
+  mode = "signup",
 }) => {
   const { language } = useTheme();
 
   // Translations
   const messages = {
     en: {
-      title: "Account Created Successfully!",
-      description: "To log in, you must confirm your email first. Please check your inbox for a confirmation link.",
+      signupTitle: "Account Created Successfully!",
+      signupDescription: "To log in, you must confirm your email first. Please check your inbox for a confirmation link.",
+      upgradeTitle: "Upgrade Email Sent!",
+      upgradeDescription: "Please check your inbox and confirm your email to finish upgrading your guest account.",
       button: "Got it",
     },
     ar: {
-      title: "تم إنشاء الحساب بنجاح!",
-      description: "لتسجيل الدخول، يجب عليك تأكيد بريدك الإلكتروني أولاً. يرجى التحقق من بريدك للحصول على رابط التأكيد.",
+      signupTitle: "تم إنشاء الحساب بنجاح!",
+      signupDescription: "لتسجيل الدخول، يجب عليك تأكيد بريدك الإلكتروني أولاً. يرجى التحقق من بريدك للحصول على رابط التأكيد.",
+      upgradeTitle: "تم إرسال رابط الترقية!",
+      upgradeDescription: "يرجى التحقق من بريدك الإلكتروني وتأكيده لإكمال ترقية حساب الضيف.",
       button: "تم",
     },
   };
 
   const t = messages[language] || messages.en;
+  const title = mode === "guest_upgrade" ? t.upgradeTitle : t.signupTitle;
+  const description = mode === "guest_upgrade" ? t.upgradeDescription : t.signupDescription;
 
   // Remove onPointerDownOutside (not valid on AlertDialogContent)
   // Basic mobile-friendly alert style; RTL support automatically applies via theme
@@ -49,12 +57,12 @@ export const EmailConfirmationDialog: React.FC<EmailConfirmationDialogProps> = (
               <Mail className="h-8 w-8 text-primary" />
             </span>
             <AlertDialogTitle className="text-xl font-bold mb-1">
-              {t.title}
+              {title}
             </AlertDialogTitle>
           </div>
         </AlertDialogHeader>
         <AlertDialogDescription className="mb-4 text-base">
-          {t.description}
+          {description}
         </AlertDialogDescription>
         <AlertDialogFooter>
           <AlertDialogAction

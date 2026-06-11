@@ -21,6 +21,7 @@ import {
   Mic,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
@@ -165,7 +166,8 @@ const TRANSLATION_LANGUAGES = [
 
 export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const MAX_INPUT_CHARS = 250;
   const [text, setText] = useState('');
   const [selectedVoiceId, setSelectedVoiceId] = useState('');
@@ -493,6 +495,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   const canTranslate = translationText.trim().length > 0;
 
   const generateSpeech = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (!canGenerate) return;
 
     setIsGenerating(true);
@@ -601,6 +607,10 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
   };
 
   const translateText = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (!canTranslate) return;
 
     setIsTranslating(true);
@@ -1224,6 +1234,13 @@ export function VoiceCloneScreen3({ onBack }: VoiceCloneScreen3Props) {
           </div>
         </div>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/tools/text' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 }

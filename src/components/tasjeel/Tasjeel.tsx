@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
+import { StudioGuestLoginDialog } from "@/components/studio/StudioGuestLoginDialog";
 import { supabase, callEdgeFunctionWithRetry, saveTasjeelRecord, updateTasjeelRecord, uploadAudioFile } from "@/integrations/supabase/client";
 import { toast } from "@/components/ui/toast-helper";
 import { Button } from "@/components/ui/button";
@@ -199,7 +200,8 @@ const translations = {
 };
 
 const Tasjeel: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const { theme, language } = useTheme();
   const translationTexts = translations[language];
   
@@ -365,6 +367,10 @@ const Tasjeel: React.FC = () => {
   
   // Start recording function with mobile-friendly codec options
   const startRecording = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
@@ -1569,6 +1575,12 @@ const Tasjeel: React.FC = () => {
           </TabsContent>
         </Tabs>
       </div>
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/tools/text' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </PageContainer>
   );
 };

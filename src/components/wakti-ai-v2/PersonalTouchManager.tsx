@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToastHelper } from "@/hooks/use-toast-helper";
+import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { Brain, Save, Bot, Zap, Cpu } from 'lucide-react';
 import { WaktiAIV2Service } from '@/services/WaktiAIV2Service';
 import { supabase } from '@/integrations/supabase/client';
@@ -60,7 +62,9 @@ interface PTMProps { compact?: boolean }
 export function PersonalTouchManager({ compact = false }: PTMProps) {
   const { language } = useTheme();
   const { showSuccess } = useToastHelper();
-  
+  const { isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
+
   const [showMore, setShowMore] = useState<boolean>(!compact);
 
   const [formData, setFormData] = useState<PersonalTouchData>({
@@ -314,7 +318,13 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
               </button>
               <button
                 type="button"
-                onClick={() => setFormData(prev => ({ ...prev, engineTier: 'intelligence' }))}
+                onClick={() => {
+                  if (isGuest) {
+                    setGuestDialogOpen(true);
+                    return;
+                  }
+                  setFormData(prev => ({ ...prev, engineTier: 'intelligence' }));
+                }}
                 className={`flex-1 flex items-center justify-center gap-1 text-[12px] font-medium transition-all ${
                   formData.engineTier === 'intelligence'
                     ? 'bg-purple-500 text-white'
@@ -419,7 +429,13 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, engineTier: 'intelligence' }))}
+                  onClick={() => {
+                    if (isGuest) {
+                      setGuestDialogOpen(true);
+                      return;
+                    }
+                    setFormData(prev => ({ ...prev, engineTier: 'intelligence' }));
+                  }}
                   className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-all ${
                     formData.engineTier === 'intelligence'
                       ? 'bg-purple-500 text-white shadow-inner'
@@ -456,7 +472,13 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
 
         {/* Save Button */}
         <Button 
-          onClick={handleSave}
+          onClick={() => {
+            if (isGuest) {
+              setGuestDialogOpen(true);
+              return;
+            }
+            handleSave();
+          }}
           disabled={isSaving}
           className={compact ? "w-full bg-blue-500 hover:bg-blue-600 text-white h-8 text-[13px] disabled:opacity-60" : "w-full bg-blue-500 hover:bg-blue-600 text-white disabled:opacity-60"}
           size={compact ? 'sm' : 'sm'}
@@ -465,6 +487,12 @@ export function PersonalTouchManager({ compact = false }: PTMProps) {
           {isSaving ? (language === 'ar' ? 'جاري الحفظ...' : 'Saving...') : (language === 'ar' ? 'حفظ' : 'Save')}
         </Button>
       </CardContent>
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/wakti-ai-v2' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </Card>
   );
 }

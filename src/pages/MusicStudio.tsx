@@ -77,8 +77,16 @@ import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
 import SavedImagesTab from '@/components/studio/SavedImagesTab';
 import QRCodeCreator from '@/components/studio/QRCodeCreator';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { readWaktiOperatorPayload } from '@/utils/waktiOperator';
+import {
+  buildStudioGuestRestorePath,
+  clearStudioGuestDraft,
+  readStudioGuestDraft,
+  saveStudioGuestDraft,
+  STUDIO_GUEST_RESTORE_QUERY_KEY,
+} from '@/utils/studioGuestDraft';
 
 const normalizeAudioUrl = (url: string) => {
   if (!url) return '';
@@ -1105,6 +1113,26 @@ export default function MusicStudio() {
     if (searchParams.get('subtab') === 'voices') {
       setMainTab('music');
       setMusicSubTab('voices');
+    }
+
+    const requestedStudioTab = searchParams.get('studioTab');
+    if (requestedStudioTab === 'music' || requestedStudioTab === 'video' || requestedStudioTab === 'image' || requestedStudioTab === 'qrcode' || requestedStudioTab === 'studio') {
+      setMainTab(requestedStudioTab);
+    }
+
+    const requestedMusicSubTab = searchParams.get('musicSubTab');
+    if (requestedMusicSubTab === 'compose' || requestedMusicSubTab === 'editor' || requestedMusicSubTab === 'voices') {
+      setMusicSubTab(requestedMusicSubTab);
+    }
+
+    const requestedVideoMode = searchParams.get('videoMode');
+    if (requestedVideoMode === 'ai' || requestedVideoMode === 'saved') {
+      setVideoMode(requestedVideoMode);
+    }
+
+    const requestedImageMode = searchParams.get('imageMode');
+    if (requestedImageMode === 'create' || requestedImageMode === 'saved') {
+      setImageMode(requestedImageMode);
     }
   }, [searchParams]);
 
@@ -2437,7 +2465,7 @@ function VoicesTab({
   imageMode?: string;
 }) {
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const isAr = language === 'ar';
 
   // Inputs (split prompt)
@@ -2447,6 +2475,9 @@ function VoicesTab({
   const [autoLabelLyrics, setAutoLabelLyrics] = useState(true); // ON by default; power users can disable
   const [variations, setVariations] = useState(1);
   const [duration, setDuration] = useState(30); // seconds
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
+  const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('music', { studioTab: 'music', musicSubTab: 'compose' }));
+  const musicDraftRestoredRef = useRef(false);
 
   useEffect(() => {
     if (!operatorPayload?.music) return;
@@ -2460,6 +2491,60 @@ function VoicesTab({
       operatorMusicAutoRunRef.current = operatorPayload.stepId;
     }
   }, [operatorPayload, operatorMusicAutoRunRef]);
+
+  useEffect(() => {
+    if (musicDraftRestoredRef.current) return;
+    if (isGuest) return;
+    if (searchParams?.get(STUDIO_GUEST_RESTORE_QUERY_KEY) !== 'music') return;
+
+    const draft = readStudioGuestDraft<{
+      title: string;
+      styleText: string;
+      lyricsText: string;
+      autoLabelLyrics: boolean;
+      variations: number;
+      duration: number;
+      composeStep: 1 | 2 | 3 | 4;
+      includeTags: string[];
+      instrumentTags: string[];
+      rhythmTags: string[];
+      moodTags: string[];
+      vocalType: 'auto' | 'none' | 'female' | 'male' | 'custom';
+      khaleejiDialect: 'kuwaiti' | 'qatari' | 'saudi' | 'emirati' | 'bahraini' | 'omani';
+      styleWeightOverride: number | null;
+      weirdnessOverride: number | null;
+      tempoOverride: string;
+      keyOverride: string;
+      showAdvancedSliders: boolean;
+      selectedMusicVoiceId: string;
+    }>('music');
+
+    if (!draft) return;
+
+    musicDraftRestoredRef.current = true;
+    setTitle(draft.title || '');
+    setStyleText(draft.styleText || '');
+    setLyricsText(draft.lyricsText || '');
+    setAutoLabelLyrics(Boolean(draft.autoLabelLyrics));
+    setVariations(typeof draft.variations === 'number' ? draft.variations : 1);
+    setDuration(typeof draft.duration === 'number' ? draft.duration : 30);
+    setComposeStep(draft.composeStep || 1);
+    setIncludeTags(Array.isArray(draft.includeTags) ? draft.includeTags : []);
+    setInstrumentTags(Array.isArray(draft.instrumentTags) ? draft.instrumentTags : []);
+    setRhythmTags(Array.isArray(draft.rhythmTags) ? draft.rhythmTags : []);
+    setMoodTags(Array.isArray(draft.moodTags) ? draft.moodTags : []);
+    setVocalType(draft.vocalType || 'auto');
+    setKhaleejiDialect(draft.khaleejiDialect || 'kuwaiti');
+    setStyleWeightOverride(typeof draft.styleWeightOverride === 'number' ? draft.styleWeightOverride : null);
+    setWeirdnessOverride(typeof draft.weirdnessOverride === 'number' ? draft.weirdnessOverride : null);
+    setTempoOverride(draft.tempoOverride || '');
+    setKeyOverride(draft.keyOverride || '');
+    setShowAdvancedSliders(Boolean(draft.showAdvancedSliders));
+    if (draft.selectedMusicVoiceId) {
+      onSelectMusicVoice(draft.selectedMusicVoiceId);
+    }
+    clearStudioGuestDraft('music');
+  }, [isGuest, onSelectMusicVoice, searchParams]);
 
   // Preset styles list (genres only)
   const STYLE_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
@@ -6508,6 +6593,36 @@ function VoicesTab({
         return;
       }
     }
+    if (isGuest) {
+      const redirectTo = buildStudioGuestRestorePath('music', {
+        studioTab: 'music',
+        musicSubTab: 'compose',
+      });
+      saveStudioGuestDraft('music', {
+        title,
+        styleText,
+        lyricsText,
+        autoLabelLyrics,
+        variations,
+        duration,
+        composeStep,
+        includeTags,
+        instrumentTags,
+        rhythmTags,
+        moodTags,
+        vocalType,
+        khaleejiDialect,
+        styleWeightOverride,
+        weirdnessOverride,
+        tempoOverride,
+        keyOverride,
+        showAdvancedSliders,
+        selectedMusicVoiceId,
+      });
+      setGuestRedirectTo(redirectTo);
+      setGuestDialogOpen(true);
+      return;
+    }
     // ── Capacity check (vocal tracks only) ──
     // Compare user's stanza count vs the duration's stanza capacity. Two paths:
     //  • autoLabelLyrics ON  → silently bump duration to fit, notify user.
@@ -8513,6 +8628,13 @@ function VoicesTab({
           </p>
         </div>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={guestRedirectTo}
+        language={isAr ? 'ar' : 'en'}
+      />
     </div>
   );
 }

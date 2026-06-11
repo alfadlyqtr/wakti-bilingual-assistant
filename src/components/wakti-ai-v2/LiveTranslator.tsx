@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { ArrowLeftRight, Mic, Volume2, Languages, Loader2, Bookmark, BookmarkCheck, Trash2, Play, Square } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { emitEvent } from '@/utils/eventBus';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -105,6 +107,8 @@ interface SavedTranslation {
 
 export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: LiveTranslatorProps) {
   const { language, theme } = useTheme();
+  const { isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const t = useCallback((en: string, ar: string) => (language === 'ar' ? ar : en), [language]);
 
   const getValidVoice = (v: string | null): 'cedar' | 'marin' =>
@@ -397,6 +401,10 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
   }, [t]);
 
   const startHold = useCallback(async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (status === 'processing' || status === 'speaking') return;
 
     setError(null);
@@ -444,7 +452,7 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
       setCountdown(remaining);
       if (remaining <= 0) stopHold();
     }, 250);
-  }, [status, processAudio, stopHold, t]);
+  }, [status, processAudio, stopHold, t, isGuest]);
 
   // ── Pointer events ─────────────────────────────────────────────────────────
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -718,6 +726,13 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
       {error && (
         <div className="px-3 py-2 rounded-lg bg-red-500/10 text-red-500 text-xs text-center">{error}</div>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/tools/text' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 }

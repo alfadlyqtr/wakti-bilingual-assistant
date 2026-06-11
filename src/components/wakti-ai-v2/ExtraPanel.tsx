@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { onEvent } from '@/utils/eventBus';
 import { PersonalTouchManager } from './PersonalTouchManager';
@@ -37,7 +39,17 @@ export function ExtraPanel({
   isLoading
 }: ExtraPanelProps) {
   const { language } = useTheme();
+  const { isGuest } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('personal');
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
+
+  const handleTabChange = (value: string) => {
+    if (isGuest && (value === 'memory' || value === 'conversations')) {
+      setGuestDialogOpen(true);
+      return;
+    }
+    setActiveTab(value);
+  };
 
   // Listen for external requests to open the Memory tab (e.g. from the onboarding popup).
   useEffect(() => {
@@ -62,7 +74,7 @@ export function ExtraPanel({
   return (
     <div className="md:h-full overflow-hidden">
       <div className="px-2 pb-0 md:pb-2 pt-0 md:h-full flex flex-col">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col md:h-full">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col md:h-full">
           {/* Sticky compact tabs header (inside the same Tabs) */}
           <div className="sticky top-0 z-10 px-1 pt-1 pb-1">
             <TabsList className="flex gap-2 h-8 p-0 bg-transparent !rounded-none justify-start">
@@ -111,6 +123,12 @@ export function ExtraPanel({
           </TabsContent>
         </Tabs>
       </div>
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/wakti-ai-v2' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 }

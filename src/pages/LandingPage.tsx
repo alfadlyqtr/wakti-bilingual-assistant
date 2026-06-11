@@ -12,17 +12,17 @@ import { SectionA, SectionB, SectionC, SectionD, SectionE } from "@/components/l
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const { language } = useTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
   // Redirect logged-in users to dashboard
   useEffect(() => {
-    if (user) {
+    if (user && !isGuest) {
       navigate("/dashboard");
     }
-  }, [user, navigate]);
+  }, [isGuest, user, navigate]);
 
   // Add landing-page class to body
   useEffect(() => {
@@ -94,15 +94,7 @@ export default function LandingPage() {
       <div className="fixed bottom-0 left-0 right-0 z-30">
         <div className="w-full border-t border-white/10 bg-black/40 backdrop-blur-xl">
           <div className="mx-auto max-w-4xl px-4 py-3 flex flex-col items-center gap-2.5">
-            {/* Line 1: Sign in CTA (stretched & centered) */}
-            <Link
-              to="/login"
-              className="rounded-full w-48 py-1.5 text-center bg-[#0c0f14]/60 text-white/90 border border-blue-400/30 backdrop-blur-xl shadow-[0_0_15px_hsla(210,100%,65%,0.3)] hover:text-white hover:bg-blue-500/15 hover:border-blue-300/50 hover:shadow-[0_0_25px_hsla(210,100%,65%,0.5)] transition-all text-[13px] font-medium tracking-wide"
-            >
-              {lang === "ar" ? "تسجيل الدخول" : "Sign in"}
-            </Link>
-            
-            {/* Line 2: Links */}
+            {/* Footer links */}
             <div className="flex flex-row flex-wrap items-center justify-center gap-2 text-[10px] md:text-[11px] text-white/60">
               <Link to="/privacy-terms" className="hover:text-white transition-colors">
                 {lang === "ar" ? "الخصوصية والشروط" : "Privacy & Terms"}

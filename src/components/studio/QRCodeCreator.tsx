@@ -1,7 +1,17 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { QRCodeCanvas } from 'qrcode.react';
 import { supabase, getCurrentUserId } from '@/integrations/supabase/client';
+import {
+  buildStudioGuestRestorePath,
+  clearStudioGuestDraft,
+  readStudioGuestDraft,
+  saveStudioGuestDraft,
+  STUDIO_GUEST_RESTORE_QUERY_KEY,
+} from '@/utils/studioGuestDraft';
 import {
   QrCode,
   Download,
@@ -76,11 +86,16 @@ function buildWifiString(ssid: string, password: string, encryption: string, hid
 /* ─────────────────────── Component ─────────────────────── */
 
 export default function QRCodeCreator() {
+  const [searchParams] = useSearchParams();
   const { language } = useTheme();
+  const { isGuest } = useAuth();
   const isArabic = language === 'ar';
   const previewRef = useRef<HTMLDivElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
+  const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('qrcode', { studioTab: 'qrcode' }));
+  const qrDraftRestoredRef = useRef(false);
 
   // Sub-tabs: create / saved
   const [subTab, setSubTab] = useState<SubTab>('create');
@@ -154,6 +169,55 @@ export default function QRCodeCreator() {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const qrCanvasRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (qrDraftRestoredRef.current) return;
+    if (isGuest) return;
+    if (searchParams.get(STUDIO_GUEST_RESTORE_QUERY_KEY) !== 'qrcode') return;
+
+    const draft = readStudioGuestDraft<{
+      subTab: SubTab;
+      qrType: QRType;
+      urlInput: string;
+      textInput: string;
+      emailInput: string;
+      emailSubject: string;
+      phoneInput: string;
+      wifiSSID: string;
+      wifiPassword: string;
+      wifiEncryption: string;
+      wifiHidden: boolean;
+      config: QRConfig;
+      logoPreview: string;
+    }>('qrcode');
+
+    if (!draft) return;
+
+    qrDraftRestoredRef.current = true;
+    setSubTab(draft.subTab || 'create');
+    setQrType(draft.qrType || 'url');
+    setUrlInput(draft.urlInput || '');
+    setTextInput(draft.textInput || '');
+    setEmailInput(draft.emailInput || '');
+    setEmailSubject(draft.emailSubject || '');
+    setPhoneInput(draft.phoneInput || '');
+    setWifiSSID(draft.wifiSSID || '');
+    setWifiPassword(draft.wifiPassword || '');
+    setWifiEncryption(draft.wifiEncryption || 'WPA');
+    setWifiHidden(Boolean(draft.wifiHidden));
+    setConfig(draft.config || {
+      text: '',
+      dark: '000000',
+      light: 'ffffff',
+      size: 400,
+      margin: 4,
+      ecLevel: 'M',
+      centerImageUrl: '',
+      centerImageSizeRatio: 0.3,
+    });
+    setLogoPreview(draft.logoPreview || '');
+    clearStudioGuestDraft('qrcode');
+  }, [isGuest, searchParams]);
+
   // Build the text content based on type
   const getQRText = useCallback((): string => {
     switch (qrType) {
@@ -187,6 +251,31 @@ export default function QRCodeCreator() {
       toast.error(isArabic ? 'يرجى إدخال المحتوى أولاً' : 'Please enter content first');
       return;
     }
+
+    if (isGuest) {
+      const redirectTo = buildStudioGuestRestorePath('qrcode', {
+        studioTab: 'qrcode',
+      });
+      saveStudioGuestDraft('qrcode', {
+        subTab,
+        qrType,
+        urlInput,
+        textInput,
+        emailInput,
+        emailSubject,
+        phoneInput,
+        wifiSSID,
+        wifiPassword,
+        wifiEncryption,
+        wifiHidden,
+        config,
+        logoPreview,
+      });
+      setGuestRedirectTo(redirectTo);
+      setGuestDialogOpen(true);
+      return;
+    }
+
     setIsGenerating(true);
     setConfig(prev => ({ ...prev, text }));
     // Wait for QRCodeCanvas to render, then grab the canvas data
@@ -198,7 +287,7 @@ export default function QRCodeCreator() {
       setIsGenerating(false);
       setGenerated(true);
     }, 800);
-  }, [config, getQRText, isArabic]);
+  }, [config, emailInput, emailSubject, getQRText, isArabic, isGuest, logoPreview, phoneInput, qrType, subTab, textInput, urlInput, wifiEncryption, wifiHidden, wifiPassword, wifiSSID]);
 
   // Download
   const handleDownload = useCallback(async () => {
@@ -906,6 +995,13 @@ export default function QRCodeCreator() {
           )}
         </div>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={guestRedirectTo}
+        language={isArabic ? 'ar' : 'en'}
+      />
     </div>
   );
 }

@@ -12,13 +12,14 @@ import { useWidgetManager } from "@/hooks/useWidgetManager";
 import { supabase } from "@/integrations/supabase/client";
 import { t } from "@/utils/translations";
 import { getScopedStorageItem, migrateLegacyScopedStorage, setScopedStorageItem } from "@/utils/userScopedStorage";
+import { getGuestDisplayName } from "@/utils/guestAuth";
 
 const DEFAULT_DASHBOARD_LOOK = 'modern' as const;
 const DASHBOARD_LOOK_MIGRATION_FLAG = 'wakti_dashboard_look_default_migrated_v1';
 
 export default function Dashboard() {
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const { profile, loading: profileLoading } = useUserProfile();
   const [isDragging, setIsDragging] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -29,12 +30,12 @@ export default function Dashboard() {
   });
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id || isGuest) return;
     migrateLegacyScopedStorage('wakti_dashboard_look', user.id, 'wakti_dashboard_look');
-  }, [user?.id]);
+  }, [user?.id, isGuest]);
 
   useEffect(() => {
-    if (!user?.id || !profile) return;
+    if (!user?.id || !profile || isGuest) return;
     const hasMigrated = getScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, user.id, DASHBOARD_LOOK_MIGRATION_FLAG);
     if (hasMigrated === 'true') return;
     const currentSettings = (profile.settings as any) || {};
@@ -63,7 +64,7 @@ export default function Dashboard() {
     };
 
     void applyModernLookDefault();
-  }, [user?.id, profile]);
+  }, [user?.id, profile, isGuest]);
 
   // Sync from cached profile (source of truth) + cache to localStorage
   useEffect(() => {
@@ -120,7 +121,8 @@ export default function Dashboard() {
     ? ''
     : (profile?.display_name ||
        profile?.username ||
-       (user?.email ? user.email.split('@')[0] : '')) || '';
+       (user?.email ? user.email.split('@')[0] : '') ||
+       (isGuest ? getGuestDisplayName(user, language === 'ar' ? 'ar' : 'en') : '')) || '';
 
   // Listen for widget settings changes from Settings page
   useEffect(() => {

@@ -7,6 +7,7 @@ import SharedInboxUI from '@/components/chatbot/SharedInboxUI';
 import KnowledgeBaseEditor from '@/components/chatbot/KnowledgeBaseEditor';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { useNavigate } from 'react-router-dom';
 import {
   ReactFlow,
@@ -312,10 +313,11 @@ type WizardStep = 'list' | 'platform' | 'instagram-connect' | 'purpose' | 'dashb
 
 export default function WaktiAssistant() {
   const { language, theme } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const navigate = useNavigate();
   const isRTL = language === 'ar';
   const isDark = theme === 'dark';
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   // Wizard state
   const [innerTab, setInnerTab] = useState<'bots' | 'inbox' | 'bookings'>('bots');
@@ -548,6 +550,10 @@ export default function WaktiAssistant() {
   // BOT CREATION
   // ============================================
   const handleCreateBot = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (!user?.id || !selectedPurpose) return;
     setCreating(true);
     try {
@@ -967,7 +973,10 @@ export default function WaktiAssistant() {
           </div>
         </div>
         <button
-          onClick={() => setStep('platform')}
+          onClick={() => {
+            if (isGuest) { setGuestDialogOpen(true); return; }
+            setStep('platform');
+          }}
           className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#060541] dark:bg-white text-white dark:text-[#060541] hover:opacity-90 active:scale-95 transition-all duration-200 shadow-sm"
         >
           <Plus className="h-4 w-4" />
@@ -997,7 +1006,10 @@ export default function WaktiAssistant() {
                     {isRTL ? 'أنشئ أول بوت ذكاء اصطناعي لموقعك أو انستقرام' : 'Create your first AI chatbot for your website or Instagram'}
                   </p>
                   <button
-                    onClick={() => setStep('platform')}
+                    onClick={() => {
+                      if (isGuest) { setGuestDialogOpen(true); return; }
+                      setStep('platform');
+                    }}
                     className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-[#060541] dark:bg-white text-white dark:text-[#060541] hover:opacity-90 active:scale-95 transition-all duration-200 shadow-sm"
                   >
                     <Plus className="h-4 w-4" />
@@ -3237,6 +3249,13 @@ export default function WaktiAssistant() {
           />
         </Suspense>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/ai-chatbot' : `${window.location.pathname}${window.location.search}`}
+        language={isRTL ? 'ar' : 'en'}
+      />
     </div>
   );
 }

@@ -83,6 +83,8 @@ import {
   type A4ReferenceImageRole,
 } from "./a4Service";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { StudioGuestLoginDialog } from "@/components/studio/StudioGuestLoginDialog";
 import { consumeSmartTextToolBridge } from "@/utils/smartTextPrefill";
 
 type Stage = "pick" | "form" | "generating" | "done" | "failed";
@@ -1614,6 +1616,8 @@ const CreativeSettingsPanel: React.FC<{
 
 const A4Tab: React.FC = () => {
   const { lang, t } = useTL();
+  const { isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   const [stage, setStage] = useState<Stage>("pick");
   const [themeId, setThemeId] = useState<string | null>(null);
@@ -1829,6 +1833,10 @@ const A4Tab: React.FC = () => {
 
   // --- Submit -----------------------------------------------------------------
   const handleGenerate = useCallback(async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (!theme) return;
     if (isPurposeMissing) {
       toast.error(t(
@@ -1922,7 +1930,7 @@ const A4Tab: React.FC = () => {
       setFatalError(normalizeA4ErrorMessage((e as Error).message));
       setStage("failed");
     }
-  }, [theme, isPurposeMissing, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, inputMode, expandedContent, decorWanted, t]);
+  }, [theme, isPurposeMissing, missingRequired, formState, purposeId, pageChoice, extractColors, designSettings, creativeSettings, inputMode, expandedContent, decorWanted, t, isGuest]);
 
   // --- Expand idea -----------------------------------------------------------
   const handleExpandIdea = useCallback(async () => {
@@ -2693,6 +2701,13 @@ const A4Tab: React.FC = () => {
           </button>
         </div>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/tools/text' : `${window.location.pathname}${window.location.search}`}
+        language={lang === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 };

@@ -7,6 +7,7 @@ import { useUserProfile } from '@/hooks/useUserProfile';
 import { useDebugContext } from '@/hooks/useDebugContext';
 import { supabase } from '@/integrations/supabase/client';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -264,7 +265,7 @@ export default function ProjectDetail() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { language } = useTheme();
-  const { user, session } = useAuth();
+  const { user, session, isGuest } = useAuth();
   const debugContext = useDebugContext();
   const isRTL = language === 'ar';
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -292,6 +293,7 @@ export default function ProjectDetail() {
   const [chatInput, setChatInput] = useState('');
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiEditing, setAiEditing] = useState(false);
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [attachedImages, setAttachedImages] = useState<Array<{ file: File; preview: string; pdfDataUrl?: string }>>([]);
   const [attachmentIntent, setAttachmentIntent] = useState<ScreenshotIntent>('style');
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -4647,6 +4649,11 @@ ${fixInstructions}
     
     const userMessage = wizardPrompt || chatInput.trim();
     if (!userMessage && attachedImages.length === 0 || aiEditing) return;
+
+    if (isGuest && leftPanelMode === 'code' && !isGenerating) {
+      setGuestDialogOpen(true);
+      return;
+    }
     
     // 🔒 AGENT LOCK: Try to acquire lock for user chat
     // SPECIAL CASE: Auto-Fix prompts act as a "skeleton key" and always bypass locks
@@ -9607,6 +9614,12 @@ ${fixInstructions}
         />
         )
       )}
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? (id ? `/projects/${id}` : '/projects') : `${window.location.pathname}${window.location.search}`}
+        language={isRTL ? 'ar' : 'en'}
+      />
       </>
       )}
     </div>

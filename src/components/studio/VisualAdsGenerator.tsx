@@ -56,7 +56,27 @@ interface VisualAdsGeneratorProps {
   onSave?: () => void;
   onDownload?: () => void;
   onTryAgain?: () => void;
+  initialState?: VisualAdsState | null;
 }
+
+const createVisualAdsInitialState = (): VisualAdsState => ({
+  brandAsset: { image: null, type: null },
+  campaignDNA: { platform: null, objective: '' },
+  creativeSoul: {
+    mainMessage: '',
+    customMainMessage: '',
+    mainMessageVariant: '',
+    featureChips: [],
+    cta: '',
+    customCta: '',
+    style: '',
+    customStyle: '',
+    styleVariant: '',
+    textPresence: 'balanced',
+    textColorStyle: 'auto-contrast',
+  },
+  assets: [],
+});
 
 function StepHeader({
   step,
@@ -378,6 +398,7 @@ export default function VisualAdsGenerator({
   onDownload,
   onSave,
   onTryAgain,
+  initialState,
 }: VisualAdsGeneratorProps) {
   const { language } = useTheme();
   const assetTypeOptions = [
@@ -405,24 +426,7 @@ export default function VisualAdsGenerator({
   const [visibleSlotCount, setVisibleSlotCount] = useState(INITIAL_VISIBLE_SLOTS);
   const [featureChipDraft, setFeatureChipDraft] = useState('');
 
-  const [state, setState] = useState<VisualAdsState>({
-    brandAsset: { image: null, type: null },
-    campaignDNA: { platform: null, objective: '' },
-    creativeSoul: {
-      mainMessage: '',
-      customMainMessage: '',
-      mainMessageVariant: '',
-      featureChips: [],
-      cta: '',
-      customCta: '',
-      style: '',
-      customStyle: '',
-      styleVariant: '',
-      textPresence: 'balanced',
-      textColorStyle: 'auto-contrast',
-    },
-    assets: [],
-  });
+  const [state, setState] = useState<VisualAdsState>(() => initialState || createVisualAdsInitialState());
 
   // Helper to update nested state
   const updateState = useCallback(<K extends keyof VisualAdsState>(
@@ -443,6 +447,15 @@ export default function VisualAdsGenerator({
     const normalized = normalizeWordLimitedValue(value);
     return normalized.length > 0 && normalized.split(' ').length > 3;
   }, [normalizeWordLimitedValue]);
+
+  useEffect(() => {
+    if (!initialState) return;
+    setState(initialState);
+    setSelectedAssetIndex(0);
+    setActiveStep(1);
+    setOpenBriefSection(1);
+    setVisibleSlotCount(Math.min(MAX_ASSET_IMAGES, Math.max(INITIAL_VISIBLE_SLOTS, initialState.assets.length || 0)));
+  }, [INITIAL_VISIBLE_SLOTS, MAX_ASSET_IMAGES, initialState]);
   const hasMoreThanFiveWords = useCallback((value: string) => {
     const normalized = normalizeWordLimitedValue(value);
     return normalized.length > 0 && normalized.split(' ').length > 5;

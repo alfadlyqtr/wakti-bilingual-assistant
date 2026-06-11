@@ -26,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { StudioGuestLoginDialog } from "@/components/studio/StudioGuestLoginDialog";
 import { AlertTriangle, Check, MessageSquare, Flag, CalendarIcon, User, CreditCard, CheckCircle, XCircle, Clock, RefreshCw, Sparkles, Sun, Users, Gift, Eye } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -43,7 +44,7 @@ import { WishlistsEmbedded } from "@/components/account/WishlistsEmbedded";
 // TrialCountdown Component - Shows remaining time of the trial window (guarded 48h rollout)
 // When trial ends, shows friendly message with subscribe CTA
 // Includes its own header - parent should NOT show "Free Trial Active" separately
-const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: string; language: string; onSubscribeClick?: () => void }) => {
+const TrialCountdown = ({ startAt, language, onSubscribeClick, isGuest }: { startAt: string; language: string; onSubscribeClick?: () => void; isGuest?: boolean }) => {
   const [timeLeft, setTimeLeft] = useState('');
   const [isExpired, setIsExpired] = useState(false);
   
@@ -78,23 +79,42 @@ const TrialCountdown = ({ startAt, language, onSubscribeClick }: { startAt: stri
   if (isExpired) {
     return (
       <div className="text-center space-y-4 py-4">
-        <div className="text-4xl">😊❤️</div>
-        <div className="text-2xl font-bold text-foreground">
-          {language === 'en' ? 'Trial ended' : 'انتهت الفترة التجريبية'}
-        </div>
-        <p className="text-muted-foreground max-w-xs mx-auto">
-          {language === 'en' 
-            ? "Hope you enjoyed Wakti! Subscribe now and you still get 3 more free days."
-            : "نتمنى أنك استمتعت بوقتي! اشترك الآن ولا تزال تحصل على 3 أيام مجانية إضافية."
-          }
-        </p>
+        {isGuest ? (
+          <div className="space-y-1">
+            <p className="text-foreground font-semibold">
+              {language === 'en' ? "You're just getting started" : 'أنت في البداية فقط'}
+            </p>
+            <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+              {language === 'en'
+                ? 'Create a free account to unlock AI chat, voice tools, events, and everything else.'
+                : 'أنشئ حساباً مجانياً لفتح الدردشة بالذكاء الاصطناعي، أدوات الصوت، الفعاليات، وكل شيء آخر.'
+              }
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="text-4xl">😊❤️</div>
+            <div className="text-2xl font-bold text-foreground">
+              {language === 'en' ? 'Trial ended' : 'انتهت الفترة التجريبية'}
+            </div>
+            <p className="text-muted-foreground max-w-xs mx-auto">
+              {language === 'en'
+                ? "Hope you enjoyed Wakti! Subscribe now and you still get 3 more free days."
+                : "نتمنى أنك استمتعت بوقتي! اشترك الآن ولا تزال تحصل على 3 أيام مجانية إضافية."
+              }
+            </p>
+          </>
+        )}
         <Button 
           onClick={onSubscribeClick}
           className="w-full max-w-xs bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
           size="lg"
         >
           <Sparkles className="w-4 h-4 mr-2" />
-          {language === 'en' ? 'Subscribe Now' : 'اشترك الآن'}
+          {isGuest
+            ? (language === 'en' ? 'Create account' : 'إنشاء حساب')
+            : (language === 'en' ? 'Subscribe Now' : 'اشترك الآن')
+          }
         </Button>
       </div>
     );
@@ -134,7 +154,7 @@ const openManageSubscriptions = () => {
 };
 
 export default function Account() {
-  const { user, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
+  const { user, isGuest, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const { language } = useTheme();
@@ -148,6 +168,7 @@ export default function Account() {
     return 'profile';
   })();
   const [activeTab, setActiveTab] = useState<'profile' | 'billing' | 'wishes'>(initialTab);
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search || '');
@@ -252,6 +273,14 @@ export default function Account() {
   // Direct native purchase
   const [isBillingPurchasing, setIsBillingPurchasing] = useState(false);
 
+  const handleBillingAction = () => {
+    if (isGuest) {
+      navigate('/signup');
+      return;
+    }
+    handleBillingSubscribe();
+  };
+
   const handleBillingSubscribe = () => {
     if (isBillingPurchasing) return;
     setIsBillingPurchasing(true);
@@ -333,6 +362,14 @@ export default function Account() {
   const [reportedUser, setReportedUser] = useState("");
   const [isSubmittingReport, setIsSubmittingReport] = useState(false);
   
+  const handleTabChange = (v: string) => {
+    if (isGuest && v === 'wishes') {
+      setGuestDialogOpen(true);
+      return;
+    }
+    setActiveTab(v as 'profile' | 'billing' | 'wishes');
+  };
+
   // Fetch user profile data
   const { data: userProfile, isLoading: isLoadingProfile } = useQuery({
     queryKey: ['userProfile'],
@@ -851,7 +888,7 @@ export default function Account() {
 
         {/* ── TAB BAR — below hero, on page background ─────────────────────── */}
         <div className="sticky top-0 z-20 px-4 pt-1 pb-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85 border-b border-[#d7dbe5] dark:border-border">
-          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'profile' | 'billing' | 'wishes')} className="w-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
           <TabsList className="grid w-full grid-cols-3 h-10 bg-muted rounded-2xl p-1 border border-[#d7dbe5] dark:border-border shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
             <TabsTrigger value="profile" className="rounded-xl text-[11px] font-bold data-[state=active]:bg-[#060541] data-[state=active]:text-white dark:data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:shadow-none transition-all flex items-center gap-1">
               <User className="h-3 w-3 shrink-0" />
@@ -878,11 +915,23 @@ export default function Account() {
                 </CardHeader>
               </Card>
 
-              <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
-                <CardContent className="pt-5 pb-5">
-                  <ProfileImageUpload showPreview={false} />
-                </CardContent>
-              </Card>
+              {isGuest ? (
+                <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)] opacity-60">
+                  <CardContent className="pt-5 pb-5">
+                    <div className="flex items-center justify-center py-4">
+                      <p className="text-sm text-muted-foreground">
+                        {language === 'ar' ? 'متوفر فقط للمستخدمين المسجلين' : 'Available for registered users only'}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
+                  <CardContent className="pt-5 pb-5">
+                    <ProfileImageUpload showPreview={false} />
+                  </CardContent>
+                </Card>
+              )}
 
               <Card className="border border-[#d7dbe5] dark:border-border bg-card rounded-2xl shadow-[0_1px_3px_rgba(15,23,42,0.08)]">
                 <CardContent className="space-y-5 pt-5 pb-5">
@@ -906,7 +955,7 @@ export default function Account() {
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                         readOnly={!canSetUsernameOnce}
-                        disabled={loadingUserData || isUpdatingProfile}
+                        disabled={loadingUserData || isUpdatingProfile || isGuest}
                         placeholder={canSetUsernameOnce ? (language === 'ar' ? 'اختر اسم المستخدم مرة واحدة' : 'Choose your username once') : ''}
                         className={!canSetUsernameOnce ? "border-[#d7dbe5] dark:border-border bg-muted cursor-not-allowed" : "border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"}
                       />
@@ -927,7 +976,7 @@ export default function Account() {
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         readOnly={!canSetNameOnce}
-                        disabled={loadingUserData || isUpdatingProfile}
+                        disabled={loadingUserData || isUpdatingProfile || isGuest}
                         placeholder={canSetNameOnce ? (language === 'ar' ? 'أدخل اسمك مرة واحدة' : 'Enter your name once') : ''}
                         className={!canSetNameOnce ? "border-[#d7dbe5] dark:border-border bg-muted cursor-not-allowed" : "border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"}
                       />
@@ -946,7 +995,7 @@ export default function Account() {
                   {needsOneTimeProfileSetup && (
                     <Button
                       onClick={handleSaveOneTimeProfileSetup}
-                      disabled={isUpdatingProfile || (canSetNameOnce && !name.trim()) || (canSetUsernameOnce && !username.trim())}
+                      disabled={isUpdatingProfile || (canSetNameOnce && !name.trim()) || (canSetUsernameOnce && !username.trim()) || isGuest}
                       className="w-full bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(195,100%,60%)] text-white shadow-[0_0_24px_hsla(210,100%,65%,0.25)]"
                     >
                       {isUpdatingProfile
@@ -973,7 +1022,7 @@ export default function Account() {
                               !dateOfBirth && "text-muted-foreground",
                               language === 'ar' && "text-right"
                             )}
-                            disabled={isUpdatingDob}
+                            disabled={isUpdatingDob || isGuest}
                           >
                             <CalendarIcon className={cn("h-5 w-5", language === 'ar' ? "ml-2" : "mr-2")} />
                             {dateOfBirth ? (
@@ -1005,7 +1054,7 @@ export default function Account() {
                     <div className="mt-2">
                       <Button
                         onClick={handleUpdateDateOfBirth}
-                        disabled={isUpdatingDob || !dateOfBirth}
+                        disabled={isUpdatingDob || !dateOfBirth || isGuest}
                         className="w-full bg-primary/80 hover:bg-primary text-white font-semibold py-6"
                       >
                         {isUpdatingDob
@@ -1023,13 +1072,13 @@ export default function Account() {
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        disabled={loadingUserData || isUpdatingEmail}
+                        disabled={loadingUserData || isUpdatingEmail || isGuest}
                         className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                       />
                     </div>
                     <div className="mt-4">
                       <Button
-                        disabled={isUpdatingEmail || loadingUserData}
+                        disabled={isUpdatingEmail || loadingUserData || isGuest}
                         type="submit"
                       >
                         {isUpdatingEmail
@@ -1048,7 +1097,7 @@ export default function Account() {
                           type="password"
                           value={currentPassword}
                           onChange={(e) => setCurrentPassword(e.target.value)}
-                          disabled={isUpdatingPassword}
+                          disabled={isUpdatingPassword || isGuest}
                           className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                         />
                       </div>
@@ -1060,7 +1109,7 @@ export default function Account() {
                             type="password"
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            disabled={isUpdatingPassword}
+                            disabled={isUpdatingPassword || isGuest}
                             className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                           />
                         </div>
@@ -1071,7 +1120,7 @@ export default function Account() {
                             type="password"
                             value={confirmPassword}
                             onChange={(e) => setConfirmPassword(e.target.value)}
-                            disabled={isUpdatingPassword}
+                            disabled={isUpdatingPassword || isGuest}
                             className="border-[#d7dbe5] dark:border-border shadow-[0_1px_2px_rgba(15,23,42,0.05)]"
                           />
                         </div>
@@ -1079,7 +1128,7 @@ export default function Account() {
                     </div>
                     <div className="mt-4">
                       <Button
-                        disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword}
+                        disabled={isUpdatingPassword || !currentPassword || !password || !confirmPassword || isGuest}
                         type="submit"
                       >
                         {isUpdatingPassword
@@ -1092,29 +1141,33 @@ export default function Account() {
               </Card>
             </div>
 
-            {/* Country + City in one row */}
-            <div id="location" className="scroll-mt-24">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
-                  <Sun className="h-4 w-4 text-white" />
+            {!isGuest && (
+              <>
+                {/* Country + City in one row */}
+                <div id="location" className="scroll-mt-24">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center">
+                      <Sun className="h-4 w-4 text-white" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-foreground">
+                        {language === 'ar' ? 'موقعك (اختياري)' : 'Your Location (optional)'}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {language === 'ar' 
+                          ? 'أضف موقعك للحصول على تحديثات الطقس المحلية ☀️'
+                          : 'Add your location to get local weather updates ☀️'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <AccountCountrySection />
+                    <AccountCitySection />
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    {language === 'ar' ? 'موقعك (اختياري)' : 'Your Location (optional)'}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {language === 'ar' 
-                      ? 'أضف موقعك للحصول على تحديثات الطقس المحلية ☀️'
-                      : 'Add your location to get local weather updates ☀️'
-                    }
-                  </p>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <AccountCountrySection />
-                <AccountCitySection />
-              </div>
-            </div>
+              </>
+            )}
             
             {/* Submit Feedback Section */}
             <Card>
@@ -1131,6 +1184,7 @@ export default function Account() {
                 <Button 
                   variant="outline" 
                   onClick={() => navigate('/help?tab=support')}
+                  disabled={isGuest}
                   className="w-full sm:w-auto"
                 >
                   {t("submitFeedback", language)}
@@ -1153,6 +1207,7 @@ export default function Account() {
                 <Button 
                   variant="outline" 
                   onClick={() => navigate('/help?tab=support')}
+                  disabled={isGuest}
                   className="w-full sm:w-auto"
                 >
                   {t("reportAbuse", language)}
@@ -1189,6 +1244,7 @@ export default function Account() {
                 <Button 
                   variant="destructive" 
                   onClick={openDeleteDialog}
+                  disabled={isGuest}
                   className="w-full sm:w-auto"
                 >
                   {t("deleteMyAccount", language)}
@@ -1257,19 +1313,38 @@ export default function Account() {
                           <TrialCountdown 
                             startAt={billingProfile.free_access_start_at!} 
                             language={language} 
-                            onSubscribeClick={handleBillingSubscribe}
+                            onSubscribeClick={handleBillingAction}
+                            isGuest={isGuest}
                           />
                           {/* Active trial: Subscribe + Restore only for cancelled variant */}
                           {isTrialActive && (
                             <div className="flex flex-col items-center gap-2 pt-2">
+                              {isGuest && (
+                                <div className="text-center space-y-1 pb-2">
+                                  <p className="text-foreground font-semibold">
+                                    {language === 'en' ? "You're just getting started" : 'أنت في البداية فقط'}
+                                  </p>
+                                  <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+                                    {language === 'en'
+                                      ? 'Create a free account to unlock AI chat, voice tools, events, and everything else.'
+                                      : 'أنشئ حساباً مجانياً لفتح الدردشة بالذكاء الاصطناعي، أدوات الصوت، الفعاليات، وكل شيء آخر.'
+                                    }
+                                  </p>
+                                </div>
+                              )}
                               <Button
-                                onClick={handleBillingSubscribe}
+                                onClick={handleBillingAction}
                                 disabled={isBillingPurchasing}
                                 className="w-full bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
                                 size="lg"
                               >
                                 <Sparkles className="w-4 h-4 mr-2" />
-                                {isBillingPurchasing ? (language === 'en' ? 'Processing...' : 'جاري المعالجة...') : (language === 'en' ? 'Subscribe Now' : 'اشترك الآن')}
+                                {isBillingPurchasing
+                                  ? (language === 'en' ? 'Processing...' : 'جاري المعالجة...')
+                                  : isGuest
+                                    ? (language === 'en' ? 'Create account' : 'إنشاء حساب')
+                                    : (language === 'en' ? 'Subscribe Now' : 'اشترك الآن')
+                                }
                               </Button>
                               {paywallVariant === 'cancelled' && (
                                 <Button
@@ -1328,19 +1403,36 @@ export default function Account() {
                     {/* STATE 3: No Subscription, No Trial (new_user) */}
                     {billingProfile && !hasActiveBillingAccess && !hasBillingTrialStarted && (
                       <div className="text-center space-y-4 py-4">
-                        <p className="text-muted-foreground">
-                          {language === 'en' 
-                            ? 'Welcome to Wakti! Subscribe now to enjoy 3 free trial days.' 
-                            : 'مرحباً بك في وقتي! اشترك الآن واستمتع بـ 3 أيام تجريبية مجانية.'}
-                        </p>
+                        {isGuest ? (
+                          <div className="space-y-1">
+                            <p className="text-foreground font-semibold">
+                              {language === 'en' ? "You're just getting started" : 'أنت في البداية فقط'}
+                            </p>
+                            <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+                              {language === 'en'
+                                ? 'Create a free account to unlock AI chat, voice tools, events, and everything else.'
+                                : 'أنشئ حساباً مجانياً لفتح الدردشة بالذكاء الاصطناعي، أدوات الصوت، الفعاليات، وكل شيء آخر.'
+                              }
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-muted-foreground">
+                            {language === 'en'
+                              ? 'Welcome to Wakti! Subscribe now to enjoy 3 free trial days.'
+                              : 'مرحباً بك في وقتي! اشترك الآن واستمتع بـ 3 أيام تجريبية مجانية.'}
+                          </p>
+                        )}
                         <Button 
-                          onClick={handleBillingSubscribe}
+                          onClick={handleBillingAction}
                           disabled={isBillingPurchasing}
                           className="w-full max-w-xs bg-gradient-to-r from-[hsl(210,100%,55%)] via-[hsl(195,100%,50%)] to-[hsl(175,100%,45%)] hover:from-[hsl(210,100%,60%)] hover:via-[hsl(195,100%,55%)] hover:to-[hsl(175,100%,50%)] text-white font-bold shadow-[0_0_30px_hsl(200,100%,55%,0.4)]"
                           size="lg"
                         >
                           {isBillingPurchasing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
-                          {language === 'en' ? 'Subscribe Now' : 'اشترك الآن'}
+                          {isGuest
+                            ? (language === 'en' ? 'Create account' : 'إنشاء حساب')
+                            : (language === 'en' ? 'Subscribe Now' : 'اشترك الآن')
+                          }
                         </Button>
                         {/* Restore only for cancelled variant (previously subscribed) */}
                         {paywallVariant === 'cancelled' && (
@@ -1589,6 +1681,12 @@ export default function Account() {
         </DialogContent>
       </Dialog>
       
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/account' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </PageContainer>
   );
 }

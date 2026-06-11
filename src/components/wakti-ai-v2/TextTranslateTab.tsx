@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { consumeSmartTextToolBridge } from '@/utils/smartTextPrefill';
 
 // Item #8 Batch A2: lazy-load tesseract.js (~10MB with wasm+worker) and jsPDF (~400KB).
@@ -56,7 +57,8 @@ async function loadMammoth() {
 
 export default function TextTranslateTab() {
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -671,6 +673,10 @@ export default function TextTranslateTab() {
   };
 
   const doTextTranslate = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (!ttText.trim()) return;
     setTtLoading(true);
     setTtResult('');
@@ -1127,6 +1133,13 @@ export default function TextTranslateTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/tools/text' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 }

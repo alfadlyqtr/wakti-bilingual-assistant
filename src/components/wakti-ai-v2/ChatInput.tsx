@@ -63,6 +63,8 @@ interface ChatInputProps {
   replyContext?: ReplyContext | null;
   onClearReply?: () => void;
   onStop?: () => void;
+  isGuest?: boolean;
+  onGuestBlockedAction?: (message?: string) => void;
 }
 
 export function ChatInput({
@@ -86,7 +88,9 @@ export function ChatInput({
   onAddTalkMessage,
   replyContext,
   onClearReply,
-  onStop
+  onStop,
+  isGuest = false,
+  onGuestBlockedAction
 }: ChatInputProps) {
   const { language } = useTheme();
   const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
@@ -496,8 +500,41 @@ export function ChatInput({
     return () => window.removeEventListener('wakti-auto-submit', handleAutoSubmit);
   }, [message, isLoading]);
 
+  const getGuestBlockedMessage = (type: 'attachment' | 'study' | 'search' | 'feature' = 'feature') => {
+    if (type === 'attachment') {
+      return language === 'ar'
+        ? 'المرفقات والصور تحتاج إلى حساب كامل. كضيف، يمكنك متابعة الدردشة النصية فقط.'
+        : 'Attachments and images need a full account. As a guest, you can continue with text chat only.';
+    }
+    if (type === 'study') {
+      return language === 'ar'
+        ? 'وضع الدراسة يحتاج إلى حساب كامل. كضيف، يمكنك متابعة وضع الدردشة فقط.'
+        : 'Study mode needs a full account. As a guest, you can continue in chat mode only.';
+    }
+    if (type === 'search') {
+      return language === 'ar'
+        ? 'البحث الذكي غير متاح في وضع الضيف. كضيف، يمكنك متابعة الدردشة فقط.'
+        : 'Smart search is not available in guest mode. As a guest, you can continue with chat only.';
+    }
+    return language === 'ar'
+      ? 'هذه الميزة تحتاج إلى حساب كامل. كضيف، يمكنك متابعة الدردشة فقط.'
+      : 'This feature needs a full account. As a guest, you can continue with chat only.';
+  };
+
   const handleSendMessage = async () => {
     if (message.trim().length > 0 && !isLoading && !isUploading) {
+      if (isGuest && (activeTrigger !== 'chat' || chatSubmode !== 'chat' || uploadedFiles.length > 0)) {
+        onGuestBlockedAction?.(
+          uploadedFiles.length > 0
+            ? getGuestBlockedMessage('attachment')
+            : activeTrigger === 'search'
+              ? getGuestBlockedMessage('search')
+              : chatSubmode === 'study'
+                ? getGuestBlockedMessage('study')
+                : getGuestBlockedMessage('feature')
+        );
+        return;
+      }
       console.log('📤 SEND: Message being sent', { message: message.substring(0, 50), filesCount: uploadedFiles.length });
       
       // Use the current activeTrigger - no auto-switching for image mode
@@ -613,6 +650,11 @@ export function ChatInput({
 
   // Chat mode: handle simple image uploads from '+' button
   const handleChatUploadChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isGuest) {
+      e.target.value = '';
+      onGuestBlockedAction?.(getGuestBlockedMessage('attachment'));
+      return;
+    }
     const files = e.target.files;
     if (files && files.length > 0) {
       const MAX_VISION_IMAGES = 4;
@@ -898,7 +940,7 @@ export function ChatInput({
     <>
     <div className="w-full space-y-4">
       {/* File Upload Component - Different component based on mode (hidden during mobile keyboard) */}
-      {!isKeyboardMode && activeTrigger !== 'video' && (
+      {!isKeyboardMode && activeTrigger !== 'video' && !isGuest && (
         <>
             <SimplifiedFileUpload
               onFilesUploaded={handleFilesUploaded}
@@ -1175,7 +1217,7 @@ export function ChatInput({
                     ) : (activeTrigger === 'chat' || activeTrigger === 'vision') ? (
                       <div className="relative flex items-center gap-2">
                         {/* Talk Mode Button - Direct access, no dropdown */}
-                        {activeTrigger === 'chat' && chatSubmode !== 'study' && (
+                        {activeTrigger === 'chat' && chatSubmode !== 'study' && !isGuest && (
                         <button
                           onPointerUp={() => setIsTalkOpen(true)}
                           className="inline-flex items-center gap-1 px-3 py-1 h-8 rounded-full text-xs font-medium leading-none border align-middle bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/30 dark:text-pink-400 dark:border-pink-700/50"
@@ -1195,7 +1237,14 @@ export function ChatInput({
                               ? 'bg-purple-50 dark:bg-purple-950/40 border border-purple-200/70 dark:border-purple-800/60 text-purple-900 dark:text-purple-200'
                               : 'bg-blue-50 dark:bg-blue-950/40 border border-blue-200/70 dark:border-blue-800/60 text-blue-900 dark:text-blue-200'
                           }`}
-                          onClick={(e) => { e.stopPropagation(); chatUploadInputRef.current?.click(); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isGuest) {
+                              onGuestBlockedAction?.(getGuestBlockedMessage('attachment'));
+                              return;
+                            }
+                            chatUploadInputRef.current?.click();
+                          }}
                           aria-label={language === 'ar' ? 'تحميل صورة' : 'Upload image'}
                         >
                           <Plus className="h-3 w-3" />
@@ -1430,6 +1479,10 @@ export function ChatInput({
                           const item = items[i];
                           if (item.type.startsWith('image/')) {
                             e.preventDefault();
+                            if (isGuest) {
+                              onGuestBlockedAction?.(getGuestBlockedMessage('attachment'));
+                              break;
+                            }
                             const file = item.getAsFile();
                             if (file && file.size <= 5 * 1024 * 1024) {
                               try {

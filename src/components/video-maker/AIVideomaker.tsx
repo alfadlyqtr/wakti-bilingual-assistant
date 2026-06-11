@@ -1,16 +1,25 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useFFmpegVideo } from '@/hooks/useFFmpegVideo';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import { SavedImagesPicker } from '@/components/dashboard/SavedImagesPicker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { PromptBlockedDialog } from '@/components/ui/prompt-blocked-dialog';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { inspectGenerationPrompt } from '@/utils/generationPromptGuard';
+import {
+  buildStudioGuestRestorePath,
+  clearStudioGuestDraft,
+  readStudioGuestDraft,
+  saveStudioGuestDraft,
+  STUDIO_GUEST_RESTORE_QUERY_KEY,
+} from '@/utils/studioGuestDraft';
 import { emitEvent } from '@/utils/eventBus';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
@@ -254,8 +263,9 @@ const AD_DURATIONS = [6, 10, 10, 6] as const;
 const AD_SCENE_COUNT = 4;
 
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
+  const [searchParams] = useSearchParams();
   const { language, theme } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const { stitchClips, isLoading: isFFmpegLoading, progress: ffmpegProgress, status: ffmpegStatus } = useFFmpegVideo();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
@@ -302,6 +312,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [videoStyleMode, setVideoStyleMode] = useState<'normal' | 'fun'>('normal');
   const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
   const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
+  const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('video', { studioTab: 'video', videoMode: 'ai' }));
+  const videoDraftRestoredRef = useRef(false);
   const [showVideoModeInfo, setShowVideoModeInfo] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -329,6 +342,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   // Trial access check — Ads Creator is locked for 24-hour trial users
   const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
   const isTrialUser = !isSubscribed && !isAdminGifted && hasTrialStarted;
+  const isVideoAdsLocked = isTrialUser || isGuest;
 
   // Ads Creator state
   const [cinemaVision, setCinemaVision] = useState('');
@@ -444,6 +458,38 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [cinemaCTA, setCinemaCTA] = useState<string[]>([]);
   const cinemaSceneCount = AD_SCENE_COUNT; // hard-locked to 4 (Video Ads v5.0)
   const [cinemaCTACustom, setCinemaCTACustom] = useState('');
+
+  useEffect(() => {
+    if (videoDraftRestoredRef.current) return;
+    if (isGuest) return;
+    if (searchParams.get(STUDIO_GUEST_RESTORE_QUERY_KEY) !== 'video') return;
+
+    const draft = readStudioGuestDraft<{
+      generationMode: 'image_to_video' | 'text_to_video' | '2images_to_video';
+      imagePreview: string | null;
+      imagePreview2: string | null;
+      prompt: string;
+      duration: '4' | '6' | '8' | '10' | '12';
+      aspectRatio: string;
+      resolution: '480p' | '720p' | '1080p';
+      videoStyleMode: 'normal' | 'fun';
+    }>('video');
+
+    if (!draft) return;
+
+    videoDraftRestoredRef.current = true;
+    setGenerationMode(draft.generationMode || 'image_to_video');
+    setImageFile(null);
+    setImagePreview(draft.imagePreview || null);
+    setImageFile2(null);
+    setImagePreview2(draft.imagePreview2 || null);
+    setPrompt(draft.prompt || '');
+    setDuration(draft.duration || '8');
+    setAspectRatio(draft.aspectRatio || '9:16');
+    setResolution(draft.resolution || '480p');
+    setVideoStyleMode(draft.videoStyleMode || 'normal');
+    clearStudioGuestDraft('video');
+  }, [isGuest, searchParams]);
 
   // Typewriter effect component for Cinema scene cards
   const TypewriterText = ({ text, delay = 0, className = '' }: { text: string; delay?: number; className?: string }) => {
@@ -1049,6 +1095,26 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (generationMode === '2images_to_video' && !imagePreview) return;
     if (generationMode === 'cinema' && !prompt.trim()) return;
     if (!user) return;
+
+    if (isGuest && generationMode !== 'cinema') {
+      const redirectTo = buildStudioGuestRestorePath('video', {
+        studioTab: 'video',
+        videoMode: 'ai',
+      });
+      saveStudioGuestDraft('video', {
+        generationMode,
+        imagePreview,
+        imagePreview2,
+        prompt,
+        duration,
+        aspectRatio,
+        resolution,
+        videoStyleMode,
+      });
+      setGuestRedirectTo(redirectTo);
+      setGuestDialogOpen(true);
+      return;
+    }
 
     if (prompt.trim()) {
       const promptSafety = inspectGenerationPrompt(prompt, language);
@@ -2503,25 +2569,25 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             <button
               type="button"
               onClick={() => {
-                if (!isGenerating && !isTrialUser) setGenerationMode('cinema');
+                if (!isGenerating && !isVideoAdsLocked) setGenerationMode('cinema');
               }}
-              disabled={isGenerating}
+              disabled={isGenerating || isVideoAdsLocked}
               className={`relative flex items-center justify-center gap-2 rounded-[18px] px-3 py-3 min-h-[52px] text-[11px] font-semibold transition-all duration-300 active:scale-[0.98] disabled:cursor-not-allowed whitespace-nowrap border ${
-                isTrialUser
-                  ? 'text-[#060541]/35 border-[#060541]/10 bg-white/40 cursor-not-allowed dark:text-white/30 dark:border-white/10 dark:bg-white/5'
+                isVideoAdsLocked
+                  ? 'opacity-45 saturate-50 text-[#060541]/35 border-[#060541]/10 bg-white/40 cursor-not-allowed dark:text-white/30 dark:border-white/10 dark:bg-white/5'
                   : generationMode === 'cinema'
                   ? 'text-[#060541] border-[#C5A47E] shadow-[0_10px_24px_rgba(197,164,126,0.28)] dark:text-[#0c0f14]'
                   : 'text-[#060541]/70 border-[#060541]/10 bg-white/70 hover:bg-white dark:text-white/70 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10'
               }`}
               style={{
-                background: !isTrialUser && generationMode === 'cinema'
+                background: !isVideoAdsLocked && generationMode === 'cinema'
                   ? 'linear-gradient(135deg, #E2C7A8 0%, #C5A47E 100%)'
                   : undefined,
               }}
             >
               <Film className="h-3.5 w-3.5" />
               <span>{language === 'ar' ? 'إعلانات الفيديو' : 'Video Ads'}</span>
-              {isTrialUser && <Lock className="h-3 w-3 ml-0.5 opacity-60" />}
+              {isVideoAdsLocked && <Lock className="h-3 w-3 ml-0.5 opacity-60" />}
             </button>
           </div>
 
@@ -4801,11 +4867,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     </>
                   )}
                 </div>
-                {generationMode !== 'cinema' && (
-                  <p className="w-full px-1 text-[10px] text-muted-foreground/80">
-                    {getResolutionSpeedHint(language, generationMode)}
-                  </p>
-                )}
+                <p className="w-full px-1 text-[10px] text-muted-foreground/80">
+                  {getResolutionSpeedHint(language, generationMode)}
+                </p>
                 {generationMode === 'image_to_video' && (
                   <div className="relative flex items-center gap-1">
                     <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
@@ -5140,6 +5204,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         onOpenChange={setShowPromptBlockedDialog}
         message={promptBlockedMessage}
         language={language}
+      />
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={guestRedirectTo}
+        language={language === 'ar' ? 'ar' : 'en'}
       />
     </div>
   );

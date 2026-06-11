@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/providers/ThemeProvider";
 import { Input } from "@/components/ui/input";
@@ -17,10 +17,14 @@ import { StudentVerificationDialog } from "@/components/auth/StudentVerification
 import { buildStudentVerificationMetadata, verifyStudentAccountWithRealX, type StudentVerificationStatus } from "@/utils/studentVerification";
 import { validateDisplayName, validateEmail, validatePassword } from "@/utils/validations";
 import { countries } from "@/utils/countries";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function Signup() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { language, theme } = useTheme();
+  const { isGuest, linkEmailToAnonymousUser } = useAuth();
+  const locationState = location.state as { guestUpgrade?: boolean; from?: string } | null;
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -45,6 +49,7 @@ export default function Signup() {
     password: string;
   } | null>(null);
   const [isEmailConfirmationDialogOpen, setIsEmailConfirmationDialogOpen] = useState(false);
+  const [emailConfirmationMode, setEmailConfirmationMode] = useState<"signup" | "guest_upgrade">("signup");
   const [studentDialogState, setStudentDialogState] = useState<{
     open: boolean;
     mode: "not_verified" | "integration_unavailable";
@@ -74,6 +79,9 @@ export default function Signup() {
   const isConnectionReadyRef = useRef(false);
   const passwordRef = useRef<HTMLInputElement | null>(null);
   const MAX_RECORD_SECONDS = 10;
+  const cameFromGuestUpgrade = Boolean(locationState?.guestUpgrade);
+  const returnTo = locationState?.from || "/dashboard";
+  const isGuestUpgradeFlow = isGuest;
 
   // Greeting audio setup with manual play control
   useEffect(() => {
@@ -291,24 +299,58 @@ export default function Signup() {
     console.log('Attempting signup with redirect URL:', redirectUrl);
 
     const selectedCountry = countries.find(c => c.code === country);
+    const profileData = {
+      full_name: name,
+      username: username || '',
+      date_of_birth: dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : '',
+      country: selectedCountry?.name || '',
+      country_code: country,
+      city: city || '',
+      ...buildStudentVerificationMetadata({
+        selected: studentSelected,
+        status: studentStatus,
+      }),
+    };
+
+    if (isGuestUpgradeFlow) {
+      const { error } = await linkEmailToAnonymousUser(signupEmail, signupPassword, profileData);
+
+      if (error) {
+        console.error("Guest upgrade error:", error);
+
+        const normalizedErrorMessage = error.message?.toLowerCase() || '';
+
+        if (normalizedErrorMessage.includes('already registered') || normalizedErrorMessage.includes('already exists')) {
+          const existingUserMsg = language === 'en'
+            ? 'This email is already registered. Please log in or use a different email.'
+            : 'هذا البريد الإلكتروني مسجل بالفعل. يرجى تسجيل الدخول أو استخدام بريد إلكتروني مختلف.';
+          surfaceError(existingUserMsg);
+          return false;
+        }
+
+        if (normalizedErrorMessage.includes('weak') ||
+            normalizedErrorMessage.includes('easy to guess')) {
+          const weakPasswordMsg = language === 'en'
+            ? 'Please choose a different password. Try making it more unique.'
+            : 'يرجى اختيار كلمة مرور مختلفة. حاول جعلها أكثر تميزًا.';
+          surfaceError(weakPasswordMsg);
+          return false;
+        }
+
+        surfaceError(error.message);
+        return false;
+      }
+
+      navigate(returnTo, { replace: true, state: { guestUpgradeCompleted: true } });
+      return true;
+    }
 
     const { data, error } = await supabase.auth.signUp({
       email: signupEmail,
       password: signupPassword,
       options: {
         emailRedirectTo: redirectUrl,
-        data: {
-          full_name: name,
-          username: username || '',
-          date_of_birth: dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : '',
-          country: selectedCountry?.name || '',
-          country_code: country,
-          city: city || '',
-          ...buildStudentVerificationMetadata({
-            selected: studentSelected,
-            status: studentStatus,
-          }),
-        },
+        data: profileData,
       },
     });
 
@@ -344,6 +386,7 @@ export default function Signup() {
 
       if (!data.user.email_confirmed_at) {
         console.log('Email confirmation required');
+        setEmailConfirmationMode("signup");
         toast.success(language === 'en'
           ? 'Please check your email and click the confirmation link to verify your account.'
           : 'يرجى فحص بريدك الإلكتروني والنقر على رابط التأكيد للتحقق من حسابك.'
@@ -356,7 +399,7 @@ export default function Signup() {
     }
 
     return true;
-  }, [city, country, dateOfBirth, email, language, name, navigate, password, username]);
+  }, [city, country, dateOfBirth, email, isGuestUpgradeFlow, language, linkEmailToAnonymousUser, name, navigate, password, returnTo, username]);
 
   const handleRealXPartnerSignup = async ({
     email: studentEmail,
@@ -527,7 +570,7 @@ export default function Signup() {
 
   const handleDialogClose = () => {
     setIsEmailConfirmationDialogOpen(false);
-    navigate("/login");
+    navigate(cameFromGuestUpgrade ? returnTo : "/login");
   };
 
   const isRtl = language === 'ar';
@@ -1332,6 +1375,7 @@ export default function Signup() {
       <EmailConfirmationDialog
         open={isEmailConfirmationDialogOpen}
         onClose={handleDialogClose}
+        mode={emailConfirmationMode}
       />
 
       <StudentVerificationDialog

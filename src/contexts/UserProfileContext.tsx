@@ -99,7 +99,7 @@ function writeCachedProfile(uid: string, data: UserProfile) {
 }
 
 export function UserProfileProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
 
   // Start with null — we'll hydrate reactively once user.id is known
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -294,6 +294,10 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
       rcSyncedUserRef.current = null;
       return;
     }
+    if (isGuest) {
+      rcSyncedUserRef.current = null;
+      return;
+    }
     if (rcSyncedUserRef.current === user.id) return; // already synced this user
     rcSyncedUserRef.current = user.id;
 
@@ -312,7 +316,7 @@ export function UserProfileProvider({ children }: { children: React.ReactNode })
       .catch((err) => {
         console.warn('[UserProfileContext] Subscription check error:', err);
       });
-  }, [user?.id, IS_DEV, fetchProfile]);
+  }, [isGuest, user?.id, IS_DEV, fetchProfile]);
 
   // Single Realtime channel for profile changes — one per app lifetime
   useEffect(() => {

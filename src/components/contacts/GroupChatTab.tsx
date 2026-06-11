@@ -5,6 +5,7 @@ import { MessageSquarePlus, Users, Loader2, Pencil, Sparkles, UserPlus } from "l
 import { toast } from "sonner";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
+import { StudioGuestLoginDialog } from "@/components/studio/StudioGuestLoginDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
@@ -37,8 +38,9 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const [createOpen, setCreateOpen] = useState(false);
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [membersDialogGroup, setMembersDialogGroup] = useState<any | null>(null);
   const [groupName, setGroupName] = useState("");
   const [selectedMemberIds, setSelectedMemberIds] = useState<string[]>([]);
@@ -179,7 +181,16 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
             {language === "ar" ? "أنشئ مجموعة جديدة من جهات الاتصال المتبادلة فقط" : "Create a new group from mutual approved contacts only"}
           </p>
         </div>
-        <Button className="rounded-xl" onClick={() => setCreateOpen(true)}>
+        <Button
+          className="rounded-xl"
+          onClick={() => {
+            if (isGuest) {
+              setGuestDialogOpen(true);
+              return;
+            }
+            setCreateOpen(true);
+          }}
+        >
           <MessageSquarePlus className="h-4 w-4 mr-2" />
           {language === "ar" ? "مجموعة جديدة" : "New Group"}
         </Button>
@@ -701,6 +712,13 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/social?section=contacts&tab=groups' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 }

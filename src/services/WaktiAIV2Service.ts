@@ -94,6 +94,27 @@ type DurableMemoryItem = {
 
 const LOCATION_CACHE_TTL = 30 * 60 * 1000; // 30 minutes - people move around!
 
+const extractBackendErrorCode = (payload: any): string | null => {
+  if (!payload || typeof payload !== 'object') return null;
+  const candidates = [
+    payload.code,
+    payload.error_code,
+    payload.errorCode,
+    payload.reason_code,
+    payload.reasonCode,
+    payload.error?.code,
+    payload.error?.error_code,
+    payload.error?.errorCode,
+    payload.error?.type,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim();
+    }
+  }
+  return null;
+};
+
 class WaktiAIV2ServiceClass {
   private personalTouchCache: any = null;
   private conversationStorage = new Map<string, AIMessage[]>();
@@ -1728,9 +1749,10 @@ class WaktiAIV2ServiceClass {
                       const parsed = JSON.parse(data);
                       if (parsed.error) {
                         const errObj = parsed.error;
-                        const errMsg = typeof errObj === 'string'
+                        const backendCode = extractBackendErrorCode(parsed) || extractBackendErrorCode(errObj);
+                        const errMsg = backendCode || (typeof errObj === 'string'
                           ? errObj
-                          : (errObj?.message || errObj?.type || JSON.stringify(errObj));
+                          : (errObj?.message || errObj?.type || JSON.stringify(errObj)));
                         encounteredError = errMsg;
                       } else {
                         if (typeof parsed.token === 'string') { 
@@ -1787,9 +1809,10 @@ class WaktiAIV2ServiceClass {
                 const parsed = JSON.parse(data);
                 if (parsed.error) {
                   const errObj = parsed.error;
-                  const errMsg = typeof errObj === 'string'
+                  const backendCode = extractBackendErrorCode(parsed) || extractBackendErrorCode(errObj);
+                  const errMsg = backendCode || (typeof errObj === 'string'
                     ? errObj
-                    : (errObj?.message || errObj?.type || JSON.stringify(errObj));
+                    : (errObj?.message || errObj?.type || JSON.stringify(errObj)));
                   encounteredError = errMsg;
 
                   // Trial limit reached — dispatch global event and stop cleanly

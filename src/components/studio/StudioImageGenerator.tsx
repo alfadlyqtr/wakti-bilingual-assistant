@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { emitEvent } from '@/utils/eventBus';
 import { toast } from 'sonner';
@@ -32,6 +33,13 @@ import {
 import { DrawAfterBGCanvas, DrawAfterBGCanvasRef } from '@/components/wakti-ai/DrawAfterBGCanvas';
 import type { UploadedFile } from '@/types/fileUpload';
 import { inspectGenerationPrompt } from '@/utils/generationPromptGuard';
+import {
+  buildStudioGuestRestorePath,
+  clearStudioGuestDraft,
+  readStudioGuestDraft,
+  saveStudioGuestDraft,
+  STUDIO_GUEST_RESTORE_QUERY_KEY,
+} from '@/utils/studioGuestDraft';
 import VisualAdsGenerator, {
   adStyleChips,
   adTopicChips,
@@ -103,12 +111,16 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const operatorPayloadId = searchParams.get('waktiOperator');
   const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
   const operatorSetupRef = useRef<string | null>(null);
   const operatorAutoGenerateRef = useRef<string | null>(null);
   const operatorAutoSaveRef = useRef<string | null>(null);
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
+  const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('image', { studioTab: 'image', imageMode: 'create' }));
+  const [restoredVisualAdsState, setRestoredVisualAdsState] = useState<VisualAdsState | null>(null);
+  const imageDraftRestoredRef = useRef(false);
 
   // Submode & quality
   const [submode, setSubmode] = useState<ImageSubmode>('text2image');
@@ -835,6 +847,36 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     }
   }, [operatorPayload, operatorPayloadId]);
 
+  useEffect(() => {
+    if (imageDraftRestoredRef.current) return;
+    if (isGuest) return;
+    if (searchParams.get(STUDIO_GUEST_RESTORE_QUERY_KEY) !== 'image') return;
+
+    const draft = readStudioGuestDraft<{
+      submode: ImageSubmode;
+      quality: 'quick' | 'fast' | 'best_fast';
+      prompt: string;
+      uploadedFile: UploadedFile | null;
+      uploadedFile2: UploadedFile | null;
+      uploadedFile3: UploadedFile | null;
+      uploadedFile4: UploadedFile | null;
+      visualAdsState: VisualAdsState | null;
+    }>('image');
+
+    if (!draft) return;
+
+    imageDraftRestoredRef.current = true;
+    setSubmode(draft.submode || 'text2image');
+    setQuality(draft.quality || 'quick');
+    setPrompt(draft.prompt || '');
+    setUploadedFile(draft.uploadedFile || null);
+    setUploadedFile2(draft.uploadedFile2 || null);
+    setUploadedFile3(draft.uploadedFile3 || null);
+    setUploadedFile4(draft.uploadedFile4 || null);
+    setRestoredVisualAdsState(draft.visualAdsState || null);
+    clearStudioGuestDraft('image');
+  }, [isGuest, searchParams]);
+
   const selectQuickResult = useCallback((index: number) => {
     const nextUrl = resultUrls[index];
     if (!nextUrl) return;
@@ -849,6 +891,26 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   // ─── Main generate handler ───
   const handleGenerate = useCallback(async () => {
     if (generateLockRef.current || isGenerating) {
+      return;
+    }
+
+    if (isGuest) {
+      const redirectTo = buildStudioGuestRestorePath('image', {
+        studioTab: 'image',
+        imageMode: 'create',
+      });
+      saveStudioGuestDraft('image', {
+        submode,
+        quality,
+        prompt,
+        uploadedFile,
+        uploadedFile2,
+        uploadedFile3,
+        uploadedFile4,
+        visualAdsState: restoredVisualAdsState,
+      });
+      setGuestRedirectTo(redirectTo);
+      setGuestDialogOpen(true);
       return;
     }
 
@@ -962,7 +1024,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         triggerSaveSuccess: false,
       }).catch(() => { /* silent */ });
     }
-  }, [submode, prompt, quality, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4, language, operatorPayload, persistGeneratedImage]);
+  }, [isGuest, language, operatorPayload, persistGeneratedImage, prompt, quality, restoredVisualAdsState, submode, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4]);
 
   useEffect(() => {
     if (!operatorPayloadId || !operatorPayload?.image?.autoGenerate) return;
@@ -1471,12 +1533,12 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey && prompt.trim()) {
                 e.preventDefault();
-                drawCanvasRef.current?.triggerManualGeneration();
+                handleGenerate();
               }
             }}
           />
           <button
-            onClick={() => drawCanvasRef.current?.triggerManualGeneration()}
+            onClick={() => { handleGenerate(); }}
             disabled={!prompt.trim()}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-lg shadow-orange-500/25 active:scale-95 transition-all duration-200 disabled:opacity-50 disabled:shadow-none shrink-0"
           >
@@ -1514,8 +1576,29 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       {/* ── Visual Ads Mode ── */}
       {submode === 'visual-ads' && (
         <VisualAdsGenerator
+          initialState={restoredVisualAdsState}
           onBack={() => setSubmode('text2image')}
           onGenerate={async (visualState) => {
+            if (isGuest) {
+              const redirectTo = buildStudioGuestRestorePath('image', {
+                studioTab: 'image',
+                imageMode: 'create',
+              });
+              saveStudioGuestDraft('image', {
+                submode: 'visual-ads' as ImageSubmode,
+                quality,
+                prompt,
+                uploadedFile,
+                uploadedFile2,
+                uploadedFile3,
+                uploadedFile4,
+                visualAdsState: visualState,
+              });
+              setRestoredVisualAdsState(visualState);
+              setGuestRedirectTo(redirectTo);
+              setGuestDialogOpen(true);
+              return;
+            }
             const getAssetLabel = (asset: NonNullable<VisualAdsState['assets']>[number]) => {
               if (asset.type === 'logo') return 'logo';
               if (asset.type === 'product') return 'product';
@@ -2765,6 +2848,13 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         onOpenChange={setShowPromptBlockedDialog}
         message={promptBlockedMessage}
         language={language}
+      />
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={guestRedirectTo}
+        language={language === 'ar' ? 'ar' : 'en'}
       />
 
       {/* Saved Images Picker Modal */}

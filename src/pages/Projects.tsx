@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { Button } from '@/components/ui/button';
 import ShareButton from '@/components/ui/ShareButton';
 import { 
@@ -944,7 +945,7 @@ Make it fun, addictive, and fully playable from the first second.`,
 
 export default function Projects() {
   const { language, theme } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const isRTL = language === 'ar';
@@ -953,6 +954,7 @@ export default function Projects() {
   const operatorPayloadId = searchParams.get('waktiOperator');
   const operatorPayload = React.useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
   const handledOperatorPayloadIdRef = useRef<string | null>(null);
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   // Trial user check — used to enforce 1 project limit
   const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
@@ -1553,6 +1555,11 @@ Apply these styles consistently throughout the entire design.`;
       return;
     }
     
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
+
     if (!user?.id) {
       toast.error(isRTL ? 'يرجى تسجيل الدخول' : 'Please log in first');
       return;
@@ -3146,6 +3153,13 @@ Apply these styles consistently throughout the entire design.`;
           </div>
         </div>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/projects' : `${window.location.pathname}${window.location.search}`}
+        language={isRTL ? 'ar' : 'en'}
+      />
       </div>{/* end scrollable content */}
     </div>
   );

@@ -4,7 +4,9 @@ import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
 import { OptimizedEventCard } from '@/components/optimized/OptimizedEventCard';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/contexts/AuthContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { Heart, Plus, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { t } from '@/utils/translations';
@@ -28,6 +30,8 @@ const EventsSkeleton = () => (
 const OptimizedMaw3dEvents = React.memo(() => {
   const navigate = useNavigate();
   const { language } = useTheme();
+  const { isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = React.useState(false);
   
   // Use optimized hook with caching and deduplication
   const { events, loading, error, attendingCounts } = useOptimizedMaw3dEvents();
@@ -38,9 +42,13 @@ const OptimizedMaw3dEvents = React.memo(() => {
   }, [navigate]);
 
   const handleCreateEvent = React.useCallback(() => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     console.log('📱 Navigating to create event');
     navigate('/maw3d/create');
-  }, [navigate]);
+  }, [navigate, isGuest]);
 
   // Ensure the page starts at the title area on load
   useEffect(() => {
@@ -73,73 +81,82 @@ const OptimizedMaw3dEvents = React.memo(() => {
   }
 
   return (
-    <div className="min-h-screen p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900" dir={language === 'ar' ? 'rtl' : 'ltr'}>
-      <div className="max-w-7xl mx-auto">
-        {/* Strong desktop/tablet header */}
-        <PageHeader
-          title={t('maw3dEvents', language)}
-          Icon={CalendarClock}
-          colorClass="nav-icon-maw3d"
-          subtitle={loading ? t('loading', language) : (language === 'ar' ? `عرض ${events.length} أحداث` : `Showing ${events.length} events`)}
-          actions={(
-            <div className="flex items-center gap-2">
-              <Button 
-                onClick={handleCreateEvent}
-                className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
-                size="sm"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                {t('createEvent', language)}
-              </Button>
-            </div>
-          )}
-        />
-        <div className="max-w-4xl mx-auto mt-6">
-
-        {/* Events content */}
-        <Suspense fallback={<EventsSkeleton />}>
-          {loading ? (
-            <EventsSkeleton />
-          ) : events.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="max-w-md mx-auto p-8 rounded-2xl bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl">
-                <Heart className="mx-auto h-16 w-16 text-purple-400 mb-6" />
-                <h3 className="text-xl font-semibold mb-3 text-gray-800">
-                  {t('noEventsYet', language)}
-                </h3>
-                <p className="text-gray-600 mb-6 leading-relaxed">
-                  {language === 'ar' 
-                    ? 'أنشئ حدثك الأول للبدء'
-                    : 'Create your first event to get started'
-                  }
-                </p>
+    <>
+      <div className="min-h-screen p-4 sm:p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-purple-100 dark:from-gray-900 dark:via-purple-900/20 dark:to-gray-900" dir={language === 'ar' ? 'rtl' : 'ltr'}>
+        <div className="max-w-7xl mx-auto">
+          {/* Strong desktop/tablet header */}
+          <PageHeader
+            title={t('maw3dEvents', language)}
+            Icon={CalendarClock}
+            colorClass="nav-icon-maw3d"
+            subtitle={loading ? t('loading', language) : (language === 'ar' ? `عرض ${events.length} أحداث` : `Showing ${events.length} events`)}
+            actions={(
+              <div className="flex items-center gap-2">
                 <Button 
                   onClick={handleCreateEvent}
-                  size="lg"
                   className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                  size="sm"
                 >
-                  <Plus className="h-5 w-5 mr-2" />
+                  <Plus className="h-4 w-4 mr-2" />
                   {t('createEvent', language)}
                 </Button>
               </div>
-            </div>
-          ) : (
-            <div className="grid gap-6 md:gap-8">
-              {events.map((event) => (
-                <OptimizedEventCard
-                  key={event.id}
-                  event={event}
-                  attendingCount={attendingCounts?.[event.id] ?? 0}
-                  onClick={() => handleEventClick(event)}
-                />
-              ))}
-            </div>
-          )}
-        </Suspense>
+            )}
+          />
+          <div className="max-w-4xl mx-auto mt-6">
+
+          {/* Events content */}
+          <Suspense fallback={<EventsSkeleton />}>
+            {loading ? (
+              <EventsSkeleton />
+            ) : events.length === 0 ? (
+              <div className="text-center py-12">
+                <div className="max-w-md mx-auto p-8 rounded-2xl bg-white/60 backdrop-blur-sm border border-white/20 shadow-xl">
+                  <Heart className="mx-auto h-16 w-16 text-purple-400 mb-6" />
+                  <h3 className="text-xl font-semibold mb-3 text-gray-800">
+                    {t('noEventsYet', language)}
+                  </h3>
+                  <p className="text-gray-600 mb-6 leading-relaxed">
+                    {language === 'ar' 
+                      ? 'أنشئ حدثك الأول للبدء'
+                      : 'Create your first event to get started'
+                    }
+                  </p>
+                  <Button 
+                    onClick={handleCreateEvent}
+                    size="lg"
+                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transition-all duration-300"
+                  >
+                    <Plus className="h-5 w-5 mr-2" />
+                    {t('createEvent', language)}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:gap-8">
+                {events.map((event) => (
+                  <OptimizedEventCard
+                    key={event.id}
+                    event={event}
+                    attendingCount={attendingCounts?.[event.id] ?? 0}
+                    onClick={() => handleEventClick(event)}
+                  />
+                ))}
+              </div>
+            )}
+          </Suspense>
+        </div>
+        {/* Close max-w-7xl container */}
+        </div>
       </div>
-      {/* Close max-w-7xl container */}
-      </div>
-    </div>
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/maw3d' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
+    </>
   );
 });
 

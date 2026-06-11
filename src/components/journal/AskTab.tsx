@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useAuth } from "@/contexts/AuthContext";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { JournalService } from "@/services/journalService";
+import { StudioGuestLoginDialog } from "@/components/studio/StudioGuestLoginDialog";
 import { useNavigate } from "react-router-dom";
 import { NotebookPen, Sparkles, SendHorizontal } from "lucide-react";
 
@@ -11,6 +13,8 @@ const STORAGE_KEY = "asktab:last";
 export const AskTab: React.FC = () => {
   const { language } = useTheme();
   const navigate = useNavigate();
+  const { isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<{ role: "user" | "assistant"; content: string; stats?: any; tips?: string; isOffTopic?: boolean }[]>([]);
@@ -36,6 +40,10 @@ export const AskTab: React.FC = () => {
   }, [messages]);
 
   const ask = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     const trimmed = q.trim();
     if (!trimmed || loading) return;
 
@@ -212,6 +220,12 @@ export const AskTab: React.FC = () => {
         </div>
       </div>
 
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/journal' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 };

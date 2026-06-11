@@ -7,6 +7,7 @@ import { CVBuilderWizard } from '@/components/cv-builder';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { supabase } from '@/integrations/supabase/client';
 import ShareButton from '@/components/ui/ShareButton';
 import { 
@@ -683,7 +684,7 @@ const translateFieldLabel = (key: string, isRTL: boolean): string => {
 
 const MyWarranty: React.FC = () => {
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const navigate = useNavigate();
   const t = translations[language] || translations.en;
   const isRTL = language === 'ar';
@@ -705,6 +706,7 @@ const MyWarranty: React.FC = () => {
   const [selectedItem, setSelectedItem] = useState<WarrantyItem | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   
   const [newItem, setNewItem] = useState({
     title: '',
@@ -1974,7 +1976,13 @@ const MyWarranty: React.FC = () => {
           {/* Add Button */}
           {viewMode !== 'add' && viewMode !== 'detail' && viewMode !== 'ask' && mainTab === 'docs' && activeTab === 'warranties' && warranties.length > 0 && (
             <Button
-              onClick={() => setViewMode('add')}
+              onClick={() => {
+                if (isGuest) {
+                  setGuestDialogOpen(true);
+                  return;
+                }
+                setViewMode('add');
+              }}
               size="sm"
               className="h-9 px-4 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-medium shadow-md"
             >
@@ -2073,7 +2081,13 @@ const MyWarranty: React.FC = () => {
             <p className="text-muted-foreground text-sm">{t.addFirst}</p>
             <button
               type="button"
-              onClick={() => setViewMode('add')}
+              onClick={() => {
+                if (isGuest) {
+                  setGuestDialogOpen(true);
+                  return;
+                }
+                setViewMode('add');
+              }}
               className="
                 mt-6 w-16 h-16 rounded-full
                 bg-gradient-to-br from-emerald-500 to-blue-500
@@ -4614,6 +4628,13 @@ const MyWarranty: React.FC = () => {
           setShowCelebration(false);
           setShowCardBuilder(true);
         }}
+      />
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/my-documents' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
       />
     </div>
   );

@@ -1,6 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
@@ -46,8 +47,9 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
     loadExistingVoices();
   }, []);
 
-  const { user: _vcUser } = useAuth();
+  const { user: _vcUser, isGuest } = useAuth();
   const { profile: _vcProfile } = useUserProfile();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   const loadExistingVoices = async () => {
     try {
@@ -187,6 +189,10 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
   };
 
   const createVoiceClone = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     console.log('🎤 FRONTEND: Starting voice clone creation...');
     
     if (!voiceName.trim()) {
@@ -554,6 +560,13 @@ export function VoiceCloneScreen2({ onNext, onBack }: VoiceCloneScreen2Props) {
           </div>
         </div>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/tools/text' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 }

@@ -17,7 +17,7 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, CustomPaywallModal }: ProtectedRouteProps) {
   const DEV = !!(import.meta && import.meta.env && import.meta.env.DEV);
-  const { user, session, isLoading, lastLoginTimestamp } = useAuth();
+  const { user, session, isLoading, lastLoginTimestamp, isGuest } = useAuth();
   const location = useLocation();
   const [showPaywall, setShowPaywall] = useState(false);
 
@@ -186,6 +186,10 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   useEffect(() => {
     if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) return;
     if (!user?.id) return;
+    if (isGuest) {
+      setShowPaywall(false);
+      return;
+    }
     if (isProfileLoading) return;
     if (trialJustStartedRef.current) { setShowPaywall(false); return; }
     if (accessStampRef.current) { setShowPaywall(false); return; }
@@ -199,9 +203,9 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
     // accessState is one of 'paywall:*' — context already picked the right variant.
     if (DEV) console.log('ProtectedRoute: showing paywall variant:', paywallVariant);
     setShowPaywall(true);
-  }, [user?.id, accessState, paywallVariant, isProfileLoading, DEV, TEMP_DISABLE_SUBSCRIPTION_CHECKS]);
+  }, [isGuest, user?.id, accessState, paywallVariant, isProfileLoading, DEV, TEMP_DISABLE_SUBSCRIPTION_CHECKS]);
 
-  let effectiveHasSession = hasAnySession;
+  let effectiveHasSession = hasAnySession || !!session || !!user;
   
   // Check multiple sources for recent login (in order of reliability)
   // 1. AuthContext state (most reliable)
@@ -272,6 +276,10 @@ export default function ProtectedRoute({ children, CustomPaywallModal }: Protect
   if (!effectiveHasSession) {
     if (DEV) console.log("ProtectedRoute: No valid user/session, redirecting to login");
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (isGuest) {
+    return <>{children}</>;
   }
 
   if (TEMP_DISABLE_SUBSCRIPTION_CHECKS) {

@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { emitEvent } from '@/utils/eventBus';
 import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/client';
 import { supabase } from '@/integrations/supabase/client';
 import { Download, FileText, Sparkles, Loader2, Wand2, Palette, Zap, FilePlus2 } from 'lucide-react';
@@ -157,8 +158,9 @@ const InlineSvg: React.FC<{ url: string; className?: string }> = ({ url, classNa
 
 const DiagramsTab: React.FC = () => {
   const { language } = useTheme();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const isArabic = language === 'ar';
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   // State
   const [inputText, setInputText] = useState('');
@@ -339,6 +341,10 @@ const DiagramsTab: React.FC = () => {
   };
 
   const handleGenerate = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     const textToUse = inputText.trim() || fileContent.trim();
 
     if (!textToUse) {
@@ -736,6 +742,13 @@ const DiagramsTab: React.FC = () => {
           animation: gradient 3s ease infinite;
         }
       `}</style>
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/tools/text' : `${window.location.pathname}${window.location.search}`}
+        language={isArabic ? 'ar' : 'en'}
+      />
     </div>
   );
 };

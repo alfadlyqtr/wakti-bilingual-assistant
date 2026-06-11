@@ -30,7 +30,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 export default function Index() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
   const { language, theme } = useTheme();
   const { isMobile } = useIsMobile();
   
@@ -70,10 +70,10 @@ export default function Index() {
 
   // If user is already logged in, redirect to dashboard
   useEffect(() => {
-    if (user) {
+    if (user && !isGuest) {
       navigate('/dashboard');
     }
-  }, [user, navigate]);
+  }, [isGuest, user, navigate]);
 
   // Add public-page class to body for proper scrolling on desktop
   useEffect(() => {

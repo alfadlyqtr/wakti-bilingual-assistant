@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { purchasesLogin, purchasesLogout, purchasesWarmup } from '@/integrations/natively/purchasesBridge';
 import { setNotificationUser, removeNotificationUser, requestNotificationPermission, setupNotificationClickHandler } from '@/integrations/natively/notificationsBridge';
 import { ACTIVE_USER_STORAGE_KEY, setActiveScopedUserId } from '@/utils/userScopedStorage';
+import { isAnonymousSession, isAnonymousUser } from '@/utils/guestAuth';
 
 interface AuthContextType {
   user: User | null;
@@ -18,8 +19,11 @@ interface AuthContextType {
   loading: boolean;
   isLoading: boolean; // Alias for loading
   lastLoginTimestamp: number | null; // Timestamp of last successful login
+  isGuest: boolean;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
+  signInAnonymously: () => Promise<{ error: any; user: User | null }>;
+  linkEmailToAnonymousUser: (email: string, password: string, profileData?: Record<string, any>) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: any }>;
   forgotPassword: (email: string) => Promise<{ error: any }>; // Alias for resetPassword
@@ -36,8 +40,11 @@ const defaultAuthContextValue: AuthContextType = {
   loading: false,
   isLoading: false,
   lastLoginTimestamp: null,
+  isGuest: false,
   signIn: async () => ({ error: null }),
   signUp: async () => ({ error: null }),
+  signInAnonymously: async () => ({ error: null, user: null }),
+  linkEmailToAnonymousUser: async () => ({ error: null }),
   signOut: async () => {},
   resetPassword: async () => ({ error: null }),
   forgotPassword: async () => ({ error: null }),
@@ -92,6 +99,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [loading, setLoading] = useState(true);
   const [lastLoginTimestamp, setLastLoginTimestamp] = useState<number | null>(null);
   const isLocalhost = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
+  const isGuest = isAnonymousUser(user) || isAnonymousSession(session);
 
   // Warm up Natively Purchases SDK if present (no-op on web)
   useEffect(() => {
@@ -228,6 +236,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (isLocalhost) return;
+    if (isGuest) return;
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     if (user?.id) {
       window.OneSignalDeferred.push(async function(OneSignal: any) {
@@ -248,11 +257,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       });
     }
-  }, [isLocalhost, user?.id]);
+  }, [isGuest, isLocalhost, user?.id]);
 
   // Sync timezone to profile for localized notifications (runs for ALL users, web + native)
   useEffect(() => {
     if (!user?.id) return;
+    if (isGuest) return;
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       if (tz) {
@@ -266,7 +276,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (tzErr) {
       console.warn('[AuthContext] Failed to get client timezone:', tzErr);
     }
-  }, [user?.id]);
+  }, [isGuest, user?.id]);
 
   // === SINGLE-DEVICE LOGIN: Realtime Session Monitoring ===
   // Uses Supabase Realtime to instantly detect when user logs in on another device.
@@ -274,6 +284,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // which rotates every ~60 min and would cause false "other device" logouts.
   useEffect(() => {
     if (!user?.id) return;
+    if (isGuest) return;
 
     // Grab the stable login_id written by LoginForm at login time
     let myLoginId: string | null = null;
@@ -334,14 +345,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('[AuthContext] Cleaning up realtime session monitoring');
       supabase.removeChannel(channel);
     };
-  }, [user?.id, lastLoginTimestamp]);
+  }, [isGuest, user?.id, lastLoginTimestamp]);
 
   // Identify logged-in user in RevenueCat (via Natively SDK). No-op on web.
   // Also check subscription status via RevenueCat REST API
   useEffect(() => {
     let t1: ReturnType<typeof setTimeout> | undefined;
     try {
-      if (user?.id) {
+      if (user?.id && !isGuest) {
         // Item #8 Batch C2: Trimmed retry schedule from 3 calls (0/2s/5s) to
         // 2 calls (0/3s). The second retry at 5s was almost never doing work —
         // the Natively/RevenueCat SDK is either loaded by ~3s after first user
@@ -383,7 +394,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return () => {
       clearTimeout(t1);
     };
-  }, [user?.id, user?.email]);
+  }, [isGuest, user?.email, user?.id]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -396,6 +407,60 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
     
     return { error };
+  };
+
+  const signInAnonymously = async () => {
+    const { data, error } = await supabase.auth.signInAnonymously();
+
+    if (error) {
+      toast.error(error.message);
+      return { error, user: null };
+    }
+
+    if (data?.user?.id) {
+      setActiveScopedUserId(data.user.id);
+    }
+
+    return { error: null, user: data?.user ?? null };
+  };
+
+  const linkEmailToAnonymousUser = async (email: string, password: string, profileData: Record<string, any> = {}) => {
+    const { data, error } = await supabase.functions.invoke('guest-complete-signup', {
+      body: {
+        email,
+        password,
+        profileData,
+      },
+    });
+
+    if (error) {
+      toast.error(error.message);
+      return { error };
+    }
+
+    const edgeError = data?.success === false ? new Error(data?.error || 'Failed to complete guest signup.') : null;
+    if (edgeError) {
+      toast.error(edgeError.message);
+      return { error: edgeError };
+    }
+
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (signInError) {
+      toast.error(signInError.message);
+      return { error: signInError };
+    }
+
+    if (signInData?.session?.user?.id) {
+      setActiveScopedUserId(signInData.session.user.id);
+      setSession(signInData.session);
+      setUser(signInData.session.user);
+    }
+
+    return { error: null };
   };
 
   const signUp = async (email: string, password: string, fullName: string) => {
@@ -537,8 +602,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loading,
     isLoading: loading, // Alias for loading
     lastLoginTimestamp,
+    isGuest,
     signIn,
     signUp,
+    signInAnonymously,
+    linkEmailToAnonymousUser,
     signOut,
     resetPassword,
     forgotPassword: resetPassword, // Alias for resetPassword

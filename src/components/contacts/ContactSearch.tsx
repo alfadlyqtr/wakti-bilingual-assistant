@@ -3,6 +3,8 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useAuth } from "@/contexts/AuthContext";
+import { StudioGuestLoginDialog } from "@/components/studio/StudioGuestLoginDialog";
 import { t } from "@/utils/translations";
 import { toast } from "sonner";
 import { searchUsers, sendContactRequest, getContactRelationshipStatus, ContactRelationshipStatus } from "@/services/contactsService";
@@ -14,6 +16,8 @@ import { Badge } from "@/components/ui/badge";
 
 export function ContactSearch() {
   const { language } = useTheme();
+  const { isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const queryClient = useQueryClient();
@@ -75,6 +79,10 @@ export function ContactSearch() {
   };
 
   const handleSearchSubmit = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (searchQuery.length >= 3) {
       setIsSearching(true);
       await performSearch();
@@ -256,6 +264,13 @@ export function ContactSearch() {
           <p>{t("noUsersFound", language)}</p>
         </div>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/contacts' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 }

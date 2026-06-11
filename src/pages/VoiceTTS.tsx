@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useExtendedQuotaManagement } from '@/hooks/useExtendedQuotaManagement';
 import { useAuth } from '@/contexts/AuthContext';
+import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import EnhancedAudioControls from '@/components/tasjeel/EnhancedAudioControls';
 import { Card } from '@/components/ui/card';
@@ -131,7 +132,8 @@ export default function VoiceTTS({ operatorPayload, onOperatorConsumed }: VoiceT
   const operatorAutoRunStepIdRef = React.useRef<string | null>(null);
   const operatorRunMetaRef = React.useRef<VoiceOperatorRunMeta | null>(null);
 
-  const { user } = useAuth();
+  const { user, isGuest } = useAuth();
+  const [guestDialogOpen, setGuestDialogOpen] = useState(false);
 
   const { userVoiceQuota, isLoadingVoiceQuota, loadUserVoiceQuota, totalAvailableCharacters, canUseVoice } =
     useExtendedQuotaManagement(language);
@@ -199,6 +201,10 @@ export default function VoiceTTS({ operatorPayload, onOperatorConsumed }: VoiceT
   };
 
   const generateSpeech = async () => {
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     if (!canGenerate) return;
     if (operatorRunMetaRef.current?.runId && operatorRunMetaRef.current?.generateStepId) {
       emitEvent('wakti-operator-status', {
@@ -840,6 +846,13 @@ export default function VoiceTTS({ operatorPayload, onOperatorConsumed }: VoiceT
 
         </>
       )}
+
+      <StudioGuestLoginDialog
+        open={guestDialogOpen}
+        onOpenChange={setGuestDialogOpen}
+        redirectTo={typeof window === 'undefined' ? '/tools/text' : `${window.location.pathname}${window.location.search}`}
+        language={language === 'ar' ? 'ar' : 'en'}
+      />
     </div>
   );
 }
