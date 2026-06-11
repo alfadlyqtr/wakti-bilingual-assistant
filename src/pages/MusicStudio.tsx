@@ -7092,7 +7092,7 @@ function VoicesTab({
 
       if (status === 'completed' && tracks?.length) {
         if (songsRemaining <= 1) {
-          emitEvent('wakti-trial-quota-finished', { feature: 'music', consumed: 1, limit: 1, remaining: 0 });
+          emitEvent('wakti-trial-quota-finished', { feature: 'music', consumed: 1, limit: 1, remaining: 0, justExhausted: true });
         }
         if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
           emitEvent('wakti-operator-status', {
@@ -7149,7 +7149,7 @@ function VoicesTab({
       if (settled) return;
       settled = true;
       if (songsRemaining <= 1) {
-        emitEvent('wakti-trial-quota-finished', { feature: 'music', consumed: 1, limit: 1, remaining: 0 });
+        emitEvent('wakti-trial-quota-finished', { feature: 'music', consumed: 1, limit: 1, remaining: 0, justExhausted: true });
       }
       setGeneratingTask(null);
       setSubmitting(false);

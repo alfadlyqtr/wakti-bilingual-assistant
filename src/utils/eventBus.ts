@@ -30,6 +30,7 @@ type EventMap = {
     consumed?: number;
     limit?: number;
     remaining?: number;
+    justExhausted?: boolean;
   };
   'wakti-operator-status': {
     runId: string;

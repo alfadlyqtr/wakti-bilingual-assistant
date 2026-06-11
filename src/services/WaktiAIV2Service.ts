@@ -10,6 +10,12 @@ let _cachedSession: { access_token: string; expires_at?: number } | null = null;
 let _sessionCachedAt = 0;
 const SESSION_CACHE_TTL_MS = 55 * 60 * 1000; // 55 minutes
 
+/** Call after guest → full-user conversion to force the next message to use the fresh JWT. */
+export function clearCachedSession() {
+  _cachedSession = null;
+  _sessionCachedAt = 0;
+}
+
 async function getCachedSession() {
   const now = Date.now();
   if (_cachedSession?.access_token && (now - _sessionCachedAt) < SESSION_CACHE_TTL_MS) {
@@ -1869,13 +1875,14 @@ class WaktiAIV2ServiceClass {
                 }
 
                 if (parsed.metadata && typeof parsed.metadata === 'object') {
-                  const trialQuotaFinished = (parsed.metadata as { trialQuotaFinished?: { feature?: string; consumed?: number; limit?: number; remaining?: number } }).trialQuotaFinished;
+                  const trialQuotaFinished = (parsed.metadata as { trialQuotaFinished?: { feature?: string; consumed?: number; limit?: number; remaining?: number; justExhausted?: boolean } }).trialQuotaFinished;
                   if (trialQuotaFinished) {
                     emitEvent('wakti-trial-quota-finished', {
                       feature: trialQuotaFinished.feature || 'ai_chat',
                       consumed: trialQuotaFinished.consumed,
                       limit: trialQuotaFinished.limit,
                       remaining: trialQuotaFinished.remaining,
+                      justExhausted: trialQuotaFinished.justExhausted,
                     });
                   }
                   metadata = { ...metadata, ...normalizeStreamMetadata(parsed.metadata) };
