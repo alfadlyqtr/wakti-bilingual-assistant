@@ -12,6 +12,14 @@ export interface GroupChatParticipant {
   } | null;
 }
 
+export interface GroupConversationMessageReaction {
+  id: string;
+  conversation_message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+}
+
 export interface GroupChatConversation {
   id: string;
   name: string;
@@ -40,6 +48,17 @@ export interface GroupChatMessage {
   voice_duration?: number | null;
   file_size?: number | null;
   created_at: string;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
+  reply_to_id?: string | null;
+  reply_to?: {
+    id: string;
+    content?: string | null;
+    sender_id: string;
+    message_type: "text" | "image" | "voice" | "pdf";
+    is_deleted?: boolean;
+  } | null;
+  reactions?: GroupConversationMessageReaction[];
   sender?: {
     display_name?: string | null;
     username?: string | null;
@@ -258,7 +277,7 @@ export async function getGroupConversationMessages(conversationId: string): Prom
 
   const { data: rows, error } = await (supabase as any)
     .from("conversation_messages")
-    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at")
+    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at, is_deleted, deleted_at, reply_to_id, reply_to:reply_to_id(id, content, sender_id, message_type, is_deleted)")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -269,6 +288,7 @@ export async function getGroupConversationMessages(conversationId: string): Prom
 
   const senderIds = Array.from(new Set((rows || []).map((row: any) => row.sender_id)));
   const profilesMap = new Map<string, any>();
+  const reactionsMap = new Map<string, GroupConversationMessageReaction[]>();
 
   if (senderIds.length > 0) {
     const { data: profiles } = await (supabase as any)
@@ -278,6 +298,20 @@ export async function getGroupConversationMessages(conversationId: string): Prom
 
     (profiles || []).forEach((profile: any) => {
       profilesMap.set(profile.id, profile);
+    });
+  }
+
+  const messageIds = (rows || []).map((row: any) => row.id);
+  if (messageIds.length > 0) {
+    const { data: reactions } = await (supabase as any)
+      .from("conversation_message_reactions")
+      .select("id, conversation_message_id, user_id, emoji, created_at")
+      .in("conversation_message_id", messageIds);
+
+    (reactions || []).forEach((reaction: GroupConversationMessageReaction) => {
+      const list = reactionsMap.get(reaction.conversation_message_id) || [];
+      list.push(reaction);
+      reactionsMap.set(reaction.conversation_message_id, list);
     });
   }
 
@@ -293,6 +327,11 @@ export async function getGroupConversationMessages(conversationId: string): Prom
     voice_duration: row.voice_duration ?? null,
     file_size: row.file_size ?? null,
     created_at: row.created_at,
+    is_deleted: row.is_deleted ?? false,
+    deleted_at: row.deleted_at ?? null,
+    reply_to_id: row.reply_to_id ?? null,
+    reply_to: row.reply_to || null,
+    reactions: reactionsMap.get(row.id) || [],
     sender: profilesMap.get(row.sender_id) || undefined,
   }));
 }
@@ -322,6 +361,7 @@ export async function sendGroupConversationMessage(
     media_type?: string;
     voice_duration?: number;
     file_size?: number;
+    reply_to_id?: string | null;
   }
 ) {
   const userId = await getCurrentUserId();
@@ -343,7 +383,7 @@ export async function sendGroupConversationMessage(
   const { data, error } = await (supabase as any)
     .from("conversation_messages")
     .insert(insertData)
-    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at")
+    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at, is_deleted, deleted_at, reply_to_id")
     .single();
 
   if (error) {
@@ -351,6 +391,69 @@ export async function sendGroupConversationMessage(
   }
 
   return data as GroupChatMessage;
+}
+
+export async function addGroupReaction(messageId: string, emoji: string): Promise<GroupConversationMessageReaction> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { error: clearError } = await (supabase as any)
+    .from("conversation_message_reactions")
+    .delete()
+    .eq("conversation_message_id", messageId)
+    .eq("user_id", userId);
+
+  if (clearError) {
+    throw clearError;
+  }
+
+  const { data, error } = await (supabase as any)
+    .from("conversation_message_reactions")
+    .insert({ conversation_message_id: messageId, user_id: userId, emoji })
+    .select("id, conversation_message_id, user_id, emoji, created_at")
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data as GroupConversationMessageReaction;
+}
+
+export async function removeGroupReaction(messageId: string, emoji: string): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { error } = await (supabase as any)
+    .from("conversation_message_reactions")
+    .delete()
+    .eq("conversation_message_id", messageId)
+    .eq("user_id", userId)
+    .eq("emoji", emoji);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deleteGroupMessage(messageId: string): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { data, error } = await (supabase as any).rpc("soft_delete_conversation_message", {
+    p_message_id: messageId,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Message could not be deleted");
+  }
 }
 
 export async function leaveGroupConversation(conversationId: string) {

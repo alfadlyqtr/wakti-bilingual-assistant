@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const ALLOWED_VOICES = new Set(["alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse", "mann", "cedar"]);
 
 const MODEL = "gpt-realtime-2";
 const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
@@ -42,7 +43,9 @@ serve(async (req: Request) => {
 
     // Parse request body
     const body = await req.json();
-    const { sdp_offer, language = "en" } = body;
+    const requestedVoice = typeof body?.voice === "string" ? body.voice.trim() : "";
+    const realtimeVoice = ALLOWED_VOICES.has(requestedVoice) ? requestedVoice : "shimmer";
+    const { sdp_offer } = body;
 
     if (!sdp_offer) {
       return new Response(JSON.stringify({ error: "Missing sdp_offer" }), {
@@ -53,6 +56,7 @@ serve(async (req: Request) => {
 
     console.log("[openai-realtime-session] Creating session using GA unified interface...");
     console.log("[openai-realtime-session] Model:", MODEL);
+    console.log("[openai-realtime-session] Voice:", realtimeVoice);
 
     const sessionConfig = JSON.stringify({
       type: "realtime",
@@ -61,7 +65,7 @@ serve(async (req: Request) => {
         input: {
           transcription: { model: "gpt-realtime-whisper" },
         },
-        output: { voice: "shimmer" },
+        output: { voice: realtimeVoice },
       },
     });
 

@@ -15,6 +15,13 @@ interface TalkBubbleProps {
 
 const MAX_RECORD_SECONDS = 10; // 10 second limit
 
+type TalkLocation = {
+  city?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+};
+
 /**
  * Clean transcript for better Tavily search results.
  * Removes common filler/command phrases while preserving the actual query.
@@ -84,6 +91,10 @@ function cleanSearchQuery(transcript: string): string {
   return cleaned;
 }
 
+function getOpenAIVoiceForGender(gender: 'male' | 'female'): 'echo' | 'shimmer' {
+  return gender === 'female' ? 'shimmer' : 'echo';
+}
+
 export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage }: TalkBubbleProps) {
   const { language, theme } = useTheme();
   const { profile: _tbCachedProfile } = useUserProfile();
@@ -104,12 +115,12 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [searchMode, setSearchMode] = useState(false); // One-turn search mode (auto-resets after use)
   const [isSearching, setIsSearching] = useState(false); // Currently fetching search results
   const [personalTouch, setPersonalTouch] = useState<any>(null);
-  const [userLocation, setUserLocation] = useState<{ city?: string; country?: string } | null>(null);
+  const [userLocation, setUserLocation] = useState<TalkLocation | null>(null);
 
   // Use refs for values needed in callbacks to avoid stale closures
   const userNameRef = useRef<string>('');
   const voiceGenderRef = useRef<'male' | 'female'>('male');
-  const userLocationRef = useRef<{ city?: string; country?: string } | null>(null);
+  const userLocationRef = useRef<TalkLocation | null>(null);
   const conversationHistoryRef = useRef<{role: 'user' | 'assistant', text: string}[]>([]);
   const talkSummaryRef = useRef<string>('');
   const searchModeRef = useRef(false); // Ref for search mode to avoid stale closures
@@ -131,6 +142,14 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   // Helpful Memory is loaded read-only when the Talk bubble opens. It is NOT
   // captured/forgotten in Talk (by design) — forget/capture happens in Chat.
   const helpfulMemoryBlockRef = useRef<string>('');
+
+  const onUserMessageRef = useRef(onUserMessage);
+  const onAssistantMessageRef = useRef(onAssistantMessage);
+
+  useEffect(() => {
+    onUserMessageRef.current = onUserMessage;
+    onAssistantMessageRef.current = onAssistantMessage;
+  }, [onUserMessage, onAssistantMessage]);
 
   // Fetch the user's active helpful memory and format a compact block for the
   // Realtime instructions. Honors the master helpful_memory_enabled toggle.
@@ -333,8 +352,13 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       try {
         // Try Natively SDK for live location (includes city/country from reverse geocoding)
         const nativeLoc = await getNativeLocation({ timeoutMs: 5000 });
-        if (nativeLoc && (nativeLoc.city || nativeLoc.country)) {
-          const loc = { city: nativeLoc.city, country: nativeLoc.country };
+        if (nativeLoc && (nativeLoc.latitude || nativeLoc.longitude || nativeLoc.city || nativeLoc.country)) {
+          const loc = {
+            city: nativeLoc.city,
+            country: nativeLoc.country,
+            latitude: nativeLoc.latitude,
+            longitude: nativeLoc.longitude,
+          };
           console.log('[Talk] Got location from Natively SDK:', loc);
           setUserLocation(loc);
           userLocationRef.current = loc;
@@ -408,6 +432,15 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     setMicLevel(0);
     setError(null);
     setIsConnectionReady(false);
+    setAiTranscript('');
+    setConversationHistory([]);
+    conversationHistoryRef.current = [];
+    setTalkSummary('');
+    talkSummaryRef.current = '';
+    setSearchMode(false);
+    searchModeRef.current = false;
+    setIsSearching(false);
+    pendingTranscriptRef.current = '';
   }, []);
 
   const toBase64 = useCallback((bytes: Uint8Array) => {
@@ -670,7 +703,7 @@ ${memoryContext ? memoryContext : ''}`
         // Select OpenAI Realtime voice based on Talk Back settings
         // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, mann, cedar
         // male=echo (deep), female=shimmer (expressive)
-        const openaiVoice = currentVoiceGender === 'female' ? 'shimmer' : 'echo';
+        const openaiVoice = getOpenAIVoiceForGender(currentVoiceGender);
         console.log('[Talk] Instructions:', instructions);
         console.log('[Talk] User name:', currentUserName, '| Voice:', openaiVoice, '(gender:', currentVoiceGender, ')');
         
@@ -680,6 +713,7 @@ ${memoryContext ? memoryContext : ''}`
           session: {
             type: 'realtime',
             instructions,
+            audio: { output: { voice: openaiVoice } },
           }
         }));
         
@@ -745,10 +779,11 @@ ${memoryContext ? memoryContext : ''}`
       // Get session token from backend
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
+      const requestedVoice = getOpenAIVoiceForGender(voiceGenderRef.current);
 
       console.log('[Talk] Calling Edge Function for SDP exchange...');
       const response = await supabase.functions.invoke('openai-realtime-session', {
-        body: { sdp_offer: offer.sdp, language },
+        body: { sdp_offer: offer.sdp, language, voice: requestedVoice },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
 
@@ -830,6 +865,7 @@ ${memoryContext ? memoryContext : ''}`
             conversationHistoryRef.current = next;
             return next;
           });
+          onUserMessageRef.current(transcript);
           
           // If in search mode, perform web search then respond
           if (searchModeRef.current) {
@@ -876,6 +912,7 @@ ${memoryContext ? memoryContext : ''}`
             conversationHistoryRef.current = next;
             return next;
           });
+          onAssistantMessageRef.current(String(msg.transcript));
 
           // Update rolling summary (simple, safe heuristic)
           setTalkSummary(prev => {
@@ -929,6 +966,8 @@ ${memoryContext ? memoryContext : ''}`
           language: lang,
           ...(location?.city ? { city: location.city } : {}),
           ...(location?.country ? { country: location.country } : {}),
+          ...(typeof location?.latitude === 'number' ? { latitude: location.latitude } : {}),
+          ...(typeof location?.longitude === 'number' ? { longitude: location.longitude } : {}),
         },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
@@ -987,8 +1026,8 @@ ${memoryContext ? memoryContext : ''}`
 
         const searchBlock = tLang(
           activeLang,
-          `\n\nFRESH WEB SEARCH RESULTS (answer from these, not from memory):\n${searchContext}\n\nHow to use these results:\n- Answer the user's question directly and naturally using the facts above.\n- Mention the source briefly when it helps trust (e.g., "according to ESPN..."), but don't read URLs out loud.\n- Spoken style — no lists, no markdown, no link dumps.\n- At the very end, once, add a short natural line inviting deeper research: "If you want a deeper dive with sources and references, jump over to Search mode in Wakti AI — it's built for that." Phrase it casually, not as an ad. Skip this line entirely if the user just wanted a quick factual check (like a score, a price, or a single fact).`,
-          `\n\nنتائج بحث حديثة من الويب (أجب منها، لا من الذاكرة):\n${searchContext}\n\nكيف تستخدمها:\n- أجب على سؤال المستخدم مباشرة وبأسلوب طبيعي من هذه الحقائق.\n- اذكر المصدر باختصار عند الحاجة (مثلاً "حسب ESPN..."), لكن لا تقرأ الروابط بصوت عالٍ.\n- أسلوب منطوق — بلا قوائم ولا ماركداون ولا سرد روابط.\n- في النهاية، مرة واحدة، أضف سطراً طبيعياً قصيراً يدعو لبحث أعمق: "لو تبي بحثاً أعمق مع مصادر ومراجع، خش على وضع البحث في Wakti AI — مصمم لهذا بالضبط." قُلها بشكل عفوي لا إعلاني. اتركها تماماً إذا كان المستخدم يبغى فقط معلومة سريعة واحدة (نتيجة مباراة، سعر، أو حقيقة واحدة).`
+          `\n\nFRESH GOOGLE-GROUNDED SEARCH RESULTS (answer from these, not from memory):\n${searchContext}\n\nHow to use these results:\n- Answer the user's question directly and naturally using the facts above.\n- Mention the source briefly when it helps trust (e.g., "according to ESPN..."), but don't read URLs out loud.\n- Spoken style — no lists, no markdown, no link dumps.\n- Do not tell the user to switch modes or use another search flow.`,
+          `\n\nنتائج بحث حديثة ومدعومة من Google (أجب منها، لا من الذاكرة):\n${searchContext}\n\nكيف تستخدمها:\n- أجب على سؤال المستخدم مباشرة وبأسلوب طبيعي من هذه الحقائق.\n- اذكر المصدر باختصار عند الحاجة (مثلاً "حسب ESPN..."), لكن لا تقرأ الروابط بصوت عالٍ.\n- أسلوب منطوق — بلا قوائم ولا ماركداون ولا سرد روابط.\n- لا تطلب من المستخدم الانتقال إلى وضع آخر أو استخدام مسار بحث مختلف.`
         );
 
         // Minimal instructions update — just the transient blocks.
@@ -1571,13 +1610,6 @@ ${memoryContext ? memoryContext : ''}`
         {/* End button */}
         <button
           onClick={() => {
-            conversationHistoryRef.current.forEach(item => {
-              if (item.role === 'user') {
-                onUserMessage(item.text);
-              } else {
-                onAssistantMessage(item.text);
-              }
-            });
             onClose();
           }}
           className={`mt-2 px-10 py-3 rounded-full text-lg font-medium transition-colors select-none ${theme === 'dark' ? 'bg-white/15 hover:bg-white/25 text-white' : 'bg-black/10 hover:bg-black/20 text-[#060541]'}`}

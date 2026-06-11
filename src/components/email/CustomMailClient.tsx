@@ -42,6 +42,35 @@ function extractEmailAddress(emailStr: string): string {
   return plainMatch ? plainMatch[0] : emailStr.trim();
 }
 
+function stripImapProtocolLines(value: string): string {
+  return value
+    .replace(/^\)?\s*A\d+\s+(?:OK|NO|BAD)\b.*$/gim, '')
+    .replace(/^\*\s+\d+\s+FETCH\b.*$/gim, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function repairCommonMojibake(value: string): string {
+  let repaired = value;
+  const replacements: Array<[string, string]> = [
+    ['â€™', '’'],
+    ['â€˜', '‘'],
+    ['â€œ', '“'],
+    ['â€�', '”'],
+    ['â€“', '–'],
+    ['â€”', '—'],
+    ['â€¦', '…'],
+    ['Â ', ' '],
+    ['Â', ''],
+  ];
+
+  for (const [wrong, right] of replacements) {
+    repaired = repaired.split(wrong).join(right);
+  }
+
+  return repaired;
+}
+
 interface MessageRowProps {
   message: ImapMessage;
   activeFolder: 'INBOX' | 'SENT';
@@ -114,6 +143,7 @@ function formatPlainEmailBody(body: string, subject: string): string {
     cleaned = cleaned.replace(new RegExp(`^${escapedSubject}(?:\\s*[-:;,.–—]+\\s*|\\s+)`, 'i'), '').trim();
   }
 
+  cleaned = repairCommonMojibake(stripImapProtocolLines(cleaned));
   cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
   if (/\n\s*\n/.test(cleaned)) {
     return cleaned;

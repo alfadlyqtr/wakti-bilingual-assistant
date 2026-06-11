@@ -393,18 +393,28 @@ function parseSearchUids(lines: string[]): number[] {
 
 function extractFetchBodyContent(lines: string[]): string {
   let collecting = false;
-  let body = "";
+  const bodyLines: string[] = [];
   for (const line of lines) {
-    if (line.match(/^\* \d+ FETCH/)) {
+    if (!collecting && line.match(/^\* \d+ FETCH/)) {
       collecting = true;
       continue;
     }
-    if (collecting) {
-      if (line === ")") break;
-      body += line + "\n";
+    if (!collecting) {
+      continue;
     }
+    if (line.match(/^\)\s*(?:[A-Z]\d+\s+(?:OK|NO|BAD)\b.*)?$/i)) {
+      break;
+    }
+    if (line.match(/^[A-Z]\d+\s+(?:OK|NO|BAD)\b/i)) {
+      break;
+    }
+    bodyLines.push(line);
   }
-  return body;
+  return bodyLines
+    .join("\n")
+    .replace(/\n?\)\s*[A-Z]\d+\s+(?:OK|NO|BAD)\b[^\n\r]*$/i, "")
+    .replace(/\n?[A-Z]\d+\s+(?:OK|NO|BAD)\b[^\n\r]*$/i, "")
+    .trimEnd();
 }
 
 function extractBodyStructurePayload(lines: string[]): string | null {
@@ -465,6 +475,7 @@ type ParsedBodyStructurePart = {
   type: string;
   subtype: string;
   contentType: string;
+  charset: string | null;
   encoding: string;
   size?: number;
   inline: boolean;
@@ -569,7 +580,8 @@ function buildBodyStructureTree(value: ImapListValue, id = "0", section = ""): P
     while (childCount < value.length && Array.isArray(value[childCount])) {
       childCount += 1;
     }
-    const subtype = typeof value[childCount] === "string" ? value[childCount].toLowerCase() : "mixed";
+    const rawSubtype = value[childCount];
+    const subtype = typeof rawSubtype === "string" ? rawSubtype.toLowerCase() : "mixed";
     const children = value
       .slice(0, childCount)
       .map((child, index) => buildBodyStructureTree(
@@ -585,6 +597,7 @@ function buildBodyStructureTree(value: ImapListValue, id = "0", section = ""): P
       type: "multipart",
       subtype,
       contentType: `multipart/${subtype}`,
+      charset: null,
       encoding: "",
       inline: false,
       isAttachment: false,
@@ -609,6 +622,7 @@ function buildBodyStructureTree(value: ImapListValue, id = "0", section = ""): P
     type,
     subtype,
     contentType: `${type}/${subtype}`,
+    charset: typeof params.charset === "string" ? params.charset : null,
     encoding,
     size,
     inline,
@@ -674,8 +688,34 @@ function findBodyStructurePartById(root: ParsedBodyStructurePart, id: string): P
   return null;
 }
 
-function decodeFetchedBodyPart(content: string, encoding: string, contentType: string): string {
-  const decoded = decodeBody(content, encoding).replace(/\r\n?/g, "\n");
+function normalizeCharset(charset?: string | null): string {
+  const normalized = (charset || "").trim().toLowerCase();
+  if (!normalized) return "utf-8";
+  if (normalized === "utf8") return "utf-8";
+  if (normalized === "cp1252") return "windows-1252";
+  if (normalized === "latin1" || normalized === "latin-1") return "iso-8859-1";
+  return normalized;
+}
+
+function decodeBytesToText(bytes: Uint8Array, charset?: string | null): string {
+  const preferred = normalizeCharset(charset);
+  const fallbacks = [preferred, "utf-8", "windows-1252", "iso-8859-1"];
+  for (const candidate of Array.from(new Set(fallbacks))) {
+    try {
+      return new TextDecoder(candidate).decode(bytes);
+    } catch {
+    }
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+function extractContentTypeCharset(headers: string): string | null {
+  const match = headers.match(/charset\s*=\s*["']?([^"';\r\n]+)/i);
+  return match?.[1]?.trim() || null;
+}
+
+function decodeFetchedBodyPart(content: string, encoding: string, contentType: string, charset?: string | null): string {
+  const decoded = decodeBody(content, encoding, charset).replace(/\r\n?/g, "\n");
   if (contentType === "text/plain") {
     return normalizeTextContent(decoded);
   }
@@ -686,29 +726,25 @@ function decodeMimeWords(str: string): string {
   return str.replace(/=\?([^?]+)\?(B|Q)\?([^?]*)\?=/gi, (full, charset, enc, text) => {
     try {
       if (enc.toUpperCase() === "B") {
-        return new TextDecoder(charset).decode(Uint8Array.from(atob(text), (c) => c.charCodeAt(0)));
+        return decodeBytesToText(Uint8Array.from(atob(text), (c) => c.charCodeAt(0)), charset);
       }
-      return text
-        .replace(/_/g, " ")
-        .replace(/=([0-9A-F]{2})/gi, (_: string, h: string) => String.fromCharCode(parseInt(h, 16)));
+      return decodeBytesToText(decodeQuotedPrintableBytes(text.replace(/_/g, " ")), charset);
     } catch {
       return full;
     }
   });
 }
 
-function decodeBody(body: string, encoding: string): string {
+function decodeBody(body: string, encoding: string, charset?: string | null): string {
   if (encoding === "base64") {
     try {
-      return new TextDecoder().decode(Uint8Array.from(atob(body.replace(/\s/g, "")), (c) => c.charCodeAt(0)));
+      return decodeBytesToText(Uint8Array.from(atob(body.replace(/\s/g, "")), (c) => c.charCodeAt(0)), charset);
     } catch {
       return body;
     }
   }
   if (encoding === "quoted-printable") {
-    return body
-      .replace(/=\r?\n/g, "")
-      .replace(/=([0-9A-F]{2})/gi, (_: string, h: string) => String.fromCharCode(parseInt(h, 16)));
+    return decodeBytesToText(decodeQuotedPrintableBytes(body), charset);
   }
   return body;
 }
@@ -837,6 +873,7 @@ function parseMimeNode(rawPart: string, path = "0", includeAttachmentContent = f
   const { headers, body } = splitMimeHeadersAndBody(rawPart);
   const contentTypeMatch = headers.match(/^Content-Type:\s*([^\r\n;]+)/im);
   const contentType = contentTypeMatch ? contentTypeMatch[1].trim().toLowerCase() : "text/plain";
+  const charset = extractContentTypeCharset(headers);
   const transferEncodingMatch = headers.match(/^Content-Transfer-Encoding:\s*(\S+)/im);
   const transferEncoding = transferEncodingMatch ? transferEncodingMatch[1].trim().toLowerCase() : "";
   const dispositionMatch = headers.match(/^Content-Disposition:\s*([^\r\n;]+)/im);
@@ -887,7 +924,7 @@ function parseMimeNode(rawPart: string, path = "0", includeAttachmentContent = f
     };
   }
 
-  const decoded = decodeBody(body, transferEncoding);
+  const decoded = decodeBody(body, transferEncoding, charset);
   if (contentType.includes("text/html")) {
     return { text: "", html: decoded, attachments: [] };
   }
@@ -922,12 +959,12 @@ async function extractOptimizedMessage(imap: ImapClient, uid: number): Promise<{
 
   if (textPart) {
     const rawText = await imap.fetchBodySection(uid, textPart.fetchSection);
-    text = decodeFetchedBodyPart(rawText, textPart.encoding, textPart.contentType);
+    text = decodeFetchedBodyPart(rawText, textPart.encoding, textPart.contentType, textPart.charset);
   }
 
   if (htmlPart) {
     const rawHtml = await imap.fetchBodySection(uid, htmlPart.fetchSection);
-    html = decodeFetchedBodyPart(rawHtml, htmlPart.encoding, htmlPart.contentType);
+    html = decodeFetchedBodyPart(rawHtml, htmlPart.encoding, htmlPart.contentType, htmlPart.charset);
   }
 
   if (!text && html) {

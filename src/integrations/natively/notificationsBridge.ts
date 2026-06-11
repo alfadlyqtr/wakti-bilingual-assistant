@@ -152,14 +152,18 @@ export function setupNotificationClickHandler(navigate: (path: string) => void) 
       // Extract data from the notification payload
       const data = notification?.additionalData || notification?.data || {};
       const senderId = data.sender_id;
+      const conversationId = data.conversation_id;
       const type = data.type;
       
-      console.log('[NativelyNotifications] Notification data:', { senderId, type, data });
+      console.log('[NativelyNotifications] Notification data:', { senderId, conversationId, type, data });
       
       // Handle message notifications - navigate to contacts with openChat param
       if ((type === 'message_received' || type === 'message' || type === 'messages') && senderId) {
         console.log('[NativelyNotifications] Navigating to chat with:', senderId);
         navigate(`/social?section=contacts&openChat=${senderId}`);
+      } else if ((type === 'group_message_received' || type === 'group_message' || type === 'group_messages') && conversationId) {
+        console.log('[NativelyNotifications] Navigating to group chat with:', conversationId);
+        navigate(`/group-chats/${conversationId}`);
       } else if (data.deep_link) {
         // Use deep_link from data if available
         console.log('[NativelyNotifications] Using deep_link:', data.deep_link);
