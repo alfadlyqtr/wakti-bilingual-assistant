@@ -102,6 +102,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const tLang = useCallback((lang: 'ar' | 'en', en: string, ar: string) => (lang === 'ar' ? ar : en), []);
   const [isHolding, setIsHolding] = useState(false);
   const [countdown, setCountdown] = useState(MAX_RECORD_SECONDS);
+  const [isConversationActive, setIsConversationActive] = useState(false);
   const [liveTranscript, setLiveTranscript] = useState('');
   const [status, setStatus] = useState<'connecting' | 'ready' | 'listening' | 'processing' | 'speaking'>('connecting');
   const [micLevel, setMicLevel] = useState(0);
@@ -126,6 +127,9 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const searchModeRef = useRef(false); // Ref for search mode to avoid stale closures
   const pendingTranscriptRef = useRef<string>(''); // Store transcript while waiting for search
   const detectedLanguageRef = useRef<'ar' | 'en'>(language === 'ar' ? 'ar' : 'en');
+  const assistantTranscriptBufferRef = useRef('');
+  const assistantMessageSyncedRef = useRef(false);
+  const assistantResponseActiveRef = useRef(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -135,9 +139,13 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const animationFrameRef = useRef<number | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const rearmTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const responseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const assistantTurnRecoveryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const holdStartRef = useRef<number>(0);
   const isStoppingRef = useRef(false); // Guard against multiple stopRecording calls
   const isHoldingRef = useRef(false); // Track holding state for audio processor callback
+  const isConversationActiveRef = useRef(false);
   const personalTouchRef = useRef<any>(null);
   // Helpful Memory is loaded read-only when the Talk bubble opens. It is NOT
   // captured/forgotten in Talk (by design) — forget/capture happens in Chat.
@@ -150,6 +158,175 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     onUserMessageRef.current = onUserMessage;
     onAssistantMessageRef.current = onAssistantMessage;
   }, [onUserMessage, onAssistantMessage]);
+
+  useEffect(() => {
+    isConversationActiveRef.current = isConversationActive;
+  }, [isConversationActive]);
+
+  const setMicTracksEnabled = useCallback((enabled: boolean) => {
+    if (streamRef.current) {
+      streamRef.current.getAudioTracks().forEach(track => {
+        track.enabled = enabled;
+      });
+    }
+  }, []);
+
+  const rearmListening = useCallback((delayMs = 0) => {
+    if (rearmTimeoutRef.current) {
+      clearTimeout(rearmTimeoutRef.current);
+      rearmTimeoutRef.current = null;
+    }
+
+    const arm = () => {
+      if (!isConversationActiveRef.current || !isConnectionReady || !dcRef.current || dcRef.current.readyState !== 'open') {
+        return;
+      }
+      setMicTracksEnabled(true);
+      dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+      setError(null);
+      setStatus('listening');
+    };
+
+    if (delayMs > 0) {
+      rearmTimeoutRef.current = setTimeout(() => {
+        rearmTimeoutRef.current = null;
+        arm();
+      }, delayMs);
+      return;
+    }
+
+    arm();
+  }, [isConnectionReady, setMicTracksEnabled]);
+
+  const normalizeAssistantTranscript = useCallback((text: string) => text.replace(/\s+/g, ' ').trim(), []);
+
+  const beginAssistantTurn = useCallback(() => {
+    assistantResponseActiveRef.current = true;
+    assistantMessageSyncedRef.current = false;
+    assistantTranscriptBufferRef.current = '';
+    setAiTranscript('');
+  }, []);
+
+  const updateAssistantTranscript = useCallback((chunk: unknown, mode: 'append' | 'replace' = 'append') => {
+    if (typeof chunk !== 'string' || chunk.length === 0) {
+      return assistantTranscriptBufferRef.current;
+    }
+
+    const nextRaw = mode === 'replace'
+      ? chunk
+      : `${assistantTranscriptBufferRef.current}${chunk}`;
+    const normalized = normalizeAssistantTranscript(nextRaw);
+
+    if (!normalized) {
+      return assistantTranscriptBufferRef.current;
+    }
+
+    assistantTranscriptBufferRef.current = normalized;
+    setAiTranscript(normalized);
+    return normalized;
+  }, [normalizeAssistantTranscript]);
+
+  const syncAssistantMessage = useCallback((text: string) => {
+    const transcript = normalizeAssistantTranscript(text);
+    if (!transcript || assistantMessageSyncedRef.current) {
+      return;
+    }
+
+    assistantMessageSyncedRef.current = true;
+    setConversationHistory(prev => {
+      const next = [...prev, { role: 'assistant' as const, text: transcript }];
+      conversationHistoryRef.current = next;
+      return next;
+    });
+    onAssistantMessageRef.current(transcript);
+    setTalkSummary(prev => {
+      const compact = (s: string) => s.replace(/\s+/g, ' ').trim();
+      const entry = compact(transcript);
+      const base = compact(prev);
+      const merged = base ? `${base} | ${entry}` : entry;
+      const limited = merged.length > 1200 ? merged.slice(merged.length - 1200) : merged;
+      talkSummaryRef.current = limited;
+      return limited;
+    });
+  }, [normalizeAssistantTranscript]);
+
+  const extractAssistantTranscriptFromResponse = useCallback((msg: any) => {
+    const found: string[] = [];
+    const addCandidate = (value: unknown) => {
+      if (typeof value !== 'string') {
+        return;
+      }
+      const normalized = normalizeAssistantTranscript(value);
+      if (normalized) {
+        found.push(normalized);
+      }
+    };
+
+    addCandidate(msg?.transcript);
+    addCandidate(msg?.response?.transcript);
+    addCandidate(msg?.response?.text);
+
+    const outputs = Array.isArray(msg?.response?.output) ? msg.response.output : [];
+    outputs.forEach((output: any) => {
+      addCandidate(output?.transcript);
+      addCandidate(output?.text);
+      const content = Array.isArray(output?.content) ? output.content : [];
+      content.forEach((item: any) => {
+        addCandidate(item?.transcript);
+        addCandidate(item?.audio_transcript);
+        addCandidate(item?.text);
+      });
+    });
+
+    return found[0] || '';
+  }, [normalizeAssistantTranscript]);
+
+  const clearAssistantTurnRecovery = useCallback(() => {
+    if (assistantTurnRecoveryTimeoutRef.current) {
+      clearTimeout(assistantTurnRecoveryTimeoutRef.current);
+      assistantTurnRecoveryTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleAssistantTurnRecovery = useCallback((delayMs = 1800) => {
+    clearAssistantTurnRecovery();
+    assistantTurnRecoveryTimeoutRef.current = setTimeout(() => {
+      assistantTurnRecoveryTimeoutRef.current = null;
+      if (!isConversationActiveRef.current) {
+        return;
+      }
+      console.log('[Talk] Assistant turn recovery fallback -> rearm listening');
+      const recoveredTranscript = normalizeAssistantTranscript(assistantTranscriptBufferRef.current);
+      if (recoveredTranscript) {
+        syncAssistantMessage(recoveredTranscript);
+      }
+      assistantResponseActiveRef.current = false;
+      rearmListening(450);
+    }, delayMs);
+  }, [clearAssistantTurnRecovery, normalizeAssistantTranscript, rearmListening, syncAssistantMessage]);
+
+  const finishAssistantTurn = useCallback((msg?: any) => {
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
+    }
+    clearAssistantTurnRecovery();
+    const finalTranscript = normalizeAssistantTranscript(
+      extractAssistantTranscriptFromResponse(msg) || assistantTranscriptBufferRef.current,
+    );
+    if (finalTranscript) {
+      assistantTranscriptBufferRef.current = finalTranscript;
+      setAiTranscript(finalTranscript);
+      syncAssistantMessage(finalTranscript);
+    }
+    assistantResponseActiveRef.current = false;
+    setError(null);
+    if (isConversationActiveRef.current) {
+      rearmListening(450);
+    } else {
+      setStatus('ready');
+    }
+  }, [clearAssistantTurnRecovery, extractAssistantTranscriptFromResponse, normalizeAssistantTranscript, rearmListening, syncAssistantMessage]);
 
   // Fetch the user's active helpful memory and format a compact block for the
   // Realtime instructions. Honors the master helpful_memory_enabled toggle.
@@ -411,6 +588,18 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
+    if (assistantTurnRecoveryTimeoutRef.current) {
+      clearTimeout(assistantTurnRecoveryTimeoutRef.current);
+      assistantTurnRecoveryTimeoutRef.current = null;
+    }
+    if (rearmTimeoutRef.current) {
+      clearTimeout(rearmTimeoutRef.current);
+      rearmTimeoutRef.current = null;
+    }
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -441,6 +630,11 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     searchModeRef.current = false;
     setIsSearching(false);
     pendingTranscriptRef.current = '';
+    assistantTranscriptBufferRef.current = '';
+    assistantMessageSyncedRef.current = false;
+    assistantResponseActiveRef.current = false;
+    setIsConversationActive(false);
+    isConversationActiveRef.current = false;
   }, []);
 
   const toBase64 = useCallback((bytes: Uint8Array) => {
@@ -553,7 +747,14 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         streamRef.current.getTracks().forEach(t => t.stop());
       }
       
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
       streamRef.current = stream;
 
       // Setup analyser for mic level visualization
@@ -713,7 +914,19 @@ ${memoryContext ? memoryContext : ''}`
           session: {
             type: 'realtime',
             instructions,
-            audio: { output: { voice: openaiVoice } },
+            audio: {
+              input: {
+                turn_detection: {
+                  type: 'server_vad',
+                  threshold: 0.55,
+                  prefix_padding_ms: 350,
+                  silence_duration_ms: 900,
+                  create_response: false,
+                  interrupt_response: false,
+                },
+              },
+              output: { voice: openaiVoice },
+            },
           }
         }));
         
@@ -834,16 +1047,25 @@ ${memoryContext ? memoryContext : ''}`
         console.log('[Talk] Session created');
         break;
       case 'session.updated':
-        console.log('[Talk] Session updated - ready for hold-to-talk');
+        console.log('[Talk] Session updated - ready for conversation');
         break;
       case 'input_audio_buffer.committed':
         // Audio buffer committed
         console.log('[Talk] Audio committed');
-        // If in search mode, cancel the auto-response immediately so we can
-        // inject search results before the model replies
-        if (searchModeRef.current && dcRef.current?.readyState === 'open') {
-          dcRef.current.send(JSON.stringify({ type: 'response.cancel' }));
+        setMicTracksEnabled(false);
+        setStatus('processing');
+        if (responseTimeoutRef.current) {
+          clearTimeout(responseTimeoutRef.current);
         }
+        responseTimeoutRef.current = setTimeout(() => {
+          responseTimeoutRef.current = null;
+          if (!isConversationActiveRef.current) {
+            return;
+          }
+          assistantResponseActiveRef.current = false;
+          setError(language === 'ar' ? 'انتهت المهلة' : 'Response timeout');
+          rearmListening();
+        }, 30000);
         break;
       case 'conversation.item.input_audio_transcription.completed':
         // User's speech transcribed
@@ -893,62 +1115,78 @@ ${memoryContext ? memoryContext : ''}`
         } else {
           // User didn't say anything - go back to ready without responding
           console.log('[Talk] Empty transcript - user did not speak, skipping response');
-          setStatus('ready');
+          if (responseTimeoutRef.current) {
+            clearTimeout(responseTimeoutRef.current);
+            responseTimeoutRef.current = null;
+          }
+          if (isConversationActiveRef.current) {
+            rearmListening(200);
+          } else {
+            setStatus('ready');
+          }
         }
         break;
+      case 'response.created':
+        console.log('[Talk] Assistant response created');
+        assistantResponseActiveRef.current = true;
+        setStatus('processing');
+        break;
+      case 'response.output_audio_transcript.delta':
       case 'response.audio_transcript.delta':
         // AI speaking - partial transcript (accumulate)
         setStatus('speaking');
+        setMicTracksEnabled(false);
         if (msg.delta) {
-          setAiTranscript(prev => prev + msg.delta);
+          updateAssistantTranscript(msg.delta, 'append');
         }
         break;
+      case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done':
-        // AI finished speaking - full transcript
+        // AI transcript completed - keep buffering, but finalize only on response.done
         if (msg.transcript) {
-          setAiTranscript(msg.transcript);
-          setConversationHistory(prev => {
-            const next = [...prev, { role: 'assistant' as const, text: String(msg.transcript) }];
-            conversationHistoryRef.current = next;
-            return next;
-          });
-          onAssistantMessageRef.current(String(msg.transcript));
-
-          // Update rolling summary (simple, safe heuristic)
-          setTalkSummary(prev => {
-            const compact = (s: string) => s.replace(/\s+/g, ' ').trim();
-            const entry = compact(String(msg.transcript));
-            const base = compact(prev);
-            const merged = base ? `${base} | ${entry}` : entry;
-            const limited = merged.length > 1200 ? merged.slice(merged.length - 1200) : merged;
-            talkSummaryRef.current = limited;
-            return limited;
-          });
+          updateAssistantTranscript(msg.transcript, 'replace');
         }
+        scheduleAssistantTurnRecovery(1600);
+        break;
+      case 'response.output_audio.done':
+        console.log('[Talk] Output audio done - finishing assistant turn');
+        finishAssistantTurn(msg);
         break;
       case 'response.done':
         console.log('[Talk] Response complete - ready for next turn');
-        setStatus('ready');
-        setError(null); // Clear any timeout error
+        finishAssistantTurn(msg);
         break;
       case 'error':
         console.error('[Talk] Realtime error:', msg);
         // Handle specific errors gracefully
         if (msg.error?.message?.includes('active response')) {
           console.log('[Talk] Waiting for active response to complete...');
+          scheduleAssistantTurnRecovery(2200);
         } else if (msg.error?.message?.includes('buffer too small')) {
           // Not enough audio detected - just go back to ready
+          clearAssistantTurnRecovery();
+          assistantResponseActiveRef.current = false;
           console.log('[Talk] Buffer too small - waiting for more speech');
-          setStatus('ready');
+          if (isConversationActiveRef.current) {
+            rearmListening(200);
+          } else {
+            setStatus('ready');
+          }
         } else {
+          clearAssistantTurnRecovery();
+          assistantResponseActiveRef.current = false;
           setError(msg.error?.message || 'Realtime error');
-          setStatus('ready');
+          if (isConversationActiveRef.current) {
+            rearmListening(600);
+          } else {
+            setStatus('ready');
+          }
         }
         break;
       default:
         break;
     }
-  }, []);
+  }, [clearAssistantTurnRecovery, finishAssistantTurn, language, rearmListening, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
 
   // Perform web search using live-talk-search Edge Function
   const performWebSearch = useCallback(async (query: string, lang: 'ar' | 'en'): Promise<string> => {
@@ -1001,12 +1239,25 @@ ${memoryContext ? memoryContext : ''}`
   // For long sessions we also piggy-back the rolling session summary so older
   // context survives even if native items get truncated.
   const sendResponseCreate = useCallback((searchContext?: string, _userUtterance?: string, detectedLang?: 'ar' | 'en') => {
+    if (!isConversationActiveRef.current) {
+      console.warn('[Talk] Conversation no longer active, skipping response.create');
+      return;
+    }
+
     if (!dcRef.current || dcRef.current.readyState !== 'open') {
       console.warn('[Talk] Data channel not open, cannot send response.create');
       setError((detectedLang || language) === 'ar' ? 'فشل الاتصال' : 'Connection failed');
       setStatus('ready');
       return;
     }
+
+    if (assistantResponseActiveRef.current) {
+      console.warn('[Talk] Assistant response already active, skipping duplicate response.create');
+      return;
+    }
+
+    beginAssistantTurn();
+    setStatus('processing');
 
     try {
       // Only inject a session.update when we have transient info (search results).
@@ -1043,84 +1294,49 @@ ${memoryContext ? memoryContext : ''}`
           session: { type: 'realtime', instructions: refreshedInstructions }
         }));
       }
-    } catch (e) {
-      console.warn('[Talk] Failed to inject transient context before response:', e);
-    }
 
-    dcRef.current.send(JSON.stringify({ type: 'response.create' }));
-  }, [language, tLang]);
+      dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+    } catch (e) {
+      assistantResponseActiveRef.current = false;
+      assistantMessageSyncedRef.current = false;
+      assistantTranscriptBufferRef.current = '';
+      console.warn('[Talk] Failed to inject transient context before response:', e);
+      setError((detectedLang || language) === 'ar' ? 'فشل الاتصال' : 'Connection failed');
+      setStatus('ready');
+    }
+  }, [beginAssistantTurn, language, tLang]);
 
   // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {
-    // Guard against multiple calls
-    if (isStoppingRef.current) {
-      return;
-    }
-    isStoppingRef.current = true;
-
+    setIsConversationActive(false);
+    isConversationActiveRef.current = false;
+    setIsHolding(false);
+    isHoldingRef.current = false;
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
       countdownIntervalRef.current = null;
     }
-
-    // Check minimum hold duration (at least 0.5 seconds to avoid accidental taps)
-    const holdDuration = Date.now() - holdStartRef.current;
-    const MIN_HOLD_MS = 500; // 0.5 seconds minimum
-    
-    if (holdDuration < MIN_HOLD_MS) {
-      console.log('[Talk] Hold too short (' + holdDuration + 'ms), ignoring');
-      setIsHolding(false);
-      isHoldingRef.current = false;
-      setStatus('ready');
-      // Clear the audio buffer to prevent accumulated audio
-      if (dcRef.current && dcRef.current.readyState === 'open') {
-        dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
-      }
-      setTimeout(() => { isStoppingRef.current = false; }, 300);
-      return;
+    if (rearmTimeoutRef.current) {
+      clearTimeout(rearmTimeoutRef.current);
+      rearmTimeoutRef.current = null;
     }
-
-    setIsHolding(false);
-    isHoldingRef.current = false;
-    setStatus('processing');
-
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = false;
-      });
+    if (responseTimeoutRef.current) {
+      clearTimeout(responseTimeoutRef.current);
+      responseTimeoutRef.current = null;
     }
-
-    // Send input_audio_buffer.commit to finalize
+    if (assistantTurnRecoveryTimeoutRef.current) {
+      clearTimeout(assistantTurnRecoveryTimeoutRef.current);
+      assistantTurnRecoveryTimeoutRef.current = null;
+    }
+    assistantTranscriptBufferRef.current = '';
+    assistantMessageSyncedRef.current = false;
+    assistantResponseActiveRef.current = false;
+    setMicTracksEnabled(false);
     if (dcRef.current && dcRef.current.readyState === 'open') {
-      console.log('[Talk] Sending commit. HoldDuration:', holdDuration, 'ms. SearchMode:', searchModeRef.current);
-      dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
-      
-      // Both Talk and Search modes now wait for transcript event before responding
-      // This allows us to check if user actually spoke (non-empty transcript)
-      // Response is triggered in handleRealtimeEvent for 'conversation.item.input_audio_transcription.completed'
-    } else {
-      console.warn('[Talk] Data channel not open, cannot send commit');
-      setError(language === 'ar' ? 'فشل الاتصال' : 'Connection failed');
-      setStatus('ready');
+      dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
     }
-
-    // Reset guard after short delay to allow next recording
-    setTimeout(() => {
-      isStoppingRef.current = false;
-    }, 1000);
-
-    // Timeout fallback: if still processing/speaking after 30s, reset
-    setTimeout(() => {
-      setStatus((prev) => {
-        if (prev === 'processing' || prev === 'speaking') {
-          console.warn('[Talk] Response timeout, resetting to ready');
-          setError(language === 'ar' ? 'انتهت المهلة' : 'Response timeout');
-          return 'ready';
-        }
-        return prev;
-      });
-    }, 30000); // Increased to 30s to allow for longer responses
-  }, [language, sendResponseCreate]);
+    setStatus('ready');
+  }, [setMicTracksEnabled]);
 
   // Start recording when user holds
   const startRecording = useCallback(() => {
@@ -1130,58 +1346,37 @@ ${memoryContext ? memoryContext : ''}`
       return;
     }
 
-    // Reset the stopping guard when starting a new recording
-    isStoppingRef.current = false;
-
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = true;
-      });
-    }
-
-    dcRef.current?.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
-    console.log('[Talk] Cleared audio buffer for fresh recording');
-
+    setIsConversationActive(true);
+    isConversationActiveRef.current = true;
     setError(null);
-    setStatus('listening');
     setLiveTranscript('');
     pendingTranscriptRef.current = ''; // Clear pending transcript
+    assistantTranscriptBufferRef.current = '';
+    assistantMessageSyncedRef.current = false;
+    assistantResponseActiveRef.current = false;
     setAiTranscript(''); // Clear previous AI response
-    setCountdown(MAX_RECORD_SECONDS);
-    holdStartRef.current = Date.now();
-
-    // Start countdown
-    countdownIntervalRef.current = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - holdStartRef.current) / 1000);
-      const remaining = Math.max(0, MAX_RECORD_SECONDS - elapsed);
-      setCountdown(remaining);
-      if (remaining <= 0) {
-        stopRecording();
-      }
-    }, 200);
-  }, [isConnectionReady, isHolding, language, stopRecording]);
+    rearmListening();
+  }, [isConnectionReady, language, rearmListening]);
 
   // Hold handlers
   const handleHoldStart = useCallback(() => {
-    if (status === 'ready' && isConnectionReady) {
+    if (status === 'ready' && isConnectionReady && !isConversationActive) {
       setError(null);
-      setIsHolding(true);
-      isHoldingRef.current = true; // Update ref for audio processor callback
       startRecording();
     }
-  }, [status, isConnectionReady, startRecording]);
+  }, [isConnectionReady, isConversationActive, startRecording, status]);
 
   const handleHoldEnd = useCallback(() => {
-    if (isHolding) {
+    if (isConversationActive && status === 'ready') {
       stopRecording();
     }
-  }, [isHolding, stopRecording]);
+  }, [isConversationActive, status, stopRecording]);
 
   if (!isOpen) return null;
 
   const statusText: Record<typeof status, string> = {
     connecting: language === 'ar' ? 'جارٍ الاتصال...' : 'Connecting...',
-    ready: language === 'ar' ? 'اضغط مع الاستمرار للتحدث' : 'Hold to talk',
+    ready: language === 'ar' ? 'اضغط لبدء المحادثة' : 'Tap to start conversation',
     listening: language === 'ar' ? 'أسمعك...' : 'Listening...',
     processing: language === 'ar' ? 'جارٍ التفكير...' : 'Thinking...',
     speaking: language === 'ar' ? 'Wakti يتحدث...' : 'Wakti speaking...',
@@ -1546,10 +1741,7 @@ ${memoryContext ? memoryContext : ''}`
           <div className="plasma plasma-4"></div>
           
           <button
-            onPointerDown={handleHoldStart}
-            onPointerUp={handleHoldEnd}
-            onPointerLeave={handleHoldEnd}
-            onPointerCancel={handleHoldEnd}
+            onClick={handleHoldStart}
             onContextMenu={(e) => e.preventDefault()}
             disabled={!isConnectionReady || status === 'processing' || status === 'speaking' || status === 'connecting'}
             className="voice-orb touch-none"
@@ -1570,7 +1762,9 @@ ${memoryContext ? memoryContext : ''}`
 
         {/* Instruction text */}
         <p className={`text-sm text-center max-w-[240px] select-none ${theme === 'dark' ? 'text-white/60' : 'text-[#060541]/60'}`}>
-          {t('Press and hold to speak, release to send', 'اضغط مع الاستمرار للتحدث، ثم اتركه للإرسال')}
+          {isConversationActive
+            ? t('Speak naturally. I will wait for you, then answer, then listen again.', 'تحدث بشكل طبيعي. سأنتظر حتى تنتهي، ثم أرد، ثم أعود للاستماع.')
+            : t('Tap once to start a natural conversation', 'اضغط مرة واحدة لبدء محادثة طبيعية')}
         </p>
 
         {/* Countdown when recording */}
