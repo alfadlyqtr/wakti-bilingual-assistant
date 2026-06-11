@@ -21,47 +21,48 @@ export function PresenceBeacon() {
   useEffect(() => {
     if (!userId) return;
 
-    const channel = supabase.channel("online-users", {
-      config: {
-        presence: { key: userId }
-      }
-    });
-
     const trackPresence = async () => {
       const now = new Date().toISOString();
-      try {
-        await channel.track({ user_id: userId, typing: false, last_seen: now });
-      } catch {}
       try {
         await supabase.from("profiles").update({ last_seen: now }).eq("id", userId);
       } catch {}
     };
 
-    const onSubscribed = async (status: string) => {
-      if (status === "SUBSCRIBED") {
-        await trackPresence();
-      }
+    const markOffline = async () => {
+      const now = new Date().toISOString();
+      try {
+        await supabase.from("profiles").update({ last_seen: now }).eq("id", userId);
+      } catch {}
     };
 
-    channel.subscribe(onSubscribed as any);
+    void trackPresence();
 
     const heartbeat = setInterval(async () => {
       if (document.visibilityState === "visible") {
         await trackPresence();
       }
-    }, 30_000);
+    }, 15_000);
 
     const onVisibility = async () => {
       if (document.visibilityState === "visible") {
         await trackPresence();
+      } else {
+        await markOffline();
       }
     };
+    const onPageHide = () => {
+      void markOffline();
+    };
     document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("beforeunload", onPageHide);
 
     return () => {
       clearInterval(heartbeat);
       document.removeEventListener("visibilitychange", onVisibility);
-      try { supabase.removeChannel(channel); } catch {}
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("beforeunload", onPageHide);
+      void markOffline();
     };
   }, [userId]);
 

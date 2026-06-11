@@ -3,10 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { formatDistanceToNow } from "date-fns";
 
-type PresencePayload = {
+type TypingPayload = {
   user_id: string;
   typing?: boolean;
-  last_seen?: string;
 };
 
 /**
@@ -14,12 +13,11 @@ type PresencePayload = {
  * Returns utilities for checking online status, typing indicators, and last seen timestamps.
  */
 export function usePresence(currentUserId?: string | null) {
-  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [typingUsers, setTypingUsers] = useState<Set<string>>(new Set());
   const [lastSeen, setLastSeen] = useState<Record<string, string>>({});
 
-  // Stable channel name to aggregate presence app-wide
-  const channelName = useMemo(() => "online-users", []);
+  const typingChannelName = useMemo(() => "online-users-typing", []);
+  const ONLINE_WINDOW_MS = 45_000;
 
   // Format timestamp to relative time (e.g., "5m ago")
   const formatLastSeen = useCallback((timestamp: string) => {
@@ -36,11 +34,15 @@ export function usePresence(currentUserId?: string | null) {
     return typingUsers.has(userId);
   }, [typingUsers]);
 
-  // Consider a user online if we currently see them in the presence channel.
-  // last_seen is primarily used for "last online" text, not for gating online status.
   const isOnline = useCallback((userId: string) => {
-    return onlineUserIds.has(userId);
-  }, [onlineUserIds]);
+    const ts = lastSeen[userId];
+    if (!ts) return false;
+    try {
+      return (Date.now() - new Date(ts).getTime()) <= ONLINE_WINDOW_MS;
+    } catch {
+      return false;
+    }
+  }, [lastSeen]);
 
   // Get neutral presence label
   const getLastSeen = useCallback((userId: string) => {
@@ -58,126 +60,100 @@ export function usePresence(currentUserId?: string | null) {
     return 'Offline';
   }, [isOnline, lastSeen, formatLastSeen]);
 
-  // Item #8 Medium #9: hold the persistent presence channel in a ref so
-  // setUserTyping can reuse it instead of creating/leaking a new channel on
-  // every keystroke. The old code created a fresh channel + subscribe for
-  // each call and never removed it, leaking one realtime channel per typing
-  // tick on long chat sessions.
   const channelRef = useRef<RealtimeChannel | null>(null);
   const isSubscribedRef = useRef<boolean>(false);
 
-  // Set typing status for current user
   const setUserTyping = useCallback((isTyping: boolean) => {
     if (!currentUserId) return;
     const ch = channelRef.current;
-    if (!ch || !isSubscribedRef.current) return; // channel not ready yet — drop the signal rather than leak
+    if (!ch || !isSubscribedRef.current) return;
     try {
-      ch.track({
-        user_id: currentUserId,
-        typing: isTyping,
-        last_seen: new Date().toISOString(),
-      } as PresencePayload);
-    } catch {
-      // track() can throw if channel is in a closed/errored state — swallow silently
-    }
+      ch.send({
+        type: 'broadcast',
+        event: 'typing',
+        payload: {
+          user_id: currentUserId,
+          typing: isTyping,
+        } satisfies TypingPayload,
+      });
+    } catch {}
   }, [currentUserId]);
+
+  useEffect(() => {
+    const ticker = window.setInterval(() => {
+      setLastSeen((prev) => ({ ...prev }));
+    }, 15_000);
+
+    return () => {
+      window.clearInterval(ticker);
+    };
+  }, []);
 
   useEffect(() => {
     if (!currentUserId) return;
 
-    // Item #8 hotfix: a lingering channel with the same topic from a previous
-    // mount (or React StrictMode double-invoke, or two simultaneous hook
-    // consumers) can cause `supabase.channel(name)` to return an already-
-    // subscribed instance. Adding `.on()` to such a channel throws
-    // "cannot add 'presence' callbacks for realtime:<topic> after 'subscribe()'".
-    // Pre-clean any existing channel with this topic before creating a fresh one.
-    try {
-      const existing = supabase.getChannels().filter(c => c.topic === `realtime:${channelName}`);
-      existing.forEach(c => {
-        try { supabase.removeChannel(c); } catch {}
-      });
-    } catch {}
+    let typingChannel: RealtimeChannel | null = null;
 
-    let channel: RealtimeChannel | null = null;
     try {
-      channel = supabase.channel(channelName, {
-        config: {
-          presence: {
-            key: currentUserId,
-          },
-        },
-      });
-      channelRef.current = channel;
+      typingChannel = supabase.channel(`${typingChannelName}-${currentUserId}`);
+      channelRef.current = typingChannel;
       isSubscribedRef.current = false;
 
-      const handlePresenceState = () => {
-        if (!channel) return;
-        const state = channel.presenceState<PresencePayload>();
-        const ids = new Set<string>();
-        const lastSeenTimes: Record<string, string> = {};
+      const handleTypingEvent = (event: { payload?: TypingPayload }) => {
+        const payload = event.payload;
+        if (!payload?.user_id || payload.user_id === currentUserId) return;
 
-        Object.values(state).forEach((presences) => {
-          presences?.forEach((presence) => {
-            if (presence?.user_id) {
-              ids.add(presence.user_id);
-              if (presence.last_seen) {
-                lastSeenTimes[presence.user_id] = presence.last_seen;
-              }
-            }
-          });
-        });
-
-        setOnlineUserIds(ids);
-        setLastSeen(prev => ({ ...prev, ...lastSeenTimes }));
-      };
-
-      const handleTypingEvent = (event: { event: string; payload: { user_id: string; typing: boolean } }) => {
         setTypingUsers(prev => {
           const next = new Set(prev);
-          if (event.payload.typing) {
-            next.add(event.payload.user_id);
+          if (payload.typing) {
+            next.add(payload.user_id);
           } else {
-            next.delete(event.payload.user_id);
+            next.delete(payload.user_id);
           }
           return next;
         });
       };
 
-      channel
-        .on('presence', { event: 'sync' }, handlePresenceState)
-        .on('presence', { event: 'join' }, handlePresenceState)
-        .on('presence', { event: 'leave' }, handlePresenceState)
+      typingChannel
         .on('broadcast', { event: 'typing' }, handleTypingEvent)
-        .subscribe(async (status) => {
-          if (status === 'SUBSCRIBED' && channel) {
-            isSubscribedRef.current = true;
-            try {
-              await channel.track({
-                user_id: currentUserId,
-                typing: false,
-                last_seen: new Date().toISOString()
-              } as PresencePayload);
-            } catch { /* track can fail if socket closes mid-flight */ }
-          }
+        .subscribe((status) => {
+          isSubscribedRef.current = status === 'SUBSCRIBED';
         });
     } catch (err) {
-      // Presence is a *nice-to-have* for online dot + typing indicator.
-      // If something goes wrong setting it up, degrade gracefully — do NOT
-      // let it bubble to the root ErrorBoundary and white-screen the app.
-      console.error('[usePresence] channel setup failed, presence disabled:', err);
+      console.error('[usePresence] typing channel setup failed:', err);
       channelRef.current = null;
       isSubscribedRef.current = false;
     }
 
-    // Cleanup
     return () => {
       isSubscribedRef.current = false;
       channelRef.current = null;
-      if (channel) {
-        try { supabase.removeChannel(channel); } catch {}
+      if (typingChannel) {
+        try { supabase.removeChannel(typingChannel); } catch {}
       }
     };
-  }, [channelName, currentUserId]);
+  }, [currentUserId, typingChannelName]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+
+    const profilesChannel = supabase
+      .channel(`profiles-last-seen-${currentUserId}`)
+      .on(
+        'postgres_changes' as any,
+        { event: 'UPDATE', schema: 'public', table: 'profiles' },
+        (payload: any) => {
+          const row = payload?.new;
+          if (!row?.id || !row?.last_seen) return;
+          setLastSeen(prev => ({ ...prev, [row.id]: row.last_seen }));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      try { supabase.removeChannel(profilesChannel); } catch {}
+    };
+  }, [currentUserId]);
 
   return {
     isOnline,
