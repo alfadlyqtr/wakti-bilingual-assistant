@@ -22,6 +22,12 @@ type TalkLocation = {
   longitude?: number;
 };
 
+type TalkTurn = {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+};
+
 /**
  * Clean transcript for better Tavily search results.
  * Removes common filler/command phrases while preserving the actual query.
@@ -111,8 +117,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [userName, setUserName] = useState<string>('');
   const [voiceGender, setVoiceGender] = useState<'male' | 'female'>('male');
   const [aiTranscript, setAiTranscript] = useState<string>('');
-  const [conversationHistory, setConversationHistory] = useState<{role: 'user' | 'assistant', text: string}[]>([]);
+  const [conversationHistory, setConversationHistory] = useState<TalkTurn[]>([]);
   const [talkSummary, setTalkSummary] = useState<string>('');
+  const [sessionModelLabel, setSessionModelLabel] = useState<string>('');
+  const [debugHint, setDebugHint] = useState<string>('');
   const [searchMode, setSearchMode] = useState(false); // One-turn search mode (auto-resets after use)
   const [isSearching, setIsSearching] = useState(false); // Currently fetching search results
   const [personalTouch, setPersonalTouch] = useState<any>(null);
@@ -122,7 +130,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const userNameRef = useRef<string>('');
   const voiceGenderRef = useRef<'male' | 'female'>('male');
   const userLocationRef = useRef<TalkLocation | null>(null);
-  const conversationHistoryRef = useRef<{role: 'user' | 'assistant', text: string}[]>([]);
+  const conversationHistoryRef = useRef<TalkTurn[]>([]);
   const talkSummaryRef = useRef<string>('');
   const searchModeRef = useRef(false); // Ref for search mode to avoid stale closures
   const pendingTranscriptRef = useRef<string>(''); // Store transcript while waiting for search
@@ -130,6 +138,11 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const assistantTranscriptBufferRef = useRef('');
   const assistantMessageSyncedRef = useRef(false);
   const assistantResponseActiveRef = useRef(false);
+  const lastAssistantTranscriptRef = useRef('');
+  const lastAssistantFinishedAtRef = useRef(0);
+  const assistantPlaybackLockUntilRef = useRef(0);
+  const syncedTurnIdsRef = useRef<Set<string>>(new Set());
+  const turnCounterRef = useRef(0);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -171,6 +184,15 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     }
   }, []);
 
+  const bumpAssistantPlaybackLock = useCallback((extraMs = 900) => {
+    const next = Date.now() + extraMs;
+    if (next > assistantPlaybackLockUntilRef.current) {
+      assistantPlaybackLockUntilRef.current = next;
+    }
+  }, []);
+
+  const isAssistantPlaybackLocked = useCallback(() => Date.now() < assistantPlaybackLockUntilRef.current, []);
+
   const rearmListening = useCallback((delayMs = 0) => {
     if (rearmTimeoutRef.current) {
       clearTimeout(rearmTimeoutRef.current);
@@ -178,6 +200,15 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     }
 
     const arm = () => {
+      if (isAssistantPlaybackLocked()) {
+        const waitMs = Math.max(80, assistantPlaybackLockUntilRef.current - Date.now() + 60);
+        rearmTimeoutRef.current = setTimeout(() => {
+          rearmTimeoutRef.current = null;
+          arm();
+        }, waitMs);
+        return;
+      }
+
       if (!isConversationActiveRef.current || !isConnectionReady || !dcRef.current || dcRef.current.readyState !== 'open') {
         return;
       }
@@ -196,16 +227,129 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     }
 
     arm();
-  }, [isConnectionReady, setMicTracksEnabled]);
+  }, [isAssistantPlaybackLocked, isConnectionReady, setMicTracksEnabled]);
 
   const normalizeAssistantTranscript = useCallback((text: string) => text.replace(/\s+/g, ' ').trim(), []);
+
+  const createTalkTurn = useCallback((role: 'user' | 'assistant', text: string): TalkTurn => {
+    turnCounterRef.current += 1;
+    return {
+      id: `${role}-talk-turn-${Date.now()}-${turnCounterRef.current}`,
+      role,
+      text,
+    };
+  }, []);
+
+  const addConversationTurn = useCallback((role: 'user' | 'assistant', rawText: string, syncToChat = true) => {
+    const text = normalizeAssistantTranscript(rawText);
+    if (!text) {
+      return null;
+    }
+
+    const turn = createTalkTurn(role, text);
+    const next = [...conversationHistoryRef.current, turn];
+    conversationHistoryRef.current = next;
+    setConversationHistory(next);
+
+    if (syncToChat && !syncedTurnIdsRef.current.has(turn.id)) {
+      syncedTurnIdsRef.current.add(turn.id);
+      if (role === 'user') {
+        onUserMessageRef.current(turn.text);
+      } else {
+        onAssistantMessageRef.current(turn.text);
+      }
+    }
+
+    return turn;
+  }, [createTalkTurn, normalizeAssistantTranscript]);
+
+  const flushConversationToChat = useCallback((includeDraftTurns = false) => {
+    if (includeDraftTurns) {
+      const userDraft = normalizeAssistantTranscript(liveTranscript);
+      if (userDraft) {
+        const hasUserDraft = conversationHistoryRef.current.some(
+          turn => turn.role === 'user' && normalizeAssistantTranscript(turn.text) === userDraft,
+        );
+        if (!hasUserDraft) {
+          addConversationTurn('user', userDraft, true);
+        }
+      }
+
+      const assistantDraft = normalizeAssistantTranscript(assistantTranscriptBufferRef.current || aiTranscript);
+      if (assistantDraft && !assistantMessageSyncedRef.current) {
+        const hasAssistantDraft = conversationHistoryRef.current.some(
+          turn => turn.role === 'assistant' && normalizeAssistantTranscript(turn.text) === assistantDraft,
+        );
+        if (!hasAssistantDraft) {
+          addConversationTurn('assistant', assistantDraft, true);
+        }
+      }
+    }
+
+    conversationHistoryRef.current.forEach(turn => {
+      if (syncedTurnIdsRef.current.has(turn.id)) {
+        return;
+      }
+      syncedTurnIdsRef.current.add(turn.id);
+      if (turn.role === 'user') {
+        onUserMessageRef.current(turn.text);
+      } else {
+        onAssistantMessageRef.current(turn.text);
+      }
+    });
+  }, [addConversationTurn, aiTranscript, liveTranscript, normalizeAssistantTranscript]);
+
+  const normalizeForEchoCheck = useCallback((text: string) => {
+    return text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  const isLikelyAssistantEcho = useCallback((userTranscript: string) => {
+    const now = Date.now();
+    if (now - lastAssistantFinishedAtRef.current > 2200) {
+      return false;
+    }
+
+    const assistant = normalizeForEchoCheck(lastAssistantTranscriptRef.current);
+    const user = normalizeForEchoCheck(userTranscript);
+    if (!assistant || !user || user.length < 4) {
+      return false;
+    }
+
+    if (assistant === user) {
+      return true;
+    }
+
+    if ((assistant.includes(user) && user.length >= 8) || (user.includes(assistant) && assistant.length >= 8)) {
+      return true;
+    }
+
+    const assistantTokens = new Set(assistant.split(' ').filter(token => token.length > 2));
+    const userTokens = user.split(' ').filter(token => token.length > 2);
+    if (userTokens.length < 3 || assistantTokens.size === 0) {
+      return false;
+    }
+
+    let overlap = 0;
+    userTokens.forEach(token => {
+      if (assistantTokens.has(token)) {
+        overlap += 1;
+      }
+    });
+    return overlap / userTokens.length >= 0.75;
+  }, [normalizeForEchoCheck]);
 
   const beginAssistantTurn = useCallback(() => {
     assistantResponseActiveRef.current = true;
     assistantMessageSyncedRef.current = false;
     assistantTranscriptBufferRef.current = '';
+    bumpAssistantPlaybackLock(1200);
+    setDebugHint('');
     setAiTranscript('');
-  }, []);
+  }, [bumpAssistantPlaybackLock]);
 
   const updateAssistantTranscript = useCallback((chunk: unknown, mode: 'append' | 'replace' = 'append') => {
     if (typeof chunk !== 'string' || chunk.length === 0) {
@@ -233,12 +377,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     }
 
     assistantMessageSyncedRef.current = true;
-    setConversationHistory(prev => {
-      const next = [...prev, { role: 'assistant' as const, text: transcript }];
-      conversationHistoryRef.current = next;
-      return next;
-    });
-    onAssistantMessageRef.current(transcript);
+    addConversationTurn('assistant', transcript, true);
     setTalkSummary(prev => {
       const compact = (s: string) => s.replace(/\s+/g, ' ').trim();
       const entry = compact(transcript);
@@ -248,7 +387,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       talkSummaryRef.current = limited;
       return limited;
     });
-  }, [normalizeAssistantTranscript]);
+  }, [addConversationTurn, normalizeAssistantTranscript]);
 
   const extractAssistantTranscriptFromResponse = useCallback((msg: any) => {
     const found: string[] = [];
@@ -301,9 +440,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         syncAssistantMessage(recoveredTranscript);
       }
       assistantResponseActiveRef.current = false;
+      bumpAssistantPlaybackLock(900);
       rearmListening(450);
     }, delayMs);
-  }, [clearAssistantTurnRecovery, normalizeAssistantTranscript, rearmListening, syncAssistantMessage]);
+  }, [bumpAssistantPlaybackLock, clearAssistantTurnRecovery, normalizeAssistantTranscript, rearmListening, syncAssistantMessage]);
 
   const finishAssistantTurn = useCallback((msg?: any) => {
     if (responseTimeoutRef.current) {
@@ -316,9 +456,12 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     );
     if (finalTranscript) {
       assistantTranscriptBufferRef.current = finalTranscript;
+      lastAssistantTranscriptRef.current = finalTranscript;
+      lastAssistantFinishedAtRef.current = Date.now();
       setAiTranscript(finalTranscript);
       syncAssistantMessage(finalTranscript);
     }
+    bumpAssistantPlaybackLock(900);
     assistantResponseActiveRef.current = false;
     setError(null);
     if (isConversationActiveRef.current) {
@@ -326,7 +469,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     } else {
       setStatus('ready');
     }
-  }, [clearAssistantTurnRecovery, extractAssistantTranscriptFromResponse, normalizeAssistantTranscript, rearmListening, syncAssistantMessage]);
+  }, [bumpAssistantPlaybackLock, clearAssistantTurnRecovery, extractAssistantTranscriptFromResponse, normalizeAssistantTranscript, rearmListening, syncAssistantMessage]);
 
   // Fetch the user's active helpful memory and format a compact block for the
   // Realtime instructions. Honors the master helpful_memory_enabled toggle.
@@ -626,13 +769,20 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     conversationHistoryRef.current = [];
     setTalkSummary('');
     talkSummaryRef.current = '';
+    setSessionModelLabel('');
+    setDebugHint('');
     setSearchMode(false);
     searchModeRef.current = false;
     setIsSearching(false);
     pendingTranscriptRef.current = '';
+    syncedTurnIdsRef.current.clear();
+    turnCounterRef.current = 0;
     assistantTranscriptBufferRef.current = '';
     assistantMessageSyncedRef.current = false;
     assistantResponseActiveRef.current = false;
+    lastAssistantTranscriptRef.current = '';
+    lastAssistantFinishedAtRef.current = 0;
+    assistantPlaybackLockUntilRef.current = 0;
     setIsConversationActive(false);
     isConversationActiveRef.current = false;
   }, []);
@@ -752,7 +902,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          channelCount: 1,
+          channelCount: { ideal: 1 },
+          sampleRate: { ideal: 48000 },
+          sampleSize: { ideal: 16 },
+          latency: { ideal: 0.01 },
         },
       });
       streamRef.current = stream;
@@ -918,9 +1071,9 @@ ${memoryContext ? memoryContext : ''}`
               input: {
                 turn_detection: {
                   type: 'server_vad',
-                  threshold: 0.55,
-                  prefix_padding_ms: 350,
-                  silence_duration_ms: 900,
+                  threshold: 0.5,
+                  prefix_padding_ms: 500,
+                  silence_duration_ms: 1100,
                   create_response: false,
                   interrupt_response: false,
                 },
@@ -1004,6 +1157,12 @@ ${memoryContext ? memoryContext : ''}`
         throw new Error(response.error?.message || 'Failed to get SDP answer');
       }
 
+      const activeModel = typeof response.data?.model === 'string' ? response.data.model : '';
+      const activeTranscriptionModel = typeof response.data?.transcription_model === 'string' ? response.data.transcription_model : '';
+      const engineLabel = [activeModel, activeTranscriptionModel].filter(Boolean).join(' / ');
+      setSessionModelLabel(engineLabel);
+      console.log('[Talk] Active engine:', engineLabel || 'unknown');
+
       console.log('[Talk] Got SDP answer, setting remote description...');
       await pc.setRemoteDescription({
         type: 'answer',
@@ -1033,11 +1192,12 @@ ${memoryContext ? memoryContext : ''}`
       }, 100);
       return () => clearTimeout(timer);
     } else {
+      flushConversationToChat(true);
       helpfulMemoryBlockRef.current = '';
       cleanup();
     }
     return () => cleanup();
-  }, [isOpen, initializeConnection, cleanup, loadHelpfulMemoryForTalk]);
+  }, [isOpen, initializeConnection, cleanup, flushConversationToChat, loadHelpfulMemoryForTalk]);
 
   // Handle realtime events from OpenAI
   const handleRealtimeEvent = useCallback((msg: any) => {
@@ -1048,6 +1208,17 @@ ${memoryContext ? memoryContext : ''}`
         break;
       case 'session.updated':
         console.log('[Talk] Session updated - ready for conversation');
+        break;
+      case 'input_audio_buffer.speech_started':
+        if (isConversationActiveRef.current && !assistantResponseActiveRef.current && !isAssistantPlaybackLocked()) {
+          setStatus('listening');
+          setDebugHint('');
+        }
+        break;
+      case 'input_audio_buffer.speech_stopped':
+        if (isConversationActiveRef.current && !assistantResponseActiveRef.current && !isAssistantPlaybackLocked()) {
+          setStatus('processing');
+        }
         break;
       case 'input_audio_buffer.committed':
         // Audio buffer committed
@@ -1069,25 +1240,39 @@ ${memoryContext ? memoryContext : ''}`
         break;
       case 'conversation.item.input_audio_transcription.completed':
         // User's speech transcribed
-        const transcript = msg.transcript?.trim() || '';
+        const transcript = normalizeAssistantTranscript(msg.transcript || '');
         setLiveTranscript(transcript);
         
         // Only proceed if user actually said something (not empty/silence)
         if (transcript.length > 0) {
-          const detectedLang = detectTranscriptLanguage(transcript);
-          if (detectedLang === 'unknown') {
-            setError(tLang(language === 'ar' ? 'ar' : 'en', 'Please speak Arabic or English.', 'الرجاء التحدث بالعربية أو الإنجليزية.'));
-            setStatus('ready');
+          if (isLikelyAssistantEcho(transcript)) {
+            console.warn('[Talk] Ignoring likely speaker echo transcript:', transcript);
+            setDebugHint(tLang(language === 'ar' ? 'ar' : 'en', 'I heard playback echo. Listening again…', 'سمعت صدى من الصوت. أستمع مرة أخرى...'));
+            if (responseTimeoutRef.current) {
+              clearTimeout(responseTimeoutRef.current);
+              responseTimeoutRef.current = null;
+            }
+            assistantResponseActiveRef.current = false;
+            if (isConversationActiveRef.current) {
+              rearmListening(160);
+            }
             return;
           }
+
+          const detectedLangResult = detectTranscriptLanguage(transcript);
+          const fallbackLang: 'ar' | 'en' = detectedLanguageRef.current || (language === 'ar' ? 'ar' : 'en');
+          const detectedLang = detectedLangResult === 'unknown' ? fallbackLang : detectedLangResult;
+
+          if (detectedLangResult === 'unknown') {
+            console.warn('[Talk] Transcript language unknown; using fallback language:', detectedLang, transcript);
+            setDebugHint(tLang(detectedLang, 'I heard you, but language detection was unclear. Continuing…', 'سمعتك، لكن تحديد اللغة غير واضح. مستمر...'));
+          } else {
+            setDebugHint('');
+          }
+
           detectedLanguageRef.current = detectedLang;
 
-          setConversationHistory(prev => {
-            const next = [...prev, { role: 'user' as const, text: transcript }];
-            conversationHistoryRef.current = next;
-            return next;
-          });
-          onUserMessageRef.current(transcript);
+          addConversationTurn('user', transcript, true);
           
           // If in search mode, perform web search then respond
           if (searchModeRef.current) {
@@ -1129,11 +1314,13 @@ ${memoryContext ? memoryContext : ''}`
       case 'response.created':
         console.log('[Talk] Assistant response created');
         assistantResponseActiveRef.current = true;
+        bumpAssistantPlaybackLock(1400);
         setStatus('processing');
         break;
       case 'response.output_audio_transcript.delta':
       case 'response.audio_transcript.delta':
         // AI speaking - partial transcript (accumulate)
+        bumpAssistantPlaybackLock(1300);
         setStatus('speaking');
         setMicTracksEnabled(false);
         if (msg.delta) {
@@ -1143,6 +1330,7 @@ ${memoryContext ? memoryContext : ''}`
       case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done':
         // AI transcript completed - keep buffering, but finalize only on response.done
+        bumpAssistantPlaybackLock(1200);
         if (msg.transcript) {
           updateAssistantTranscript(msg.transcript, 'replace');
         }
@@ -1150,10 +1338,12 @@ ${memoryContext ? memoryContext : ''}`
         break;
       case 'response.output_audio.done':
         console.log('[Talk] Output audio done - finishing assistant turn');
+        bumpAssistantPlaybackLock(1000);
         finishAssistantTurn(msg);
         break;
       case 'response.done':
         console.log('[Talk] Response complete - ready for next turn');
+        bumpAssistantPlaybackLock(1000);
         finishAssistantTurn(msg);
         break;
       case 'error':
@@ -1186,7 +1376,7 @@ ${memoryContext ? memoryContext : ''}`
       default:
         break;
     }
-  }, [clearAssistantTurnRecovery, finishAssistantTurn, language, rearmListening, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
+  }, [addConversationTurn, bumpAssistantPlaybackLock, clearAssistantTurnRecovery, detectTranscriptLanguage, finishAssistantTurn, isAssistantPlaybackLocked, isLikelyAssistantEcho, language, normalizeAssistantTranscript, rearmListening, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
 
   // Perform web search using live-talk-search Edge Function
   const performWebSearch = useCallback(async (query: string, lang: 'ar' | 'en'): Promise<string> => {
@@ -1331,6 +1521,10 @@ ${memoryContext ? memoryContext : ''}`
     assistantTranscriptBufferRef.current = '';
     assistantMessageSyncedRef.current = false;
     assistantResponseActiveRef.current = false;
+    lastAssistantTranscriptRef.current = '';
+    lastAssistantFinishedAtRef.current = 0;
+    assistantPlaybackLockUntilRef.current = 0;
+    setDebugHint('');
     setMicTracksEnabled(false);
     if (dcRef.current && dcRef.current.readyState === 'open') {
       dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
@@ -1354,9 +1548,19 @@ ${memoryContext ? memoryContext : ''}`
     assistantTranscriptBufferRef.current = '';
     assistantMessageSyncedRef.current = false;
     assistantResponseActiveRef.current = false;
+    lastAssistantTranscriptRef.current = '';
+    lastAssistantFinishedAtRef.current = 0;
+    assistantPlaybackLockUntilRef.current = 0;
+    setDebugHint('');
     setAiTranscript(''); // Clear previous AI response
     rearmListening();
   }, [isConnectionReady, language, rearmListening]);
+
+  const handleEndConversation = useCallback(() => {
+    flushConversationToChat(true);
+    stopRecording();
+    onClose();
+  }, [flushConversationToChat, onClose, stopRecording]);
 
   // Hold handlers
   const handleHoldStart = useCallback(() => {
@@ -1426,7 +1630,7 @@ ${memoryContext ? memoryContext : ''}`
 
         {/* Close button - absolute right */}
         <button
-          onClick={onClose}
+          onClick={handleEndConversation}
           className={`absolute right-4 p-3 rounded-full transition-colors select-none ${theme === 'dark' ? 'bg-white/10 hover:bg-white/20' : 'bg-black/10 hover:bg-black/20'}`}
           aria-label="Close"
         >
@@ -1801,11 +2005,17 @@ ${memoryContext ? memoryContext : ''}`
           </div>
         )}
 
+        {/* Lightweight diagnostics */}
+        {(debugHint || sessionModelLabel) && (
+          <div className={`max-w-sm text-center text-xs leading-relaxed select-none ${theme === 'dark' ? 'text-white/45' : 'text-[#060541]/45'}`}>
+            {debugHint && <div>{debugHint}</div>}
+            {sessionModelLabel && <div>{t('Engine', 'المحرك')}: {sessionModelLabel}</div>}
+          </div>
+        )}
+
         {/* End button */}
         <button
-          onClick={() => {
-            onClose();
-          }}
+          onClick={handleEndConversation}
           className={`mt-2 px-10 py-3 rounded-full text-lg font-medium transition-colors select-none ${theme === 'dark' ? 'bg-white/15 hover:bg-white/25 text-white' : 'bg-black/10 hover:bg-black/20 text-[#060541]'}`}
         >
           {t('End', 'إنهاء')}

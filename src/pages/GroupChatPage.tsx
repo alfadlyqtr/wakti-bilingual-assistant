@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AtSign, Crown, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, Crown, Download, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Save, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,6 +45,7 @@ export default function GroupChatPage() {
   const [aiStyle, setAiStyle] = useState("natural");
   const [aiSearchEnabled, setAiSearchEnabled] = useState(true);
   const [attachedImage, setAttachedImage] = useState<{ url: string; type: string; size: number } | null>(null);
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [waktiTyping, setWaktiTyping] = useState(false);
   const [pendingWaktiSince, setPendingWaktiSince] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
@@ -586,6 +587,37 @@ export default function GroupChatPage() {
     return url.trim().replace(/^(%20|\s)+/, "").replace(/(%20|\s)+$/, "");
   };
 
+  const handleImageDownload = async (imageUrl: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const extension = (blob.type.split("/")[1] || "jpg").replace(/[^a-zA-Z0-9]/g, "") || "jpg";
+      const file = new File([blob], `group-chat-image-${Date.now()}.${extension}`, { type: blob.type || "image/jpeg" });
+
+      if ("share" in navigator && "canShare" in navigator && (navigator as any).canShare({ files: [file] })) {
+        await (navigator as any).share({
+          files: [file],
+          title: language === "ar" ? "صورة من المحادثة الجماعية" : "Group chat image",
+        });
+        toast.success(language === "ar" ? "تم فتح قائمة المشاركة" : "Share menu opened");
+        return;
+      }
+
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(objectUrl);
+      toast.success(language === "ar" ? "تم حفظ الصورة" : "Image saved");
+    } catch (error) {
+      console.error("Error saving group image:", error);
+      toast.error(language === "ar" ? "تعذر حفظ الصورة" : "Could not save image");
+    }
+  };
+
   const toggleAudioPlayback = (messageId: string, audioUrl: string) => {
     if (playingAudio === messageId) {
       audioRefs.current[messageId]?.pause();
@@ -641,13 +673,53 @@ export default function GroupChatPage() {
     }
 
     if (message.message_type === "image" && message.media_url) {
+      const imageUrl = cleanMediaUrl(message.media_url);
+
       return (
-        <div className="flex flex-col gap-2">
-          <img
-            src={cleanMediaUrl(message.media_url)}
-            alt="sent image"
-            className={cn(compact ? "max-w-full max-h-[260px]" : "max-w-[260px] max-h-[320px]", "rounded-lg object-cover block")}
-          />
+        <div className="flex max-w-full flex-col gap-2">
+          <div className={cn("relative max-w-full overflow-hidden rounded-lg", !compact && "group w-full max-w-[260px]")}>
+            <img
+              src={imageUrl}
+              alt="sent image"
+              className={cn(
+                "block h-auto w-full max-w-full cursor-pointer rounded-lg object-contain",
+                compact ? "max-h-[260px]" : "max-h-[320px]"
+              )}
+              loading="lazy"
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpandedImage(imageUrl);
+              }}
+            />
+            {!compact && (
+              <div className="absolute top-2 right-2 hidden flex-col gap-1 opacity-0 transition-opacity duration-200 group-hover:flex group-hover:opacity-100 sm:flex">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setExpandedImage(imageUrl);
+                  }}
+                  className="h-7 w-7 rounded-full border-0 bg-black/60 p-0 text-white hover:bg-black/80"
+                >
+                  <Expand className="h-3 w-3" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleImageDownload(imageUrl);
+                  }}
+                  className="h-7 w-7 rounded-full border-0 bg-black/60 p-0 text-white hover:bg-black/80"
+                >
+                  <Download className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
           {message.content && (
             <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.content}</p>
           )}
@@ -689,8 +761,8 @@ export default function GroupChatPage() {
 
   const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 390;
   const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 844;
-  const reactionBarWidth = 312;
-  const actionMenuWidth = 220;
+  const reactionBarWidth = Math.min(312, Math.max(252, viewportWidth - 32));
+  const actionMenuWidth = Math.min(220, Math.max(180, viewportWidth - 32));
   const messagePreviewWidth = selectedMessageRect ? Math.min(selectedMessageRect.width, viewportWidth - 32) : 0;
   const messagePreviewLeft = selectedMessageRect
     ? clamp(selectedActionIsSentByMe ? selectedMessageRect.right - messagePreviewWidth : selectedMessageRect.left, 16, Math.max(16, viewportWidth - messagePreviewWidth - 16))
@@ -742,7 +814,7 @@ export default function GroupChatPage() {
   }
 
   return (
-    <div className="flex flex-col bg-background fixed inset-x-0 bottom-0" style={{ top: 'var(--app-header-h, 64px)' }}>
+    <div className="fixed inset-x-0 bottom-0 flex w-full max-w-full flex-col overflow-x-hidden overscroll-x-none bg-background" style={{ top: 'var(--app-header-h, 64px)', touchAction: 'pan-y' }}>
       {/* ── Fixed Header ── */}
       <div className="shrink-0 border-b border-border/60 bg-background/95 backdrop-blur z-20">
         <div className="flex items-center gap-3 px-4 py-3">
@@ -766,8 +838,8 @@ export default function GroupChatPage() {
       </div>
 
       {/* ── Scrollable Messages ── */}
-      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto px-4 py-4" style={{ touchAction: 'pan-y' }}>
+        <div className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-3 overflow-x-hidden">
           {loadingMessages ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
@@ -802,7 +874,7 @@ export default function GroupChatPage() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3 }}
-                    className={cn("flex select-none", mine ? "justify-end" : "justify-start")}
+                    className={cn("flex w-full min-w-0 select-none", mine ? "justify-end" : "justify-start")}
                     onContextMenu={(event) => {
                       if (message.is_deleted) return;
                       event.preventDefault();
@@ -823,7 +895,7 @@ export default function GroupChatPage() {
                     onMouseLeave={endLongPress}
                     style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
                   >
-                    <div className={cn("max-w-[85%] sm:max-w-[70%] flex flex-col", mine ? "items-end" : "items-start")}>
+                    <div className={cn("flex min-w-0 max-w-[85%] flex-col sm:max-w-[70%]", mine ? "items-end" : "items-start")}>
                       {!mine && (
                         <div className="mb-1 flex items-center gap-2 px-1">
                           <Avatar className="h-7 w-7">
@@ -847,13 +919,13 @@ export default function GroupChatPage() {
                         </div>
                       )}
 
-                      <div className={cn("relative inline-block", displayedReaction && "pb-4")}>
+                      <div className={cn("relative inline-block max-w-full", displayedReaction && "pb-4")}>
                         <div
                           ref={(element) => {
                             messageBubbleRefs.current[message.id] = element;
                           }}
                           className={cn(
-                            "select-none rounded-3xl px-4 shadow-sm",
+                            "max-w-full overflow-hidden select-none rounded-3xl px-4 shadow-sm",
                             displayedReaction ? "pt-5 pb-3" : "py-3",
                             mine
                               ? "bg-[linear-gradient(135deg,hsl(210_100%_55%)_0%,hsl(195_100%_50%)_100%)] text-white"
@@ -1143,6 +1215,48 @@ export default function GroupChatPage() {
           </>
         )}
       </AnimatePresence>
+
+      {expandedImage && (
+        <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
+          <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-4xl overflow-hidden p-4" hideCloseButton>
+            <DialogHeader className="sr-only">
+              <DialogTitle>{language === "ar" ? "الصورة" : "Image"}</DialogTitle>
+              <DialogDescription>
+                {language === "ar" ? "عرض موسع للصورة" : "Expanded image preview"}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h3 className="truncate text-lg font-semibold">{language === "ar" ? "الصورة" : "Image"}</h3>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleImageDownload(expandedImage)}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {language === "ar" ? "حفظ" : "Save"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setExpandedImage(null)}
+                  className="h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="relative overflow-hidden rounded-lg bg-muted">
+              <img
+                src={expandedImage}
+                alt="Expanded image"
+                className="max-h-[70vh] w-full object-contain"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* ── Members Modal ── */}
       <Dialog open={showMembersModal} onOpenChange={setShowMembersModal}>
