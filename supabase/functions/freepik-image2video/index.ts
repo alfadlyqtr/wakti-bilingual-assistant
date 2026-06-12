@@ -34,7 +34,7 @@ type VisualAdsJobInsertClient = {
   };
 };
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
-const KIE_IMAGE2VIDEO_MODEL = "grok-imagine-video-1-5-preview";
+const KIE_IMAGE2VIDEO_MODEL = "gemini-omni-video";
 const KIE_TEXT2VIDEO_MODEL = "gemini-omni-video";
 const KIE_2IMAGES_MODEL = "veo3_lite";
 const KIE_VISUAL_ADS_MODEL = "gpt-image-2-image-to-image";
@@ -755,22 +755,19 @@ async function createVideoTask(
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
   void videoStyleMode;
-  const parsedSingleImageDuration = Number.parseInt(duration || "", 10);
   const validDuration = isTwoImages
     ? (["6", "8"].includes(duration || "") ? duration! : "8")
-    : (Number.isFinite(parsedSingleImageDuration) && parsedSingleImageDuration >= 1 && parsedSingleImageDuration <= 15)
-      ? String(parsedSingleImageDuration)
-      : "6";
+    : (["4", "6", "8", "10"].includes(duration || "") ? duration! : "6");
   const validAspectRatio = isTwoImages
     ? (["16:9", "9:16", "Auto"].includes(aspectRatio || "")
       ? aspectRatio!
       : "9:16")
-    : (["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "auto"].includes(aspectRatio || "")
+    : (["16:9", "9:16"].includes(aspectRatio || "")
       ? aspectRatio!
-      : "auto");
+      : "9:16");
   const validResolution = isTwoImages
     ? (["720p", "1080p"].includes(resolution || "") ? resolution! : "720p")
-    : (["480p", "720p"].includes(resolution || "") ? resolution! : "480p");
+    : (["720p", "1080p"].includes(resolution || "") ? resolution! : "720p");
 
   const model = isTwoImages ? KIE_2IMAGES_MODEL : (modelOverride || KIE_IMAGE2VIDEO_MODEL);
 
@@ -833,12 +830,11 @@ async function createVideoTask(
         generate_audio: generateAudio || false,
       }
     : {
-        // Grok Imagine Video 1.5 Preview API: image_urls + aspect_ratio + resolution + duration.
+        // Gemini Omni Video API for image-to-video.
         image_urls: sanitizedImageUrls,
         aspect_ratio: validAspectRatio,
         resolution: validResolution,
-        duration: Number.parseInt(validDuration, 10),
-        nsfw_checker: false,
+        duration: validDuration,
       };
 
   if (isTwoImages) {

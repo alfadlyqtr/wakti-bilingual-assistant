@@ -125,6 +125,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
   // Submode & quality
   const [submode, setSubmode] = useState<ImageSubmode>('text2image');
   const [quality, setQuality] = useState<'quick' | 'fast' | 'best_fast'>('quick');
+  const [imageAspectRatio, setImageAspectRatio] = useState<'9:16' | '16:9'>('9:16');
 
   // Multi-image picker (for Quick/Grok results)
   const [resultUrls, setResultUrls] = useState<string[]>([]);
@@ -456,7 +457,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const submitResp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-grok-text2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ prompt, user_id: user?.id, aspect_ratio: '9:16' }),
+      body: JSON.stringify({ prompt, user_id: user?.id, aspect_ratio: imageAspectRatio }),
     });
     const submitJson = await submitResp.json().catch(() => ({} as any));
     if (submitJson?.error === 'TRIAL_LIMIT_REACHED') {
@@ -486,7 +487,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const submitResp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-grok-image2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id }),
+      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id, aspect_ratio: imageAspectRatio }),
     });
     const submitJson = await submitResp.json().catch(() => ({} as any));
     if (submitJson?.error === 'TRIAL_LIMIT_REACHED') {
@@ -509,7 +510,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-text2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ prompt, quality, user_id: user?.id }),
+      body: JSON.stringify({ prompt, quality, user_id: user?.id, aspect_ratio: imageAspectRatio }),
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
@@ -535,7 +536,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-image2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id, quality }),
+      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id, quality, aspect_ratio: imageAspectRatio }),
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
@@ -856,6 +857,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const draft = readStudioGuestDraft<{
       submode: ImageSubmode;
       quality: 'quick' | 'fast' | 'best_fast';
+      imageAspectRatio: '9:16' | '16:9';
       prompt: string;
       uploadedFile: UploadedFile | null;
       uploadedFile2: UploadedFile | null;
@@ -869,6 +871,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     imageDraftRestoredRef.current = true;
     setSubmode(draft.submode || 'text2image');
     setQuality(draft.quality || 'quick');
+    setImageAspectRatio(draft.imageAspectRatio || '9:16');
     setPrompt(draft.prompt || '');
     setUploadedFile(draft.uploadedFile || null);
     setUploadedFile2(draft.uploadedFile2 || null);
@@ -903,6 +906,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       saveStudioGuestDraft('image', {
         submode,
         quality,
+        imageAspectRatio,
         prompt,
         uploadedFile,
         uploadedFile2,
@@ -1025,7 +1029,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         triggerSaveSuccess: false,
       }).catch(() => { /* silent */ });
     }
-  }, [isGuest, language, operatorPayload, persistGeneratedImage, prompt, quality, restoredVisualAdsState, submode, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4]);
+  }, [imageAspectRatio, isGuest, language, operatorPayload, persistGeneratedImage, prompt, quality, restoredVisualAdsState, submode, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4]);
 
   useEffect(() => {
     if (!operatorPayloadId || !operatorPayload?.image?.autoGenerate) return;
@@ -1588,6 +1592,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               saveStudioGuestDraft('image', {
                 submode: 'visual-ads' as ImageSubmode,
                 quality,
+                imageAspectRatio,
                 prompt,
                 uploadedFile,
                 uploadedFile2,
@@ -2532,6 +2537,36 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 ضعيف للنص بالصور
               </div>
             )}
+
+            <div className="flex items-center gap-2 flex-wrap pt-1">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {language === 'ar' ? 'المقاس' : 'Format'}
+              </span>
+              <div className="flex bg-muted/50 rounded-lg p-0.5">
+                <button
+                  onClick={() => setImageAspectRatio('16:9')}
+                  disabled={isGenerating}
+                  className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 disabled:opacity-50 ${
+                    imageAspectRatio === '16:9'
+                      ? 'bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-md'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  ▬ {language === 'ar' ? 'Post' : 'Post'}
+                </button>
+                <button
+                  onClick={() => setImageAspectRatio('9:16')}
+                  disabled={isGenerating}
+                  className={`px-3 py-1.5 rounded-md text-sm font-semibold transition-all duration-200 disabled:opacity-50 ${
+                    imageAspectRatio === '9:16'
+                      ? 'bg-gradient-to-r from-purple-500 to-violet-500 text-white shadow-md'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  ▮ {language === 'ar' ? 'Story' : 'Story'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

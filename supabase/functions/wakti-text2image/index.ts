@@ -178,12 +178,13 @@ async function generateBestWithKie(prompt: string, aspectRatio: string): Promise
   return await pollKieTaskForImage(taskId);
 }
 
-function getDimensionsForModel(model: string): { width: number; height: number } {
-  if (model === "google:4@3") return { width: 1536, height: 2752 };
-  if (model === "google:4@2") return { width: 768, height: 1376 };
-  if (model === "openai:gpt-image@2") return { width: 1024, height: 1536 };
-  // google:4@1 and fallback: 768x1344 (9:16)
-  return { width: 768, height: 1344 };
+function getDimensionsForModel(model: string, aspectRatio: "9:16" | "16:9"): { width: number; height: number } {
+  const isLandscape = aspectRatio === "16:9";
+  if (model === "google:4@3") return isLandscape ? { width: 2752, height: 1536 } : { width: 1536, height: 2752 };
+  if (model === "google:4@2") return isLandscape ? { width: 1376, height: 768 } : { width: 768, height: 1376 };
+  if (model === "openai:gpt-image@2") return isLandscape ? { width: 1536, height: 1024 } : { width: 1024, height: 1536 };
+  // google:4@1 and fallback
+  return isLandscape ? { width: 1344, height: 768 } : { width: 768, height: 1344 };
 }
 
 const IMAGE_URL_KEYS = ["imageURL", "URL", "url", "outputUrl", "outputURL"] as const;
@@ -203,8 +204,8 @@ function findFirstImage(node: unknown): { url?: string; dataURI?: string } | nul
   return dfs(node);
 }
 
-async function runwareGenerate(positivePrompt: string, model: string, signal?: AbortSignal) {
-  const { width, height } = getDimensionsForModel(model);
+async function runwareGenerate(positivePrompt: string, model: string, aspectRatio: "9:16" | "16:9", signal?: AbortSignal) {
+  const { width, height } = getDimensionsForModel(model, aspectRatio);
   const isGoogleModel = model.startsWith("google:");
   const isOpenAIImageModel = model.startsWith("openai:gpt-image");
   const inferenceTask: Record<string, unknown> = {
@@ -256,17 +257,17 @@ async function runwareGenerate(positivePrompt: string, model: string, signal?: A
   } finally { clearTimeout(tid); }
 }
 
-async function runwareGenerateWithRetry(positivePrompt: string, model: string, signal?: AbortSignal) {
+async function runwareGenerateWithRetry(positivePrompt: string, model: string, aspectRatio: "9:16" | "16:9", signal?: AbortSignal) {
   try {
-    return await runwareGenerate(positivePrompt, model, signal);
+    return await runwareGenerate(positivePrompt, model, aspectRatio, signal);
   } catch (err) {
     const message = String((err as any)?.message || err || "");
     if (!isRetryableRunwareErrorMessage(message)) throw err;
-    return await runwareGenerate(positivePrompt, model, signal);
+    return await runwareGenerate(positivePrompt, model, aspectRatio, signal);
   }
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: { ...cors } });
   const startTime = Date.now();
   let usedModel = MODEL_FAST;
@@ -279,6 +280,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({ }));
     const prompt = (body?.prompt || "").toString();
     const quality = (body?.quality || "fast").toString();
+    const aspectRatio: "9:16" | "16:9" = body?.aspect_ratio === "16:9" ? "16:9" : "9:16";
     const userId = body?.user_id || null;
     promptText = prompt;
     const supabaseAdmin = userId
@@ -313,12 +315,12 @@ Deno.serve(async (req) => {
 
     let url: string | null = null;
     if (quality === "best_fast") {
-      url = await generateBestWithKie(finalPrompt, (body?.aspect_ratio || "9:16").toString());
+      url = await generateBestWithKie(finalPrompt, aspectRatio);
     } else {
       if (!RUNWARE_API_KEY) {
         return new Response(JSON.stringify({ success: false, error: "RUNWARE_API_KEY not configured" }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
       }
-      const result = await runwareGenerateWithRetry(finalPrompt, usedModel, req.signal);
+      const result = await runwareGenerateWithRetry(finalPrompt, usedModel, aspectRatio, req.signal);
       url = result.url;
     }
     if (!url) {

@@ -109,7 +109,7 @@ const generateVideoTitle = (raw: string): string => {
 const getVideoWaitHint = (
   language: string,
   generationMode: 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema',
-  resolution: '480p' | '720p' | '1080p'
+  resolution: '720p' | '1080p'
 ) => {
   if (generationMode === 'text_to_video' && resolution === '1080p') {
     return language === 'ar'
@@ -152,8 +152,8 @@ const getResolutionSpeedHint = (
 
   if (generationMode === 'image_to_video') {
     return language === 'ar'
-      ? '480p الأسرع • 720p أوضح لكنه أبطأ'
-      : '480p is fastest • 720p is sharper but slower';
+      ? '720p أسرع • 1080p أبطأ لكنه أوضح'
+      : '720p is faster • 1080p is slower but sharper';
   }
 
   return '';
@@ -296,9 +296,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } else if (mode === 'text_to_video') {
       setDuration('6');
       setResolution('720p');
+    } else if (mode === 'image_to_video') {
+      setDuration('6');
+      setResolution('720p');
     } else {
       setDuration('6');
-      if (resolution === '1080p') setResolution('480p');
     }
   };
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -306,9 +308,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [imageFile2, setImageFile2] = useState<File | null>(null);
   const [imagePreview2, setImagePreview2] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [duration, setDuration] = useState<'4' | '6' | '8' | '10' | '12'>('8');
+  const [duration, setDuration] = useState<'4' | '6' | '8' | '10'>('6');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
-  const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('480p');
+  const [resolution, setResolution] = useState<'720p' | '1080p'>('720p');
   const [videoStyleMode, setVideoStyleMode] = useState<'normal' | 'fun'>('normal');
   const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
   const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
@@ -469,9 +471,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       imagePreview: string | null;
       imagePreview2: string | null;
       prompt: string;
-      duration: '4' | '6' | '8' | '10' | '12';
+      duration: '4' | '6' | '8' | '10';
       aspectRatio: string;
-      resolution: '480p' | '720p' | '1080p';
+      resolution: '720p' | '1080p';
       videoStyleMode: 'normal' | 'fun';
     }>('video');
 
@@ -484,9 +486,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setImageFile2(null);
     setImagePreview2(draft.imagePreview2 || null);
     setPrompt(draft.prompt || '');
-    setDuration(draft.duration || '8');
+    setDuration(draft.duration || '6');
     setAspectRatio(draft.aspectRatio || '9:16');
-    setResolution(draft.resolution || '480p');
+    setResolution(draft.resolution || '720p');
     setVideoStyleMode(draft.videoStyleMode || 'normal');
     clearStudioGuestDraft('video');
   }, [isGuest, searchParams]);
@@ -2459,6 +2461,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 ) : (
                   <>
                     <button
+                      onClick={() => !isGenerating && setDuration('4')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '4'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '4 ث' : '4s'}
+                    </button>
+                    <button
                       onClick={() => !isGenerating && setDuration('6')}
                       disabled={isGenerating}
                       className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
@@ -2468,6 +2481,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       }`}
                     >
                       {language === 'ar' ? '6 ث' : '6s'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setDuration('8')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '8'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '8 ث' : '8s'}
                     </button>
                     <button
                       onClick={() => !isGenerating && setDuration('10')}
@@ -4837,32 +4861,31 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <>
                       <button
                         onClick={() => {
-                          if (!isGenerating) setResolution('480p');
-                        }}
-                        disabled={isGenerating}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                          resolution === '480p'
-                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                        }`}
-                      >
-                        480p
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (!isGenerating) {
-                            setResolution('720p');
-                            if (duration === '12') setDuration('8');
-                          }
+                          if (!isGenerating) setResolution('720p');
                         }}
                         disabled={isGenerating}
                         className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
                           resolution === '720p'
-                            ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
                             : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
                         }`}
                       >
                         720p
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating) {
+                            setResolution('1080p');
+                          }
+                        }}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          resolution === '1080p'
+                            ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        1080p
                       </button>
                     </>
                   )}

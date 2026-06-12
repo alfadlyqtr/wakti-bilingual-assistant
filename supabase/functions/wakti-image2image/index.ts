@@ -66,8 +66,12 @@ const RUNWARE_API_KEY = Deno.env.get("RUNWARE_API_KEY")!;
 const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "openai:gpt-image@2";
 const MODEL_BEST = "nano-banana-2";
 
-function getDimensionsForModel(model: string): { width?: number; height?: number } {
-  if (model === "openai:gpt-image@2") return { width: 1024, height: 1536 };
+function getDimensionsForModel(model: string, aspectRatio: "9:16" | "16:9"): { width?: number; height?: number } {
+  if (model === "openai:gpt-image@2") {
+    return aspectRatio === "16:9"
+      ? { width: 1536, height: 1024 }
+      : { width: 1024, height: 1536 };
+  }
   return {};
 }
 
@@ -143,7 +147,7 @@ async function pollKieTaskForImage(taskId: string): Promise<string> {
   throw new Error("KIE generation timed out");
 }
 
-async function generateBestWithKie(finalPrompt: string, referenceUrls: string[]): Promise<string> {
+async function generateBestWithKie(finalPrompt: string, referenceUrls: string[], aspectRatio: "9:16" | "16:9"): Promise<string> {
   if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
   const submitResp = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
     method: "POST",
@@ -153,6 +157,7 @@ async function generateBestWithKie(finalPrompt: string, referenceUrls: string[])
       input: {
         prompt: finalPrompt,
         image_input: referenceUrls,
+        aspect_ratio: aspectRatio,
         resolution: "1K",
         output_format: "jpg",
       },
@@ -240,8 +245,8 @@ async function uploadAndSignReferenceImage(params: {
   return signed.data.signedUrl;
 }
 
-async function callRunwareI2I(finalPrompt: string, referenceImages: string[], model: string): Promise<unknown> {
-  const { width, height } = getDimensionsForModel(model);
+async function callRunwareI2I(finalPrompt: string, referenceImages: string[], model: string, aspectRatio: "9:16" | "16:9"): Promise<unknown> {
+  const { width, height } = getDimensionsForModel(model, aspectRatio);
   const isOpenAIImageModel = model.startsWith("openai:gpt-image");
   const inferenceTask: Record<string, unknown> = {
     taskType: "imageInference",
@@ -288,13 +293,13 @@ async function callRunwareI2I(finalPrompt: string, referenceImages: string[], mo
   return j;
 }
 
-async function callRunwareI2IWithRetry(finalPrompt: string, referenceImages: string[], model: string): Promise<unknown> {
+async function callRunwareI2IWithRetry(finalPrompt: string, referenceImages: string[], model: string, aspectRatio: "9:16" | "16:9"): Promise<unknown> {
   try {
-    return await callRunwareI2I(finalPrompt, referenceImages, model);
+    return await callRunwareI2I(finalPrompt, referenceImages, model, aspectRatio);
   } catch (err) {
     const message = String((err as Error)?.message || err || "");
     if (!isRetryableRunwareErrorMessage(message)) throw err;
-    return await callRunwareI2I(finalPrompt, referenceImages, model);
+    return await callRunwareI2I(finalPrompt, referenceImages, model, aspectRatio);
   }
 }
 
@@ -305,6 +310,7 @@ serve(async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     const quality = body?.quality === "best_fast" ? "best_fast" : "fast";
     const selectedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
+    const aspectRatio: "9:16" | "16:9" = body?.aspect_ratio === "16:9" ? "16:9" : "9:16";
     const image_base64_raw = (body?.image_base64 || body?.image || "").toString();
     const image_base64_raw_2 = (body?.image_base64_2 || "").toString();
     const image_base64s = Array.isArray(body?.image_base64s) ? body.image_base64s : [];
@@ -378,7 +384,7 @@ serve(async (req: Request) => {
 
     const finalPrompt = promptSafety.normalizedPrompt;
     if (quality === "best_fast") {
-      const stableUrl = await generateBestWithKie(finalPrompt, referenceUrls);
+      const stableUrl = await generateBestWithKie(finalPrompt, referenceUrls, aspectRatio);
 
       await logAIFromRequest(req, {
         functionName: "wakti-image2image",
@@ -401,7 +407,7 @@ serve(async (req: Request) => {
       );
     }
 
-    const rw = await callRunwareI2IWithRetry(finalPrompt, referenceUrls, selectedModel);
+    const rw = await callRunwareI2IWithRetry(finalPrompt, referenceUrls, selectedModel, aspectRatio);
     const node = (pickFirstResultNode(rw) || rw) as Record<string, unknown>;
 
     // Extract the Runware output — prefer dataURI (stable), fallback to URL

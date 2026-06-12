@@ -88,7 +88,7 @@ function extractImageUrls(data: any): string[] {
   return urls;
 }
 
-Deno.serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const startTime = Date.now();
@@ -101,6 +101,7 @@ Deno.serve(async (req) => {
       ? body.image_base64s.filter((v: unknown) => typeof v === "string" && v.trim().length > 0).slice(0, 4) as string[]
       : [];
     const userId: string = body?.user_id || "";
+    const aspectRatio: "9:16" | "16:9" = body?.aspect_ratio === "16:9" ? "16:9" : "9:16";
     // If taskId is provided, this is a poll request
     const taskId: string = body?.taskId || "";
 
@@ -246,7 +247,7 @@ Deno.serve(async (req) => {
       headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "grok-imagine/image-to-image",
-        input: { prompt: promptWithRef, image_urls: referencePublicUrls },
+        input: { prompt: promptWithRef, image_urls: referencePublicUrls, aspect_ratio: aspectRatio },
       }),
     });
     const submitText = await submitResp.text();

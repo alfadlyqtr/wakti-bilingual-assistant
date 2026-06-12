@@ -1444,12 +1444,12 @@ export default function MusicStudio() {
               </button>
             ))}
 
-            {/* Video — prominent, spans 2 rows on md */}
+            {/* Video */}
             {studioCards.filter(c => c.key === 'video').map((card) => (
               <button
                 key={card.key}
                 onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 md:row-span-2 group`}
+                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 group`}
               >
                 {/* Soft radial pulse behind card — orange */}
                 <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-40 blur-3xl" style={{ background: 'radial-gradient(circle, hsla(25,95%,60%,0.35) 0%, transparent 70%)' }} />
@@ -1476,12 +1476,12 @@ export default function MusicStudio() {
               </button>
             ))}
 
-            {/* Image — prominent, spans 2 rows on md */}
+            {/* Image */}
             {studioCards.filter(c => c.key === 'image').map((card) => (
               <button
                 key={card.key}
                 onClick={() => setMainTab(card.key)}
-                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 md:row-span-2 group`}
+                className={`relative text-left p-6 rounded-3xl ${card.cardBg} ${card.shadow} ${card.cardBorder} backdrop-blur-2xl overflow-hidden transition-all duration-200 active:scale-[0.96] col-span-1 row-span-1 group`}
               >
                 {/* Soft radial pulse behind card — emerald */}
                 <div className="pointer-events-none absolute inset-0 -z-10 scale-110 opacity-40 blur-3xl" style={{ background: 'radial-gradient(circle, hsla(160,80%,55%,0.35) 0%, transparent 70%)' }} />
