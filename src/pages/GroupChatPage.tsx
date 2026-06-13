@@ -67,6 +67,7 @@ export default function GroupChatPage() {
   const longPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const longPressTriggeredRef = useRef(false);
   const suppressNextImageTapRef = useRef(false);
+  const ignoreNextImageClickRef = useRef(false);
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isDark = theme === "dark";
   const entrySource = searchParams.get("from");
@@ -538,6 +539,8 @@ export default function GroupChatPage() {
     setSelectedMessageRect(null);
     longPressTriggeredRef.current = false;
     longPressStartPointRef.current = null;
+    suppressNextImageTapRef.current = false;
+    ignoreNextImageClickRef.current = false;
   }, []);
 
   const openMessageActions = useCallback((message: GroupChatMessage, isSentByMe: boolean) => {
@@ -581,7 +584,7 @@ export default function GroupChatPage() {
       longPressTriggeredRef.current = true;
       suppressNextImageTapRef.current = true;
       openMessageActions(message, isSentByMe);
-    }, 420);
+    }, 300);
   };
 
   const endLongPress = () => {
@@ -626,13 +629,30 @@ export default function GroupChatPage() {
     const touch = event.touches[0];
     const moveDistance = Math.hypot(touch.clientX - startPoint.x, touch.clientY - startPoint.y);
 
-    if (moveDistance > 10) {
+    if (moveDistance > 14) {
       endLongPress();
     }
   };
 
+  const handleImageTouchEnd = (event: React.TouchEvent<HTMLImageElement>, imageUrl: string) => {
+    event.stopPropagation();
+    const didTriggerLongPress = longPressTriggeredRef.current;
+    endLongPress();
+
+    if (didTriggerLongPress || suppressNextImageTapRef.current) {
+      return;
+    }
+
+    ignoreNextImageClickRef.current = true;
+    setExpandedImage(imageUrl);
+  };
+
   const handleImageExpand = (event: React.MouseEvent<HTMLElement>, imageUrl: string) => {
     event.stopPropagation();
+    if (ignoreNextImageClickRef.current) {
+      ignoreNextImageClickRef.current = false;
+      return;
+    }
     if (suppressNextImageTapRef.current) return;
     setExpandedImage(imageUrl);
   };
@@ -708,6 +728,7 @@ export default function GroupChatPage() {
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
               onClick={(event) => handleImageExpand(event, imageUrl)}
+              onTouchEnd={(event) => handleImageTouchEnd(event, imageUrl)}
             />
             {!compact && (
               <div className="absolute top-2 right-2 hidden flex-col gap-1 opacity-0 transition-opacity duration-200 group-hover:flex group-hover:opacity-100 sm:flex">

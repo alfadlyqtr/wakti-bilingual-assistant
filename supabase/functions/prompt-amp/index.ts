@@ -78,6 +78,15 @@ function hasArabic(text: string) {
   return /[\u0600-\u06FF]/.test(text || "");
 }
 
+function detectOutputLanguage(text: string): "ar" | "en" | "mixed" {
+  const input = text || "";
+  const hasAr = /[\u0600-\u06FF]/.test(input);
+  const hasEn = /[A-Za-z]/.test(input);
+  if (hasAr && hasEn) return "mixed";
+  if (hasAr) return "ar";
+  return "en";
+}
+
 function buildSystemPrompt(preferArabic: boolean, mode?: string) {
   const isI2I = mode === "image2image";
   const isBG = mode === "background-removal";
@@ -114,14 +123,17 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
   if (preferArabic) {
     if (isText2Video) {
       return [
-        "أنت مهندس مطالبات خبير لنماذج تحويل النص إلى فيديو.",
-        "مهمتك: أعد صياغة فكرة المستخدم كمطالبة فيديو سينمائية واحدة باللغة الإنجليزية.",
-        "قواعد صارمة:",
-        "- يجب أن يكون الناتج باللغة الإنجليزية دائماً حتى لو كان الإدخال بالعربية.",
-        "- صف الحركة والمشهد والكاميرا والإضاءة والمزاج بوضوح.",
-        "- اجعل الوصف حيوياً ومفصلاً لنموذج إنشاء الفيديو.",
-        "- لا تتحدث مع المستخدم، لا تشرح، فقط أخرج المطالبة المحسّنة.",
-        "المخرج: فقرة واحدة باللغة الإنجليزية تصف الفيديو المطلوب."
+        "أنت مجمّع مطالبات رئيسي لوضع تحويل النص إلى فيديو.",
+        "مهمتك: تحويل طلب المستخدم إلى وصف سينمائي عالي الدقة مع الحفاظ الصارم على لغة الإدخال.",
+        "قوانين صارمة:",
+        "- إذا كان الإدخال بالعربية فالمخرج بالعربية فقط.",
+        "- إذا كان الإدخال بالإنجليزية فالمخرج بالإنجليزية فقط.",
+        "- إذا كان الإدخال مختلطاً (عربي + إنجليزي) فحافظ على نفس توزيع اللغات بدون فرض ترجمة كاملة.",
+        "- لا تحذف أي اسم علامة أو عنصر أو كيان طلبه المستخدم.",
+        "- إذا طلب المستخدم نصاً يظهر داخل المشهد، ضع النص المطلوب بين علامتي اقتباس بشكل حرفي.",
+        "- اكتب المشهد والحركة والكاميرا والإضاءة بزمن حركي واضح خلال 4-8 ثوانٍ.",
+        "- ممنوع الرد الحواري أو الشرح.",
+        "المخرج: فقرة سينمائية واحدة محسّنة باللغة نفسها مع تفاصيل حركة احترافية."
       ].join(" ");
     }
 
@@ -235,15 +247,16 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
 
     if (isText2Video) {
       return [
-        "You are an expert prompt engineer for Text-to-Video AI models.",
-        "Your job: rewrite the user's idea into a single, vivid, cinematic video prompt.",
+        "You are the WAKTI_AI Master Prompt Compiler for Text-to-Video.",
+        "Your job: compile user intent into one dense, cinematic, machine-usable video prompt.",
         "Hard rules:",
-        "- Output must ALWAYS be in English, even if the input is in another language.",
-        "- Describe the scene, motion, camera movement, lighting, mood, and timing clearly.",
-        "- Be specific about subjects, environments, actions, and visual dynamics.",
-        "- Keep the prompt under 300 words but rich in detail.",
-        "- Do NOT chat, explain, or add commentary. Output only the enhanced video prompt.",
-        "Output format: One paragraph describing the desired video scene and motion."
+        "- STRICT LANGUAGE LOCK: preserve the user's input language exactly.",
+        "- Arabic input => Arabic output. English input => English output. Mixed input => keep mixed layout naturally.",
+        "- Do NOT remove or replace any requested noun, brand, object, or keyword.",
+        "- If the user asks for visible text inside the scene, preserve it exactly in quotation marks.",
+        "- Enforce dynamic movement over a 4-8 second timeline with clear camera vector and environmental motion.",
+        "- Do NOT chat, explain, or add filler.",
+        "Output: one high-fidelity cinematic paragraph in the same language as the input."
       ].join(" ");
     }
 
@@ -516,43 +529,27 @@ async function ampPromptWithDeepSeek(
 }
 
 // ─── Image-to-Video Amp (OpenAI gpt-4o-mini vision) ───
-function stripArabicChars(text: string): string {
-  return (text || "")
-    .replace(/[\u0600-\u06FF]+/g, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
+const IMAGE2VIDEO_SYSTEM_PROMPT = `You are the WAKTI_AI Master Prompt Compiler for Image-to-Video.
 
-const IMAGE2VIDEO_SYSTEM_PROMPT = `You are a cinematic video prompt engineer. You analyze an uploaded image and generate a production-ready video prompt for a 6–10 second cinematic reveal spot.
+CRITICAL LANGUAGE LAWS:
+- Preserve the user's primary input language exactly.
+- Arabic input => Arabic output. English input => English output. Mixed input => keep mixed layout without forced full translation.
+- If user requests visible scene text, preserve exact text in strict quotation marks.
 
-Your job:
-1. Analyze the uploaded image: colors, shapes, style, aesthetic cues, product/category hints, visible text/symbols.
-2. Combine image analysis with any brand details and environment provided by the user.
-3. Output ONLY a pure JSON block using exactly these keys:
+MISSION:
+- Read the uploaded reference image and user intent.
+- Keep the main subject as the focal point.
+- Compile a cinematic motion prompt for a 6-10 second sequence with physically plausible motion.
 
-{
-  "description": "A vivid one-sentence cinematic synopsis of the full transformation (under 120 words)",
-  "style": "comma-separated visual aesthetics inferred from the image (e.g., cinematic, colourful, high-tech, 4K)",
-  "camera": "one line describing the shot type and camera movement",
-  "lighting": "one line describing the lighting progression",
-  "environment": "concise description of the starting environment",
-  "elements": ["ordered list of visible props and inferred hero items"],
-  "motion": "one line describing how objects assemble or unfold",
-  "ending": "one line describing the final cinematic tableau",
-  "text": "none",
-  "keywords": ["9:16", "<derived-brand-name>", "fast assembly", "no text", "cinematic", "...additional inferred tags"]
-}
+MANDATORY OUTPUT FORMAT (same language as input):
+Initial Scene: [Detailed description of the static layout].
+Camera Motion: [Explicit camera vector and tracking instructions].
+Environmental Dynamics: [Micro-movements and particle simulation instructions], continuous fluid 24fps kinetic flow.
 
-Rules:
-- Output language MUST be ENGLISH ONLY. If any provided brand/business details are in Arabic (or any non-English language), translate them internally and output ONLY English.
-- Write in present tense, active voice.
-- Keep description under ~120 words.
-- One seamless, visually satisfying build-up from emptiness to full reveal.
-- Keep the hero item visible throughout, or at minimum at start and end.
-- Decide props, mood, pacing, and any people or animals independently based on image style and brand details.
-- If brand direction is unclear, default to cinematic magical realism.
-- The aspect ratio is ALWAYS 9:16 (vertical/portrait).
-- Output ONLY the JSON block. No preamble, no explanation, no follow-up.`;
+HARD RULES:
+- Do NOT remove any requested noun, brand, object, or keyword.
+- Do NOT add conversational text.
+- Output ONLY the compiled prompt payload.`;
 
 async function ampImage2VideoWithOpenAI(
   imageUrl: string,
@@ -627,50 +624,34 @@ async function ampImage2VideoWithOpenAI(
     throw new Error("openai_empty_response");
   }
 
-  // Parse the JSON to extract a flat prompt string for the video model
-  try {
-    // Strip markdown code fences if present
-    let jsonStr = content.trim();
-    if (jsonStr.startsWith("```")) {
-      jsonStr = jsonStr.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-    }
-    const parsed = JSON.parse(jsonStr);
-
-    // Build a single descriptive prompt from the JSON fields
-    const parts: string[] = [];
-    if (parsed.description) parts.push(parsed.description);
-    if (parsed.style) parts.push(`Style: ${parsed.style}.`);
-    if (parsed.camera) parts.push(`Camera: ${parsed.camera}.`);
-    if (parsed.lighting) parts.push(`Lighting: ${parsed.lighting}.`);
-    if (parsed.environment) parts.push(`Environment: ${parsed.environment}.`);
-    if (Array.isArray(parsed.elements) && parsed.elements.length > 0) {
-      parts.push(`Elements: ${parsed.elements.join(", ")}.`);
-    }
-    if (parsed.motion) parts.push(`Motion: ${parsed.motion}.`);
-    if (parsed.ending) parts.push(`Ending: ${parsed.ending}.`);
-    if (Array.isArray(parsed.keywords) && parsed.keywords.length > 0) {
-      parts.push(`Keywords: ${parsed.keywords.join(", ")}.`);
-    }
-
-    return stripArabicChars(parts.join(" "));
-  } catch {
-    // If JSON parsing fails, return the raw content as-is (still useful)
-    return stripArabicChars(content.trim());
+  let cleaned = content.trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:text|markdown|md)?\s*/i, "").replace(/\s*```$/, "").trim();
   }
+  return cleaned;
 }
 // ─── End Image-to-Video Amp ───
 
 // ─── Text-to-Video Amp (OpenAI gpt-4o-mini) ───
-const TEXT2VIDEO_SYSTEM_PROMPT = `You are an expert cinematic video prompt engineer for Text-to-Video AI models.
+const TEXT2VIDEO_SYSTEM_PROMPT = `You are the WAKTI_AI Master Prompt Compiler for Text-to-Video.
 
-Your job: Take the user's idea (in ANY language, including Arabic) and rewrite it as a single, vivid, production-ready cinematic video prompt in ENGLISH.
+CRITICAL LANGUAGE LAWS:
+- Strictly preserve the user's language.
+- Arabic input => Arabic output. English input => English output. Mixed input => maintain mixed structure naturally.
+- If user asks for words in-scene, keep exact typography inside quotation marks.
 
-The video prompt should describe a 4–8 second cinematic spot. Think of brands like Corona, Tesla, IKEA, Apple, Google, Qatar Airways, and Chewy — magical, fast-assembly transformations progressing smoothly from an empty or minimal scene into a fully revealed experience. No on-screen text. No spoken dialogue.
+PROCESSING CHAIN:
+1) Scene Establishment: lock opening visual environment and subject quickly.
+2) Temporal Progression: script continuous motion across a 4-8 second timeline.
+3) Commercial Glaze: inject premium lighting, grading, and motion quality.
 
-Rules & Tone:
-- Start with the core subject.
-- Describe lighting, environment, and dynamic motion.
-- End with a beautiful cinematic conclusion.`;
+HARD RULES:
+- Static shots are failure; output must include movement.
+- Preserve every requested noun, brand, object, and key detail.
+- Output only compiled payload. No conversational filler.
+
+OUTPUT FORMAT (same language as input):
+Cinematic commercial sequence. Opening: [Visual composition and starting camera angle]. Action Vector: [How core subject/environment evolve seamlessly]. Technical Finish: [Camera profile, volumetric lighting, commercial-grade motion tracking].`;
 
 async function ampText2VideoWithOpenAI(userText: string): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -722,34 +703,26 @@ async function ampText2VideoWithOpenAI(userText: string): Promise<string> {
 // ─── End Text-to-Video Amp ───
 
 // ─── 2Images-to-Video Amp (OpenAI gpt-4o-mini vision with dual images) ───
-const IMAGES2VIDEO_SYSTEM_PROMPT = `You are an expert cinematic video prompt engineer for dual-image-to-video AI models.
+const IMAGES2VIDEO_SYSTEM_PROMPT = `You are the WAKTI_AI Master Prompt Compiler for Dual-Image-to-Video.
 
-Your job: Analyze TWO uploaded images and the user's text prompt, then generate a production-ready video prompt.
+CRITICAL LANGUAGE LAWS:
+- Preserve user language exactly.
+- Arabic input => Arabic output. English input => English output. Mixed input => maintain mixed language layout.
+- If user requests visible text, keep exact text in quotation marks.
 
-FRAME RULE (CRITICAL):
-- Image 1 = the OPENING/START FRAME. The video begins exactly as Image 1 looks. It is shown for roughly the FIRST THIRD of the video.
-- Image 2 = the CLOSING/END FRAME. The video ends exactly as Image 2 looks. It must be PROMINENTLY shown and HELD for the FINAL THIRD of the video — not just a brief flash.
-- The middle portion is the smooth cinematic transition/morph between them.
-- Time allocation guidance: ~30% Image 1 → ~30% transition → ~40% Image 2 (end frame gets MORE screen time).
+FRAME CONSTRAINT:
+- Image 1 is opening state (first ~30%).
+- Transition is middle transformation (middle ~30%).
+- Image 2 is final locked state (final ~40%) and must hold clearly.
 
-CRITICAL RULES (MUST FOLLOW):
-1. **Preserve user intent**: The user's text prompt is SACRED. You must include their core idea and enhance it, NOT replace it.
-2. **Image identity lock**: Use the EXACT logo/object/subject from Image 1 and Image 2. Keep the same colors, shape, and identity. No new symbols, no extra text, no random letters invented by the AI. These constraints apply regardless of what the user's prompt says — NEVER add invented visual elements not present in the images.
-3. **Strong Image 2 presence**: Image 2 must be clearly visible and held at the end. Explicitly describe it settling into focus, glowing, or being revealed as the final hero. The viewer should clearly SEE Image 2 for a noticeable portion of the video.
-4. **Visual constraints**: Clean background, subtle glow, premium 3D lighting, minimal camera motion.
-5. **Output language**: ALWAYS output in English, even if the user's text is in Arabic or another language.
-6. **Duration & aspect ratio**: Respect the provided duration (6s or 8s) and aspect ratio (9:16 or 16:9).
+HARD RULES:
+- No random extra objects.
+- No identity drift for key subjects/logo/objects.
+- Preserve all requested nouns, brands, and objects.
+- Output only compiled payload.
 
-Output format:
-- Start with the user's original intent (translated to English if needed)
-- Describe Image 1 as the clear opening scene (first ~30% of video)
-- Describe the transition/morph animation (middle ~30%)
-- Describe Image 2 as the strong, held closing scene (final ~40%) — use words like "settles into", "reveals", "holds on", "rests on", "the video ends with a clear view of"
-- Add technical details: camera, lighting, mood
-- Keep total output under 280 words
-- Plain text paragraph, NOT JSON
-
-Do NOT chat, explain, or add commentary. Output ONLY the enhanced video prompt.`;
+OUTPUT FORMAT (same language as input):
+Sequence begins locked on [Detailed Frame A elements for first 30% duration]. Transition Mechanics: [Specific structural transformation instructions for middle 30% duration]. Final Tableau: Sequence resolves and locks perfectly onto [Detailed Frame B elements holding for the final 40% duration], zero artifacting, zero ghosting, pristine temporal interpolation.`;
 
 async function amp2Images2VideoWithOpenAI(
   imageUrl1: string,
@@ -1009,6 +982,7 @@ serve(async (req) => {
       }
 
       const improved = await ampImage2VideoWithOpenAI(imageUrl, brandDetails, environment, duration);
+      const responseLanguage = detectOutputLanguage(`${brandDetails} ${environment} ${improved}`);
 
       await logAI({
         functionName: "prompt-amp",
@@ -1021,7 +995,7 @@ serve(async (req) => {
         metadata: {
           provider: "openai",
           mode: "image2video",
-          language: "en",
+          language: responseLanguage,
         },
       });
 
@@ -1029,7 +1003,7 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           text: improved,
-          language: "en",
+          language: responseLanguage,
           mode: "image2video",
         }),
         {
@@ -1057,6 +1031,7 @@ serve(async (req) => {
 
       inputText = `[text2video] ${text}`;
       const improved = await ampText2VideoWithOpenAI(text);
+      const responseLanguage = detectOutputLanguage(text);
 
       await logAI({
         functionName: "prompt-amp",
@@ -1069,7 +1044,7 @@ serve(async (req) => {
         metadata: {
           provider: "openai",
           mode: "text2video",
-          language: "en",
+          language: responseLanguage,
         },
       });
 
@@ -1077,7 +1052,7 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           text: improved,
-          language: "en",
+          language: responseLanguage,
           mode: "text2video",
         }),
         {
@@ -1128,6 +1103,7 @@ serve(async (req) => {
       }
 
       const improved = await amp2Images2VideoWithOpenAI(imageUrl1, imageUrl2, userText, duration, aspectRatio);
+      const responseLanguage = detectOutputLanguage(userText || improved);
 
       await logAI({
         functionName: "prompt-amp",
@@ -1140,7 +1116,7 @@ serve(async (req) => {
         metadata: {
           provider: "openai",
           mode: "2images2video",
-          language: "en",
+          language: responseLanguage,
         },
       });
 
@@ -1148,7 +1124,7 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           text: improved,
-          language: "en",
+          language: responseLanguage,
           mode: "2images2video",
         }),
         {

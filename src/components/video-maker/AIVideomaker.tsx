@@ -2766,12 +2766,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-xs font-semibold text-foreground">
-                            {language === 'ar' ? 'وضع محتوى الأطفال' : 'Kids Content Mode'}
+                            {language === 'ar' ? 'وضع أمان الأطفال' : 'Child Safety Mode'}
                           </p>
                           <p className="mt-1 text-[11px] text-muted-foreground/90">
                             {language === 'ar'
-                              ? 'وفقًا لسياساتنا وشروطنا، يتم تطبيق إعدادات أكثر أمانًا في هذا الوضع.'
-                              : 'As per our policies and terms, safer generation settings are applied in this mode.'}
+                              ? 'فعّل هذا الخيار إذا كانت الصورة تحتوي على طفل، وفقًا لسياساتنا.'
+                              : 'Turn this ON when the image contains a child, as per our policies.'}
                           </p>
                         </div>
                         <span
