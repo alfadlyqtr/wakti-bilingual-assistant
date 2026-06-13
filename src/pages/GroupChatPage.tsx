@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AtSign, Crown, Download, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Save, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -22,6 +22,7 @@ import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage,
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
+import { ImageModal } from "@/components/wakti-ai-v2/ImageModal";
 
 export default function GroupChatPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -63,6 +64,9 @@ export default function GroupChatPage() {
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialScrollDoneRef = useRef(false);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const longPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
+  const longPressTriggeredRef = useRef(false);
+  const suppressNextImageTapRef = useRef(false);
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const isDark = theme === "dark";
   const entrySource = searchParams.get("from");
@@ -532,6 +536,8 @@ export default function GroupChatPage() {
     setSelectedActionMessage(null);
     setSelectedActionIsSentByMe(false);
     setSelectedMessageRect(null);
+    longPressTriggeredRef.current = false;
+    longPressStartPointRef.current = null;
   }, []);
 
   const openMessageActions = useCallback((message: GroupChatMessage, isSentByMe: boolean) => {
@@ -570,16 +576,32 @@ export default function GroupChatPage() {
 
   const startLongPress = (message: GroupChatMessage, isSentByMe: boolean) => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTriggeredRef.current = false;
     longPressTimer.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      suppressNextImageTapRef.current = true;
       openMessageActions(message, isSentByMe);
-    }, 500);
+    }, 420);
   };
 
   const endLongPress = () => {
+    const didTriggerLongPress = longPressTriggeredRef.current;
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
     }
+    longPressStartPointRef.current = null;
+
+    if (didTriggerLongPress) {
+      window.setTimeout(() => {
+        suppressNextImageTapRef.current = false;
+        longPressTriggeredRef.current = false;
+      }, 250);
+      return;
+    }
+
+    suppressNextImageTapRef.current = false;
+    longPressTriggeredRef.current = false;
   };
 
   const cleanMediaUrl = (url: string | null | undefined): string => {
@@ -587,35 +609,32 @@ export default function GroupChatPage() {
     return url.trim().replace(/^(%20|\s)+/, "").replace(/(%20|\s)+$/, "");
   };
 
-  const handleImageDownload = async (imageUrl: string) => {
-    try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-      const extension = (blob.type.split("/")[1] || "jpg").replace(/[^a-zA-Z0-9]/g, "") || "jpg";
-      const file = new File([blob], `group-chat-image-${Date.now()}.${extension}`, { type: blob.type || "image/jpeg" });
+  const handleTouchStart = (event: React.TouchEvent, message: GroupChatMessage, isSentByMe: boolean) => {
+    if (message.is_deleted || event.touches.length !== 1) return;
+    const touch = event.touches[0];
+    longPressStartPointRef.current = { x: touch.clientX, y: touch.clientY };
+    startLongPress(message, isSentByMe);
+  };
 
-      if ("share" in navigator && "canShare" in navigator && (navigator as any).canShare({ files: [file] })) {
-        await (navigator as any).share({
-          files: [file],
-          title: language === "ar" ? "صورة من المحادثة الجماعية" : "Group chat image",
-        });
-        toast.success(language === "ar" ? "تم فتح قائمة المشاركة" : "Share menu opened");
-        return;
-      }
-
-      const objectUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = file.name;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(objectUrl);
-      toast.success(language === "ar" ? "تم حفظ الصورة" : "Image saved");
-    } catch (error) {
-      console.error("Error saving group image:", error);
-      toast.error(language === "ar" ? "تعذر حفظ الصورة" : "Could not save image");
+  const handleTouchMove = (event: React.TouchEvent) => {
+    const startPoint = longPressStartPointRef.current;
+    if (!startPoint || event.touches.length !== 1) {
+      endLongPress();
+      return;
     }
+
+    const touch = event.touches[0];
+    const moveDistance = Math.hypot(touch.clientX - startPoint.x, touch.clientY - startPoint.y);
+
+    if (moveDistance > 10) {
+      endLongPress();
+    }
+  };
+
+  const handleImageExpand = (event: React.MouseEvent<HTMLElement>, imageUrl: string) => {
+    event.stopPropagation();
+    if (suppressNextImageTapRef.current) return;
+    setExpandedImage(imageUrl);
   };
 
   const toggleAudioPlayback = (messageId: string, audioUrl: string) => {
@@ -688,34 +707,17 @@ export default function GroupChatPage() {
               loading="lazy"
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
-              onClick={(event) => {
-                event.stopPropagation();
-                setExpandedImage(imageUrl);
-              }}
+              onClick={(event) => handleImageExpand(event, imageUrl)}
             />
             {!compact && (
               <div className="absolute top-2 right-2 hidden flex-col gap-1 opacity-0 transition-opacity duration-200 group-hover:flex group-hover:opacity-100 sm:flex">
                 <Button
                   size="sm"
                   variant="secondary"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setExpandedImage(imageUrl);
-                  }}
+                  onClick={(event) => handleImageExpand(event, imageUrl)}
                   className="h-7 w-7 rounded-full border-0 bg-black/60 p-0 text-white hover:bg-black/80"
                 >
                   <Expand className="h-3 w-3" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handleImageDownload(imageUrl);
-                  }}
-                  className="h-7 w-7 rounded-full border-0 bg-black/60 p-0 text-white hover:bg-black/80"
-                >
-                  <Download className="h-3 w-3" />
                 </Button>
               </div>
             )}
@@ -880,12 +882,10 @@ export default function GroupChatPage() {
                       event.preventDefault();
                       openMessageActions(message, mine);
                     }}
-                    onTouchStart={() => {
-                      if (message.is_deleted) return;
-                      startLongPress(message, mine);
-                    }}
+                    onTouchStart={(event) => handleTouchStart(event, message, mine)}
                     onTouchEnd={endLongPress}
-                    onTouchMove={endLongPress}
+                    onTouchMove={handleTouchMove}
+                    onTouchCancel={endLongPress}
                     onMouseDown={(event) => {
                       if (message.is_deleted || event.button !== 0) return;
                       event.preventDefault();
@@ -1217,45 +1217,11 @@ export default function GroupChatPage() {
       </AnimatePresence>
 
       {expandedImage && (
-        <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
-          <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] max-w-4xl overflow-hidden p-4" hideCloseButton>
-            <DialogHeader className="sr-only">
-              <DialogTitle>{language === "ar" ? "الصورة" : "Image"}</DialogTitle>
-              <DialogDescription>
-                {language === "ar" ? "عرض موسع للصورة" : "Expanded image preview"}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <h3 className="truncate text-lg font-semibold">{language === "ar" ? "الصورة" : "Image"}</h3>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleImageDownload(expandedImage)}
-                  className="flex items-center gap-2"
-                >
-                  <Save className="h-4 w-4" />
-                  {language === "ar" ? "حفظ" : "Save"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setExpandedImage(null)}
-                  className="h-8 w-8 p-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-            <div className="relative overflow-hidden rounded-lg bg-muted">
-              <img
-                src={expandedImage}
-                alt="Expanded image"
-                className="max-h-[70vh] w-full object-contain"
-              />
-            </div>
-          </DialogContent>
-        </Dialog>
+        <ImageModal
+          isOpen={!!expandedImage}
+          onClose={() => setExpandedImage(null)}
+          imageUrl={expandedImage}
+        />
       )}
 
       {/* ── Members Modal ── */}

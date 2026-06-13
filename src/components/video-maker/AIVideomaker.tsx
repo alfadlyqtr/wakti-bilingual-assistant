@@ -44,7 +44,6 @@ import {
   Check,
   Lock,
   FolderOpen,
-  Info,
   Type,
   GalleryHorizontalEnd,
   Images,
@@ -109,8 +108,14 @@ const generateVideoTitle = (raw: string): string => {
 const getVideoWaitHint = (
   language: string,
   generationMode: 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema',
-  resolution: '720p' | '1080p'
+  resolution: '480p' | '720p' | '1080p'
 ) => {
+  if (generationMode === 'image_to_video' && resolution === '480p') {
+    return language === 'ar'
+      ? 'عادةً 1-2 دقائق. دقة 480p هي الأسرع.'
+      : 'Usually 1-2 minutes. 480p is the fastest option.';
+  }
+
   if (generationMode === 'text_to_video' && resolution === '1080p') {
     return language === 'ar'
       ? 'عادةً 3-6 دقائق. دقة 1080p أبطأ لكنها أوضح.'
@@ -142,7 +147,8 @@ const getVideoWaitHint = (
 
 const getResolutionSpeedHint = (
   language: string,
-  generationMode: 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema'
+  generationMode: 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema',
+  isKidsContentMode: boolean,
 ) => {
   if (generationMode === 'text_to_video' || generationMode === '2images_to_video') {
     return language === 'ar'
@@ -151,6 +157,12 @@ const getResolutionSpeedHint = (
   }
 
   if (generationMode === 'image_to_video') {
+    if (isKidsContentMode) {
+      return language === 'ar'
+        ? '480p متاح دائمًا • 720p متاح فقط لمدة 4ث و6ث'
+        : '480p is always available • 720p is only for 4s and 6s';
+    }
+
     return language === 'ar'
       ? '720p أسرع • 1080p أبطأ لكنه أوضح'
       : '720p is faster • 1080p is slower but sharper';
@@ -241,6 +253,22 @@ const parseInvokeErrorPayload = async (error: unknown): Promise<VideoInvokeError
 const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null, language: string): string | null => {
   if (!payload) return null;
 
+  const rawCode = String(payload.code || '').toLowerCase();
+  const rawError = String(payload.error || '').toLowerCase();
+  const rawMessage = String(payload.message || '').toLowerCase();
+  const hasMinorUploadError =
+    rawCode === '400' ||
+    rawError.includes('minor upload') ||
+    rawMessage.includes('minor upload') ||
+    rawError.includes('public error minor upload') ||
+    rawMessage.includes('public error minor upload');
+
+  if (hasMinorUploadError) {
+    return language === 'ar'
+      ? 'تحتوي الصورة على طفل، ووفقًا لسياسات الخصوصية لدينا فهذا غير مسموح.'
+      : 'The image contains a child, and as per our privacy policy this is not allowed.';
+  }
+
   if (payload.code === 'MONTHLY_VIDEO_LIMIT_REACHED' || payload.error === 'MONTHLY_VIDEO_LIMIT_REACHED') {
     return language === 'ar'
       ? 'لقد وصلت إلى الحد الشهري للفيديوهات بالذكاء الاصطناعي.'
@@ -310,14 +338,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [prompt, setPrompt] = useState('');
   const [duration, setDuration] = useState<'4' | '6' | '8' | '10'>('6');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
-  const [resolution, setResolution] = useState<'720p' | '1080p'>('720p');
-  const [videoStyleMode, setVideoStyleMode] = useState<'normal' | 'fun'>('normal');
+  const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('720p');
+  const [isKidsContentMode, setIsKidsContentMode] = useState(false);
   const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
   const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
   const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('video', { studioTab: 'video', videoMode: 'ai' }));
   const videoDraftRestoredRef = useRef(false);
-  const [showVideoModeInfo, setShowVideoModeInfo] = useState(false);
   const [isAmping, setIsAmping] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStatus, setGenerationStatus] = useState('');
@@ -473,8 +500,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       prompt: string;
       duration: '4' | '6' | '8' | '10';
       aspectRatio: string;
-      resolution: '720p' | '1080p';
-      videoStyleMode: 'normal' | 'fun';
+      resolution: '480p' | '720p' | '1080p';
+      isKidsContentMode: boolean;
     }>('video');
 
     if (!draft) return;
@@ -489,9 +516,22 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setDuration(draft.duration || '6');
     setAspectRatio(draft.aspectRatio || '9:16');
     setResolution(draft.resolution || '720p');
-    setVideoStyleMode(draft.videoStyleMode || 'normal');
+    setIsKidsContentMode(Boolean(draft.isKidsContentMode));
     clearStudioGuestDraft('video');
   }, [isGuest, searchParams]);
+
+  useEffect(() => {
+    if (generationMode !== 'image_to_video' || !isKidsContentMode) return;
+
+    if (resolution === '1080p') {
+      setResolution('480p');
+      return;
+    }
+
+    if (resolution === '720p' && !['4', '6'].includes(duration)) {
+      setResolution('480p');
+    }
+  }, [generationMode, isKidsContentMode, duration, resolution]);
 
   // Typewriter effect component for Cinema scene cards
   const TypewriterText = ({ text, delay = 0, className = '' }: { text: string; delay?: number; className?: string }) => {
@@ -1111,7 +1151,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         duration,
         aspectRatio,
         resolution,
-        videoStyleMode,
+        isKidsContentMode,
       });
       setGuestRedirectTo(redirectTo);
       setGuestDialogOpen(true);
@@ -1240,7 +1280,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           duration,
           aspect_ratio: aspectRatio,
           resolution,
-          video_style_mode: videoStyleMode,
+          ...(isKidsContentMode ? { model: 'grok-imagine-video-1-5-preview' } : {}),
           mode: 'async',
         };
       } else if (generationMode === '2images_to_video') {
@@ -1319,7 +1359,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               duration,
               aspect_ratio: aspectRatio,
               resolution,
-              video_style_mode: videoStyleMode,
+              ...(isKidsContentMode ? { model: 'grok-imagine-video-1-5-preview' } : {}),
               mode: 'async',
             };
           }
@@ -2458,6 +2498,57 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       {language === 'ar' ? '8 ث' : '8s'}
                     </button>
                   </>
+                ) : generationMode === 'image_to_video' && isKidsContentMode ? (
+                  <>
+                    <button
+                      onClick={() => !isGenerating && setDuration('4')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '4'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '4 ث' : '4s'}
+                    </button>
+                    <button
+                      onClick={() => !isGenerating && setDuration('6')}
+                      disabled={isGenerating}
+                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                        duration === '6'
+                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                          : 'text-muted-foreground hover:text-primary'
+                      }`}
+                    >
+                      {language === 'ar' ? '6 ث' : '6s'}
+                    </button>
+                    {resolution === '480p' && (
+                      <>
+                        <button
+                          onClick={() => !isGenerating && setDuration('8')}
+                          disabled={isGenerating}
+                          className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                            duration === '8'
+                              ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                              : 'text-muted-foreground hover:text-primary'
+                          }`}
+                        >
+                          {language === 'ar' ? '8 ث' : '8s'}
+                        </button>
+                        <button
+                          onClick={() => !isGenerating && setDuration('10')}
+                          disabled={isGenerating}
+                          className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                            duration === '10'
+                              ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                              : 'text-muted-foreground hover:text-primary'
+                          }`}
+                        >
+                          {language === 'ar' ? '10 ث' : '10s'}
+                        </button>
+                      </>
+                    )}
+                  </>
                 ) : (
                   <>
                     <button
@@ -2655,6 +2746,47 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         </p>
                       </div>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isGenerating) return;
+                        const nextValue = !isKidsContentMode;
+                        setIsKidsContentMode(nextValue);
+                        if (nextValue) {
+                          setDuration('6');
+                          setResolution('720p');
+                        } else {
+                          if (resolution === '480p') setResolution('720p');
+                        }
+                      }}
+                      disabled={isGenerating}
+                      className="rounded-xl border border-primary/20 bg-background/60 p-3 text-left transition-all hover:border-primary/40 disabled:opacity-60"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">
+                            {language === 'ar' ? 'وضع محتوى الأطفال' : 'Kids Content Mode'}
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted-foreground/90">
+                            {language === 'ar'
+                              ? 'وفقًا لسياساتنا وشروطنا، يتم تطبيق إعدادات أكثر أمانًا في هذا الوضع.'
+                              : 'As per our policies and terms, safer generation settings are applied in this mode.'}
+                          </p>
+                        </div>
+                        <span
+                          className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors ${
+                            isKidsContentMode ? 'bg-[hsl(210,100%,65%)]' : 'bg-muted-foreground/30'
+                          }`}
+                        >
+                          <span
+                            className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                              isKidsContentMode ? 'translate-x-5' : 'translate-x-0.5'
+                            }`}
+                          />
+                        </span>
+                      </div>
+                    </button>
                   </div>
                 ) : (
                   <div className="relative h-full min-h-[200px]">
@@ -4828,6 +4960,37 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         1080p
                       </button>
                     </>
+                  ) : generationMode === 'image_to_video' && isKidsContentMode ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating) setResolution('480p');
+                        }}
+                        disabled={isGenerating}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          resolution === '480p'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(260,70%,65%)] text-white shadow-md shadow-blue-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        480p
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (!isGenerating && ['4', '6'].includes(duration)) {
+                            setResolution('720p');
+                          }
+                        }}
+                        disabled={isGenerating || !['4', '6'].includes(duration)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+                          resolution === '720p'
+                            ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(45,100%,60%)] text-white shadow-md shadow-orange-500/30'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
+                        }`}
+                      >
+                        720p
+                      </button>
+                    </>
                   ) : generationMode === 'text_to_video' ? (
                     <>
                       <button
@@ -4891,58 +5054,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   )}
                 </div>
                 <p className="w-full px-1 text-[10px] text-muted-foreground/80">
-                  {getResolutionSpeedHint(language, generationMode)}
+                  {getResolutionSpeedHint(language, generationMode, isKidsContentMode)}
                 </p>
-                {generationMode === 'image_to_video' && (
-                  <div className="relative flex items-center gap-1">
-                    <div className="flex items-center gap-1 p-1 rounded-xl bg-muted/60 border border-border/50">
-                      <button
-                        onClick={() => !isGenerating && setVideoStyleMode('normal')}
-                        disabled={isGenerating}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                          videoStyleMode === 'normal'
-                            ? 'bg-gradient-to-r from-[#060541] to-[hsl(210,100%,45%)] text-white shadow-md shadow-blue-500/30'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                        }`}
-                      >
-                        {language === 'ar' ? 'متوازن' : 'Balanced'}
-                      </button>
-                      <button
-                        onClick={() => !isGenerating && setVideoStyleMode('fun')}
-                        disabled={isGenerating}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
-                          videoStyleMode === 'fun'
-                            ? 'bg-gradient-to-r from-[hsl(25,95%,60%)] to-[hsl(320,75%,70%)] text-white shadow-md shadow-orange-500/30'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-background/60'
-                        }`}
-                      >
-                        {language === 'ar' ? 'إبداعي' : 'Creative'}
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowVideoModeInfo((prev) => !prev)}
-                      className="h-8 w-8 rounded-full border border-border/50 bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-background/70 flex items-center justify-center transition-all active:scale-95"
-                      aria-label={language === 'ar' ? 'معلومات أوضاع الفيديو' : 'Video mode info'}
-                    >
-                      <Info className="h-4 w-4" />
-                    </button>
-                    {showVideoModeInfo && (
-                      <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-border/60 bg-background/95 backdrop-blur-md shadow-[0_10px_30px_rgba(0,0,0,0.25)] p-3 z-20">
-                        <div className="space-y-2 text-xs">
-                          <div>
-                            <p className="font-semibold text-foreground">{language === 'ar' ? 'متوازن' : 'Balanced'}</p>
-                            <p className="text-muted-foreground">{language === 'ar' ? 'للحركة الأنظف والأهدأ والنتائج الأكثر ثباتًا.' : 'Best for cleaner, steadier, more predictable motion.'}</p>
-                          </div>
-                          <div>
-                            <p className="font-semibold text-foreground">{language === 'ar' ? 'إبداعي' : 'Creative'}</p>
-                            <p className="text-muted-foreground">{language === 'ar' ? 'لحركة أكثر حيوية وتعبيرًا ولمسة أكثر خيالًا.' : 'Best for more lively, expressive, imaginative motion.'}</p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
 

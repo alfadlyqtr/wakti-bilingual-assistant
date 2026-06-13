@@ -755,6 +755,8 @@ async function createVideoTask(
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
   void videoStyleMode;
+  const model = isTwoImages ? KIE_2IMAGES_MODEL : (modelOverride || KIE_IMAGE2VIDEO_MODEL);
+  const isGrokImageToVideoModel = !isTwoImages && model === "grok-imagine-video-1-5-preview";
   const validDuration = isTwoImages
     ? (["6", "8"].includes(duration || "") ? duration! : "8")
     : (["4", "6", "8", "10"].includes(duration || "") ? duration! : "6");
@@ -767,9 +769,9 @@ async function createVideoTask(
       : "9:16");
   const validResolution = isTwoImages
     ? (["720p", "1080p"].includes(resolution || "") ? resolution! : "720p")
-    : (["720p", "1080p"].includes(resolution || "") ? resolution! : "720p");
-
-  const model = isTwoImages ? KIE_2IMAGES_MODEL : (modelOverride || KIE_IMAGE2VIDEO_MODEL);
+    : isGrokImageToVideoModel
+      ? (["480p", "720p"].includes(resolution || "") ? resolution! : "480p")
+      : (["720p", "1080p"].includes(resolution || "") ? resolution! : "720p");
 
   if (isTwoImages) {
     const frameDirective = "FRAME RULE: The FIRST uploaded image is the OPENING START FRAME. The SECOND uploaded image is the CLOSING END FRAME. Create a smooth transition that clearly begins on image 1 and clearly ends on image 2.";
