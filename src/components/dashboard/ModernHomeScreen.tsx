@@ -1420,7 +1420,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
           </div>
 
           <section className={cn("self-start border-[1.5px]", cardShell)} style={{ ...widgetsSectionStyle, borderRadius: `${widgetsRadius}px`, paddingLeft: `${widgetsPaddingX}px`, paddingRight: `${widgetsPaddingX}px`, paddingTop: `${widgetsPaddingTop}px`, paddingBottom: `${widgetsPaddingBottom}px` }}>
-            <Carousel opts={{ align: "start", dragFree: true, direction: "ltr" }} className="w-full" dir="ltr">
+            <Carousel opts={{ align: "start", direction: "ltr" }} className="w-full" dir="ltr">
               <CarouselContent className="sm:-ml-2">
                 {visibleModernWidgetOrder.map((key) => (
                   <CarouselItem key={key} className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-full">

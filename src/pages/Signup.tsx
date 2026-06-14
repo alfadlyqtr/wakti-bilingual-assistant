@@ -18,13 +18,19 @@ import { buildStudentVerificationMetadata, verifyStudentAccountWithRealX, type S
 import { validateDisplayName, validateEmail, validatePassword } from "@/utils/validations";
 import { countries } from "@/utils/countries";
 import { useAuth } from "@/contexts/AuthContext";
+import { setActiveScopedUserId } from "@/utils/userScopedStorage";
+
+type AuthTab = "login" | "signup";
 
 export default function Signup() {
   const navigate = useNavigate();
   const location = useLocation();
   const { language, theme } = useTheme();
-  const { isGuest, linkEmailToAnonymousUser } = useAuth();
-  const locationState = location.state as { guestUpgrade?: boolean; from?: string } | null;
+  const { isGuest, linkEmailToAnonymousUser, applyManualLoginRecovery } = useAuth();
+  const locationState = location.state as { guestUpgrade?: boolean; from?: string; authTab?: AuthTab } | null;
+  const cameFromGuestUpgrade = Boolean(locationState?.guestUpgrade);
+  const initialAuthTab: AuthTab = !cameFromGuestUpgrade && locationState?.authTab === "login" ? "login" : "signup";
+  const [authTab, setAuthTab] = useState<AuthTab>(initialAuthTab);
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -33,6 +39,12 @@ export default function Signup() {
   const [country, setCountry] = useState("");
   const [city, setCity] = useState("");
   const [showOptionalFields, setShowOptionalFields] = useState(false);
+  useEffect(() => {
+    if (!cameFromGuestUpgrade && locationState?.authTab === "login") {
+      setAuthTab("login");
+    }
+  }, [cameFromGuestUpgrade, locationState?.authTab]);
+
   // Reset city when country changes
   useEffect(() => {
     setCity("");
@@ -79,7 +91,6 @@ export default function Signup() {
   const isConnectionReadyRef = useRef(false);
   const passwordRef = useRef<HTMLInputElement | null>(null);
   const MAX_RECORD_SECONDS = 10;
-  const cameFromGuestUpgrade = Boolean(locationState?.guestUpgrade);
   const returnTo = locationState?.from || "/dashboard";
   const isGuestUpgradeFlow = isGuest;
 
@@ -451,6 +462,87 @@ export default function Signup() {
     }
   };
 
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+
+    if (!email || !password) {
+      setErrorMsg(language === 'en' ? 'Please fill in all fields' : 'يرجى تعبئة جميع الحقول');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        setErrorMsg(error.message);
+        toast.error(language === 'en' ? 'Login Failed: ' + error.message : 'فشل تسجيل الدخول: ' + error.message);
+        return;
+      }
+
+      if (data?.user) {
+        toast.success(language === 'en' ? 'Login Successful: Welcome back!' : 'تم تسجيل الدخول بنجاح: مرحبا بعودتك!');
+        const loginTimestamp = Date.now();
+
+        try { localStorage.setItem('wakti_recent_login', String(loginTimestamp)); } catch {}
+        try { sessionStorage.setItem('wakti_recent_login', String(loginTimestamp)); } catch {}
+
+        const session = (data as any)?.session;
+        const accessToken = session?.access_token;
+        const refreshToken = session?.refresh_token;
+
+        if (accessToken && refreshToken) {
+          supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).catch(() => {});
+          try { applyManualLoginRecovery(data.user, session, loginTimestamp); } catch {}
+
+          try {
+            const loginId = crypto.randomUUID();
+            try { sessionStorage.setItem('wakti_login_id', loginId); } catch {}
+            Promise.resolve(
+              supabase
+                .from('user_active_sessions')
+                .upsert({
+                  user_id: data.user.id,
+                  session_id: accessToken,
+                  login_id: loginId,
+                  last_login: new Date().toISOString(),
+                  device_info: navigator.userAgent || 'Unknown Device'
+                })
+            ).catch(() => {});
+          } catch {}
+        }
+
+        setActiveScopedUserId(data.user.id);
+        Promise.resolve(
+          supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', data.user.id)
+            .single()
+        ).then(({ data: profileData }) => {
+            if (profileData) {
+              try {
+                localStorage.setItem(`wakti_profile_${data.user.id}`, JSON.stringify({ data: profileData, _cachedAt: Date.now() }));
+                window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+              } catch {}
+            }
+          })
+          .catch(() => {});
+
+        navigate(returnTo);
+      }
+    } catch {
+      setErrorMsg(language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
@@ -570,7 +662,10 @@ export default function Signup() {
 
   const handleDialogClose = () => {
     setIsEmailConfirmationDialogOpen(false);
-    navigate(cameFromGuestUpgrade ? returnTo : "/login");
+    if (!cameFromGuestUpgrade) {
+      setAuthTab("login");
+    }
+    navigate(cameFromGuestUpgrade ? returnTo : "/signup", cameFromGuestUpgrade ? undefined : { state: { authTab: "login" } });
   };
 
   const isRtl = language === 'ar';
@@ -883,6 +978,44 @@ export default function Signup() {
         }
         .su-details-pill:hover::before { opacity: ${dk ? '0.75' : '0.55'}; }
 
+        .su-auth-tabs {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+          padding: 6px;
+          border-radius: 999px;
+          border: 1px solid ${dk ? 'rgba(255,255,255,0.09)' : 'rgba(6,5,65,0.12)'};
+          background: ${dk ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.72)'};
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+        }
+        .su-auth-tab {
+          height: 34px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 700;
+          border: none;
+          cursor: pointer;
+          transition: all 0.22s ease;
+          color: ${dk ? 'rgba(255,255,255,0.7)' : 'rgba(6,5,65,0.62)'};
+          background: transparent;
+        }
+        .su-auth-tab.is-active {
+          color: #fff;
+          background: ${dk
+            ? 'linear-gradient(135deg, hsla(210,100%,65%,0.92) 0%, hsla(280,70%,65%,0.92) 100%)'
+            : 'linear-gradient(135deg, #060541 0%, hsl(250,70%,32%) 100%)'
+          };
+          box-shadow: ${dk
+            ? '0 8px 20px hsla(210,100%,65%,0.24)'
+            : '0 8px 16px hsla(243,84%,14%,0.2)'
+          };
+        }
+        .su-auth-tab:not(.is-active):hover {
+          color: ${dk ? 'rgba(255,255,255,0.9)' : 'rgba(6,5,65,0.9)'};
+          background: ${dk ? 'rgba(255,255,255,0.04)' : 'rgba(6,5,65,0.06)'};
+        }
+
         /* ─── login link ─── */
         .su-login-link {
           display: inline-flex;
@@ -1055,114 +1188,140 @@ export default function Signup() {
               <Logo3D size="lg" />
             </div>
             
-            {/* Welcome message with word highlighting */}
-            <div className="text-center space-y-2">
-              <h1
-                className="text-3xl font-bold tracking-tight"
-                style={{
-                  background: 'linear-gradient(135deg, var(--foreground) 0%, hsl(210, 60%, 55%) 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  backgroundClip: 'text',
+            {authTab === "signup" && (
+              <div className="text-center space-y-2">
+                <h1
+                  className="text-3xl font-bold tracking-tight"
+                  style={{
+                    background: 'linear-gradient(135deg, var(--foreground) 0%, hsl(210, 60%, 55%) 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}
+                >
+                  {language === 'en' ? 'Create Account' : 'إنشاء حساب'}
+                </h1>
+                <div className="flex justify-center mb-1">
+                  <AnimatePresence mode="wait">
+                    {isPlayingAudio ? (
+                      <motion.button
+                        key="pause"
+                        type="button"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ duration: 0.15 }}
+                        onClick={() => { if (audioRef.current) { audioRef.current.pause(); } }}
+                        className="su-audio-btn"
+                        aria-label="Pause"
+                      >
+                        <Pause className="w-3 h-3" />
+                      </motion.button>
+                    ) : audioUnlocked ? (
+                      <motion.button
+                        key="play"
+                        type="button"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ duration: 0.15 }}
+                        onClick={() => {
+                          if (audioRef.current) {
+                            audioRef.current.currentTime = 0;
+                            audioRef.current.play();
+                          }
+                        }}
+                        className="su-audio-btn"
+                        aria-label="Play"
+                      >
+                        <Play className="w-3 h-3" />
+                      </motion.button>
+                    ) : null}
+                  </AnimatePresence>
+                </div>
+
+                <p className="text-sm text-muted-foreground max-w-[320px] mx-auto leading-relaxed text-center">
+                  {language === 'ar' ? (
+                    <span className="inline-block">
+                      {['أهلاً', '!', 'شكراً', 'لانضمامك', 'إلينا', '،', 'يرجى', 'إدخال', 'بريدك', 'الإلكتروني', 'وكلمة', 'المرور', 'للبدء', '.'].map((word, index) => (
+                        <motion.span
+                          key={index}
+                          initial={{ color: 'hsl(var(--muted-foreground))' }}
+                          animate={{
+                            color: currentWordIndex === index && isPlayingAudio
+                              ? 'hsl(142, 76%, 55%)'
+                              : 'hsl(var(--muted-foreground))',
+                            scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
+                            fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
+                          }}
+                          transition={{ duration: 0.2 }}
+                          className="inline-block"
+                          style={{
+                            marginRight: word === '،' || word === '.' ? '0.2rem' : '0.3rem',
+                            marginLeft: word === '،' || word === '.' ? '0.2rem' : '0',
+                            textShadow: currentWordIndex === index && isPlayingAudio
+                              ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
+                              : 'none'
+                          }}
+                        >
+                          {word}
+                        </motion.span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="inline-block">
+                      {['Hi', '!', 'Thanks', 'for', 'joining', 'us', '.', 'Please', 'enter', 'your', 'email', 'and', 'password', 'to', 'get', 'started', '.'].map((word, index) => (
+                        <motion.span
+                          key={index}
+                          initial={{ color: 'hsl(var(--muted-foreground))' }}
+                          animate={{
+                            color: currentWordIndex === index && isPlayingAudio
+                              ? 'hsl(142, 76%, 55%)'
+                              : 'hsl(var(--muted-foreground))',
+                            scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
+                            fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
+                          }}
+                          transition={{ duration: 0.2 }}
+                          className="inline-block"
+                          style={{
+                            marginRight: word === '.' || word === '!' ? '0.4rem' : '0.25rem',
+                            textShadow: currentWordIndex === index && isPlayingAudio
+                              ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
+                              : 'none'
+                          }}
+                        >
+                          {word}
+                        </motion.span>
+                      ))}
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="w-full max-w-sm mb-3">
+            <div className="su-auth-tabs">
+              <button
+                type="button"
+                className={cn("su-auth-tab", authTab === "login" && "is-active")}
+                onClick={() => {
+                  setAuthTab("login");
+                  setErrorMsg(null);
                 }}
               >
-                {language === 'en' ? 'Create Account' : 'إنشاء حساب'}
-              </h1>
-              <div className="flex justify-center mb-1">
-                <AnimatePresence mode="wait">
-                  {isPlayingAudio ? (
-                    <motion.button
-                      key="pause"
-                      type="button"
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.15 }}
-                      onClick={() => { if (audioRef.current) { audioRef.current.pause(); } }}
-                      className="su-audio-btn"
-                      aria-label="Pause"
-                    >
-                      <Pause className="w-3 h-3" />
-                    </motion.button>
-                  ) : audioUnlocked ? (
-                    <motion.button
-                      key="play"
-                      type="button"
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.15 }}
-                      onClick={() => {
-                        if (audioRef.current) {
-                          audioRef.current.currentTime = 0;
-                          audioRef.current.play();
-                        }
-                      }}
-                      className="su-audio-btn"
-                      aria-label="Play"
-                    >
-                      <Play className="w-3 h-3" />
-                    </motion.button>
-                  ) : null}
-                </AnimatePresence>
-              </div>
-
-              <p className="text-sm text-muted-foreground max-w-[320px] mx-auto leading-relaxed text-center">
-                {language === 'ar' ? (
-                  <span className="inline-block">
-                    {['أهلاً', '!', 'شكراً', 'لانضمامك', 'إلينا', '،', 'يرجى', 'إدخال', 'بريدك', 'الإلكتروني', 'وكلمة', 'المرور', 'للبدء', '.'].map((word, index) => (
-                      <motion.span
-                        key={index}
-                        initial={{ color: 'hsl(var(--muted-foreground))' }}
-                        animate={{
-                          color: currentWordIndex === index && isPlayingAudio
-                            ? 'hsl(142, 76%, 55%)'
-                            : 'hsl(var(--muted-foreground))',
-                          scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
-                          fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
-                        }}
-                        transition={{ duration: 0.2 }}
-                        className="inline-block"
-                        style={{
-                          marginRight: word === '،' || word === '.' ? '0.2rem' : '0.3rem',
-                          marginLeft: word === '،' || word === '.' ? '0.2rem' : '0',
-                          textShadow: currentWordIndex === index && isPlayingAudio
-                            ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
-                            : 'none'
-                        }}
-                      >
-                        {word}
-                      </motion.span>
-                    ))}
-                  </span>
-                ) : (
-                  <span className="inline-block">
-                    {['Hi', '!', 'Thanks', 'for', 'joining', 'us', '.', 'Please', 'enter', 'your', 'email', 'and', 'password', 'to', 'get', 'started', '.'].map((word, index) => (
-                      <motion.span
-                        key={index}
-                        initial={{ color: 'hsl(var(--muted-foreground))' }}
-                        animate={{
-                          color: currentWordIndex === index && isPlayingAudio
-                            ? 'hsl(142, 76%, 55%)'
-                            : 'hsl(var(--muted-foreground))',
-                          scale: currentWordIndex === index && isPlayingAudio ? 1.1 : 1,
-                          fontWeight: currentWordIndex === index && isPlayingAudio ? 600 : 400
-                        }}
-                        transition={{ duration: 0.2 }}
-                        className="inline-block"
-                        style={{
-                          marginRight: word === '.' || word === '!' ? '0.4rem' : '0.25rem',
-                          textShadow: currentWordIndex === index && isPlayingAudio
-                            ? '0 0 15px hsla(142, 76%, 55%, 0.4)'
-                            : 'none'
-                        }}
-                      >
-                        {word}
-                      </motion.span>
-                    ))}
-                  </span>
-                )}
-              </p>
+                {language === 'en' ? 'Log in' : 'تسجيل الدخول'}
+              </button>
+              <button
+                type="button"
+                className={cn("su-auth-tab", authTab === "signup" && "is-active")}
+                onClick={() => {
+                  setAuthTab("signup");
+                  setErrorMsg(null);
+                }}
+              >
+                {language === 'en' ? 'Create account' : 'إنشاء حساب'}
+              </button>
             </div>
           </div>
 
@@ -1190,7 +1349,7 @@ export default function Signup() {
               )}
             </AnimatePresence>
 
-            <form onSubmit={handleSignup} className="space-y-2.5">
+            <form onSubmit={authTab === "login" ? handleLogin : handleSignup} className="space-y-2.5">
 
               {/* Email */}
               <div className="relative">
@@ -1210,8 +1369,10 @@ export default function Signup() {
                 <Input
                   id="password" ref={passwordRef}
                   type={showPassword ? "text" : "password"}
-                  placeholder={t.passwordPlaceholder}
-                  autoCapitalize="none" autoComplete="new-password"
+                  placeholder={authTab === "login"
+                    ? (language === 'en' ? 'Enter your password' : 'أدخل كلمة المرور')
+                    : t.passwordPlaceholder}
+                  autoCapitalize="none" autoComplete={authTab === "login" ? "current-password" : "new-password"}
                   disabled={isLoading} value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className={cn(fieldCls, "pl-9 pr-9")} required
@@ -1222,141 +1383,153 @@ export default function Signup() {
                 </button>
               </div>
 
-              {/* Optional fields toggle */}
-              <div className="flex justify-center">
-                <button
-                  type="button"
-                  onClick={() => setShowOptionalFields(!showOptionalFields)}
-                  className="su-details-pill"
-                >
-                  {language === 'ar' ? 'تفاصيل إضافية' : 'Add details'}
-                  {showOptionalFields ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
-                </button>
-              </div>
+              {authTab === "signup" && (
+                <>
+                  {/* Optional fields toggle */}
+                  <div className="flex justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setShowOptionalFields(!showOptionalFields)}
+                      className="su-details-pill"
+                    >
+                      {language === 'ar' ? 'تفاصيل إضافية' : 'Add details'}
+                      {showOptionalFields ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                    </button>
+                  </div>
 
-              {/* Optional fields */}
-              <AnimatePresence>
-                {showOptionalFields && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
-                    exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
-                    transition={{ duration: 0.25 }}
-                    className="space-y-2.5"
+                  {/* Optional fields */}
+                  <AnimatePresence>
+                    {showOptionalFields && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                        animate={{ opacity: 1, height: 'auto', overflow: 'visible' }}
+                        exit={{ opacity: 0, height: 0, overflow: 'hidden' }}
+                        transition={{ duration: 0.25 }}
+                        className="space-y-2.5"
+                      >
+                        {/* Name | Username row */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="relative">
+                            <User className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
+                            <Input id="name" placeholder={language === 'ar' ? 'اسمك' : 'Your Name'} type="text" autoCapitalize="words" autoCorrect="off" disabled={isLoading} value={name} onChange={(e) => setName(e.target.value)} className={cn(fieldCls, "pl-9")} />
+                          </div>
+                          <div className="relative">
+                            <AtSign className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
+                            <Input id="username" placeholder={language === 'ar' ? 'اسم المستخدم' : 'Username'} type="text" autoCapitalize="none" autoCorrect="off" disabled={isLoading} value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))} className={cn(fieldCls, "pl-9")} />
+                          </div>
+                        </div>
+                        {/* DOB full width */}
+                        <div className="relative">
+                          <CalendarIcon className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
+                          <Input id="dob" type="date" disabled={isLoading} value={dateOfBirth ? dateOfBirth.toISOString().slice(0,10) : ""} onChange={(e) => { const v = e.target.value; setDateOfBirth(v ? new Date(`${v}T00:00:00`) : undefined); }} className={cn(fieldCls, "pl-9", !dateOfBirth && "text-muted-foreground")} min="1900-01-01" max={new Date().toISOString().slice(0,10)} />
+                        </div>
+                        {/* Country | City row */}
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="relative">
+                            <Globe className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
+                            <Select value={country} onValueChange={setCountry} disabled={isLoading}>
+                              <SelectTrigger className={cn(fieldCls, "pl-9")}>
+                                <SelectValue placeholder={t.selectCountry} />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-52 rounded-xl">
+                                {countries.map((c) => (
+                                  <SelectItem key={c.code} value={c.code}>{language === 'ar' ? c.nameAr : c.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="relative">
+                            <MapPin className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
+                            <Input id="city" placeholder={language === 'ar' ? 'مدينتك' : 'City'} type="text" autoCapitalize="words" autoCorrect="off" disabled={isLoading || !country} value={city} onChange={(e) => setCity(e.target.value)} className={cn(fieldCls, "pl-9")} />
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Terms */}
+                  <div className="flex items-start gap-3 pt-0.5">
+                    <Checkbox
+                      id="terms"
+                      checked={agreedToTerms}
+                      onCheckedChange={(v) => setAgreedToTerms(v as boolean)}
+                      disabled={isLoading}
+                      className="su-checkbox mt-[2px]"
+                    />
+                    <label htmlFor="terms" className="cursor-pointer text-[10.5px] leading-relaxed" style={{ color: fgHi('0.35') }}>
+                      {language === 'ar' ? '* أوافق على ' : '* I agree to the '}
+                      <button type="button" onClick={() => navigate("/privacy-terms")} className="font-bold underline decoration-dotted underline-offset-2" style={{ color: accent }}>
+                        {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                      </button>
+                      {language === 'ar' ? ' و' : ' and '}
+                      <button type="button" onClick={() => navigate("/privacy-terms")} className="font-bold underline decoration-dotted underline-offset-2" style={{ color: accent }}>
+                        {language === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
+                      </button>
+                      {language === 'ar'
+                        ? '، وأسمح باستخدام بياناتي مع '
+                        : ', and I allow my text, voice & image data to be used with trusted '}
+                      <button type="button" onClick={() => navigate("/privacy-terms#ai-providers")} className="font-semibold" style={{ color: dk ? 'hsl(45,100%,60%)' : 'hsl(25,95%,40%)' }}>
+                        {language === 'ar' ? 'مزودي الذكاء الاصطناعي' : 'AI providers'}
+                      </button>
+                      {language === 'ar' ? ' لتشغيل وقتي.' : ' to power WAKTI.'}
+                    </label>
+                  </div>
+                </>
+              )}
+
+              {authTab === "login" && (
+                <div className={cn("text-[11px] text-center", language === 'ar' ? 'text-right' : 'text-left')}>
+                  <button
+                    type="button"
+                    className="font-semibold underline decoration-dotted underline-offset-2"
+                    style={{ color: accent }}
+                    onClick={() => navigate("/forgot-password")}
                   >
-                    {/* Name | Username row */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="relative">
-                        <User className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
-                        <Input id="name" placeholder={language === 'ar' ? 'اسمك' : 'Your Name'} type="text" autoCapitalize="words" autoCorrect="off" disabled={isLoading} value={name} onChange={(e) => setName(e.target.value)} className={cn(fieldCls, "pl-9")} />
-                      </div>
-                      <div className="relative">
-                        <AtSign className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none" />
-                        <Input id="username" placeholder={language === 'ar' ? 'اسم المستخدم' : 'Username'} type="text" autoCapitalize="none" autoCorrect="off" disabled={isLoading} value={username} onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))} className={cn(fieldCls, "pl-9")} />
-                      </div>
-                    </div>
-                    {/* DOB full width */}
-                    <div className="relative">
-                      <CalendarIcon className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
-                      <Input id="dob" type="date" disabled={isLoading} value={dateOfBirth ? dateOfBirth.toISOString().slice(0,10) : ""} onChange={(e) => { const v = e.target.value; setDateOfBirth(v ? new Date(`${v}T00:00:00`) : undefined); }} className={cn(fieldCls, "pl-9", !dateOfBirth && "text-muted-foreground")} min="1900-01-01" max={new Date().toISOString().slice(0,10)} />
-                    </div>
-                    {/* Country | City row */}
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="relative">
-                        <Globe className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
-                        <Select value={country} onValueChange={setCountry} disabled={isLoading}>
-                          <SelectTrigger className={cn(fieldCls, "pl-9")}>
-                            <SelectValue placeholder={t.selectCountry} />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-52 rounded-xl">
-                            {countries.map((c) => (
-                              <SelectItem key={c.code} value={c.code}>{language === 'ar' ? c.nameAr : c.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="relative">
-                        <MapPin className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
-                        <Input id="city" placeholder={language === 'ar' ? 'مدينتك' : 'City'} type="text" autoCapitalize="words" autoCorrect="off" disabled={isLoading || !country} value={city} onChange={(e) => setCity(e.target.value)} className={cn(fieldCls, "pl-9")} />
-                      </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Terms */}
-              <div className="flex items-start gap-3 pt-0.5">
-                <Checkbox
-                  id="terms"
-                  checked={agreedToTerms}
-                  onCheckedChange={(v) => setAgreedToTerms(v as boolean)}
-                  disabled={isLoading}
-                  className="su-checkbox mt-[2px]"
-                />
-                <label htmlFor="terms" className="cursor-pointer text-[10.5px] leading-relaxed" style={{ color: fgHi('0.35') }}>
-                  {language === 'ar' ? '* أوافق على ' : '* I agree to the '}
-                  <button type="button" onClick={() => navigate("/privacy-terms")} className="font-bold underline decoration-dotted underline-offset-2" style={{ color: accent }}>
-                    {language === 'ar' ? 'سياسة الخصوصية' : 'Privacy Policy'}
+                    {language === 'ar' ? 'نسيت كلمة المرور؟' : 'Forgot password?'}
                   </button>
-                  {language === 'ar' ? ' و' : ' and '}
-                  <button type="button" onClick={() => navigate("/privacy-terms")} className="font-bold underline decoration-dotted underline-offset-2" style={{ color: accent }}>
-                    {language === 'ar' ? 'شروط الخدمة' : 'Terms of Service'}
-                  </button>
-                  {language === 'ar'
-                    ? '، وأسمح باستخدام بياناتي مع '
-                    : ', and I allow my text, voice & image data to be used with trusted '}
-                  <button type="button" onClick={() => navigate("/privacy-terms#ai-providers")} className="font-semibold" style={{ color: dk ? 'hsl(45,100%,60%)' : 'hsl(25,95%,40%)' }}>
-                    {language === 'ar' ? 'مزودي الذكاء الاصطناعي' : 'AI providers'}
-                  </button>
-                  {language === 'ar' ? ' لتشغيل وقتي.' : ' to power WAKTI.'}
-                </label>
-              </div>
+                </div>
+              )}
 
               {/* Submit */}
               <div className="flex flex-col items-center gap-2.5 pt-1">
-                <button type="submit" disabled={isLoading || !agreedToTerms} className="su-pill">
+                <button type="submit" disabled={isLoading || (authTab === "signup" && !agreedToTerms)} className="su-pill">
                   {isLoading
                     ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
-                    : <><Sparkles className="w-3.5 h-3.5" />{t.signup}</>
+                    : authTab === "login"
+                      ? <><Sparkles className="w-3.5 h-3.5" />{language === 'en' ? 'Log in' : 'تسجيل الدخول'}</>
+                      : <><Sparkles className="w-3.5 h-3.5" />{t.signup}</>
                   }
                 </button>
-                <p className="text-[11px] text-center flex items-center justify-center gap-2" style={{ color: fgHi('0.35') }}>
-                  {t.alreadyHaveAccount}{' '}
-                  <button
-                    onClick={() => navigate("/login")}
-                    className="su-login-link"
-                  >
-                    {t.login}
-                  </button>
-                </p>
               </div>
 
             </form>
           </motion.div>
 
-          <motion.button
-            type="button"
-            initial={{ opacity: 0, y: 14 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.16, duration: 0.4, ease: [0.22,1,0.36,1] }}
-            onClick={() => {
-              setRealXPartnerError(null);
-              setIsRealXPartnerDialogOpen(true);
-            }}
-            className="su-partner-entry mt-3 w-full max-w-sm"
-          >
-            <span className="su-realx-badge" aria-hidden="true">
-              <img src="/realx.avif" alt="" className="su-realx-logo" />
-            </span>
-            <div className={cn("flex-1", language === 'ar' ? 'text-right' : 'text-left')}>
-              <div className="su-partner-entry-copy">
-                {language === 'ar' ? 'التسجيل الطلابي عبر realX' : 'Student signup with realX'}
+          {authTab === "signup" && (
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.16, duration: 0.4, ease: [0.22,1,0.36,1] }}
+              onClick={() => {
+                setRealXPartnerError(null);
+                setIsRealXPartnerDialogOpen(true);
+              }}
+              className="su-partner-entry mt-3 w-full max-w-sm"
+            >
+              <span className="su-realx-badge" aria-hidden="true">
+                <img src="/realx.avif" alt="" className="su-realx-logo" />
+              </span>
+              <div className={cn("flex-1", language === 'ar' ? 'text-right' : 'text-left')}>
+                <div className="su-partner-entry-copy">
+                  {language === 'ar' ? 'التسجيل الطلابي عبر realX' : 'Student signup with realX'}
+                </div>
+                <div className="su-partner-entry-note">
+                  {language === 'ar' ? 'افتح مسار الشريك المخصص' : 'Open the dedicated partner flow'}
+                </div>
               </div>
-              <div className="su-partner-entry-note">
-                {language === 'ar' ? 'افتح مسار الشريك المخصص' : 'Open the dedicated partner flow'}
-              </div>
-            </div>
-          </motion.button>
+            </motion.button>
+          )}
 
         </div>
       </div>

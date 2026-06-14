@@ -66,94 +66,112 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
         {
           icon: Code2,
           color: "text-emerald-300",
-          line: "فايب كودينج — صِف فكرتك والذكاء الاصطناعي يبنيها لك",
+          title: "فايب كودينج",
+          desc: "صِف فكرتك والذكاء الاصطناعي يبنيها لك",
         },
         {
           icon: Sparkles,
           color: "text-blue-300",
-          line: "مساعد ذكي — دردشة وبحث ويب وملخصات يوتيوب",
+          title: "مساعد ذكي",
+          desc: "دردشة وبحث ويب وملخصات يوتيوب",
         },
         {
           icon: ImageIcon,
           color: "text-pink-300",
-          line: "توليد الصور — حوّل النص إلى صورة فنية خلال ثوانٍ",
+          title: "توليد الصور",
+          desc: "حوّل النص إلى صورة فنية خلال ثوانٍ",
         },
         {
           icon: Mic,
           color: "text-cyan-300",
-          line: "استنساخ الصوت — صوتك بأكثر من 60 لغة",
+          title: "استنساخ الصوت",
+          desc: "صوتك بأكثر من 60 لغة",
         },
         {
           icon: Languages,
           color: "text-green-300",
-          line: "مترجم فوري — ترجمة صوت ونص لحظية بأكثر من 60 لغة",
+          title: "مترجم فوري",
+          desc: "ترجمة صوت ونص لحظية بأكثر من 60 لغة",
         },
         {
           icon: AudioLines,
           color: "text-teal-300",
-          line: "مدوّن الاجتماعات — سجّل وفرّغ ولخّص اجتماعاتك تلقائياً",
+          title: "مدوّن الاجتماعات",
+          desc: "سجّل وفرّغ ولخّص اجتماعاتك تلقائياً",
         },
         {
           icon: Music,
           color: "text-purple-300",
-          line: "موسيقى وفيديو AI — مقاطع أصلية وفيديوهات قصيرة",
+          title: "موسيقى وفيديو AI",
+          desc: "مقاطع أصلية وفيديوهات قصيرة",
         },
         {
           icon: MonitorPlay,
           color: "text-violet-300",
-          line: "شرائح بالذكاء الاصطناعي — عروض و PDF خلال ثوانٍ",
+          title: "شرائح بالذكاء الاصطناعي",
+          desc: "عروض و PDF خلال ثوانٍ",
         },
         {
           icon: ListTodo,
           color: "text-amber-300",
-          line: "مهام ذكية — قوائم قابلة للمشاركة مع متابعة لحظية",
+          title: "مهام ذكية",
+          desc: "قوائم قابلة للمشاركة مع متابعة لحظية",
         },
       ]
     : [
         {
           icon: Code2,
           color: "text-emerald-300",
-          line: "Vibe Coding — describe it, AI builds & ships your app",
+          title: "Vibe Coding",
+          desc: "Describe it, AI builds & ships your app",
         },
         {
           icon: Sparkles,
           color: "text-blue-300",
-          line: "AI Assistant — smart chat, web search & YouTube recaps",
+          title: "AI Assistant",
+          desc: "Smart chat, web search & YouTube recaps",
         },
         {
           icon: ImageIcon,
           color: "text-pink-300",
-          line: "AI Image Gen — text-to-image art in seconds",
+          title: "AI Image Gen",
+          desc: "Text-to-image art in seconds",
         },
         {
           icon: Mic,
           color: "text-cyan-300",
-          line: "Voice Cloning — your voice in 60+ languages",
+          title: "Voice Cloning",
+          desc: "Your voice in 60+ languages",
         },
         {
           icon: Languages,
           color: "text-green-300",
-          line: "Live Translator — real-time voice & text in 60+ languages",
+          title: "Live Translator",
+          desc: "Real-time voice & text in 60+ languages",
         },
         {
           icon: AudioLines,
           color: "text-teal-300",
-          line: "AI Note-Taker — record, transcribe & summarize meetings",
+          title: "AI Note-Taker",
+          desc: "Record, transcribe & summarize meetings",
         },
         {
           icon: Music,
           color: "text-purple-300",
-          line: "AI Music & Video — original tracks & short-form clips",
+          title: "AI Music & Video",
+          desc: "Original tracks & short-form clips",
         },
         {
           icon: MonitorPlay,
           color: "text-violet-300",
-          line: "AI Slides — deck & PDF builder in seconds",
+          title: "AI Slides",
+          desc: "Deck & PDF builder in seconds",
         },
         {
           icon: ListTodo,
           color: "text-amber-300",
-          line: "Smart Tasks — shareable to-dos with live tracking",
+          title: "Smart Tasks",
+          desc: "Shareable to-dos with live tracking",
         },
       ];
 
@@ -277,24 +295,32 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
         </motion.p>
 
         {/* Features banner carousel */}
-        <div className="w-full max-w-md md:max-w-2xl mb-12 md:mb-20">
+        <div className="w-full max-w-sm md:max-w-lg mb-10 md:mb-16">
           <Carousel setApi={setFeaturesApi} opts={{ loop: true }}>
             <CarouselContent>
               {slides.map((s, idx) => {
                 const Icon = s.icon as any;
                 return (
                   <CarouselItem key={idx}>
-                    <div className="inline-flex flex-col items-stretch mx-auto max-w-[90vw] md:max-w-2xl">
+                    <div className="flex justify-center px-2">
                       {/* Glow + gradient ring wrapper */}
-                      <div className="relative p-[1.5px] rounded-full bg-[linear-gradient(135deg,hsl(210_100%_65%/.35),hsl(280_70%_65%/.35))]">
-                        <div className="absolute -inset-2 rounded-full pointer-events-none opacity-70 animate-pulse shadow-[0_0_40px_hsla(210,100%,65%,0.45),0_0_80px_hsla(280,70%25,65%,0.28)]" />
-                        <div className="relative rounded-full border border-white/10 bg-[#0c0f14]/60 backdrop-blur-xl px-3 py-2 shadow-[0_0_14px_rgba(0,0,0,0.3)] inline-flex items-start md:items-center gap-3 min-h-[2.5rem] md:h-11">
-                          <div className={`flex h-8 w-8 flex-none items-center justify-center rounded-xl bg-white/5 border border-white/10 ${s.color} transition-transform duration-700 ease-in-out will-change-transform`}
+                      <div className="relative p-[1.5px] rounded-2xl bg-[linear-gradient(135deg,hsl(210_100%_65%/.35),hsl(280_70%_65%/.35))]">
+                        <div className="absolute -inset-2 rounded-2xl pointer-events-none opacity-60 animate-pulse shadow-[0_0_40px_hsla(210,100%,65%,0.4),0_0_80px_hsla(280,70%,65%,0.25)]" />
+                        <div
+                          onClick={() => navigate("/signup", { state: { authTab: "login" } })}
+                          className="relative rounded-2xl border border-white/10 bg-[#0c0f14]/70 backdrop-blur-xl px-5 py-4 shadow-[0_0_14px_rgba(0,0,0,0.3)] flex items-center gap-4 min-w-[260px] md:min-w-[340px] cursor-pointer hover:bg-[#0c0f14]/90 transition-colors duration-300"
+                        >
+                          <div className={`flex h-10 w-10 flex-none items-center justify-center rounded-xl bg-white/5 border border-white/10 ${s.color} transition-transform duration-700 ease-in-out will-change-transform`}
                                style={{ transform: 'scale(1)' }}>
                             <Icon className="h-5 w-5" />
                           </div>
-                          <div className="text-white/90 text-[13px] md:text-base font-medium leading-snug whitespace-normal break-words pr-1">
-                            {s.line}
+                          <div className="flex flex-col items-start text-left gap-0.5">
+                            <div className="text-white font-semibold text-sm md:text-base leading-tight">
+                              {s.title}
+                            </div>
+                            <div className="text-white/60 text-[11px] md:text-sm leading-snug">
+                              {s.desc}
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -313,20 +339,29 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
           transition={{ delay: 0.7, duration: 0.8 }}
           className="flex flex-col items-center mt-4 md:mt-10 lg:mt-14"
         >
-          <button
-            type="button"
-            onClick={handleGuestAccess}
-            disabled={isGuestSigningIn}
-            className="mb-2 rounded-full px-10 py-2 text-[13px] font-semibold tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] bg-[#0c0f14]/70 text-white border border-emerald-300/40 backdrop-blur-xl shadow-[0_0_18px_hsla(160,80%,55%,0.32)] hover:bg-emerald-500/15 hover:border-emerald-300/60 hover:shadow-[0_0_26px_hsla(160,80%,55%,0.55)]"
-          >
-            <span className="inline-flex items-center gap-2">
-              <span>{isGuestSigningIn ? (isArabic ? "جارٍ الدخول كضيف..." : "STARTING GUEST MODE...") : (isArabic ? "جربه كضيف" : "TRY IT OUT AS A GUEST")}</span>
-              <ArrowRight className={isArabic ? "h-4 w-4 rotate-180" : "h-4 w-4"} />
-            </span>
-          </button>
+          {/* START button with animated green border light */}
+          <div className="relative mb-2 rounded-full p-[1.5px] overflow-hidden inline-flex">
+            <div
+              className="absolute -inset-full rounded-full animate-[spin_3s_linear_infinite]"
+              style={{
+                background: 'conic-gradient(from 0deg, transparent, hsla(160,80%,55%,0.9), transparent 25%)',
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleGuestAccess}
+              disabled={isGuestSigningIn}
+              className="relative rounded-full px-10 py-2 text-[13px] font-semibold tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] bg-[#0c0f14]/70 text-white border border-emerald-300/40 backdrop-blur-xl shadow-[0_0_18px_hsla(160,80%,55%,0.32)] hover:bg-emerald-500/15 hover:border-emerald-300/60 hover:shadow-[0_0_26px_hsla(160,80%,55%,0.55)]"
+            >
+              <span className="inline-flex items-center gap-2">
+                <span>{isGuestSigningIn ? (isArabic ? "جارٍ الدخول كضيف..." : "STARTING GUEST MODE...") : (isArabic ? "ابدأ" : "START")}</span>
+                <ArrowRight className={isArabic ? "h-4 w-4 rotate-180" : "h-4 w-4"} />
+              </span>
+            </button>
+          </div>
 
           <button
-            onClick={() => navigate("/signup")}
+            onClick={() => navigate("/signup", { state: { authTab: "login" } })}
             className="relative overflow-hidden rounded-full px-10 py-2 text-[13px] font-semibold tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] bg-[#0c0f14]/70 text-white border border-blue-300/35 backdrop-blur-xl shadow-[0_0_18px_hsla(210,100%,65%,0.32),inset_0_1px_0_rgba(255,255,255,0.08)] hover:text-white hover:bg-blue-500/18 hover:border-blue-200/55 hover:shadow-[0_0_30px_hsla(210,100%,65%,0.55),inset_0_1px_0_rgba(255,255,255,0.12)]"
           >
             <span className="relative z-10">{isArabic ? "إنشاء حساب / تسجيل الدخول" : "Create Account / Sign in"}</span>
