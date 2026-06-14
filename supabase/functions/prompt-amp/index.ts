@@ -312,12 +312,19 @@ HARD RULES:
    - Make wording more specific, visual, and model-friendly.
    - Add useful poster/composition/detail language only when it supports the existing intent.
    - Keep the result concise but structured.
+7. STRICT LANGUAGE LOCK.
+   - Preserve the user's language exactly.
+   - Arabic input => Arabic output.
+   - English input => English output.
+   - Mixed Arabic+English input => keep mixed layout naturally without forcing full translation.
+8. TYPOGRAPHY PROTECTION.
+   - If visible text must appear in the generated asset, preserve that exact text in quotation marks.
 
 OUTPUT RULES:
 - Output ONLY the improved structured prompt.
 - Keep line breaks.
 - Keep the poster brief readable and easy to edit.
-- English only.`;
+- Same language layout as the input.`;
 
 async function ampVisualAdsWithOpenAI(
   userIdea: string,
@@ -333,6 +340,13 @@ async function ampVisualAdsWithOpenAI(
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
 
+  const requestedLanguage = detectOutputLanguage(userIdea);
+  const languageLockInstruction = requestedLanguage === "ar"
+    ? "STRICT LANGUAGE LOCK: Return the full improved prompt in Arabic only. Do not translate Arabic content to English."
+    : requestedLanguage === "en"
+      ? "STRICT LANGUAGE LOCK: Return the full improved prompt in English only."
+      : "STRICT LANGUAGE LOCK: Preserve the mixed Arabic/English layout from input. Do not force full translation.";
+
   const payload = {
     model: "gpt-4o-mini",
     temperature: 0.55,
@@ -347,6 +361,7 @@ async function ampVisualAdsWithOpenAI(
         content: [
           "Improve this structured visual-ads prompt while preserving its line-by-line poster format.",
           "Keep all image-role lines, keep the target format line, and keep CTA behavior as poster text.",
+          languageLockInstruction,
           "Return only the improved structured prompt.",
           "",
           "PROMPT TO ENHANCE:",
@@ -857,6 +872,7 @@ serve(async (req) => {
       const stylePrompt = (body?.style_prompt ?? "").toString();
       const platform = (body?.platform ?? "9:16").toString();
       inputText = text;
+      const responseLanguage = detectOutputLanguage(text);
 
       if (!text || text.trim().length === 0) {
         return new Response(
@@ -884,7 +900,7 @@ serve(async (req) => {
         metadata: {
           provider: "openai",
           mode: "visual-ads",
-          language: "en",
+          language: responseLanguage,
           assetsCount,
           tagList,
           topicLabel,
@@ -899,7 +915,7 @@ serve(async (req) => {
         JSON.stringify({
           success: true,
           text: improved,
-          language: "en",
+          language: responseLanguage,
           mode: "visual-ads",
         }),
         {

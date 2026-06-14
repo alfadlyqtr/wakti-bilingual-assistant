@@ -39,6 +39,12 @@ import { toast } from 'sonner';
 
 type QRType = 'url' | 'text' | 'email' | 'phone' | 'wifi';
 type SubTab = 'create' | 'saved';
+type URLMode = 'direct' | 'dynamic' | 'cta';
+
+interface CtaLinkInput {
+  label: string;
+  url: string;
+}
 
 interface QRConfig {
   text: string;
@@ -76,11 +82,41 @@ const COLOR_PRESETS = [
   { dark: '00bcd4', light: '263238', label: 'Cyber' },
 ];
 
+const DEFAULT_CTA_LINKS: CtaLinkInput[] = [
+  { label: '', url: '' },
+  { label: '', url: '' },
+  { label: '', url: '' },
+];
+
+const CTA_LABEL_PLACEHOLDERS = {
+  en: ['App Store', 'Google Play', 'Website'],
+  ar: ['App Store', 'Google Play', 'Website'],
+};
+const MAX_CTA_LINKS = 5;
+
+function createDefaultCtaLinks(): CtaLinkInput[] {
+  return DEFAULT_CTA_LINKS.map((link) => ({ ...link }));
+}
+
 
 /* ─────────────────────── Helpers ─────────────────────── */
 
 function buildWifiString(ssid: string, password: string, encryption: string, hidden: boolean): string {
   return `WIFI:T:${encryption};S:${ssid};P:${password};H:${hidden ? 'true' : 'false'};;`;
+}
+
+function encodeBase64Url(value: string): string {
+  const base64 = btoa(unescape(encodeURIComponent(value)));
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function getCtaLabelPlaceholder(index: number, isArabic: boolean): string {
+  const set = isArabic ? CTA_LABEL_PLACEHOLDERS.ar : CTA_LABEL_PLACEHOLDERS.en;
+  return set[index] || (isArabic ? `زر ${index + 1}` : `CTA ${index + 1}`);
+}
+
+function getCtaPayloadLabel(index: number, label: string): string {
+  return label.trim() || CTA_LABEL_PLACEHOLDERS.en[index] || `Link ${index + 1}`;
 }
 
 /* ─────────────────────── Component ─────────────────────── */
@@ -142,6 +178,12 @@ export default function QRCodeCreator() {
 
   // Input fields per type
   const [urlInput, setUrlInput] = useState('');
+  const [urlMode, setUrlMode] = useState<URLMode>('direct');
+  const [iosStoreUrl, setIosStoreUrl] = useState('');
+  const [androidStoreUrl, setAndroidStoreUrl] = useState('');
+  const [dynamicFallbackUrl, setDynamicFallbackUrl] = useState('');
+  const [ctaPageTitle, setCtaPageTitle] = useState('');
+  const [ctaLinks, setCtaLinks] = useState<CtaLinkInput[]>(() => createDefaultCtaLinks());
   const [textInput, setTextInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [emailSubject, setEmailSubject] = useState('');
@@ -178,6 +220,12 @@ export default function QRCodeCreator() {
       subTab: SubTab;
       qrType: QRType;
       urlInput: string;
+      urlMode: URLMode;
+      iosStoreUrl: string;
+      androidStoreUrl: string;
+      dynamicFallbackUrl: string;
+      ctaPageTitle: string;
+      ctaLinks: CtaLinkInput[];
       textInput: string;
       emailInput: string;
       emailSubject: string;
@@ -196,6 +244,20 @@ export default function QRCodeCreator() {
     setSubTab(draft.subTab || 'create');
     setQrType(draft.qrType || 'url');
     setUrlInput(draft.urlInput || '');
+    setUrlMode(draft.urlMode || 'direct');
+    setIosStoreUrl(draft.iosStoreUrl || '');
+    setAndroidStoreUrl(draft.androidStoreUrl || '');
+    setDynamicFallbackUrl(draft.dynamicFallbackUrl || '');
+    setCtaPageTitle(draft.ctaPageTitle || '');
+    if (Array.isArray(draft.ctaLinks) && draft.ctaLinks.length > 0) {
+      const restored = draft.ctaLinks.map((entry, index) => ({
+        label: typeof entry?.label === 'string' ? entry.label : '',
+        url: typeof entry?.url === 'string' ? entry.url : '',
+      }));
+      setCtaLinks(restored.slice(0, MAX_CTA_LINKS));
+    } else {
+      setCtaLinks(createDefaultCtaLinks());
+    }
     setTextInput(draft.textInput || '');
     setEmailInput(draft.emailInput || '');
     setEmailSubject(draft.emailSubject || '');
@@ -221,14 +283,47 @@ export default function QRCodeCreator() {
   // Build the text content based on type
   const getQRText = useCallback((): string => {
     switch (qrType) {
-      case 'url':
-        return urlInput.trim();
+      case 'url': {
+        if (urlMode === 'direct') {
+          return urlInput.trim();
+        }
+
+        if (urlMode === 'dynamic') {
+          const ios = iosStoreUrl.trim();
+          const android = androidStoreUrl.trim();
+          const fallback = dynamicFallbackUrl.trim();
+          if (!ios || !android) return '';
+
+          const payload = encodeBase64Url(JSON.stringify({
+            i: ios,
+            a: android,
+            ...(fallback ? { f: fallback } : {}),
+          }));
+          return `${window.location.origin}/qr/view?mode=smart&d=${payload}`;
+        }
+
+        const ctas = ctaLinks
+          .slice(0, MAX_CTA_LINKS)
+          .map((link, index) => ({
+            l: getCtaPayloadLabel(index, link.label),
+            u: link.url.trim(),
+          }))
+          .filter((cta) => cta.u);
+
+        if (ctas.length === 0) return '';
+
+        const title = ctaPageTitle.trim();
+        const payload = encodeBase64Url(JSON.stringify({
+          ...(title ? { t: title } : {}),
+          c: ctas,
+        }));
+        return `${window.location.origin}/qr/view?mode=cta&d=${payload}`;
+      }
       case 'text': {
         const raw = textInput.trim();
         if (!raw) return '';
         // Encode text into a Wakti page URL so scanners open a branded page instead of a search
-        const base64 = btoa(unescape(encodeURIComponent(raw)));
-        const urlSafe = base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        const urlSafe = encodeBase64Url(raw);
         return `${window.location.origin}/qr/view?t=${urlSafe}`;
       }
       case 'email':
@@ -242,7 +337,24 @@ export default function QRCodeCreator() {
       default:
         return '';
     }
-  }, [qrType, urlInput, textInput, emailInput, emailSubject, phoneInput, wifiSSID, wifiPassword, wifiEncryption, wifiHidden]);
+  }, [
+    qrType,
+    urlInput,
+    urlMode,
+    iosStoreUrl,
+    androidStoreUrl,
+    dynamicFallbackUrl,
+    ctaPageTitle,
+    ctaLinks,
+    textInput,
+    emailInput,
+    emailSubject,
+    phoneInput,
+    wifiSSID,
+    wifiPassword,
+    wifiEncryption,
+    wifiHidden,
+  ]);
 
   // Generate QR — renders via hidden QRCodeCanvas, then exports to data URL
   const handleGenerate = useCallback(() => {
@@ -260,6 +372,12 @@ export default function QRCodeCreator() {
         subTab,
         qrType,
         urlInput,
+        urlMode,
+        iosStoreUrl,
+        androidStoreUrl,
+        dynamicFallbackUrl,
+        ctaPageTitle,
+        ctaLinks,
         textInput,
         emailInput,
         emailSubject,
@@ -287,7 +405,30 @@ export default function QRCodeCreator() {
       setIsGenerating(false);
       setGenerated(true);
     }, 800);
-  }, [config, emailInput, emailSubject, getQRText, isArabic, isGuest, logoPreview, phoneInput, qrType, subTab, textInput, urlInput, wifiEncryption, wifiHidden, wifiPassword, wifiSSID]);
+  }, [
+    config,
+    ctaLinks,
+    ctaPageTitle,
+    dynamicFallbackUrl,
+    emailInput,
+    emailSubject,
+    getQRText,
+    iosStoreUrl,
+    androidStoreUrl,
+    isArabic,
+    isGuest,
+    logoPreview,
+    phoneInput,
+    qrType,
+    subTab,
+    textInput,
+    urlInput,
+    urlMode,
+    wifiEncryption,
+    wifiHidden,
+    wifiPassword,
+    wifiSSID,
+  ]);
 
   // Download
   const handleDownload = useCallback(async () => {
@@ -335,7 +476,19 @@ export default function QRCodeCreator() {
         toast.error(isArabic ? 'يرجى تسجيل الدخول أولاً' : 'Please sign in first');
         return;
       }
-      const label = qrType === 'url' ? urlInput : qrType === 'text' ? textInput : qrType === 'email' ? emailInput : qrType === 'phone' ? phoneInput : wifiSSID;
+      const label = qrType === 'url'
+        ? (urlMode === 'direct'
+          ? urlInput
+          : urlMode === 'dynamic'
+            ? (isArabic ? 'رابط ذكي ديناميكي' : 'Dynamic Smart URL')
+            : (ctaPageTitle.trim() || (isArabic ? 'صفحة روابط CTA' : 'CTA Landing Page')))
+        : qrType === 'text'
+          ? textInput
+          : qrType === 'email'
+            ? emailInput
+            : qrType === 'phone'
+              ? phoneInput
+              : wifiSSID;
       const { error } = await supabase.from('saved_qr_codes').insert({
         user_id: userId,
         label: (label || '').slice(0, 80) || 'QR Code',
@@ -349,7 +502,7 @@ export default function QRCodeCreator() {
       console.error('Failed to save QR code:', err);
       toast.error(isArabic ? 'فشل الحفظ' : 'Save failed');
     }
-  }, [qrDataUrl, qrType, urlInput, textInput, emailInput, phoneInput, wifiSSID, isArabic, fetchSavedQRs]);
+  }, [qrDataUrl, qrType, urlInput, urlMode, ctaPageTitle, textInput, emailInput, phoneInput, wifiSSID, isArabic, fetchSavedQRs]);
 
   // Delete a saved QR code from Supabase
   const handleDeleteQR = useCallback(async (id: string) => {
@@ -396,6 +549,12 @@ export default function QRCodeCreator() {
   // Reset
   const handleReset = useCallback(() => {
     setUrlInput('');
+    setUrlMode('direct');
+    setIosStoreUrl('');
+    setAndroidStoreUrl('');
+    setDynamicFallbackUrl('');
+    setCtaPageTitle('');
+    setCtaLinks(createDefaultCtaLinks());
     setTextInput('');
     setEmailInput('');
     setEmailSubject('');
@@ -510,15 +669,159 @@ export default function QRCodeCreator() {
           {/* Input Fields */}
           <div className="space-y-3">
             {qrType === 'url' && (
-              <div className="space-y-1.5">
-                <label className="text-sm font-semibold text-foreground">{isArabic ? 'الرابط' : 'URL'}</label>
-                <input
-                  type="url"
-                  value={urlInput}
-                  onChange={(e) => setUrlInput(e.target.value)}
-                  placeholder={isArabic ? 'https://example.com' : 'https://example.com'}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/40 transition-all text-sm"
-                />
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-foreground">{isArabic ? 'وضع الرابط' : 'URL Mode'}</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <button
+                      onClick={() => setUrlMode('direct')}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        urlMode === 'direct'
+                          ? 'bg-sky-500 text-white shadow-sm'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                    >
+                      {isArabic ? 'رابط واحد' : 'One URL'}
+                    </button>
+                    <button
+                      onClick={() => setUrlMode('dynamic')}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        urlMode === 'dynamic'
+                          ? 'bg-sky-500 text-white shadow-sm'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                    >
+                      {isArabic ? 'رابط ديناميكي' : 'Dynamic URL'}
+                    </button>
+                    <button
+                      onClick={() => setUrlMode('cta')}
+                      className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                        urlMode === 'cta'
+                          ? 'bg-sky-500 text-white shadow-sm'
+                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                      }`}
+                    >
+                      {isArabic ? 'صفحة CTA' : 'CTA Page'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground/70 px-1 leading-snug">
+                    {urlMode === 'direct'
+                      ? (isArabic
+                        ? 'يفتح الرابط كما هو مباشرة.'
+                        : 'Opens one direct URL exactly as entered.')
+                      : urlMode === 'dynamic'
+                        ? (isArabic
+                          ? 'يعيد التوجيه تلقائياً حسب نوع الجهاز.'
+                          : 'Automatically redirects based on the scanned device.')
+                        : (isArabic
+                          ? 'يفتح صفحة Wakti عامة تحتوي أزرار CTA متعددة.'
+                          : 'Opens a Wakti public page with multiple CTA buttons.')}
+                  </p>
+                </div>
+
+                {urlMode === 'direct' && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-foreground">{isArabic ? 'الرابط' : 'URL'}</label>
+                    <input
+                      type="url"
+                      value={urlInput}
+                      onChange={(e) => setUrlInput(e.target.value)}
+                      placeholder="https://example.com"
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/40 transition-all text-sm"
+                    />
+                  </div>
+                )}
+
+                {urlMode === 'dynamic' && (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-semibold text-foreground">{isArabic ? 'الرابط #1' : 'URL #1'}</label>
+                        <input
+                          type="url"
+                          value={iosStoreUrl}
+                          onChange={(e) => setIosStoreUrl(e.target.value)}
+                          placeholder="https://example.com/url-1"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/40 transition-all text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-sm font-semibold text-foreground">{isArabic ? 'الرابط #2' : 'URL #2'}</label>
+                        <input
+                          type="url"
+                          value={androidStoreUrl}
+                          onChange={(e) => setAndroidStoreUrl(e.target.value)}
+                          placeholder="https://example.com/url-2"
+                          className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/40 transition-all text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-foreground">{isArabic ? 'رابط احتياطي (اختياري)' : 'Fallback URL (optional)'}</label>
+                      <input
+                        type="url"
+                        value={dynamicFallbackUrl}
+                        onChange={(e) => setDynamicFallbackUrl(e.target.value)}
+                        placeholder="https://wakti.ai"
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/40 transition-all text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {urlMode === 'cta' && (
+                  <div className="space-y-3">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-foreground">{isArabic ? 'عنوان الصفحة (اختياري)' : 'Page Title (optional)'}</label>
+                      <input
+                        type="text"
+                        value={ctaPageTitle}
+                        onChange={(e) => setCtaPageTitle(e.target.value)}
+                        placeholder={isArabic ? 'مثال: اختر المتجر المناسب' : 'Example: Choose your preferred destination'}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/40 transition-all text-sm"
+                      />
+                    </div>
+
+                    {ctaLinks.map((link, index) => (
+                      <div key={`cta-link-${index}`} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2 items-start">
+                        <input
+                          type="text"
+                          value={link.label}
+                          onChange={(e) => setCtaLinks((prev) => prev.map((item, i) => i === index ? { ...item, label: e.target.value } : item))}
+                          placeholder={getCtaLabelPlaceholder(index, isArabic)}
+                          className="px-4 py-3 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/40 transition-all text-sm"
+                        />
+                        <input
+                          type="url"
+                          value={link.url}
+                          onChange={(e) => setCtaLinks((prev) => prev.map((item, i) => i === index ? { ...item, url: e.target.value } : item))}
+                          placeholder="https://example.com"
+                          className="px-4 py-3 rounded-xl border border-gray-200 dark:border-white/[0.1] bg-white dark:bg-white/[0.04] text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-sky-500/40 focus:border-sky-500/40 transition-all text-sm"
+                        />
+                        <button
+                          onClick={() => setCtaLinks((prev) => prev.length <= 1 ? prev : prev.filter((_, i) => i !== index))}
+                          aria-label={isArabic ? 'حذف رابط' : 'Remove link'}
+                          className="h-[46px] px-3 rounded-xl border border-gray-200 dark:border-white/[0.1] text-muted-foreground hover:text-red-500 hover:border-red-300/40 transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+
+                    <button
+                      onClick={() => setCtaLinks((prev) => prev.length >= MAX_CTA_LINKS ? prev : [...prev, { label: '', url: '' }])}
+                      disabled={ctaLinks.length >= MAX_CTA_LINKS}
+                      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                        ctaLinks.length >= MAX_CTA_LINKS
+                          ? 'bg-gray-100 dark:bg-white/[0.06] text-muted-foreground/60 cursor-not-allowed'
+                          : 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-100 dark:hover:bg-sky-500/20'
+                      }`}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      {isArabic ? `إضافة رابط CTA (${ctaLinks.length}/${MAX_CTA_LINKS})` : `Add CTA URL (${ctaLinks.length}/${MAX_CTA_LINKS})`}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
