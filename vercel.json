@@ -43,6 +43,7 @@
   "rewrites": [
     { "source": "/api/video/stitch", "destination": "/api/video/stitch" },
     { "source": "/api/video/produce", "destination": "/api/video/produce" },
+    { "source": "/api/qr/redirect", "destination": "/api/qr/redirect" },
     { "source": "/apple-app-site-association", "destination": "/apple-app-site-association" },
     { "source": "/.well-known/apple-app-site-association", "destination": "/.well-known/apple-app-site-association" },
     { "source": "/preview/:subdomain", "destination": "/index.html" },

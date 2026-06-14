@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Navigate } from 'react-router-dom';
 import { ArrowLeft, Download, ExternalLink } from 'lucide-react';
 
 const APP_STORE_URL = 'https://apps.apple.com/us/app/wakti-ai/id6755150700';
@@ -12,11 +12,6 @@ interface SmartPayload {
   i?: string;
   a?: string;
   f?: string;
-}
-
-interface CtaPayload {
-  t?: string;
-  c?: Array<{ l?: string; u?: string }>;
 }
 
 function decodeBase64Url(value: string): string {
@@ -34,10 +29,19 @@ function parseJsonPayload<T>(value: string | null): T | null {
   }
 }
 
+function isAppleStoreUrl(url: string): boolean {
+  return /apps\.apple\.com|itunes\.apple\.com|itms-apps:/i.test(url);
+}
+
+function isGooglePlayUrl(url: string): boolean {
+  return /play\.google\.com\/store|market:\/\//i.test(url);
+}
+
 export default function QRTextView() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [smartTarget, setSmartTarget] = useState<string>('');
+  const [showManualOptions, setShowManualOptions] = useState(false);
 
   const mode = useMemo<QRMode>(() => {
     const currentMode = (searchParams.get('mode') || '').toLowerCase();
@@ -57,18 +61,6 @@ export default function QRTextView() {
   }, [searchParams]);
 
   const smartPayload = useMemo(() => parseJsonPayload<SmartPayload>(searchParams.get('d')), [searchParams]);
-  const ctaPayload = useMemo(() => parseJsonPayload<CtaPayload>(searchParams.get('d')), [searchParams]);
-
-  const ctaLinks = useMemo(() => {
-    if (!Array.isArray(ctaPayload?.c)) return [];
-    return ctaPayload.c
-      .map((item, index) => ({
-        label: (item?.l || '').trim() || `Link ${index + 1}`,
-        url: (item?.u || '').trim(),
-      }))
-      .filter((item) => !!item.url);
-  }, [ctaPayload]);
-
   // Check if user likely has the app (came from in-app browser)
   const isInApp = useMemo(() => {
     const ua = navigator.userAgent.toLowerCase();
@@ -93,18 +85,35 @@ export default function QRTextView() {
     const ios = (smartPayload?.i || '').trim();
     const android = (smartPayload?.a || '').trim();
     const fallback = (smartPayload?.f || '').trim();
+    const smartLinks = [ios, android].filter(Boolean);
+    const appleStoreUrl = smartLinks.find((url) => isAppleStoreUrl(url)) || '';
+    const playStoreUrl = smartLinks.find((url) => isGooglePlayUrl(url)) || '';
+    const genericUrl = smartLinks.find((url) => !isAppleStoreUrl(url) && !isGooglePlayUrl(url)) || '';
     const ua = navigator.userAgent || '';
-    const isAndroid = /android/i.test(ua);
-    const isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && /Mobile/i.test(ua));
-    const target = isIOS ? ios : isAndroid ? android : (fallback || ios || android);
+    const hasAndroidSignal = /android/i.test(ua);
+    const hasAppleSignal = /iPhone|iPad|iPod|iOS|Macintosh/i.test(ua);
+    const hasWindowsPhoneSignal = /Windows Phone/i.test(ua);
+    const isStrictAndroid = hasAndroidSignal && !hasAppleSignal && !hasWindowsPhoneSignal;
+    const target = isStrictAndroid
+      ? (playStoreUrl || genericUrl || fallback || android || ios)
+      : (appleStoreUrl || genericUrl || fallback || ios || android);
     if (!target) return;
 
     setSmartTarget(target);
-    const timer = window.setTimeout(() => {
-      window.location.replace(target);
-    }, 150);
+    setShowManualOptions(false);
 
-    return () => window.clearTimeout(timer);
+    const redirectTimer = window.setTimeout(() => {
+      window.location.replace(target);
+    }, 80);
+
+    const manualOptionsTimer = window.setTimeout(() => {
+      setShowManualOptions(true);
+    }, 2200);
+
+    return () => {
+      window.clearTimeout(redirectTimer);
+      window.clearTimeout(manualOptionsTimer);
+    };
   }, [mode, smartPayload]);
 
   if (mode === 'smart') {
@@ -128,17 +137,21 @@ export default function QRTextView() {
           <img src={WAKTI_LOGO} alt="Wakti" className="w-14 h-14 mx-auto rounded-2xl" />
           <div>
             <p className="text-lg font-bold">Opening your destination...</p>
-            <p className="text-sm text-gray-400 mt-2">If it does not open automatically, tap the button below.</p>
+            <p className="text-sm text-gray-400 mt-2">
+              {showManualOptions
+                ? 'Automatic open did not complete. Use a button below.'
+                : 'Redirecting now based on your device.'}
+            </p>
           </div>
           <a
             href={continueUrl}
             className="inline-flex items-center justify-center gap-2.5 w-full px-5 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-indigo-600 text-white font-bold text-sm shadow-[0_8px_32px_hsla(210,80%,50%,0.35)] hover:shadow-[0_8px_40px_hsla(210,80%,50%,0.5)] active:scale-[0.98] transition-all"
           >
-            Continue
+            Open now
             <ExternalLink className="h-3.5 w-3.5 opacity-70" />
           </a>
 
-          {fallbackCtaLinks.length > 0 && (
+          {showManualOptions && fallbackCtaLinks.length > 1 && (
             <div className="pt-1 space-y-2">
               {fallbackCtaLinks.map((link, index) => (
                 <a
@@ -157,48 +170,11 @@ export default function QRTextView() {
   }
 
   if (mode === 'cta') {
-    if (ctaLinks.length === 0) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-[#0c0f14] text-white p-6">
-          <div className="text-center space-y-4">
-            <img src={WAKTI_LOGO} alt="Wakti" className="w-16 h-16 mx-auto rounded-2xl" />
-            <p className="text-lg font-semibold">No links found</p>
-            <p className="text-sm text-gray-400">This CTA QR code is empty or invalid.</p>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-[#0c0f14] via-[#0f1219] to-[#0c0f14] text-white">
-        <main className="max-w-xl mx-auto px-4 py-10 space-y-6">
-          <div className="text-center space-y-3">
-            <img src={WAKTI_LOGO} alt="Wakti" className="w-16 h-16 mx-auto rounded-2xl" />
-            <h1 className="text-2xl font-bold tracking-tight">{ctaPayload?.t?.trim() || 'Choose your destination'}</h1>
-            <p className="text-sm text-gray-400">Select where you want to go.</p>
-          </div>
-
-          <div className="space-y-3">
-            {ctaLinks.map((link, index) => (
-              <a
-                key={`${link.label}-${index}`}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between gap-3 w-full px-5 py-4 rounded-2xl bg-gradient-to-r from-sky-500/20 to-indigo-500/20 border border-sky-300/20 text-white hover:from-sky-500/30 hover:to-indigo-500/30 transition-all"
-              >
-                <span className="font-semibold text-sm">{link.label}</span>
-                <ExternalLink className="h-4 w-4 opacity-70" />
-              </a>
-            ))}
-          </div>
-
-          <div className="text-center pt-3">
-            <p className="text-xs text-gray-500">Generated with Wakti QR Code Creator</p>
-          </div>
-        </main>
-      </div>
-    );
+    const encodedPayload = searchParams.get('d') || '';
+    const target = encodedPayload
+      ? `/qr/cta?d=${encodeURIComponent(encodedPayload)}`
+      : '/qr/cta';
+    return <Navigate to={target} replace />;
   }
 
   if (!text) {

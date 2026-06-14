@@ -299,7 +299,7 @@ export default function QRCodeCreator() {
             a: android,
             ...(fallback ? { f: fallback } : {}),
           }));
-          return `${window.location.origin}/qr/view?mode=smart&d=${payload}`;
+          return `${window.location.origin}/api/qr/redirect?d=${payload}`;
         }
 
         const ctas = ctaLinks
@@ -317,7 +317,7 @@ export default function QRCodeCreator() {
           ...(title ? { t: title } : {}),
           c: ctas,
         }));
-        return `${window.location.origin}/qr/view?mode=cta&d=${payload}`;
+        return `${window.location.origin}/qr/cta?d=${payload}`;
       }
       case 'text': {
         const raw = textInput.trim();

@@ -66,6 +66,7 @@ const VideoShare = lazy(() => import("@/pages/VideoShare"));
 const BusinessCardShare = lazy(() => import("@/pages/BusinessCardShare"));
 const WalletPass = lazy(() => import("@/pages/WalletPass"));
 const QRTextView = lazy(() => import("@/pages/QRTextView"));
+const QRCTAView = lazy(() => import("@/pages/QRCTAView"));
 const LettersAiSetup = lazy(() => import("@/pages/LettersAiSetup"));
 const LettersAiPlay = lazy(() => import("@/pages/LettersAiPlay"));
 const LettersCreate = lazy(() => import("@/pages/LettersCreate"));
@@ -166,6 +167,7 @@ export default function ConsumerRouter() {
         <Route path="/video/:id" element={<VideoShare />} />
         <Route path="/wallet-pass" element={<WalletPass />} />
         <Route path="/qr/view" element={<QRTextView />} />
+        <Route path="/qr/cta" element={<QRCTAView />} />
         <Route path="/instagram-connect-callback" element={<InstagramConnectCallback />} />
         <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
 
