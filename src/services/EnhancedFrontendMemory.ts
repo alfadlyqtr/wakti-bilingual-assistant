@@ -42,6 +42,7 @@ class EnhancedFrontendMemoryClass {
           content: typeof m?.content === 'string' ? m.content : '',
           timestamp: m?.timestamp || Date.now(),
           intent: m?.intent,
+          chatSubmode: m?.chatSubmode,
           attachedFiles: m?.attachedFiles,
           // keep confidence only if small literal
           confidence: (m?.confidence === 'high' || m?.confidence === 'medium' || m?.confidence === 'low') ? m.confidence : undefined,
@@ -58,6 +59,10 @@ class EnhancedFrontendMemoryClass {
           if (typeof md.imageMode === 'string') lightMd.imageMode = md.imageMode;
           if (typeof md.prompt === 'string') lightMd.prompt = md.prompt.slice(0, 160);
           if (typeof md.loading === 'boolean') lightMd.loading = md.loading;
+          if (typeof md.studyMode === 'boolean') lightMd.studyMode = md.studyMode;
+          if (md.wolfram && typeof md.wolfram === 'object' && typeof md.wolfram.mode === 'string') {
+            lightMd.wolfram = { mode: md.wolfram.mode };
+          }
           if (Object.keys(lightMd).length > 0) base.metadata = lightMd;
         }
 

@@ -51,6 +51,143 @@ type PreviewHealthState = 'loading' | 'ready' | 'recovering' | 'failed';
 type PreviewRenderMode = 'exact' | 'visual';
 
 const WAKTI_VISUAL_ELEMENT_SELECTED_EVENT = 'wakti:visual-element-selected';
+const STOCK_IMAGE_HELPER_PATHS = [
+  '/utils/stockImages.js',
+  '/utils/stockImages.ts',
+  '/src/utils/stockImages.js',
+  '/src/utils/stockImages.ts',
+] as const;
+
+const SAFE_STOCK_IMAGES_HELPER = `import { useEffect, useState } from "react";
+
+const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
+
+function toLabel(query) {
+  if (typeof query !== "string" || !query.trim()) return "stock image";
+  return query.trim().split(/\\s+/).slice(0, 4).join(" ");
+}
+
+function toLimit(limit) {
+  const n = Number(limit);
+  if (!Number.isFinite(n)) return 5;
+  return Math.max(1, Math.min(Math.floor(n), 20));
+}
+
+export function getStaticPlaceholder(query, width = 400, height = 300) {
+  const w = Math.max(64, Number(width) || 400);
+  const h = Math.max(64, Number(height) || 300);
+  const text = encodeURIComponent(toLabel(query));
+  return "https://placehold.co/" + w + "x" + h + "/1a1a2e/eaeaea?text=" + text;
+}
+
+function buildFallbackImages(query, limit) {
+  const safeLimit = toLimit(limit);
+  return Array.from({ length: safeLimit }, (_, index) =>
+    getStaticPlaceholder(toLabel(query) + " " + (index + 1), 1200, 800)
+  );
+}
+
+function extractUrls(payload) {
+  if (!payload || typeof payload !== "object") return [];
+  const maybeImages = payload.images;
+  if (!Array.isArray(maybeImages)) return [];
+  return maybeImages
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (item && typeof item === "object") {
+        return item.url || item.thumbnail || "";
+      }
+      return "";
+    })
+    .filter((value) => typeof value === "string" && value.trim().length > 0);
+}
+
+async function safeJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
+async function postWithTimeout(url, init, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
+export async function fetchStockImages(query, limit = 5, options = {}) {
+  const normalizedQuery = typeof query === "string" ? query.trim() : "";
+  const safeLimit = toLimit(limit);
+  const fallback = buildFallbackImages(normalizedQuery || "stock image", safeLimit);
+
+  if (!normalizedQuery) {
+    return fallback;
+  }
+
+  const projectId = typeof options.projectId === "string" && options.projectId.trim()
+    ? options.projectId.trim()
+    : "preview";
+
+  try {
+    const response = await postWithTimeout(BACKEND_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        action: "freepik/images",
+        data: { query: normalizedQuery, limit: safeLimit },
+      }),
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      console.warn("[stockImages] backend error", response.status, details.slice(0, 180));
+      return fallback;
+    }
+
+    const payload = await safeJson(response);
+    const urls = extractUrls(payload).slice(0, safeLimit);
+    return urls.length > 0 ? urls : fallback;
+  } catch (error) {
+    console.warn("[stockImages] falling back to placeholder images", error);
+    return fallback;
+  }
+}
+
+export function useStockImage(query, options = {}) {
+  const [image, setImage] = useState(() => getStaticPlaceholder(query, 1200, 800));
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+
+    fetchStockImages(query, 1, options)
+      .then((urls) => {
+        if (cancelled) return;
+        setImage(urls[0] || getStaticPlaceholder(query, 1200, 800));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setImage(getStaticPlaceholder(query, 1200, 800));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [query, options.projectId]);
+
+  return { image, loading };
+}
+`;
 
 // --- 3. INSPECTABLE PREVIEW COMPONENT ---
 // Uses SandpackPreview ref to directly access the iframe for reliable postMessage communication
@@ -441,6 +578,7 @@ const SandpackWorkspaceSync = ({
 interface SandpackStudioProps {
   files: Record<string, string>;
   projectId?: string; // Used for stable key to prevent full rebuilds
+  projectName?: string;
   onRuntimeError?: (error: string) => void;
   elementSelectMode?: boolean;
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
@@ -650,7 +788,7 @@ export default function SandpackStudio({
     autoRecoveryCountRef.current = 0;
     setPreviewFailureMessage('');
     setPreviewHealth('loading');
-  }, [resolvedPreviewRenderMode]);
+  }, [elementSelectMode, resolvedPreviewRenderMode]);
 
   const handlePreviewFailure = useCallback((reason: string) => {
     if (activeBundlerIndex < bundlerCandidates.length - 1) {
@@ -827,6 +965,12 @@ export default function SandpackStudio({
     const next: Record<string, string> = {
       ...normalizedProjectFiles,
     };
+
+    for (const helperPath of STOCK_IMAGE_HELPER_PATHS) {
+      if (typeof next[helperPath] === 'string') {
+        next[helperPath] = SAFE_STOCK_IMAGES_HELPER;
+      }
+    }
 
     // If no files are ready yet, provide a minimal App so Sandpack doesn't fall back
     // to its built-in default template (which shows "Hello world").

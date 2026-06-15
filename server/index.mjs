@@ -33,6 +33,12 @@ app.use(cors({
   allowedHeaders: ['content-type','authorization','cache-control','accept']
 }));
 app.use(express.json({ limit: '20mb' }));
+app.use((error, req, res, next) => {
+  if (error?.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Invalid JSON body' });
+  }
+  return next(error);
+});
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 

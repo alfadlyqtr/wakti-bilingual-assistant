@@ -812,6 +812,9 @@ const WaktiAIV2 = () => {
       },
     };
     setSessionMessages([...newMessages, assistantPlaceholder]);
+    if (effectiveChatSubmode === 'study') {
+      setChatSubmode('chat');
+    }
 
     try {
       if (inputType === 'vision') {
@@ -888,11 +891,11 @@ const WaktiAIV2 = () => {
         const visionEndTime = Date.now();
         const visionThinkingDuration = Math.round((visionEndTime - startTime) / 1000);
         const cleanedStreamed = stripTrailingActionJSON(streamed);
+        const returnedResponse = typeof streamedResp?.response === 'string' ? stripTrailingActionJSON(streamedResp.response) : '';
+        const finalResponseText = returnedResponse.length >= cleanedStreamed.length ? returnedResponse : cleanedStreamed;
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
-          // Use || (not ??) so an empty backend response ('') doesn't overwrite the
-          // fully-streamed content. Matches the chat-path fix already applied below.
-          content: (streamedResp?.response || cleanedStreamed),
+          content: finalResponseText,
           chatSubmode: effectiveChatSubmode,
           metadata: { 
             loading: false, 
@@ -1140,6 +1143,8 @@ const WaktiAIV2 = () => {
         };
         
         const cleanedStreamed = stripTrailingActionJSON(streamed);
+        const returnedResponse = typeof streamedResp?.response === 'string' ? stripTrailingActionJSON(streamedResp.response) : '';
+        const finalResponseText = returnedResponse.length >= cleanedStreamed.length ? returnedResponse : cleanedStreamed;
         const returnedBrowsingData = (streamedResp as any)?.browsingData && typeof (streamedResp as any).browsingData === 'object'
           ? (streamedResp as any).browsingData
           : undefined;
@@ -1193,7 +1198,7 @@ const WaktiAIV2 = () => {
           : undefined;
         const finalAssistantMessage: AIMessage = {
           ...assistantPlaceholder,
-          content: (streamedResp?.response || cleanedStreamed),
+          content: finalResponseText,
           browsingUsed: streamMeta?.browsingUsed === true || trigger === 'search' || !!resolvedBrowsingData,
           browsingData: resolvedBrowsingData,
           chatSubmode: effectiveChatSubmode,

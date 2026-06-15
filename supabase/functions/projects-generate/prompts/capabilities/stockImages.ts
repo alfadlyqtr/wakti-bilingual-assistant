@@ -18,7 +18,7 @@ Create this file FIRST in every project. It must export three helpers:
 
 | Export | Signature | Behavior |
 |---|---|---|
-| \`fetchStockImages\` | \`(query: string, limit=5) => Promise<string[]>\` | POST to BACKEND_URL with \`action: 'freepik/images'\`, return \`data.images[].url\`. On error or empty, fall back to \`getStaticPlaceholder\`. |
+| \`fetchStockImages\` | \`(query: string, limit=5) => Promise<string[]>\` | POST to BACKEND_URL with \`action: 'freepik/images'\`, return \`data.images[].url\`. NEVER throw. On non-200, parse failure, timeout, or empty result, return placeholder array from \`getStaticPlaceholder\`. |
 | \`useStockImage\` | \`(query: string) => { image: string; loading: boolean }\` | React hook: calls \`fetchStockImages(query, 1)\` on mount, returns first image with fallback. |
 | \`getStaticPlaceholder\` | \`(query, w=400, h=300) => string\` | Returns \`https://placehold.co/{w}x{h}/1a1a2e/eaeaea?text={first-3-words}\`. |
 
@@ -85,4 +85,6 @@ Extract KEY ENTITIES from the user's prompt (product category, location, busines
 3. Include specific prompt terms in the query; use different queries per section (hero, about, services, gallery).
 4. Placeholder fallback is emergency-only. Never design the main visual identity around placeholders if any better business-matched image path exists.
 5. If the business is premium, elegant, luxury, editorial, boutique, or high-end, the imagery must reflect that tone.
+6. \`fetchStockImages\` must be wrapped in try/catch and must NEVER throw; always resolve to a string[] so UI never crashes.
+7. If backend returns an \`error\` field, treat it as recoverable and return placeholders instead of throwing.
 `;

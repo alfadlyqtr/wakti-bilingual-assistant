@@ -57,6 +57,7 @@ const TRANSLATION_LANGUAGES = [
   { code: 'id', name: { en: 'Indonesian', ar: 'الإندونيسية' } },
   { code: 'it', name: { en: 'Italian', ar: 'الإيطالية' } },
   { code: 'ja', name: { en: 'Japanese', ar: 'اليابانية' } },
+  { code: 'rw', name: { en: 'Kinyarwanda', ar: 'الكينيارواندية' } },
   { code: 'ko', name: { en: 'Korean', ar: 'الكورية' } },
   { code: 'lv', name: { en: 'Latvian', ar: 'اللاتفية' } },
   { code: 'lt', name: { en: 'Lithuanian', ar: 'الليتوانية' } },
@@ -204,7 +205,8 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
   const loadSaved = useCallback(async () => {
     setSavedLoading(true);
     try {
-      const { data, error: err } = await supabase
+      const db = supabase as unknown as any;
+      const { data, error: err } = await db
         .from('saved_translations')
         .select('id, spoken_language, target_language, original_text, translated_text, audio_base64, created_at')
         .order('created_at', { ascending: false })
@@ -229,7 +231,8 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
       const { data: sessionData } = await supabase.auth.getSession();
       const userId = sessionData?.session?.user?.id;
       if (!userId) return;
-      const { error: insertErr } = await supabase.from('saved_translations').insert({
+      const db = supabase as unknown as any;
+      const { error: insertErr } = await db.from('saved_translations').insert({
         user_id: userId,
         spoken_language: spokenLangRef.current,
         target_language: targetLangRef.current,
@@ -249,7 +252,8 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
 
   // ── Delete saved translation ───────────────────────────────────────────────
   const handleDelete = useCallback(async (id: string) => {
-    await supabase.from('saved_translations').delete().eq('id', id);
+    const db = supabase as unknown as any;
+    await db.from('saved_translations').delete().eq('id', id);
     setSavedList(prev => prev.filter(s => s.id !== id));
   }, []);
 
@@ -307,7 +311,6 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
 
       const json = await res.json();
 
-      // Trial gate
       if (json.error === 'TRIAL_LIMIT_REACHED' || res.status === 403) {
         emitEvent('wakti-trial-limit-reached', {
           feature: json.feature || 'interpreter',
@@ -328,11 +331,9 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
       const { transcript, translation, audio_base64, audio_mime } = json;
       currentAudioBase64Ref.current = audio_base64 || null;
       setCurrentAudioBase64(audio_base64 || null);
-
       setUserTranscript(transcript || '');
       setTranslatedText(translation || '');
 
-      // Trial quota finished notification
       if (json.trial?.justExhausted || json.trial?.remaining === 0) {
         emitEvent('wakti-trial-quota-finished', {
           feature: 'interpreter',
@@ -343,15 +344,11 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
         });
       }
 
-      // Play audio + enable replay
       if (audio_base64) {
         const byteArr = Uint8Array.from(atob(audio_base64), c => c.charCodeAt(0));
         const blob = new Blob([byteArr], { type: audio_mime || 'audio/mp3' });
         const url = URL.createObjectURL(blob);
-
-        // revoke previous replay URL
         setReplayUrl(prev => { if (prev) URL.revokeObjectURL(prev); return url; });
-
         if (audioRef.current) {
           setStatus('speaking');
           audioRef.current.src = url;
@@ -361,9 +358,7 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
             setError(t('Could not play the translated voice.', 'تعذر تشغيل صوت الترجمة.'));
             setStatus('idle');
           };
-          try { await audioRef.current.play(); } catch {
-            setStatus('idle');
-          }
+          try { await audioRef.current.play(); } catch { setStatus('idle'); }
         } else {
           setStatus('idle');
         }

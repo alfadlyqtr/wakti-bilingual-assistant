@@ -1,0 +1,234 @@
+export const PROJECT_ENTRY_CANDIDATES = [
+  '/App.tsx',
+  '/App.jsx',
+  '/App.js',
+  '/src/App.tsx',
+  '/src/App.jsx',
+  '/src/App.js',
+  '/src/main.tsx',
+  '/src/main.jsx',
+  '/src/main.js',
+  '/src/index.tsx',
+  '/src/index.jsx',
+  '/src/index.js',
+  '/index.tsx',
+  '/index.jsx',
+  '/index.js',
+] as const;
+
+export function getProjectEntryPoint(files: Record<string, string>): string {
+  for (const candidate of PROJECT_ENTRY_CANDIDATES) {
+    if (typeof files[candidate] === 'string') {
+      return candidate;
+    }
+  }
+
+  const firstCodeFile = Object.keys(files).find((path) => /\.(js|jsx|ts|tsx)$/.test(path));
+  return firstCodeFile || '/App.js';
+}
+
+export function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function escapeInlineScript(source: string): string {
+  return source.replace(/<\/script/gi, '<\\/script');
+}
+
+function escapeInlineStyle(source: string): string {
+  return source.replace(/<\/style/gi, '<\\/style');
+}
+
+export function buildProjectRuntimeHtml({
+  projectName,
+  bundledJs,
+  bundledCss,
+  useBabelRuntime = false,
+}: {
+  projectName: string;
+  bundledJs: string;
+  bundledCss: string;
+  useBabelRuntime?: boolean;
+}): string {
+  const safeTitle = escapeHtml(projectName || 'Wakti Preview');
+  const safeJs = escapeInlineScript(bundledJs || '');
+  const safeCss = escapeInlineStyle(bundledCss || '');
+  const babelScriptTag = useBabelRuntime
+    ? '<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>'
+    : '';
+  const runtimeScriptTag = useBabelRuntime
+    ? `<script type="text/babel" data-presets="react,typescript">${safeJs}</script>`
+    : `<script>${safeJs}</script>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${safeTitle}</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/react-is/umd/react-is.production.min.js"></script>
+  <script src="https://unpkg.com/framer-motion@6.5.1/dist/framer-motion.js"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
+  ${babelScriptTag}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&family=Oswald:wght@400;500;600;700&family=Cairo:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+            tajawal: ['Tajawal', 'sans-serif'],
+            oswald: ['Oswald', 'sans-serif'],
+            cairo: ['Cairo', 'sans-serif'],
+            playfair: ['Playfair Display', 'serif'],
+            roboto: ['Roboto', 'sans-serif'],
+            poppins: ['Poppins', 'sans-serif'],
+          },
+          colors: {
+            gray: {
+              50: '#f9fafb', 100: '#f3f4f6', 200: '#e5e7eb', 300: '#d1d5db', 400: '#9ca3af',
+              500: '#6b7280', 600: '#4b5563', 700: '#374151', 800: '#1f2937', 900: '#111827', 950: '#030712',
+            },
+            zinc: {
+              50: '#fafafa', 100: '#f4f4f5', 200: '#e4e4e7', 300: '#d4d4d8', 400: '#a1a1aa',
+              500: '#71717a', 600: '#52525b', 700: '#3f3f46', 800: '#27272a', 900: '#18181b', 950: '#09090b',
+            },
+            slate: {
+              50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8',
+              500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617',
+            },
+            purple: {
+              50: '#faf5ff', 100: '#f3e8ff', 200: '#e9d5ff', 300: '#d8b4fe', 400: '#c084fc',
+              500: '#a855f7', 600: '#9333ea', 700: '#7e22ce', 800: '#6b21a8', 900: '#581c87', 950: '#3b0764',
+            },
+            pink: {
+              50: '#fdf2f8', 100: '#fce7f3', 200: '#fbcfe8', 300: '#f9a8d4', 400: '#f472b6',
+              500: '#ec4899', 600: '#db2777', 700: '#be185d', 800: '#9d174d', 900: '#831843', 950: '#500724',
+            },
+            rose: {
+              50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af', 400: '#fb7185',
+              500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 900: '#881337', 950: '#4c0519',
+            },
+            amber: {
+              50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24',
+              500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f', 950: '#451a03',
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; min-height: 100vh; font-family: 'Inter', 'Tajawal', system-ui, sans-serif; }
+    #root { min-height: 100vh; }
+    .bg-clip-text { -webkit-background-clip: text; background-clip: text; }
+    .text-transparent { color: transparent; }
+    ${safeCss}
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div id="wakti-boot-status" style="padding:40px;text-align:center;font-family:Inter,system-ui,sans-serif;">
+      <div style="font-size:24px;margin-bottom:16px;">⏳</div>
+      <div style="color:#666;">Loading app...</div>
+    </div>
+  </div>
+  <script>
+    window.__waktiBootLog = [];
+    function waktiRunnerNotify(type, payload) {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ source: 'wakti-preview-runner', type, payload }, '*');
+        }
+      } catch {}
+    }
+    function waktiLog(msg) {
+      window.__waktiBootLog.push('[' + new Date().toISOString() + '] ' + msg);
+      console.log('[Wakti Boot]', msg);
+    }
+    window.onerror = function(msg, url, line, col, error) {
+      waktiLog('UNCAUGHT ERROR: ' + msg + ' at ' + url + ':' + line);
+      waktiRunnerNotify('error', { message: String(msg || 'Unknown runtime error'), stack: error && error.stack ? error.stack : '' });
+      var bootDiv = document.getElementById('wakti-boot-status');
+      if (bootDiv) {
+        bootDiv.innerHTML = '<div style="color:#f87171;font-size:18px;margin-bottom:16px;">❌ Error</div>' +
+          '<pre style="background:#1e1e1e;padding:16px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;color:#f87171;">' + 
+          msg + '\n' + ((error && error.stack) || '') + '</pre>' +
+          '<div style="color:#9ca3af;margin-top:16px;font-size:12px;">Check console for details</div>';
+      }
+      return false;
+    };
+    window.onunhandledrejection = function(e) {
+      var message = e && e.reason && e.reason.message ? e.reason.message : (e && e.reason ? String(e.reason) : 'Unknown promise error');
+      waktiLog('UNHANDLED PROMISE: ' + message);
+      waktiRunnerNotify('error', { message: message });
+    };
+    waktiLog('Script block starting');
+    waktiLog('React available: ' + (typeof React !== 'undefined'));
+    waktiLog('ReactDOM available: ' + (typeof ReactDOM !== 'undefined'));
+    const FM = window.FramerMotion || window.Motion;
+    waktiLog('Framer Motion available: ' + (!!FM));
+    if (typeof FM !== 'undefined' && FM) {
+      window.FramerMotion = FM;
+      window.motion = FM.motion;
+      window.AnimatePresence = FM.AnimatePresence;
+      window.useAnimation = FM.useAnimation;
+      window.useInView = FM.useInView;
+      window.useScroll = FM.useScroll;
+      window.useTransform = FM.useTransform;
+      window.useMotionValue = FM.useMotionValue;
+    }
+    if (typeof window.lucide !== 'undefined' && window.lucide) {
+      window.__lucideIcons = window.lucide;
+    }
+    if (typeof window.Recharts !== 'undefined' && window.Recharts) {
+      waktiLog('Recharts available: true');
+    } else {
+      waktiLog('Recharts available: false');
+    }
+  </script>
+  ${runtimeScriptTag}
+  <script>
+    waktiLog('Bundled code executed');
+    function renderApp(retries) {
+      retries = retries || 0;
+      try {
+        if (typeof window.App === 'undefined' || window.App === null) {
+          if (retries < 120) {
+            setTimeout(function() { renderApp(retries + 1); }, 100);
+            return;
+          }
+          throw new Error('App component not found after ' + retries + ' attempts. window.App = ' + typeof window.App + '. Boot log: ' + window.__waktiBootLog.join(' | '));
+        }
+        var rootElement = document.getElementById('root');
+        var root = ReactDOM.createRoot(rootElement);
+        root.render(React.createElement(window.App));
+        waktiLog('App rendered successfully');
+        waktiRunnerNotify('ready', { ok: true });
+      } catch (err) {
+        var message = err && err.message ? err.message : String(err);
+        waktiLog('RENDER ERROR: ' + message);
+        console.error('[Wakti] Render error:', err);
+        waktiRunnerNotify('error', { message: message, stack: err && err.stack ? err.stack : '' });
+        document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#f87171;font-family:Inter,sans-serif;"><h2>Error loading app</h2><pre style="background:#1e1e1e;padding:20px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;">' + message + '</pre><details style="margin-top:20px;text-align:left;"><summary style="cursor:pointer;color:#9ca3af;">Boot Log</summary><pre style="background:#1e1e1e;padding:12px;border-radius:4px;font-size:10px;margin-top:8px;">' + (window.__waktiBootLog || []).join('\n') + '</pre></details></div>';
+      }
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function() { renderApp(0); });
+    } else {
+      renderApp(0);
+    }
+  </script>
+</body>
+</html>`;
+}

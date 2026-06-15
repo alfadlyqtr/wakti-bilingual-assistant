@@ -60,6 +60,9 @@ export default defineConfig(({ mode }) => {
     esbuild: {
       drop: mode === 'production' ? ['console', 'debugger'] : [],
     },
+    optimizeDeps: {
+      include: ['vaul', 'react-day-picker'],
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),

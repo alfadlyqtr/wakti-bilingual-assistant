@@ -3,6 +3,49 @@ import { SkeletonPulse } from '@/components/ui/AnimatedContainer';
 
 // Lazy loading utilities for code splitting
 
+const retryableImportPatterns = [
+  'text/html',
+  'MIME type',
+  'Failed to fetch dynamically imported module',
+  'Importing a module script failed',
+  'Loading chunk',
+  'Loading CSS chunk',
+  'Outdated Optimize Dep',
+  'fetch dynamically imported module',
+];
+
+function waitFor(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+export function isRetryableImportError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return retryableImportPatterns.some((pattern) => message.includes(pattern));
+}
+
+export function lazyRetry<T extends ComponentType<any>>(
+  importFn: () => Promise<{ default: T }>,
+  retryDelays: number[] = [350, 1200]
+) {
+  return lazy(async () => {
+    let lastError: unknown = null;
+
+    for (let attempt = 0; attempt <= retryDelays.length; attempt += 1) {
+      try {
+        return await importFn();
+      } catch (error) {
+        lastError = error;
+        if (!isRetryableImportError(error) || attempt === retryDelays.length) {
+          throw error;
+        }
+        await waitFor(retryDelays[attempt]);
+      }
+    }
+
+    throw lastError instanceof Error ? lastError : new Error('Failed to load lazy module.');
+  });
+}
+
 /**
  * Create a lazy-loaded component with a fallback
  */

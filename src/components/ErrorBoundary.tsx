@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { isRetryableImportError } from '@/utils/lazyLoading';
 
 interface Props {
   children: ReactNode;
@@ -10,6 +11,29 @@ interface State {
   error: Error | null;
 }
 
+function getImportRecoveryKey(error: Error) {
+  const path = typeof window !== 'undefined' ? window.location.pathname : 'unknown';
+  const message = error?.message || 'unknown';
+  return `wakti-import-recovery:${path}:${message}`;
+}
+
+function shouldAutoReloadTransientError(error: Error) {
+  if (!isRetryableImportError(error)) return false;
+  try {
+    const key = getImportRecoveryKey(error);
+    if (sessionStorage.getItem(key) === '1') return false;
+    sessionStorage.setItem(key, '1');
+  } catch {}
+  return true;
+}
+
+function clearTransientErrorReloadFlag(error: Error | null) {
+  if (!error) return;
+  try {
+    sessionStorage.removeItem(getImportRecoveryKey(error));
+  } catch {}
+}
+
 class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
@@ -17,18 +41,8 @@ class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
-    // Transient chunk-load / MIME errors (e.g. after OAuth Safari round-trip in Natively)
-    // auto-recover with a silent reload instead of showing the error screen.
-    const msg = error?.message || '';
-    const isTransient =
-      msg.includes('text/html') ||
-      msg.includes('MIME type') ||
-      msg.includes('Failed to fetch dynamically imported module') ||
-      msg.includes('Importing a module script failed') ||
-      msg.includes('Loading chunk') ||
-      msg.includes('Loading CSS chunk');
-    if (isTransient) {
-      window.location.reload();
+    if (shouldAutoReloadTransientError(error)) {
+      window.setTimeout(() => window.location.reload(), 0);
       return { hasError: false, error: null };
     }
     return { hasError: true, error };
@@ -39,6 +53,7 @@ class ErrorBoundary extends Component<Props, State> {
   }
 
   public resetErrorBoundary = () => {
+    clearTransientErrorReloadFlag(this.state.error);
     this.setState({ hasError: false, error: null });
   };
 
@@ -97,7 +112,10 @@ class ErrorBoundary extends Component<Props, State> {
                 Try again
               </button>
               <button
-                onClick={() => window.location.reload()}
+                onClick={() => {
+                  clearTransientErrorReloadFlag(this.state.error);
+                  window.location.reload();
+                }}
                 style={{
                   padding: '10px 20px',
                   background: 'hsl(210 100% 65%)',

@@ -1459,13 +1459,15 @@ async function streamGemini(
   contents: GeminiContent[],
   onToken: (token: string) => void,
   systemInstruction?: string,
-  generationConfig?: Record<string, unknown>
+  generationConfig?: Record<string, unknown>,
+  enableSearchTool = true
 ) {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
   const body: Record<string, unknown> = { contents };
   if (systemInstruction) body.system_instruction = { parts: [{ text: systemInstruction }] };
   if (generationConfig) body.generationConfig = generationConfig;
+  if (enableSearchTool) body.tools = [{ google_search: {} }];
 
   const resp = await fetch(url, {
     method: "POST",
@@ -1680,34 +1682,6 @@ function buildMapsGroundingQuery(
 const chatSearchCache = new Map<string, { result: string; ts: number }>();
 const CHAT_SEARCH_CACHE_TTL_MS = 60_000;
 
-function isKnowledgeOrCreativeQuery(query: string): boolean {
-  return /\b(explain|teach|study|summari[sz]e|summary|analy[sz]e|compare|pros?\s+and\s+cons|definition|define|meaning|history|why does|how does|tutorial|guide|essay|write|rewrite|improve|translate|brainstorm|idea|ideas|debug|fix this code|code review|refactor|math|equation|solve|proof)\b|╪º╪┤╪▒╪¡|┘ä╪«╪╡|╪¡┘ä┘ä|┘é╪º╪▒┘å|╪╣╪▒┘æ┘ü|╪╣╪▒┘ü|╪º┘ä┘à╪╣┘å┘ë|╪º┘ä╪¬╪º╪▒┘è╪«|┘ä┘è╪┤|┘ä┘à╪º╪░╪º|┘â┘è┘ü|╪»┘ä┘è┘ä|┘à┘é╪º┘ä|╪º┘â╪¬╪¿|╪¬╪▒╪¼┘à|╪º┘ü┘â╪º╪▒|╪ú┘ü┘â╪º╪▒|╪╡╪¡╪¡|╪¿╪▒┘à╪¼╪⌐|┘à╪╣╪º╪»┘ä╪⌐|╪¡┘ä/i.test(query);
-}
-
-function isUserLocalClockQuestion(query: string): boolean {
-  return /\b(what time is it|current time|local time|time now)\b|╪º┘ä╪│╪º╪╣╪⌐ ┘â┘à|┘â┘à ╪º┘ä╪│╪º╪╣╪⌐|╪º┘ä┘ê┘é╪¬ ╪º┘ä╪ó┘å|╪º┘ä┘ê┘é╪¬ ╪º┘ä╪º┘å/i.test(query);
-}
-
-// Brain-First hard router: returns true ONLY for explicit live-data queries.
-// Everything else (math, history, science, creative, general knowledge) ΓåÆ pure brain.
-function chatNeedsSearch(query: string): boolean {
-  const q = (query || '').trim().toLowerCase();
-  if (!q) return false;
-  if (isUserLocalClockQuestion(q)) return false;
-  if (isKnowledgeOrCreativeQuery(q)) return false;
-
-  const hasTimeCue = /\b(today|tonight|now|right now|latest|current|live|this week|this month|as of today|breaking)\b|╪º┘ä┘è┘ê┘à|╪º┘ä╪ó┘å|╪º┘ä╪º┘å|┘à╪¿╪º╪┤╪▒|╪¡╪º┘ä┘è|╪ú╪¡╪»╪½|╪º╪«╪▒/i.test(q);
-
-  if (/\b(weather|forecast|temperature|rain|snow|humid|wind speed)\b|╪╖┘é╪│|╪»╪▒╪¼╪⌐ ╪º┘ä╪¡╪▒╪º╪▒╪⌐|╪¬┘ê┘é╪╣╪º╪¬/i.test(q)) return true;
-  if (/\b(breaking news|latest news|news today|headline|headlines today)\b|╪ú╪«╪¿╪º╪▒ ╪╣╪º╪¼┘ä╪⌐|╪ó╪«╪▒ ╪º┘ä╪ú╪«╪¿╪º╪▒|╪º╪«╪▒ ╪º┘ä╪ú╪«╪¿╪º╪▒/i.test(q)) return true;
-  if (/\b(current score|live score|match result|final score|halftime|fulltime|standings today|table today)\b|┘å╪¬┘è╪¼╪⌐ ┘à╪¿╪º╪┤╪▒╪⌐|╪¬╪▒╪¬┘è╪¿ ╪º┘ä┘è┘ê┘à|┘à╪¿╪º╪▒╪º╪⌐ ╪º┘ä┘è┘ê┘à/i.test(q)) return true;
-  if (/\b(stock price|share price|market cap|nasdaq|nyse|crypto price|bitcoin price|eth price|exchange rate|usd to|eur to|gbp to|currency today)\b|╪│╪╣╪▒ ╪º┘ä╪│┘ç┘à|╪│╪╣╪▒ ╪º┘ä╪¿┘è╪¬┘â┘ê┘è┘å|╪│╪╣╪▒ ╪º┘ä╪╣┘à┘ä╪⌐|╪│╪╣╪▒ ╪º┘ä╪╡╪▒┘ü/i.test(q)) return true;
-  if (/\b(earthquake|tsunami|hurricane|cyclone|flood)\b|╪▓┘ä╪▓╪º┘ä|╪¬╪│┘ê┘å╪º┘à┘è|╪Ñ╪╣╪╡╪º╪▒|┘ü┘è╪╢╪º┘å/i.test(q) && hasTimeCue) return true;
-  if (/\b(today's|tonight's|this week's).{0,30}(news|price|score|weather|result)\b/.test(q)) return true;
-
-  return false;
-}
-
 // Chat mode: model is determined by engineTier at the call site
 async function streamGemini3FlashChat(
   query: string,
@@ -1760,32 +1734,24 @@ async function streamGemini3FlashChat(
   // ALWAYS push the full, untruncated query as the final user message
   contents.push({ role: 'user', parts: [{ text: query }] });
 
-  // Brain-First hard router: 95% of chat queries go straight to the model (no search overhead).
-  // Only explicit live-data signals (weather, scores, prices, breaking news) trigger grounding.
-  const useSearch = chatNeedsSearch(query);
-
-  // If search IS needed, check 60s in-memory cache first
-  if (useSearch) {
-    const cacheKey = query.trim().toLowerCase();
+  const cacheKey = query.trim().toLowerCase();
+  if (cacheKey) {
     const cached = chatSearchCache.get(cacheKey);
     if (cached && (Date.now() - cached.ts) < CHAT_SEARCH_CACHE_TTL_MS) {
       onToken(cached.result);
       return cached.result;
     }
-    // Signal UI immediately so user sees "Searching..." instead of blank wait
-    try {
-      onSignal?.({ searching: true, message: language === 'ar' ? '╪¼╪º╪▒┘ì ╪º┘ä╪¿╪¡╪½...' : 'Searching...' });
-    } catch { /* ignore */ }
   }
+
+  try {
+    onSignal?.({ searching: true, message: language === 'ar' ? '╪¼╪º╪▒┘ì ╪º┘ä╪¿╪¡╪½...' : 'Searching...' });
+  } catch { /* ignore */ }
 
   const body: Record<string, unknown> = {
     contents,
-    // When grounding: limit to 3 snippets + 2000 tokens for a fast fact-check, not a research paper
-    generationConfig: { temperature: 0.4, maxOutputTokens: useSearch ? 2800 : 4500 },
+    generationConfig: { temperature: 0.4, maxOutputTokens: 3200 },
+    tools: [{ google_search: {} }],
   };
-  if (useSearch) {
-    body.tools = [{ google_search: {} }];
-  }
   if (systemInstruction) {
     body.system_instruction = { parts: [{ text: systemInstruction }] };
   }
@@ -1835,23 +1801,12 @@ async function streamGemini3FlashChat(
       } catch { /* ignore parse errors */ }
     }
   }
-
-
-  // Cache the result for 60s to avoid redundant search round-trips
-  if (useSearch && fullText) {
-    const cacheKey = query.trim().toLowerCase();
+  if (cacheKey && fullText) {
     chatSearchCache.set(cacheKey, { result: fullText, ts: Date.now() });
-    // Prune old entries to prevent memory leak (keep max 100 entries)
     if (chatSearchCache.size > 100) {
       const oldest = chatSearchCache.keys().next().value;
       if (oldest) chatSearchCache.delete(oldest);
     }
-    // Append search-mode tip to the streamed response
-    const tip = language === 'ar'
-      ? '\n\n> ≡ƒÆí *┘ä┘ä╪¡╪╡┘ê┘ä ╪╣┘ä┘ë ┘å╪¬╪º╪ª╪¼ ╪¿╪¡╪½ ╪ú╪╣┘à┘é╪î ╪¼╪▒╪¿ **┘ê╪╢╪╣ ╪º┘ä╪¿╪¡╪½**.*'
-      : '\n\n> ≡ƒÆí *For deeper search results, try **Search Mode**.*';
-    onToken(tip);
-    fullText += tip;
   }
 
   return fullText;
@@ -2288,11 +2243,6 @@ function _promptStudy(): string {
   return `\n\n≡ƒôÜ STUDY MODE (TUTOR STYLE) - CRITICAL\nYou are now in STUDY MODE. Act as a friendly, patient tutor.\n\nSTUDY MODE RULES:\n0. ANSWER BOX (MANDATORY): Your response MUST start with a unique 1-sentence summary wrapped in [BOX]...[/BOX] tags. Example: [BOX]Photosynthesis is the process plants use to convert sunlight into food.[/BOX]. DO NOT repeat this sentence anywhere in the main body of your response.\n1. EXPLAIN STEP-BY-STEP: After the [BOX], break down the reasoning in simple, numbered steps.\n2. USE SIMPLE LANGUAGE: Avoid jargon. Explain like teaching a curious student.\n3. STRUCTURE CLEARLY: Use bullet points, numbered lists, or short paragraphs. Never a wall of text.\n4. ADD EXAMPLES: When helpful, include a real-world example or analogy.\n5. PRACTICE QUESTIONS (optional): For suitable topics, end with 1-2 short practice questions.\n6. ENCOURAGE: Be supportive and encouraging.\n\nApplies to ALL subjects: math, science, history, languages, programming, exam prep, general knowledge.\nIf user uploads an image (photo of notes, textbook, problem), analyze and teach based on what you see.`;
 }
 
-// SEARCH EXTENSION (~800 chars): Only when useSearch===true in chat mode
-function _promptChatSearch(userNick: string, aiNick: string, currentDate: string): string {
-  return `\n\n≡ƒöì LIVE DATA LOOKUP (CHAT MODE QUICK SEARCH)\n- You are doing a fast fact-check. Keep it concise ΓÇö 2000 tokens max.\n- Only output numbers/facts from the retrieved web snippets. Do NOT invent data.\n- If sources conflict, prefer the most recent and note which one you used.\n- Format: short intro (1-2 sentences) + bullet points or compact table. No long paragraphs.\n- If you open with a greeting, keep it short and natural. Never say "Greetings" or "I've pulled the latest for you". Good examples: "Here's the quick latest:" or "${userNick || 'Friend'}, here's the quick latest."\n\n> ≡ƒÆí *For deeper search results, try **Search Mode**.*`;
-}
-
 // SEARCH MODE FULL EXTENSION: Only for activeTrigger === 'search'
 function _promptSearchModeFull(userNick: string, aiNick: string, currentDate: string, localTime: string): string {
   return `\n\n≡ƒöì SEARCH MODE INTELLIGENCE (CRITICAL)\n\nCONTEXT-AWARE SEARCH PROTOCOL:\n1. CHECK CONVERSATION CONTEXT FIRST: Look at the "CURRENT CONVERSATION TOPIC" section in the Stay Hot Summary above.\n2. INFER SEARCH INTENT: If user says just "search" or "find" without specifying what, check what they were just discussing and intelligently infer what they want.\n3. ASK ONLY IF TRULY AMBIGUOUS: Only ask "search about what?" if there's genuinely no context to infer from.\n\nSEARCH EXECUTION RULES:\n- You MUST use the google_search tool for web facts and current events.\n- Do NOT answer from pre-trained memory for live data (scores, prices, news).\n\nCRITICAL SEARCH FORMATTING RULES (NON-NEGOTIABLE)\nSEARCH MODE = FACTS FIRST (CRITICAL)\n- NO jokes, no storytelling, no assumptions, no "filler".\n- For live facts (sports standings/scores, prices, flights, news):\n  - You MUST ONLY output numbers/facts that appear in the retrieved web snippets.\n  - If you cannot find exact numbers, say so clearly.\n- If sources conflict, prefer the most recent dated source and say which one you used.\n- When you present a table/dashboard with numbers, include a short "Sources" section with direct URLs.\n\nFRESHNESS ENFORCEMENT (MANDATORY)\n- If the user asks for "latest", "today", "current", or live data ΓÇö use results updated today/this week.\n- If retrieved snippets mention an older season/year, treat as STALE and re-search with stricter queries.\n- Re-search strategy: (1) Add today's year and season label, (2) Add "updated today" / "live", (3) Prefer official sources.\n- If after re-search you STILL cannot find verified up-to-date numbers, do NOT guess. Provide the best official link(s).\n\nFORMATTING ENFORCEMENT:\n- NEVER respond with a single long paragraph.\n- ALWAYS use: Dashboard layout, Short answers (1-2 sentence intro + max 3 bullets), or Detailed answers (2-3 sentence intro + 5-7 bullets).\n- If 3+ distinct items: Use a Markdown table (Event | Key Detail | Source).\n- ALWAYS start with: "Greetings, ${userNick || 'friend'} ΓÇö ${aiNick || 'Wakti'} here. ${currentDate}. I've pulled the latest for you ΓÇö"\n\nCONTENT RULES:\n- Base your answer ONLY on the search results provided.\n- Do NOT invent events, dates, or facts not in the search results.\n- Keep each bullet point or table row concise (1-2 sentences max).`;
@@ -2301,6 +2251,15 @@ function _promptSearchModeFull(userNick: string, aiNick: string, currentDate: st
 // TIMEZONE EXTENSION (~400 chars): Injected whenever time conversions may be needed
 function _promptTimezone(): string {
   return `\n\nΓÅ░ CRITICAL TIMEZONE RULES (HIGHEST PRIORITY):\n1. The user's local time is shown above as "Current local time". This IS the user's timezone.\n2. When you find times in OTHER timezones (ET, PT, GMT, UTC), convert them to the user's local timezone.\n3. If a time is ALREADY in the user's local timezone, DO NOT convert it again.\n4. Format: Show local time first, then original. Example: "3:00 AM (7:00 PM ET)"\n5. NEVER double-convert.`;
+}
+
+function buildMemoryActionInstruction(): string {
+  return `MEMORY ACTION (CRITICAL):
+When the user explicitly asks you to remember or forget something, append this JSON block on its own line at the ABSOLUTE END of your response (no markdown, no code fences):
+{"action":"memory","operation":"remember"|"forget","text":"..."}
+Rules:
+- Never mention this JSON block in normal text.
+- If both memory and reminder actions are needed, output memory JSON first and reminder JSON last.`;
 }
 
 // REMINDER INTERCEPTION: dynamic instruction injected only when user requests a reminder.
@@ -2318,79 +2277,111 @@ Rules:
 }
 
 /**
- * Intercept reminder JSON from AI response, schedule it, and return cleaned text.
- * Pattern: {"action":"set_reminder","time":"...","text":"..."} at end of response.
+ * Intercept trailing action JSON blocks from AI response, process them, and return cleaned text.
  */
-async function interceptAndScheduleReminder(
+async function interceptAndProcessActions(
   responseText: string,
   userId: string,
   timezone: string,
   controller: ReadableStreamDefaultController<Uint8Array>,
   encoder: TextEncoder,
-  userOffset = '+00:00'
+  userOffset = '+00:00',
+  capturePaused = false
 ): Promise<string> {
-  // Use lastIndexOf to find the TRAILING action block ΓÇö not a mid-response mention
-  const triggerIdx = responseText.lastIndexOf('{"action"');
-  if (triggerIdx === -1) return responseText;
+  const lines = (responseText || '').split('\n');
+  const actionBlocks: Array<Record<string, unknown>> = [];
+  let cursor = lines.length - 1;
+  let strippedMalformedAction = false;
 
-  const rawTail = responseText.substring(triggerIdx).trim();
-  // Find the last closing brace ΓÇö AI may append trailing text/newlines after the JSON
-  const lastBrace = rawTail.lastIndexOf('}');
-  const tail = lastBrace !== -1 ? rawTail.substring(0, lastBrace + 1) : rawTail;
+  while (cursor >= 0) {
+    const trimmed = lines[cursor].trim();
+    if (!trimmed) {
+      cursor -= 1;
+      continue;
+    }
 
-  try {
-    const data = JSON.parse(tail);
-    // Only proceed if it's actually a valid action JSON object
-    if (!data || typeof data !== 'object' || !('action' in data)) return responseText;
-    const cleanText = responseText.substring(0, triggerIdx).trim();
-    if (data.action === 'set_reminder') {
-      let scheduledTime = (data.time as string) || '';
-      // Safety net: if AI omitted the offset, append the user's dynamic offset
-      if (scheduledTime && !scheduledTime.includes('+') && !scheduledTime.includes('-', 10) && !scheduledTime.endsWith('Z')) {
-        scheduledTime = `${scheduledTime}${userOffset}`;
+    if (!(trimmed.startsWith('{') && trimmed.includes('"action"'))) {
+      break;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object' && 'action' in parsed) {
+        actionBlocks.unshift(parsed as Record<string, unknown>);
+      } else {
+        break;
       }
-      const timeStr = scheduledTime;
-      const reminderText = data.text as string;
+    } catch {
+      strippedMalformedAction = true;
+    }
 
-      try {
-        const supabaseAdmin = createClient(
-          Deno.env.get('SUPABASE_URL')!,
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-        );
-        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    cursor -= 1;
+  }
 
-        // Parse the scheduled time ΓÇö handle ISO 8601 with timezone offset (e.g. 2026-03-24T10:36:00+03:00)
-        const cleanedTimeStr = timeStr
-          .replace(/[\u200B-\u200D\uFEFF]/g, '') // strip zero-width chars
-          .replace(/[^\x20-\x7E]/g, '')          // strip non-ASCII
-          .trim()
-          .replace(' ', 'T');                     // normalise space-separated datetime
+  if (actionBlocks.length === 0 && !strippedMalformedAction) return responseText;
 
-        if (!cleanedTimeStr) {
-          console.error(`ΓÜá∩╕Å REMINDER INTERCEPT: Empty scheduled_for ΓÇö aborting`);
-          return cleanText;
+  const cleanText = lines.slice(0, cursor + 1).join('\n').trimEnd();
+  if (actionBlocks.length === 0) return cleanText;
+  const pausedMemoryNote = '*(Note: Memory capture is currently paused in your settings.)*';
+  let memoryPausedNotice = false;
+
+  let supabaseAdmin: any = null;
+  const getSupabaseAdmin = () => {
+    if (supabaseAdmin) return supabaseAdmin;
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+      const serviceRole = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+      if (!supabaseUrl || !serviceRole) return null;
+      supabaseAdmin = createClient(supabaseUrl, serviceRole);
+      return supabaseAdmin;
+    } catch {
+      return null;
+    }
+  };
+
+  for (const data of actionBlocks) {
+    try {
+      const action = typeof data.action === 'string' ? data.action : '';
+
+      if (action === 'set_reminder') {
+        if (!userId) continue;
+        const rawTime = typeof data.time === 'string' ? data.time : '';
+        const reminderText = typeof data.text === 'string' ? data.text.trim().slice(0, 280) : '';
+        if (!rawTime || !reminderText) continue;
+
+        let scheduledTime = rawTime;
+        if (scheduledTime && !scheduledTime.includes('+') && !scheduledTime.includes('-', 10) && !scheduledTime.endsWith('Z')) {
+          scheduledTime = `${scheduledTime}${userOffset}`;
         }
 
-        // Manual ISO+offset parser ΓÇö guaranteed to work in all Deno versions
-        // Handles: YYYY-MM-DDTHH:MM[:SS][.mmm](Z|┬▒HH:MM|┬▒HHMM)
+        const supabaseClient = getSupabaseAdmin();
+        const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+        if (!supabaseClient || !serviceKey) continue;
+
+        const cleanedTimeStr = scheduledTime
+          .replace(/[\u200B-\u200D\uFEFF]/g, '')
+          .replace(/[^\x20-\x7E]/g, '')
+          .trim()
+          .replace(' ', 'T');
+        if (!cleanedTimeStr) continue;
+
         let validTimeStr: string;
-        const m = cleanedTimeStr.match(
+        const parsedIso = cleanedTimeStr.match(
           /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(?:(Z)|([+-])(\d{2}):?(\d{2}))$/
         );
-        if (m) {
-          const [, yr, mo, dy, hr, mn, sc = '00', ms = '000', zulu, sign, tzH, tzM] = m;
+        if (parsedIso) {
+          const [, yr, mo, dy, hr, mn, sc = '00', ms = '000', zulu, sign, tzH, tzM] = parsedIso;
           const baseMs = Date.UTC(+yr, +mo - 1, +dy, +hr, +mn, +sc, +ms.padEnd(3, '0'));
           const offsetMs = zulu ? 0 : ((+tzH * 60 + +tzM) * 60_000 * (sign === '+' ? 1 : -1));
           validTimeStr = new Date(baseMs - offsetMs).toISOString();
         } else {
-          // Last-resort fallback
-          const fb = new Date(cleanedTimeStr);
-          validTimeStr = isNaN(fb.getTime()) ? new Date(Date.now() + 60_000).toISOString() : fb.toISOString();
-          console.error(`ΓÜá∩╕Å REMINDER INTERCEPT: Non-standard date "${timeStr}" ΓÇö using fallback: ${validTimeStr}`);
+          const fallbackDate = new Date(cleanedTimeStr);
+          validTimeStr = isNaN(fallbackDate.getTime())
+            ? new Date(Date.now() + 60_000).toISOString()
+            : fallbackDate.toISOString();
         }
 
-        // INSERT notification_history row first so process-scheduled-reminders can pick it up
-        const { data: inserted, error: insertError } = await supabaseAdmin
+        const { data: inserted, error: insertError } = await supabaseClient
           .from('notification_history')
           .insert({
             user_id: userId,
@@ -2404,11 +2395,7 @@ async function interceptAndScheduleReminder(
           .select('id')
           .single();
 
-        if (insertError) {
-          console.error('ΓÜá∩╕Å REMINDER INTERCEPT: Failed to insert notification_history row', insertError.message);
-        } else {
-          // Reminder row saved successfully; delivery scheduling continues below.
-        }
+        if (insertError) continue;
 
         const notificationId = inserted?.id || null;
         let reminderDeliveryMode: 'scheduled' | 'fallback_only' = 'fallback_only';
@@ -2431,27 +2418,75 @@ async function interceptAndScheduleReminder(
         });
         if (schedResp.ok) {
           reminderDeliveryMode = 'scheduled';
-        } else {
-          const errBody = await schedResp.text();
-          console.error(`ΓÜá∩╕Å REMINDER INTERCEPT: Schedule failed ${schedResp.status}`, errBody);
         }
 
         if (notificationId) {
           try {
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ reminderScheduled: { id: notificationId, time: timeStr, scheduledFor: validTimeStr, text: reminderText, deliveryMode: reminderDeliveryMode } })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ reminderScheduled: { id: notificationId, time: scheduledTime, scheduledFor: validTimeStr, text: reminderText, deliveryMode: reminderDeliveryMode } })}\n\n`));
           } catch { /* stream may be closing */ }
         }
-      } catch (err) {
-        console.error('ΓÜá∩╕Å REMINDER INTERCEPT: Fetch error', err);
+
+        continue;
       }
 
-      return cleanText;
+      if (action === 'memory' && typeof data.text === 'string') {
+        const memoryText = normalizeHelpfulMemoryText(data.text, 180);
+        if (!memoryText) continue;
+
+        if (capturePaused) {
+          memoryPausedNotice = true;
+          continue;
+        }
+
+        if (!userId) continue;
+
+        const supabaseClient = getSupabaseAdmin();
+        if (!supabaseClient) continue;
+
+        const operation = typeof data.operation === 'string' ? data.operation.toLowerCase().trim() : '';
+
+        if (operation === 'remember') {
+          const memItem: DurableMemoryItem = {
+            key: `auto_${Date.now()}`,
+            type: 'identity_context',
+            layer: 'always_use',
+            sensitivity: 'normal',
+            action: 'remember',
+            text: memoryText,
+            confidence: 'high',
+            evidenceCount: 1,
+            keywords: [],
+            source: 'conversation'
+          };
+          await upsertAutoHelpfulMemory(supabaseClient, userId, [memItem]);
+          try { controller.enqueue(encoder.encode('data: ' + JSON.stringify({ metadata: { memoryAction: { operation: data.operation } } }) + '\n\n')); } catch {}
+        } else if (operation === 'forget') {
+          const forgetItem: DurableMemoryItem = {
+            key: `forget_${Date.now()}`,
+            type: 'identity_context',
+            action: 'forget',
+            text: memoryText,
+            confidence: 'high',
+            evidenceCount: 1,
+            keywords: [],
+            source: 'conversation'
+          };
+          await processForgetItems(supabaseClient, userId, [forgetItem]);
+          try { controller.enqueue(encoder.encode('data: ' + JSON.stringify({ metadata: { memoryAction: { operation: data.operation } } }) + '\n\n')); } catch {}
+        }
+      }
+    } catch {
+      continue;
     }
-  } catch (e) {
-      console.error('ΓÜá∩╕Å REMINDER INTERCEPT: Failed to parse intercepted reminder JSON', e);
   }
 
-  return responseText;
+  if (memoryPausedNotice) {
+    return cleanText
+      ? `${cleanText}\n\n${pausedMemoryNote}`
+      : pausedMemoryNote;
+  }
+
+  return cleanText;
 }
 
 // ΓöÇΓöÇΓöÇ LAZY-LOAD DISPATCHER ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -2464,13 +2499,11 @@ function buildSystemPrompt(
   personalTouch: Record<string, unknown> | null | undefined,
   activeTrigger: string,
   chatSubmode = 'chat',
-  lazyOpts?: { useSearch?: boolean; hasReminders?: boolean; isReminderTrigger?: boolean; formattedOffset?: string }
+  lazyOpts?: { hasReminders?: boolean; isReminderTrigger?: boolean; formattedOffset?: string }
 ) {
   const pt = (personalTouch || {}) as Record<string, unknown>;
   const userNick = ((pt.nickname as string | undefined) || '').toString().trim();
   const aiNick  = ((pt.aiNickname as string | undefined) || (pt.ai_nickname as string | undefined) || '').toString().trim();
-  const useSearch   = lazyOpts?.useSearch   ?? (activeTrigger === 'search');
-  const _hasReminders = lazyOpts?.hasReminders ?? false;
 
   // REMINDER INSTRUCTION: injected FIRST so it is never buried and always obeyed
   let reminderPrefix = '';
@@ -2479,7 +2512,7 @@ function buildSystemPrompt(
   }
 
   // BASE is always included (~500 chars)
-  let prompt = reminderPrefix + _promptBase(language, currentDate, localTime, pt, aiNick);
+  let prompt = reminderPrefix + buildMemoryActionInstruction() + '\n\n' + _promptBase(language, currentDate, localTime, pt, aiNick);
 
   // MODE-SPECIFIC EXTENSIONS ΓÇö injected only when needed
   if (activeTrigger === 'search') {
@@ -2489,10 +2522,6 @@ function buildSystemPrompt(
   } else if (chatSubmode === 'study') {
     // Study mode: tutor block only
     prompt += _promptStudy();
-    prompt += _promptTimezone();
-  } else if (useSearch) {
-    // Chat mode triggered grounding: compact search hint
-    prompt += _promptChatSearch(userNick, aiNick, currentDate);
     prompt += _promptTimezone();
   } else {
     // Pure chat: freshness hint only ΓÇö reminder interception handled at backend level
@@ -5174,8 +5203,6 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
         const numericOffset = offsetPart.replace('GMT', '').replace('UTC', '') || 'Z';
         const formattedOffset = numericOffset === 'Z' ? '+00:00' : (numericOffset.length <= 3 ? numericOffset + ':00' : numericOffset);
 
-        // Lazy-load: determine useSearch now so buildSystemPrompt can conditionally include blocks
-        const chatUsesSearch = (effectiveTrigger === 'chat') && chatNeedsSearch(message || '');
         const selectedDurableMemory = selectRelevantDurableMemory(normalizedDurableMemory, message || '', effectiveTrigger, chatSubmode);
         const selectedHelpfulMemory = helpfulMemorySettings.helpful_memory_enabled
           ? selectRelevantHelpfulMemory(helpfulMemoryItems, message || '', effectiveTrigger, chatSubmode)
@@ -5201,7 +5228,7 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
           personalTouch as Record<string, unknown> | null | undefined,
           effectiveTrigger,
           chatSubmode,
-          { useSearch: chatUsesSearch, hasReminders: !!activeRemindersContext, isReminderTrigger: messageHasReminderKeyword, formattedOffset }
+          { hasReminders: !!activeRemindersContext, isReminderTrigger: messageHasReminderKeyword, formattedOffset }
         );
         // Detect WhatsApp-style reply marker injected by the frontend and convert it into an explicit system instruction.
         // Supports EN: [Replying to: (wakti said) "..."]  and  AR: [╪▒╪»┘ï╪º ╪╣┘ä┘ë: (┘ê┘â╪¬┘è ┘é╪º┘ä) "..."]
@@ -6159,8 +6186,8 @@ If you are running out of space, keep this order and drop the rest:
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fallback, content: fallback })}\n\n`));
               }
 
-              // Intercept + schedule any reminder JSON embedded in the response
-              await interceptAndScheduleReminder(fullResponseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset);
+              // Intercept and process trailing action JSON blocks (reminders + memory)
+              fullResponseText = await interceptAndProcessActions(fullResponseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset, helpfulMemorySettings.capture_paused);
 
               await emitAiChatTrialFinished(trialRequestId);
               controller.enqueue(encoder.encode('data: [DONE]\n\n'));
@@ -6491,7 +6518,8 @@ If you are running out of space, keep this order and drop the rest:
               try { controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`)); } catch { /* ignore */ }
             },
             sysMsg,
-            { temperature: effectiveTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: effectiveTrigger === 'search' ? 6000 : 8000 }
+            { temperature: effectiveTrigger === 'search' ? 0.3 : 0.7, maxOutputTokens: effectiveTrigger === 'search' ? 6000 : 8000 },
+            normalizedImageAttachments.length === 0
           );
           
           if (geminiTokenCount === 0) {
@@ -6575,8 +6603,8 @@ If you are running out of space, keep this order and drop the rest:
         }
 
         if (aiProvider === 'gemini') {
-          // Backend reminder interception: parse JSON block from response, schedule, strip it
-          responseText = await interceptAndScheduleReminder(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset);
+          // Backend action interception: parse JSON blocks, process side-effects, strip them
+          responseText = await interceptAndProcessActions(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset, helpfulMemorySettings.capture_paused);
 
           // Log successful Gemini usage with token estimation
           const inputTokens = estimateTokens(requestMessage);
@@ -6641,8 +6669,8 @@ If you are running out of space, keep this order and drop the rest:
           responseText = claudeResponse; // Capture Claude response for token estimation
         }
 
-        // Backend reminder interception for OpenAI/Claude paths
-        responseText = await interceptAndScheduleReminder(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset);
+        // Backend action interception for OpenAI/Claude paths
+        responseText = await interceptAndProcessActions(responseText, userId || '', effectiveTimezone || 'UTC', controller, encoder, formattedOffset, helpfulMemorySettings.capture_paused);
 
         // Log successful OpenAI/Claude usage with token estimation
         const inputTokens = estimateTokens(requestMessage);

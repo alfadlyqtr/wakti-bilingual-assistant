@@ -10,7 +10,8 @@
     "build:analyze": "cross-env ANALYZE=true vite build",
     "lint": "eslint .",
     "qa:projects-generate-prompts": "node scripts/qa-projects-generate-prompts.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:runner": "npm --prefix server run dev"
   },
   "dependencies": {
     "@codesandbox/sandpack-react": "^2.20.0",

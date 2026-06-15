@@ -221,7 +221,7 @@ function SearchMessageCard({
 
   return (
     <div className="w-full space-y-4">
-      {!hasGroundedPlaceCards && (!isPlaceSearch || hasStructuredSearchCards) && (
+      {!hasGroundedPlaceCards && hasStructuredSearchCards && (
         <SearchCardsBlock message={message as any} language={language} introText={introOnly} />
       )}
 
@@ -309,27 +309,20 @@ function SearchMessageCard({
         <GroundedPlacesBlock message={message as any} language={language} />
       )}
 
-      {(hasGroundedPlaceCards || isPlaceSearch) && sources.length > 0 && (
-        <details className="rounded-xl border border-border/40 bg-muted/10 dark:bg-white/5 p-3">
-          <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-            {language === 'ar' ? `المصادر (${sources.length})` : `Sources (${sources.length})`}
-          </summary>
-          <ul className="mt-3 space-y-2">
-            {sources.slice(0, 10).map((s, idx) => (
-              <li key={idx} className="flex items-start gap-2 min-w-0">
-                <span className="text-muted-foreground text-xs mt-1">•</span>
-                <a
-                  href={s.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline text-xs break-words"
-                >
-                  {s.title || s.url}
-                </a>
-              </li>
+      {(hasGroundedPlaceCards || isPlaceSearch || sources.length > 0) && sources.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-border/40">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
+            <Globe className="w-3 h-3" />
+            {language === 'ar' ? 'المصادر' : 'Sources'}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {sources.slice(0, 6).map((s, idx) => (
+              <a key={idx} href={s.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-border/50 bg-muted/20 hover:bg-muted/50 transition-colors max-w-[200px]">
+                <span className="text-xs font-medium text-foreground/80 truncate">{s.title || s.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
+              </a>
             ))}
-          </ul>
-        </details>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -357,14 +350,40 @@ function MessageMarkdownImpl({ content, isStudyMode, language }: MessageMarkdown
   const stripBoxTag = (text: string): string =>
     text.replace(/\[BOX\][\s\S]*?\[\/BOX\]\n?/i, '').trimStart();
 
+  const displayContent = isStudyMode ? stripBoxTag(content) : content;
+
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeRaw]}
       components={{
+        p: ({ node, ...props }) => (
+          <p className="my-3 leading-7 text-[15px] text-foreground/95 first:mt-0 last:mb-0" {...props} />
+        ),
+        h1: ({ node, ...props }) => (
+          <h1 className="mt-5 mb-3 text-xl font-semibold tracking-tight text-foreground first:mt-0" {...props} />
+        ),
+        h2: ({ node, ...props }) => (
+          <h2 className="mt-5 mb-3 text-lg font-semibold tracking-tight text-foreground first:mt-0" {...props} />
+        ),
+        h3: ({ node, ...props }) => (
+          <h3 className="mt-4 mb-2 text-base font-semibold text-foreground first:mt-0" {...props} />
+        ),
+        ul: ({ node, ...props }) => (
+          <ul className="my-3 list-disc space-y-1.5 pl-5 marker:text-primary" {...props} />
+        ),
+        ol: ({ node, ...props }) => (
+          <ol className="my-3 list-decimal space-y-1.5 pl-5 marker:font-semibold marker:text-primary" {...props} />
+        ),
+        li: ({ node, ...props }) => (
+          <li className="leading-7 text-[15px] text-foreground/95" {...props} />
+        ),
+        blockquote: ({ node, ...props }) => (
+          <blockquote className="my-4 rounded-r-xl border-l-4 border-primary/40 bg-muted/25 px-4 py-3 italic text-foreground/85" {...props} />
+        ),
         table: ({ node, ...props }) => (
-          <div className="my-3 overflow-x-auto rounded-xl border border-border/60 bg-white/70 shadow-sm dark:bg-black/20">
-            <table className="w-full min-w-[400px] border-separate border-spacing-0 text-sm" {...props} />
+          <div className="my-4 overflow-x-auto rounded-2xl border border-border/60 bg-background/80 shadow-sm backdrop-blur-sm">
+            <table className="w-full min-w-[420px] border-separate border-spacing-0 text-sm" {...props} />
           </div>
         ),
         th: ({ node, ...props }) => (
@@ -389,16 +408,16 @@ function MessageMarkdownImpl({ content, isStudyMode, language }: MessageMarkdown
           const { className, children, ...props } = (rawProps as any);
           const isInline = !String(children).includes('\n');
           if (isInline) {
-            return <code className="px-1 py-[1px] rounded bg-muted/60" {...props}>{children}</code>;
+            return <code className="rounded-md bg-muted/70 px-1.5 py-0.5 font-medium text-[0.92em]" {...props}>{children}</code>;
           }
           return (
-            <pre className="bg-muted/40 p-3 rounded-md overflow-x-auto text-[13px]">
+            <pre className="my-4 overflow-x-auto rounded-xl border border-border/50 bg-muted/50 p-4 text-[13px] shadow-sm">
               <code className={className} {...props}>{children}</code>
             </pre>
           );
         },
         img: ({ node, ...props }) => (
-          <img className="max-w-full h-auto rounded-md border" {...props} />
+          <img className="my-4 h-auto max-w-full rounded-xl border border-border/50 shadow-sm" {...props} />
         ),
         a: ({ node, href, children, ...props }) => {
           const normalizedHref = href ? normalizeGoogleMapsUrl(href, language) : href;
@@ -470,7 +489,7 @@ function MessageMarkdownImpl({ content, isStudyMode, language }: MessageMarkdown
         },
       }}
     >
-      {isStudyMode ? stripBoxTag(content) : content}
+      {displayContent}
     </ReactMarkdown>
   );
 }
@@ -1663,7 +1682,7 @@ export function ChatMessages({
     // Render assistant content using ReactMarkdown (tables, code, images)
     if (message.role === 'assistant') {
       // Search: render the dedicated mobile-first Search UI
-      if (message.intent === 'search' || message.browsingUsed) {
+      if (message.intent === 'search') {
         return <SearchMessageCard message={message} language={language} />;
       }
 
@@ -1904,16 +1923,25 @@ export function ChatMessages({
         const firstSentence = text.split(/[.!?\n]/)[0];
         return firstSentence?.trim() || text.slice(0, 150);
       };
+      const extractStudyExplanation = (text: string): string => {
+        if (!text) return '';
+        const withoutBox = text.replace(/\[BOX\][\s\S]*?\[\/BOX\]\n?/i, '').trim();
+        if (!withoutBox) return '';
+        const withoutAnswerLead = withoutBox.replace(/^\s*\*?\*?Answer:?\*?\*?[^\n]*\n+/i, '').trim();
+        if (withoutAnswerLead) return withoutAnswerLead;
+        return withoutBox.replace(/^\s*\*?\*?Answer:?\*?\*?\s*/i, '').trim();
+      };
       // Note: [BOX]...[/BOX] stripping now happens inside MessageMarkdown component.
 
       return (
-        <div className="prose prose-sm max-w-none dark:prose-invert prose-p:my-2 prose-pre:my-3 prose-table:my-3">
+        <div className="max-w-none text-[15px] leading-7">
           {/* Render Study Mode structured answer - from Wolfram OR extracted from response */}
           {isStudyMode && (wolframMeta?.answer || content) && (
             <StudyModeMessage
               answer={wolframMeta?.answer || extractStudyAnswer(content)}
               steps={wolframMeta?.steps}
               inputInterpretation={wolframMeta?.interpretation}
+              explanation={extractStudyExplanation(content)}
               summaryBox={wolframMeta?.summaryBox}
               language={language}
             />
@@ -1928,7 +1956,7 @@ export function ChatMessages({
           {renderVisionStructured()}
           {/* Item #8 Batch B1b: memoized markdown renderer — skips re-parse
               on streaming-text updates when bubble content is unchanged. */}
-          <MessageMarkdown content={content} isStudyMode={isStudyMode} language={language} />
+          {!isStudyMode && <MessageMarkdown content={content} isStudyMode={false} language={language} />}
           {reminderScheduled && (
             <div className="mt-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-500/15 p-4 shadow-sm">
               <div className="flex items-start gap-3">
@@ -2141,6 +2169,7 @@ export function ChatMessages({
             const isApplied = metadata.applied || (metadata.filesModified && metadata.filesModified.length > 0);
             const filesModified = metadata.filesModified || [];
             const tasks = metadata.tasks || [];
+            const isStudy = (message as any)?.chatSubmode === 'study' || (message as any)?.metadata?.studyMode || (message as any)?.metadata?.wolfram?.mode === 'study';
             
             const replyToId = (message as any)?.replyTo as string | undefined;
             const replyQuotePreview = (message as any)?.replyQuote as string | undefined;
@@ -2156,13 +2185,12 @@ export function ChatMessages({
             return (
               <div id={`msg-${message.id}`} key={message.id} className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'} group scroll-mt-24 transition-shadow rounded-lg`}>
                 <div className="flex w-full min-w-0">
-                  
-                  <div className={`rounded-lg px-4 py-3 relative w-full min-h-24 ${
+                  <div className={`rounded-2xl px-4 py-3.5 relative w-full min-h-24 shadow-sm ${
                     message.role === 'user'
-                      ? ((message as any)?.metadata?.wolfram?.mode === 'study' || (message as any)?.chatSubmode === 'study'
-                          ? 'bg-purple-500 text-white'
-                          : 'bg-primary text-primary-foreground')
-                      : `bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-900 text-gray-900 dark:text-gray-100 border-2 ${getAssistantBubbleClasses(message)}`
+                      ? (isStudy
+                          ? 'bg-purple-500 text-white border border-purple-300/40'
+                          : 'bg-primary text-primary-foreground border border-primary/30')
+                      : `bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-slate-800 dark:via-slate-850 dark:to-slate-900 text-gray-900 dark:text-gray-100 border-2 ${getAssistantBubbleClasses(message)}`
                   }`}>
                     {/* Mode Badge with proper logic */}
                     <div className="flex items-center gap-2 mb-2">

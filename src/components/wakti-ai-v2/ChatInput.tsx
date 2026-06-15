@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAudioSession } from '@/hooks/useAudioSession';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Send, Loader2, ChevronDown, ChevronLeft, ChevronRight, Plus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Mic, X, Square, Volume2 } from 'lucide-react';
+import { Send, Loader2, ChevronLeft, ChevronRight, Plus, MessageSquare, Search as SearchIcon, Image as ImageIcon, SlidersHorizontal, Mic, X, Square, Volume2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -124,6 +124,7 @@ export function ChatInput({
   const [chatSubmodeMenuPos, setChatSubmodeMenuPos] = useState<{ top: number; left: number } | null>(null);
   // Talk mode state
   const [isTalkOpen, setIsTalkOpen] = useState(false);
+  const memoryToastSeenRef = useRef<Set<string>>(new Set());
 
   // Compute a safe, clamped viewport position for the QuickModes portal
   const getQuickModesPortalPos = () => {
@@ -481,6 +482,28 @@ export function ChatInput({
     window.addEventListener('wakti-auto-submit', handleAutoSubmit);
     return () => window.removeEventListener('wakti-auto-submit', handleAutoSubmit);
   }, [message, isLoading]);
+
+  useEffect(() => {
+    const latestAssistantWithMemoryAction = [...(sessionMessages || [])]
+      .reverse()
+      .find((m: any) => m?.role === 'assistant' && m?.metadata?.memoryAction && m?.id);
+
+    if (!latestAssistantWithMemoryAction) return;
+
+    const messageId = String(latestAssistantWithMemoryAction.id);
+    if (memoryToastSeenRef.current.has(messageId)) return;
+    memoryToastSeenRef.current.add(messageId);
+
+    const metadata = latestAssistantWithMemoryAction.metadata as any;
+    if (metadata?.memoryAction) {
+      const { toast } = require('sonner');
+      if (metadata.memoryAction.operation === 'remember') {
+        toast.success(language === 'ar' ? 'تم حفظ الذاكرة المفيدة!' : 'Helpful memory saved!');
+      } else {
+        toast.success(language === 'ar' ? 'تم تحديث الذاكرة!' : 'Memory updated!');
+      }
+    }
+  }, [sessionMessages, language]);
 
   const getGuestBlockedMessage = (type: 'attachment' | 'study' | 'search' | 'feature' = 'feature') => {
     if (type === 'attachment') {
@@ -921,30 +944,6 @@ export function ChatInput({
             `}
             ref={cardRef}
           >
-            {/* Collapse toggle positioned above input (hidden when keyboard is visible) */}
-            {!isKeyboardMode && (
-            <div className="absolute -top-6 left-1/2 -translate-x-1/2 z-20 hide-on-keyboard">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      onPointerUp={(e) => { e.preventDefault(); e.stopPropagation(); setIsInputCollapsed(v => !v); }}
-                      aria-expanded={!isInputCollapsed}
-                      aria-label={language === 'ar' ? (isInputCollapsed ? 'توسيع الإدخال' : 'طي الإدخال') : (isInputCollapsed ? 'Expand input' : 'Collapse input')}
-                      className="h-8 w-8 rounded-full flex items-center justify-center bg-white text-sky-600 dark:bg-neutral-900 dark:text-white/90 hover:bg-white active:bg-white transition-all border border-white/80 dark:border-white/10 shadow-lg hover:shadow-xl ring-2 ring-sky-500/60 dark:ring-sky-400/60 ring-offset-2 ring-offset-white dark:ring-offset-neutral-900 hover:scale-[1.03] touch-manipulation"
-                    >
-                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${isInputCollapsed ? 'rotate-180' : ''}`} />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs bg-black/80 dark:bg-white/80 backdrop-blur-xl border-0 rounded-xl">
-                    {language === 'ar' ? (isInputCollapsed ? 'توسيع الإدخال' : 'طي الإدخال') : (isInputCollapsed ? 'Expand input' : 'Collapse input')}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-            )}
-            
             {/* Top row with all buttons - always visible (even during mobile keyboard) */}
             <div className="flex items-center justify-between px-3 pt-2 pb-0 isolate relative z-[200] pointer-events-auto">
                 {/* Left side: Extra + Modes + Active Chat */}
@@ -1118,8 +1117,8 @@ export function ChatInput({
                     </AnimatePresence>
                   </div>
 
-                  <div className="min-w-0 max-w-[120px] sm:max-w-[170px] px-0.5">
-                    <span className="block truncate text-xs font-semibold tracking-[-0.01em] text-[hsl(243_40%_24%)] dark:text-white/75">
+                  <div className="min-w-0 max-w-[130px] sm:max-w-[190px] px-0.5">
+                    <span className="block truncate text-[12.5px] sm:text-sm font-bold tracking-[0.01em] text-[hsl(243_84%_14%)] dark:text-white/90 drop-shadow-[0_1px_6px_rgba(0,0,0,0.28)]">
                       {activeConversationTitle}
                     </span>
                   </div>

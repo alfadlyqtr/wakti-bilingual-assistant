@@ -1383,8 +1383,53 @@ async function handleComments(action: string, projectId: string, ownerId: string
 }
 
 // Handle FreePik stock media search (images and videos)
-const FREEPIK_API_KEY = Deno.env.get('MAGNIFIC_API_KEY') || Deno.env.get('FREEPIK_API_KEY') || 'FPSX97f81d1b76ea19976ac068b75e93ea9d';
+const FREEPIK_API_KEY = Deno.env.get('MAGNIFIC_API_KEY') || Deno.env.get('FREEPIK_API_KEY') || '';
 const FREEPIK_API_BASE_URL = 'https://api.magnific.com/v1';
+
+function toFreepikLimit(limit: unknown, max = 20): number {
+  const parsed = Number(limit);
+  if (!Number.isFinite(parsed)) return 5;
+  return Math.max(1, Math.min(Math.floor(parsed), max));
+}
+
+function buildFreepikFallbackResponse(query: unknown, page: unknown, limit: unknown, reason: string) {
+  const safeLimit = toFreepikLimit(limit, 20);
+  const safePage = Math.max(1, Number(page) || 1);
+  const label = (typeof query === 'string' && query.trim() ? query : 'stock image')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 4)
+    .join(' ');
+
+  const images = Array.from({ length: safeLimit }, (_, index) => {
+    const text = encodeURIComponent(`${label} ${index + 1}`);
+    const url = `https://placehold.co/1200x800/1a1a2e/eaeaea?text=${text}`;
+    return {
+      id: `fallback-${index + 1}`,
+      title: `${label} ${index + 1}`,
+      url,
+      thumbnail: url,
+      size: '1200x800',
+      orientation: 'horizontal',
+      type: 'placeholder',
+      author: 'Wakti Fallback',
+      authorAvatar: '',
+      freepikUrl: '',
+      downloads: 0,
+      likes: 0,
+      fallback: true,
+    };
+  });
+
+  return {
+    images,
+    total: images.length,
+    page: safePage,
+    lastPage: 1,
+    fallback: true,
+    error: reason,
+  };
+}
 
 function normalizeFreepikFilters(filters: unknown): { type?: string; orientation?: string; color?: string } {
   if (!filters || typeof filters !== 'object') {
@@ -1415,20 +1460,20 @@ function normalizeFreepikFilters(filters: unknown): { type?: string; orientation
 async function handleFreepik(action: string, _projectId: string, _ownerId: string, data: Record<string, unknown>) {
   console.log(`[project-backend-api] Freepik: ${action}`, data);
 
-  if (!FREEPIK_API_KEY) {
-    throw new Error('Freepik API key not configured');
-  }
-
-  const headers = {
-    'x-magnific-api-key': FREEPIK_API_KEY,
-    'Accept': 'application/json',
-  };
-
   switch (action) {
     case 'images': {
       // Search for images/photos/vectors
       const { query, page = 1, limit = 20, filters, language = 'en-US' } = data;
       if (!query) throw new Error('query required');
+
+      if (!FREEPIK_API_KEY) {
+        return buildFreepikFallbackResponse(query, page, limit, 'Freepik API key not configured');
+      }
+
+      const headers = {
+        'x-magnific-api-key': FREEPIK_API_KEY,
+        'Accept': 'application/json',
+      };
 
       const normalizedQuery = String(query).trim();
       const normalizedFilters = normalizeFreepikFilters(filters);
@@ -1497,21 +1542,30 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
       }
 
       if (upstreamErrors.length > 0) {
-        throw new Error(`Freepik image search failed: ${upstreamErrors[0]}`);
+        return buildFreepikFallbackResponse(
+          normalizedQuery,
+          page,
+          limit,
+          `Freepik image search failed: ${upstreamErrors[0]}`
+        );
       }
 
-      return {
-        images: [],
-        total: 0,
-        page,
-        lastPage: 1,
-      };
+      return buildFreepikFallbackResponse(normalizedQuery, page, limit, 'No images returned from Freepik');
     }
 
     case 'videos': {
       // Search for videos
       const { query, page = 1, limit = 20, filters } = data;
       if (!query) throw new Error('query required');
+
+      if (!FREEPIK_API_KEY) {
+        return { videos: [], total: 0, page, fallback: true, error: 'Freepik API key not configured' };
+      }
+
+      const headers = {
+        'x-magnific-api-key': FREEPIK_API_KEY,
+        'Accept': 'application/json',
+      };
 
       const params = new URLSearchParams({
         term: query as string,
@@ -1563,6 +1617,15 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
       // Get download URL for a resource
       const { resourceId, type = 'image' } = data;
       if (!resourceId) throw new Error('resourceId required');
+
+      if (!FREEPIK_API_KEY) {
+        throw new Error('Freepik API key not configured');
+      }
+
+      const headers = {
+        'x-magnific-api-key': FREEPIK_API_KEY,
+        'Accept': 'application/json',
+      };
 
       const endpoint = type === 'video' 
         ? `${FREEPIK_API_BASE_URL}/videos/${resourceId}/download`

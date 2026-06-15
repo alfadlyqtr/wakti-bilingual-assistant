@@ -3,9 +3,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkTrialAccess, checkAndConsumeTrialTokenOnce, buildTrialErrorPayload, buildTrialSuccessPayload } from "../_shared/trial-tracker.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || "";
-const GOOGLE_TTS_KEY = Deno.env.get("GOOGLE_TTS_KEY") || Deno.env.get("GOOGLE_TTS_API_KEY") || "";
-const GEMINI_TTS_KEY = GOOGLE_TTS_KEY || GEMINI_API_KEY;
+const GOOGLE_APPLICATION_CREDENTIALS_JSON = Deno.env.get("GOOGLE_APPLICATION_CREDENTIALS_JSON") || "";
+const GOOGLE_TTS_KEY = Deno.env.get("GOOGLE_TTS_KEY") || Deno.env.get("GOOGLE_TTS_API_KEY") || Deno.env.get("GEMINI_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -15,11 +14,49 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Gemini 2.5 Flash TTS voices (mirrors voice-tts function)
+// Gemini 2.5 Flash TTS voices — Cloud TTS API names
 const VOICE_MAP: Record<string, string> = {
-  cedar: "Puck",   // Male
-  marin: "Leda",   // Female
+  cedar: "Puck",
+  marin: "Leda",
 };
+
+// ── OAuth token cache ─────────────────────────────────────────────────────
+type ServiceAccountJson = { client_email: string; private_key: string; token_uri?: string };
+let cachedToken: { token: string; expiresAtMs: number } | null = null;
+
+function pemToDer(pem: string): ArrayBuffer {
+  const cleaned = pem.replace(/-----BEGIN[\s\S]*?-----/g, "").replace(/-----END[\s\S]*?-----/g, "").replace(/\s+/g, "");
+  const raw = atob(cleaned);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  return bytes.buffer;
+}
+
+function b64url(input: Uint8Array): string {
+  return btoa(String.fromCharCode(...input)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+async function getGoogleBearerToken(): Promise<string | null> {
+  if (!GOOGLE_APPLICATION_CREDENTIALS_JSON) return null;
+  try {
+    if (cachedToken && cachedToken.expiresAtMs > Date.now() + 60_000) return cachedToken.token;
+    const sa = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON) as ServiceAccountJson;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const aud = sa.token_uri || "https://oauth2.googleapis.com/token";
+    const enc = new TextEncoder();
+    const header = b64url(enc.encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
+    const payload = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub: sa.client_email, aud, iat: nowSec, exp: nowSec + 3600, scope: "https://www.googleapis.com/auth/cloud-platform" })));
+    const sigInput = `${header}.${payload}`;
+    const key = await crypto.subtle.importKey("pkcs8", pemToDer(sa.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
+    const sig = b64url(new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, enc.encode(sigInput))));
+    const tokenResp = await fetch(aud, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${sigInput}.${sig}` }).toString() });
+    if (!tokenResp.ok) { console.error("[live-translate] OAuth token error:", await tokenResp.text()); return null; }
+    const tokenJson = await tokenResp.json() as { access_token?: string; expires_in?: number };
+    if (!tokenJson.access_token) return null;
+    cachedToken = { token: tokenJson.access_token, expiresAtMs: Date.now() + (tokenJson.expires_in ?? 3600) * 1000 };
+    return tokenJson.access_token;
+  } catch (e) { console.error("[live-translate] OAuth error:", e); return null; }
+}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -47,7 +84,7 @@ serve(async (req: Request) => {
       });
     }
 
-    // Trial gate — reuse interpreter quota (5 for free users)
+    // Trial gate
     const trial = await checkTrialAccess(supabase, user.id, "interpreter", 5);
     if (!trial.allowed) {
       return new Response(JSON.stringify(buildTrialErrorPayload("interpreter", trial)), {
@@ -56,7 +93,6 @@ serve(async (req: Request) => {
       });
     }
 
-    // Parse multipart form: audio file + metadata
     const contentType = req.headers.get("content-type") || "";
     if (!contentType.includes("multipart/form-data")) {
       return new Response(JSON.stringify({ error: "Expected multipart/form-data" }), {
@@ -80,12 +116,18 @@ serve(async (req: Request) => {
 
     const geminiVoice = VOICE_MAP[voiceKey] || "Puck";
 
+    // Languages NOT supported by Whisper — pass empty string so Whisper auto-detects
+    const WHISPER_UNSUPPORTED = new Set(["rw", "fr_ca"]);
+
     // ── Step 1: Whisper transcription ──────────────────────────────────────
     console.log("[live-translate] Step 1: Whisper transcription...");
+    const whisperLangCode = (spokenLanguage !== "auto" && !WHISPER_UNSUPPORTED.has(spokenLanguage))
+      ? spokenLanguage
+      : "";
     const whisperForm = new FormData();
     whisperForm.append("file", audioFile, audioFile.name || "audio.webm");
     whisperForm.append("model", "whisper-1");
-    whisperForm.append("language", spokenLanguage !== "auto" ? spokenLanguage : "");
+    whisperForm.append("language", whisperLangCode);
     whisperForm.append("response_format", "text");
 
     const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
@@ -114,8 +156,6 @@ serve(async (req: Request) => {
 
     // ── Step 2: GPT-4o-mini translation ───────────────────────────────────
     console.log("[live-translate] Step 2: Translating...");
-
-    // Get target language full name for the prompt
     const LANGUAGE_NAMES: Record<string, string> = {
       en: "English", ar: "Arabic", fr: "French", de: "German", es: "Spanish",
       it: "Italian", pt: "Portuguese", ru: "Russian", zh: "Chinese", ja: "Japanese",
@@ -127,23 +167,20 @@ serve(async (req: Request) => {
       lv: "Latvian", lt: "Lithuanian", fa: "Persian", ur: "Urdu", bn: "Bengali",
       sw: "Swahili", mt: "Maltese", lb: "Luxembourgish", is: "Icelandic",
       ka: "Georgian", eu: "Basque", af: "Afrikaans", tl: "Filipino",
+      sl: "Slovenian", pa: "Punjabi", nn: "Norwegian Nynorsk", ml: "Malayalam",
+      ne: "Nepali", ht: "Haitian Creole", fr_ca: "French (Canada)", be: "Belarusian",
+      az: "Azerbaijani", hy: "Armenian", am: "Amharic", rw: "Kinyarwanda",
     };
     const targetLangName = LANGUAGE_NAMES[targetLanguage] || targetLanguage;
 
     const gptRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "gpt-4o-mini",
         temperature: 0.2,
         messages: [
-          {
-            role: "system",
-            content: `You are a precise translator. Translate the user's text into ${targetLangName}. Output ONLY the translation — no explanations, no notes, no quotation marks, no original text. Just the clean translated text.`,
-          },
+          { role: "system", content: `You are a precise translator. Translate the user's text into ${targetLangName}. Output ONLY the translation — no explanations, no notes, no quotation marks, no original text. Just the clean translated text.` },
           { role: "user", content: transcript },
         ],
       }),
@@ -168,32 +205,35 @@ serve(async (req: Request) => {
     }
     console.log("[live-translate] Translation:", translation);
 
-    // ── Step 3: Gemini 2.5 Flash TTS ──────────────────────────────────────
-    // Uses generativelanguage.googleapis.com — works with GEMINI_API_KEY (AI Studio).
-    // texttospeech.googleapis.com requires a Google Cloud key (different product).
-    console.log("[live-translate] Step 3: Gemini 2.5 Flash TTS voice:", geminiVoice);
-    const ttsRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-tts:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: translation }] }],
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: { voiceName: geminiVoice },
-              },
-            },
-          },
-        }),
-      }
-    );
+    // ── Step 3: Cloud Text-to-Speech API ──────────────────────────────────
+    console.log("[live-translate] Step 3: Cloud TTS voice:", geminiVoice);
+    const bearerToken = await getGoogleBearerToken();
+    const ttsUrl = bearerToken
+      ? "https://texttospeech.googleapis.com/v1/text:synthesize"
+      : `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}`;
+    const ttsHeaders: Record<string, string> = { "Content-Type": "application/json" };
+    if (bearerToken) ttsHeaders["Authorization"] = `Bearer ${bearerToken}`;
+
+    if (!bearerToken && !GOOGLE_TTS_KEY) {
+      return new Response(JSON.stringify({ error: "Voice synthesis not configured." }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const ttsRes = await fetch(ttsUrl, {
+      method: "POST",
+      headers: ttsHeaders,
+      body: JSON.stringify({
+        input: { text: translation },
+        voice: { languageCode: "en-US", name: geminiVoice, model_name: "gemini-2.5-flash-tts" },
+        audioConfig: { audioEncoding: "MP3" },
+      }),
+    });
 
     if (!ttsRes.ok) {
       const err = await ttsRes.text();
-      console.error("[live-translate] Gemini TTS error:", ttsRes.status, err);
+      console.error("[live-translate] Cloud TTS error:", ttsRes.status, err);
       return new Response(JSON.stringify({ error: "Voice synthesis failed. Please try again." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -201,44 +241,29 @@ serve(async (req: Request) => {
     }
 
     const ttsData = await ttsRes.json();
-    const audioPart = ttsData?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
-    const audioBase64 = audioPart?.data as string | undefined;
-    const audioMime = (audioPart?.mimeType as string) || "audio/wav";
+    const audioBase64 = ttsData?.audioContent as string | undefined;
     if (!audioBase64) {
-      console.error("[live-translate] Gemini TTS no audio:", JSON.stringify(ttsData).slice(0, 300));
+      console.error("[live-translate] Cloud TTS no audio:", JSON.stringify(ttsData).slice(0, 300));
       return new Response(JSON.stringify({ error: "Voice synthesis returned empty audio. Please try again." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const audioMime = "audio/mp3";
 
-    // Consume trial token
     const consume = await checkAndConsumeTrialTokenOnce(supabase, user.id, "interpreter", 5, requestId);
     const trialPayload = consume.allowed ? buildTrialSuccessPayload("interpreter", consume) : null;
 
-    console.log("[live-translate] Done. Returning transcript + translation + audio.");
+    console.log("[live-translate] Done.");
     return new Response(
-      JSON.stringify({
-        success: true,
-        transcript,
-        translation,
-        audio_base64: audioBase64,
-        audio_mime: audioMime,
-        trial: trialPayload,
-      }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      JSON.stringify({ success: true, transcript, translation, audio_base64: audioBase64, audio_mime: audioMime, trial: trialPayload }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("[live-translate] Unexpected error:", err);
     return new Response(
       JSON.stringify({ error: "Something went wrong. Please try again." }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
