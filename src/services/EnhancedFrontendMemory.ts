@@ -42,6 +42,7 @@ class EnhancedFrontendMemoryClass {
           content: typeof m?.content === 'string' ? m.content : '',
           timestamp: m?.timestamp || Date.now(),
           intent: m?.intent,
+          attachedFiles: m?.attachedFiles,
           // keep confidence only if small literal
           confidence: (m?.confidence === 'high' || m?.confidence === 'medium' || m?.confidence === 'low') ? m.confidence : undefined,
           // crucial for image messages

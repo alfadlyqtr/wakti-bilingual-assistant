@@ -93,7 +93,6 @@ export function ChatInput({
   onGuestBlockedAction
 }: ChatInputProps) {
   const { language } = useTheme();
-  const [wasAutoSwitchedToVision, setWasAutoSwitchedToVision] = useState(false);
   const [isModeMenuOpen, setIsModeMenuOpen] = useState(false);
   const [showQuickModes, setShowQuickModes] = useState(false);
   const quickModesAnchorRef = useRef<HTMLButtonElement>(null);
@@ -321,23 +320,6 @@ export function ChatInput({
     startUploading
   } = useSimplifiedFileUpload();
 
-  // Auto-reset vision mode when no images are present
-  // CRITICAL: Do NOT reset while a request is loading (isLoading=true)
-  useEffect(() => {
-    if (isLoading) return; // Don't reset during active request
-
-    const hasAnyImage = Array.isArray(uploadedFiles) && uploadedFiles.some((f: any) => {
-      const t = (f?.type || '') as string;
-      const url = (f?.url || '') as string;
-      return t.startsWith('image/') || (typeof url === 'string' && (url.startsWith('http') || url.startsWith('data:')));
-    });
-
-    if (wasAutoSwitchedToVision && activeTrigger === 'vision' && !hasAnyImage) {
-      if (onTriggerChange) onTriggerChange('chat');
-      setWasAutoSwitchedToVision(false);
-    }
-  }, [uploadedFiles, activeTrigger, wasAutoSwitchedToVision, onTriggerChange, isLoading]);
-
 
   // Removed auto-focus to avoid programmatically opening the mobile keyboard
   // Keyboard should appear only after explicit user interaction with the input
@@ -521,6 +503,15 @@ export function ChatInput({
       : 'This feature needs a full account. As a guest, you can continue with chat only.';
   };
 
+  const appendChipPrompt = (chipText: string) => {
+    const existing = typeof message === 'string' ? message.trim() : '';
+    if (!existing) {
+      setMessage(chipText);
+      return;
+    }
+    setMessage(`${existing}\n${chipText}`);
+  };
+
   const handleSendMessage = async () => {
     if (message.trim().length > 0 && !isLoading && !isUploading) {
       if (isGuest && (activeTrigger !== 'chat' || chatSubmode !== 'chat' || uploadedFiles.length > 0)) {
@@ -536,25 +527,7 @@ export function ChatInput({
         return;
       }
       console.log('📤 SEND: Message being sent', { message: message.substring(0, 50), filesCount: uploadedFiles.length });
-      
-      // Use the current activeTrigger - no auto-switching for image mode
-      let finalTrigger = activeTrigger;
-      
-      // AUTO-SWITCH TO VISION MODE ONLY if not already in image mode
-      // BUT: Do NOT switch if we're in Study mode - Study handles images for tutoring
-      if (uploadedFiles.length > 0 && activeTrigger !== 'image') {
-        const hasImages = uploadedFiles.some(file => file.type?.startsWith('image/'));
-        const isStudyMode = activeTrigger === 'chat' && chatSubmode === 'study';
-        if (hasImages && activeTrigger !== 'video' && activeTrigger !== 'vision' && !isStudyMode) {
-          finalTrigger = 'vision';
-          setWasAutoSwitchedToVision(true);
-          console.log('🔍 AUTO-SWITCH: Images detected, switching to vision mode');
-          // Update the actual trigger
-          if (onTriggerChange) {
-            onTriggerChange('vision');
-          }
-        }
-      }
+      const finalTrigger = activeTrigger;
 
       // PROPERLY CONVERT UPLOADED FILES TO ATTACHED FILES FORMAT
       // Include raw base64 as `data` and `content` for backend VisionSystem (Claude/OpenAI)
@@ -593,18 +566,10 @@ export function ChatInput({
       console.log('📎 ENHANCED FILES COUNT:', enhancedFiles?.length, 'First file data length:', enhancedFiles?.[0]?.data?.length);
 
       // Clear input immediately for snappier UX, while sending uses captured values
-      // IMPORTANT: Do NOT clear files for Vision mode - keep images visible
       const outgoingMessage = message;
       const outgoingFiles = enhancedFiles;
       setMessage('');
-      // Only clear files for non-vision modes (Image generation, etc.)
-      // Vision mode keeps images visible throughout the conversation
-      console.log('🧹 CLEAR FILES CHECK:', { finalTrigger, willClear: finalTrigger !== 'vision' });
-      if (finalTrigger !== 'vision') {
-        clearFiles();
-      } else {
-        console.log('✅ VISION MODE: Keeping images visible (not clearing)');
-      }
+      clearFiles();
 
       // If Search + YouTube submode, prefix with lightweight marker for routing in service
       const maybePrefixed = (finalTrigger === 'search' && searchSubmode === 'youtube')
@@ -613,22 +578,13 @@ export function ChatInput({
 
       const sendPromise = onSendMessage(
         maybePrefixed, 
-        finalTrigger, // Use the final trigger (could be auto-switched to vision)
+        finalTrigger,
         outgoingFiles,
         undefined,
         undefined,
         activeTrigger === 'chat' ? chatSubmode : undefined, // Pass chatSubmode for Chat mode (chat vs study)
         replyContext || undefined // Pass reply context if replying to a message
       );
-
-      // Vision UX: clear the uploader area after sending, but keep the image in the thread.
-      // Also prevent auto-reset to Chat when we intentionally clear the uploader.
-      if (finalTrigger === 'vision') {
-        try {
-          setWasAutoSwitchedToVision(false);
-          clearFiles();
-        } catch {}
-      }
 
       await sendPromise;
       
@@ -697,12 +653,6 @@ export function ChatInput({
       }
       if (validFiles.length > 0) {
         handleFilesUploaded(validFiles);
-        // Auto-switch to Vision to reflect image context when in Chat (but NOT in Study mode)
-        // Study mode keeps images for tutoring without switching to Vision
-        if (activeTrigger === 'chat' && chatSubmode !== 'study' && onTriggerChange) {
-          onTriggerChange('vision');
-          setWasAutoSwitchedToVision(true);
-        }
       }
     }
     // reset input so same file can be chosen again
@@ -950,14 +900,6 @@ export function ChatInput({
               isUploading={isUploading}
               disabled={isUploading}
               isStudyMode={activeTrigger === 'chat' && chatSubmode === 'study'}
-              onAutoSwitchMode={(mode) => {
-                if (onTriggerChange) {
-                  onTriggerChange(mode);
-                  if (mode === 'vision') {
-                    setWasAutoSwitchedToVision(true);
-                  }
-                }
-              }}
             />
         </>
       )}
@@ -1214,7 +1156,7 @@ export function ChatInput({
                           <span className="text-xs">YouTube</span>
                         </button>
                       </div>
-                    ) : (activeTrigger === 'chat' || activeTrigger === 'vision') ? (
+                    ) : (activeTrigger === 'chat' || activeTrigger === 'vision' || activeTrigger === 'search') ? (
                       <div className="relative flex items-center gap-2">
                         {/* Talk Mode Button - Direct access, no dropdown */}
                         {activeTrigger === 'chat' && chatSubmode !== 'study' && !isGuest && (
@@ -1260,19 +1202,19 @@ export function ChatInput({
             {!isKeyboardMode && uploadedFiles.length > 0 && message === '' && !isInputCollapsed && activeTrigger === 'chat' && chatSubmode === 'study' && (
               <div className="flex gap-2 flex-wrap px-3 py-2 mb-2 border-b border-purple-200/30 hide-on-keyboard">
                 <button
-                  onClick={() => setMessage('Explain this step by step')}
+                  onClick={() => appendChipPrompt('Explain this step by step')}
                   className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
                 >
                   📚 {language === 'ar' ? 'اشرح خطوة بخطوة' : 'Explain step by step'}
                 </button>
                 <button
-                  onClick={() => setMessage('Solve this and teach me how')}
+                  onClick={() => appendChipPrompt('Solve this and teach me how')}
                   className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
                 >
                   🧠 {language === 'ar' ? 'حل وعلمني' : 'Solve and teach me'}
                 </button>
                 <button
-                  onClick={() => setMessage('What are the key concepts here?')}
+                  onClick={() => appendChipPrompt('What are the key concepts here?')}
                   className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
                 >
                   💡 {language === 'ar' ? 'ما المفاهيم الرئيسية؟' : 'Key concepts?'}
@@ -1285,13 +1227,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'ids' && (
                       <>
                         <button
-                          onClick={() => setMessage('What info is on this document?')}
+                          onClick={() => appendChipPrompt('What info is on this document?')}
                           className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm"
                         >
                           🔍 {language === 'ar' ? 'ما المعلومات الموجودة في هذا المستند؟' : 'What info is on this document?'}
                         </button>
                         <button
-                          onClick={() => setMessage('Extract all the text for me')}
+                          onClick={() => appendChipPrompt('Extract all the text for me')}
                           className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 text-blue-800 rounded-full text-sm"
                         >
                           📝 {language === 'ar' ? 'استخرج كل النص' : 'Extract all the text'}
@@ -1301,13 +1243,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'bills' && (
                       <>
                         <button
-                          onClick={() => setMessage('How much did I spend?')}
+                          onClick={() => appendChipPrompt('How much did I spend?')}
                           className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm"
                         >
                           💰 {language === 'ar' ? 'كم أنفقت؟' : 'How much did I spend?'}
                         </button>
                         <button
-                          onClick={() => setMessage('Split this bill between ___ people')}
+                          onClick={() => appendChipPrompt('Split this bill between ___ people')}
                           className="px-3 py-1.5 bg-green-100 hover:bg-green-200 text-green-800 rounded-full text-sm"
                         >
                           ➗ {language === 'ar' ? 'قسّم هذه الفاتورة' : 'Split this bill'}
@@ -1317,13 +1259,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'food' && (
                       <>
                         <button
-                          onClick={() => setMessage('How many calories is this?')}
+                          onClick={() => appendChipPrompt('How many calories is this?')}
                           className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
                         >
                           🔥 {language === 'ar' ? 'كم عدد السعرات؟' : 'How many calories?'}
                         </button>
                         <button
-                          onClick={() => setMessage('What ingredients do you see?')}
+                          onClick={() => appendChipPrompt('What ingredients do you see?')}
                           className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-full text-sm"
                         >
                           🥗 {language === 'ar' ? 'ما المكونات؟' : 'What ingredients?'}
@@ -1333,13 +1275,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'docs' && (
                       <>
                         <button
-                          onClick={() => setMessage('Answer the questions in this')}
+                          onClick={() => appendChipPrompt('Answer the questions in this')}
                           className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
                         >
                           📚 {language === 'ar' ? 'أجب عن الأسئلة' : 'Answer the questions'}
                         </button>
                         <button
-                          onClick={() => setMessage('Explain this chart/report')}
+                          onClick={() => appendChipPrompt('Explain this chart/report')}
                           className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-full text-sm"
                         >
                           📊 {language === 'ar' ? 'اشرح هذا المخطط' : 'Explain this chart'}
@@ -1349,13 +1291,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'screens' && (
                       <>
                         <button
-                          onClick={() => setMessage("What's the error/problem here?")}
+                          onClick={() => appendChipPrompt("What's the error/problem here?")}
                           className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm"
                         >
                           🚨 {language === 'ar' ? 'ما الخطأ هنا؟' : "What's the error?"}
                         </button>
                         <button
-                          onClick={() => setMessage('How do I fix this step by step?')}
+                          onClick={() => appendChipPrompt('How do I fix this step by step?')}
                           className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-800 rounded-full text-sm"
                         >
                           🛠️ {language === 'ar' ? 'كيف أصلح ذلك؟' : 'How to fix this?'}
@@ -1365,13 +1307,13 @@ export function ChatInput({
                     {uploadedFiles[0]?.imageType?.id === 'photos' && (
                       <>
                         <button
-                          onClick={() => setMessage('Describe the person/people')}
+                          onClick={() => appendChipPrompt('Describe the person/people')}
                           className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm"
                         >
                           👥 {language === 'ar' ? 'صف الأشخاص' : 'Describe the people'}
                         </button>
                         <button
-                          onClick={() => setMessage('Where was this taken?')}
+                          onClick={() => appendChipPrompt('Where was this taken?')}
                           className="px-3 py-1.5 bg-pink-100 hover:bg-pink-200 text-pink-800 rounded-full text-sm"
                         >
                           📍 {language === 'ar' ? 'أين تم التقاطها؟' : 'Where was this taken?'}
@@ -1381,13 +1323,13 @@ export function ChatInput({
                     {(!uploadedFiles[0]?.imageType || uploadedFiles[0]?.imageType?.id === 'general') && (
                       <>
                         <button
-                          onClick={() => setMessage('Describe everything you see')}
+                          onClick={() => appendChipPrompt('Describe everything you see')}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm"
                         >
                           👁️ {language === 'ar' ? 'صف كل شيء' : 'Describe everything'}
                         </button>
                         <button
-                          onClick={() => setMessage("What's the main subject here?")}
+                          onClick={() => appendChipPrompt("What's the main subject here?")}
                           className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-full text-sm"
                         >
                           🔍 {language === 'ar' ? 'ما الموضوع الرئيسي؟' : "What's the main subject?"}

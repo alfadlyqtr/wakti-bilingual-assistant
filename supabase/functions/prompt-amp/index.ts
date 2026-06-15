@@ -87,9 +87,80 @@ function detectOutputLanguage(text: string): "ar" | "en" | "mixed" {
   return "en";
 }
 
+function normalizeAmpText(text: string): string {
+  let cleaned = (text || "").trim();
+  if (cleaned.startsWith("```")) {
+    cleaned = cleaned.replace(/^```(?:text|markdown|md|json)?\s*/i, "").replace(/\s*```$/, "").trim();
+  }
+  return cleaned;
+}
+
+function getLanguageLockInstruction(input: string): string {
+  const requestedLanguage = detectOutputLanguage(input || "");
+  if (requestedLanguage === "ar") {
+    return "STRICT LANGUAGE LOCK: Return Arabic only. Do not translate Arabic text to English.";
+  }
+  if (requestedLanguage === "en") {
+    return "STRICT LANGUAGE LOCK: Return English only.";
+  }
+  return "STRICT LANGUAGE LOCK: Preserve mixed Arabic and English layout naturally. Do not force full translation.";
+}
+
+function isGenericInstructionalAmpText(text: string): boolean {
+  const trimmed = (text || "").trim();
+  if (!trimmed) return true;
+
+  const normalized = trimmed.toLowerCase();
+  const englishSignals = [
+    /^enhance\b/,
+    /^improve\b/,
+    /^rewrite\b/,
+    /^edit\b/,
+    /\buploaded (photo|image)\b/,
+    /\battached (photo|image)\b/,
+    /\bthe user\b/,
+    /\byour job\b/,
+    /\bhard rules?\b/,
+    /\boutput format\b/,
+  ];
+  if (englishSignals.some((pattern) => pattern.test(normalized))) return true;
+
+  const arabicSignals = [
+    /^(حسّن|حسن|قم بتحسين|أعد صياغة|عدّل|قم بتعديل)/,
+    /الصورة المرفوعة|الصورة المرفقة|المشهد نفسه|نفس المشهد/,
+    /مهمتك|قواعد صارمة|شكل المخرج/,
+  ];
+  if (arabicSignals.some((pattern) => pattern.test(trimmed))) return true;
+
+  if (/^(sure|here'?s|i can|i will|let me)/i.test(trimmed)) return true;
+  if (/^(بالتأكيد|إليك|سأقوم|يمكنني)/.test(trimmed)) return true;
+
+  return false;
+}
+
+function buildAmpRetryInput(mode: string, originalInput: string, weakDraft: string): string {
+  return [
+    `MODE: ${mode}`,
+    "Rewrite the weak draft into one final generation-ready prompt.",
+    getLanguageLockInstruction(originalInput || weakDraft),
+    "Hard rules:",
+    "- Output ONLY the final prompt text.",
+    "- No wrapper phrasing like 'Enhance the uploaded photo', 'The user', 'Your job', or 'Output format'.",
+    "- No bullet points, no explanations, no commentary.",
+    "- Preserve all requested nouns, brands, objects, and constraints from the original input.",
+    "",
+    "ORIGINAL INPUT:",
+    originalInput || "(empty)",
+    "",
+    "WEAK DRAFT:",
+    weakDraft,
+  ].join("\n");
+}
+
 function buildSystemPrompt(preferArabic: boolean, mode?: string) {
   const isI2I = mode === "image2image";
   const isBG = mode === "background-removal";
+  const isDraw = mode === "draw";
   const isMusic = mode === "music";
   const isLyrics = mode === "lyrics";
 
@@ -171,6 +242,7 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
         "- ممنوع تحسين/تجميل/رتوش للوجه أو تغيير تفاصيل الشخص. يُسمح فقط بتعديلات عامة على الإضاءة/الألوان إذا كانت لا تغيّر هوية الشخص أو ملامحه.",
         "- طبّق فقط التغييرات التي طلبها المستخدم صراحةً. لا تضف أفكارًا أو تحسينات إضافية من عندك إلا إذا طلبها المستخدم.",
         "- حافظ على الهدف الأساسي لطلب المستخدم واجعل الناتج مناسبًا لنموذج تعديل الصور.",
+        "- اكتب النتيجة النهائية مباشرة ولا تبدأ بعبارات تمهيدية مثل «حسّن الصورة المرفوعة» أو «مهمتك».",
         "- لا تتحدث مع المستخدم. لا تقل «فهمت» أو «سأقوم». لا تكتب خطوات أو شروح أو تعليقات.",
         "شكل المخرج:",
         "- أعد جملة واحدة أو فقرة قصيرة واحدة كنص عادي فقط تصف التعديلات النهائية المطلوبة.",
@@ -190,8 +262,23 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
         "- أضف تفاصيل مفيدة: إضاءة، واقعية، كلمات جودة (تركيز حاد، إضاءة طبيعية، تفاصيل دقيقة، إلخ).",
         "- الشخص/الموضوع في الصورة المرفوعة يجب أن يبقى دون تغيير (نفس الوجه، الهوية، الوضعية، الملابس) إلا إذا طلب المستخدم تغييره صراحةً.",
         "- لا تحوّل التعليمة إلى مطالبة 'إنشاء من الصفر'. هذا تعديل على صورة موجودة.",
+        "- ابدأ مباشرة بالمخرج النهائي ولا تبدأ بعبارات مثل «حسّن الصورة المرفوعة» أو «أعد الصياغة».",
         "- لا تتحدث، لا تشرح، لا تضف تعليقات. أخرج فقط تعليمة التحرير المحسّنة.",
         "شكل المخرج: جملة واحدة أو فقرة قصيرة تحسّن تعليمة المستخدم مع الحفاظ على نيته بالضبط."
+      ].join(" ");
+    }
+
+    if (isDraw) {
+      return [
+        "أنت مهندس مطالبات محترف لوضع الرسم والIllustration.",
+        "مهمتك: تحويل فكرة المستخدم إلى مطالبة رسم إنتاجية جاهزة للتوليد مباشرة.",
+        "قواعد صارمة:",
+        "- أخرج مطالبة نهائية مباشرة بدون تمهيد أو شرح.",
+        "- لا تبدأ بعبارات مثل «حسّن» أو «أعد الصياغة» أو «مهمتك».",
+        "- ركّز على نوع الرسم، أسلوب الخطوط، التكوين، التظليل، لوحة الألوان، والخامة البصرية.",
+        "- حافظ على كل الأسماء والعناصر المطلوبة من المستخدم بدون حذف.",
+        "- لا تضف تعداد نقطي أو كلام حواري.",
+        "شكل المخرج: جملة واحدة أو فقرة قصيرة تمثل prompt الرسم النهائي فقط."
       ].join(" ");
     }
 
@@ -199,6 +286,8 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
     return [
       "أنت مهندس مطالبات خبير لنماذج تحويل النص إلى صورة.",
       "افهم فكرة المستخدم، ثم أعد صياغتها كمطالبة (prompt) واحدة واضحة ومختصرة لإنشاء صورة.",
+      "أخرج prompt النهائي مباشرة بدون أي تمهيد أو شرح.",
+      "لا تبدأ بعبارات مثل «حسّن» أو «أعد الصياغة» أو «مهمتك».",
       "ركّز على الأسلوب، الألوان، الإضاءة، التكوين، المزاج، وأي عناصر مهمة.",
       "لا تتحدث مع المستخدم، لا تشرح، ولا تضف تعليقات؛ فقط جملة أو فقرة قصيرة تصف الصورة المستهدفة."
     ].join(" ");
@@ -237,6 +326,7 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
         "- Do NOT beautify, retouch, or “enhance” the subject, and do not change facial details. You may adjust global lighting/color only if it does not alter the subject’s identity.",
         "- Apply ONLY the changes explicitly requested by the user. Do not add extra improvements or creative ideas unless the user asked for them.",
         "- Maintain the core goal of the request and keep the output practical for an image editing model.",
+        "- Start directly with the final edit prompt. Do NOT start with wrapper phrases like 'Enhance the uploaded photo'.",
         "- Do NOT speak to the user. Do NOT say you understand or will do anything. Do NOT add steps, explanations, or comments.",
         "Output format:",
         "- Return exactly ONE plain-text sentence or short paragraph describing the final desired edits.",
@@ -271,8 +361,23 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
         "- ADD helpful details: lighting, realism, quality keywords (sharp focus, natural lighting, detailed textures, etc.).",
         "- The subject/person in the uploaded image must remain UNCHANGED (same face, identity, pose, clothing) unless the user explicitly asks to change them.",
         "- Do NOT turn the instruction into a 'generate from scratch' prompt. This is an EDIT to an existing photo.",
+        "- Start directly with the final edit instruction. Do NOT start with phrases like 'Enhance the uploaded photo'.",
         "- Do NOT chat, explain, or add commentary. Output only the enhanced edit instruction.",
         "Output format: One sentence or short paragraph that enhances the user's edit instruction while preserving their exact intent."
+      ].join(" ");
+    }
+
+    if (isDraw) {
+      return [
+        "You are an expert prompt engineer for drawing and illustration generation.",
+        "Your job is to compile the user's idea into one final drawing prompt ready for generation.",
+        "Hard rules:",
+        "- Return the final prompt directly, no wrappers.",
+        "- Do NOT start with words like 'Enhance', 'Improve', or 'Rewrite'.",
+        "- Focus on drawing style, line work, composition, shading, palette, and visual texture.",
+        "- Preserve all requested nouns, objects, and constraints exactly.",
+        "- No bullets, no explanation, no commentary.",
+        "Output: one concise production-ready drawing prompt."
       ].join(" ");
     }
 
@@ -280,6 +385,8 @@ function buildSystemPrompt(preferArabic: boolean, mode?: string) {
     return [
       "You are an expert prompt engineer for Text-to-Image models.",
       "Understand the user's idea and rewrite it as a single, clear prompt for image generation.",
+      "Return the final prompt directly with no wrapper language.",
+      "Do NOT start with 'Enhance', 'Improve', or meta wording about the user.",
       "Focus on style, composition, colors, lighting, mood, and important details.",
       "Do not talk to the user or explain; return only one concise description of the desired image."
     ].join(" ");
@@ -483,7 +590,7 @@ async function ampMusicLyricsWithOpenAI(
   return content.trim();
 }
 
-// DEPRECATED: Old DeepSeek implementation for non-music modes
+// DeepSeek implementation for text-first AMP modes
 async function ampPromptWithDeepSeek(
   input: string,
   preferArabic: boolean,
@@ -571,6 +678,7 @@ async function ampImage2VideoWithOpenAI(
   brandDetails?: string,
   environment?: string,
   duration?: string,
+  strictFinalOutput: boolean = false,
 ): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
@@ -586,6 +694,11 @@ async function ampImage2VideoWithOpenAI(
     userParts.push(`Video duration: ${duration} seconds`);
   }
   userParts.push("Analyze the attached image and generate the JSON video prompt.");
+  if (strictFinalOutput) {
+    userParts.push("CRITICAL OUTPUT FIX: Return one final production-ready generation prompt only.");
+    userParts.push("Do NOT mention uploaded image, user instructions, your role, hard rules, or output format.");
+    userParts.push("Do NOT start with words like Enhance, Improve, Rewrite, or Edit.");
+  }
 
   const userText = userParts.join("\n");
 
@@ -639,11 +752,7 @@ async function ampImage2VideoWithOpenAI(
     throw new Error("openai_empty_response");
   }
 
-  let cleaned = content.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```(?:text|markdown|md)?\s*/i, "").replace(/\s*```$/, "").trim();
-  }
-  return cleaned;
+  return normalizeAmpText(content);
 }
 // ─── End Image-to-Video Amp ───
 
@@ -668,9 +777,22 @@ HARD RULES:
 OUTPUT FORMAT (same language as input):
 Cinematic commercial sequence. Opening: [Visual composition and starting camera angle]. Action Vector: [How core subject/environment evolve seamlessly]. Technical Finish: [Camera profile, volumetric lighting, commercial-grade motion tracking].`;
 
-async function ampText2VideoWithOpenAI(userText: string): Promise<string> {
+async function ampText2VideoWithOpenAI(userText: string, strictFinalOutput: boolean = false): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
+
+  const finalUserText = strictFinalOutput
+    ? [
+      "Rewrite this into one final production-ready video generation prompt.",
+      getLanguageLockInstruction(userText),
+      "Do NOT include wrappers, role text, or instructions.",
+      "Do NOT start with words like Enhance, Improve, Rewrite, or Edit.",
+      "Output only the final prompt text.",
+      "",
+      "USER INPUT:",
+      userText,
+    ].join("\n")
+    : userText;
 
   const payload = {
     model: "gpt-4o-mini",
@@ -683,7 +805,7 @@ async function ampText2VideoWithOpenAI(userText: string): Promise<string> {
       },
       {
         role: "user",
-        content: userText,
+        content: finalUserText,
       },
     ],
   };
@@ -713,7 +835,7 @@ async function ampText2VideoWithOpenAI(userText: string): Promise<string> {
     throw new Error("openai_empty_response");
   }
 
-  return content.trim();
+  return normalizeAmpText(content);
 }
 // ─── End Text-to-Video Amp ───
 
@@ -745,6 +867,7 @@ async function amp2Images2VideoWithOpenAI(
   userText?: string,
   duration?: string,
   aspectRatio?: string,
+  strictFinalOutput: boolean = false,
 ): Promise<string> {
   const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
   if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
@@ -762,6 +885,12 @@ async function amp2Images2VideoWithOpenAI(
   
   if (aspectRatio) {
     userParts.push(`Aspect ratio: ${aspectRatio}`);
+  }
+
+  if (strictFinalOutput) {
+    userParts.push("CRITICAL OUTPUT FIX: Return one final production-ready generation prompt only.");
+    userParts.push("Do NOT mention uploaded image references, role instructions, or output format.");
+    userParts.push("Do NOT start with words like Enhance, Improve, Rewrite, or Edit.");
   }
   
   userParts.push("Image 1 is the START FRAME (opening). Image 2 is the END FRAME (closing). Generate a video prompt that opens on Image 1 and ends on Image 2, with a smooth cinematic transition between them. HARD CONSTRAINT: Keep the same colors, shape, and identity from both images. No new symbols, no extra text, no random letters — unless explicitly mentioned in the user's prompt.");
@@ -822,7 +951,7 @@ async function amp2Images2VideoWithOpenAI(
     throw new Error("openai_empty_response");
   }
 
-  return content.trim();
+  return normalizeAmpText(content);
 }
 // ─── End 2Images-to-Video Amp ───
 
@@ -975,6 +1104,74 @@ serve(async (req) => {
     }
     // ─── End Music/Lyrics route ───
 
+    // ─── Dedicated Image AMP routes (DeepSeek) ───
+    if (
+      mode === "text2image"
+      || mode === "image2image"
+      || mode === "background-removal"
+      || mode === "draw"
+    ) {
+      if (!text || text.trim().length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: `Missing 'text' for ${mode} mode`,
+            code: "BAD_REQUEST_MISSING_TEXT",
+          }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      inputText = `[${mode}] ${text}`;
+      const preferArabic = hasArabic(text);
+      const responseLanguage = detectOutputLanguage(text);
+
+      let improved = normalizeAmpText(await ampPromptWithDeepSeek(text, preferArabic, mode));
+      let qualityRetry = false;
+
+      if (isGenericInstructionalAmpText(improved)) {
+        const retryInput = buildAmpRetryInput(mode, text, improved);
+        const retryOutput = await ampPromptWithDeepSeek(retryInput, preferArabic, mode);
+        const normalizedRetry = normalizeAmpText(retryOutput);
+        if (normalizedRetry) {
+          improved = normalizedRetry;
+          qualityRetry = true;
+        }
+      }
+
+      await logAI({
+        functionName: "prompt-amp",
+        userId,
+        model: "deepseek-chat",
+        inputText,
+        outputText: improved,
+        durationMs: Date.now() - startTime,
+        status: "success",
+        metadata: {
+          provider: "deepseek",
+          mode,
+          language: responseLanguage,
+          qualityRetry,
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          text: improved,
+          language: responseLanguage,
+          mode,
+        }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        },
+      );
+    }
+    // ─── End Dedicated Image AMP routes ───
+
     // ─── Image-to-Video Amp route ───
     if (mode === "image2video") {
       const rawImageUrl = (body?.image_url ?? "").toString();
@@ -997,7 +1194,12 @@ serve(async (req) => {
         );
       }
 
-      const improved = await ampImage2VideoWithOpenAI(imageUrl, brandDetails, environment, duration);
+      let improved = await ampImage2VideoWithOpenAI(imageUrl, brandDetails, environment, duration);
+      let qualityRetry = false;
+      if (isGenericInstructionalAmpText(improved)) {
+        improved = await ampImage2VideoWithOpenAI(imageUrl, brandDetails, environment, duration, true);
+        qualityRetry = true;
+      }
       const responseLanguage = detectOutputLanguage(`${brandDetails} ${environment} ${improved}`);
 
       await logAI({
@@ -1012,6 +1214,7 @@ serve(async (req) => {
           provider: "openai",
           mode: "image2video",
           language: responseLanguage,
+          qualityRetry,
         },
       });
 
@@ -1046,7 +1249,12 @@ serve(async (req) => {
       }
 
       inputText = `[text2video] ${text}`;
-      const improved = await ampText2VideoWithOpenAI(text);
+      let improved = await ampText2VideoWithOpenAI(text);
+      let qualityRetry = false;
+      if (isGenericInstructionalAmpText(improved)) {
+        improved = await ampText2VideoWithOpenAI(text, true);
+        qualityRetry = true;
+      }
       const responseLanguage = detectOutputLanguage(text);
 
       await logAI({
@@ -1061,6 +1269,7 @@ serve(async (req) => {
           provider: "openai",
           mode: "text2video",
           language: responseLanguage,
+          qualityRetry,
         },
       });
 
@@ -1118,7 +1327,12 @@ serve(async (req) => {
         );
       }
 
-      const improved = await amp2Images2VideoWithOpenAI(imageUrl1, imageUrl2, userText, duration, aspectRatio);
+      let improved = await amp2Images2VideoWithOpenAI(imageUrl1, imageUrl2, userText, duration, aspectRatio);
+      let qualityRetry = false;
+      if (isGenericInstructionalAmpText(improved)) {
+        improved = await amp2Images2VideoWithOpenAI(imageUrl1, imageUrl2, userText, duration, aspectRatio, true);
+        qualityRetry = true;
+      }
       const responseLanguage = detectOutputLanguage(userText || improved);
 
       await logAI({
@@ -1133,6 +1347,7 @@ serve(async (req) => {
           provider: "openai",
           mode: "2images2video",
           language: responseLanguage,
+          qualityRetry,
         },
       });
 
@@ -1224,7 +1439,7 @@ serve(async (req) => {
     }
 
     const preferArabic = hasArabic(text);
-    const improved = await ampPromptWithDeepSeek(text, preferArabic, mode);
+    const improved = normalizeAmpText(await ampPromptWithDeepSeek(text, preferArabic, mode));
 
     // Log successful AI usage with user ID
     await logAI({

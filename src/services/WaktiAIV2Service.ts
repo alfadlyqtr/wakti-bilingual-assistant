@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { getNativeLocation, queryNeedsFreshLocation, containsNearMePattern } from '@/integrations/natively/locationBridge';
-import { parseReminderFromResponse, createScheduledReminder, cancelRecentPendingReminders } from '@/services/ReminderService';
 import { emitEvent } from '@/utils/eventBus';
 
 // Module-level session cache — avoids a Supabase network round-trip on every message send.
@@ -1494,7 +1493,15 @@ class WaktiAIV2ServiceClass {
         const cleaned: any = { ...msg };
         if (cleaned.attachedFiles && Array.isArray(cleaned.attachedFiles)) {
           cleaned.attachedFiles = cleaned.attachedFiles.map((f: any) => ({
-            name: f.name, type: f.type, size: f.size, imageType: f.imageType,
+            name: f.name,
+            type: f.type,
+            size: f.size,
+            imageType: f.imageType,
+            url: f.url,
+            preview: f.preview,
+            data: f.data,
+            content: f.content,
+            base64: f.base64,
           }));
         }
         if (cleaned.metadata?.search) {
@@ -1535,6 +1542,19 @@ class WaktiAIV2ServiceClass {
       const clientTimezone = location?.timezone || this.getClientTimezone();
 
       const maybeAnonKey = this.getAnonKey();
+
+      let streamAttachedFiles: any[] = attachedFiles;
+      if (Array.isArray(attachedFiles) && attachedFiles.length > 0 && activeTrigger !== 'image') {
+        try {
+          streamAttachedFiles = await this.prepareVisionAttachments(attachedFiles);
+          console.log('✅ MULTIMODAL PREFLIGHT: Processed attachments for brain stream', streamAttachedFiles.length);
+        } catch (prepErr: any) {
+          const msg = (prepErr?.message || 'Images too large. Please upload smaller images.');
+          console.error('❌ MULTIMODAL PREFLIGHT FAILED:', msg);
+          onError?.(msg);
+          return { response: msg, conversationId, metadata: { multimodal: 'client_preflight_reject' } } as any;
+        }
+      }
 
       // Inner attempt function: parameterize primary provider and stream
       const attemptStream = async (primary: 'gemini-brain' | 'claude' | 'openai') => {
@@ -1601,7 +1621,7 @@ class WaktiAIV2ServiceClass {
                 inputType,
                 activeTrigger,
                 chatSubmode,
-                attachedFiles,
+                attachedFiles: streamAttachedFiles,
                 recentMessages: transportMessages,
                 conversationSummary: finalSummary,
                 durableMemory,
@@ -1961,374 +1981,9 @@ class WaktiAIV2ServiceClass {
         return { response: cleanResponse, metadata };
       };
 
-      // Vision-first path via Supabase Edge Function: stream SSE and honor provider
-      const attemptVision = async (primary: 'claude' | 'openai', visionFiles: any[]) => {
-        // Check if aborted before starting any work
-        if (signal?.aborted) {
-          throw new Error('Vision request aborted before start');
-        }
-
-        if (!visionFiles || visionFiles.length === 0) {
-          throw new Error('No images for vision');
-        }
-
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) {
-          throw new Error('No valid session for vision');
-        }
-        const maybeAnonKey = this.getAnonKey();
-
-        // Await DB refresh if local PT has no nickname (prevents 'friend' fallback on first vision call).
-        const pt = await this.ensurePersonalTouchAwaitingDB(userId);
-        const supabaseUrl = ((import.meta as any).env && (import.meta as any).env.VITE_SUPABASE_URL)
-          || 'https://hxauxozopvpzpdygoqwf.supabase.co';
-
-        // Prefer URL-based images: upload to Supabase Storage, then send URLs; fallback to base64 if upload fails
-        const bucket = (((import.meta as any).env && (import.meta as any).env.VITE_VISION_BUCKET) || 'vision-uploads') + '';
-        const toBlob = (b64: string, mime: string) => {
-          try {
-            const cleaned = b64.startsWith('data:') ? b64.split(',')[1] || '' : b64;
-            const bin = atob(cleaned);
-            const arr = new Uint8Array(bin.length);
-            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-            return new Blob([arr], { type: mime });
-          } catch {
-            return null;
-          }
-        };
-
-        const payloadImages: { mimeType: string; url?: string; base64?: string }[] = [];
-        for (let i = 0; i < (visionFiles || []).length; i++) {
-          const p: any = visionFiles[i];
-          const mime = ((p?.type || p?.mimeType || 'image/jpeg') + '').replace('image/jpg', 'image/jpeg');
-          let base64 = typeof p?.data === 'string' && p.data ? p.data : (typeof p?.content === 'string' ? p.content : '');
-          if (!base64 || base64.length < 100) continue;
-          // Try upload -> signed URL
-          let uploadedUrl: string | null = null;
-          try {
-            const idx = base64.indexOf(',');
-            if (base64.startsWith('data:') && idx > -1) base64 = base64.slice(idx + 1);
-            const blob = toBlob(base64, mime);
-            if (!blob) throw new Error('blob_conv');
-            const ext = (mime.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
-            // Use a single fixed bucket for simplicity
-            const bucketName = 'vision-uploads';
-            const uid = (userId || 'anon').toString();
-            const path = `vision/${uid}/${requestId}/${Date.now()}_${i}.${ext}`;
-            const up = await supabase.storage.from(bucketName).upload(path, blob, { contentType: mime, upsert: true });
-            if (up?.error) throw up.error;
-            // Try public URL first
-            const pub = supabase.storage.from(bucketName).getPublicUrl(path);
-            if (pub?.data?.publicUrl) {
-              uploadedUrl = pub.data.publicUrl;
-            } else {
-              const signed = await supabase.storage.from(bucketName).createSignedUrl(path, 600);
-              if (signed?.data?.signedUrl) uploadedUrl = signed.data.signedUrl;
-            }
-          } catch (uploadErr: any) {
-            console.error('❌ VISION UPLOAD error (will try base64 fallback):', uploadErr?.message || uploadErr, 'mime:', mime, 'request:', requestId);
-            uploadedUrl = null;
-          }
-          if (uploadedUrl) {
-            payloadImages.push({ mimeType: mime, url: uploadedUrl });
-          } else {
-            // Fallback: send base64 directly (capped at 1.2MB to avoid gateway abort)
-            const approxBytes = Math.round(base64.length * 0.75);
-            if (approxBytes <= 1.2 * 1024 * 1024) {
-              console.warn('⚠️ VISION: Upload failed, using base64 fallback (size:', approxBytes, 'bytes)');
-              payloadImages.push({ mimeType: mime, base64 });
-            } else {
-              console.error('❌ VISION: Upload failed and image too large for base64 fallback', approxBytes, 'bytes');
-              throw new Error('vision_upload_failed');
-            }
-          }
-        }
-
-        if (payloadImages.length === 0) {
-          throw new Error('No valid images to send (all images filtered out)');
-        }
-
-        const visionPrompt = (() => {
-          const n = payloadImages.length;
-          // Normal analysis mode: analyze the images
-          if (n <= 1) return message;
-          const header = language === 'ar'
-            ? `مهم جداً: لديك ${n} صور. يجب تحليل جميع الصور بالترتيب وعدم تجاهل أي صورة. اكتب نتيجتك بهذه الأقسام بالضبط: صورة 1، صورة 2${n >= 3 ? '، صورة 3' : ''}${n >= 4 ? '، صورة 4' : ''}. إذا كانت الصور مستندات، استخرج النص من كل صورة ثم قارن بينها.`
-            : `CRITICAL: You received ${n} images. You MUST analyze ALL images in order and not ignore any. Format your answer with these exact sections: Image 1, Image 2${n >= 3 ? ', Image 3' : ''}${n >= 4 ? ', Image 4' : ''}. If the images are documents, extract text from each image and then compare.`;
-          return `${header}\n\nUser prompt:\n${message}`;
-        })();
-
-        // Call Supabase Edge Function with SSE streaming (stream:true). Server may still return JSON if it chooses.
-        let resp: Response | null = null;
-        for (let attempt = 1; attempt <= 2; attempt++) {
-          try {
-            // Extract visionCategory from the first image's imageType.id (set by the UI dropdown)
-            const visionCategory = (visionFiles[0] as any)?.imageType?.id || 'general';
-            const body = {
-              requestId: requestId,
-              prompt: visionPrompt,
-              language,
-              personalTouch: pt,
-              provider: primary,
-              // NOTE: `model` is intentionally NOT sent here. The edge function picks
-              // its own model per provider (Claude 3.5 Sonnet / GPT-4o) and ignores any
-              // client hint. Sending one caused confusing client/server disagreements.
-              stream: true,
-              images: payloadImages,
-              options: { ocr: true, max_tokens: 4000 },
-              chatSubmode: chatSubmode, // Pass Study mode to Vision for tutor-style responses
-              visionCategory // Pass the UI dropdown category for intent-based prompt routing
-            };
-            resp = await fetch(`${supabaseUrl}/functions/v1/wakti-vision-stream`, {
-              method: 'POST',
-              mode: 'cors',
-              cache: 'no-cache',
-              credentials: 'omit',
-              headers: {
-                'Authorization': `Bearer ${session.access_token}`,
-                'Accept': 'text/event-stream',
-                'apikey': maybeAnonKey,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify(body)
-            });
-            if (resp.ok) break;
-            if (attempt === 2) throw new Error(`Vision HTTP ${resp.status}`);
-          } catch (e: any) {
-            console.error(`❌ VISION: Attempt ${attempt} failed:`, e.message || e);
-            if (attempt === 2) throw e;
-            await new Promise(r => setTimeout(r, 800 * attempt));
-          }
-        }
-        const respNonNull = resp as Response;
-        if (!respNonNull.ok) throw new Error(`Vision HTTP ${respNonNull.status}`);
-
-        // If server returns plain JSON, consume it directly and finish without streaming
-        const ct = (respNonNull.headers.get('content-type') || '').toLowerCase();
-        if (ct.includes('application/json')) {
-          const result = await respNonNull.json();
-          let metadata: any = {};
-          if (result?.json && typeof result.json === 'object') metadata.visionJson = result.json;
-          if (result?.metadata && typeof result.metadata === 'object') metadata = { ...metadata, ...result.metadata };
-          const summary = typeof result?.summary === 'string' ? result.summary : '';
-          if (summary) onToken?.(summary);
-          onComplete?.(metadata);
-          return { response: summary, metadata };
-        }
-
-        // Otherwise fallback to SSE streaming parsing
-        const reader = respNonNull.body?.getReader();
-        if (!reader) throw new Error('No response body reader for vision');
-
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullResponse = '';
-        let metadata: any = {};
-        let encounteredError: string | null = null;
-        let isCompleted = false;
-        let chunkCount = 0;
-
-        const abortHandler = async () => { try { await reader.cancel(); } catch {} };
-        if (signal) {
-          if (signal.aborted) { await abortHandler(); throw new Error('Streaming aborted'); }
-          signal.addEventListener('abort', abortHandler, { once: true });
-        }
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              // Flush any remaining buffered SSE data (prevents final chunk from being dropped)
-              try {
-                const tail = (buffer || '').trim();
-                if (tail) {
-                  const tailLines = tail.split('\n');
-                  buffer = '';
-                  for (const tailLine of tailLines) {
-                    const line = tailLine.trim();
-                    if (!line.startsWith('data: ')) continue;
-                    const data = line.slice(6);
-                    if (data === '[DONE]') {
-                      if (!isCompleted) { onComplete?.(metadata); isCompleted = true; }
-                      continue;
-                    }
-                    try {
-                      const parsed = JSON.parse(data);
-                      if (parsed.error) {
-                        encounteredError = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message || 'vision_error');
-                        continue;
-                      }
-                      if (parsed.json && typeof parsed.json === 'object') { metadata = { ...metadata, visionJson: parsed.json }; continue; }
-                      if (typeof parsed.token === 'string') { onToken?.(parsed.token); fullResponse += parsed.token; }
-                      else if (typeof parsed.content === 'string') { onToken?.(parsed.content); fullResponse += parsed.content; }
-                      if (parsed.metadata && typeof parsed.metadata === 'object') { metadata = { ...metadata, ...parsed.metadata }; }
-                    } catch {
-                      onToken?.(data);
-                      fullResponse += data;
-                    }
-                  }
-                }
-              } catch {}
-              if (!isCompleted) onComplete?.(metadata);
-              break;
-            }
-            chunkCount++;
-            const rawChunk = decoder.decode(value, { stream: true });
-            buffer += rawChunk;
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-            for (const line of lines) {
-              if (!line.startsWith('data: ')) continue;
-              const data = line.slice(6);
-              if (data === '[DONE]') { if (!isCompleted) { onComplete?.(metadata); isCompleted = true; } continue; }
-              try {
-                const parsed = JSON.parse(data);
-                if (parsed.error) { encounteredError = typeof parsed.error === 'string' ? parsed.error : (parsed.error?.message || 'vision_error'); continue; }
-                if (parsed.json && typeof parsed.json === 'object') { metadata = { ...metadata, visionJson: parsed.json }; continue; }
-                if (typeof parsed.token === 'string') { onToken?.(parsed.token); fullResponse += parsed.token; }
-                else if (typeof parsed.content === 'string') { onToken?.(parsed.content); fullResponse += parsed.content; }
-                if (parsed.metadata && typeof parsed.metadata === 'object') { metadata = { ...metadata, ...parsed.metadata }; }
-              } catch { onToken?.(data); fullResponse += data; }
-            }
-          }
-        } finally {
-          try { reader.releaseLock(); } catch {}
-          if (signal) signal.removeEventListener('abort', abortHandler as any);
-          try { localStorage.setItem('wakti_last_seen_at', String(Date.now())); } catch {}
-        }
-
-        if (encounteredError) throw new Error(String(encounteredError));
-
-        // Check for reminder CONFIRMATION in vision response and create scheduled reminder
-        // ONLY create reminder on CONFIRM (user said yes), NOT on OFFER
-        try {
-          const reminderData = parseReminderFromResponse(fullResponse);
-          if (reminderData && reminderData.type === 'confirm') {
-            const data = reminderData.data as { scheduled_for?: string; reminder_text?: string; timezone?: string; replaces_previous?: boolean };
-            let scheduledTime = data.scheduled_for;
-            const reminderText = data.reminder_text || 'Reminder from Wakti AI';
-            const replacesPrevious = data.replaces_previous === true;
-            
-            // SAFETY NET: If AI calculated a time in the past, try to fix it
-            if (scheduledTime) {
-              const scheduledDate = new Date(scheduledTime);
-              const now = new Date();
-              const oneMinuteAgo = now.getTime() - 60000;
-              
-              if (scheduledDate.getTime() < oneMinuteAgo) {
-                console.warn('⚠️ REMINDER FIX (Vision): AI output past time, attempting to recalculate...', { 
-                  aiTime: scheduledTime, 
-                  now: now.toISOString() 
-                });
-                
-                // Use the current user message (in scope from sendStreamingMessage param)
-                const lastUserMsg = (message || '').toLowerCase();
-                
-                const minuteMatch = lastUserMsg.match(/in\s+(\d+|a|one|an)\s*min/i);
-                const hourMatch = lastUserMsg.match(/in\s+(\d+|a|one|an)\s*hour/i);
-                
-                let fixedTime: Date | null = null;
-                
-                if (minuteMatch) {
-                  const numStr = minuteMatch[1].toLowerCase();
-                  const minutes = (numStr === 'a' || numStr === 'one' || numStr === 'an') ? 1 : parseInt(numStr, 10);
-                  if (!isNaN(minutes) && minutes > 0 && minutes <= 1440) {
-                    fixedTime = new Date(now.getTime() + minutes * 60000);
-                    console.log(`🔧 REMINDER FIX (Vision): Recalculated "in ${minutes} minute(s)" → ${fixedTime.toISOString()}`);
-                  }
-                } else if (hourMatch) {
-                  const numStr = hourMatch[1].toLowerCase();
-                  const hours = (numStr === 'a' || numStr === 'one' || numStr === 'an') ? 1 : parseInt(numStr, 10);
-                  if (!isNaN(hours) && hours > 0 && hours <= 24) {
-                    fixedTime = new Date(now.getTime() + hours * 3600000);
-                    console.log(`🔧 REMINDER FIX (Vision): Recalculated "in ${hours} hour(s)" → ${fixedTime.toISOString()}`);
-                  }
-                }
-                
-                if (fixedTime) {
-                  scheduledTime = fixedTime.toISOString();
-                } else {
-                  console.error('❌ REMINDER FIX (Vision): Could not recalculate time, skipping reminder creation');
-                  scheduledTime = undefined;
-                }
-              }
-            }
-            
-            if (scheduledTime && userId) {
-              // Only cancel previous reminders if AI explicitly says it's replacing/adjusting one
-              if (replacesPrevious) {
-                console.log('🔔 REMINDER (Vision): AI indicated this replaces a previous reminder, cancelling old one...');
-                const cancelledCount = await cancelRecentPendingReminders(userId, 30);
-                if (cancelledCount > 0) {
-                  console.log(`🔔 REMINDER (Vision): Cancelled ${cancelledCount} previous reminder(s) - replacing with corrected time`);
-                }
-              }
-              
-              console.log('🔔 REMINDER (Vision): Creating scheduled reminder (user confirmed)', { scheduledTime, reminderText, replacesPrevious });
-              const result = await createScheduledReminder(
-                userId,
-                reminderText,
-                scheduledTime,
-                `AI Chat Reminder`
-              );
-              if (result.success) {
-                console.log('✅ REMINDER (Vision): Successfully created reminder', result.id);
-              } else {
-                console.error('❌ REMINDER (Vision): Failed to create reminder', result.error);
-              }
-            }
-          } else if (reminderData && reminderData.type === 'offer') {
-            console.log('🔔 REMINDER (Vision): AI offered reminder, waiting for user confirmation...');
-          }
-        } catch (reminderErr) {
-          console.warn('⚠️ REMINDER (Vision): Error processing reminder', reminderErr);
-        }
-
-        return { response: fullResponse, metadata };
-      };
-
       // Try Claude first, then auto-fallback to OpenAI on 529/overloaded errors (text/search or fallback vision)
       try {
-        // Short-circuit: no files → skip all vision processing, go straight to brain-stream
-        if (attachedFiles && attachedFiles.length > 0 && activeTrigger !== 'image') {
-          console.log('✅ VISION PATH: Entering vision processing with', attachedFiles.length, 'files');
-          // Preflight: size-check and downscale large images client-side to avoid gateway aborts
-          let processedFiles: any[] = [];
-          try {
-            processedFiles = await this.prepareVisionAttachments(attachedFiles);
-            console.log('✅ VISION PREFLIGHT: Processed', processedFiles.length, 'files');
-          } catch (prepErr: any) {
-            const msg = (prepErr?.message || 'Images too large. Please upload smaller images.');
-            console.error('❌ VISION PREFLIGHT FAILED:', msg);
-            onError?.(msg);
-            return { response: msg, conversationId, metadata: { vision: 'client_preflight_reject' } } as any;
-          }
-          // Compute client bytes total
-          let clientBytesTotal = 0;
-          for (const p of processedFiles) {
-            const type = (p.type || p.mimeType || '').toString();
-            const isImage = typeof type === 'string' && type.startsWith('image/');
-            const raw = typeof p.data === 'string' && p.data ? p.data : (typeof p.content === 'string' ? p.content : '');
-            if (isImage && raw) clientBytesTotal += this.approxBase64Bytes(raw);
-          }
-          // Send processed base64 images directly (Option A)
-          try {
-            const vres = await attemptVision('claude', processedFiles);
-            return { response: vres.response, conversationId, metadata: vres.metadata };
-          } catch (vErr: any) {
-            const msg = String(vErr?.message || vErr || '').toLowerCase();
-            const shouldFallbackVision = msg.includes('overloaded') || msg.includes('529') || msg.includes('claude') || msg.includes('not_found') || msg.includes('404');
-            if (shouldFallbackVision) {
-              console.warn('⚠️ Vision Claude failed/overloaded, falling back to OpenAI Vision...');
-              const vres2 = await attemptVision('openai', processedFiles);
-              return { response: vres2.response, conversationId, metadata: vres2.metadata };
-            }
-            console.warn('⚠️ Vision endpoint failed, falling back to brain stream...');
-          }
-        }
-
-        // Normal chat path (or vision fallback to brain)
-        // Backend uses Gemini 3 Flash (Brain-First) → auto-falls back to OpenAI → Claude
+        // Unified path: always use wakti-ai-v2-brain-stream (text + multimodal attachments)
         const res = await attemptStream('gemini-brain');
         return { response: res.response, conversationId, metadata: res.metadata };
       } catch (err: any) {
@@ -2499,13 +2154,18 @@ class WaktiAIV2ServiceClass {
       const enhancedMessages = rawEnhanced.map(msg => {
         const cleaned: any = { ...msg };
         
-        // Strip base64 data from attachedFiles (vision images)
+        // Keep attachment payload fields for persistence and reload continuity
         if (cleaned.attachedFiles && Array.isArray(cleaned.attachedFiles)) {
           cleaned.attachedFiles = cleaned.attachedFiles.map((f: any) => ({
             name: f.name,
             type: f.type,
             size: f.size,
             imageType: f.imageType,
+            url: f.url,
+            preview: f.preview,
+            data: f.data,
+            content: f.content,
+            base64: f.base64,
           }));
         }
         

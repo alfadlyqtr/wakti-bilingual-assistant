@@ -1343,8 +1343,79 @@ async function classifySearchIntent(message: string, language: string): Promise<
 }
 
 type GeminiRole = 'user' | 'model';
-type GeminiContentPart = { text: string };
+type GeminiContentPart = { text: string } | { inline_data: { mime_type: string; data: string } };
 type GeminiContent = { role: GeminiRole; parts: GeminiContentPart[] };
+
+type NormalizedImageAttachment = {
+  mimeType: string;
+  base64: string;
+  dataUrl: string;
+};
+
+function resolveMimeTypeFromDataUrl(value: string): string | null {
+  const match = /^data:([^;,]+);base64,/i.exec((value || '').trim());
+  const mime = match?.[1]?.trim().toLowerCase();
+  if (!mime) return null;
+  return mime === 'image/jpg' ? 'image/jpeg' : mime;
+}
+
+function normalizeMultimodalImageAttachments(attachedFiles: unknown[]): NormalizedImageAttachment[] {
+  if (!Array.isArray(attachedFiles) || attachedFiles.length === 0) return [];
+
+  const normalized: NormalizedImageAttachment[] = [];
+  for (let i = 0; i < attachedFiles.length; i += 1) {
+    try {
+      const file = attachedFiles[i];
+      const record = (file && typeof file === 'object') ? file as Record<string, unknown> : {};
+      const base64Source =
+        (typeof record.data === 'string' && record.data.trim())
+          ? record.data.trim()
+          : (typeof record.content === 'string' && record.content.trim())
+            ? record.content.trim()
+            : (typeof record.base64 === 'string' && record.base64.trim())
+              ? record.base64.trim()
+              : '';
+
+      if (!base64Source) {
+        continue;
+      }
+
+      const mimeFromPayload =
+        (typeof record.type === 'string' && record.type.trim())
+          ? record.type.trim().toLowerCase()
+          : (typeof record.mimeType === 'string' && record.mimeType.trim())
+            ? record.mimeType.trim().toLowerCase()
+            : '';
+      const mimeFromData = resolveMimeTypeFromDataUrl(base64Source)
+        || resolveMimeTypeFromDataUrl(typeof record.base64 === 'string' ? record.base64 : '');
+      const mimeType = (mimeFromPayload || mimeFromData || 'image/jpeg').replace('image/jpg', 'image/jpeg');
+
+      if (!mimeType.startsWith('image/')) {
+        continue;
+      }
+
+      const rawBase64 = base64Source.startsWith('data:')
+        ? (base64Source.split(',')[1] || '')
+        : base64Source;
+      const compactBase64 = rawBase64.replace(/\s+/g, '').trim();
+
+      if (!compactBase64 || compactBase64.length < 40) {
+        console.error('[multimodal] skipped attachment with empty/invalid base64', { index: i, mimeType });
+        continue;
+      }
+
+      normalized.push({
+        mimeType,
+        base64: compactBase64,
+        dataUrl: `data:${mimeType};base64,${compactBase64}`,
+      });
+    } catch (error) {
+      console.error('[multimodal] failed to normalize attachment', { index: i, error });
+    }
+  }
+
+  return normalized;
+}
 
 function buildTextContent(role: GeminiRole, text: string): GeminiContent {
   return { role, parts: [{ text }] };
@@ -1797,7 +1868,8 @@ async function streamGemini3WithSearch(
   onFinishReason: (finishReason?: string) => void,
   userLocation?: { latitude: number; longitude: number; city?: string; country?: string } | null,
   searchIntent: 'business' | 'news' | 'sports' | 'url' | 'research' | 'general' = 'general',
-  model: string = 'gemini-3.1-pro-preview'
+  model: string = 'gemini-3.1-pro-preview',
+  attachedFiles: unknown[] = []
 ): Promise<string> {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
@@ -1824,8 +1896,32 @@ async function streamGemini3WithSearch(
   const mapsQuery = useMapsGrounding ? buildMapsGroundingQuery(query, userLocation) : query;
   const effectiveQuery = useMapsGrounding ? mapsQuery : latestQuery;
 
+  const searchContents = buildSearchFollowupContents(
+    query,
+    effectiveQuery,
+    recentMessages,
+    useMapsGrounding ? 'google_maps' : 'google_search'
+  ) as Array<{ role: 'user' | 'model'; parts: GeminiContentPart[] }>;
+  const normalizedSearchAttachments = normalizeMultimodalImageAttachments(attachedFiles);
+  if (normalizedSearchAttachments.length > 0) {
+    const lastUserIndex = [...searchContents].reverse().findIndex((entry) => entry.role === 'user');
+    const targetIndex = lastUserIndex === -1 ? -1 : (searchContents.length - 1 - lastUserIndex);
+    const imageParts: GeminiContentPart[] = normalizedSearchAttachments.map((attachment) => ({
+      inline_data: {
+        mime_type: attachment.mimeType,
+        data: attachment.base64,
+      },
+    }));
+    if (targetIndex >= 0) {
+      searchContents[targetIndex].parts.push(...imageParts);
+    } else {
+      searchContents.push({ role: 'user', parts: imageParts });
+    }
+    console.error('[multimodal] search stream attached images', { count: normalizedSearchAttachments.length });
+  }
+
   const body: Record<string, unknown> = {
-    contents: buildSearchFollowupContents(query, effectiveQuery, recentMessages, useMapsGrounding ? 'google_maps' : 'google_search'),
+    contents: searchContents,
     tools: useMapsGrounding
       ? [{ googleMaps: { enableWidget: true } }]
       : [{ google_search: {} }],
@@ -4366,105 +4462,6 @@ async function queryWolframSummaryBox(input: string, timeoutMs: number = 3000): 
   }
 }
 
-// === STUDY MODE OCR: Extract text/math from images using Gemini Vision ===
-interface StudyOCRResult {
-  success: boolean;
-  extractedText?: string;
-  questionType?: 'math' | 'science' | 'language' | 'history' | 'general';
-  error?: string;
-}
-
-async function extractTextFromImageForStudy(
-  imageBase64: string,
-  mimeType: string,
-  userPrompt: string,
-  language: string
-): Promise<StudyOCRResult> {
-  try {
-    const key = getGeminiApiKey();
-    // Use Gemini 3.1 Flash-Lite for fast, accurate OCR
-    const model = 'gemini-3.1-flash-lite';
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-
-    const ocrPrompt = language === 'ar'
-      ? `╪ú┘å╪¬ ╪«╪¿┘è╪▒ ┘ü┘è ╪º╪│╪¬╪«╪▒╪º╪¼ ╪º┘ä┘å╪╡┘ê╪╡ ┘à┘å ╪º┘ä╪╡┘ê╪▒ ╪º┘ä╪¬╪╣┘ä┘è┘à┘è╪⌐. ┘à┘ç┘à╪¬┘â:
-1. ╪º╪│╪¬╪«╪▒╪¼ ┘â┘ä ╪º┘ä┘å╪╡ ┘ê╪º┘ä╪ú╪▒┘é╪º┘à ┘ê╪º┘ä┘à╪╣╪º╪»┘ä╪º╪¬ ┘ê╪º┘ä╪▒┘à┘ê╪▓ ┘à┘å ╪º┘ä╪╡┘ê╪▒╪⌐ ╪¿╪»┘é╪⌐ ╪¬╪º┘à╪⌐
-2. ╪Ñ╪░╪º ┘â╪º┘å╪¬ ┘à╪╣╪º╪»┘ä╪⌐ ╪▒┘è╪º╪╢┘è╪⌐╪î ╪º┘â╪¬╪¿┘ç╪º ╪¿╪╡┘è╪║╪⌐ ┘å╪╡┘è╪⌐ ┘ê╪º╪╢╪¡╪⌐ (┘à╪½┘ä: 2x + 3 = 7)
-3. ╪Ñ╪░╪º ┘â╪º┘å ╪│╪ñ╪º┘ä ╪º╪«╪¬┘è╪º╪▒ ┘à┘å ┘à╪¬╪╣╪»╪»╪î ╪º┘â╪¬╪¿ ╪º┘ä╪│╪ñ╪º┘ä ┘ê╪¼┘à┘è╪╣ ╪º┘ä╪«┘è╪º╪▒╪º╪¬
-4. ╪¡╪º┘ü╪╕ ╪╣┘ä┘ë ╪º┘ä╪¬┘å╪│┘è┘é ╪º┘ä╪ú╪╡┘ä┘è ┘é╪»╪▒ ╪º┘ä╪Ñ┘à┘â╪º┘å
-
-╪│┘è╪º┘é ╪º┘ä┘à╪│╪¬╪«╪»┘à: "${userPrompt}"
-
-╪ú╪╣╪» ╪º┘ä┘å╪╡ ╪º┘ä┘à╪│╪¬╪«╪▒╪¼ ┘ü┘é╪╖╪î ╪¿╪»┘ê┘å ╪┤╪▒╪¡ ╪ú┘ê ╪¬╪¡┘ä┘è┘ä.`
-      : `You are an expert at extracting text from educational images. Your task:
-1. Extract ALL text, numbers, equations, and symbols from the image with perfect accuracy
-2. If it's a math equation, write it in clear text format (e.g., 2x + 3 = 7)
-3. If it's a multiple choice question, include the question and ALL options
-4. Preserve the original formatting as much as possible
-
-User context: "${userPrompt}"
-
-Return ONLY the extracted text, no explanations or analysis.`;
-
-    const requestBody = {
-      contents: [{
-        parts: [
-          { text: ocrPrompt },
-          {
-            inline_data: {
-              mime_type: mimeType || 'image/jpeg',
-              data: imageBase64
-            }
-          }
-        ]
-      }],
-      generationConfig: {
-        temperature: 0.1, // Low temp for accurate extraction
-        maxOutputTokens: 2000
-      }
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => '');
-      console.error('Γ¥î STUDY OCR: Gemini error', response.status, errText.slice(0, 200));
-      return { success: false, error: `Gemini OCR error: ${response.status}` };
-    }
-
-    const data = await response.json();
-    const extractedText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-
-    if (!extractedText || extractedText.length < 5) {
-      return { success: false, error: 'No text found in image' };
-    }
-
-    // Detect question type for better Wolfram routing
-    const lower = extractedText.toLowerCase();
-    let questionType: StudyOCRResult['questionType'] = 'general';
-    if (/[+\-*/=^ΓêÜΓê½ΓêæΓêÅ]|equation|solve|calculate|x\s*[=+\-]|[0-9]+\s*[+\-*/]/.test(extractedText)) {
-      questionType = 'math';
-    } else if (/atom|molecule|element|chemical|physics|force|energy|velocity|acceleration/i.test(lower)) {
-      questionType = 'science';
-    } else if (/history|war|century|king|queen|empire|dynasty|revolution/i.test(lower)) {
-      questionType = 'history';
-    } else if (/grammar|verb|noun|sentence|translate|language/i.test(lower)) {
-      questionType = 'language';
-    }
-
-    return { success: true, extractedText: extractedText.trim(), questionType };
-
-  } catch (err) {
-    const errMessage = err instanceof Error ? err.message : String(err);
-    console.error('Γ¥î STUDY OCR: Error:', errMessage);
-    return { success: false, error: errMessage };
-  }
-}
-
 // Detect if query is better suited for Summary Boxes (entity lookups)
 function isSummaryBoxQuery(q: string): boolean {
   if (!q) return false;
@@ -4862,7 +4859,7 @@ serve(async (req) => {
           chatSubmode = 'chat', // 'chat' or 'study'
           location = null,
           clientTimezone = 'UTC',
-          attachedFiles = [] // Images for Study mode OCRΓåÆWolfram pipeline
+          attachedFiles = [] // Multimodal image attachments for unified chat/search/study
         } = body as { message?: string; language?: string; recentMessages?: unknown[]; conversationId?: string | null; conversationSummary?: string; durableMemory?: unknown[]; personalTouch?: unknown; activeTrigger?: string; chatSubmode?: string; location?: unknown; clientTimezone?: string; attachedFiles?: unknown[] };
         const requestLocation = (location && typeof location === 'object')
           ? location as { city?: string; country?: string; latitude?: number; longitude?: number }
@@ -4873,6 +4870,7 @@ serve(async (req) => {
         const rollingConversationSummary = normalizeContinuityText(conversationSummary, 700);
         const normalizedDurableMemory = normalizeDurableMemoryItems(durableMemory);
         const normalizedAttachedFiles = Array.isArray(attachedFiles) ? attachedFiles : [];
+        const hasFiles = Array.isArray(attachedFiles) && attachedFiles.length > 0;
 
         // Resolve engineTier from personalTouch payload ('speed' | 'intelligence', default 'speed')
         const engineTier: 'speed' | 'intelligence' =
@@ -5081,7 +5079,7 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
         }
 
         // Chat mode: if the user is asking about WAKTI specifically, respond with the correct format + chip
-        if (effectiveTrigger === 'chat' && chatSubmode === 'chat' && isWaktiInvolved(message)) {
+        if (effectiveTrigger === 'chat' && chatSubmode === 'chat' && !hasFiles && isWaktiInvolved(message)) {
           const userName = (personalTouch as { nickname?: string })?.nickname || '';
           const greeting = userName ? `Sure, ${userName}! ` : 'Sure! ';
           
@@ -5660,7 +5658,8 @@ If you are running out of space, keep this order and drop the rest:
               },
               userLocationForSearch,
               searchIntent,
-              searchModel
+              searchModel,
+              normalizedAttachedFiles
             );
             fullResponseText = trimIncompleteSearchResponse(fullResponseText, searchFinishReason);
 
@@ -6062,7 +6061,7 @@ If you are running out of space, keep this order and drop the rest:
           }
         } else {
           // ΓöÇΓöÇΓöÇ CHAT MODE: Always grounded with Gemini 2.5 Flash (smooth, no prompts) ΓöÇΓöÇΓöÇ
-          if (effectiveTrigger === 'chat' && chatSubmode === 'chat') {
+          if (effectiveTrigger === 'chat' && chatSubmode === 'chat' && !hasFiles) {
             // ΓöÇΓöÇΓöÇ LOCATION FOLLOW-UP DETECTION ΓöÇΓöÇΓöÇ
             // If assistant previously asked for location and user just replied with a place,
             // combine with the original intent and run a proper grounded search
@@ -6180,53 +6179,8 @@ If you are running out of space, keep this order and drop the rest:
             } catch { /* ignore */ }
           }
 
-          // === STUDY MODE OCRΓåÆWOLFRAM PIPELINE ===
-          // If Study mode has attached images, extract text first, then send to Wolfram
-          let ocrExtractedText = '';
-          let ocrQuestionType: string | undefined;
-          const studyHasImages = chatSubmode === 'study' && Array.isArray(attachedFiles) && attachedFiles.length > 0;
-          
-          if (studyHasImages) {
-            // Send keepalive ping during OCR
-            try {
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ keepalive: true, stage: 'ocr' })}\n\n`));
-            } catch { /* ignore */ }
-            
-            // Extract text from the first image (most homework photos are single images)
-            const firstImage = attachedFiles[0] as { data?: string; content?: string; type?: string; mimeType?: string } | undefined;
-            const imageBase64 = firstImage?.data || firstImage?.content || '';
-            let imageMimeType = firstImage?.type || firstImage?.mimeType || 'image/jpeg';
-            // Normalize mime type
-            if (imageMimeType === 'image/jpg') imageMimeType = 'image/jpeg';
-            
-            if (imageBase64 && imageBase64.length > 100) {
-              const ocrResult = await extractTextFromImageForStudy(imageBase64, imageMimeType, message || '', language);
-              
-              if (ocrResult.success && ocrResult.extractedText) {
-                ocrExtractedText = ocrResult.extractedText;
-                ocrQuestionType = ocrResult.questionType;
-                // Emit OCR metadata for frontend
-                try {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ 
-                    metadata: { 
-                      studyOCR: { 
-                        extracted: true, 
-                        textPreview: ocrExtractedText.substring(0, 200),
-                        questionType: ocrQuestionType 
-                      } 
-                    } 
-                  })}\n\n`));
-                } catch { /* ignore */ }
-              }
-            }
-          }
-
           // Determine the raw query string
-          const rawWolframQuery = ocrExtractedText
-            ? (message?.trim()
-                ? `${message}\n\n[Extracted from image]:\n${ocrExtractedText}`
-                : ocrExtractedText)
-            : message;
+          const rawWolframQuery = message;
 
           let wolframContext = '';
           let wolframMetaBase: Record<string, unknown> | null = null;
@@ -6244,7 +6198,7 @@ If you are running out of space, keep this order and drop the rest:
 
             if (chatSubmode === 'study') {
               // === STUDY MODE: Universal Knowledge Engine ===
-              const rawSubject = ocrExtractedText || message || '';
+              const rawSubject = message || '';
               let cleanSubject = getCleanSubject(rawSubject);
 
               // STEP 0 ΓÇö Arabic Translation Bridge (internal, never shown to user)
@@ -6386,19 +6340,9 @@ If you are running out of space, keep this order and drop the rest:
             }
           }
 
-          // Build final user message
-          // Include OCR-extracted text context for Study mode with images
-          const ocrContext = ocrExtractedText 
-            ? (language === 'ar'
-                ? `\n\n[┘å╪╡ ┘à╪│╪¬╪«╪▒╪¼ ┘à┘å ╪º┘ä╪╡┘ê╪▒╪⌐]:\n${ocrExtractedText}`
-                : `\n\n[Text extracted from image]:\n${ocrExtractedText}`)
-            : '';
-          
+          // Build final user message (unified multimodal path — providers read images directly)
           if (wolframContext) {
-            messages.push({ role: 'user', content: `${wolframContext}${ocrContext}\n\nUser question: ${message}` });
-          } else if (ocrExtractedText) {
-            // Study mode with image but no Wolfram result - still include OCR context
-            messages.push({ role: 'user', content: `${ocrContext}\n\nUser question: ${message || (language === 'ar' ? '╪º╪┤╪▒╪¡ ┘ç╪░╪º' : 'Explain this')}` });
+            messages.push({ role: 'user', content: `${wolframContext}\n\nUser question: ${message}` });
           } else {
             messages.push({ role: 'user', content: message });
           }
@@ -6408,6 +6352,101 @@ If you are running out of space, keep this order and drop the rest:
         let streamReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
         let modelUsed = '';
         let responseText = ''; // Track full response for token estimation
+        const normalizedImageAttachments = normalizeMultimodalImageAttachments(normalizedAttachedFiles);
+        if (normalizedImageAttachments.length > 0) {
+          console.error('[multimodal] unified stream attached images', {
+            count: normalizedImageAttachments.length,
+            trigger: effectiveTrigger,
+            submode: chatSubmode,
+          });
+        }
+
+        const appendGeminiImagesToContents = (contents: GeminiContent[]) => {
+          if (normalizedImageAttachments.length === 0) return contents;
+          const imageParts: GeminiContentPart[] = normalizedImageAttachments.map((attachment) => ({
+            inline_data: {
+              mime_type: attachment.mimeType,
+              data: attachment.base64,
+            },
+          }));
+          const lastUserIndex = [...contents].reverse().findIndex((item) => item.role === 'user');
+          const targetIndex = lastUserIndex === -1 ? -1 : (contents.length - 1 - lastUserIndex);
+          if (targetIndex >= 0) {
+            contents[targetIndex].parts.push(...imageParts);
+          } else {
+            contents.push({ role: 'user', parts: imageParts });
+          }
+          return contents;
+        };
+
+        const buildOpenAIMessages = (sourceMessages: Array<{ role: string; content: string }>) => {
+          const out: Array<{ role: string; content: unknown }> = sourceMessages.map((entry) => ({
+            role: entry.role,
+            content: entry.content,
+          }));
+          if (normalizedImageAttachments.length === 0) return out;
+
+          const imageParts = normalizedImageAttachments.map((attachment) => ({
+            type: 'image_url',
+            image_url: {
+              url: attachment.dataUrl,
+            },
+          }));
+
+          const lastUserIndex = [...out].reverse().findIndex((entry) => entry.role === 'user');
+          const targetIndex = lastUserIndex === -1 ? -1 : (out.length - 1 - lastUserIndex);
+          if (targetIndex >= 0) {
+            const originalContent = out[targetIndex].content;
+            const text = typeof originalContent === 'string' ? originalContent : '';
+            const blocks: Array<Record<string, unknown>> = [];
+            if (text.trim()) {
+              blocks.push({ type: 'text', text });
+            }
+            blocks.push(...imageParts);
+            out[targetIndex] = { ...out[targetIndex], content: blocks };
+          } else {
+            out.push({ role: 'user', content: imageParts });
+          }
+
+          return out;
+        };
+
+        const buildClaudeMessages = (sourceMessages: Array<{ role: string; content: string }>) => {
+          const converted = convertMessagesToClaudeFormat(sourceMessages);
+          const outMessages: Array<{ role: string; content: unknown }> = converted.messages.map((entry) => ({
+            role: entry.role,
+            content: entry.content,
+          }));
+          if (normalizedImageAttachments.length === 0) {
+            return { system: converted.system, messages: outMessages };
+          }
+
+          const imageBlocks = normalizedImageAttachments.map((attachment) => ({
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: attachment.mimeType,
+              data: attachment.base64,
+            },
+          }));
+
+          const lastUserIndex = [...outMessages].reverse().findIndex((entry) => entry.role === 'user');
+          const targetIndex = lastUserIndex === -1 ? -1 : (outMessages.length - 1 - lastUserIndex);
+          if (targetIndex >= 0) {
+            const originalContent = outMessages[targetIndex].content;
+            const text = typeof originalContent === 'string' ? originalContent : '';
+            const blocks: Array<Record<string, unknown>> = [];
+            if (text.trim()) {
+              blocks.push({ type: 'text', text });
+            }
+            blocks.push(...imageBlocks);
+            outMessages[targetIndex] = { ...outMessages[targetIndex], content: blocks };
+          } else {
+            outMessages.push({ role: 'user', content: imageBlocks });
+          }
+
+          return { system: converted.system, messages: outMessages };
+        };
 
         // Send keepalive ping before AI model calls to prevent connection timeout
         try {
@@ -6417,13 +6456,14 @@ If you are running out of space, keep this order and drop the rest:
         const tryGemini = async () => {
           const sysMsg = messages.find((m) => m.role === 'system')?.content || '';
           const userMsgs = messages.filter((m) => m.role !== 'system');
-          const contents = [];
+          const contents: GeminiContent[] = [];
           if (sysMsg) contents.push(buildTextContent('user', sysMsg));
           for (const m of userMsgs) {
             if (typeof m?.content === 'string') {
               contents.push(buildTextContent(m.role === 'assistant' ? 'model' : 'user', m.content));
             }
           }
+          appendGeminiImagesToContents(contents);
           
           aiProvider = 'gemini';
           // Tiered Engine Router ΓÇö based on user's engineTier preference (speed | intelligence)
@@ -6461,12 +6501,7 @@ If you are running out of space, keep this order and drop the rest:
 
         const tryOpenAI = async () => {
           if (!OPENAI_API_KEY) throw new Error('OpenAI API key not configured');
-          // CRITICAL: Reformat messages from Gemini format if needed
-          // Gemini uses contents array with parts, OpenAI uses standard messages
-          let reformattedMessages = messages;
-          
-          // If messages were built for Gemini (has system in messages), keep as-is
-          // OpenAI expects standard { role, content } format
+          const reformattedMessages = buildOpenAIMessages(messages);
           
           const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
@@ -6493,9 +6528,7 @@ If you are running out of space, keep this order and drop the rest:
 
         const tryClaude = async () => {
           if (!ANTHROPIC_API_KEY) throw new Error('Claude API key not configured');
-          // CRITICAL: Reformat messages for Claude format
-          // Claude expects separate system string and messages array
-          const { system, messages: claudeMessages } = convertMessagesToClaudeFormat(messages);
+          const { system, messages: claudeMessages } = buildClaudeMessages(messages);
           
           const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',

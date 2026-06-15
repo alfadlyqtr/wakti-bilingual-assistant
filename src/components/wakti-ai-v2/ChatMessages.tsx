@@ -1420,6 +1420,8 @@ export function ChatMessages({
   const getMessageBadge = (message: AIMessage, currentActiveTrigger: string) => {
     // Prefer saved intent for user messages to keep badge stable
     if (message.role === 'user') {
+      if ((message as any)?.chatSubmode === 'study') return '📚 Study';
+
       // Check intent FIRST - if user explicitly switched modes, respect that
       if (message.intent) {
         switch (message.intent) {
@@ -1464,10 +1466,8 @@ export function ChatMessages({
     }
 
     // For assistant messages, use the saved intent or detect from content
-    // Check for Study mode first (either via studyMode flag or Wolfram metadata)
-    const studyModeFlag = (message as any)?.metadata?.studyMode;
-    const wolframMeta = (message as any)?.metadata?.wolfram;
-    if (studyModeFlag || wolframMeta?.mode === 'study') return '📚 Study';
+    const isStudy = (message as any)?.chatSubmode === 'study' || (message as any)?.metadata?.studyMode || (message as any)?.metadata?.wolfram?.mode === 'study';
+    if (isStudy) return '📚 Study';
     
     if (message.intent === 'vision') return '👁️ Vision';
     if (message.intent === 'search') {
@@ -1886,10 +1886,10 @@ export function ChatMessages({
         );
       };
 
-      // Check for Wolfram|Alpha metadata AND Study mode flag
+      // Check study mode from both message root and metadata
+      const isStudy = (message as any)?.chatSubmode === 'study' || (message as any)?.metadata?.studyMode || (message as any)?.metadata?.wolfram?.mode === 'study';
       const wolframMeta = (message as any)?.metadata?.wolfram;
-      const studyModeFlag = (message as any)?.metadata?.studyMode;
-      const isStudyMode = studyModeFlag || wolframMeta?.mode === 'study';
+      const isStudyMode = isStudy;
       
       // Extract the [BOX]...[/BOX] summary sentence from the AI response
       const extractStudyAnswer = (text: string): string => {
@@ -2028,10 +2028,9 @@ export function ChatMessages({
   };
 
   const getAssistantBubbleClasses = (message: AIMessage) => {
-    // Check for Study mode first (via metadata flag or Wolfram mode)
-    const studyModeFlag = (message as any)?.metadata?.studyMode;
-    const wolframMeta = (message as any)?.metadata?.wolfram;
-    if (studyModeFlag || wolframMeta?.mode === 'study') {
+    // Check study mode from both message root and metadata
+    const isStudy = (message as any)?.chatSubmode === 'study' || (message as any)?.metadata?.studyMode || (message as any)?.metadata?.wolfram?.mode === 'study';
+    if (isStudy) {
       return 'border-purple-400'; // Purple border for Study mode
     }
     

@@ -726,7 +726,6 @@ const WaktiAIV2 = () => {
     }
 
     const effectiveChatSubmode: ChatSubmode = requestedSubmode;
-    const usedStudyThisRequest = effectiveChatSubmode === 'study';
 
     // Route to Vision path if: explicit vision trigger (NOT Study mode - Study uses brain-stream with OCR→Wolfram)
     const hasImages = attachedFiles && attachedFiles.length > 0 && attachedFiles.some((f: any) => f.type?.startsWith('image/'));
@@ -802,11 +801,13 @@ const WaktiAIV2 = () => {
       content: '',
       timestamp: new Date(),
       intent: trigger,
+      chatSubmode: effectiveChatSubmode,
       metadata: {
         loading: true,
         startTime,
         toolsUsed: getInitialToolCalls().length,
         toolCalls: getInitialToolCalls(),
+        studyMode: effectiveChatSubmode === 'study',
         ...(trigger === 'search' && isYouTubeQuery ? { youtubeLoading: true } : {})
       },
     };
@@ -892,6 +893,7 @@ const WaktiAIV2 = () => {
           // Use || (not ??) so an empty backend response ('') doesn't overwrite the
           // fully-streamed content. Matches the chat-path fix already applied below.
           content: (streamedResp?.response || cleanedStreamed),
+          chatSubmode: effectiveChatSubmode,
           metadata: { 
             loading: false, 
             ...streamMeta,
@@ -900,7 +902,8 @@ const WaktiAIV2 = () => {
             toolCalls: [
               { id: 'vision-1', name: 'Vision Analysis', icon: 'scan', status: 'completed', duration: Math.round(visionThinkingDuration * 0.6) },
               { id: 'vision-2', name: 'AI Processing', icon: 'brain', status: 'completed', duration: Math.round(visionThinkingDuration * 0.4) }
-            ]
+            ],
+            studyMode: effectiveChatSubmode === 'study',
           },
           intent: trigger,
         };
@@ -948,6 +951,7 @@ const WaktiAIV2 = () => {
           const finalAssistantMessage: AIMessage = {
             ...assistantPlaceholder,
             content: (response as any)?.response || '',
+            chatSubmode: effectiveChatSubmode,
             metadata: { 
               loading: false, 
               ...(response as any)?.metadata,
@@ -956,7 +960,8 @@ const WaktiAIV2 = () => {
               toolCalls: [
                 { id: 'yt-1', name: 'YouTube Search', icon: 'video', status: 'completed', duration: Math.round(ytThinkingDuration * 0.6) },
                 { id: 'yt-2', name: 'AI Analysis', icon: 'brain', status: 'completed', duration: Math.round(ytThinkingDuration * 0.4) }
-              ]
+              ],
+              studyMode: effectiveChatSubmode === 'study',
             },
             intent: trigger,
           };
@@ -1191,12 +1196,14 @@ const WaktiAIV2 = () => {
           content: (streamedResp?.response || cleanedStreamed),
           browsingUsed: streamMeta?.browsingUsed === true || trigger === 'search' || !!resolvedBrowsingData,
           browsingData: resolvedBrowsingData,
+          chatSubmode: effectiveChatSubmode,
           metadata: { 
             loading: false, 
             ...streamMeta,
             thinkingDuration: streamThinkingDuration,
             toolsUsed: getCompletedToolCalls().length,
-            toolCalls: getCompletedToolCalls()
+            toolCalls: getCompletedToolCalls(),
+            studyMode: effectiveChatSubmode === 'study',
           },
           intent: trigger,
         };
@@ -1289,21 +1296,6 @@ const WaktiAIV2 = () => {
         abortControllerRef.current = null;
       }
 
-      // HARD RULE: Study mode must never persist.
-      // After ANY request that used Study, always snap back to Chat.
-      if (usedStudyThisRequest) {
-        setActiveTrigger('chat');
-        setChatSubmode('chat');
-        console.log('🔄 AUTO-SWITCH: Study used → Chat mode');
-      }
-
-      // HARD RULE: Search mode must never persist.
-      // After ANY search request completes, always snap back to Chat mode.
-      if (trigger === 'search') {
-        setActiveTrigger('chat');
-        console.log('🔄 AUTO-SWITCH: Search completed → Chat mode');
-      }
-      
       // Auto-switch back to Chat after certain modes to save backend credits
       // and provide a smoother UX (user usually wants to chat about the result)
       if (trigger === 'vision') {

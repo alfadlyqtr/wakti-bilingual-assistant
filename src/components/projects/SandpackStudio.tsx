@@ -10,7 +10,7 @@ import { SandpackErrorListener } from "./SandpackErrorListener";
 import { SandpackConsolePanel } from "./SandpackConsolePanel";
 import { CollapsibleFileTree } from "./CollapsibleFileTree";
 import { atomDark } from "@codesandbox/sandpack-themes";
-import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, MousePointer2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft } from "lucide-react";
 import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
 import { useIncrementalFileUpdater } from '@/pages/ProjectDetail/hooks/useIncrementalFileUpdater';
 import { useSandpackFiles } from '@/pages/ProjectDetail/hooks/useSandpackFiles';
@@ -25,6 +25,13 @@ import { clsx } from "clsx";
 import { WAKTI_INSPECTOR_COMPONENT } from "@/utils/waktiInspectorComponent";
 import sandpackI18nBundle from "@/assets/sandpack-i18n-bundle.mjs?raw";
 import { SANDPACK_DEPENDENCIES, rootPackageName } from "@/config/sandpackPackages";
+
+const SANDPACK_COMPANION_DEPENDENCIES: Record<string, string[]> = {
+  "framer-motion": ["@emotion/is-prop-valid"],
+  "react-leaflet": ["leaflet"],
+  "react-slick": ["slick-carousel"],
+  "@hookform/resolvers": ["react-hook-form"],
+};
 
 // --- 2. SELECTED ELEMENT INFO TYPE ---
 interface SelectedElementInfo {
@@ -41,6 +48,7 @@ interface SelectedElementInfo {
 }
 
 type PreviewHealthState = 'loading' | 'ready' | 'recovering' | 'failed';
+type PreviewRenderMode = 'exact' | 'visual';
 
 const WAKTI_VISUAL_ELEMENT_SELECTED_EVENT = 'wakti:visual-element-selected';
 
@@ -49,12 +57,14 @@ const WAKTI_VISUAL_ELEMENT_SELECTED_EVENT = 'wakti:visual-element-selected';
 const InspectablePreview = ({ 
   elementSelectMode, 
   onElementSelect,
+  inspectorEnabled = true,
   watchdogEnabled = true,
   onPreviewReady,
   onPreviewFailure,
 }: { 
   elementSelectMode?: boolean;
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
+  inspectorEnabled?: boolean;
   watchdogEnabled?: boolean;
   onPreviewReady?: () => void;
   onPreviewFailure?: (reason: string) => void;
@@ -130,6 +140,10 @@ const InspectablePreview = ({
 
   // Send inspect mode toggle with retry logic
   const sendToggleMessage = useCallback((enabled: boolean) => {
+    if (!inspectorEnabled) {
+      return;
+    }
+
     // Clear any pending retry
     if (retryRef.current) {
       clearTimeout(retryRef.current);
@@ -158,7 +172,7 @@ const InspectablePreview = ({
     };
 
     attemptSend(15); // Try up to 15 times (3 seconds total)
-  }, [findIframe]);
+  }, [findIframe, inspectorEnabled]);
 
   // Listen for inspector ready, mode ack, and element selection
   useEffect(() => {
@@ -168,7 +182,7 @@ const InspectablePreview = ({
       if (!isPreviewMessage(e)) return;
 
       // Inspector loaded confirmation
-      if (data.type === 'WAKTI_INSPECTOR_READY') {
+      if (inspectorEnabled && data.type === 'WAKTI_INSPECTOR_READY') {
         console.log('[InspectablePreview] Inspector ready received');
         setInspectorReady(true);
         lastPongAtRef.current = Date.now();
@@ -179,19 +193,19 @@ const InspectablePreview = ({
       }
 
       // Mode change acknowledgment
-      if (data.type === 'WAKTI_INSPECT_MODE_CHANGED') {
+      if (inspectorEnabled && data.type === 'WAKTI_INSPECT_MODE_CHANGED') {
         console.log('[InspectablePreview] Mode ACK received:', data.payload);
         setModeAckReceived(true);
       }
 
       // Pong response for debugging
-      if (data.type === 'WAKTI_INSPECTOR_PONG') {
+      if (inspectorEnabled && data.type === 'WAKTI_INSPECTOR_PONG') {
         console.log('[InspectablePreview] Pong received - connection confirmed');
         lastPongAtRef.current = Date.now();
       }
 
       // Element selected
-      if (data.type === 'WAKTI_ELEMENT_SELECTED' && data.payload) {
+      if (inspectorEnabled && data.type === 'WAKTI_ELEMENT_SELECTED' && data.payload) {
         console.log('[InspectablePreview] Element selected:', data.payload);
         setModeAckReceived(true);
         const info = data.payload as SelectedElementInfo;
@@ -206,12 +220,34 @@ const InspectablePreview = ({
       if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
       if (healthcheckIntervalRef.current) clearInterval(healthcheckIntervalRef.current);
     };
-  }, [elementSelectMode, emitElementSelection, isPreviewMessage, onPreviewReady, sendToggleMessage]);
+  }, [elementSelectMode, emitElementSelection, inspectorEnabled, isPreviewMessage, onPreviewReady, sendToggleMessage]);
+
+  useEffect(() => {
+    if (!inspectorEnabled) {
+      if (retryRef.current) {
+        clearTimeout(retryRef.current);
+        retryRef.current = null;
+      }
+      setInspectorReady(false);
+      setModeAckReceived(false);
+    }
+  }, [inspectorEnabled]);
 
   // Send toggle when mode changes
   useEffect(() => {
+    if (!inspectorEnabled) {
+      return;
+    }
     sendToggleMessage(!!elementSelectMode);
-  }, [elementSelectMode, sendToggleMessage]);
+  }, [elementSelectMode, inspectorEnabled, sendToggleMessage]);
+
+  useEffect(() => {
+    if (inspectorEnabled) return;
+    if (sandpack.error || sandpack.status !== 'running') return;
+
+    failureReportedRef.current = false;
+    onPreviewReady?.();
+  }, [inspectorEnabled, onPreviewReady, sandpack.error, sandpack.status]);
 
   // Reset inspector ready state when sandpack restarts
   useEffect(() => {
@@ -225,6 +261,7 @@ const InspectablePreview = ({
 
   // Debug: Log status when mode is enabled but not working
   useEffect(() => {
+    if (!inspectorEnabled) return;
     if (elementSelectMode && !modeAckReceived) {
       const timeout = setTimeout(() => {
         if (!modeAckReceived) {
@@ -234,13 +271,13 @@ const InspectablePreview = ({
       }, 3000);
       return () => clearTimeout(timeout);
     }
-  }, [elementSelectMode, modeAckReceived, inspectorReady]);
+  }, [elementSelectMode, inspectorEnabled, modeAckReceived, inspectorReady]);
 
   useEffect(() => {
-    if (!watchdogEnabled || inspectorReady || sandpack.error) return;
+    if (!watchdogEnabled || inspectorReady || sandpack.error || sandpack.status === 'running') return;
 
     const timeout = setTimeout(() => {
-      if (inspectorReady || sandpack.error) return;
+      if (inspectorReady || sandpack.error || sandpack.status === 'running') return;
       const iframe = findIframe();
       const iframeSrc = iframe?.getAttribute('src') || '';
       reportPreviewFailure(
@@ -251,7 +288,7 @@ const InspectablePreview = ({
     }, 12000);
 
     return () => clearTimeout(timeout);
-  }, [findIframe, inspectorReady, reportPreviewFailure, sandpack.error, watchdogEnabled]);
+  }, [findIframe, inspectorReady, reportPreviewFailure, sandpack.error, sandpack.status, watchdogEnabled]);
 
   useEffect(() => {
     if (!watchdogEnabled || !inspectorReady || sandpack.error) return;
@@ -437,13 +474,118 @@ export default function SandpackStudio({
   isRTL = false
 }: SandpackStudioProps) {
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
-  const [selectedElement, setSelectedElement] = useState<SelectedElementInfo | null>(null);
+  const [previewCompatibilityMode, setPreviewCompatibilityMode] = useState<PreviewRenderMode>('exact');
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(() => window.innerWidth < 768);
   const [previewSessionKey, setPreviewSessionKey] = useState(0);
   const [previewHealth, setPreviewHealth] = useState<PreviewHealthState>('loading');
   const [previewFailureMessage, setPreviewFailureMessage] = useState('');
+  const [forcedDependencyRoots, setForcedDependencyRoots] = useState<string[]>([]);
+  const [forceAllDependencies, setForceAllDependencies] = useState(false);
+  const [runtimeDependencies, setRuntimeDependencies] = useState<Record<string, string>>({});
+  const bundlerCandidates = useMemo(() => {
+    const urls: string[] = [];
+    const envBundlerUrl = (import.meta as any)?.env?.VITE_SANDPACK_BUNDLER_URL;
+
+    if (typeof envBundlerUrl === 'string' && envBundlerUrl.trim()) {
+      urls.push(envBundlerUrl.trim());
+    }
+
+    urls.push('https://sandpack-bundler.codesandbox.io');
+
+    if (typeof window !== 'undefined') {
+      const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (isLocalHost) {
+        urls.push('http://localhost:1234');
+      }
+    }
+
+    return Array.from(new Set(urls));
+  }, []);
+  const [activeBundlerIndex, setActiveBundlerIndex] = useState(0);
   const autoRecoveryCountRef = useRef(0);
+  const resolvedPreviewRenderMode = elementSelectMode ? 'visual' : previewCompatibilityMode;
+
+  const knownDependencyRoots = useMemo(() => {
+    const roots = new Set<string>();
+    Object.keys(SANDPACK_DEPENDENCIES).forEach((pkg) => {
+      roots.add(rootPackageName(pkg));
+    });
+    Object.keys(runtimeDependencies).forEach((pkg) => {
+      roots.add(rootPackageName(pkg));
+    });
+    return roots;
+  }, [runtimeDependencies]);
+
+  const activeBundlerUrl = bundlerCandidates[Math.min(activeBundlerIndex, bundlerCandidates.length - 1)] || 'https://sandpack-bundler.codesandbox.io';
+
+  const extractMissingDependencyRoot = useCallback((errorMsg: string): string | null => {
+    const missingDependencyPatterns = [
+      /Cannot find module\s+['"]([^'"]+)['"]/i,
+      /Could not find dependency:\s*['"]([^'"]+)['"]/i,
+      /Module not found:.*?['"]([^'"]+)['"]/i,
+    ];
+
+    for (const pattern of missingDependencyPatterns) {
+      const match = errorMsg.match(pattern);
+      if (match?.[1]) {
+        return rootPackageName(match[1]);
+      }
+    }
+
+    return null;
+  }, []);
+
+  const recoverFromMissingDependency = useCallback((errorMsg: string): boolean => {
+    const missingRoot = extractMissingDependencyRoot(errorMsg);
+    if (!missingRoot) return false;
+
+    if (!knownDependencyRoots.has(missingRoot)) {
+      if (!runtimeDependencies[missingRoot]) {
+        setRuntimeDependencies((prev) => ({
+          ...prev,
+          [missingRoot]: 'latest',
+        }));
+        setPreviewFailureMessage(`Adding package "${missingRoot}" and retrying preview...`);
+        setPreviewHealth('recovering');
+        setPreviewSessionKey(prev => prev + 1);
+        return true;
+      }
+
+      if (forceAllDependencies) return false;
+
+      setForceAllDependencies(true);
+      setPreviewFailureMessage(`Missing package "${missingRoot}" detected. Retrying with compatibility mode...`);
+      setPreviewHealth('recovering');
+      setPreviewSessionKey(prev => prev + 1);
+      return true;
+    }
+
+    if (!forcedDependencyRoots.includes(missingRoot)) {
+      setForcedDependencyRoots((prev) => [...prev, missingRoot]);
+      setPreviewFailureMessage(`Adding missing package "${missingRoot}" and retrying preview...`);
+      setPreviewHealth('recovering');
+      setPreviewSessionKey(prev => prev + 1);
+      return true;
+    }
+
+    if (!forceAllDependencies) {
+      setForceAllDependencies(true);
+      setPreviewFailureMessage('Retrying preview with full dependency mode...');
+      setPreviewHealth('recovering');
+      setPreviewSessionKey(prev => prev + 1);
+      return true;
+    }
+
+    return false;
+  }, [extractMissingDependencyRoot, forceAllDependencies, forcedDependencyRoots, knownDependencyRoots, runtimeDependencies]);
+
+  const handleSandpackError = useCallback((errorMsg: string) => {
+    if (recoverFromMissingDependency(errorMsg)) {
+      return;
+    }
+    onRuntimeError?.(errorMsg);
+  }, [onRuntimeError, recoverFromMissingDependency]);
   
   // Remove Sandpack resize handle - it causes issues in preview-only mode
   useEffect(() => {
@@ -497,7 +639,36 @@ export default function SandpackStudio({
     setPreviewHealth('ready');
   }, []);
 
+  useEffect(() => {
+    setForcedDependencyRoots([]);
+    setForceAllDependencies(false);
+    setRuntimeDependencies({});
+    setPreviewCompatibilityMode('exact');
+  }, [projectId]);
+
+  useEffect(() => {
+    autoRecoveryCountRef.current = 0;
+    setPreviewFailureMessage('');
+    setPreviewHealth('loading');
+  }, [resolvedPreviewRenderMode]);
+
   const handlePreviewFailure = useCallback((reason: string) => {
+    if (activeBundlerIndex < bundlerCandidates.length - 1) {
+      setPreviewFailureMessage(`${reason} Switching preview engine...`);
+      setPreviewHealth('recovering');
+      setActiveBundlerIndex(prev => Math.min(prev + 1, bundlerCandidates.length - 1));
+      setPreviewSessionKey(prev => prev + 1);
+      return;
+    }
+
+    if (!elementSelectMode && previewCompatibilityMode !== 'visual') {
+      setPreviewFailureMessage('Retrying preview in compatibility mode...');
+      setPreviewCompatibilityMode('visual');
+      setPreviewHealth('recovering');
+      setPreviewSessionKey(prev => prev + 1);
+      return;
+    }
+
     if (autoRecoveryCountRef.current < 1) {
       autoRecoveryCountRef.current += 1;
       setPreviewFailureMessage(reason);
@@ -508,12 +679,16 @@ export default function SandpackStudio({
 
     setPreviewFailureMessage(reason);
     setPreviewHealth('failed');
-  }, []);
+  }, [activeBundlerIndex, bundlerCandidates.length, elementSelectMode, previewCompatibilityMode]);
 
   const handleManualPreviewReload = useCallback(() => {
     autoRecoveryCountRef.current = 0;
     setPreviewFailureMessage('');
     setPreviewHealth('loading');
+    setActiveBundlerIndex(0);
+    if (!elementSelectMode) {
+      setPreviewCompatibilityMode('exact');
+    }
 
     if (onRefresh) {
       onRefresh();
@@ -521,54 +696,127 @@ export default function SandpackStudio({
     }
 
     setPreviewSessionKey(prev => prev + 1);
-  }, [onRefresh]);
+  }, [elementSelectMode, onRefresh]);
+
+  const normalizedProjectFiles = useMemo<Record<string, string>>(() => {
+    const normalized: Record<string, string> = {};
+    Object.entries(files).forEach(([path, content]) => {
+      const fixedPath = path.startsWith('/') ? path : `/${path}`;
+      normalized[fixedPath] = content;
+    });
+    return normalized;
+  }, [files]);
   
   // Scan project files for actual import statements and return only used packages.
   // This prevents Sandpack from resolving all 50+ packages on every project load.
   const activeDependencies = useMemo<Record<string, string>>(() => {
-    const allCode = Object.values(files).join('\n');
+    if (forceAllDependencies) {
+      return {
+        ...SANDPACK_DEPENDENCIES,
+        ...runtimeDependencies,
+      };
+    }
+
+    const allCode = Object.values(normalizedProjectFiles).join('\n');
     // Match: import ... from 'pkg' / require('pkg') / from "pkg"
-    const importRegex = /(?:from\s+['"]|require\s*\(\s*['"]|import\s+['"])(@?[a-z0-9][\w\-./]*)/g;
-    const usedRoots = new Set<string>();
+    const importRegex = /(?:from\s+['"]|require\s*\(\s*['"]|import\s+['"]|import\s*\(\s*['"])(@?[a-z0-9][\w\-./]*)/g;
+    const rootsToInclude = new Set<string>(['react', 'react-dom']);
     let m: RegExpExecArray | null;
     while ((m = importRegex.exec(allCode)) !== null) {
-      usedRoots.add(rootPackageName(m[1]));
+      rootsToInclude.add(rootPackageName(m[1]));
     }
-    // Always include core React packages
-    const ALWAYS_INCLUDE = new Set(['react', 'react-dom']);
+
+    forcedDependencyRoots.forEach((pkg) => {
+      rootsToInclude.add(rootPackageName(pkg));
+    });
+
+    const queue = Array.from(rootsToInclude);
+    while (queue.length > 0) {
+      const root = queue.shift();
+      if (!root) continue;
+
+      const companionPackages = SANDPACK_COMPANION_DEPENDENCIES[root] || [];
+      for (const companionPkg of companionPackages) {
+        const companionRoot = rootPackageName(companionPkg);
+        if (!knownDependencyRoots.has(companionRoot)) continue;
+        if (rootsToInclude.has(companionRoot)) continue;
+        rootsToInclude.add(companionRoot);
+        queue.push(companionRoot);
+      }
+    }
+
     const result: Record<string, string> = {};
     for (const [pkg, ver] of Object.entries(SANDPACK_DEPENDENCIES)) {
-      if (ALWAYS_INCLUDE.has(rootPackageName(pkg)) || usedRoots.has(rootPackageName(pkg))) {
+      if (rootsToInclude.has(rootPackageName(pkg))) {
         result[pkg] = ver;
       }
     }
+
+    for (const [pkg, ver] of Object.entries(runtimeDependencies)) {
+      result[pkg] = ver;
+    }
+
     return result;
-  }, [files]);
+  }, [forceAllDependencies, forcedDependencyRoots, knownDependencyRoots, normalizedProjectFiles, runtimeDependencies]);
+
+  const dependencyFingerprint = useMemo(
+    () => Object.entries(activeDependencies)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([pkg, version]) => `${pkg}@${version}`)
+      .join('|'),
+    [activeDependencies]
+  );
+
+  const usesTypeScript = useMemo(
+    () => Object.keys(files).some((path) => /\.(ts|tsx)$/.test(path)),
+    [files]
+  );
 
   // Check if we have valid files (not just empty or placeholder)
   // Enhanced validation to catch HTML error pages and malformed responses
   const hasValidFiles = useMemo(() => {
-    if (Object.keys(files).length === 0) return false;
-    const appJs =
-      files["/App.js"] ??
-      files["/src/App.js"] ??
-      files["/src/App.jsx"] ??
-      files["/src/App.tsx"];
-    if (!appJs || appJs.length < 50) return false;
+    if (Object.keys(normalizedProjectFiles).length === 0) return false;
+
+    const entryCandidates = [
+      '/App.js',
+      '/App.jsx',
+      '/App.tsx',
+      '/src/App.js',
+      '/src/App.jsx',
+      '/src/App.tsx',
+      '/src/main.js',
+      '/src/main.jsx',
+      '/src/main.tsx',
+      '/index.js',
+      '/index.jsx',
+      '/index.tsx',
+      '/src/index.js',
+      '/src/index.jsx',
+      '/src/index.tsx',
+    ];
+
+    const entryPath = entryCandidates.find((path) => typeof normalizedProjectFiles[path] === 'string')
+      ?? Object.keys(normalizedProjectFiles).find((path) => /\.(js|jsx|ts|tsx)$/.test(path));
+
+    if (!entryPath) return false;
+
+    const entryCode = normalizedProjectFiles[entryPath];
+    if (!entryCode || entryCode.length < 20) return false;
     // Reject HTML error pages
-    if (appJs.includes("<!DOCTYPE") || appJs.includes("<html")) return false;
+    if (entryCode.includes('<!DOCTYPE') || entryCode.includes('<html')) return false;
     // Reject obvious non-React content
-    if (appJs.startsWith("{") && appJs.includes('"error"')) return false;
-    // Must have React-like content
-    if (!appJs.includes("import") && !appJs.includes("export") && !appJs.includes("function")) return false;
+    if (entryCode.startsWith('{') && entryCode.includes('"error"')) return false;
+    // Must have executable JS/TS-like content
+    if (!/(import|export|function|const|class|createRoot|React)/.test(entryCode)) return false;
     return true;
-  }, [files]);
+  }, [normalizedProjectFiles]);
 
   useEffect(() => {
     if (isLoading || !hasValidFiles) {
       autoRecoveryCountRef.current = 0;
       setPreviewFailureMessage('');
       setPreviewHealth('loading');
+      setActiveBundlerIndex(0);
     }
   }, [hasValidFiles, isLoading, projectId]);
 
@@ -576,14 +824,9 @@ export default function SandpackStudio({
 
   // Build Sandpack files. Memoized to prevent SandpackProvider from re-initializing on every render.
   const formattedFiles: Record<string, string> = useMemo(() => {
-    const next: Record<string, string> = {};
-
-    // Copy all files, fixing paths if needed
-    Object.entries(files).forEach(([path, content]) => {
-      // Ensure path starts with /
-      const fixedPath = path.startsWith('/') ? path : `/${path}`;
-      next[fixedPath] = content;
-    });
+    const next: Record<string, string> = {
+      ...normalizedProjectFiles,
+    };
 
     // If no files are ready yet, provide a minimal App so Sandpack doesn't fall back
     // to its built-in default template (which shows "Hello world").
@@ -601,17 +844,39 @@ export default function App() {
 `;
     }
 
-    // Ensure /App.js exists so Sandpack always has a default entry file to open in Code view.
-    // Many generated projects place App under /src, which would leave Sandpack with no obvious active file.
-    if (!next["/App.js"]) {
-      if (next["/src/App.js"] || next["/src/App.jsx"] || next["/src/App.tsx"]) {
-        next["/App.js"] = "export { default } from './src/App';\n";
-      }
-    }
+    const appEntryCandidates = [
+      '/App.tsx',
+      '/App.jsx',
+      '/App.js',
+      '/src/App.tsx',
+      '/src/App.jsx',
+      '/src/App.js',
+    ];
 
-    // ALWAYS inject our custom index.js with the WaktiInspector component
-    // This ensures the inspector runs inside the Sandpack iframe as a React component
-    next["/index.js"] = `import React from "react";
+    const appEntryPath = appEntryCandidates.find((path) => typeof next[path] === 'string');
+    const hasJavaScriptEntry = Boolean(
+      next['/index.js'] ||
+      next['/index.jsx'] ||
+      next['/index.tsx'] ||
+      next['/src/index.js'] ||
+      next['/src/index.jsx'] ||
+      next['/src/index.tsx'] ||
+      next['/src/main.js'] ||
+      next['/src/main.jsx'] ||
+      next['/src/main.tsx']
+    );
+
+    if (resolvedPreviewRenderMode === 'visual') {
+      // Ensure /App.js exists so Sandpack always has a default entry file to open in Code view.
+      // Many generated projects place App under /src, which would leave Sandpack with no obvious active file.
+      if (!next['/App.js']) {
+        if (next['/src/App.js'] || next['/src/App.jsx'] || next['/src/App.tsx']) {
+          next['/App.js'] = "export { default } from './src/App';\n";
+        }
+      }
+
+      // Visual mode injects our custom index.js with the WaktiInspector component.
+      next["/index.js"] = `import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App";
 
@@ -625,24 +890,37 @@ root.render(
   </>
 );`;
 
-    // Add styles.css if not present
-    if (!next["/styles.css"]) {
-      next["/styles.css"] = "/* Tailwind loaded via CDN */";
-    }
+      // Add styles.css if not present
+      if (!next["/styles.css"]) {
+        next["/styles.css"] = "/* Tailwind loaded via CDN */";
+      }
 
-    // Strip @tailwind directives and @apply rules from all CSS files
-    // Tailwind is loaded via CDN script tag, so these directives crash Sandpack's bundler
-    for (const [path, content] of Object.entries(next)) {
-      if (path.endsWith('.css') && typeof content === 'string') {
-        let cleaned = content;
-        // Remove @tailwind directives
-        cleaned = cleaned.replace(/@tailwind\s+(base|components|utilities)\s*;?\s*/g, '');
-        // Replace @apply with plain comment (can't be processed without PostCSS)
-        cleaned = cleaned.replace(/@apply\s+[^;]+;/g, '/* @apply removed - use inline classes */');
-        if (cleaned !== content) {
-          next[path] = cleaned;
+      // Strip @tailwind directives and @apply rules from all CSS files
+      // Tailwind is loaded via CDN script tag, so these directives crash Sandpack's bundler
+      for (const [path, content] of Object.entries(next)) {
+        if (path.endsWith('.css') && typeof content === 'string') {
+          let cleaned = content;
+          // Remove @tailwind directives
+          cleaned = cleaned.replace(/@tailwind\s+(base|components|utilities)\s*;?\s*/g, '');
+          // Replace @apply with plain comment (can't be processed without PostCSS)
+          cleaned = cleaned.replace(/@apply\s+[^;]+;/g, '/* @apply removed - use inline classes */');
+          if (cleaned !== content) {
+            next[path] = cleaned;
+          }
         }
       }
+    } else if (!hasJavaScriptEntry && appEntryPath) {
+      const appImportPath = appEntryPath
+        .replace(/^\//, './')
+        .replace(/\.(tsx|ts|jsx|js)$/i, '');
+
+      next['/index.js'] = `import React from "react";
+import { createRoot } from "react-dom/client";
+import App from "${appImportPath}";
+
+const root = createRoot(document.getElementById("root"));
+root.render(<App />);
+`;
     }
 
     // If project uses i18n, inject our pre-bundled version under the original package names
@@ -682,14 +960,14 @@ export * from './bundle.js';`;
 export { LanguageDetector as default } from '../i18next/bundle.js';`;
     }
     
-    // Set index.html (no script injection needed - inspector is now a React component)
+    // Ensure index.html exists (fallback only; never overwrite user html)
     const indexHtmlContent = `<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wakti Preview</title>
-    <script src="https://cdn.tailwindcss.com"><\/script>
+    <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Playfair+Display:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick-theme.min.css" />
@@ -699,11 +977,17 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
   </body>
 </html>`;
 
-    next["/public/index.html"] = indexHtmlContent;
-    next["/index.html"] = indexHtmlContent;
+    if (!next['/index.html'] && !next['/public/index.html']) {
+      next['/index.html'] = indexHtmlContent;
+      next['/public/index.html'] = indexHtmlContent;
+    } else if (!next['/index.html'] && next['/public/index.html']) {
+      next['/index.html'] = next['/public/index.html'];
+    } else if (!next['/public/index.html'] && next['/index.html']) {
+      next['/public/index.html'] = next['/index.html'];
+    }
 
     return next;
-  }, [files, sandpackI18nBundle, WAKTI_INSPECTOR_COMPONENT]);
+  }, [normalizedProjectFiles, resolvedPreviewRenderMode]);
 
   const {
     activeFile,
@@ -775,7 +1059,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          
+
           <div className="h-4 w-px bg-white/10 hidden xs:block" />
           
           <button 
@@ -878,12 +1162,13 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
 
   return (<>
     <SandpackProvider
-      key={`sandpack-provider-${projectId ?? 'local'}-${previewSessionKey}`}
-      template="react"
+      key={`sandpack-provider-${projectId ?? 'local'}-${usesTypeScript ? 'ts' : 'js'}-${resolvedPreviewRenderMode}-${previewSessionKey}-${dependencyFingerprint}`}
+      template={usesTypeScript ? "react-ts" : "react"}
       theme={atomDark}
       files={formattedFiles}
       options={{
         externalResources: ["https://cdn.tailwindcss.com"],
+        bundlerURL: activeBundlerUrl,
         activeFile,
         visibleFiles: openTabs,
         classes: {
@@ -974,10 +1259,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                       min-height: 0 !important;
                       width: 100% !important;
                     }
-                    .sp-stack .sp-preview-actions, 
-                    .sp-stack .sp-error-message,
-                    .sp-stack .sp-error-list,
-                    .sp-preview-container .sp-bridge-frame,
+                    .sp-stack .sp-preview-actions,
                     .cm-diagnostic-error {
                       display: none !important;
                     }
@@ -1012,16 +1294,6 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     .sp-layout .sp-separator,
                     .sp-stack .sp-separator {
                       display: none !important;
-                    }
-                    /* Hide Sandpack loading spinner/indicator */
-                    .sp-loading,
-                    .sp-cube-wrapper,
-                    .sp-preview-loading,
-                    [class*="sp-loading"],
-                    [class*="sp-cube"],
-                    .sp-overlay {
-                      display: none !important;
-                      opacity: 0 !important;
                     }
                     /* Hide refresh button */
                     .sp-button[title="Refresh"],
@@ -1098,12 +1370,13 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                   <SandpackErrorBoundary
                     onError={(error) => {
                       console.error('[SandpackStudio] React Error Boundary caught error:', error);
-                      onRuntimeError?.(error.message);
+                      handleSandpackError(error.message);
                     }}
                   >
                     <InspectablePreview 
-                      elementSelectMode={elementSelectMode}
+                      elementSelectMode={resolvedPreviewRenderMode === 'visual' ? elementSelectMode : false}
                       onElementSelect={onElementSelect}
+                      inspectorEnabled={resolvedPreviewRenderMode === 'visual'}
                       watchdogEnabled={viewMode === 'preview' && !isLoading && hasValidFiles}
                       onPreviewReady={handlePreviewReady}
                       onPreviewFailure={handlePreviewFailure}
@@ -1117,9 +1390,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
           <IncrementalFileUpdaterComponent files={formattedFiles} />
 
           {/* ERROR LISTENER - Invisible component that detects crashes */}
-          {onRuntimeError && (
-            <SandpackErrorListener onErrorDetected={onRuntimeError} />
-          )}
+          <SandpackErrorListener onErrorDetected={handleSandpackError} />
         </div>
 
         {/* CONSOLE PANEL - Integrated at bottom */}

@@ -268,6 +268,7 @@ export default function ProjectDetail() {
   const { user, session, isGuest } = useAuth();
   const debugContext = useDebugContext();
   const isRTL = language === 'ar';
+  const userId = user?.id;
   const chatEndRef = useRef<HTMLDivElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const thinkingStartTimeRef = useRef<number | null>(null);
@@ -398,10 +399,22 @@ export default function ProjectDetail() {
   // Visual Edit Mode undo/redo history
   const visualEditHistory = useEditHistory({ maxHistory: 30 });
 
-  const syncAgentFilesToEditor = useCallback((filesMap: Record<string, string>) => {
-    setGeneratedFiles(filesMap);
-    setCodeContent(filesMap['/App.js'] || Object.values(filesMap)[0] || '');
+  const areFileMapsEqual = useCallback((a: Record<string, string>, b: Record<string, string>) => {
+    if (a === b) return true;
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    for (const key of aKeys) {
+      if (a[key] !== b[key]) return false;
+    }
+    return true;
   }, []);
+
+  const syncAgentFilesToEditor = useCallback((filesMap: Record<string, string>) => {
+    setGeneratedFiles(prev => (areFileMapsEqual(prev, filesMap) ? prev : filesMap));
+    const nextCode = filesMap['/App.js'] || Object.values(filesMap)[0] || '';
+    setCodeContent(prev => (prev === nextCode ? prev : nextCode));
+  }, [areFileMapsEqual]);
 
   const {
     currentPlan: sharedAgentPlan,
@@ -1047,7 +1060,7 @@ export default function ProjectDetail() {
 
   // Check if we need to generate on mount
   useEffect(() => {
-    if (user && id) {
+    if (userId && id) {
       // Check for generation params
       const generating = searchParams.get('generating');
       const prompt = searchParams.get('prompt');
@@ -1101,7 +1114,7 @@ export default function ProjectDetail() {
         runGeneration(prompt, themeId, assets, customInstructions, assetIntentParam === 'layout' || assetIntentParam === 'style' || assetIntentParam === 'content' ? assetIntentParam : undefined);
       }
     }
-  }, [user, id]);
+  }, [userId, id]);
   
   const fetchChatHistory = async () => {
     if (!id) return;
@@ -1350,11 +1363,11 @@ export default function ProjectDetail() {
 
   // Fetch uploaded assets and backend context when project loads
   useEffect(() => {
-    if (id && user) {
+    if (id && userId) {
       fetchUploadedAssets();
       fetchBackendContext();
     }
-  }, [id, user]);
+  }, [id, userId]);
 
   const handleRevert = async (messageId: string) => {
     const targetMessage = chatMessages.find(m => m.id === messageId);
@@ -1997,8 +2010,10 @@ export default function ProjectDetail() {
           try {
             const parsed = JSON.parse(legacyIndexFile.content);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-              setGeneratedFiles(parsed);
-              setCodeContent(parsed["/App.js"] || Object.values(parsed)[0] || "");
+              const parsedFiles = parsed as Record<string, string>;
+              setGeneratedFiles(prev => (areFileMapsEqual(prev, parsedFiles) ? prev : parsedFiles));
+              const nextCode = parsedFiles["/App.js"] || Object.values(parsedFiles)[0] || "";
+              setCodeContent(prev => (prev === nextCode ? prev : nextCode));
             } else {
               setCodeContent(legacyIndexFile.content);
             }
@@ -2007,8 +2022,9 @@ export default function ProjectDetail() {
           }
         }
       } else {
-        setGeneratedFiles(mapFromRows);
-        setCodeContent(mapFromRows["/App.js"] || Object.values(mapFromRows)[0] || "");
+        setGeneratedFiles(prev => (areFileMapsEqual(prev, mapFromRows) ? prev : mapFromRows));
+        const nextCode = mapFromRows["/App.js"] || Object.values(mapFromRows)[0] || "";
+        setCodeContent(prev => (prev === nextCode ? prev : nextCode));
       }
     } catch (err) {
       console.error('Error fetching project:', err);
@@ -2086,11 +2102,11 @@ export default function ProjectDetail() {
         return Array.from(byPath.values());
       });
 
-      setGeneratedFiles(filesToSave);
-      setCodeContent(filesToSave['/App.js'] || Object.values(filesToSave)[0] || '');
+      setGeneratedFiles(prev => (areFileMapsEqual(prev, filesToSave) ? prev : filesToSave));
+      const nextCode = filesToSave['/App.js'] || Object.values(filesToSave)[0] || '';
+      setCodeContent(prev => (prev === nextCode ? prev : nextCode));
       
       toast.success(isRTL ? 'تم الحفظ!' : 'Saved!');
-      refreshPreview();
     } catch (err) {
       console.error('Error saving:', err);
       toast.error(isRTL ? 'فشل في الحفظ' : 'Failed to save');
@@ -8801,7 +8817,12 @@ ${fixInstructions}
                           return acc;
                         }, {});
 
-                        void saveCode(Object.keys(filteredFiles).length > 0 ? filteredFiles : undefined);
+                        if (Object.keys(filteredFiles).length === 0) return;
+
+                        const hasActualChange = Object.entries(filteredFiles).some(([path, content]) => generatedFiles[path] !== content);
+                        if (!hasActualChange) return;
+
+                        void saveCode(filteredFiles);
                       }}
                       isSaving={saving}
                       deviceView={deviceView}
