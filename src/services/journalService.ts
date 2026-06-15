@@ -8,10 +8,12 @@ export type JournalDay = {
   tags: string[];
   note: string | null;
   morning_reflection: string | null;
+  midday_reflection: string | null;
   evening_reflection: string | null;
   gratitude_1: string | null;
   gratitude_2: string | null;
   gratitude_3: string | null;
+  is_ended?: boolean;
   created_at?: string;
   updated_at?: string;
 };
@@ -52,7 +54,7 @@ export const JournalService = {
     return data as JournalCheckin;
   },
 
-  async upsertDay(payload: Omit<JournalDay, "id" | "created_at" | "updated_at" | "user_id">) {
+  async upsertDay(payload: Omit<JournalDay, "id" | "created_at" | "updated_at" | "user_id" | "is_ended"> & { is_ended?: boolean }) {
     const { data: { session } } = await supabase.auth.getSession();
     const user = session?.user;
     if (!user) throw new Error("not_authenticated");

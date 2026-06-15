@@ -1589,6 +1589,8 @@ export type Database = {
           gratitude_2: string | null
           gratitude_3: string | null
           id: string
+          is_ended: boolean | null
+          midday_reflection: string | null
           mood_value: number | null
           morning_reflection: string | null
           note: string | null
@@ -1604,6 +1606,8 @@ export type Database = {
           gratitude_2?: string | null
           gratitude_3?: string | null
           id?: string
+          is_ended?: boolean | null
+          midday_reflection?: string | null
           mood_value?: number | null
           morning_reflection?: string | null
           note?: string | null
@@ -1619,6 +1623,8 @@ export type Database = {
           gratitude_2?: string | null
           gratitude_3?: string | null
           id?: string
+          is_ended?: boolean | null
+          midday_reflection?: string | null
           mood_value?: number | null
           morning_reflection?: string | null
           note?: string | null

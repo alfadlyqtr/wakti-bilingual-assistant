@@ -180,10 +180,11 @@ export const TimelineTab: React.FC<{ selectedDate?: string }> = ({ selectedDate 
     const countKeys = Object.keys(counts);
     const fc = (d?.note ? [] : cis.filter(c => (c.tags?.length||0) > 0 || (c.note && c.note.trim().length>0)));
     const hasMorning = !!d?.morning_reflection;
+    const hasMidday = !!d?.midday_reflection;
     const hasEvening = !!d?.evening_reflection;
     const hasGratitude = !!(d?.gratitude_1 || d?.gratitude_2 || d?.gratitude_3);
     const hasNote = !!d?.note;
-    const isEmptyDay = !hasNote && !hasMorning && !hasEvening && !hasGratitude && fc.length === 0;
+    const isEmptyDay = !hasNote && !hasMorning && !hasMidday && !hasEvening && !hasGratitude && fc.length === 0;
 
     return (
       <div key={dateStr} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
@@ -222,6 +223,15 @@ export const TimelineTab: React.FC<{ selectedDate?: string }> = ({ selectedDate 
             {language === 'ar' ? 'مدخل الصباح' : 'Morning entry'}
           </span>
           <span>{d.morning_reflection}</span>
+        </div>
+      )}
+
+      {hasMidday && (
+        <div className="mt-2 text-sm">
+          <span className="mr-2 inline-flex items-center rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 px-2 py-0.5 text-[11px] font-medium">
+            {language === 'ar' ? 'مدخل النهار' : 'Mid-day entry'}
+          </span>
+          <span>{d.midday_reflection}</span>
         </div>
       )}
 
