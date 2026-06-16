@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, AtSign, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
@@ -55,7 +55,15 @@ export default function GroupChatPage() {
   const [selectedActionIsSentByMe, setSelectedActionIsSentByMe] = useState(false);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const [selectedMessageRect, setSelectedMessageRect] = useState<{ top: number; left: number; width: number; height: number; right: number; } | null>(null);
+  const [entryLastReadAt, setEntryLastReadAt] = useState<string | null | undefined>(undefined);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const hasScrolledToUnreadRef = useRef(false);
+  const unreadDividerRef = useCallback((node: HTMLDivElement | null) => {
+    if (node && !hasScrolledToUnreadRef.current) {
+      node.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
+      hasScrolledToUnreadRef.current = true;
+    }
+  }, []);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -69,6 +77,7 @@ export default function GroupChatPage() {
   const suppressNextImageTapRef = useRef(false);
   const ignoreNextImageClickRef = useRef(false);
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const entryReadCapturedRef = useRef(false);
   const isDark = theme === "dark";
   const entrySource = searchParams.get("from");
 
@@ -177,12 +186,43 @@ export default function GroupChatPage() {
   const isCreator = conversation?.created_by === user?.id;
   const WAKTI_AI_ID = "00000000-0000-0000-0000-000000000002";
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!conversationId) return;
-    initialScrollDoneRef.current = false; // reset when switching conversations
+    initialScrollDoneRef.current = false;
+    hasScrolledToUnreadRef.current = false;
+    entryReadCapturedRef.current = false;
+    setEntryLastReadAt(undefined);
+    setWaktiTyping(false);
+    setPendingWaktiSince(null);
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (!conversationId || !conversation || !user?.id || entryReadCapturedRef.current) return;
+
+    const myParticipant = conversation.participants.find((participant) => participant.user_id === user.id);
+    setEntryLastReadAt(myParticipant?.last_read_at || null);
+    entryReadCapturedRef.current = true;
+
     markGroupConversationRead(conversationId).catch(() => undefined);
     queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
-  }, [conversationId, queryClient]);
+  }, [conversation, conversationId, queryClient, user?.id]);
+
+  const unreadSeparatorMessageId = useMemo(() => {
+    if (!messages.length || !user?.id || entryLastReadAt === undefined) return null;
+
+    if (!entryLastReadAt) {
+      const firstUnread = messages.find((message) => message.sender_id !== user.id);
+      return firstUnread?.id || null;
+    }
+
+    const entryReadMs = new Date(entryLastReadAt).getTime();
+    const firstUnread = messages.find((message) => (
+      message.sender_id !== user.id &&
+      new Date(message.created_at).getTime() > entryReadMs
+    ));
+
+    return firstUnread?.id || null;
+  }, [entryLastReadAt, messages, user?.id]);
 
   useEffect(() => {
     if (!conversationId) return;
@@ -215,22 +255,21 @@ export default function GroupChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [conversationId, queryClient]);
 
-  // Scroll to bottom — instant on first load, smooth after that
-  useEffect(() => {
+  // Fallback: scroll to bottom on first load when there are no unread messages
+  useLayoutEffect(() => {
     if (messages.length === 0) return;
-    const container = messagesContainerRef.current;
+    if (entryLastReadAt === undefined) return;
     const end = endRef.current;
-    if (!container || !end) return;
+    if (!end) return;
 
-    if (!initialScrollDoneRef.current) {
-      // First load — instant scroll to bottom
+    if (!initialScrollDoneRef.current && !unreadSeparatorMessageId) {
       end.scrollIntoView({ behavior: "auto" });
       initialScrollDoneRef.current = true;
-    } else {
+    } else if (initialScrollDoneRef.current) {
       // New message arrived while chatting — smooth scroll
       end.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages]);
+  }, [entryLastReadAt, messages, unreadSeparatorMessageId]);
 
   // Scroll to bottom when Wakti starts typing so the indicator is visible
   useEffect(() => {
@@ -882,6 +921,7 @@ export default function GroupChatPage() {
               {messages.map((message) => {
                 const mine = message.sender_id === user?.id;
                 const isWakti = message.sender_id === WAKTI_AI_ID;
+                const showUnreadDivider = unreadSeparatorMessageId === message.id;
                 const senderLabel = mine
                   ? (language === "ar" ? "أنت" : "You")
                   : isWakti
@@ -892,95 +932,105 @@ export default function GroupChatPage() {
                   : null;
 
                 return (
-                  <motion.div
-                    key={message.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3 }}
-                    className={cn("flex w-full min-w-0 select-none", mine ? "justify-end" : "justify-start")}
-                    onContextMenu={(event) => {
-                      if (message.is_deleted) return;
-                      event.preventDefault();
-                      openMessageActions(message, mine);
-                    }}
-                    onTouchStart={(event) => handleTouchStart(event, message, mine)}
-                    onTouchEnd={endLongPress}
-                    onTouchMove={handleTouchMove}
-                    onTouchCancel={endLongPress}
-                    onMouseDown={(event) => {
-                      if (message.is_deleted || event.button !== 0) return;
-                      event.preventDefault();
-                      startLongPress(message, mine);
-                    }}
-                    onMouseUp={endLongPress}
-                    onMouseLeave={endLongPress}
-                    style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
-                  >
-                    <div className={cn("flex min-w-0 max-w-[85%] flex-col sm:max-w-[70%]", mine ? "items-end" : "items-start")}>
-                      {!mine && (
-                        <div className="mb-1 flex items-center gap-2 px-1">
-                          <Avatar className="h-7 w-7">
-                            {message.sender?.avatar_url && <AvatarImage src={message.sender.avatar_url} />}
-                            <AvatarFallback className={cn(
-                              "text-white text-[10px] font-bold",
-                              isWakti
-                                ? "bg-[linear-gradient(135deg,hsl(280_70%_65%)_0%,hsl(210_100%_65%)_100%)]"
-                                : "bg-[linear-gradient(135deg,hsl(210_100%_65%)_0%,hsl(280_70%_65%)_100%)]"
-                            )}>
-                              {isWakti ? "WA" : senderLabel.slice(0, 2).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
-                          <span className="text-xs font-medium text-muted-foreground">{senderLabel}</span>
-                          {isWakti && (
-                            <Badge className="bg-[hsl(280_60%_65%)]/20 text-[hsl(280_60%_65%)] border-[hsl(280_60%_65%)]/30 text-[10px] px-1.5 py-0">
-                              <Sparkles className="h-2 w-2 mr-0.5" />
-                              AI
-                            </Badge>
-                          )}
-                        </div>
-                      )}
+                  <Fragment key={message.id}>
+                    {showUnreadDivider && (
+                      <div ref={unreadDividerRef} className="my-2 flex items-center gap-3 px-1">
+                        <div className="h-px flex-1 bg-border/80" />
+                        <span className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(210_100%_55%)]">
+                          {language === "ar" ? "رسائل غير مقروءة" : "Unread messages"}
+                        </span>
+                        <div className="h-px flex-1 bg-border/80" />
+                      </div>
+                    )}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className={cn("flex w-full min-w-0 select-none", mine ? "justify-end" : "justify-start")}
+                      onContextMenu={(event) => {
+                        if (message.is_deleted) return;
+                        event.preventDefault();
+                        openMessageActions(message, mine);
+                      }}
+                      onTouchStart={(event) => handleTouchStart(event, message, mine)}
+                      onTouchEnd={endLongPress}
+                      onTouchMove={handleTouchMove}
+                      onTouchCancel={endLongPress}
+                      onMouseDown={(event) => {
+                        if (message.is_deleted || event.button !== 0) return;
+                        event.preventDefault();
+                        startLongPress(message, mine);
+                      }}
+                      onMouseUp={endLongPress}
+                      onMouseLeave={endLongPress}
+                      style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
+                    >
+                      <div className={cn("flex min-w-0 max-w-[85%] flex-col sm:max-w-[70%]", mine ? "items-end" : "items-start")}>
+                        {!mine && (
+                          <div className="mb-1 flex items-center gap-2 px-1">
+                            <Avatar className="h-7 w-7">
+                              {message.sender?.avatar_url && <AvatarImage src={message.sender.avatar_url} />}
+                              <AvatarFallback className={cn(
+                                "text-white text-[10px] font-bold",
+                                isWakti
+                                  ? "bg-[linear-gradient(135deg,hsl(280_70%_65%)_0%,hsl(210_100%_65%)_100%)]"
+                                  : "bg-[linear-gradient(135deg,hsl(210_100%_65%)_0%,hsl(280_70%_65%)_100%)]"
+                              )}>
+                                {isWakti ? "WA" : senderLabel.slice(0, 2).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <span className="text-xs font-medium text-muted-foreground">{senderLabel}</span>
+                            {isWakti && (
+                              <Badge className="bg-[hsl(280_60%_65%)]/20 text-[hsl(280_60%_65%)] border-[hsl(280_60%_65%)]/30 text-[10px] px-1.5 py-0">
+                                <Sparkles className="h-2 w-2 mr-0.5" />
+                                AI
+                              </Badge>
+                            )}
+                          </div>
+                        )}
 
-                      <div className={cn("relative inline-block max-w-full", displayedReaction && "pb-4")}>
-                        <div
-                          ref={(element) => {
-                            messageBubbleRefs.current[message.id] = element;
-                          }}
-                          className={cn(
-                            "max-w-full overflow-hidden select-none rounded-3xl px-4 shadow-sm",
-                            displayedReaction ? "pt-5 pb-3" : "py-3",
-                            mine
-                              ? "bg-[linear-gradient(135deg,hsl(210_100%_55%)_0%,hsl(195_100%_50%)_100%)] text-white"
-                              : isWakti
-                                ? "bg-[linear-gradient(135deg,hsl(280_60%_65%)/10_0%,hsl(210_100%_65%)/10_100%)] border border-[hsl(280_60%_65%)]/20 text-foreground"
-                                : isDark ? "bg-white/8 text-white border border-white/10" : "bg-white border border-[#d9dee9] text-[#060541]"
-                          )}
-                          style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
-                        >
-                          {renderReplySnippet(message, mine)}
-                          {renderMessageContent(message, mine)}
-                        </div>
-
-                        {displayedReaction && (
-                          <button
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleReaction(message.id, displayedReaction.emoji);
+                        <div className={cn("relative inline-block max-w-full", displayedReaction && "pb-4")}>
+                          <div
+                            ref={(element) => {
+                              messageBubbleRefs.current[message.id] = element;
                             }}
                             className={cn(
-                              "absolute -top-2 right-2 z-10 flex h-7 min-w-7 items-center justify-center rounded-full border px-1.5 text-sm shadow-md",
-                              isDark ? "border-white/10 bg-[#1f1f1f] text-white" : "border-black/10 bg-white text-gray-900"
+                              "max-w-full overflow-hidden select-none rounded-3xl px-4 shadow-sm",
+                              displayedReaction ? "pt-5 pb-3" : "py-3",
+                              mine
+                                ? "bg-[linear-gradient(135deg,hsl(210_100%_55%)_0%,hsl(195_100%_50%)_100%)] text-white"
+                                : isWakti
+                                  ? "bg-[linear-gradient(135deg,hsl(280_60%_65%)/10_0%,hsl(210_100%_65%)/10_100%)] border border-[hsl(280_60%_65%)]/20 text-foreground"
+                                  : isDark ? "bg-white/8 text-white border border-white/10" : "bg-white border border-[#d9dee9] text-[#060541]"
                             )}
+                            style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
                           >
-                            <span>{displayedReaction.emoji}</span>
-                          </button>
-                        )}
-                      </div>
+                            {renderReplySnippet(message, mine)}
+                            {renderMessageContent(message, mine)}
+                          </div>
 
-                      <div className={cn("mt-1 px-1 text-[11px] text-muted-foreground", mine ? "text-right" : "text-left")}>
-                        {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                          {displayedReaction && (
+                            <button
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleReaction(message.id, displayedReaction.emoji);
+                              }}
+                              className={cn(
+                                "absolute -top-2 right-2 z-10 flex h-7 min-w-7 items-center justify-center rounded-full border px-1.5 text-sm shadow-md",
+                                isDark ? "border-white/10 bg-[#1f1f1f] text-white" : "border-black/10 bg-white text-gray-900"
+                              )}
+                            >
+                              <span>{displayedReaction.emoji}</span>
+                            </button>
+                          )}
+                        </div>
+
+                        <div className={cn("mt-1 px-1 text-[11px] text-muted-foreground", mine ? "text-right" : "text-left")}>
+                          {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
+                    </motion.div>
+                  </Fragment>
                 );
               })}
             </AnimatePresence>

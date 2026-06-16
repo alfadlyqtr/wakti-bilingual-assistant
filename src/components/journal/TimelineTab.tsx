@@ -16,6 +16,31 @@ function getLocalDayString(d = new Date()) {
   return `${y}-${m}-${dd}`;
 }
 
+const enMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const arMonths = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
+
+function ordinalSuffix(n: number) {
+  if (n > 3 && n < 21) return 'th';
+  switch (n % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+}
+
+function formatTimelineDate(dateStr: string, lang: string) {
+  const [yy, mm, dd] = dateStr.split('-').map(n => parseInt(n, 10));
+  const d = new Date(yy, (mm || 1) - 1, dd || 1);
+  const day = d.getDate();
+  const monthIndex = d.getMonth();
+  const year = d.getFullYear();
+  if (lang === 'ar') {
+    return `${day} ${arMonths[monthIndex]}، ${year}`;
+  }
+  return `${day}${ordinalSuffix(day)} ${enMonths[monthIndex]}, ${year}`;
+}
+
 export const TimelineTab: React.FC<{ selectedDate?: string }> = ({ selectedDate }) => {
   const { language } = useTheme();
   const navigate = useNavigate();
@@ -115,12 +140,25 @@ export const TimelineTab: React.FC<{ selectedDate?: string }> = ({ selectedDate 
 
   const getDayMoodCounts = (d: JournalDay | null, cis: JournalCheckin[]) => {
     const counts: Record<number, number> = {};
-    if (cis.length > 0) {
-      cis.forEach(c => { counts[c.mood_value] = (counts[c.mood_value] || 0) + 1; });
-      return counts;
-    }
     const note = d?.note || '';
-    if (!note) return counts;
+    // Mood emoji → value mapping
+    const emojiToValue: Record<string, number> = { '😖': 1, '🙁': 2, '😐': 3, '🙂': 4, '😄': 5 };
+    if (note.trim()) {
+      // Count moods from the displayed note text
+      for (const line of note.split('\n')) {
+        for (const [emoji, value] of Object.entries(emojiToValue)) {
+          // Count each occurrence of the mood emoji in the line
+          const re = new RegExp(emoji.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+          const matches = line.match(re);
+          if (matches) counts[value] = (counts[value] || 0) + matches.length;
+        }
+      }
+    } else {
+      // No note — count from visible checkins
+      const visible = cis.filter(c => (c.tags?.length || 0) > 0 || (c.note && c.note.trim().length > 0));
+      const source = visible.length > 0 ? visible : cis;
+      source.forEach(c => { counts[c.mood_value] = (counts[c.mood_value] || 0) + 1; });
+    }
     return counts;
   };
 
@@ -190,14 +228,14 @@ export const TimelineTab: React.FC<{ selectedDate?: string }> = ({ selectedDate 
       <div key={dateStr} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-medium flex items-center gap-3 group">
-            <span>{dateStr}</span>
+            <span>{formatTimelineDate(dateStr, language)}</span>
             {countKeys.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 {countKeys.map(m => (
-                  <div key={`${dateStr}-hdr-mood-${m}`} className="flex items-center gap-1">
-                    <MoodFace value={parseInt(m) as MoodValue} size={56} active className="transition-transform duration-150 group-hover:scale-[1.03]" />
-                    {counts[parseInt(m)]>1 && (
-                      <span className="ml-1 inline-flex items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-slate-700 px-1.5 py-0.5 text-[10px] shadow-sm">×{counts[parseInt(m)]}</span>
+                  <div key={`${dateStr}-hdr-mood-${m}`} className="relative">
+                    <MoodFace value={parseInt(m) as MoodValue} size={40} active className="transition-transform duration-150 group-hover:scale-[1.03]" />
+                    {counts[parseInt(m)] > 1 && (
+                      <span className="absolute -top-1 -right-1 inline-flex items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-slate-700 h-5 w-5 text-[10px] shadow-sm">{counts[parseInt(m)]}</span>
                     )}
                   </div>
                 ))}
@@ -217,48 +255,57 @@ export const TimelineTab: React.FC<{ selectedDate?: string }> = ({ selectedDate 
         </div>
       )}
 
-      {hasMorning && (
-        <div className="mt-2 text-sm">
-          <span className="mr-2 inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 text-[11px] font-medium">
-            {language === 'ar' ? 'مدخل الصباح' : 'Morning entry'}
-          </span>
-          <span>{d.morning_reflection}</span>
-        </div>
-      )}
-
-      {hasMidday && (
-        <div className="mt-2 text-sm">
-          <span className="mr-2 inline-flex items-center rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 px-2 py-0.5 text-[11px] font-medium">
-            {language === 'ar' ? 'مدخل النهار' : 'Mid-day entry'}
-          </span>
-          <span>{d.midday_reflection}</span>
-        </div>
-      )}
-
-      {hasGratitude && (
-        <div className="mt-3 p-3 rounded-xl bg-gradient-to-br from-purple-50/50 to-pink-50/50 dark:from-purple-950/20 dark:to-pink-950/20 border border-purple-200/30 dark:border-purple-800/30">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-lg">🙏</span>
-            <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
-              {language === 'ar' ? 'الامتنان' : 'Gratitude'}
+      <div className="space-y-2">
+        {hasMorning && (
+          <div className="rounded-xl border border-border/40 p-3 bg-gradient-to-b from-blue-50/40 to-background/60 dark:from-blue-950/20 dark:to-background">
+            <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-0.5 text-[11px] font-medium mb-1.5 block w-fit">
+              {language === 'ar' ? 'الصباح' : 'Morning'}
             </span>
+            <p className="text-sm text-left">{d.morning_reflection}</p>
           </div>
-          <div className="space-y-1.5 text-sm">
-            {d?.gratitude_1 && (<div className="flex gap-2"><span className="text-purple-500 dark:text-purple-400">1.</span><span>{d.gratitude_1}</span></div>)}
-            {d?.gratitude_2 && (<div className="flex gap-2"><span className="text-pink-500 dark:text-pink-400">2.</span><span>{d.gratitude_2}</span></div>)}
-            {d?.gratitude_3 && (<div className="flex gap-2"><span className="text-purple-600 dark:text-purple-300">3.</span><span>{d.gratitude_3}</span></div>)}
-          </div>
-        </div>
-      )}
+        )}
 
-      {hasEvening && (
-        <div className="mt-2 text-sm">
-          <span className="mr-2 inline-flex items-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 text-[11px] font-medium">
-            {language === 'ar' ? 'مدخل المساء' : 'Night entry'}
-          </span>
-          <span>{d.evening_reflection}</span>
-        </div>
-      )}
+        {hasMidday && (
+          <div className="rounded-xl border border-border/40 p-3 bg-gradient-to-b from-teal-50/40 to-background/60 dark:from-teal-950/20 dark:to-background">
+            <span className="inline-flex items-center rounded-full bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300 px-2 py-0.5 text-[11px] font-medium mb-1.5 block w-fit">
+              {language === 'ar' ? 'النهار' : 'Mid-day'}
+            </span>
+            <p className="text-sm text-left">{d.midday_reflection}</p>
+          </div>
+        )}
+
+        {hasEvening && (
+          <div className="rounded-xl border border-border/40 p-3 bg-gradient-to-b from-amber-50/40 to-background/60 dark:from-amber-950/20 dark:to-background">
+            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 px-2 py-0.5 text-[11px] font-medium mb-1.5 block w-fit">
+              {language === 'ar' ? 'المساء' : 'Evening'}
+            </span>
+            <p className="text-sm text-left">{d.evening_reflection}</p>
+          </div>
+        )}
+
+        {hasGratitude && (
+          <div className="rounded-xl border border-purple-200/40 dark:border-purple-800/30 p-3 bg-gradient-to-br from-purple-50/50 to-pink-50/50 dark:from-purple-950/20 dark:to-pink-950/20">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-lg">🙏</span>
+              <span className="text-xs font-medium text-purple-600 dark:text-purple-400">
+                {language === 'ar' ? 'ممتن لـ:' : 'Grateful for:'}
+              </span>
+            </div>
+            <div className="space-y-1.5 text-sm text-left">
+              {d?.gratitude_1 && (<div className="flex gap-2"><span className="text-purple-500 dark:text-purple-400">1.</span><span>{d.gratitude_1}</span></div>)}
+              {d?.gratitude_2 && (<div className="flex gap-2"><span className="text-pink-500 dark:text-pink-400">2.</span><span>{d.gratitude_2}</span></div>)}
+              {d?.gratitude_3 && (<div className="flex gap-2"><span className="text-purple-600 dark:text-purple-300">3.</span><span>{d.gratitude_3}</span></div>)}
+            </div>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-3 my-2">
+        <div className="h-px flex-1 bg-border/40" />
+        <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">
+          {language === 'ar' ? 'السجلات' : 'Logs'}
+        </span>
+        <div className="h-px flex-1 bg-border/40" />
+      </div>
       {renderNotePills(d?.note)}
 
       {!hasNote && fc.length > 0 && (

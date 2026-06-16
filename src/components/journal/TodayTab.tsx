@@ -200,7 +200,7 @@ export const TodayTab: React.FC = () => {
     lastEntryMinuteRef.current = minuteKey;
     lastEntryTimeStrRef.current = timeStr;
 
-    const stub = `[${timeStr}] 🕒 | __UNSAVED__`;
+    const stub = `[${timeStr}] | __UNSAVED__`;
     setNote(prev => {
       const prevText = prev || '';
       const lines = prevText.split('\n');
@@ -250,7 +250,7 @@ export const TodayTab: React.FC = () => {
         return lines.join('\n');
       }
       const base = cur.endsWith('\n') || cur.length === 0 ? cur : cur + '\n';
-      return `${base}[${stubTime}] 🕒  | __FREE____END__ | `;
+      return `${base}[${stubTime}] | __FREE____END__ | `;
     });
     // Focus caret to the free-text pill on next paint
     requestAnimationFrame(() => {
@@ -285,7 +285,7 @@ export const TodayTab: React.FC = () => {
       if (i < 0) {
         const now = new Date();
         const t = formatTime(now, language as any, { hour: '2-digit', minute: '2-digit' });
-        lines.push(`[${t}] 🕒  | __FREE____END__ | `);
+        lines.push(`[${t}] | __FREE____END__ | `);
         i = lines.length - 1;
       }
       const line = lines[i];
@@ -1012,7 +1012,7 @@ export const TodayTab: React.FC = () => {
           }
 
           const parts = line.split('|').map(p => p.trim()).filter(Boolean);
-          const head = parts.shift() || `[${timeStr}] 🕒`;
+          const head = parts.shift() || `[${timeStr}]`;
           const tokens = parts.filter(token => !moodTokenRe.test(token));
           tokens.unshift(emoji[value]);
 
@@ -1027,7 +1027,7 @@ export const TodayTab: React.FC = () => {
         }
 
         if (!entry.created) return prevText;
-        const stub = `[${timeStr}] 🕒 | ${emoji[value]} | __UNSAVED__`;
+        const stub = `[${timeStr}] | ${emoji[value]} | __UNSAVED__`;
         const next = prevText && prevText.trim().length > 0 ? `${prevText}\n${stub}` : stub;
         lastStubTextRef.current = stub;
         lastStubAtRef.current = Date.now();
@@ -1035,6 +1035,7 @@ export const TodayTab: React.FC = () => {
         return next;
       });
 
+      if (entry.created) setTags([]);
       setNotesOpen(true);
     } catch (e: any) {
       toast.error(e?.message || 'Error');
@@ -1178,7 +1179,7 @@ export const TodayTab: React.FC = () => {
             return next;
           } else {
             if (!entry.created) return prevVal;
-            const stub = `[${groupKey}] 🕒 | ${token} | __UNSAVED__`;
+            const stub = `[${groupKey}] | ${token} | __UNSAVED__`;
             const next = prevVal && prevVal.trim().length > 0 ? `${prevVal}\n${stub}` : stub;
             lastStubTextRef.current = stub;
             lastStubAtRef.current = Date.now();
@@ -1198,11 +1199,11 @@ export const TodayTab: React.FC = () => {
             if (/^\[[^\]]+\]/.test(line) && tagPattern.test(line)) {
               let updated = line.replace(tagPattern, '').replace(/\s*\|\s*\|/g,' | ').replace(/^\[([^\]]+)\]\s*\|\s*$/,'[$1] ').trimEnd();
               // Keep single placeholder when content remains
-              if (!/^\[[^\]]+\]\s*$/.test(updated) && !/^\[[^\]]+\]\s*🕒\s*$/.test(updated)) {
+              if (!/^\[[^\]]+\]\s*$/.test(updated)) {
                 updated = updated.replace(/\s*\|\s*$/, '').trimEnd() + ' | ';
               }
               // If line is only a timestamp after cleanup, drop the line
-              if (/^\[[^\]]+\]\s*$/.test(updated) || /^\[[^\]]+\]\s*🕒\s*$/.test(updated)) {
+              if (/^\[[^\]]+\]\s*$/.test(updated)) {
                 lines.splice(i,1);
               } else {
                 lines[i] = updated;
@@ -1330,15 +1331,6 @@ export const TodayTab: React.FC = () => {
       // Note is updated via setNote above; read from ref shortly after to capture final string
       setTimeout(() => {
         setSavedNote(noteRef.current?.value || savedNote);
-      }, 0);
-      // Keep cursor at end
-      setTimeout(() => {
-        const el = noteRef.current;
-        if (el) {
-          el.focus();
-          const len = el.value.length;
-          el.setSelectionRange(len, len);
-        }
       }, 0);
       toast.success(language === 'ar' ? 'تم الحفظ' : 'Saved');
     } catch (e: any) {
@@ -1487,28 +1479,30 @@ export const TodayTab: React.FC = () => {
 
       {/* Daily Check-in Section */}
       <div className="rounded-2xl border-2 border-slate-300 dark:border-slate-600 bg-gradient-to-b from-card to-background p-4">
-        <div className="flex items-center justify-between mb-3 pb-2 border-b border-border/30">
-          <div className="flex items-center gap-2">
-            <span className="h-1.5 w-1.5 rounded-full bg-orange-400 inline-block" />
-            <span className="text-sm font-semibold text-foreground/90">
-              {language === 'ar' ? 'سجل اليوم' : 'Daily Log'}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
-              const entry = ensureMinuteEntry('add-log');
-              if (!entry.allowed) return;
-              setNotesOpen(true);
-              setIsNoteEditing(true);
-              ensureEndStub();
-              focusNoteEditor();
-            }}
-            className="inline-flex items-center gap-1 text-[11px] px-2.5 py-1.5 rounded-md border-0 bg-[#060541] text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-[#f2f2f2] dark:text-[#0c0f14]"
-          >
-            <Plus className="h-3.5 w-3.5" /> {language === 'ar' ? 'أضف سجل' : 'Add Log'}
-          </button>
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border/30">
+          <span className="h-1.5 w-1.5 rounded-full bg-orange-400 inline-block" />
+          <span className="text-sm font-semibold text-foreground/90">
+            {language === 'ar' ? 'سجل اليوم' : 'Daily Log'}
+          </span>
         </div>
+        <button
+          type="button"
+          onClick={() => {
+            const entry = ensureMinuteEntry('add-log');
+            if (!entry.allowed) return;
+            if (entry.created) {
+              setTags([]);
+              setMood(null);
+            }
+            setNotesOpen(true);
+            setIsNoteEditing(true);
+            ensureEndStub();
+            focusNoteEditor();
+          }}
+          className="w-full flex items-center justify-center gap-2 text-sm font-medium px-4 py-3 rounded-xl border-0 bg-[#060541] text-white shadow-md hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-[#f2f2f2] dark:text-[#0c0f14] mb-4"
+        >
+          <Plus className="h-4 w-4" style={{ animation: 'spin-pulse 2s ease-in-out infinite' }} /> {language === 'ar' ? 'أضف سجل' : 'Add Log'}
+        </button>
         <div className="space-y-3">
       <Collapsible open={moodOpen} onOpenChange={setMoodOpen}>
         <div className="rounded-2xl border border-slate-300 dark:border-slate-600 bg-gradient-to-b from-card/60 to-background/60 p-4">
@@ -1655,21 +1649,8 @@ export const TodayTab: React.FC = () => {
               }}
               onDrop={(e) => { e.preventDefault(); }}
               onInput={(e) => {
-                // In controlled typing mode we already updated note via key handlers; ignore browser input
-                if (isNoteEditing) return;
-                const el = e.currentTarget as HTMLDivElement;
-                const raw = el.innerText.replace(/\r\n/g, '\n');
-                setNote(raw);
-                requestAnimationFrame(() => {
-                  try {
-                    const range = document.createRange();
-                    range.selectNodeContents(el);
-                    range.collapse(false);
-                    const sel = window.getSelection();
-                    sel?.removeAllRanges();
-                    sel?.addRange(range);
-                  } catch {}
-                });
+                // Controlled via key handlers and programmatic updates; ignore browser input events
+                return;
               }}
               onPaste={(e) => {
                 e.preventDefault();
