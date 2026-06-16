@@ -565,7 +565,7 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
   const searchType = resolvedBrowsingData?.searchType?.toLowerCase();
   // STRICT GATE: Never parse places for non-business queries
-  if (searchType && ['news', 'sports', 'research', 'general', 'url'].includes(searchType)) {
+  if (searchType && ['news', 'sports', 'url'].includes(searchType)) {
     return [];
   }
   const backendPlaces = Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : [];
@@ -770,7 +770,7 @@ export function GroundedPlacesBlock({
 
   const resolvedBrowsingData = resolveGroundedBrowsingData(message);
   const searchType = resolvedBrowsingData?.searchType?.toLowerCase();
-  if (searchType && ['news', 'sports', 'research', 'general', 'url'].includes(searchType)) {
+  if (searchType && ['news', 'sports', 'url'].includes(searchType)) {
     return null;
   }
   const groundedPlaces = getGroundedPlaces(message);
@@ -943,6 +943,12 @@ export function GroundedPlacesBlock({
             {/* ── Collapsible Card Content ── */}
             {isExpanded && (
               <div className={`border-t ${isDark ? 'border-white/5' : 'border-slate-100'} animate-in fade-in slide-in-from-top-1 duration-200`}>
+                {photoUrl && (
+                  <div className="w-full aspect-video sm:aspect-[16/7] max-h-[320px] relative border-b border-border/10 bg-muted/20">
+                    <img src={photoUrl} alt={placeName} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
+                  </div>
+                )}
                 <div className="px-4 pt-4 pb-3">
                   {/* Editorial summary */}
                   {editorialSummary && (
@@ -970,65 +976,18 @@ export function GroundedPlacesBlock({
                         <div className={`text-[13px] ${textVal} leading-relaxed`}>{mustTryText}</div>
                       </div>
                     )}
-                    {ratingValue && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'التقييم' : 'Rating'}</div>
-                        <div className={`text-[13px] ${textVal} leading-relaxed`}>
-                          {`${ratingValue}/5${reviewCountValue ? ` (${reviewCountValue})` : ''}`}
-                        </div>
-                      </div>
-                    )}
-                    {photoUrl && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الصور' : 'Photo'}</div>
-                        <img src={photoUrl} alt={placeName} className="w-full max-h-48 rounded-xl object-cover border border-slate-100 dark:border-white/10" />
-                      </div>
-                    )}
-                    {mapsUrl && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>Google Maps</div>
-                        <a href={mapsUrl} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
-                          {isAr ? 'افتح في Google Maps' : 'Open in Google Maps'}
-                        </a>
-                      </div>
-                    )}
-                    {websiteUrl && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الموقع الإلكتروني' : 'Website'}</div>
-                        <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
-                          {websiteLabel || websiteUrl}
-                        </a>
-                      </div>
-                    )}
-                    {phoneText && hasCall && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الهاتف' : 'Phone'}</div>
-                        <a href={phoneHref} className={`text-[13px] font-medium ${linkText} transition-colors`}>
-                          {phoneText}
-                        </a>
-                      </div>
-                    )}
-                    {openingHours.length > 0 && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'ساعات العمل' : 'Opening hours'}</div>
-                        <div className="space-y-0.5">
-                          {openingHours.map((line: string, hoursIndex: number) => (
-                            <div key={`${place.placeId || place.name || 'place'}-hours-${hoursIndex}`} className={`text-[12px] ${textVal} leading-snug`}>
-                              {line}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {hasEmail && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الإيميل' : 'Email'}</div>
-                        <a href={emailHref} className={`text-[13px] font-medium ${linkText} transition-colors break-all`}>
-                          {emailText}
-                        </a>
-                      </div>
-                    )}
                   </div>
+
+                  {openingHours.length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-border/10">
+                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-2`}>{isAr ? 'ساعات العمل' : 'Opening Hours'}</div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                        {openingHours.map((line: string, hoursIndex: number) => (
+                          <div key={hoursIndex} className={`text-[11.5px] ${isDark ? 'text-white/70' : 'text-slate-600'}`}>{line}</div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* ── Action buttons ── */}

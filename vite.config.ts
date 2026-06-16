@@ -61,7 +61,7 @@ export default defineConfig(({ mode }) => {
       drop: mode === 'production' ? ['console', 'debugger'] : [],
     },
     optimizeDeps: {
-      include: ['vaul', 'react-day-picker'],
+      include: ['vaul', 'react-day-picker', '@xyflow/react'],
     },
     resolve: {
       alias: {

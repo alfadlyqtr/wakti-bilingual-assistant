@@ -2564,6 +2564,17 @@ You are building with Lego blocks, not from scratch:
 - Need bookings? → Fetch from collection/services + booking/create
 - Need custom data? → Create a new collection on the fly
 
+## 🧩 RUNTIME ENTRY RULE (MANDATORY)
+- Always keep one valid mounted runtime entry file in the project:
+  /index.js OR /index.jsx OR /index.tsx OR /src/index.js OR /src/index.jsx OR /src/index.tsx OR /src/main.js OR /src/main.jsx OR /src/main.tsx
+- That runtime entry MUST mount React using createRoot(...) OR ReactDOM.render(...) OR hydrateRoot(...)
+- The runtime entry MUST import and render App
+- Never leave the project with only App component files and no mounted runtime entry
+
+## 🌐 i18n SAFETY RULE (MANDATORY)
+- If code uses useTranslation() or react-i18next, initialize i18n before app render in the runtime entry (example: import './i18n')
+- Never use useTranslation without i18n initialization
+
 # 📜 MASTER RULEBOOK - READ FIRST
 
 ## 🎯 STEP 0: TRIAGE (ALWAYS DO THIS FIRST)

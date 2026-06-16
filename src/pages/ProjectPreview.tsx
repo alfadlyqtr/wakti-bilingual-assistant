@@ -15,6 +15,38 @@ interface ProjectPreviewProps {
   subdomain?: string;
 }
 
+const RUNTIME_ENTRY_CANDIDATES = [
+  '/index.js',
+  '/index.jsx',
+  '/index.tsx',
+  '/src/index.js',
+  '/src/index.jsx',
+  '/src/index.tsx',
+  '/src/main.js',
+  '/src/main.jsx',
+  '/src/main.tsx',
+] as const;
+
+const APP_ENTRY_CANDIDATES = [
+  '/App.tsx',
+  '/App.jsx',
+  '/App.js',
+  '/src/App.tsx',
+  '/src/App.jsx',
+  '/src/App.js',
+] as const;
+
+function hasReactMountCode(source: string): boolean {
+  if (typeof source !== 'string') return false;
+  return /createRoot\s*\(/.test(source) || /ReactDOM\.render\s*\(/.test(source) || /hydrateRoot\s*\(/.test(source);
+}
+
+function toImportPath(filePath: string): string {
+  return filePath
+    .replace(/^\//, './')
+    .replace(/\.(tsx|ts|jsx|js)$/i, '');
+}
+
 export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPreviewProps) {
   const { subdomain: paramSubdomain } = useParams<{ subdomain: string }>();
   const subdomain = propSubdomain || paramSubdomain;
@@ -135,15 +167,39 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
     sandpackFiles[cleanPath] = content;
   }
 
-  // Ensure we have an App.js entry point
-  if (!sandpackFiles['/App.js'] && !sandpackFiles['/App.jsx']) {
+  const appEntry = APP_ENTRY_CANDIDATES.find((path) => typeof sandpackFiles[path] === 'string');
+  const mountedRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.find((path) => {
+    const source = sandpackFiles[path];
+    return typeof source === 'string' && hasReactMountCode(source);
+  });
+
+  let sandpackEntry = mountedRuntimeEntry || '';
+
+  if (!sandpackEntry && appEntry) {
+    const appImportPath = toImportPath(appEntry);
+    sandpackFiles['/__wakti_entry.js'] = `import React from "react";
+import { createRoot } from "react-dom/client";
+import App from "${appImportPath}";
+
+const root = createRoot(document.getElementById("root"));
+root.render(<App />);
+`;
+    sandpackEntry = '/__wakti_entry.js';
+  }
+
+  if (!sandpackEntry && RUNTIME_ENTRY_CANDIDATES.some((path) => typeof sandpackFiles[path] === 'string')) {
+    sandpackEntry = RUNTIME_ENTRY_CANDIDATES.find((path) => typeof sandpackFiles[path] === 'string') || '';
+  }
+
+  // Ensure we have either a mounted runtime entry or an App file to bootstrap from.
+  if (!sandpackEntry && !appEntry) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 to-gray-800">
         <div className="text-center text-white max-w-md px-6">
           <div className="text-6xl mb-6">⚠️</div>
           <h1 className="text-2xl font-bold mb-4">Missing Entry Point</h1>
           <p className="text-gray-300 mb-8">
-            No App.js found in the project files.
+            No mounted runtime entry or App file was found in the project files.
           </p>
         </div>
       </div>
@@ -164,7 +220,7 @@ export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPrev
           ],
         }}
         customSetup={{
-          entry: '/App.js',
+          entry: sandpackEntry || '/index.js',
           dependencies: {
             // Core React
             "react": "^18.2.0",

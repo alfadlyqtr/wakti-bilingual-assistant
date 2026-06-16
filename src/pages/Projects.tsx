@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BusinessContextForm, { type ContextField, type BusinessContextData } from '@/components/projects/BusinessContextForm';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import RippleGrid from '../components/landing/RippleGrid';
 import ErrorBoundary from '@/components/ErrorBoundary';
+import { lazyRetry } from '@/utils/lazyLoading';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
@@ -61,9 +62,10 @@ interface Project {
   files?: Record<string, string>;
 }
 
-const WaktiAssistant = lazy(() => import('./WaktiAssistant'));
+const WaktiAssistant = lazyRetry(() => import('./WaktiAssistant'));
 
 const MAX_PROJECTS = 3;
+const AI_CODER_TEMP_LOCKED = true;
 type ScreenshotIntent = 'layout' | 'style' | 'content';
 
 const SCREENSHOT_INTENT_OPTIONS: Array<{
@@ -2025,7 +2027,22 @@ Apply these styles consistently throughout the entire design.`;
       )}
 
       {/* ============ AI CODER TAB ============ */}
-      {activeTab === 'coder' && (<>
+      {activeTab === 'coder' && (
+      AI_CODER_TEMP_LOCKED ? (
+        <div className="min-h-[60vh] flex items-center justify-center px-4 py-16">
+          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300">
+              <Sparkles className="h-6 w-6" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">
+              {isRTL ? 'نقوم بتحديث ميزة مبرمج الذكاء' : 'We are updating AI Coder'}
+            </h2>
+            <p className="text-sm text-white/75 leading-6">
+              {isRTL ? 'سنعود قريبًا جدًا. شكرًا لصبرك 💙' : 'We will be back very soon. Thank you for your patience 💙'}
+            </p>
+          </div>
+        </div>
+      ) : (<>
       {/* Context Detect Loading Overlay */}
       {isDetectingContext && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)' }}>
@@ -2895,10 +2912,11 @@ Apply these styles consistently throughout the entire design.`;
           )}
         </div>
       </div>
-      </>)}
+      </>)
+      )}
 
       {/* Custom Theme Creator Modal - Mobile Optimized */}
-      {activeTab === 'coder' && showThemeCreator && (
+      {activeTab === 'coder' && !AI_CODER_TEMP_LOCKED && showThemeCreator && (
         <div className="fixed inset-0 z-[10000] flex items-end md:items-center justify-center" onClick={() => setShowThemeCreator(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div 

@@ -22,27 +22,44 @@ serve(async (req) => {
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+
+    if (!token) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Missing bearer token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!supabaseUrl || !serviceRoleKey) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Server configuration is missing Supabase credentials' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
     
-    // Create a Supabase client with the auth header
+    // Create a Supabase admin client that keeps service-role privileges
     const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      supabaseUrl,
+      serviceRoleKey,
       {
-        global: {
-          headers: {
-            Authorization: authHeader,
-          },
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false,
         },
       }
     );
     
-    // Get the session from auth
-    const { data: { user }, error: getUserError } = await supabaseAdmin.auth.getUser();
+    // Verify the caller from their bearer token without replacing admin credentials
+    const { data: { user }, error: getUserError } = await supabaseAdmin.auth.getUser(token);
     
     if (getUserError || !user) {
       return new Response(
         JSON.stringify({ success: false, error: getUserError?.message || 'Could not get user' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     

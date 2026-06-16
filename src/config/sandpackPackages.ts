@@ -61,8 +61,8 @@ export interface SandpackPackage {
 
 export const SANDPACK_PACKAGES: SandpackPackage[] = [
   // ── Core React ──────────────────────────────────────────────────────────
-  { name: 'react',     version: '^18.2.0', category: 'core' },
-  { name: 'react-dom', version: '^18.2.0', category: 'core' },
+  { name: 'react',     version: '18.3.1', category: 'core' },
+  { name: 'react-dom', version: '18.3.1', category: 'core' },
 
   // ── Icons ───────────────────────────────────────────────────────────────
   { name: 'lucide-react', version: '^0.462.0', category: 'icons', note: 'PRIMARY icon library — use this over react-icons' },

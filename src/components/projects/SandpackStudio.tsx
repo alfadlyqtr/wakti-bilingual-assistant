@@ -9,8 +9,8 @@ import {
 import { SandpackErrorBoundary } from "./SandpackErrorBoundary";
 import { PREVIEW_ERROR_CAPTURE_SCRIPT, SandpackErrorListener } from "./SandpackErrorListener";
 import { SandpackConsolePanel } from "./SandpackConsolePanel";
-import { CollapsibleFileTree } from "./CollapsibleFileTree";
 import RunnerPreview from "./RunnerPreview";
+import { CollapsibleFileTree } from "./CollapsibleFileTree";
 import { atomDark } from "@codesandbox/sandpack-themes";
 import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft } from "lucide-react";
 import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
@@ -51,7 +51,6 @@ interface SelectedElementInfo {
 }
 
 type PreviewHealthState = 'loading' | 'ready' | 'recovering' | 'failed';
-type PreviewRenderMode = 'exact' | 'visual';
 
 const WAKTI_VISUAL_ELEMENT_SELECTED_EVENT = 'wakti:visual-element-selected';
 const STOCK_IMAGE_HELPER_PATHS = [
@@ -60,6 +59,132 @@ const STOCK_IMAGE_HELPER_PATHS = [
   '/src/utils/stockImages.js',
   '/src/utils/stockImages.ts',
 ] as const;
+const RUNTIME_ENTRY_CANDIDATES = [
+  '/index.js',
+  '/index.jsx',
+  '/index.tsx',
+  '/src/index.js',
+  '/src/index.jsx',
+  '/src/index.tsx',
+  '/src/main.js',
+  '/src/main.jsx',
+  '/src/main.tsx',
+] as const;
+const APP_COMPONENT_ENTRY_CANDIDATES = [
+  '/App.tsx',
+  '/App.jsx',
+  '/App.js',
+  '/src/App.tsx',
+  '/src/App.jsx',
+  '/src/App.js',
+] as const;
+
+function hasReactMountCode(source: string): boolean {
+  if (typeof source !== 'string') return false;
+  return /createRoot\s*\(/.test(source) || /ReactDOM\.render\s*\(/.test(source) || /hydrateRoot\s*\(/.test(source);
+}
+
+function toImportPath(filePath: string): string {
+  return filePath
+    .replace(/^\//, './')
+    .replace(/\.(tsx|ts|jsx|js)$/i, '');
+}
+
+function isLikelyPackageSpecifier(specifier: string): boolean {
+  if (typeof specifier !== 'string') return false;
+  const value = specifier.trim();
+  if (!value) return false;
+
+  if (
+    value.startsWith('.') ||
+    value.startsWith('/') ||
+    value.startsWith('#') ||
+    value.startsWith('http://') ||
+    value.startsWith('https://') ||
+    value.startsWith('data:') ||
+    value.startsWith('blob:') ||
+    value.startsWith('@/') ||
+    value.startsWith('~/')
+  ) {
+    return false;
+  }
+
+  if (value.startsWith('@')) {
+    return /^@[a-z0-9][\w.-]*\/[a-z0-9][\w.-]*/i.test(value);
+  }
+
+  return /^[a-z0-9][\w.-]*/i.test(value);
+}
+
+function rewriteSandboxAliases(source: string): string {
+  if (typeof source !== 'string' || source.length === 0) return source;
+
+  return source
+    .replace(/from\s+['"]@\/([^'"]+)['"]/g, 'from "/$1"')
+    .replace(/from\s+['"]~\/([^'"]+)['"]/g, 'from "/$1"')
+    .replace(/import\s+['"]@\/([^'"]+)['"]/g, 'import "/$1"')
+    .replace(/import\s+['"]~\/([^'"]+)['"]/g, 'import "/$1"')
+    .replace(/import\(\s*['"]@\/([^'"]+)['"]\s*\)/g, 'import("/$1")')
+    .replace(/import\(\s*['"]~\/([^'"]+)['"]\s*\)/g, 'import("/$1")')
+    .replace(/require\(\s*['"]@\/([^'"]+)['"]\s*\)/g, 'require("/$1")')
+    .replace(/require\(\s*['"]~\/([^'"]+)['"]\s*\)/g, 'require("/$1")');
+}
+
+function ensureRootMountHtml(html: string): string {
+  if (typeof html !== 'string' || html.trim().length === 0) {
+    return '<!DOCTYPE html>\n<html><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head><body><div id="root"></div></body></html>';
+  }
+
+  if (/id=["']root["']/i.test(html)) {
+    return html;
+  }
+
+  if (html.includes('</body>')) {
+    return html.replace('</body>', '<div id="root"></div>\n</body>');
+  }
+
+  if (html.includes('</html>')) {
+    return html.replace('</html>', '<body><div id="root"></div></body>\n</html>');
+  }
+
+  return `${html}\n<div id="root"></div>`;
+}
+
+function parseRequestUrl(input: unknown): URL | null {
+  try {
+    if (typeof input === 'string') {
+      return new URL(input, window.location.href);
+    }
+    if (input instanceof URL) {
+      return input;
+    }
+    if (input && typeof input === 'object' && 'url' in input) {
+      const maybeUrl = (input as { url?: unknown }).url;
+      if (typeof maybeUrl === 'string') {
+        return new URL(maybeUrl, window.location.href);
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function isBlockedSandpackTelemetryRequest(input: unknown): boolean {
+  const parsed = parseRequestUrl(input);
+  if (!parsed) return false;
+  return parsed.hostname === 'api.csbops.io' && parsed.pathname.startsWith('/data/sandpack');
+}
+
+function createNoopTelemetryResponse(): Promise<Response> {
+  return Promise.resolve(
+    new Response('{}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  );
+}
 
 const SAFE_STOCK_IMAGES_HELPER = `import { useEffect, useState } from "react";
 
@@ -197,6 +322,81 @@ export function useStockImage(query, options = {}) {
 `;
 
 const PREVIEW_ERROR_CAPTURE_MARKER = 'WAKTI_PREVIEW_ERROR_CAPTURE_SCRIPT';
+const SANDBOX_NETWORK_GUARD_MARKER = 'WAKTI_SANDBOX_NETWORK_GUARD_SCRIPT';
+const SANDBOX_NETWORK_GUARD_SCRIPT = `
+(() => {
+  const parseUrl = (input) => {
+    try {
+      if (typeof input === "string") {
+        return new URL(input, window.location.href);
+      }
+      if (input && typeof input === "object" && "url" in input) {
+        return new URL(String(input.url), window.location.href);
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  };
+
+  const isBlockedSandpackAnalytics = (input) => {
+    const url = parseUrl(input);
+    if (!url) return false;
+    return url.hostname === "api.csbops.io" && url.pathname.startsWith("/data/sandpack");
+  };
+
+  const okJsonResponse = () =>
+    Promise.resolve(
+      new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+
+  if (typeof window.fetch === "function") {
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      if (isBlockedSandpackAnalytics(input)) {
+        return okJsonResponse();
+      }
+      return originalFetch(input, init).catch((error) => {
+        if (isBlockedSandpackAnalytics(input)) {
+          return okJsonResponse();
+        }
+        throw error;
+      });
+    };
+  }
+
+  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+    const originalSendBeacon = navigator.sendBeacon.bind(navigator);
+    navigator.sendBeacon = (url, data) => {
+      if (isBlockedSandpackAnalytics(url)) {
+        return true;
+      }
+      return originalSendBeacon(url, data);
+    };
+  }
+})();
+`;
+
+function injectSandboxNetworkGuardScript(html: string): string {
+  if (!html || html.includes(SANDBOX_NETWORK_GUARD_MARKER)) {
+    return html;
+  }
+
+  const scriptTag = `<script>\n/* ${SANDBOX_NETWORK_GUARD_MARKER} */\n${SANDBOX_NETWORK_GUARD_SCRIPT}\n</script>`;
+
+  if (html.includes('</head>')) {
+    return html.replace('</head>', `${scriptTag}\n</head>`);
+  }
+
+  if (html.includes('</body>')) {
+    return html.replace('</body>', `${scriptTag}\n</body>`);
+  }
+
+  return `${html}\n${scriptTag}`;
+}
 
 function injectPreviewErrorCaptureScript(html: string): string {
   if (!html || html.includes(PREVIEW_ERROR_CAPTURE_MARKER)) {
@@ -227,7 +427,6 @@ const InspectablePreview = ({
   watchdogEnabled = true,
   onPreviewReady,
   onPreviewFailure,
-  onClientError,
 }: { 
   elementSelectMode?: boolean;
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
@@ -235,7 +434,6 @@ const InspectablePreview = ({
   watchdogEnabled?: boolean;
   onPreviewReady?: () => void;
   onPreviewFailure?: (reason: string) => void;
-  onClientError?: (errorMessage: string) => void;
 }) => {
   const { sandpack } = useSandpack();
   const previewRef = useRef<SandpackPreviewRef>(null);
@@ -486,7 +684,7 @@ const InspectablePreview = ({
       ref={previewRef}
       showNavigator={false}
       showOpenInCodeSandbox={false}
-      showSandpackErrorOverlay={false}
+      showSandpackErrorOverlay={true}
       showRefreshButton={false}
       style={{ height: '100%', width: '100%' }}
     />
@@ -633,38 +831,17 @@ export default function SandpackStudio({
   isRTL = false
 }: SandpackStudioProps) {
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
-  const [previewCompatibilityMode, setPreviewCompatibilityMode] = useState<PreviewRenderMode>('exact');
   const [consoleOpen, setConsoleOpen] = useState(false);
   const [fileTreeCollapsed, setFileTreeCollapsed] = useState(() => window.innerWidth < 768);
   const [previewSessionKey, setPreviewSessionKey] = useState(0);
   const [previewHealth, setPreviewHealth] = useState<PreviewHealthState>('loading');
   const [previewFailureMessage, setPreviewFailureMessage] = useState('');
+  const [useRunnerFallback, setUseRunnerFallback] = useState(false);
   const [forcedDependencyRoots, setForcedDependencyRoots] = useState<string[]>([]);
   const [forceAllDependencies, setForceAllDependencies] = useState(false);
   const [runtimeDependencies, setRuntimeDependencies] = useState<Record<string, string>>({});
-  const bundlerCandidates = useMemo(() => {
-    const urls: string[] = [];
-    const envBundlerUrl = (import.meta as any)?.env?.VITE_SANDPACK_BUNDLER_URL;
-
-    if (typeof envBundlerUrl === 'string' && envBundlerUrl.trim()) {
-      urls.push(envBundlerUrl.trim());
-    }
-
-    urls.push('https://sandpack-bundler.codesandbox.io');
-
-    if (typeof window !== 'undefined') {
-      const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (isLocalHost) {
-        urls.push('http://localhost:1234');
-      }
-    }
-
-    return Array.from(new Set(urls));
-  }, []);
-  const [activeBundlerIndex, setActiveBundlerIndex] = useState(0);
   const autoRecoveryCountRef = useRef(0);
-  const resolvedPreviewRenderMode = elementSelectMode ? 'visual' : previewCompatibilityMode;
-  const usingVisualPreview = resolvedPreviewRenderMode === 'visual';
+  const usingVisualPreview = !!elementSelectMode;
 
   const knownDependencyRoots = useMemo(() => {
     const roots = new Set<string>();
@@ -677,8 +854,6 @@ export default function SandpackStudio({
     return roots;
   }, [runtimeDependencies]);
 
-  const activeBundlerUrl = bundlerCandidates[Math.min(activeBundlerIndex, bundlerCandidates.length - 1)] || 'https://sandpack-bundler.codesandbox.io';
-
   const extractMissingDependencyRoot = useCallback((errorMsg: string): string | null => {
     const missingDependencyPatterns = [
       /Cannot find module\s+['"]([^'"]+)['"]/i,
@@ -689,7 +864,11 @@ export default function SandpackStudio({
     for (const pattern of missingDependencyPatterns) {
       const match = errorMsg.match(pattern);
       if (match?.[1]) {
-        return rootPackageName(match[1]);
+        const specifier = match[1];
+        if (!isLikelyPackageSpecifier(specifier)) {
+          return null;
+        }
+        return rootPackageName(specifier);
       }
     }
 
@@ -701,7 +880,7 @@ export default function SandpackStudio({
     if (!missingRoot) return false;
 
     if (!knownDependencyRoots.has(missingRoot)) {
-      if (!runtimeDependencies[missingRoot]) {
+      if (!runtimeDependencies[missingRoot] && isLikelyPackageSpecifier(missingRoot)) {
         setRuntimeDependencies((prev) => ({
           ...prev,
           [missingRoot]: 'latest',
@@ -767,6 +946,46 @@ export default function SandpackStudio({
       cancelled = true;
     };
   }, [onRuntimeError]);
+
+  useEffect(() => {
+    const originalFetch = typeof window.fetch === 'function' ? window.fetch.bind(window) : null;
+    const originalSendBeacon = typeof navigator.sendBeacon === 'function'
+      ? navigator.sendBeacon.bind(navigator)
+      : null;
+
+    if (originalFetch) {
+      (window as typeof window & { fetch: typeof window.fetch }).fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+        if (isBlockedSandpackTelemetryRequest(input)) {
+          return createNoopTelemetryResponse();
+        }
+
+        return originalFetch(input, init).catch((error) => {
+          if (isBlockedSandpackTelemetryRequest(input)) {
+            return createNoopTelemetryResponse();
+          }
+          throw error;
+        });
+      }) as typeof window.fetch;
+    }
+
+    if (originalSendBeacon) {
+      navigator.sendBeacon = ((url: string | URL, data?: BodyInit | null) => {
+        if (isBlockedSandpackTelemetryRequest(url)) {
+          return true;
+        }
+        return originalSendBeacon(url, data);
+      }) as typeof navigator.sendBeacon;
+    }
+
+    return () => {
+      if (originalFetch) {
+        (window as typeof window & { fetch: typeof window.fetch }).fetch = originalFetch;
+      }
+      if (originalSendBeacon) {
+        navigator.sendBeacon = originalSendBeacon;
+      }
+    };
+  }, []);
   
   // Remove Sandpack resize handle - it causes issues in preview-only mode
   useEffect(() => {
@@ -824,32 +1043,17 @@ export default function SandpackStudio({
     setForcedDependencyRoots([]);
     setForceAllDependencies(false);
     setRuntimeDependencies({});
-    setPreviewCompatibilityMode('exact');
+    setUseRunnerFallback(false);
   }, [projectId]);
 
   useEffect(() => {
     autoRecoveryCountRef.current = 0;
     setPreviewFailureMessage('');
     setPreviewHealth('loading');
-  }, [elementSelectMode, resolvedPreviewRenderMode]);
+    setUseRunnerFallback(false);
+  }, [elementSelectMode]);
 
   const handleVisualPreviewFailure = useCallback((reason: string) => {
-    if (activeBundlerIndex < bundlerCandidates.length - 1) {
-      setPreviewFailureMessage(`${reason} Switching preview engine...`);
-      setPreviewHealth('recovering');
-      setActiveBundlerIndex(prev => Math.min(prev + 1, bundlerCandidates.length - 1));
-      setPreviewSessionKey(prev => prev + 1);
-      return;
-    }
-
-    if (!elementSelectMode && previewCompatibilityMode !== 'visual') {
-      setPreviewFailureMessage('Retrying preview in compatibility mode...');
-      setPreviewCompatibilityMode('visual');
-      setPreviewHealth('recovering');
-      setPreviewSessionKey(prev => prev + 1);
-      return;
-    }
-
     if (autoRecoveryCountRef.current < 1) {
       autoRecoveryCountRef.current += 1;
       setPreviewFailureMessage(reason);
@@ -859,38 +1063,26 @@ export default function SandpackStudio({
     }
 
     setPreviewFailureMessage(reason);
+
+    if (!usingVisualPreview) {
+      setUseRunnerFallback(true);
+      setPreviewHealth('recovering');
+      return;
+    }
+
     setPreviewHealth('failed');
-  }, [activeBundlerIndex, bundlerCandidates.length]);
+  }, [usingVisualPreview]);
 
   const handleRunnerPreviewFailure = useCallback((reason: string) => {
-    if (autoRecoveryCountRef.current < 1) {
-      autoRecoveryCountRef.current += 1;
-      setPreviewFailureMessage(reason);
-      setPreviewHealth('recovering');
-      setPreviewSessionKey(prev => prev + 1);
-      return;
-    }
-
-    if (!elementSelectMode && previewCompatibilityMode !== 'visual') {
-      setPreviewFailureMessage(reason);
-      setPreviewCompatibilityMode('visual');
-      setPreviewHealth('recovering');
-      setPreviewSessionKey(prev => prev + 1);
-      return;
-    }
-
     setPreviewFailureMessage(reason);
     setPreviewHealth('failed');
-  }, [elementSelectMode, previewCompatibilityMode]);
+  }, []);
 
   const handleManualPreviewReload = useCallback(() => {
     autoRecoveryCountRef.current = 0;
     setPreviewFailureMessage('');
     setPreviewHealth('loading');
-    setActiveBundlerIndex(0);
-    if (!elementSelectMode) {
-      setPreviewCompatibilityMode('exact');
-    }
+    setUseRunnerFallback(false);
 
     if (onRefresh) {
       onRefresh();
@@ -898,13 +1090,17 @@ export default function SandpackStudio({
     }
 
     setPreviewSessionKey(prev => prev + 1);
-  }, [elementSelectMode, onRefresh]);
+  }, [onRefresh]);
 
   const normalizedProjectFiles = useMemo<Record<string, string>>(() => {
     const normalized: Record<string, string> = {};
     Object.entries(files).forEach(([path, content]) => {
       const fixedPath = path.startsWith('/') ? path : `/${path}`;
-      normalized[fixedPath] = content;
+      if (/\.(jsx?|tsx?)$/i.test(fixedPath)) {
+        normalized[fixedPath] = rewriteSandboxAliases(content);
+      } else {
+        normalized[fixedPath] = content;
+      }
     });
     return normalized;
   }, [files]);
@@ -925,7 +1121,9 @@ export default function SandpackStudio({
     const rootsToInclude = new Set<string>(['react', 'react-dom']);
     let m: RegExpExecArray | null;
     while ((m = importRegex.exec(allCode)) !== null) {
-      rootsToInclude.add(rootPackageName(m[1]));
+      const specifier = m[1];
+      if (!isLikelyPackageSpecifier(specifier)) continue;
+      rootsToInclude.add(rootPackageName(specifier));
     }
 
     forcedDependencyRoots.forEach((pkg) => {
@@ -1010,7 +1208,6 @@ export default function SandpackStudio({
       autoRecoveryCountRef.current = 0;
       setPreviewFailureMessage('');
       setPreviewHealth('loading');
-      setActiveBundlerIndex(0);
     }
   }, [hasValidFiles, isLoading, projectId]);
 
@@ -1044,29 +1241,14 @@ export default function App() {
 `;
     }
 
-    const appEntryCandidates = [
-      '/App.tsx',
-      '/App.jsx',
-      '/App.js',
-      '/src/App.tsx',
-      '/src/App.jsx',
-      '/src/App.js',
-    ];
+    const appEntryPath = APP_COMPONENT_ENTRY_CANDIDATES.find((path) => typeof next[path] === 'string');
+    const hasRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.some((path) => typeof next[path] === 'string');
+    const hasMountingRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.some((path) => {
+      const source = next[path];
+      return typeof source === 'string' && hasReactMountCode(source);
+    });
 
-    const appEntryPath = appEntryCandidates.find((path) => typeof next[path] === 'string');
-    const hasJavaScriptEntry = Boolean(
-      next['/index.js'] ||
-      next['/index.jsx'] ||
-      next['/index.tsx'] ||
-      next['/src/index.js'] ||
-      next['/src/index.jsx'] ||
-      next['/src/index.tsx'] ||
-      next['/src/main.js'] ||
-      next['/src/main.jsx'] ||
-      next['/src/main.tsx']
-    );
-
-    if (resolvedPreviewRenderMode === 'visual') {
+    if (usingVisualPreview) {
       // Ensure /App.js exists so Sandpack always has a default entry file to open in Code view.
       // Many generated projects place App under /src, which would leave Sandpack with no obvious active file.
       if (!next['/App.js']) {
@@ -1094,27 +1276,10 @@ root.render(
       if (!next["/styles.css"]) {
         next["/styles.css"] = "/* Tailwind loaded via CDN */";
       }
+    } else if ((!hasRuntimeEntry || !hasMountingRuntimeEntry) && appEntryPath) {
+      const appImportPath = toImportPath(appEntryPath);
 
-      // Strip @tailwind directives and @apply rules from all CSS files
-      // Tailwind is loaded via CDN script tag, so these directives crash Sandpack's bundler
-      for (const [path, content] of Object.entries(next)) {
-        if (path.endsWith('.css') && typeof content === 'string') {
-          let cleaned = content;
-          // Remove @tailwind directives
-          cleaned = cleaned.replace(/@tailwind\s+(base|components|utilities)\s*;?\s*/g, '');
-          // Replace @apply with plain comment (can't be processed without PostCSS)
-          cleaned = cleaned.replace(/@apply\s+[^;]+;/g, '/* @apply removed - use inline classes */');
-          if (cleaned !== content) {
-            next[path] = cleaned;
-          }
-        }
-      }
-    } else if (!hasJavaScriptEntry && appEntryPath) {
-      const appImportPath = appEntryPath
-        .replace(/^\//, './')
-        .replace(/\.(tsx|ts|jsx|js)$/i, '');
-
-      next['/index.js'] = `import React from "react";
+      next['/__wakti_entry.js'] = `import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "${appImportPath}";
 
@@ -1187,15 +1352,45 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
     }
 
     if (typeof next['/index.html'] === 'string') {
-      next['/index.html'] = injectPreviewErrorCaptureScript(next['/index.html']);
+      next['/index.html'] = injectPreviewErrorCaptureScript(
+        injectSandboxNetworkGuardScript(ensureRootMountHtml(next['/index.html']))
+      );
     }
 
     if (typeof next['/public/index.html'] === 'string') {
-      next['/public/index.html'] = injectPreviewErrorCaptureScript(next['/public/index.html']);
+      next['/public/index.html'] = injectPreviewErrorCaptureScript(
+        injectSandboxNetworkGuardScript(ensureRootMountHtml(next['/public/index.html']))
+      );
     }
 
     return next;
-  }, [normalizedProjectFiles, resolvedPreviewRenderMode]);
+  }, [normalizedProjectFiles, usingVisualPreview]);
+
+  const sandpackEntryFile = useMemo(() => {
+    if (usingVisualPreview && typeof formattedFiles['/index.js'] === 'string') {
+      return '/index.js';
+    }
+
+    if (typeof formattedFiles['/__wakti_entry.js'] === 'string') {
+      return '/__wakti_entry.js';
+    }
+
+    const mountedRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.find((path) => {
+      const source = formattedFiles[path];
+      return typeof source === 'string' && hasReactMountCode(source);
+    });
+
+    if (mountedRuntimeEntry) {
+      return mountedRuntimeEntry;
+    }
+
+    const existingRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.find((path) => typeof formattedFiles[path] === 'string');
+    if (existingRuntimeEntry) {
+      return existingRuntimeEntry;
+    }
+
+    return APP_COMPONENT_ENTRY_CANDIDATES.find((path) => typeof formattedFiles[path] === 'string') || '/index.js';
+  }, [formattedFiles, usingVisualPreview]);
 
   const {
     activeFile,
@@ -1376,7 +1571,6 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
       files={formattedFiles}
       options={{
         externalResources: ["https://cdn.tailwindcss.com"],
-        bundlerURL: activeBundlerUrl,
         activeFile,
         visibleFiles: openTabs,
         classes: {
@@ -1390,6 +1584,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
         },
       }}
       customSetup={{
+        entry: sandpackEntryFile,
         // Dependencies are sourced from the Sandpack SSOT so the AI prompt
         // (via supabase/functions/_shared/sandpackPackages.ts) and the preview
         // sandbox can NEVER drift. Add/remove packages in
@@ -1448,7 +1643,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
           {/* PREVIEW MODE: Keep mounted; show/hide to avoid iframe blanking on toggle */}
           <div className={clsx(
             "absolute inset-0 h-full w-full min-w-0 relative bg-black overflow-hidden group",
-            viewMode === 'preview' ? "block" : "hidden"
+            viewMode === 'preview' && !useRunnerFallback ? "block" : "hidden"
           )}>
                   {/* CSS to hide the default Sandpack error screen and fix scrollbar styling */}
                   <style dangerouslySetInnerHTML={{ __html: `
@@ -1530,22 +1725,6 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     />
                   )}
 
-                  <div className={clsx(
-                    "absolute inset-0 h-full w-full",
-                    usingVisualPreview ? "hidden" : "block"
-                  )}>
-                    <RunnerPreview
-                      projectId={projectId}
-                      projectName={projectName}
-                      isActive={!usingVisualPreview && !isLoading && hasValidFiles}
-                      isLoading={isLoading || !hasValidFiles}
-                      reloadKey={previewSessionKey}
-                      isRTL={isRTL}
-                      onPreviewReady={handlePreviewReady}
-                      onPreviewFailure={handleRunnerPreviewFailure}
-                    />
-                  </div>
-
                   {usingVisualPreview && viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'recovering' && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0c0f14]/70 backdrop-blur-sm p-4">
                       <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c0f14] px-5 py-4 text-center shadow-2xl">
@@ -1590,7 +1769,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     </div>
                   )}
                   
-                  {usingVisualPreview && (
+                  {viewMode === 'preview' && hasValidFiles && !isLoading && (
                     <SandpackErrorBoundary
                       onError={(error) => {
                         console.error('[SandpackStudio] React Error Boundary caught error:', error);
@@ -1598,19 +1777,34 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                       }}
                     >
                       <InspectablePreview
-                        key={`inspectable-preview-${activeBundlerIndex}-${previewSessionKey}`}
-                        elementSelectMode={resolvedPreviewRenderMode === 'visual' ? elementSelectMode : false}
+                        key={`inspectable-preview-${usingVisualPreview ? 'visual' : 'standard'}-${previewSessionKey}`}
+                        elementSelectMode={elementSelectMode}
                         onElementSelect={onElementSelect}
-                        inspectorEnabled={resolvedPreviewRenderMode === 'visual'}
+                        inspectorEnabled={usingVisualPreview}
                         watchdogEnabled={viewMode === 'preview' && !isLoading && hasValidFiles}
                         onPreviewReady={handlePreviewReady}
                         onPreviewFailure={handleVisualPreviewFailure}
-                        onClientError={handleSandpackError}
                       />
                     </SandpackErrorBoundary>
                   )}
 
                   {/* Visual Mode Indicator removed - now handled in ProjectDetail.tsx */}
+          </div>
+
+          <div className={clsx(
+            "absolute inset-0 h-full w-full min-w-0 relative bg-black overflow-hidden",
+            viewMode === 'preview' && useRunnerFallback ? "block" : "hidden"
+          )}>
+            <RunnerPreview
+              projectId={projectId}
+              projectName={projectName}
+              isActive={viewMode === 'preview' && useRunnerFallback && hasValidFiles && !isLoading}
+              isLoading={isLoading || !hasValidFiles}
+              reloadKey={previewSessionKey}
+              isRTL={isRTL}
+              onPreviewReady={handlePreviewReady}
+              onPreviewFailure={handleRunnerPreviewFailure}
+            />
           </div>
 
           {/* INCREMENTAL FILE UPDATER - Prevents full rebuilds on code changes */}

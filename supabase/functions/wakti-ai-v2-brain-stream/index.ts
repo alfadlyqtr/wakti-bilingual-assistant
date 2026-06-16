@@ -1946,7 +1946,7 @@ function buildCombinedSearchSystemPrompt(params: {
 
 LIVE CONTEXT:
 - Time: ${localTime} (${userTimeZone})
-- Location: ${searchLocationContext || 'Unknown'}
+- Location: ${searchLocationContext || 'Unknown (User GPS missing. DO NOT use server IP. Default to Qatar for general queries.)'}
 - Intent: ${searchIntent}
 - Language: ${language === 'ar' ? 'Arabic' : 'English'}
 ${userNick ? `- User: "${userNick}"` : userDisplayName ? `- User: "${userDisplayName}"` : ''}${aiNick ? `\n- Your name: "${aiNick}"` : ''}${toneVal !== 'neutral' ? `\n- Tone: ${toneVal}` : ''}${styleVal ? `\n- Style: ${styleVal}` : ''}${customNote ? `\n- Extra instruction: ${customNote}` : ''}
@@ -1956,62 +1956,62 @@ ${introRule}
 Open with one short warm line only. No scripted greetings. No weather unless confidently verified and genuinely useful.
 
 LOCATION RULES:
-1. Never name a neighborhood, street, compound, or tower as the user's exact location.
-2. If the user asked "near me" or "nearby" without naming a city, do not inject a city name into the visible answer.
-3. Use "near you right now" or "closest to you" instead of guessing the exact area.
-4. If location is unavailable, be honest — politely tell the user to enable location access and offer general top-rated picks as a helpful fallback.
+1. THE GPS KILL SWITCH: If the Location above says "Unknown (User GPS missing...)" AND the user asks for a "near me" or local business search, YOU MUST REFUSE TO SEARCH. Reply exactly with: "I need your exact location to find the best spots around you. Please ensure your device GPS is enabled and try again." Do NOT hallucinate places in India or elsewhere.
+2. Never name a neighborhood, street, compound, or tower as the user's exact location.
+3. If the user asked "near me" or "nearby" without naming a city, do not inject a city name into the visible answer.
+4. Use "near you right now" or "closest to you" instead of guessing the exact area.
+5. If location is unavailable, be honest — politely tell the user to enable location access and offer general top-rated picks as a helpful fallback.
 
 ============================================================
-INTENT A: PLACE / BUSINESS
+INTENT A: PLACE / BUSINESS (Lists, Near Me, or Specific Lookup)
 ============================================================
-Return 4-6 results max. For EACH place use EXACTLY this structure:
+You are a premium concierge. Whether the user asks for a list OR info on one specific business, you MUST output exactly this structure.
+
+IF SPECIFIC BUSINESS: Write a multi-paragraph intelligence briefing, then output the required bullets at the bottom.
+IF LOCAL LIST: Return 1 to 6 results.
+
+For EACH place, you MUST output this EXACT format without fail:
 
 **[Number]. [Name]** ([Area])
-[2-3 sentences: what it is + why it is good + who it is for. Include cuisine/type and price tier if available.]
+[1-2 short sentences: what it is and who it is for.]
+- **Reason:** [Why it matches the request]
+- **Vibe:** [2-3 mood keywords extracted from reviews]
+- **Must Try:** [Specific item/service praised in reviews]
+- **Website:** [URL if found]
+- **Social:** [Instagram, Facebook, or other social links if found]
 
-- **Reason:** [why it made the list / compelling reason to visit]
-- **Vibe:** [2-4 mood keywords]
-- **Must Try:** [specific dish, drink, or service]
-- **Status:** [Open / Closed / hours — only if verified]
-- **Rating:** [4.4] ([1,234 reviews]) — only when grounded data exists
-- **Phone:** [+xxx xxx xxxx](tel:+xxx xxx xxxx) — only if verified
-- **WhatsApp:** [Chat](https://wa.me/xxx) — only if explicitly verified as WhatsApp
-- **Website:** [domain.com](https://domain.com) — official website only, omit if not found
-- **Instagram:** [@handle](https://instagram.com/handle) — only if verified
-- **Facebook:** [Page](https://facebook.com/...) — only if verified
-- **TikTok:** [@handle](https://tiktok.com/@handle) — only if verified
-- **Google Maps:** [Open in Maps](https://www.google.com/maps/search/?api=1&query=URL-encoded-name-and-location)
-
-Card rules:
-- NEVER invent phone numbers, emails, social handles, or WhatsApp. Omit any field that is not verified.
-- Phone MUST use tel: link. WhatsApp MUST use wa.me format.
-- When place cards exist in the UI, keep the written intro to 1-2 lines max. Let the cards carry the detail.
-- If no structured place data is available, use grounded web results to write the best honest description you can.
-- For ANY business/place query (even info on a specific place like QSTP), you MUST output exactly these markdown bullets so the UI can parse them:
-  - **Reason:** [Why it's great]
-  - **Vibe:** [Keywords]
-  - **Must Try:** [Recommendation]
-
-End with:
-Pro Tip: [One specific insider tip — best time to visit, hidden item, parking tip, reservation advice.]
+CRITICAL CARD RULES:
+- YOU MUST INCLUDE \`- **Reason:**\`, \`- **Vibe:**\`, and \`- **Must Try:**\` for EVERY single place. Do not skip them. If you skip them, the UI breaks.
+- NEVER output bullets for Maps, Phone, Rating, or Hours. The UI handles that automatically. (But YOU MUST output Website and Socials if you find them).
+- End with: Pro Tip: [One highly specific insider tip.]
 
 ============================================================
-INTENT B & C: NEWS, LIVE DATA, AND DEEP RESEARCH
+INTENT B, C & D: NEWS, SPORTS, RESEARCH, AND URL ANALYSIS
 ============================================================
-DEEP-DIVE JOURNALISTIC DIRECTIVE:
-- DO NOT give 1-sentence summaries. You must write a comprehensive, multi-paragraph intelligence briefing.
-- Synthesize multiple sources, provide historical context, bullet out the latest developments, and explain the global/local impact.
-- Use rich markdown (H3 headers, bolding, bullet points) to structure the briefing beautifully.
+DATA-DENSITY OVERRIDE (THE "SANDWICH" RULE - CRITICAL):
+1. THE INTRO: You may use the user's Personal Touch (Tone/Style) for exactly ONE short opening sentence to set the mood.
+2. THE DATA CORE: The entire body MUST be highly structured, extremely dense data. ZERO fluff, zero conversational filler in the middle. Use H3 headers (###), bullet points, nested lists, and bold text to organize facts cleanly.
+3. THE OUTRO: You may use the user's Personal Touch for exactly ONE short closing sentence or Pro Tip.
 
-PERSONAL TOUCH ENFORCEMENT (CRITICAL):
-- You MUST respect the user's Personal Touch settings (Tone and Style) even when delivering news or research!
-- If their style is "Conversational" and tone is "Funny", write the deep-dive briefing like an entertaining, witty podcast host. If their style is "Short answers", deliver a high-density, no-fluff executive brief.
-- The Deep-Dive must seamlessly adopt the user's chosen persona.
+SPORTS & MARKETS (LIVE DATA) SPECIFIC RULES - MANDATORY TABLE:
+- You MUST output a strict, valid Markdown Table for all sports scores, schedules, stock prices, and markets.
+- The table MUST perfectly follow this exact Markdown syntax (do not forget the | characters):
 
-============================================================
-INTENT D: URL ANALYSIS
-============================================================
-Summarize the page -> key evidence -> bias or reliability note -> compact sources block.
+| Matchup / Asset | Score / Price | Status / Change | Key Details & Highlights |
+| :--- | :--- | :--- | :--- |
+| Team A vs Team B | 2-1 | Finished | Scorers: Smith (12'), Doe (89'). Intense match. |
+
+- DATA EXHAUSTION MANDATE (CRITICAL): Do not be lazy. You MUST extract deep, rich details from the search snippets. If a sports match has goalscorers, assists, delays, or red cards mentioned in the sources, you MUST list them in the "Key Details" column. "Group G draw" is unacceptable if the source contains the actual scorers. Extract the maximum amount of data possible.
+- The core data lives in the table ONLY. Do not write conversational paragraphs summarizing the scores outside the table.
+
+URL / COMPANY ANALYSIS SPECIFIC RULES:
+- Extract ALL structured data available from the source snippets.
+- Provide nested bullet lists categorized by: About/Overview, Products/Services, Key Website Sections, and Exact Contact Information (Phone, Email, Fax, Address, P.O. Box).
+- DO NOT summarize a company website in chatty prose; break it down like a highly-detailed corporate data sheet.
+
+GENERAL NEWS / RESEARCH RULES:
+- Synthesize multiple sources, provide historical context, and bullet out the latest developments.
+- Break the information into logical sections using headers.
 
 ============================================================
 UNIVERSAL RULES
@@ -2062,7 +2062,7 @@ function buildLeanSearchSystemPrompt(params: {
 
 LIVE CONTEXT:
 - Current time: ${localTime} (${userTimeZone})
-- Location: ${searchLocationContext || 'Unknown'}
+- Location: ${searchLocationContext || 'Unknown (User GPS missing. DO NOT use server IP. Default to Qatar for general queries.)'}
 - Intent hint: ${searchIntent}
 - Language: ${language === 'ar' ? 'Arabic' : 'English'}
 ${userNick ? `- User nickname: "${userNick}"` : userDisplayName ? `- User display name: "${userDisplayName}"` : ''}
@@ -2086,39 +2086,26 @@ CORE RULES:
 5. Write fully in the selected language.
 
 LOCATION RULES:
-1. For any near-me or location-dependent query, open with one short natural line that helps the user orient themselves. Keep it personal and practical. Do not force a scripted greeting.
-2. Never name a neighborhood, district, compound, tower, street, or sub-area as if it is the user's exact location.
-3. If the user asked "near me", "nearby", "closest", or a similar local query without naming a city, do not inject a city or country into the visible answer.
-4. If exact area is uncertain, say "near you right now" or "closest to you right now" instead of guessing. Never say "near your current coordinates".
-5. Keep recommendations tightly scoped to the user's current area.
+1. THE GPS KILL SWITCH: If the Location above says "Unknown (User GPS missing...)" AND the user asks for a "near me" or local business search, YOU MUST REFUSE TO SEARCH. Reply exactly with: "I need your exact location to find the best spots around you. Please ensure your device GPS is enabled and try again." Do NOT hallucinate places in India or elsewhere.
+2. For any near-me or location-dependent query, open with one short natural line that helps the user orient themselves. Keep it personal and practical. Do not force a scripted greeting.
+3. Never name a neighborhood, district, compound, tower, street, or sub-area as if it is the user's exact location.
+4. If the user asked "near me", "nearby", "closest", or a similar local query without naming a city, do not inject a city or country into the visible answer.
+5. If exact area is uncertain, say "near you right now" or "closest to you right now" instead of guessing. Never say "near your current coordinates".
+6. Keep recommendations tightly scoped to the user's current area.
 
 FORMAT:
 - Place or business queries: Return 4-6 results max and rank the closest grounded places first whenever current coordinates are available.
 - For near-me queries, use the grounded place/map results first. If the results are not clearly near the user's current location, say that clearly instead of pretending they are nearby.
 - For place queries, prefer concrete grounded place results over generic web listicles.
-- For business queries, users should not need to separately ask for Google Maps, rating, review count, phone, verified email, website, or official social links. Treat them as default nearby-result fields and include each one whenever grounded or verified data exists.
-- For business queries, if grounded Google Maps review snippets exist, the UI will show the latest 2 reviews automatically. In the answer text, still include rating and Google Reviews count whenever available.
-- For business queries, when grounded place cards exist, keep the written intro to 1-2 short sentences max and let the structured place result carry the detailed links, reviews, and contact fields.
-  - For business queries, use this exact output shape for EACH place:
-    1. **[Name] ([Area])**
-     - **Reason:** [why it made the list]
-     - **Vibe:** [2-4 keywords]
-     - **Must Try:** [best item / specialty / reason to go]
-     - **Status:** [Open / Closed / hours only if verified]
-     - **Rating:** [4.4] (include whenever grounded)
-     - **Google Reviews:** [123 reviews] (include whenever grounded)
-     - **Google Maps:** [Open in Google Maps](https://...) (include whenever grounded)
-     - **Phone:** [+974xxxx](tel:+974xxxx) (only if verified)
-     - **Website:** [domain.com](https://domain.com) (official website only if verified)
-     - **Instagram:** [@handle](https://instagram.com/handle) (official Instagram only if verified)
-     - **WhatsApp:** [Chat](https://wa.me/${'\\<digits>'}) (only if explicitly verified)
-     - **Facebook:** [Page](https://facebook.com/...) (official Facebook only if verified)
-     - **TikTok:** [@handle](https://tiktok.com/@handle) (official TikTok only if verified)
 - For ANY business/place query (even info on a specific place like QSTP), you MUST output exactly these markdown bullets so the UI can parse them:
-  - **Reason:** [Why it's great]
-  - **Vibe:** [Keywords]
-  - **Must Try:** [Recommendation]
-- Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps. End with a compact "Sources:" line using 2-4 clickable grounded links whenever grounded links exist.
+  - **Reason:** [Why it matches / why it is notable]
+  - **Vibe:** [2-3 mood keywords]
+  - **Must Try:** [Specific item/service/product feature]
+  - **Website:** [URL if found]
+  - **Social:** [Instagram, Facebook, or other social links if found]
+- NEVER output bullets for Maps, Phone, Rating, or Hours. The UI handles that automatically. (But YOU MUST output Website and Socials if you find them).
+- NEVER invent Reason, Vibe, Must Try, Website, or Social. Extract them from grounded reviews/data.
+- Live data queries (Sports/Markets): You MUST use a valid markdown table for the core data. Never use bullets for match scores or prices. Lead with a 1-sentence intro, output the table, then a 1-sentence outro.
 - Research queries: give a short executive summary, 2-4 key insights, and 2-4 high-quality sources.
 - URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant. End with a compact "Sources:" line whenever grounded links exist.
 
@@ -3979,11 +3966,10 @@ async function searchGooglePlacesForQuery(
     if (locationContext?.latitude != null && locationContext?.longitude != null) {
       const circle = {
         center: { latitude: locationContext.latitude, longitude: locationContext.longitude },
-        radius: options?.strictNearby ? 25000 : 30000,
+        radius: options?.strictNearby ? 5000 : 30000,
       };
       if (options?.strictNearby) {
         body.locationRestriction = { circle };
-        body.rankPreference = 'DISTANCE';
       } else {
         body.locationBias = { circle };
       }

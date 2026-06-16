@@ -429,7 +429,7 @@ class WaktiAIV2ServiceClass {
     // If forceFresh, request fresh location with skipCache
     let hasDeviceGPS = false;
     try {
-      const nativeLoc = await getNativeLocation({ skipCache: forceFresh, timeoutMs: forceFresh ? 3000 : 2500 });
+      const nativeLoc = await getNativeLocation({ skipCache: forceFresh, timeoutMs: forceFresh ? 10000 : 6000 });
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
         hasDeviceGPS = true;
         resolved = {
@@ -906,7 +906,7 @@ class WaktiAIV2ServiceClass {
           if (cachedLocation) return cachedLocation;
           return await Promise.race([
             this.getUserLocation(userId || '', false),
-            new Promise<null>(r => setTimeout(() => r(null), 5000))
+            new Promise<null>(r => setTimeout(() => r(null), 12000))
           ]);
         }
 

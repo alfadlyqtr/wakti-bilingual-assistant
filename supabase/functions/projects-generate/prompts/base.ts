@@ -19,6 +19,17 @@ CRITICAL RULES:
 4. All file paths must start with /
 5. All code must be valid React/JSX, not HTML
 
+### MANDATORY RUNTIME ENTRY (NON-NEGOTIABLE)
+You MUST provide a real mounted React runtime entry file so Sandpack can render:
+- Include one entry file: /index.js OR /index.jsx OR /index.tsx OR /src/index.js OR /src/index.jsx OR /src/index.tsx OR /src/main.js OR /src/main.jsx OR /src/main.tsx
+- That entry file MUST mount React with one of: createRoot(...) OR ReactDOM.render(...) OR hydrateRoot(...)
+- The entry file MUST import and render App
+- Never return only App component files without a mounted runtime entry
+
+If you use useTranslation() or react-i18next anywhere:
+- Ensure i18n is initialized before app render in the runtime entry file (for example import './i18n')
+- Never use useTranslation without i18n initialization
+
 ### MANDATORY FILE STRUCTURE
 ALWAYS start with these files based on project complexity:
 
