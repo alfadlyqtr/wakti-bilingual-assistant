@@ -446,33 +446,6 @@ class WaktiAIV2ServiceClass {
       console.warn('[WaktiAIV2Service] Native location error:', err);
     }
 
-    // IP Geo Fallback if GPS/Native fails or times out
-    if (typeof resolved.latitude !== 'number' || typeof resolved.longitude !== 'number') {
-      console.log('📍 [WaktiAIV2Service] GPS/Native location unavailable. Fetching IP Geolocation fallback...');
-      try {
-        const controller = new AbortController();
-        const tId = setTimeout(() => controller.abort(), 2000);
-        const ipRes = await fetch('https://ipapi.co/json/', { signal: controller.signal });
-        clearTimeout(tId);
-        if (ipRes.ok) {
-          const ipData = await ipRes.json();
-          if (typeof ipData?.latitude === 'number' && typeof ipData?.longitude === 'number') {
-            resolved = {
-              ...resolved,
-              latitude: ipData.latitude,
-              longitude: ipData.longitude,
-              city: ipData.city || null,
-              country: ipData.country_name || null,
-              source: 'ip_fallback',
-            };
-            console.log('📍 [WaktiAIV2Service] IP Geolocation fallback success:', resolved.city, resolved.latitude, resolved.longitude);
-          }
-        }
-      } catch (ipErr) {
-        console.warn('[WaktiAIV2Service] IP Geolocation fallback failed:', ipErr);
-      }
-    }
-
     resolved.timezone = timezone;
     resolved.updatedAt = Date.now();
     const hasPreciseCoords = typeof resolved.latitude === 'number' && typeof resolved.longitude === 'number';

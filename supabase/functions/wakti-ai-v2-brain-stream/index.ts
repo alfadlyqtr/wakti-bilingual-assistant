@@ -261,39 +261,8 @@ async function lookupIpGeo(ip: string): Promise<IpGeoLite | null> {
   const now = Date.now();
   if (cached && now - cached.at < 6 * 60 * 60 * 1000) return cached.geo;
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 400);
-  try {
-    const resp = await fetch(`https://ipapi.co/${encodeURIComponent(key)}/json/`, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal,
-    });
-    if (!resp.ok) {
-      ipGeoCache.set(key, { at: now, geo: null });
-      return null;
-    }
-    const data = await resp.json().catch(() => null) as Record<string, unknown> | null;
-    if (!data || typeof data !== 'object') {
-      ipGeoCache.set(key, { at: now, geo: null });
-      return null;
-    }
-    const geo: IpGeoLite = {
-      city: typeof data.city === 'string' ? data.city : undefined,
-      region: typeof data.region === 'string' ? data.region : undefined,
-      country: typeof data.country_name === 'string' ? data.country_name : (typeof data.country === 'string' ? data.country : undefined),
-      timezone: typeof data.timezone === 'string' ? data.timezone : undefined,
-      latitude: typeof data.latitude === 'number' ? data.latitude : (typeof data.latitude === 'string' ? Number(data.latitude) : undefined),
-      longitude: typeof data.longitude === 'number' ? data.longitude : (typeof data.longitude === 'string' ? Number(data.longitude) : undefined),
-    };
-    ipGeoCache.set(key, { at: now, geo });
-    return geo;
-  } catch {
-    ipGeoCache.set(key, { at: now, geo: null });
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  ipGeoCache.set(key, { at: now, geo: null });
+  return null;
 }
 
 function normalizeContinuityText(input: unknown, maxLength: number): string {
@@ -1828,7 +1797,6 @@ async function streamGemini3WithSearch(
 ): Promise<string> {
   const key = getGeminiApiKey();
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
-  const useMapsGrounding = false;
 
   // Inject today's date into the query so Google Search grounding fetches current results
   const now = new Date();
@@ -1841,6 +1809,7 @@ async function streamGemini3WithSearch(
   const isNhlLive = /\bnhl\b/i.test(query) && /(standings?|scores?|results?|schedule|wild\s*card|conference|division|points|gp|games\s*played)/i.test(query);
   const nhlHint = isNhlLive ? ` Current NHL season: ${nhlSeason}.` : '';
   const isNearMeQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(query);
+  const useMapsGrounding = searchIntent === 'business' || searchIntent === 'places' || isNearMeQuery;
   const hasUserCoords = typeof userLocation?.latitude === 'number' && typeof userLocation?.longitude === 'number';
   // Inject device GPS location into the query so google_search returns hyper-local results
   let locationHint = '';
@@ -2018,22 +1987,26 @@ Card rules:
 - Phone MUST use tel: link. WhatsApp MUST use wa.me format.
 - When place cards exist in the UI, keep the written intro to 1-2 lines max. Let the cards carry the detail.
 - If no structured place data is available, use grounded web results to write the best honest description you can.
+- For ANY business/place query (even info on a specific place like QSTP), you MUST output exactly these markdown bullets so the UI can parse them:
+  - **Reason:** [Why it's great]
+  - **Vibe:** [Keywords]
+  - **Must Try:** [Recommendation]
 
 End with:
 Pro Tip: [One specific insider tip — best time to visit, hidden item, parking tip, reservation advice.]
 
 ============================================================
-INTENT B: LIVE DATA (Sports / Markets / Flights)
+INTENT B & C: NEWS, LIVE DATA, AND DEEP RESEARCH
 ============================================================
-Lead with the most recent verified result. Cross-reference sources for accuracy.
-Explain what the result MEANS — standings impact, market trend, flight status.
-For sports: include the next game/fixture if available.
-End with: *Sources: [Name 1](url), [Name 2](url)*
+DEEP-DIVE JOURNALISTIC DIRECTIVE:
+- DO NOT give 1-sentence summaries. You must write a comprehensive, multi-paragraph intelligence briefing.
+- Synthesize multiple sources, provide historical context, bullet out the latest developments, and explain the global/local impact.
+- Use rich markdown (H3 headers, bolding, bullet points) to structure the briefing beautifully.
 
-============================================================
-INTENT C: RESEARCH
-============================================================
-Short executive summary -> 2-4 key insights with one rare or non-obvious angle -> 2-4 high-quality verified sources.
+PERSONAL TOUCH ENFORCEMENT (CRITICAL):
+- You MUST respect the user's Personal Touch settings (Tone and Style) even when delivering news or research!
+- If their style is "Conversational" and tone is "Funny", write the deep-dive briefing like an entertaining, witty podcast host. If their style is "Short answers", deliver a high-density, no-fluff executive brief.
+- The Deep-Dive must seamlessly adopt the user's chosen persona.
 
 ============================================================
 INTENT D: URL ANALYSIS
@@ -2130,7 +2103,7 @@ FORMAT:
     1. **[Name] ([Area])**
      - **Reason:** [why it made the list]
      - **Vibe:** [2-4 keywords]
-     - **Must-Try:** [best item / specialty / reason to go]
+     - **Must Try:** [best item / specialty / reason to go]
      - **Status:** [Open / Closed / hours only if verified]
      - **Rating:** [4.4] (include whenever grounded)
      - **Google Reviews:** [123 reviews] (include whenever grounded)
@@ -2141,6 +2114,10 @@ FORMAT:
      - **WhatsApp:** [Chat](https://wa.me/${'\\<digits>'}) (only if explicitly verified)
      - **Facebook:** [Page](https://facebook.com/...) (official Facebook only if verified)
      - **TikTok:** [@handle](https://tiktok.com/@handle) (official TikTok only if verified)
+- For ANY business/place query (even info on a specific place like QSTP), you MUST output exactly these markdown bullets so the UI can parse them:
+  - **Reason:** [Why it's great]
+  - **Vibe:** [Keywords]
+  - **Must Try:** [Recommendation]
 - Live data queries: lead with the latest result, then explain the stakes. Use a valid markdown table only when it truly helps. End with a compact "Sources:" line using 2-4 clickable grounded links whenever grounded links exist.
 - Research queries: give a short executive summary, 2-4 key insights, and 2-4 high-quality sources.
 - URL analysis: summarize the page first, then key evidence, then any reliability or bias note if relevant. End with a compact "Sources:" line whenever grounded links exist.
@@ -3807,7 +3784,7 @@ async function fetchGooglePlaceDetails(place: GroundedPlaceCard): Promise<Partia
     mappedReviews
       .sort((a, b) => (b?.publishedAt || 0) - (a?.publishedAt || 0))
       .forEach((entry) => {
-        if (!entry?.review || reviewSnippets.length >= 4) return;
+        if (!entry?.review || reviewSnippets.length >= 3) return;
         reviewSnippets.push(entry.review);
       });
 
@@ -3893,7 +3870,7 @@ function mapPlaceV1ToCard(data: Record<string, unknown>): Partial<GroundedPlaceC
   mappedReviews
     .sort((a, b) => (b?.publishedAt || 0) - (a?.publishedAt || 0))
     .forEach((entry) => {
-      if (!entry?.review || reviewSnippets.length >= 4) return;
+      if (!entry?.review || reviewSnippets.length >= 3) return;
       reviewSnippets.push(entry.review);
     });
 

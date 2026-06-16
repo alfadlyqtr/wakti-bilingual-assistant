@@ -18,7 +18,7 @@ serve(async (req) => {
     
     if (!authHeader) {
       return new Response(
-        JSON.stringify({ error: 'No authorization header provided' }),
+        JSON.stringify({ success: false, error: 'No authorization header provided' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -41,7 +41,7 @@ serve(async (req) => {
     
     if (getUserError || !user) {
       return new Response(
-        JSON.stringify({ error: getUserError?.message || 'Could not get user' }),
+        JSON.stringify({ success: false, error: getUserError?.message || 'Could not get user' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -76,18 +76,18 @@ serve(async (req) => {
     
     if (deleteError) {
       return new Response(
-        JSON.stringify({ error: deleteError.message }),
+        JSON.stringify({ success: false, error: deleteError.message }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
     return new Response(
-      JSON.stringify({ message: 'User deleted successfully' }),
+      JSON.stringify({ success: true, message: 'User deleted successfully' }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

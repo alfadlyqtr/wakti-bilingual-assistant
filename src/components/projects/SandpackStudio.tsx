@@ -4,11 +4,13 @@ import {
   SandpackCodeEditor, 
   SandpackPreview,
   useSandpack,
+  type SandpackPreviewRef,
 } from "@codesandbox/sandpack-react";
 import { SandpackErrorBoundary } from "./SandpackErrorBoundary";
-import { SandpackErrorListener } from "./SandpackErrorListener";
+import { PREVIEW_ERROR_CAPTURE_SCRIPT, SandpackErrorListener } from "./SandpackErrorListener";
 import { SandpackConsolePanel } from "./SandpackConsolePanel";
 import { CollapsibleFileTree } from "./CollapsibleFileTree";
+import RunnerPreview from "./RunnerPreview";
 import { atomDark } from "@codesandbox/sandpack-themes";
 import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft } from "lucide-react";
 import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
@@ -24,7 +26,7 @@ import {
 import { clsx } from "clsx";
 import { WAKTI_INSPECTOR_COMPONENT } from "@/utils/waktiInspectorComponent";
 import sandpackI18nBundle from "@/assets/sandpack-i18n-bundle.mjs?raw";
-import { SANDPACK_DEPENDENCIES, rootPackageName } from "@/config/sandpackPackages";
+import { SANDPACK_DEPENDENCIES, assertSandpackPackagesInSync, rootPackageName } from "@/config/sandpackPackages";
 
 const SANDPACK_COMPANION_DEPENDENCIES: Record<string, string[]> = {
   "framer-motion": ["@emotion/is-prop-valid"],
@@ -32,6 +34,7 @@ const SANDPACK_COMPANION_DEPENDENCIES: Record<string, string[]> = {
   "react-slick": ["slick-carousel"],
   "@hookform/resolvers": ["react-hook-form"],
 };
+
 
 // --- 2. SELECTED ELEMENT INFO TYPE ---
 interface SelectedElementInfo {
@@ -133,6 +136,10 @@ export async function fetchStockImages(query, limit = 5, options = {}) {
     ? options.projectId.trim()
     : "preview";
 
+  if (projectId === "preview") {
+    return fallback;
+  }
+
   try {
     const response = await postWithTimeout(BACKEND_URL, {
       method: "POST",
@@ -189,8 +196,30 @@ export function useStockImage(query, options = {}) {
 }
 `;
 
+const PREVIEW_ERROR_CAPTURE_MARKER = 'WAKTI_PREVIEW_ERROR_CAPTURE_SCRIPT';
+
+function injectPreviewErrorCaptureScript(html: string): string {
+  if (!html || html.includes(PREVIEW_ERROR_CAPTURE_MARKER)) {
+    return html;
+  }
+
+  const scriptTag = `<script>\n/* ${PREVIEW_ERROR_CAPTURE_MARKER} */\n${PREVIEW_ERROR_CAPTURE_SCRIPT}\n</script>`;
+
+  if (html.includes('</body>')) {
+    return html.replace('</body>', `${scriptTag}\n</body>`);
+  }
+
+  if (html.includes('</head>')) {
+    return html.replace('</head>', `${scriptTag}\n</head>`);
+  }
+
+  return `${html}\n${scriptTag}`;
+}
+
 // --- 3. INSPECTABLE PREVIEW COMPONENT ---
-// Uses SandpackPreview ref to directly access the iframe for reliable postMessage communication
+// Uses the official SandpackPreview + ref approach as documented by CodeSandbox.
+// The ref gives us the live client for postMessage while SandpackPreview
+// handles bundler boot, externalResources, hot-reload, and origin correctly.
 const InspectablePreview = ({ 
   elementSelectMode, 
   onElementSelect,
@@ -198,6 +227,7 @@ const InspectablePreview = ({
   watchdogEnabled = true,
   onPreviewReady,
   onPreviewFailure,
+  onClientError,
 }: { 
   elementSelectMode?: boolean;
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
@@ -205,46 +235,42 @@ const InspectablePreview = ({
   watchdogEnabled?: boolean;
   onPreviewReady?: () => void;
   onPreviewFailure?: (reason: string) => void;
+  onClientError?: (errorMessage: string) => void;
 }) => {
   const { sandpack } = useSandpack();
-  const previewRef = useRef<{ clientId: string; getClient: () => any } | null>(null);
+  const previewRef = useRef<SandpackPreviewRef>(null);
   const [inspectorReady, setInspectorReady] = useState(false);
   const [modeAckReceived, setModeAckReceived] = useState(false);
   const retryRef = useRef<NodeJS.Timeout | null>(null);
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const pingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const healthcheckIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const lastPongAtRef = useRef(0);
   const failureReportedRef = useRef(false);
 
-  // Find the iframe in the DOM (fallback method)
+  const reportPreviewFailure = useCallback((reason: string) => {
+    if (failureReportedRef.current) return;
+    failureReportedRef.current = true;
+    console.warn('[InspectablePreview] Preview health check failed:', reason);
+    onPreviewFailure?.(reason);
+  }, [onPreviewFailure]);
+
+  // Find the iframe via the SandpackPreview ref, then fall back to DOM query
   const findIframe = useCallback((): HTMLIFrameElement | null => {
-    // Method 1: Via previewRef
-    const client = previewRef.current?.getClient?.();
-    if (client?.iframe) {
-      return client.iframe;
-    }
-    
-    // Method 2: Via sandpack.clients
-    const clients = Object.values(sandpack.clients);
-    for (const c of clients) {
-      const anyClient = c as any;
-      if (anyClient.iframe) {
-        return anyClient.iframe;
+    // Official approach: get client from ref, then find its iframe
+    const client = previewRef.current?.getClient();
+    if (client) {
+      const clientId = previewRef.current?.clientId;
+      if (clientId && sandpack.clients[clientId]) {
+        // The client exists — find the iframe in the DOM that sandpack manages
+        const spIframe = document.querySelector('.sp-preview-container iframe') as HTMLIFrameElement | null;
+        if (spIframe) return spIframe;
       }
     }
-    
-    // Method 3: Direct DOM query
-    const iframe = document.querySelector('.sp-preview-container iframe') as HTMLIFrameElement;
-    return iframe || null;
+    return document.querySelector('.sp-preview-container iframe') as HTMLIFrameElement | null;
   }, [sandpack.clients]);
 
   const getPreviewWindow = useCallback((): Window | null => {
-    const iframe = iframeRef.current || findIframe();
-    if (iframe) {
-      iframeRef.current = iframe;
-    }
-    return iframe?.contentWindow || null;
+    return findIframe()?.contentWindow || null;
   }, [findIframe]);
 
   const isPreviewMessage = useCallback((event: MessageEvent): boolean => {
@@ -268,13 +294,6 @@ const InspectablePreview = ({
     }));
   }, [onElementSelect]);
 
-  const reportPreviewFailure = useCallback((reason: string) => {
-    if (failureReportedRef.current) return;
-    failureReportedRef.current = true;
-    console.warn('[InspectablePreview] Preview health check failed:', reason);
-    onPreviewFailure?.(reason);
-  }, [onPreviewFailure]);
-
   // Send inspect mode toggle with retry logic
   const sendToggleMessage = useCallback((enabled: boolean) => {
     if (!inspectorEnabled) {
@@ -295,7 +314,6 @@ const InspectablePreview = ({
       if (iframe?.contentWindow) {
         console.log('[InspectablePreview] Sending WAKTI_TOGGLE_INSPECT:', enabled);
         iframe.contentWindow.postMessage({ type: 'WAKTI_TOGGLE_INSPECT', enabled }, '*');
-        iframeRef.current = iframe;
         return;
       }
 
@@ -370,6 +388,14 @@ const InspectablePreview = ({
     }
   }, [inspectorEnabled]);
 
+  // When not using inspector, signal preview ready once sandpack is running
+  useEffect(() => {
+    if (inspectorEnabled) return;
+    if (sandpack.status !== 'running') return;
+    failureReportedRef.current = false;
+    onPreviewReady?.();
+  }, [inspectorEnabled, onPreviewReady, sandpack.status]);
+
   // Send toggle when mode changes
   useEffect(() => {
     if (!inspectorEnabled) {
@@ -378,15 +404,7 @@ const InspectablePreview = ({
     sendToggleMessage(!!elementSelectMode);
   }, [elementSelectMode, inspectorEnabled, sendToggleMessage]);
 
-  useEffect(() => {
-    if (inspectorEnabled) return;
-    if (sandpack.error || sandpack.status !== 'running') return;
-
-    failureReportedRef.current = false;
-    onPreviewReady?.();
-  }, [inspectorEnabled, onPreviewReady, sandpack.error, sandpack.status]);
-
-  // Reset inspector ready state when sandpack restarts
+  // Reset inspector state when sandpack restarts
   useEffect(() => {
     if (sandpack.status === 'initial' || sandpack.status === 'idle') {
       setInspectorReady(false);
@@ -410,11 +428,13 @@ const InspectablePreview = ({
     }
   }, [elementSelectMode, inspectorEnabled, modeAckReceived, inspectorReady]);
 
+  const sandpackRunning = sandpack.status === 'running';
   useEffect(() => {
-    if (!watchdogEnabled || inspectorReady || sandpack.error || sandpack.status === 'running') return;
+    if (!watchdogEnabled) return;
+    if (inspectorEnabled ? inspectorReady : sandpackRunning) return;
 
     const timeout = setTimeout(() => {
-      if (inspectorReady || sandpack.error || sandpack.status === 'running') return;
+      if (inspectorEnabled ? inspectorReady : sandpackRunning) return;
       const iframe = findIframe();
       const iframeSrc = iframe?.getAttribute('src') || '';
       reportPreviewFailure(
@@ -425,10 +445,10 @@ const InspectablePreview = ({
     }, 12000);
 
     return () => clearTimeout(timeout);
-  }, [findIframe, inspectorReady, reportPreviewFailure, sandpack.error, sandpack.status, watchdogEnabled]);
+  }, [findIframe, inspectorEnabled, inspectorReady, reportPreviewFailure, sandpackRunning, watchdogEnabled]);
 
   useEffect(() => {
-    if (!watchdogEnabled || !inspectorReady || sandpack.error) return;
+    if (!watchdogEnabled || !inspectorReady) return;
 
     const pingPreview = () => {
       const previewWindow = getPreviewWindow();
@@ -459,16 +479,16 @@ const InspectablePreview = ({
       if (pingTimeoutRef.current) clearTimeout(pingTimeoutRef.current);
       if (healthcheckIntervalRef.current) clearInterval(healthcheckIntervalRef.current);
     };
-  }, [getPreviewWindow, inspectorReady, reportPreviewFailure, sandpack.error, watchdogEnabled]);
+  }, [getPreviewWindow, inspectorReady, reportPreviewFailure, watchdogEnabled]);
 
   return (
-    <SandpackPreview 
-      ref={previewRef as any}
-      showNavigator={false} 
+    <SandpackPreview
+      ref={previewRef}
+      showNavigator={false}
       showOpenInCodeSandbox={false}
       showSandpackErrorOverlay={false}
       showRefreshButton={false}
-      style={{ height: '100%' }} 
+      style={{ height: '100%', width: '100%' }}
     />
   );
 };
@@ -597,6 +617,7 @@ interface SandpackStudioProps {
 export default function SandpackStudio({ 
   files, 
   projectId,
+  projectName,
   onRuntimeError, 
   elementSelectMode, 
   onElementSelect, 
@@ -643,6 +664,7 @@ export default function SandpackStudio({
   const [activeBundlerIndex, setActiveBundlerIndex] = useState(0);
   const autoRecoveryCountRef = useRef(0);
   const resolvedPreviewRenderMode = elementSelectMode ? 'visual' : previewCompatibilityMode;
+  const usingVisualPreview = resolvedPreviewRenderMode === 'visual';
 
   const knownDependencyRoots = useMemo(() => {
     const roots = new Set<string>();
@@ -724,6 +746,27 @@ export default function SandpackStudio({
     }
     onRuntimeError?.(errorMsg);
   }, [onRuntimeError, recoverFromMissingDependency]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    assertSandpackPackagesInSync().catch((error) => {
+      if (cancelled) return;
+
+      const message = error instanceof Error
+        ? error.message
+        : 'Sandpack package sync check failed between frontend and edge mirror.';
+
+      console.error('[SandpackStudio] Package sync check failed:', error);
+      setPreviewFailureMessage(message);
+      setPreviewHealth('failed');
+      onRuntimeError?.(message);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [onRuntimeError]);
   
   // Remove Sandpack resize handle - it causes issues in preview-only mode
   useEffect(() => {
@@ -790,7 +833,7 @@ export default function SandpackStudio({
     setPreviewHealth('loading');
   }, [elementSelectMode, resolvedPreviewRenderMode]);
 
-  const handlePreviewFailure = useCallback((reason: string) => {
+  const handleVisualPreviewFailure = useCallback((reason: string) => {
     if (activeBundlerIndex < bundlerCandidates.length - 1) {
       setPreviewFailureMessage(`${reason} Switching preview engine...`);
       setPreviewHealth('recovering');
@@ -817,7 +860,28 @@ export default function SandpackStudio({
 
     setPreviewFailureMessage(reason);
     setPreviewHealth('failed');
-  }, [activeBundlerIndex, bundlerCandidates.length, elementSelectMode, previewCompatibilityMode]);
+  }, [activeBundlerIndex, bundlerCandidates.length]);
+
+  const handleRunnerPreviewFailure = useCallback((reason: string) => {
+    if (autoRecoveryCountRef.current < 1) {
+      autoRecoveryCountRef.current += 1;
+      setPreviewFailureMessage(reason);
+      setPreviewHealth('recovering');
+      setPreviewSessionKey(prev => prev + 1);
+      return;
+    }
+
+    if (!elementSelectMode && previewCompatibilityMode !== 'visual') {
+      setPreviewFailureMessage(reason);
+      setPreviewCompatibilityMode('visual');
+      setPreviewHealth('recovering');
+      setPreviewSessionKey(prev => prev + 1);
+      return;
+    }
+
+    setPreviewFailureMessage(reason);
+    setPreviewHealth('failed');
+  }, [elementSelectMode, previewCompatibilityMode]);
 
   const handleManualPreviewReload = useCallback(() => {
     autoRecoveryCountRef.current = 0;
@@ -896,14 +960,6 @@ export default function SandpackStudio({
 
     return result;
   }, [forceAllDependencies, forcedDependencyRoots, knownDependencyRoots, normalizedProjectFiles, runtimeDependencies]);
-
-  const dependencyFingerprint = useMemo(
-    () => Object.entries(activeDependencies)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([pkg, version]) => `${pkg}@${version}`)
-      .join('|'),
-    [activeDependencies]
-  );
 
   const usesTypeScript = useMemo(
     () => Object.keys(files).some((path) => /\.(ts|tsx)$/.test(path)),
@@ -1130,6 +1186,14 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
       next['/public/index.html'] = next['/index.html'];
     }
 
+    if (typeof next['/index.html'] === 'string') {
+      next['/index.html'] = injectPreviewErrorCaptureScript(next['/index.html']);
+    }
+
+    if (typeof next['/public/index.html'] === 'string') {
+      next['/public/index.html'] = injectPreviewErrorCaptureScript(next['/public/index.html']);
+    }
+
     return next;
   }, [normalizedProjectFiles, resolvedPreviewRenderMode]);
 
@@ -1306,7 +1370,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
 
   return (<>
     <SandpackProvider
-      key={`sandpack-provider-${projectId ?? 'local'}-${usesTypeScript ? 'ts' : 'js'}-${resolvedPreviewRenderMode}-${previewSessionKey}-${dependencyFingerprint}`}
+      key={`sandpack-provider-${projectId ?? 'local'}-${usesTypeScript ? 'ts' : 'js'}`}
       template={usesTypeScript ? "react-ts" : "react"}
       theme={atomDark}
       files={formattedFiles}
@@ -1466,7 +1530,23 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     />
                   )}
 
-                  {viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'recovering' && (
+                  <div className={clsx(
+                    "absolute inset-0 h-full w-full",
+                    usingVisualPreview ? "hidden" : "block"
+                  )}>
+                    <RunnerPreview
+                      projectId={projectId}
+                      projectName={projectName}
+                      isActive={!usingVisualPreview && !isLoading && hasValidFiles}
+                      isLoading={isLoading || !hasValidFiles}
+                      reloadKey={previewSessionKey}
+                      isRTL={isRTL}
+                      onPreviewReady={handlePreviewReady}
+                      onPreviewFailure={handleRunnerPreviewFailure}
+                    />
+                  </div>
+
+                  {usingVisualPreview && viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'recovering' && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0c0f14]/70 backdrop-blur-sm p-4">
                       <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c0f14] px-5 py-4 text-center shadow-2xl">
                         <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-400">
@@ -1482,7 +1562,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     </div>
                   )}
 
-                  {viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'failed' && (
+                  {usingVisualPreview && viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'failed' && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0c0f14]/80 backdrop-blur-sm p-4">
                       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0c0f14] p-6 text-center shadow-2xl">
                         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-400">
@@ -1510,22 +1590,25 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     </div>
                   )}
                   
-                  {/* Error Boundary to prevent entire app crash from broken components */}
-                  <SandpackErrorBoundary
-                    onError={(error) => {
-                      console.error('[SandpackStudio] React Error Boundary caught error:', error);
-                      handleSandpackError(error.message);
-                    }}
-                  >
-                    <InspectablePreview 
-                      elementSelectMode={resolvedPreviewRenderMode === 'visual' ? elementSelectMode : false}
-                      onElementSelect={onElementSelect}
-                      inspectorEnabled={resolvedPreviewRenderMode === 'visual'}
-                      watchdogEnabled={viewMode === 'preview' && !isLoading && hasValidFiles}
-                      onPreviewReady={handlePreviewReady}
-                      onPreviewFailure={handlePreviewFailure}
-                    />
-                  </SandpackErrorBoundary>
+                  {usingVisualPreview && (
+                    <SandpackErrorBoundary
+                      onError={(error) => {
+                        console.error('[SandpackStudio] React Error Boundary caught error:', error);
+                        handleSandpackError(error.message);
+                      }}
+                    >
+                      <InspectablePreview
+                        key={`inspectable-preview-${activeBundlerIndex}-${previewSessionKey}`}
+                        elementSelectMode={resolvedPreviewRenderMode === 'visual' ? elementSelectMode : false}
+                        onElementSelect={onElementSelect}
+                        inspectorEnabled={resolvedPreviewRenderMode === 'visual'}
+                        watchdogEnabled={viewMode === 'preview' && !isLoading && hasValidFiles}
+                        onPreviewReady={handlePreviewReady}
+                        onPreviewFailure={handleVisualPreviewFailure}
+                        onClientError={handleSandpackError}
+                      />
+                    </SandpackErrorBoundary>
+                  )}
 
                   {/* Visual Mode Indicator removed - now handled in ProjectDetail.tsx */}
           </div>
@@ -1538,7 +1621,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
         </div>
 
         {/* CONSOLE PANEL - Integrated at bottom */}
-        {viewMode === 'preview' && (
+        {viewMode === 'preview' && usingVisualPreview && (
           <SandpackConsolePanel 
             isOpen={consoleOpen}
             onToggle={() => setConsoleOpen(prev => !prev)}

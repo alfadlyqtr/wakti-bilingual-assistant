@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
-import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe, Reply, FileCode, AlertCircle, Bell } from 'lucide-react';
+import { MessageSquare, Bot, User, Calendar, Clock, CheckCircle, Loader2, Volume2, Copy, VolumeX, ExternalLink, Play, Pause, RotateCcw, Globe, Reply, FileCode, AlertCircle, Bell, ChevronDown } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { AIMessage } from '@/services/WaktiAIV2Service';
 import { TaskConfirmationCard } from './TaskConfirmationCard';
@@ -189,8 +189,20 @@ function SearchMessageCard({
   const hasGroundedPlaceCards = hasGroundedPlaces(message as any);
   const rawContent = message.content || '';
   const cleanedContent = stripReminderBlocks(rawContent);
-  const isPlaceTextFormat = /^##\s+\d+\.\s+.+|\*\*(Vibe|Must.?Try|Reason|السبب|الأجواء|الجو|أجواء|جرّب|جرب|لا تفوت|لازم تجربه|الموقع|خرائط)\s*:/im.test(cleanedContent);
-  const isPlaceSearch = (typeof resolvedBrowsingData?.searchType === 'string' && resolvedBrowsingData.searchType.trim().toLowerCase() === 'business') || isPlaceTextFormat;
+  const searchType = (resolvedBrowsingData?.searchType || 'general').toLowerCase();
+  const isPlaceSearch = searchType === 'business' || searchType === 'places';
+  const isContentSearch = ['news', 'sports', 'research', 'general', 'url'].includes(searchType);
+
+  let themeColor = 'text-emerald-500';
+  let themeBg = 'bg-emerald-500/10';
+  let themeBorder = 'border-emerald-500/30';
+  let label = language === 'ar' ? 'بحث' : 'Search';
+
+  if (searchType === 'news') { themeColor = 'text-blue-500'; themeBg = 'bg-blue-500/10'; themeBorder = 'border-blue-500/30'; label = language === 'ar' ? 'أخبار' : 'News'; }
+  else if (searchType === 'sports') { themeColor = 'text-amber-500'; themeBg = 'bg-amber-500/10'; themeBorder = 'border-amber-500/30'; label = language === 'ar' ? 'رياضة' : 'Sports'; }
+  else if (searchType === 'research') { themeColor = 'text-fuchsia-500'; themeBg = 'bg-fuchsia-500/10'; themeBorder = 'border-fuchsia-500/30'; label = language === 'ar' ? 'بحث عميق' : 'Research'; }
+  else if (searchType === 'url') { themeColor = 'text-violet-500'; themeBg = 'bg-violet-500/10'; themeBorder = 'border-violet-500/30'; label = language === 'ar' ? 'تحليل الرابط' : 'URL Analysis'; }
+
   const hasStructuredSearchCards = Array.isArray(resolvedBrowsingData?.cards) && resolvedBrowsingData.cards.length > 0;
 
   // When place cards are present, only show the intro line(s) before the first bullet —
@@ -221,108 +233,103 @@ function SearchMessageCard({
 
   return (
     <div className="w-full space-y-4">
-      {!hasGroundedPlaceCards && hasStructuredSearchCards && (
-        <SearchCardsBlock message={message as any} language={language} introText={introOnly} />
-      )}
-
-      {(hasGroundedPlaceCards || isPlaceSearch) && content.trim() && (
-        <div 
-          className="search-result-content prose prose-sm sm:prose-base max-w-none dark:prose-invert" 
-          dir="auto"
-        >
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeRaw]}
-            components={{
-              h2: ({ children }) => (
-                <h2 className="text-base sm:text-lg font-bold mt-6 mb-2 text-foreground border-b border-border/40 pb-2">
-                  {children}
-                </h2>
-              ),
-              h3: ({ children }) => (
-                <h3 className="text-sm sm:text-base font-semibold mt-4 mb-2 text-foreground">
-                  {children}
-                </h3>
-              ),
-              p: ({ children }) => (
-                <p className="text-sm leading-relaxed text-muted-foreground mb-3">
-                  {children}
-                </p>
-              ),
-              ul: ({ children }) => (
-                <ul className="space-y-1.5 my-3 list-none pl-0">
-                  {children}
-                </ul>
-              ),
-              li: ({ children }) => (
-                <li className="text-sm text-muted-foreground flex items-start gap-2">
-                  <span className="text-primary mt-0.5">•</span>
-                  <span>{children}</span>
-                </li>
-              ),
-              strong: ({ children }) => (
-                <strong className="font-semibold text-foreground">{children}</strong>
-              ),
-              a: ({ href, children }) => {
-                const normalizedHref = href ? normalizeGoogleMapsUrl(href, language) : href;
-                const isGoogleMaps = normalizedHref && (
-                  normalizedHref.includes('google.com/maps') || 
-                  normalizedHref.includes('maps.google.com') || 
-                  normalizedHref.includes('goo.gl/maps')
-                );
-                
-                if (isGoogleMaps) {
-                  return (
-                    <a
-                      href={normalizedHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 font-medium hover:underline"
-                    >
-                      <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                      </svg>
-                      <span>{children || (language === 'ar' ? 'خرائط جوجل' : 'Google Maps')}</span>
+      {isContentSearch ? (
+        <div className={`w-full rounded-2xl overflow-hidden border ${themeBorder} bg-card/60 shadow-sm`}>
+          {/* Beautiful Header with Dropdown Sources */}
+          <div className={`${themeBg} px-4 py-3 border-b ${themeBorder}`}>
+            <div className="flex items-center justify-between mb-1">
+              <div className={`text-xs font-bold uppercase tracking-wider ${themeColor}`}>
+                {label}
+              </div>
+            </div>
+            {sources.length > 0 && (
+              <details className="group">
+                <summary className={`cursor-pointer text-[11px] font-medium ${themeColor} hover:opacity-80 flex items-center gap-1.5 list-none`}>
+                  <Globe className="w-3.5 h-3.5" />
+                  {sources.length} {language === 'ar' ? 'مصادر' : 'Sources'}
+                  <ChevronDown className="w-3 h-3 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  {sources.slice(0, 8).map((s: any, idx: number) => (
+                    <a key={idx} href={s.url} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${themeBorder} bg-background/80 hover:bg-background transition-colors shrink-0 max-w-[200px]`}>
+                      <span className="text-[10px] font-medium text-foreground/80 truncate">{s.title || s.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
                     </a>
-                  );
-                }
-                
-                return (
-                  <a
-                    href={normalizedHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    {children}
-                  </a>
-                );
-              },
-            }}
-          >
-            {content}
-          </ReactMarkdown>
-        </div>
-      )}
- 
-      {(hasGroundedPlaceCards || isPlaceSearch) && (
-        <GroundedPlacesBlock message={message as any} language={language} />
-      )}
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
 
-      {(hasGroundedPlaceCards || isPlaceSearch || sources.length > 0) && sources.length > 0 && (
-        <div className="mt-4 pt-3 border-t border-border/40">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2 flex items-center gap-1.5">
-            <Globe className="w-3 h-3" />
-            {language === 'ar' ? 'المصادر' : 'Sources'}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {sources.slice(0, 6).map((s, idx) => (
-              <a key={idx} href={s.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-border/50 bg-muted/20 hover:bg-muted/50 transition-colors max-w-[200px]">
-                <span className="text-xs font-medium text-foreground/80 truncate">{s.title || s.url.replace(/^https?:\/\/(www\.)?/, '')}</span>
-              </a>
-            ))}
+          {/* Full Uncut Markdown Content */}
+          <div className="p-4 sm:p-5 search-result-content prose prose-sm sm:prose-base max-w-none dark:prose-invert" dir="auto">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeRaw]}
+              components={{
+                h2: ({ children }) => <h2 className="text-base sm:text-lg font-bold mt-6 mb-2 text-foreground border-b border-border/40 pb-2">{children}</h2>,
+                h3: ({ children }) => <h3 className="text-sm sm:text-base font-semibold mt-4 mb-2 text-foreground">{children}</h3>,
+                p: ({ children }) => <p className="text-sm leading-relaxed text-muted-foreground mb-3">{children}</p>,
+                ul: ({ children }) => <ul className="space-y-1.5 my-3 list-none pl-0">{children}</ul>,
+                li: ({ children }) => <li className="text-sm text-muted-foreground flex items-start gap-2"><span className="text-primary mt-0.5">•</span><span>{children}</span></li>,
+                strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                a: ({ href, children }) => {
+                  const normalizedHref = href ? normalizeGoogleMapsUrl(href, language) : href;
+                  const isGoogleMaps = normalizedHref && (normalizedHref.includes('google.com/maps') || normalizedHref.includes('maps.google.com') || normalizedHref.includes('goo.gl/maps'));
+                  if (isGoogleMaps) {
+                    return <a href={normalizedHref} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-blue-500 hover:text-blue-600 font-medium hover:underline"><Globe className="w-4 h-4 flex-shrink-0" /><span>{children || 'Google Maps'}</span></a>;
+                  }
+                  return <a href={normalizedHref} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{children}</a>;
+                }
+              }}
+            >
+              {content}
+            </ReactMarkdown>
           </div>
         </div>
+      ) : (
+        <>
+          {/* Fallback for Places/Business Search (Kept exactly as before) */}
+          {!hasGroundedPlaceCards && (!isPlaceSearch || hasStructuredSearchCards) && (
+            <SearchCardsBlock message={message as any} language={language} introText={introOnly} />
+          )}
+          {(hasGroundedPlaceCards || isPlaceSearch) && content.trim() && (
+            <div className="search-result-content prose prose-sm sm:prose-base max-w-none dark:prose-invert" dir="auto">
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+                components={{
+                  h2: ({ children }) => <h2 className="text-base sm:text-lg font-bold mt-6 mb-2 text-foreground border-b border-border/40 pb-2">{children}</h2>,
+                  h3: ({ children }) => <h3 className="text-sm sm:text-base font-semibold mt-4 mb-2 text-foreground">{children}</h3>,
+                  p: ({ children }) => <p className="text-sm leading-relaxed text-muted-foreground mb-3">{children}</p>,
+                  ul: ({ children }) => <ul className="space-y-1.5 my-3 list-none pl-0">{children}</ul>,
+                  li: ({ children }) => <li className="text-sm text-muted-foreground flex items-start gap-2"><span className="text-primary mt-0.5">•</span><span>{children}</span></li>,
+                  strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                  a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">{children}</a>
+                }}
+              >
+                {content}
+              </ReactMarkdown>
+            </div>
+          )}
+          {(hasGroundedPlaceCards || isPlaceSearch) && (
+            <GroundedPlacesBlock message={message as any} language={language} />
+          )}
+          {(hasGroundedPlaceCards || isPlaceSearch) && sources.length > 0 && (
+            <details className="rounded-xl border border-border/40 bg-muted/10 dark:bg-white/5 p-3">
+              <summary className="cursor-pointer text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                {language === 'ar' ? `المصادر (${sources.length})` : `Sources (${sources.length})`}
+              </summary>
+              <ul className="mt-3 space-y-2">
+                {sources.slice(0, 10).map((s, idx) => (
+                  <li key={idx} className="flex items-start gap-2 min-w-0">
+                    <span className="text-muted-foreground text-xs mt-1">•</span>
+                    <a href={s.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs break-words">{s.title || s.url}</a>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </>
       )}
     </div>
   );

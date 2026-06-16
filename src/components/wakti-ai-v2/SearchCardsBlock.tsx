@@ -307,33 +307,20 @@ function buildCards(message: MessageLike | null | undefined, language: string) {
   }
 
   if (searchType === 'news' || searchType === 'sports' || searchType === 'research') {
-    const leadCards = (sourceCards.length > 0 ? sourceCards : bulletCards).slice(0, 6).map((card, index) => ({
-      ...card,
-      badge: index === 0
-        ? (searchType === 'sports'
-            ? (language === 'ar' ? 'التحديث الأهم' : 'Top update')
-            : searchType === 'research'
-              ? (language === 'ar' ? 'الفكرة الأساسية' : 'Key insight')
-            : (language === 'ar' ? 'العنوان الأهم' : 'Top story'))
-        : (searchType === 'research' ? (language === 'ar' ? 'نقطة' : 'Insight') : (language === 'ar' ? 'تحديث' : 'Update')),
-    }));
     return {
       searchType,
       summary,
       sources,
-      cards: leadCards.length > 0 ? leadCards : [{
-        title: searchType === 'sports'
-          ? (language === 'ar' ? 'تحديث رياضي' : 'Sports update')
-          : searchType === 'research'
-            ? (language === 'ar' ? 'ملخص بحث' : 'Research summary')
-          : (language === 'ar' ? 'آخر الأخبار' : 'Latest news'),
-        summary: summary || '',
-        badge: searchType === 'sports'
-          ? (language === 'ar' ? 'رياضة' : 'Sports')
-          : searchType === 'research'
-            ? (language === 'ar' ? 'بحث' : 'Research')
-            : (language === 'ar' ? 'أخبار' : 'News'),
-      }],
+      cards: [],
+    };
+  }
+
+  if (searchType === 'general') {
+    return {
+      searchType,
+      summary,
+      sources,
+      cards: [],
     };
   }
 

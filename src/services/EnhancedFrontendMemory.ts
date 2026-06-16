@@ -63,6 +63,8 @@ class EnhancedFrontendMemoryClass {
           if (md.wolfram && typeof md.wolfram === 'object' && typeof md.wolfram.mode === 'string') {
             lightMd.wolfram = { mode: md.wolfram.mode };
           }
+          if (md.browsingData) lightMd.browsingData = md.browsingData;
+          if (md.geminiSearch) lightMd.geminiSearch = md.geminiSearch;
           if (Object.keys(lightMd).length > 0) base.metadata = lightMd;
         }
 

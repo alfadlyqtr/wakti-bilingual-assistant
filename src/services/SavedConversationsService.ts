@@ -82,10 +82,7 @@ function normalizeMessages(messages: any[]): any[] {
     if (src.browsingUsed === true) kept.browsingUsed = true;
     if (src.browsingData) kept.browsingData = src.browsingData;
     if (Object.keys(kept).length > 0) {
-      try {
-        const asStr = JSON.stringify(kept);
-        if (asStr.length <= 8000) base.metadata = kept;
-      } catch { /* ignore */ }
+      base.metadata = kept;
     }
     return base;
   });

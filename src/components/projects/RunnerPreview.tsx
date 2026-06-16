@@ -16,217 +16,12 @@ interface RunnerPreviewProps {
 
 type RunnerStatus = 'idle' | 'building' | 'loading-frame' | 'ready' | 'failed';
 
-function buildLocalPreviewBundle(files: Record<string, string>) {
-  const allCss: string[] = [];
-  const allJs: string[] = [];
-  const processedFiles = new Set<string>();
-  const jsonVars: string[] = [];
-  const entryPoint = getProjectEntryPoint(files);
-  const entryBaseName = entryPoint.split('/').pop()?.replace(/\.(js|jsx|ts|tsx)$/, '') || 'App';
+type SandpackLiveFile = {
+  code?: string;
+  content?: string;
+};
 
-  for (const [filePath, content] of Object.entries(files)) {
-    if (filePath.endsWith('.css')) {
-      let css = content;
-      css = css.replace(/@tailwind\s+[^;]+;/g, '');
-      css = css.replace(/@import\s+url\([^)]+\);?/g, '');
-      allCss.push(css);
-      processedFiles.add(filePath);
-    }
-  }
-
-  for (const [filePath, content] of Object.entries(files)) {
-    if (filePath.endsWith('.json')) {
-      const varName = filePath
-        .replace(/^\//, '')
-        .replace(/[^a-zA-Z0-9]/g, '_')
-        .replace(/_+/g, '_');
-      jsonVars.push(`const ${varName} = ${content};`);
-      processedFiles.add(filePath);
-    }
-  }
-
-  const resolveImportPath = (importPath: string, currentFile: string): string | null => {
-    let cleanPath = importPath.replace(/['"`;]/g, '').trim();
-
-    if (cleanPath.startsWith('./') || cleanPath.startsWith('../')) {
-      const currentDir = currentFile.substring(0, currentFile.lastIndexOf('/')) || '';
-      const parts = cleanPath.split('/');
-      const resolvedParts = currentDir.split('/').filter(Boolean);
-
-      for (const part of parts) {
-        if (part === '.') continue;
-        if (part === '..') resolvedParts.pop();
-        else resolvedParts.push(part);
-      }
-
-      cleanPath = '/' + resolvedParts.join('/');
-    }
-
-    if (!cleanPath.startsWith('/')) cleanPath = '/' + cleanPath;
-    if (files[cleanPath]) return cleanPath;
-
-    for (const ext of ['', '.js', '.jsx', '.ts', '.tsx', '.json']) {
-      if (files[cleanPath + ext]) return cleanPath + ext;
-    }
-
-    for (const idx of ['/index.js', '/index.jsx', '/index.ts', '/index.tsx']) {
-      if (files[cleanPath + idx]) return cleanPath + idx;
-    }
-
-    return null;
-  };
-
-  const stripImportsExports = (content: string, filePath: string): string => {
-    let result = content;
-    const fileName = filePath.split('/').pop()?.replace(/\.(js|jsx|ts|tsx)$/, '') || 'Component';
-
-    const convertNamedImports = (value: string) => value
-      .trim()
-      .replace(/^\{/, '')
-      .replace(/\}$/, '')
-      .split(',')
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => part.replace(/\s+as\s+/g, ': '))
-      .join(', ');
-
-    const buildGlobalImport = (specifiers: string, source: string) => {
-      const trimmed = specifiers.trim();
-      const makeDeclarations = (globalExpr: string) => {
-        const declarations: string[] = [];
-
-        if (trimmed.startsWith('{')) {
-          declarations.push(`var { ${convertNamedImports(trimmed)} } = ${globalExpr};`);
-          return declarations.join('\n');
-        }
-
-        if (trimmed.startsWith('* as ')) {
-          declarations.push(`var ${trimmed.replace('* as ', '').trim()} = ${globalExpr};`);
-          return declarations.join('\n');
-        }
-
-        if (trimmed.includes(',')) {
-          const commaIndex = trimmed.indexOf(',');
-          const defaultImport = trimmed.slice(0, commaIndex).trim();
-          const rest = trimmed.slice(commaIndex + 1).trim();
-          if (defaultImport) {
-            declarations.push(`var ${defaultImport} = ${globalExpr};`);
-          }
-          if (rest.startsWith('{')) {
-            declarations.push(`var { ${convertNamedImports(rest)} } = ${globalExpr};`);
-          } else if (rest.startsWith('* as ')) {
-            declarations.push(`var ${rest.replace('* as ', '').trim()} = ${globalExpr};`);
-          }
-          return declarations.join('\n');
-        }
-
-        declarations.push(`var ${trimmed} = ${globalExpr};`);
-        return declarations.join('\n');
-      };
-
-      if (source === 'react') return makeDeclarations('window.React');
-      if (source === 'react-dom') return makeDeclarations('window.ReactDOM');
-      if (source === 'framer-motion') return makeDeclarations('(window.FramerMotion || window.Motion || {})');
-      if (source === 'lucide-react') return makeDeclarations('(window.__lucideIcons || window.lucide || {})');
-      if (source === 'recharts') return makeDeclarations('(window.Recharts || {})');
-
-      return '';
-    };
-
-    result = result.replace(/^import\s+(.+?)\s+from\s+['"]([^'"]+)['"];?\s*$/gm, (_match, specifiers, source) => {
-      if (source.startsWith('.') || source.startsWith('/')) {
-        return '';
-      }
-
-      return buildGlobalImport(specifiers, source);
-    });
-    result = result.replace(/^import\s+['"][^'"]*['"];?\s*$/gm, '');
-    result = result.replace(/export\s+default\s+function\s+(\w+)/g, 'function $1');
-    result = result.replace(/export\s+default\s+function\s*\(/g, `function ${fileName}(`);
-    result = result.replace(/export\s+default\s+\(\s*\)\s*=>/g, `const ${fileName} = () =>`);
-    result = result.replace(/export\s+default\s+\(([^)]*)\)\s*=>/g, `const ${fileName} = ($1) =>`);
-    result = result.replace(/export\s+default\s+(\w+)\s*;?/g, '');
-    result = result.replace(/export\s+function\s+/g, 'function ');
-    result = result.replace(/export\s+const\s+/g, 'const ');
-    result = result.replace(/export\s+(let|var)\s+/g, '$1 ');
-    result = result.replace(/export\s+\{[^}]*\}\s*;?/g, '');
-    result = result.replace(/\n{3,}/g, '\n\n');
-
-    if (filePath === entryPoint) {
-      result += `\n\nwindow.App = typeof App !== 'undefined' ? App : (typeof ${entryBaseName} !== 'undefined' ? ${entryBaseName} : window.App);`;
-    }
-
-    return result.trim();
-  };
-
-  const jsOrder: string[] = [];
-
-  const processJsFile = (filePath: string) => {
-    if (processedFiles.has(filePath)) return;
-    if (!files[filePath]) return;
-    if (!filePath.match(/\.(js|jsx|ts|tsx)$/)) return;
-
-    processedFiles.add(filePath);
-    const content = files[filePath];
-    const fromImports = content.matchAll(/import\s+(?:[\s\S]*?)\s*from\s+['"]([^'"]+)['"]/g);
-    const sideEffectImports = content.matchAll(/import\s+['"]([^'"]+)['"]\s*;?/g);
-    const allImportPaths = new Set<string>();
-
-    for (const match of fromImports) {
-      const importPath = match[1];
-      if (importPath.startsWith('.') || importPath.startsWith('/')) {
-        allImportPaths.add(importPath);
-      }
-    }
-
-    for (const match of sideEffectImports) {
-      const importPath = match[1];
-      if (importPath.startsWith('.') || importPath.startsWith('/')) {
-        allImportPaths.add(importPath);
-      }
-    }
-
-    for (const importPath of allImportPaths) {
-      const resolved = resolveImportPath(importPath, filePath);
-      if (resolved && !processedFiles.has(resolved)) {
-        processJsFile(resolved);
-      }
-    }
-
-    jsOrder.push(filePath);
-  };
-
-  processJsFile(entryPoint);
-
-  for (const filePath of Object.keys(files)) {
-    if (filePath.match(/\.(js|jsx|ts|tsx)$/) && !processedFiles.has(filePath)) {
-      processJsFile(filePath);
-    }
-  }
-
-  if (jsonVars.length > 0) {
-    allJs.push(...jsonVars);
-  }
-
-  for (const filePath of jsOrder) {
-    const content = files[filePath];
-    if (content) {
-      allJs.push(stripImportsExports(content, filePath));
-    }
-  }
-
-  const bundledCss = allCss.join('\n\n');
-  const cssInjectionScript = bundledCss.length > 0
-    ? `(function(){const style=document.createElement('style');style.textContent=${JSON.stringify(bundledCss)};document.head.appendChild(style);}());`
-    : '';
-
-  return {
-    js: `${cssInjectionScript}\n\n${allJs.join('\n\n')}`,
-    css: '',
-  };
-}
-
-function toLiveFiles(files: Record<string, any>): Record<string, string> {
+function toLiveFiles(files: Record<string, SandpackLiveFile>): Record<string, string> {
   return Object.entries(files).reduce<Record<string, string>>((acc, [path, file]) => {
     if (path.startsWith('/node_modules/')) {
       return acc;
@@ -257,9 +52,8 @@ export default function RunnerPreview({
   const [status, setStatus] = useState<RunnerStatus>('idle');
   const [errorMessage, setErrorMessage] = useState('');
   const [frameSrc, setFrameSrc] = useState('');
-  const [frameHtml, setFrameHtml] = useState('');
 
-  const liveFiles = useMemo(() => toLiveFiles(sandpack.files as Record<string, any>), [sandpack.files]);
+  const liveFiles = useMemo(() => toLiveFiles(sandpack.files as Record<string, SandpackLiveFile>), [sandpack.files]);
   const filesFingerprint = useMemo(
     () => Object.entries(liveFiles)
       .sort(([a], [b]) => a.localeCompare(b))
@@ -333,7 +127,6 @@ export default function RunnerPreview({
 
         setStatus('loading-frame');
         setFrameSrc(`${sessionData.url}${sessionData.url.includes('?') ? '&' : '?'}t=${Date.now()}`);
-        setFrameHtml('');
 
         if (readyTimeoutRef.current) {
           window.clearTimeout(readyTimeoutRef.current);
@@ -435,17 +228,6 @@ export default function RunnerPreview({
         <iframe
           ref={iframeRef}
           src={frameSrc}
-          srcDoc={frameHtml || undefined}
-          title="Wakti Preview Runner"
-          className="h-full w-full border-0 bg-white"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"
-        />
-      )}
-
-      {!frameSrc && frameHtml && (
-        <iframe
-          ref={iframeRef}
-          srcDoc={frameHtml}
           title="Wakti Preview Runner"
           className="h-full w-full border-0 bg-white"
           sandbox="allow-scripts allow-same-origin allow-forms allow-modals allow-popups"

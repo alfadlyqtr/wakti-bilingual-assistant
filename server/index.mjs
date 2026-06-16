@@ -10,6 +10,9 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import Anthropic from '@anthropic-ai/sdk';
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+import { buildProjectPreviewSession, getPreviewSession, getPreviewSessionAsset } from './project-preview.mjs';
 
 const execFileAsync = promisify(execFile);
 
@@ -41,6 +44,7 @@ app.use((error, req, res, next) => {
 });
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 function buildSystemPrompt(language, personalTouch) {
   const pt = personalTouch || {};
@@ -378,6 +382,53 @@ app.post('/api/music/to-mp4', async (req, res) => {
   } finally {
     try { await rm(workDir, { recursive: true, force: true }); } catch {}
   }
+});
+
+app.post('/api/project-preview/build-sessions', async (req, res) => {
+  try {
+    const { files, entryPoint, projectId, projectName, ttlSeconds } = req.body || {};
+
+    if (!files || typeof files !== 'object' || Array.isArray(files)) {
+      return res.status(400).json({ error: 'files must be an object map of project files' });
+    }
+
+    const session = await buildProjectPreviewSession({
+      files,
+      entryPoint,
+      ttlSeconds,
+      projectId,
+      projectName,
+      workspaceRoot,
+    });
+
+    return res.status(200).json(session);
+  } catch (err) {
+    console.error('[project-preview/build-sessions] failed', err);
+    return res.status(500).json({ error: err?.message || 'preview_build_failed' });
+  }
+});
+
+app.get('/api/project-preview/sessions/:sessionId', (req, res) => {
+  const session = getPreviewSession(req.params.sessionId);
+  if (!session) {
+    return res.status(404).send('Preview session not found');
+  }
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(200).send(session.html);
+});
+
+app.get('/api/project-preview/sessions/:sessionId/assets/*', (req, res) => {
+  const assetPath = req.params[0];
+  const asset = getPreviewSessionAsset(req.params.sessionId, assetPath);
+  if (!asset) {
+    return res.status(404).send('Preview asset not found');
+  }
+
+  res.setHeader('Content-Type', asset.contentType || 'application/octet-stream');
+  res.setHeader('Cache-Control', 'no-store');
+  return res.status(200).send(asset.contents);
 });
 
 const PORT = process.env.PORT || 3000;

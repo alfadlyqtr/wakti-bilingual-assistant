@@ -199,6 +199,70 @@ export const SANDPACK_DEPENDENCIES: Record<string, string> = Object.fromEntries(
 /** Flat list of allowed package names (for prompt injection / validation). */
 export const ALLOWED_PACKAGE_NAMES: string[] = SANDPACK_PACKAGES.map((p) => p.name);
 
+type SandpackSignaturePackage = Pick<SandpackPackage, 'name' | 'version'>;
+
+function buildSandpackPackagesSignature(packages: SandpackSignaturePackage[]): string {
+  return packages
+    .map((pkg) => `${pkg.name}@${pkg.version}`)
+    .sort((a, b) => a.localeCompare(b))
+    .join('|');
+}
+
+function extractSandpackPackagesFromSource(source: string): SandpackSignaturePackage[] {
+  const packages: SandpackSignaturePackage[] = [];
+  const packageRegex = /\{\s*name:\s*['"]([^'"]+)['"]\s*,\s*version:\s*['"]([^'"]+)['"]/g;
+
+  let match: RegExpExecArray | null;
+  while ((match = packageRegex.exec(source)) !== null) {
+    packages.push({ name: match[1], version: match[2] });
+  }
+
+  return packages;
+}
+
+export const SANDPACK_PACKAGES_SIGNATURE = buildSandpackPackagesSignature(SANDPACK_PACKAGES);
+
+let mirrorDriftCheckPromise: Promise<void> | null = null;
+
+export async function assertSandpackPackagesInSync(): Promise<void> {
+  if (!import.meta.env.DEV) return;
+  if (mirrorDriftCheckPromise) return mirrorDriftCheckPromise;
+
+  mirrorDriftCheckPromise = (async () => {
+    const mirrorModule = await import('../../supabase/functions/_shared/sandpackPackages.ts?raw');
+    const mirrorSource = typeof mirrorModule.default === 'string' ? mirrorModule.default : '';
+    const mirrorPackages = extractSandpackPackagesFromSource(mirrorSource);
+
+    if (mirrorPackages.length === 0) {
+      throw new Error('Sandpack package mirror check failed: could not parse mirror package list.');
+    }
+
+    const mirrorSignature = buildSandpackPackagesSignature(mirrorPackages);
+    if (mirrorSignature === SANDPACK_PACKAGES_SIGNATURE) return;
+
+    const frontendSet = new Set(SANDPACK_PACKAGES.map((pkg) => `${pkg.name}@${pkg.version}`));
+    const mirrorSet = new Set(mirrorPackages.map((pkg) => `${pkg.name}@${pkg.version}`));
+
+    const frontendOnly = [...frontendSet].filter((entry) => !mirrorSet.has(entry)).slice(0, 8);
+    const mirrorOnly = [...mirrorSet].filter((entry) => !frontendSet.has(entry)).slice(0, 8);
+
+    const mismatchDetails = [
+      frontendOnly.length > 0 ? `frontend-only: ${frontendOnly.join(', ')}` : null,
+      mirrorOnly.length > 0 ? `mirror-only: ${mirrorOnly.join(', ')}` : null,
+    ]
+      .filter(Boolean)
+      .join(' | ');
+
+    throw new Error(
+      `Sandpack package drift detected between frontend and edge mirror.${
+        mismatchDetails ? ` ${mismatchDetails}` : ''
+      }`,
+    );
+  })();
+
+  return mirrorDriftCheckPromise;
+}
+
 /**
  * Returns the root package name from an import path.
  *   'lodash/debounce'        → 'lodash'

@@ -118,6 +118,7 @@ interface EdgeJobStatus {
   error?: string;
   result_summary?: string;
   created_at?: string;
+  prompt?: string;
 }
 
 interface EdgeStatusResponse {
@@ -281,13 +282,34 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
     return /504|timeout|gateway|failed to fetch|err_failed|network|cors|aborted/i.test(message);
   }, []);
 
-  const findRecentAgentJob = useCallback(async (startedAtMs: number): Promise<EdgeJobStatus | null> => {
+  const normalizePromptForMatching = useCallback((value: string): string => {
+    return value
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }, []);
+
+  const getPromptTokens = useCallback((value: string): string[] => {
+    const normalized = normalizePromptForMatching(value);
+    if (!normalized) return [];
+
+    const uniqueTokens = new Set<string>();
+    for (const token of normalized.split(' ')) {
+      if (token.length < 4) continue;
+      uniqueTokens.add(token);
+      if (uniqueTokens.size >= 8) break;
+    }
+
+    return [...uniqueTokens];
+  }, [normalizePromptForMatching]);
+
+  const findRecentAgentJob = useCallback(async (startedAtMs: number, promptForMatch: string): Promise<EdgeJobStatus | null> => {
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     const thresholdIso = new Date(startedAtMs - 15000).toISOString();
     const { data, error } = await (supabase
       .from('project_generation_jobs' as any)
-      .select('id, status, error, result_summary, created_at')
+      .select('id, status, error, result_summary, created_at, prompt')
       .eq('project_id', projectId)
       .eq('mode', 'edit')
       .gte('created_at', thresholdIso)
@@ -299,9 +321,33 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
       return null;
     }
 
+    const promptTokens = getPromptTokens(promptForMatch);
+    if (promptTokens.length === 0) {
+      return null;
+    }
+
     const rows = (data || []) as EdgeJobStatus[];
-    return rows.find((job) => typeof job.id === 'string' && job.id.length > 0) || null;
-  }, [projectId]);
+    const bestMatch = rows
+      .filter((job) => typeof job.id === 'string' && job.id.length > 0)
+      .map((job) => {
+        const normalizedJobPrompt = normalizePromptForMatching(job.prompt || '');
+        const score = promptTokens.reduce((acc, token) => (
+          normalizedJobPrompt.includes(token) ? acc + 1 : acc
+        ), 0);
+
+        return { job, score };
+      })
+      .sort((a, b) => b.score - a.score)[0];
+
+    if (!bestMatch) return null;
+
+    const minimumRequiredScore = Math.min(2, promptTokens.length);
+    if (bestMatch.score < minimumRequiredScore) {
+      return null;
+    }
+
+    return bestMatch.job;
+  }, [getPromptTokens, normalizePromptForMatching, projectId]);
 
   const runAgent = useCallback(
     async (
@@ -357,7 +403,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
               throw new Error(startMessage);
             }
 
-            recoveredJob = await findRecentAgentJob(startAttemptedAt);
+            recoveredJob = await findRecentAgentJob(startAttemptedAt, prompt);
             if (!recoveredJob?.id) {
               throw new Error(startMessage);
             }
@@ -377,7 +423,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
             throw startErr;
           }
 
-          recoveredJob = await findRecentAgentJob(startAttemptedAt);
+          recoveredJob = await findRecentAgentJob(startAttemptedAt, prompt);
           if (!recoveredJob?.id) {
             throw startErr;
           }

@@ -143,6 +143,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const assistantPlaybackLockUntilRef = useRef(0);
   const syncedTurnIdsRef = useRef<Set<string>>(new Set());
   const turnCounterRef = useRef(0);
+  const pendingAutoStartAfterConnectRef = useRef(false);
+  const startRecordingRef = useRef<(() => void) | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -1085,6 +1087,12 @@ ${memoryContext ? memoryContext : ''}`
         
         setIsConnectionReady(true);
         setStatus('ready');
+        if (pendingAutoStartAfterConnectRef.current) {
+          pendingAutoStartAfterConnectRef.current = false;
+          setTimeout(() => {
+            startRecordingRef.current?.();
+          }, 80);
+        }
         
         // Start continuous mic level animation
         startMicLevelAnimation();
@@ -1182,16 +1190,15 @@ ${memoryContext ? memoryContext : ''}`
   // Initialize connection when Talk bubble opens or engine changes
   useEffect(() => {
     if (isOpen) {
+      setStatus('ready');
+      setError(null);
+      setIsConnectionReady(false);
       // Kick off helpful-memory fetch in parallel — it's read-only in Talk and
       // non-blocking: if it resolves before session.update, great; if not, the
       // block is simply empty for the first turn and refreshed on later turns.
       loadHelpfulMemoryForTalk().catch(() => { /* silent — best-effort */ });
-      // Small delay to allow userName fetch to complete
-      const timer = setTimeout(() => {
-        initializeConnection();
-      }, 100);
-      return () => clearTimeout(timer);
     } else {
+      pendingAutoStartAfterConnectRef.current = false;
       flushConversationToChat(true);
       helpfulMemoryBlockRef.current = '';
       cleanup();
@@ -1556,31 +1563,42 @@ ${memoryContext ? memoryContext : ''}`
     rearmListening();
   }, [isConnectionReady, language, rearmListening]);
 
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+  }, [startRecording]);
+
   const handleEndConversation = useCallback(() => {
+    pendingAutoStartAfterConnectRef.current = false;
     flushConversationToChat(true);
     stopRecording();
     onClose();
   }, [flushConversationToChat, onClose, stopRecording]);
 
-  // Hold handlers
-  const handleHoldStart = useCallback(() => {
-    if (status === 'ready' && isConnectionReady && !isConversationActive) {
-      setError(null);
+  const handleTalkButtonPress = useCallback(() => {
+    if (status === 'connecting' || status === 'processing' || status === 'speaking') {
+      return;
+    }
+
+    setError(null);
+
+    if (!isConnectionReady) {
+      pendingAutoStartAfterConnectRef.current = true;
+      initializeConnection();
+      return;
+    }
+
+    if (!isConversationActive) {
       startRecording();
     }
-  }, [isConnectionReady, isConversationActive, startRecording, status]);
-
-  const handleHoldEnd = useCallback(() => {
-    if (isConversationActive && status === 'ready') {
-      stopRecording();
-    }
-  }, [isConversationActive, status, stopRecording]);
+  }, [initializeConnection, isConnectionReady, isConversationActive, startRecording, status]);
 
   if (!isOpen) return null;
 
   const statusText: Record<typeof status, string> = {
     connecting: language === 'ar' ? 'جارٍ الاتصال...' : 'Connecting...',
-    ready: language === 'ar' ? 'اضغط لبدء المحادثة' : 'Tap to start conversation',
+    ready: isConnectionReady
+      ? (language === 'ar' ? 'اضغط لبدء المحادثة' : 'Tap to start conversation')
+      : (language === 'ar' ? 'اضغط للاتصال' : 'Tap to connect'),
     listening: language === 'ar' ? 'أسمعك...' : 'Listening...',
     processing: language === 'ar' ? 'جارٍ التفكير...' : 'Thinking...',
     speaking: language === 'ar' ? 'Wakti يتحدث...' : 'Wakti speaking...',
@@ -1945,9 +1963,9 @@ ${memoryContext ? memoryContext : ''}`
           <div className="plasma plasma-4"></div>
           
           <button
-            onClick={handleHoldStart}
+            onClick={handleTalkButtonPress}
             onContextMenu={(e) => e.preventDefault()}
-            disabled={!isConnectionReady || status === 'processing' || status === 'speaking' || status === 'connecting'}
+            disabled={status === 'processing' || status === 'speaking' || status === 'connecting'}
             className="voice-orb touch-none"
             aria-label={statusText[status]}
           >
@@ -1968,7 +1986,9 @@ ${memoryContext ? memoryContext : ''}`
         <p className={`text-sm text-center max-w-[240px] select-none ${theme === 'dark' ? 'text-white/60' : 'text-[#060541]/60'}`}>
           {isConversationActive
             ? t('Speak naturally. I will wait for you, then answer, then listen again.', 'تحدث بشكل طبيعي. سأنتظر حتى تنتهي، ثم أرد، ثم أعود للاستماع.')
-            : t('Tap once to start a natural conversation', 'اضغط مرة واحدة لبدء محادثة طبيعية')}
+            : isConnectionReady
+              ? t('Tap once to start a natural conversation', 'اضغط مرة واحدة لبدء محادثة طبيعية')
+              : t('Tap once to connect and start', 'اضغط مرة واحدة للاتصال والبدء')}
         </p>
 
         {/* Countdown when recording */}

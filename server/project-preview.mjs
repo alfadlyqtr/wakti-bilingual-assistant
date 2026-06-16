@@ -278,24 +278,34 @@ function buildSessionHtml({ sessionId, projectName, entryScriptPath, cssPaths })
 </head>
 <body>
   <div id="root"></div>
-  <script type="module" onload="window.__waktiPreviewLoadedOk()">
+  <script type="module">
     import React from 'react';
     import { createRoot } from 'react-dom/client';
-    import App from '/api/project-preview/sessions/${sessionId}/assets/${entryScriptPath}';
-    
-    try {
-      const rootElement = document.getElementById('root');
-      const root = createRoot(rootElement);
-      root.render(React.createElement(App));
-      window.__waktiPreviewLoadedOk();
-    } catch (err) {
-      console.error('[Wakti Boot Error]', err);
-      window.parent.postMessage({
-        source: 'wakti-preview-runner',
-        type: 'error',
-        payload: { message: err?.message || String(err) }
-      }, '*');
-    }
+
+    (async () => {
+      try {
+        const appModule = await import('/api/project-preview/sessions/${sessionId}/assets/${entryScriptPath}');
+        const App = appModule?.default;
+        if (!App) {
+          throw new Error('Preview entry module does not export a default component');
+        }
+
+        const rootElement = document.getElementById('root');
+        if (!rootElement) {
+          throw new Error('Preview root element was not found');
+        }
+
+        const root = createRoot(rootElement);
+        root.render(React.createElement(App));
+        window.__waktiPreviewLoadedOk();
+      } catch (err) {
+        console.error('[Wakti Boot Error]', err);
+        waktiRunnerNotify('error', {
+          message: err?.message || String(err),
+          stack: err?.stack || ''
+        });
+      }
+    })();
   </script>
 </body>
 </html>`;
