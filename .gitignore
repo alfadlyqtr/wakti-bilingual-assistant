@@ -30,3 +30,4 @@ dist-ssr
 
 # Generated self-hosted Sandpack bundler (run `npm run bundler:prepare`)
 wakti-sandpack-bundler/
+.tmp-sandpack-bundler/
