@@ -106,28 +106,28 @@ function sanitizeModernWidgetOrder(raw: unknown): ModernWidgetKey[] {
 // --- App lists ---------------------------------------------------------------
 
 const CREATION_APPS: AppItem[] = [
-  { id: "projects", nameEn: "Code", nameAr: "???????", path: "/projects", icon: Code2, accent: "#60a5fa", glow: "rgba(96,165,250,0.26)" },
-  { id: "studio", nameEn: "Studio", nameAr: "?????????", path: "/music", icon: Aperture, accent: "#34d399", glow: "rgba(52,211,153,0.24)" },
-  { id: "text", nameEn: "Text", nameAr: "????", path: "/tools/text", icon: PenTool, accent: "#f59e0b", glow: "rgba(245,158,11,0.24)" },
-  { id: "voice", nameEn: "Voice", nameAr: "?????", path: "/tools/voice-studio", icon: Mic, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
-  { id: "maw3d", nameEn: "Maw3d", nameAr: "??????", path: "/maw3d", icon: CalendarClock, accent: "#fb923c", glow: "rgba(251,146,60,0.24)" },
+  { id: "projects", nameEn: "Code", nameAr: "البرمجة", path: "/projects", icon: Code2, accent: "#60a5fa", glow: "rgba(96,165,250,0.26)" },
+  { id: "studio", nameEn: "Studio", nameAr: "الاستوديو", path: "/music", icon: Aperture, accent: "#34d399", glow: "rgba(52,211,153,0.24)" },
+  { id: "text", nameEn: "Text", nameAr: "نص", path: "/tools/text", icon: PenTool, accent: "#f59e0b", glow: "rgba(245,158,11,0.24)" },
+  { id: "voice", nameEn: "Voice", nameAr: "صوت", path: "/tools/voice-studio", icon: Mic, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
+  { id: "maw3d", nameEn: "Maw3d", nameAr: "مواعيد", path: "/maw3d", icon: CalendarClock, accent: "#fb923c", glow: "rgba(251,146,60,0.24)" },
 ];
 
 const SYSTEM_APPS: AppItem[] = [
-  { id: "settings", nameEn: "Settings", nameAr: "?????????", path: "/settings", icon: Settings, accent: "#60a5fa", glow: "rgba(96,165,250,0.24)" },
-  { id: "help", nameEn: "Help", nameAr: "????????", path: "/help", icon: HelpCircle, accent: "#4ade80", glow: "rgba(74,222,128,0.24)" },
+  { id: "settings", nameEn: "Settings", nameAr: "الإعدادات", path: "/settings", icon: Settings, accent: "#60a5fa", glow: "rgba(96,165,250,0.24)" },
+  { id: "help", nameEn: "Help", nameAr: "المساعدة", path: "/help", icon: HelpCircle, accent: "#4ade80", glow: "rgba(74,222,128,0.24)" },
 ];
 
 const PRODUCTIVITY_APPS: AppItem[] = [
-  { id: "my-files", nameEn: "My Files", nameAr: "??????", path: "/my-warranty", icon: FolderOpen, accent: "#10b981", glow: "rgba(16,185,129,0.24)" },
-  { id: "journal", nameEn: "Journal", nameAr: "???????", path: "/journal", icon: NotebookPen, accent: "#f59e0b", glow: "rgba(245,158,11,0.24)" },
-  { id: "calendar", nameEn: "Calendar", nameAr: "???????", path: "/calendar", icon: Calendar, accent: "#38bdf8", glow: "rgba(56,189,248,0.24)" },
-  { id: "tasks", nameEn: "Tasks", nameAr: "??????", path: "/tr", icon: ListTodo, accent: "#22c55e", glow: "rgba(34,197,94,0.24)" },
-  { id: "email", nameEn: "Email", nameAr: "??????", path: "/tools/email", icon: Mail, accent: "#fbbf24", glow: "rgba(251,191,36,0.24)" },
-  { id: "social", nameEn: "Social", nameAr: "??????", path: "/social", icon: MessageCircle, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
-  { id: "vitality", nameEn: "Health", nameAr: "?????", path: "/fitness", icon: Activity, accent: "#84cc16", glow: "rgba(132,204,22,0.24)" },
-  { id: "games", nameEn: "Games", nameAr: "???????", path: "/tools/game", icon: Gamepad2, accent: "#f97316", glow: "rgba(249,115,22,0.24)" },
-  { id: "deen", nameEn: "Deen", nameAr: "???", path: "/deen", icon: BookOpen, accent: "#818cf8", glow: "rgba(129,140,248,0.24)" },
+  { id: "my-files", nameEn: "My Files", nameAr: "ملفاتي", path: "/my-warranty", icon: FolderOpen, accent: "#10b981", glow: "rgba(16,185,129,0.24)" },
+  { id: "journal", nameEn: "Journal", nameAr: "اليومية", path: "/journal", icon: NotebookPen, accent: "#f59e0b", glow: "rgba(245,158,11,0.24)" },
+  { id: "calendar", nameEn: "Calendar", nameAr: "التقويم", path: "/calendar", icon: Calendar, accent: "#38bdf8", glow: "rgba(56,189,248,0.24)" },
+  { id: "tasks", nameEn: "Tasks", nameAr: "المهام", path: "/tr", icon: ListTodo, accent: "#22c55e", glow: "rgba(34,197,94,0.24)" },
+  { id: "email", nameEn: "Email", nameAr: "البريد", path: "/tools/email", icon: Mail, accent: "#fbbf24", glow: "rgba(251,191,36,0.24)" },
+  { id: "social", nameEn: "Social", nameAr: "التواصل", path: "/social", icon: MessageCircle, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
+  { id: "vitality", nameEn: "Health", nameAr: "الصحة", path: "/fitness", icon: Activity, accent: "#84cc16", glow: "rgba(132,204,22,0.24)" },
+  { id: "games", nameEn: "Games", nameAr: "الألعاب", path: "/tools/game", icon: Gamepad2, accent: "#f97316", glow: "rgba(249,115,22,0.24)" },
+  { id: "deen", nameEn: "Deen", nameAr: "دين", path: "/deen", icon: BookOpen, accent: "#818cf8", glow: "rgba(129,140,248,0.24)" },
 ];
 
 type AppCircleProps = {
