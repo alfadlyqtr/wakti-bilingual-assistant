@@ -4,7 +4,7 @@
  * Displays chat with a contact in full-screen with back navigation
  */
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, CheckCheck, X, Reply, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, CheckCheck, X, Reply, Trash2 } from "lucide-react";
 import type { DirectMessage } from "@/services/messageService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMessages, sendMessage, markAsRead, uploadMessageAttachment, addReaction, removeReaction, deleteMessage } from "@/services/messageService";
@@ -58,14 +58,26 @@ export default function ChatPage() {
   const [selectedMessageRect, setSelectedMessageRect] = useState<{ top: number; left: number; width: number; height: number; right: number; } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const hasScrolledToUnreadRef = useRef(false);
+  const isNearBottomRef = useRef(true);
+  const initialScrollDoneRef = useRef(false);
+  const unreadMessageIdRef = useRef<string | null>(null);
+  const unreadDividerRef = useCallback((node: HTMLDivElement | null) => {
+    if (node && !hasScrolledToUnreadRef.current) {
+      node.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
+      hasScrolledToUnreadRef.current = true;
+    }
+  }, []);
 
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
 
   // Presence and typing indicators
-  const { isOnline, isTyping, getLastSeen, setUserTyping, setExternalLastSeen } = usePresence(currentUserId);
+  const { isOnline, getLastSeen, setExternalLastSeen } = usePresence(currentUserId);
   const [isContactTyping, setIsContactTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const isContactOnline = contactId ? isOnline(contactId) : false;
   const entrySource = searchParams.get("from");
 
@@ -77,9 +89,11 @@ export default function ChatPage() {
     setSearchParams(nextParams, { replace: true });
   }, [operatorPayloadId, searchParams, setSearchParams]);
 
-  // Auto scroll to bottom on new messages
+  // Scroll to bottom and hide button
   const scrollToBottom = () => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setShowScrollToBottom(false);
+    isNearBottomRef.current = true;
   };
 
   // Get current user ID
@@ -169,12 +183,56 @@ export default function ChatPage() {
     // refetchOnWindowFocus stays default (true) as a safety net if realtime drops.
   });
 
-  // Auto scroll when messages change
+  // Reset scroll/unread flags when switching contact
   useEffect(() => {
-    if (allMessages && allMessages.length > 0) {
-      setTimeout(scrollToBottom, 100);
-    }
-  }, [allMessages]);
+    if (!contactId) return;
+    initialScrollDoneRef.current = false;
+    hasScrolledToUnreadRef.current = false;
+    unreadMessageIdRef.current = null;
+    isNearBottomRef.current = true;
+    setShowScrollToBottom(false);
+    setIsContactTyping(false);
+  }, [contactId]);
+
+  // Typing indicator: shared broadcast channel between both users
+  useEffect(() => {
+    if (!currentUserId || !contactId) return;
+    const channelName = `direct-typing-${[currentUserId, contactId].sort().join('-')}`;
+    const channel = supabase.channel(channelName);
+    typingChannelRef.current = channel;
+    channel
+      .on('broadcast', { event: 'typing' }, (event: any) => {
+        const payload = event.payload;
+        if (!payload || payload.user_id === currentUserId) return;
+        if (payload.typing) {
+          setIsContactTyping(true);
+        } else {
+          setIsContactTyping(false);
+        }
+      })
+      .subscribe();
+    return () => {
+      typingChannelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [currentUserId, contactId]);
+
+  // Safety: clear typing if no update for 5s
+  useEffect(() => {
+    if (!isContactTyping) return;
+    const safety = setTimeout(() => setIsContactTyping(false), 5000);
+    return () => clearTimeout(safety);
+  }, [isContactTyping]);
+
+  // Capture first unread message on first load
+  useEffect(() => {
+    if (!allMessages?.length || !contactId) return;
+    if (unreadMessageIdRef.current !== null) return;
+    const firstUnread = allMessages.find(
+      (m) => m.sender_id === contactId && !m.is_read
+    );
+    unreadMessageIdRef.current = firstUnread?.id || null;
+  }, [allMessages, contactId]);
 
   // Mark messages as read when viewing
   useEffect(() => {
@@ -183,21 +241,61 @@ export default function ChatPage() {
     }
   }, [contactId, currentUserId, allMessages]);
 
+  // Auto scroll on first load and new messages
+  useEffect(() => {
+    if (!allMessages?.length || !messageEndRef.current) return;
+    if (!initialScrollDoneRef.current) {
+      setTimeout(() => {
+        if (!hasScrolledToUnreadRef.current) {
+          messageEndRef.current?.scrollIntoView({ behavior: "auto" });
+        }
+        initialScrollDoneRef.current = true;
+      }, 0);
+    } else if (isNearBottomRef.current) {
+      messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [allMessages]);
+
+  // Detect when user scrolls away from bottom using IntersectionObserver
+  useEffect(() => {
+    const endNode = messageEndRef.current;
+    if (!endNode) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const isVisible = entry.isIntersecting;
+        isNearBottomRef.current = isVisible;
+        setShowScrollToBottom(!isVisible);
+      },
+      { threshold: 0 }
+    );
+    observer.observe(endNode);
+    return () => observer.disconnect();
+  }, [allMessages]);
+
+  // Broadcast typing status to shared channel
+  const broadcastTyping = useCallback((typing: boolean) => {
+    const ch = typingChannelRef.current;
+    if (!ch || !currentUserId) return;
+    try {
+      ch.send({ type: 'broadcast', event: 'typing', payload: { user_id: currentUserId, typing } });
+    } catch {}
+  }, [currentUserId]);
+
   // Handle typing indicator
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const text = e.target.value;
     setMessageText(text);
-    
-    if (text.length === 1) {
-      setUserTyping(true);
+
+    if (text.length >= 1) {
+      broadcastTyping(true);
     }
-    
+
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
-    
+
     typingTimeoutRef.current = setTimeout(() => {
-      setUserTyping(false);
+      broadcastTyping(false);
     }, 2000);
   };
   
@@ -547,7 +645,6 @@ export default function ChatPage() {
 
     return (
       <motion.div
-        key={message.id}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
@@ -883,9 +980,49 @@ export default function ChatPage() {
               <div className="space-y-1 py-2">
                 <AnimatePresence>
                   {allMessages.map((message, index) => (
-                    renderMessage(message, index, allMessages)
+                    <Fragment key={message.id}>
+                      {unreadMessageIdRef.current === message.id && (
+                        <div ref={unreadDividerRef} className="my-2 flex items-center gap-3 px-1">
+                          <div className="h-px flex-1 bg-border/80" />
+                          <span className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(210_100%_55%)]">
+                            {language === "ar" ? "رسائل غير مقروءة" : "Unread messages"}
+                          </span>
+                          <div className="h-px flex-1 bg-border/80" />
+                        </div>
+                      )}
+                      {renderMessage(message, index, allMessages)}
+                    </Fragment>
                   ))}
                 </AnimatePresence>
+
+                {/* Contact typing indicator */}
+                {isContactTyping && (
+                  <div className="flex justify-start mb-2">
+                    <div className="flex items-end gap-2 max-w-[80%]">
+                      <div className="w-8 flex-shrink-0"></div>
+                      <div className={`flex flex-col rounded-2xl rounded-bl-sm px-4 py-3 ${isDark ? 'bg-dark-secondary/60 text-white' : 'bg-light-secondary/40 text-light-primary'}`}>
+                        <div className="flex gap-1 items-center h-4">
+                          <motion.span
+                            className={`h-2 w-2 rounded-full ${isDark ? 'bg-gray-400' : 'bg-gray-500'}`}
+                            animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
+                            transition={{ duration: 1.4, repeat: Infinity, delay: 0, ease: "easeInOut" }}
+                          />
+                          <motion.span
+                            className={`h-2 w-2 rounded-full ${isDark ? 'bg-gray-400' : 'bg-gray-500'}`}
+                            animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
+                            transition={{ duration: 1.4, repeat: Infinity, delay: 0.15, ease: "easeInOut" }}
+                          />
+                          <motion.span
+                            className={`h-2 w-2 rounded-full ${isDark ? 'bg-gray-400' : 'bg-gray-500'}`}
+                            animate={{ y: [0, -4, 0], opacity: [0.4, 1, 0.4] }}
+                            transition={{ duration: 1.4, repeat: Infinity, delay: 0.3, ease: "easeInOut" }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div ref={messageEndRef} />
               </div>
             </div>
@@ -899,6 +1036,21 @@ export default function ChatPage() {
           </div>
         )}
       </ScrollArea>
+
+      {/* Scroll-to-bottom button */}
+      {showScrollToBottom && allMessages && allMessages.length > 0 && (
+        <button
+          onClick={scrollToBottom}
+          className={`fixed bottom-20 right-4 z-50 flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-all active:scale-95 border ${
+            isDark
+              ? 'bg-[hsl(240_1%_38%)]/90 text-[#f2f2f2] shadow-[0_4px_16px_rgba(0,0,0,0.5)] border-white/30'
+              : 'bg-white/95 text-[#060541] shadow-[0_4px_16px_rgba(0,0,0,0.2)] border-[#060541]/15'
+          }`}
+          aria-label={language === "ar" ? "الرسالة الأخيرة" : "Last message"}
+        >
+          <ChevronDown className="h-5 w-5" />
+        </button>
+      )}
 
       {/* Composer area */}
       <div
@@ -978,12 +1130,12 @@ export default function ChatPage() {
                     sendTextMessage();
                   }
                 }}
-                onFocus={() => setUserTyping(true)}
+                onFocus={() => broadcastTyping(true)}
                 onBlur={() => {
                   if (typingTimeoutRef.current) {
                     clearTimeout(typingTimeoutRef.current);
                   }
-                  setUserTyping(false);
+                  broadcastTyping(false);
                 }}
               />
               <span className={`ml-2 mt-2 text-[10px] ${isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`}>{charCount}/{MAX_CHARS}</span>

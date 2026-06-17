@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AtSign, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, ChevronDown, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,12 +50,17 @@ export default function GroupChatPage() {
   const [waktiTyping, setWaktiTyping] = useState(false);
   const [pendingWaktiSince, setPendingWaktiSince] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
+  const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const lastTypingSentRef = useRef<number>(0);
   const [replyingTo, setReplyingTo] = useState<GroupChatMessage | null>(null);
   const [selectedActionMessage, setSelectedActionMessage] = useState<GroupChatMessage | null>(null);
   const [selectedActionIsSentByMe, setSelectedActionIsSentByMe] = useState(false);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const [selectedMessageRect, setSelectedMessageRect] = useState<{ top: number; left: number; width: number; height: number; right: number; } | null>(null);
   const [entryLastReadAt, setEntryLastReadAt] = useState<string | null | undefined>(undefined);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const hasScrolledToUnreadRef = useRef(false);
   const unreadDividerRef = useCallback((node: HTMLDivElement | null) => {
@@ -71,6 +76,7 @@ export default function GroupChatPage() {
   const audioRefs = useRef<Record<string, HTMLAudioElement>>({});
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialScrollDoneRef = useRef(false);
+  const isNearBottomRef = useRef(true);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const longPressStartPointRef = useRef<{ x: number; y: number } | null>(null);
   const longPressTriggeredRef = useRef(false);
@@ -194,6 +200,9 @@ export default function GroupChatPage() {
     setEntryLastReadAt(undefined);
     setWaktiTyping(false);
     setPendingWaktiSince(null);
+    setTypingUserIds(new Set());
+    typingTimeoutsRef.current = {};
+    lastTypingSentRef.current = 0;
   }, [conversationId]);
 
   useEffect(() => {
@@ -265,8 +274,8 @@ export default function GroupChatPage() {
     if (!initialScrollDoneRef.current && !unreadSeparatorMessageId) {
       end.scrollIntoView({ behavior: "auto" });
       initialScrollDoneRef.current = true;
-    } else if (initialScrollDoneRef.current) {
-      // New message arrived while chatting — smooth scroll
+    } else if (initialScrollDoneRef.current && isNearBottomRef.current) {
+      // New message arrived while user is already at bottom — smooth scroll
       end.scrollIntoView({ behavior: "smooth" });
     }
   }, [entryLastReadAt, messages, unreadSeparatorMessageId]);
@@ -275,8 +284,23 @@ export default function GroupChatPage() {
   useEffect(() => {
     if (waktiTyping && endRef.current) {
       endRef.current.scrollIntoView({ behavior: "smooth" });
+      setShowScrollToBottom(false);
     }
   }, [waktiTyping]);
+
+  // Detect if user has scrolled away from bottom
+  const handleMessagesScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 10;
+    isNearBottomRef.current = isNearBottom;
+    setShowScrollToBottom(!isNearBottom);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    setShowScrollToBottom(false);
+  }, []);
 
   // Turn off Wakti typing indicator when a new Wakti message arrives
   useEffect(() => {
@@ -290,6 +314,56 @@ export default function GroupChatPage() {
       setPendingWaktiSince(null);
     }
   }, [messages, pendingWaktiSince, waktiTyping]);
+
+  // Group typing indicator: shared broadcast channel
+  useEffect(() => {
+    if (!conversationId || !user?.id) return;
+    const channelName = `group-typing-${conversationId}`;
+    const channel = supabase.channel(channelName);
+    typingChannelRef.current = channel;
+    channel
+      .on('broadcast', { event: 'typing' }, (event: any) => {
+        const payload = event.payload;
+        if (!payload?.user_id || payload.user_id === user.id) return;
+        if (payload.typing) {
+          setTypingUserIds((prev) => {
+            if (prev.has(payload.user_id)) return prev;
+            const next = new Set(prev);
+            next.add(payload.user_id);
+            return next;
+          });
+          // Clear previous safety timeout for this user
+          if (typingTimeoutsRef.current[payload.user_id]) {
+            clearTimeout(typingTimeoutsRef.current[payload.user_id]);
+          }
+          // Safety: auto-clear after 5s if no stop event
+          typingTimeoutsRef.current[payload.user_id] = setTimeout(() => {
+            setTypingUserIds((prev) => {
+              if (!prev.has(payload.user_id)) return prev;
+              const next = new Set(prev);
+              next.delete(payload.user_id);
+              return next;
+            });
+          }, 5000);
+        } else {
+          setTypingUserIds((prev) => {
+            if (!prev.has(payload.user_id)) return prev;
+            const next = new Set(prev);
+            next.delete(payload.user_id);
+            return next;
+          });
+          if (typingTimeoutsRef.current[payload.user_id]) {
+            clearTimeout(typingTimeoutsRef.current[payload.user_id]);
+            delete typingTimeoutsRef.current[payload.user_id];
+          }
+        }
+      })
+      .subscribe();
+    return () => {
+      typingChannelRef.current = null;
+      supabase.removeChannel(channel);
+    };
+  }, [conversationId, user?.id]);
 
   // Welcome back summary after long absence
   useEffect(() => {
@@ -380,12 +454,24 @@ export default function GroupChatPage() {
     return locationKeywords.some((kw) => lower.includes(kw.toLowerCase()));
   };
 
+  // Broadcast typing status to group channel
+  const broadcastTyping = useCallback((typing: boolean) => {
+    const ch = typingChannelRef.current;
+    if (!ch || !user?.id) return;
+    try {
+      ch.send({ type: 'broadcast', event: 'typing', payload: { user_id: user.id, typing } });
+    } catch {}
+  }, [user?.id]);
+
   const handleSendText = async () => {
     if (sendMutation.isPending) return;
     const text = messageText.trim();
 
     // Must have text OR attached image
     if (!text && !attachedImage) return;
+
+    // Stop typing broadcast when sending
+    broadcastTyping(false);
 
     const hasMention = text.toLowerCase().includes("@wakti");
     const needsGps = hasMention && needsLocationContext(text);
@@ -900,7 +986,7 @@ export default function GroupChatPage() {
       </div>
 
       {/* ── Scrollable Messages ── */}
-      <div ref={messagesContainerRef} className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto px-4 py-4" style={{ touchAction: 'pan-y' }}>
+      <div ref={messagesContainerRef} onScroll={handleMessagesScroll} className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto px-4 py-4" style={{ touchAction: 'pan-y' }}>
         <div className="mx-auto flex w-full max-w-3xl min-w-0 flex-col gap-3 overflow-x-hidden">
           {loadingMessages ? (
             <div className="flex justify-center py-10">
@@ -1067,9 +1153,87 @@ export default function GroupChatPage() {
             </div>
           )}
 
+          {/* Members typing indicator */}
+          {(() => {
+            const activeTypingIds = Array.from(typingUserIds).filter(
+              (id) => id !== user?.id && id !== WAKTI_AI_ID
+            );
+            if (activeTypingIds.length === 0) return null;
+
+            const getName = (uid: string) => {
+              const p = conversation?.participants.find((pt) => pt.user_id === uid);
+              return p?.profile?.display_name || p?.profile?.username || (language === "ar" ? "عضو" : "Member");
+            };
+            const getAvatar = (uid: string) => {
+              const p = conversation?.participants.find((pt) => pt.user_id === uid);
+              return p?.profile?.avatar_url;
+            };
+            const getInitials = (uid: string) => {
+              const p = conversation?.participants.find((pt) => pt.user_id === uid);
+              const name = p?.profile?.display_name || p?.profile?.username || "M";
+              return name.slice(0, 2).toUpperCase();
+            };
+
+            const names = activeTypingIds.map(getName);
+            let label: string;
+            if (names.length === 1) {
+              label = language === "ar" ? `${names[0]} يكتب...` : `${names[0]} is typing...`;
+            } else if (names.length === 2) {
+              label = language === "ar" ? `${names[0]} و ${names[1]} يكتبان...` : `${names[0]} and ${names[1]} are typing...`;
+            } else {
+              label = language === "ar" ? "أشخاص عدة يكتبون..." : "Several people are typing...";
+            }
+
+            return (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] sm:max-w-[70%] flex flex-col items-start">
+                  <div className="mb-1 flex items-center gap-2 px-1">
+                    {activeTypingIds.slice(0, 2).map((uid) => (
+                      <Avatar key={uid} className="h-7 w-7">
+                        {getAvatar(uid) && <AvatarImage src={getAvatar(uid)} />}
+                        <AvatarFallback className="bg-[linear-gradient(135deg,hsl(210_100%_65%)_0%,hsl(280_70%_65%)_100%)] text-white text-[10px] font-bold">
+                          {getInitials(uid)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                    <span className="text-xs font-medium text-muted-foreground">{label}</span>
+                  </div>
+                  <div className={`rounded-3xl px-4 py-3 shadow-sm border text-foreground ${
+                    isDark
+                      ? 'bg-dark-secondary/60 border-white/10'
+                      : 'bg-light-secondary/40 border-black/10'
+                  }`}>
+                    <div className="flex gap-1.5 items-center h-5">
+                      <span className={`w-2 h-2 rounded-full animate-bounce ${isDark ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '0ms' }} />
+                      <span className={`w-2 h-2 rounded-full animate-bounce ${isDark ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '150ms' }} />
+                      <span className={`w-2 h-2 rounded-full animate-bounce ${isDark ? 'bg-gray-400' : 'bg-gray-500'}`} style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div ref={endRef} />
         </div>
+
       </div>
+
+      {/* Scroll-to-bottom button */}
+      {showScrollToBottom && messages.length > 0 && (
+        <button
+          onClick={scrollToBottom}
+          className={cn(
+            "fixed bottom-24 right-4 z-50 flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-all active:scale-95 border",
+            isDark
+              ? "bg-[hsl(240_1%_38%)]/90 text-[#f2f2f2] shadow-[0_4px_16px_rgba(0,0,0,0.5)] border-white/30"
+              : "bg-white/95 text-[#060541] shadow-[0_4px_16px_rgba(0,0,0,0.2)] border-[#060541]/15"
+          )}
+          aria-label={language === "ar" ? "الرسالة الأخيرة" : "Last message"}
+        >
+          <ChevronDown className="h-5 w-5" />
+        </button>
+      )}
 
       {/* ── Fixed Input Bar ── */}
       <div className="shrink-0 border-t border-border/60 bg-background/95 backdrop-blur px-4 pt-3" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
@@ -1161,7 +1325,19 @@ export default function GroupChatPage() {
             {/* Text input */}
             <Textarea
               value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
+              onChange={(e) => {
+                const text = e.target.value;
+                setMessageText(text);
+                if (text.length >= 1) {
+                  const now = Date.now();
+                  if (now - lastTypingSentRef.current > 800) {
+                    broadcastTyping(true);
+                    lastTypingSentRef.current = now;
+                  }
+                }
+              }}
+              onFocus={() => broadcastTyping(true)}
+              onBlur={() => broadcastTyping(false)}
               placeholder={attachedImage
                 ? (language === "ar" ? "أضف تعليق... (اختياري)" : "Add a caption... (optional)")
                 : (language === "ar" ? "اكتب رسالة للمجموعة" : "Write a message to the group")
