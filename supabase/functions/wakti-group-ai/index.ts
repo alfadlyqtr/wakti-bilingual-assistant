@@ -103,6 +103,10 @@ function shouldUseSearchGrounding(searchEnabled: boolean, triggerType: string, t
   return /(weather|news|score|scores|result|results|near me|nearby|closest|nearest|open now|search|find|latest|today|traffic|restaurant|cafe|coffee|hotel|pharmacy|hospital|airport|map|maps|directions|where|price|prices|stock|الطقس|أخبار|نتائج|بالقرب|قريب|ابحث|ابحثي|ابحث عن|أقرب|وين|أين|مطعم|كافيه|مقهى|فندق|صيدلية|مستشفى|مطار)/i.test(text);
 }
 
+function isLocationQuery(text: string): boolean {
+  return /\b(near me|nearby|closest|nearest|around me|directions?|where is|where are|map|maps|location|locate|address|street|avenue|restaurant|cafe|coffee|hotel|pharmacy|hospital|airport|mall|store|shop|gas station|parking|gym|park|beach|museum|mosque|church|temple|station|metro|subway|port|embassy|police|clinic|dentist|spa|salon|barber|laundry|mechanic|car rental|taxi|delivery|fast food|bakery|grocery|market|plaza|tower|building|bridge|tunnel|highway|intersection|roundabout|campground|resort|villa|apartment|hostel|bnb|travel|tourism|tour|guide|destination|attraction|landmark|monument|palace|castle|festival|event|concert|exhibition|conference|meeting|appointment|therapy|treatment|surgery|checkup|scan|vaccine|prescription|medication|bandage|ambulance|emergency|urgent care|red cross|hospital|clinic|health center|medical center|diagnostic center|lab|laboratory|cardiology|dermatology|neurology|oncology|ophthalmology|orthopedics|pediatrics|psychiatry|pulmonology|urology|ent|dental|optical|physiotherapy|rehabilitation|wellness|fitness|nutrition|diet|yoga|meditation|pilates|crossfit|boxing|swimming|tennis|golf|horse riding|skating|skiing|snowboarding|hiking|cycling|running|jogging|walking|trekking|camping|fishing|boating|sailing|kayaking|canoeing|rafting|surfing|diving|snorkeling|paragliding|skydiving|rock climbing|mountaineering|caving|safari|zoo|aquarium|botanical garden|farm|ranch|vineyard|winery|brewery|dam|reservoir|canal|waterfall|hot spring|geyser|volcano|crater|canyon|cliff|cave|beach|island|mountain|desert|lake|river|valley|وين|أين|بالقرب|قريب|أقرب|مكان|عنوان|شارع|طريق|جسر|نفق|دوار|تقاطع|مطعم|كافيه|مقهى|فندق|صيدلية|مستشفى|مطار|مركز تجاري|سوق|متجر|محل|محطة|مترو|موقف|موقف سيارات|بنزينة|جيم|حديقة|شاطئ|متحف|مسجد|كنيسة|معبد|سفارة|شرطة|عيادة|طبيب أسنان|منتجع|صالون|حلاق|مغسلة|ميكانيكي|تأجير سيارات|تاكسي|توصيل|مطعم سريع|مخبز|بقالة|سوق|برج|مبنى|طريق سريع|مخيم|منتجع|فيلا|شقة|نزل|سفر|سياحة|جولة|دليل|وجهة|معلم|نصب|قصر|قلعة|مهرجان|حدث|حفلة|مؤتمر|اجتماع|موعد|علاج|جراحة|فحص|مسح|لقاح|وصفة طبية|دواء|ضمادة|إسعاف|طوارئ|صليب أحمر|مستشفى|عيادة|مركز صحي|مركز طبي|مركز تشخيص|مختبر|قلب|جلدية|أعصاب|أورام|عيون|عظام|أطفال|نفسية|صدرية|مسالك|أنف وأذن وحنجرة|أسنان|بصريات|علاج طبيعي|تأهيل|عافية|لياقة|تغذية|رجيم|يوغا|تأمل|بيلاتس|ملاكمة|سباحة|تنس|جولف|فروسية|تزلج|تزلج على الجليد|تسلق|جبل|تخييم|صيد|قوارب|إبحار|تجديف|غطس|طيران شراعي|قفز|تسلق صخور|كهوف|سفاري|حديقة حيوان|أحواض|حديقة نباتية|مزرعة|كرم|خمر|سد|خزان|قناة|شلال|ينبوع|بركان|فوهة|وادي|جرف|كهف|جزيرة|جبل|صحراء|بحيرة|نهر|وادي)\b/i.test(text);
+}
+
 function buildFallbackReply(language: string): string {
   return language === "ar"
     ? "سامحني، صار عندي خطأ مؤقت الآن. أرسلها مرة ثانية بعد لحظة وأنا أرد عليك."
@@ -545,10 +549,10 @@ serve(async (req) => {
     aiText = aiText.replace(/\b\d{1,3}\.\d{5,6},\s*\d{1,3}\.\d{5,6}\b/g, "");
     aiText = aiText.replace(/\s{2,}/g, " ").trim();
 
-    // Append Google Maps link if we have sender location and it's a mention
+    // Append Google Maps link ONLY for location queries (not sports, news, general search)
     if (useGrounding && senderLoc && triggerMessage?.content) {
       const cleanQuery = triggerMessage.content.replace(/@wakti\s*/i, "").trim();
-      if (cleanQuery) {
+      if (cleanQuery && isLocationQuery(cleanQuery)) {
         const searchQuery = encodeURIComponent(cleanQuery + (language === "ar" ? " بالقرب مني" : " near me"));
         const mapsUrl = `https://www.google.com/maps/search/${searchQuery}/@${senderLoc.lat.toFixed(5)},${senderLoc.lng.toFixed(5)},15z`;
         const mapsLabel = language === "ar" ? "📍 افتح في Google Maps" : "📍 Open in Google Maps";

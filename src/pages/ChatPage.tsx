@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown, ChevronLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, CheckCheck, X, Reply, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, CheckCheck, Clock, X, Reply, Trash2 } from "lucide-react";
 import type { DirectMessage } from "@/services/messageService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMessages, sendMessage, markAsRead, uploadMessageAttachment, addReaction, removeReaction, deleteMessage } from "@/services/messageService";
@@ -78,6 +78,7 @@ export default function ChatPage() {
   const [isContactTyping, setIsContactTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const [pendingMessageIds, setPendingMessageIds] = useState<Set<string>>(new Set());
   const isContactOnline = contactId ? isOnline(contactId) : false;
   const entrySource = searchParams.get("from");
 
@@ -192,6 +193,7 @@ export default function ChatPage() {
     isNearBottomRef.current = true;
     setShowScrollToBottom(false);
     setIsContactTyping(false);
+    setPendingMessageIds(new Set());
   }, [contactId]);
 
   // Typing indicator: shared broadcast channel between both users
@@ -381,10 +383,83 @@ export default function ChatPage() {
     }
   };
 
-  // Send message mutation
+  // Send message mutation with optimistic UI
   const sendMessageMutation = useMutation({
     mutationFn: (message: any) => sendMessage(contactId!, message),
-    onSuccess: () => {
+    onMutate: async (variables) => {
+      if (!currentUserId || !contactId) return { tempId: null };
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      // Find reply-to message if any
+      const currentMessages = queryClient.getQueryData<DirectMessage[]>(['directMessages', contactId]);
+      const replyToMessage = variables.reply_to_id
+        ? currentMessages?.find(m => m.id === variables.reply_to_id)
+        : undefined;
+
+      const tempMessage: DirectMessage = {
+        id: tempId,
+        sender_id: currentUserId,
+        recipient_id: contactId,
+        message_type: variables.message_type,
+        content: variables.content,
+        media_url: variables.media_url,
+        media_type: variables.media_type,
+        voice_duration: variables.voice_duration,
+        file_size: variables.file_size,
+        created_at: new Date().toISOString(),
+        is_read: false,
+        is_deleted: false,
+        reply_to_id: variables.reply_to_id || null,
+        reply_to: replyToMessage ? {
+          id: replyToMessage.id,
+          content: replyToMessage.content,
+          sender_id: replyToMessage.sender_id,
+          message_type: replyToMessage.message_type,
+          is_deleted: replyToMessage.is_deleted,
+        } : null,
+        reactions: [],
+      };
+
+      // Add temp message to cache instantly
+      queryClient.setQueryData(['directMessages', contactId], (old: DirectMessage[] | undefined) => {
+        return old ? [...old, tempMessage] : [tempMessage];
+      });
+
+      setPendingMessageIds(prev => {
+        const next = new Set(prev);
+        next.add(tempId);
+        return next;
+      });
+
+      return { tempId };
+    },
+    onError: (error, variables, context) => {
+      if (context?.tempId) {
+        queryClient.setQueryData(['directMessages', contactId], (old: DirectMessage[] | undefined) => {
+          return old ? old.filter(m => m.id !== context.tempId) : [];
+        });
+        setPendingMessageIds(prev => {
+          const next = new Set(prev);
+          next.delete(context.tempId);
+          return next;
+        });
+      }
+      console.error("Error sending message:", error);
+      toast.error("Error sending message");
+    },
+    onSuccess: (data, variables, context) => {
+      if (context?.tempId) {
+        // Replace temp message with real one from server
+        queryClient.setQueryData(['directMessages', contactId], (old: DirectMessage[] | undefined) => {
+          if (!old) return data ? [data] : [];
+          return old.map(m => m.id === context.tempId ? data : m);
+        });
+        setPendingMessageIds(prev => {
+          const next = new Set(prev);
+          next.delete(context.tempId);
+          return next;
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
       scrollToBottom();
       if (operatorPayload?.runId && operatorPayload.stepRefs?.handoffStepId) {
@@ -396,10 +471,6 @@ export default function ChatPage() {
         clearOperatorFlow();
       }
     },
-    onError: (error) => {
-      console.error("Error sending message:", error);
-      toast.error("Error sending message");
-    }
   });
 
   // Handle file uploads
@@ -809,8 +880,12 @@ export default function ChatPage() {
             } ${isDark ? 'text-gray-300' : 'text-gray-600'} flex items-center gap-1`}>
               <span>{formatMessageTime(message.created_at)}</span>
               {isSentByMe && (
-                <span title={message.is_read ? 'Read' : 'Sent'} className="inline-flex items-center">
-                  <CheckCheck className={`h-3.5 w-3.5 ${message.is_read ? 'text-green-500' : 'text-gray-400'}`} />
+                <span title={pendingMessageIds.has(message.id) ? 'Sending...' : message.is_read ? 'Read' : 'Sent'} className="inline-flex items-center">
+                  {pendingMessageIds.has(message.id) ? (
+                    <Clock className="h-3.5 w-3.5 text-gray-400" />
+                  ) : (
+                    <CheckCheck className={`h-3.5 w-3.5 ${message.is_read ? 'text-green-500' : 'text-gray-400'}`} />
+                  )}
                 </span>
               )}
             </div>

@@ -29,6 +29,7 @@ export interface GroupChatConversation {
   last_message_text: string | null;
   last_message_at: string | null;
   last_message_by: string | null;
+  avatar_url: string | null;
   participants: GroupChatParticipant[];
   unread: boolean;
   ai_tone?: string | null;
@@ -97,7 +98,7 @@ export async function getMyGroupConversations(): Promise<GroupChatConversation[]
 
   const { data: conversations, error: conversationError } = await (supabase as any)
     .from("conversations")
-    .select("id, name, is_group, created_by, updated_at, last_message_text, last_message_at, last_message_by")
+    .select("id, name, is_group, created_by, updated_at, last_message_text, last_message_at, last_message_by, avatar_url")
     .in("id", conversationIds)
     .eq("is_group", true);
 
@@ -164,6 +165,7 @@ export async function getMyGroupConversations(): Promise<GroupChatConversation[]
         last_message_text: conversation.last_message_text || null,
         last_message_at: conversation.last_message_at || null,
         last_message_by: conversation.last_message_by || null,
+        avatar_url: conversation.avatar_url || null,
         participants,
         unread,
       };
@@ -205,7 +207,7 @@ export async function getGroupConversation(conversationId: string): Promise<Grou
 
   const { data: conversation, error: conversationError } = await (supabase as any)
     .from("conversations")
-    .select("id, name, is_group, created_by, updated_at, last_message_text, last_message_at, last_message_by, ai_tone, ai_response_length, ai_response_style, ai_search_enabled")
+    .select("id, name, is_group, created_by, updated_at, last_message_text, last_message_at, last_message_by, avatar_url, ai_tone, ai_response_length, ai_response_style, ai_search_enabled")
     .eq("id", conversationId)
     .eq("is_group", true)
     .maybeSingle();
@@ -254,6 +256,7 @@ export async function getGroupConversation(conversationId: string): Promise<Grou
     last_message_text: conversation.last_message_text || null,
     last_message_at: conversation.last_message_at || null,
     last_message_by: conversation.last_message_by || null,
+    avatar_url: conversation.avatar_url || null,
     participants,
     unread: Boolean(
       conversation.last_message_at &&
@@ -499,6 +502,18 @@ export async function renameGroupConversation(conversationId: string, newName: s
   const { error } = await (supabase as any)
     .from("conversations")
     .update({ name: trimmed, updated_at: new Date().toISOString() })
+    .eq("id", conversationId)
+    .eq("created_by", userId);
+  if (error) throw error;
+}
+
+export async function updateGroupAvatar(conversationId: string, avatarUrl: string) {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+  const { error } = await (supabase as any)
+    .from("conversations")
+    .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
     .eq("id", conversationId)
     .eq("created_by", userId);
   if (error) throw error;

@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AtSign, ChevronDown, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, Camera, ChevronDown, Clock, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,10 +15,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { GroupAvatar } from "@/components/GroupAvatar";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, uploadGroupMessageAttachment, type GroupChatMessage } from "@/services/groupChatService";
+import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatMessage } from "@/services/groupChatService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -54,9 +55,11 @@ export default function GroupChatPage() {
   const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastTypingSentRef = useRef<number>(0);
+  const [pendingMessageIds, setPendingMessageIds] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<GroupChatMessage | null>(null);
   const [selectedActionMessage, setSelectedActionMessage] = useState<GroupChatMessage | null>(null);
   const [selectedActionIsSentByMe, setSelectedActionIsSentByMe] = useState(false);
+  const groupAvatarInputRef = useRef<HTMLInputElement>(null);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
   const [selectedMessageRect, setSelectedMessageRect] = useState<{ top: number; left: number; width: number; height: number; right: number; } | null>(null);
   const [entryLastReadAt, setEntryLastReadAt] = useState<string | null | undefined>(undefined);
@@ -102,15 +105,92 @@ export default function GroupChatPage() {
   const sendMutation = useMutation({
     mutationFn: async (payload: Parameters<typeof sendGroupConversationMessage>[1]) =>
       sendGroupConversationMessage(conversationId!, payload),
-    onSuccess: () => {
+    onMutate: async (variables) => {
+      if (!user?.id || !conversationId) return { tempId: null };
+      const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
+      const currentMessages = queryClient.getQueryData<GroupChatMessage[]>(["groupConversationMessages", conversationId]);
+      const replyToId = typeof variables === 'string' ? null : (variables.reply_to_id || null);
+      const replyToMessage = replyToId
+        ? currentMessages?.find(m => m.id === replyToId)
+        : undefined;
+
+      const payloadObj = typeof variables === 'string'
+        ? { message_type: 'text' as const, content: variables.trim() }
+        : variables;
+
+      const tempMessage: GroupChatMessage = {
+        id: tempId,
+        conversation_id: conversationId,
+        sender_id: user.id,
+        message_type: payloadObj.message_type,
+        content: payloadObj.content || null,
+        media_url: payloadObj.media_url || null,
+        media_type: payloadObj.media_type || null,
+        voice_duration: payloadObj.voice_duration || null,
+        file_size: payloadObj.file_size || null,
+        created_at: new Date().toISOString(),
+        is_deleted: false,
+        deleted_at: null,
+        reply_to_id: replyToId,
+        reply_to: replyToMessage ? {
+          id: replyToMessage.id,
+          content: replyToMessage.content,
+          sender_id: replyToMessage.sender_id,
+          message_type: replyToMessage.message_type,
+          is_deleted: replyToMessage.is_deleted,
+        } : null,
+        reactions: [],
+      };
+
+      queryClient.setQueryData(["groupConversationMessages", conversationId], (old: GroupChatMessage[] | undefined) => {
+        return old ? [...old, tempMessage] : [tempMessage];
+      });
+
+      setPendingMessageIds(prev => {
+        const next = new Set(prev);
+        next.add(tempId);
+        return next;
+      });
+
+      // Scroll to bottom so the user's new message is visible even if they were scrolled up
+      setTimeout(() => {
+        endRef.current?.scrollIntoView({ behavior: "smooth" });
+        setShowScrollToBottom(false);
+      }, 0);
+
+      return { tempId };
+    },
+    onError: (error: any, variables, context) => {
+      if (context?.tempId) {
+        queryClient.setQueryData(["groupConversationMessages", conversationId], (old: GroupChatMessage[] | undefined) => {
+          return old ? old.filter(m => m.id !== context.tempId) : [];
+        });
+        setPendingMessageIds(prev => {
+          const next = new Set(prev);
+          next.delete(context.tempId);
+          return next;
+        });
+      }
+      toast.error(error?.message || (language === "ar" ? "تعذر إرسال الرسالة" : "Failed to send message"));
+    },
+    onSuccess: (data, variables, context) => {
+      if (context?.tempId) {
+        queryClient.setQueryData(["groupConversationMessages", conversationId], (old: GroupChatMessage[] | undefined) => {
+          if (!old) return data ? [data] : [];
+          return old.map(m => m.id === context.tempId ? data : m);
+        });
+        setPendingMessageIds(prev => {
+          const next = new Set(prev);
+          next.delete(context.tempId);
+          return next;
+        });
+      }
       setMessageText("");
       setReplyingTo(null);
       queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
-    },
-    onError: (error: any) => {
-      toast.error(error?.message || (language === "ar" ? "تعذر إرسال الرسالة" : "Failed to send message"));
     },
   });
 
@@ -138,6 +218,42 @@ export default function GroupChatPage() {
       toast.error(error?.message || (language === "ar" ? "تعذر تغيير الاسم" : "Failed to rename group"));
     },
   });
+
+  const avatarMutation = useMutation({
+    mutationFn: (avatarUrl: string) => updateGroupAvatar(conversationId!, avatarUrl),
+    onSuccess: () => {
+      toast.success(language === "ar" ? "تم تحديث صورة المجموعة" : "Group picture updated");
+      queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || (language === "ar" ? "تعذر تحديث الصورة" : "Failed to update group picture"));
+    },
+  });
+
+  const handleGroupAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user?.id || !conversationId) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error(language === "ar" ? "يرجى اختيار ملف صورة صحيح" : "Please select a valid image file");
+      return;
+    }
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `groups/${conversationId}/avatar-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(fileName, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: publicData } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      const cleanUrl = (publicData?.publicUrl || "").trim().replace(/^(%20)+/i, "").trim();
+      avatarMutation.mutate(cleanUrl);
+    } catch (error: any) {
+      toast.error(error?.message || (language === "ar" ? "فشل في رفع الصورة" : "Failed to upload image"));
+    } finally {
+      if (groupAvatarInputRef.current) groupAvatarInputRef.current.value = "";
+    }
+  };
 
   const addMembersMutation = useMutation({
     mutationFn: (memberIds: string[]) => addGroupMembers(conversationId!, memberIds),
@@ -203,6 +319,7 @@ export default function GroupChatPage() {
     setTypingUserIds(new Set());
     typingTimeoutsRef.current = {};
     lastTypingSentRef.current = 0;
+    setPendingMessageIds(new Set());
   }, [conversationId]);
 
   useEffect(() => {
@@ -972,6 +1089,7 @@ export default function GroupChatPage() {
           </Button>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
+              <GroupAvatar name={conversation.name} avatarUrl={conversation.avatar_url} size="sm" />
               <h1 className="truncate text-lg font-bold">{conversation.name}</h1>
               <Badge
                 className="bg-[hsl(210_100%_55%)] text-white border-transparent shrink-0 cursor-pointer hover:opacity-90 active:scale-95 transition-transform"
@@ -1111,8 +1229,11 @@ export default function GroupChatPage() {
                           )}
                         </div>
 
-                        <div className={cn("mt-1 px-1 text-[11px] text-muted-foreground", mine ? "text-right" : "text-left")}>
-                          {formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}
+                        <div className={cn("mt-1 px-1 text-[11px] text-muted-foreground flex items-center gap-1", mine ? "justify-end" : "justify-start")}>
+                          <span>{formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}</span>
+                          {mine && pendingMessageIds.has(message.id) && (
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                          )}
                         </div>
                       </div>
                     </motion.div>
@@ -1485,6 +1606,11 @@ export default function GroupChatPage() {
               </DialogDescription>
             </DialogHeader>
 
+            {/* Group avatar display */}
+            <div className="flex justify-center mt-3">
+              <GroupAvatar name={conversation.name} avatarUrl={conversation.avatar_url} size="xl" />
+            </div>
+
             {/* Creator actions */}
             {isCreator && (
               <div className="flex flex-col gap-2 mt-3">
@@ -1508,6 +1634,16 @@ export default function GroupChatPage() {
                     {language === "ar" ? "إضافة أعضاء" : "Add Members"}
                   </Button>
                 </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full rounded-xl text-xs"
+                  onClick={() => groupAvatarInputRef.current?.click()}
+                  disabled={avatarMutation.isPending}
+                >
+                  {avatarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Camera className="h-3.5 w-3.5 mr-1" />}
+                  {language === "ar" ? "تغيير صورة المجموعة" : "Change Group Picture"}
+                </Button>
                 {/* Wakti AI toggle */}
                 {waktiInGroup ? (
                   <Button
@@ -1868,6 +2004,16 @@ export default function GroupChatPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Hidden file input for group avatar upload */}
+      <input
+        ref={groupAvatarInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleGroupAvatarUpload}
+        aria-label={language === "ar" ? "تغيير صورة المجموعة" : "Change group picture"}
+      />
     </div>
   );
 }

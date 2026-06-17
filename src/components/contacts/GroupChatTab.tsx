@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { MessageSquarePlus, Users, Loader2, Pencil, Sparkles, UserPlus } from "lucide-react";
+import { Camera, MessageSquarePlus, Users, Loader2, Pencil, Sparkles, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { GroupAvatar } from "@/components/GroupAvatar";
 import {
   addGroupMembers,
   addWaktiToGroup,
@@ -24,8 +25,10 @@ import {
   removeWaktiFromGroup,
   renameGroupConversation,
   updateGroupAiSettings,
+  updateGroupAvatar,
 } from "@/services/groupChatService";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 
 interface GroupChatTabProps {
   embedded?: boolean;
@@ -53,6 +56,7 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
   const [aiLength, setAiLength] = useState("medium");
   const [aiStyle, setAiStyle] = useState("natural");
   const [aiSearchEnabled, setAiSearchEnabled] = useState(true);
+  const groupAvatarInputRef = useRef<HTMLInputElement>(null);
 
   const activeGroupId = membersDialogGroup?.id || null;
 
@@ -115,6 +119,42 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
       toast.error(error?.message || (language === "ar" ? "تعذر تغيير الاسم" : "Failed to rename group"));
     },
   });
+
+  const avatarMutation = useMutation({
+    mutationFn: (avatarUrl: string) => updateGroupAvatar(activeGroupId!, avatarUrl),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversation", activeGroupId] });
+      toast.success(language === "ar" ? "تم تحديث صورة المجموعة" : "Group picture updated");
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || (language === "ar" ? "تعذر تحديث الصورة" : "Failed to update group picture"));
+    },
+  });
+
+  const handleGroupAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user?.id || !activeGroupId) return;
+    if (!file.type.startsWith("image/")) {
+      toast.error(language === "ar" ? "يرجى اختيار ملف صورة صحيح" : "Please select a valid image file");
+      return;
+    }
+    try {
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `groups/${activeGroupId}/avatar-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(fileName, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: publicData } = supabase.storage.from("avatars").getPublicUrl(fileName);
+      const cleanUrl = (publicData?.publicUrl || "").trim().replace(/^(%20)+/i, "").trim();
+      avatarMutation.mutate(cleanUrl);
+    } catch (error: any) {
+      toast.error(error?.message || (language === "ar" ? "فشل في رفع الصورة" : "Failed to upload image"));
+    } finally {
+      if (groupAvatarInputRef.current) groupAvatarInputRef.current.value = "";
+    }
+  };
 
   const addMembersMutation = useMutation({
     mutationFn: (memberIds: string[]) => addGroupMembers(activeGroupId!, memberIds),
@@ -219,42 +259,59 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
           {groups.map((group) => {
             const creator = group.participants.find((participant) => participant.user_id === group.created_by);
             const creatorName = creator?.profile?.display_name || creator?.profile?.username || (language === "ar" ? "غير معروف" : "Unknown");
+            const sender = group.participants.find((participant) => participant.user_id === group.last_message_by);
+            const senderName = sender?.profile?.display_name || sender?.profile?.username || (language === "ar" ? "غير معروف" : "Unknown");
+            const lastMsgText = group.last_message_text || "";
+            const lastMsgAt = group.last_message_at ? new Date(group.last_message_at) : null;
+            const timeStr = lastMsgAt
+              ? lastMsgAt.toLocaleTimeString(language === "ar" ? "ar-SA" : "en-US", { hour: "numeric", minute: "2-digit", hour12: true })
+              : "";
+            const previewText = lastMsgText
+              ? (language === "ar" ? `${senderName}: ${lastMsgText}` : `${senderName}: ${lastMsgText}`)
+              : (language === "ar" ? `المنشئ: ${creatorName}` : `Creator: ${creatorName}`);
 
             return (
               <Card
                 key={group.id}
-                className="cursor-pointer rounded-2xl border border-border/60 bg-card/80 transition-all active:scale-[0.99]"
+                className={cn(
+                  "cursor-pointer rounded-2xl border bg-card/80 transition-all active:scale-[0.99] overflow-hidden",
+                  group.unread ? "border-l-[3px] border-l-[hsl(210_100%_55%)] border-border/60" : "border-border/60"
+                )}
                 onClick={() => navigate(getConversationRoute(group.id))}
               >
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between gap-3">
+                <CardContent className="p-3">
+                  <div className="flex items-start gap-3">
+                    <GroupAvatar name={group.name} avatarUrl={group.avatar_url} size="lg" className="shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-semibold text-base truncate text-[#060541] dark:text-white">{group.name}</h4>
-                      <p className="mt-1 text-sm text-muted-foreground truncate">
-                        {language === "ar" ? `المنشئ: ${creatorName}` : `Creator: ${creatorName}`}
-                      </p>
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className={cn(
+                          "text-base truncate",
+                          group.unread ? "font-bold text-[#060541] dark:text-white" : "font-semibold text-[#060541] dark:text-white"
+                        )}>
+                          {group.name}
+                        </h4>
+                        {timeStr && (
+                          <span className={cn(
+                            "text-[11px] shrink-0",
+                            group.unread ? "text-[hsl(210_100%_55%)] font-semibold" : "text-muted-foreground"
+                          )}>
+                            {timeStr}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between gap-2 mt-0.5">
+                        <p className={cn(
+                          "text-sm truncate min-w-0 flex-1",
+                          group.unread ? "text-foreground font-medium" : "text-muted-foreground"
+                        )}>
+                          {previewText}
+                        </p>
+                        {group.unread && (
+                          <span className="shrink-0 h-2.5 w-2.5 rounded-full bg-[hsl(210_100%_55%)]" />
+                        )}
+                      </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setMembersDialogGroup(group);
-                      }}
-                      className="shrink-0 inline-flex items-center gap-1.5 rounded-full border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(248,250,253,0.92))] dark:bg-[linear-gradient(180deg,rgba(20,24,35,0.98),rgba(14,17,26,0.98))] px-3 py-1.5 text-xs font-semibold text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.96),0_4px_14px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_6px_16px_rgba(0,0,0,0.16)] active:scale-95 transition-transform"
-                    >
-                      <Users className="h-3.5 w-3.5" />
-                      <span>
-                        {group.participants.length} {language === "ar" ? "أعضاء" : "members"}
-                      </span>
-                    </button>
                   </div>
-                  {group.unread && (
-                    <div className="mt-3">
-                      <Badge className="bg-[hsl(210_100%_55%)] text-white border-transparent">
-                        {language === "ar" ? "جديد" : "New"}
-                      </Badge>
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             );
@@ -272,6 +329,15 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
               {activeGroup?.name || membersDialogGroup?.name || (language === "ar" ? "المجموعة" : "Group chat")}
             </DialogDescription>
           </DialogHeader>
+
+          {/* Group avatar display */}
+          <div className="flex justify-center mt-3">
+            <GroupAvatar
+              name={activeGroup?.name || membersDialogGroup?.name || "Group"}
+              avatarUrl={activeGroup?.avatar_url || membersDialogGroup?.avatar_url || null}
+              size="xl"
+            />
+          </div>
 
           {isCreator && activeGroup && (
             <div className="space-y-2">
@@ -301,6 +367,16 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
                   {language === "ar" ? "إضافة أعضاء" : "Add Members"}
                 </Button>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full rounded-xl text-xs"
+                onClick={() => groupAvatarInputRef.current?.click()}
+                disabled={avatarMutation.isPending}
+              >
+                {avatarMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Camera className="h-3.5 w-3.5 mr-1" />}
+                {language === "ar" ? "تغيير صورة المجموعة" : "Change Group Picture"}
+              </Button>
 
               {activeGroupHasWakti ? (
                 <Button
@@ -718,6 +794,16 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
         onOpenChange={setGuestDialogOpen}
         redirectTo={typeof window === 'undefined' ? '/social?section=contacts&tab=groups' : `${window.location.pathname}${window.location.search}`}
         language={language === 'ar' ? 'ar' : 'en'}
+      />
+
+      {/* Hidden file input for group avatar upload */}
+      <input
+        ref={groupAvatarInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleGroupAvatarUpload}
+        aria-label={language === "ar" ? "تغيير صورة المجموعة" : "Change group picture"}
       />
     </div>
   );
