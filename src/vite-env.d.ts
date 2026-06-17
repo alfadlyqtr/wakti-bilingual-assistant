@@ -1,6 +1,14 @@
 
 /// <reference types="vite/client" />
 
+interface ImportMetaEnv {
+  readonly VITE_SANDPACK_BUNDLER_URL?: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}
+
 // Speech Recognition API declarations
 interface SpeechRecognition extends EventTarget {
   continuous: boolean;

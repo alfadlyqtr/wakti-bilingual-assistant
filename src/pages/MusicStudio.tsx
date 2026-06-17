@@ -2530,7 +2530,7 @@ function VoicesTab({
     setDuration(typeof draft.duration === 'number' ? draft.duration : 30);
     setComposeStep(draft.composeStep || 1);
     setIncludeTags(Array.isArray(draft.includeTags) ? draft.includeTags : []);
-    setInstrumentTags(Array.isArray(draft.instrumentTags) ? draft.instrumentTags : []);
+    setInstrumentTags(Array.isArray(draft.instrumentTags) ? normalizeInstrumentKeys(draft.instrumentTags) : []);
     setRhythmTags(Array.isArray(draft.rhythmTags) ? draft.rhythmTags : []);
     setMoodTags(Array.isArray(draft.moodTags) ? draft.moodTags : []);
     setVocalType(draft.vocalType || 'auto');
@@ -3076,8 +3076,8 @@ function VoicesTab({
       'مصري':                 ['oud', 'qanun', 'ney', 'tabla', 'darbuka'],
       'Egyptian Shaabi':      ['drum machine', 'synth lead', 'bass guitar', 'darbuka'],
       'شعبي مصري':            ['drum kit', 'synth lead', 'bass guitar', 'electric guitar', 'darbuka'],
-      'Turkish':              ['saz', 'kemenche', 'zurna', 'mey', 'davul'],
-      'تركي':                 ['saz', 'kemenche', 'zurna', 'mey', 'davul'],
+      'Turkish':              ['baglama', 'kemenche', 'zurna', 'mey', 'davul'],
+      'تركي':                 ['baglama', 'kemenche', 'zurna', 'mey', 'davul'],
       'مهرجانات':             ['drum kit', 'synth lead', 'bass guitar', 'percussion'],
       'Anasheed':             ['Vocal Harmony'],
       'أناشيد':               ['Vocal Harmony'],
@@ -3096,7 +3096,7 @@ function VoicesTab({
     'oud': 'عود', 'qanun': 'قانون', 'ney': 'ناي', 'riq': 'رق', 'darbuka': 'دربوكة',
     'tabla': 'طبلة', 'mirwas': 'مرواس', 'tabl': 'طبل', 'tabl turki': 'طبل تركي',
     'frame drum': 'طار', 'daff': 'دف', 'tar': 'طار', 'tanbura': 'طنبورة',
-    'saz': 'ساز', 'kemenche': 'كمنجة تركية', 'zurna': 'زورنا', 'mey': 'مي تركي', 'cumbus': 'جومبوش', 'davul': 'داوول',
+    'saz': 'ساز', 'baglama': 'باغلاما', 'kemenche': 'كمنجة تركية', 'zurna': 'زورنا', 'mey': 'مي تركي', 'cumbus': 'جومبوش', 'davul': 'داوول',
     'mijwiz': 'مجوز', 'rebab': 'رباب', 'gulf percussion': 'إيقاع خليجي',
     'violin': 'كمان', 'viola': 'فيولا', 'cello': 'تشيلو', 'contrabass': 'كونترباص', 'strings': 'وتريات',
     'piano': 'بيانو', 'electric piano': 'بيانو كهربائي', 'soft piano': 'بيانو ناعم', 'organ': 'أورغ', 'accordion': 'أكورديون',
@@ -3303,6 +3303,40 @@ function VoicesTab({
       'Cajun': ['accordion', 'fiddle', 'acoustic guitar', 'triangle', 'upright bass'],
       'Industrial': ['drum machine', 'synth bass', 'distorted synth', 'noise generator', 'electric guitar'],
   };
+
+  const INSTRUMENT_DISPLAY_EN: Record<string, string> = {
+    'baglama': 'bağlama',
+    'bağlama': 'bağlama',
+  };
+
+  function normalizeInstrumentKey(inst: string): string {
+    const trimmed = (inst || '').trim();
+    if (!trimmed) return '';
+    const lower = trimmed.toLowerCase();
+    if (lower === 'bağlama' || lower === 'baglama') return 'baglama';
+    return trimmed;
+  }
+
+  function normalizeInstrumentKeys(instruments: string[]): string[] {
+    const seen = new Set<string>();
+    const normalized: string[] = [];
+    for (const inst of instruments) {
+      const next = normalizeInstrumentKey(inst);
+      if (!next || seen.has(next)) continue;
+      seen.add(next);
+      normalized.push(next);
+    }
+    return normalized;
+  }
+
+  function getInstrumentDisplayLabel(inst: string): string {
+    const normalized = normalizeInstrumentKey(inst);
+    if (!normalized) return inst;
+    if (language === 'ar') {
+      return INSTRUMENT_DISPLAY_AR[normalized] ?? INSTRUMENT_DISPLAY_AR[inst] ?? normalized;
+    }
+    return INSTRUMENT_DISPLAY_EN[normalized] ?? INSTRUMENT_DISPLAY_EN[inst] ?? normalized;
+  }
 
   // Mood → extra instrument boosters
   const MOOD_INSTRUMENT_BOOST: Record<string, string[]> = {
@@ -4071,7 +4105,7 @@ function VoicesTab({
     if (language === 'ar') {
       return [
         { title: 'تراثي عربي وخليجي', items: ['oud','qanun','ney','riq','darbuka','tabla','tar','daff','mirwas','rebab','gulf percussion'] },
-        { title: 'تركية', items: ['saz','kemenche','zurna','mey','cumbus','davul'] },
+        { title: 'تركية', items: ['saz','baglama','kemenche','zurna','mey','cumbus','davul'] },
         { title: 'أوتار', items: ['violin','viola','cello','contrabass','strings'] },
         { title: 'مفاتيح', items: ['piano','electric piano','soft piano','organ','accordion'] },
         { title: 'جيتارات وباص', items: ['acoustic guitar','electric guitar','bass guitar','upright bass','synth bass'] },
@@ -4084,7 +4118,7 @@ function VoicesTab({
     }
     return [
       { title: 'Arabic & Gulf Traditional', items: ['oud','qanun','ney','riq','darbuka','tabla','mirwas','tabl','tabl turki','frame drum','daff','tar','tanbura','mijwiz','rebab','gulf percussion'] },
-      { title: 'Turkish', items: ['saz','kemenche','zurna','mey','cumbus','davul'] },
+      { title: 'Turkish', items: ['saz','baglama','kemenche','zurna','mey','cumbus','davul'] },
       { title: 'Strings', items: ['violin','viola','cello','contrabass','strings'] },
       { title: 'Keys', items: ['piano','electric piano','soft piano','organ','accordion'] },
       { title: 'Guitars & Bass', items: ['acoustic guitar','electric guitar','bass guitar','upright bass','synth bass'] },
@@ -4636,7 +4670,7 @@ function VoicesTab({
 
   function handleSelectRecommendedInstruments() {
     if (recommendedInstruments.length === 0) return;
-    const limited = [...recommendedInstruments].slice(0, 6);
+    const limited = normalizeInstrumentKeys(recommendedInstruments).slice(0, 6);
     setInstrumentTags(limited);
     if (limited.length >= 6) {
       setTimeout(() => {
@@ -4648,9 +4682,11 @@ function VoicesTab({
   }
 
   function handleInstrumentToggle(inst: string) {
+    const normalizedInst = normalizeInstrumentKey(inst);
+    if (!normalizedInst) return;
     setInstrumentTags((prev) => {
-      if (prev.includes(inst)) {
-        return prev.filter((tag) => tag !== inst);
+      if (prev.includes(normalizedInst)) {
+        return prev.filter((tag) => tag !== normalizedInst);
       }
 
       if (prev.length >= 6) {
@@ -4658,7 +4694,7 @@ function VoicesTab({
         return prev;
       }
 
-      const next = [...prev, inst];
+      const next = [...prev, normalizedInst];
 
       if (next.length === 6) {
         setTimeout(() => {
@@ -7587,7 +7623,7 @@ function VoicesTab({
                 ))}
                 {instrumentTags.map((tag) => (
                   <span key={tag} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50 dark:bg-purple-500/20 border border-purple-200 dark:border-purple-400/30 text-purple-600 dark:text-purple-300 text-sm shadow-[0_2px_8px_rgba(147,51,234,0.10)] dark:shadow-none">
-                    {tag}
+                    {getInstrumentDisplayLabel(tag)}
                     <button type="button" aria-label={isAr ? 'إزالة' : 'Remove'} onClick={() => setInstrumentTags(p => p.filter(t => t !== tag))} className="hover:text-white p-0.5">
                       <X className="h-3 w-3" />
                     </button>
@@ -7981,7 +8017,7 @@ function VoicesTab({
                                     : 'bg-white dark:bg-white/[0.09] border-[#d9dde7] dark:border-white/20 text-[#374151] dark:text-white/90 hover:border-purple-300 dark:hover:border-purple-400/40 hover:text-purple-600 dark:hover:text-purple-200 dark:hover:bg-purple-500/15'
                               }`}
                             >
-                              {language === 'ar' ? (INSTRUMENT_DISPLAY_AR[inst] ?? inst) : inst}
+                              {getInstrumentDisplayLabel(inst)}
                             </button>
                           );
                         })}

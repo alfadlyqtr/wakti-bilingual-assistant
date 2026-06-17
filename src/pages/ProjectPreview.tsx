@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { SandpackProvider, SandpackPreview } from '@codesandbox/sandpack-react';
+import { SANDPACK_EFFECTIVE_BUNDLER_URL } from '@/config/sandpackBundler';
 
 interface ProjectData {
   id: string;
@@ -212,6 +213,7 @@ root.render(<App />);
         template="react"
         files={sandpackFiles}
         options={{
+          bundlerURL: SANDPACK_EFFECTIVE_BUNDLER_URL,
           externalResources: [
             'https://cdn.tailwindcss.com',
             'https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.css',

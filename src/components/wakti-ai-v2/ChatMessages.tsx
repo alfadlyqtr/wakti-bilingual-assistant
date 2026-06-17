@@ -190,8 +190,9 @@ function SearchMessageCard({
   const rawContent = message.content || '';
   const cleanedContent = stripReminderBlocks(rawContent);
   const searchType = (resolvedBrowsingData?.searchType || 'general').toLowerCase();
-  const isPlaceSearch = searchType === 'business' || searchType === 'places';
-  const isContentSearch = ['news', 'sports', 'research', 'general', 'url'].includes(searchType);
+  const isNearMeQuery = typeof resolvedBrowsingData?.isNearMeQuery === 'boolean' ? resolvedBrowsingData.isNearMeQuery : false;
+  const isPlaceSearch = searchType === 'business' || searchType === 'places' || isNearMeQuery;
+  const isContentSearch = !isPlaceSearch && ['news', 'sports', 'research', 'general', 'url'].includes(searchType);
 
   let themeColor = 'text-emerald-500';
   let themeBg = 'bg-emerald-500/10';

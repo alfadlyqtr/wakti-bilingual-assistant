@@ -774,8 +774,7 @@ export function GroundedPlacesBlock({
     return null;
   }
   const groundedPlaces = getGroundedPlaces(message);
-  const isNearMeQuery = typeof resolvedBrowsingData?.isNearMeQuery === 'boolean' ? resolvedBrowsingData.isNearMeQuery : false;
-  const searchEntryPointHtml = !isNearMeQuery && typeof resolvedBrowsingData?.searchEntryPointHtml === 'string'
+  const searchEntryPointHtml = typeof resolvedBrowsingData?.searchEntryPointHtml === 'string'
     ? resolvedBrowsingData.searchEntryPointHtml.trim()
     : '';
   const googleMapsSearchUrl = getGoogleMapsSearchUrl(resolvedBrowsingData, groundedPlaces);
@@ -863,6 +862,7 @@ export function GroundedPlacesBlock({
         const openingHours = Array.isArray(place.openingHours)
           ? place.openingHours.map((line: string) => toCleanString(line)).filter(Boolean)
           : [];
+        const unavailableText = isAr ? 'غير متاح حالياً' : 'Not available right now';
 
         let socialLinks = [
           place.instagramUrl ? { label: 'Instagram', url: toCleanString(place.instagramUrl) } : null,
@@ -943,157 +943,120 @@ export function GroundedPlacesBlock({
             {/* ── Collapsible Card Content ── */}
             {isExpanded && (
               <div className={`border-t ${isDark ? 'border-white/5' : 'border-slate-100'} animate-in fade-in slide-in-from-top-1 duration-200`}>
-                {photoUrl && (
-                  <div className="w-full aspect-video sm:aspect-[16/7] max-h-[320px] relative border-b border-border/10 bg-muted/20">
-                    <img src={photoUrl} alt={placeName} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                  </div>
-                )}
                 <div className="px-4 pt-4 pb-3">
-                  {/* Editorial summary */}
                   {editorialSummary && (
-                    <p className={`text-[13px] ${isDark ? 'text-white/60' : 'text-slate-600'} leading-relaxed mb-3 whitespace-pre-line`}>
+                    <p className={`text-[13px] ${isDark ? 'text-white/60' : 'text-slate-600'} leading-relaxed mb-4 whitespace-pre-line`}>
                       {editorialSummary}
                     </p>
                   )}
 
-                  <div className="space-y-2 mb-3">
+                  {/* RICH DATA GRID - ALL FIELDS RESTORED */}
+                  <div className="space-y-2 mb-4">
                     {reasonText && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'السبب' : 'Reason'}</div>
-                        <div className={`text-[13px] ${textVal} leading-relaxed`}>{reasonText}</div>
+                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2 flex flex-col`}>
+                        <span className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'السبب' : 'Reason'}</span>
+                        <span className={`text-[13px] ${textVal} leading-relaxed`}>{reasonText}</span>
                       </div>
                     )}
                     {vibeText && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الأجواء' : 'Vibe'}</div>
-                        <div className={`text-[13px] ${textVal} leading-relaxed`}>{vibeText}</div>
+                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2 flex flex-col`}>
+                        <span className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'الأجواء' : 'Vibe'}</span>
+                        <span className={`text-[13px] ${textVal} leading-relaxed`}>{vibeText}</span>
                       </div>
                     )}
                     {mustTryText && (
-                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2`}>
-                        <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'لازم تجربه' : 'Must-try'}</div>
-                        <div className={`text-[13px] ${textVal} leading-relaxed`}>{mustTryText}</div>
+                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2 flex flex-col`}>
+                        <span className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'لازم تجرّب' : 'Must Try'}</span>
+                        <span className={`text-[13px] ${textVal} leading-relaxed`}>{mustTryText}</span>
+                      </div>
+                    )}
+                    {ratingValue && (
+                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2 flex flex-col`}>
+                        <span className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'التقييم' : 'Rating'}</span>
+                        <span className={`text-[13px] ${textVal} leading-relaxed font-semibold text-amber-500`}>★ {ratingValue} {reviewCountValue ? `(${reviewCountValue} reviews)` : ''}</span>
+                      </div>
+                    )}
+                    {addressText && (
+                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2 flex flex-col`}>
+                        <span className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'العنوان' : 'Location'}</span>
+                        <span className={`text-[13px] ${textVal} leading-relaxed`}>{addressText}</span>
+                      </div>
+                    )}
+                    {openingHours.length > 0 && (
+                      <div className={`rounded-xl ${infoBlockBg} px-3 py-2 flex flex-col`}>
+                        <span className={`text-[10px] uppercase tracking-widest ${labelText} mb-1`}>{isAr ? 'ساعات العمل' : 'Opening Hours'}</span>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-0.5 mt-1">
+                          {openingHours.map((line: string, idx: number) => (
+                            <span key={idx} className={`text-[11px] ${textVal}`}>{line}</span>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
 
-                  {openingHours.length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-border/10">
-                      <div className={`text-[10px] uppercase tracking-widest ${labelText} mb-2`}>{isAr ? 'ساعات العمل' : 'Opening Hours'}</div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-                        {openingHours.map((line: string, hoursIndex: number) => (
-                          <div key={hoursIndex} className={`text-[11.5px] ${isDark ? 'text-white/70' : 'text-slate-600'}`}>{line}</div>
-                        ))}
+                  {/* MEDIA & LINKS */}
+                  <div className="space-y-3">
+                    {photoUrl && (
+                      <div className={`rounded-xl ${infoBlockBg} p-2 flex flex-col`}>
+                        <span className={`text-[10px] uppercase tracking-widest ${labelText} px-1 mb-1.5`}>{isAr ? 'الصور' : 'Photo'}</span>
+                        <img src={photoUrl} alt={placeName} className="w-full max-h-56 rounded-lg object-cover border border-border/10" />
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
 
-                {/* ── Action buttons ── */}
+                {/* ACTION BUTTONS (Maps, Call, Website) */}
                 {(hasMaps || hasCall || hasEmail || hasWeb || hasWhatsApp) && (
                   <div className="px-4 pb-3 flex flex-wrap gap-2">
                     {hasMaps && (
-                      <a href={place.mapsUrl} target="_blank" rel="noopener noreferrer"
-                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                        style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%) 0%, hsl(220 90% 38%) 100%)' }}>
-                        <Navigation size={13} />
-                        {isAr ? 'الخريطة' : 'Maps'}
-                      </a>
+                      <a href={place.mapsUrl} target="_blank" rel="noopener noreferrer" className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95" style={{ background: 'linear-gradient(135deg, hsl(210 100% 45%) 0%, hsl(220 90% 38%) 100%)' }}><Navigation size={13} /> {isAr ? 'الخريطة' : 'Maps'}</a>
                     )}
                     {hasCall && (
-                      <a href={phoneHref}
-                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                        style={{ background: 'linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(150 70% 28%) 100%)' }}>
-                        <Phone size={13} />
-                        {isAr ? 'اتصال' : 'Call'}
-                      </a>
-                    )}
-                    {hasEmail && (
-                      <a href={emailHref}
-                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                        style={{ background: 'linear-gradient(135deg, hsl(210 80% 56%) 0%, hsl(235 75% 44%) 100%)' }}>
-                        <Mail size={13} />
-                        {isAr ? 'إيميل' : 'Email'}
-                      </a>
-                    )}
-                    {hasWhatsApp && (
-                      <a href={place.whatsappUrl} target="_blank" rel="noopener noreferrer"
-                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                        style={{ background: 'linear-gradient(135deg, hsl(142 76% 42%) 0%, hsl(160 75% 30%) 100%)' }}>
-                        <MessageCircle size={13} />
-                        WhatsApp
-                      </a>
+                      <a href={phoneHref} className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95" style={{ background: 'linear-gradient(135deg, hsl(142 76% 36%) 0%, hsl(150 70% 28%) 100%)' }}><Phone size={13} /> {isAr ? 'اتصال' : 'Call'}</a>
                     )}
                     {hasWeb && (
-                      <a href={place.websiteUrl} target="_blank" rel="noopener noreferrer"
-                        className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95"
-                        style={{ background: 'linear-gradient(135deg, hsl(280 60% 45%) 0%, hsl(270 55% 35%) 100%)' }}>
-                        <Globe size={13} />
-                        {isAr ? 'الموقع' : 'Website'}
-                      </a>
+                      <a href={place.websiteUrl} target="_blank" rel="noopener noreferrer" className="min-w-[110px] flex-1 flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold text-white transition-opacity hover:opacity-90 active:scale-95" style={{ background: 'linear-gradient(135deg, hsl(280 60% 45%) 0%, hsl(270 55% 35%) 100%)' }}><Globe size={13} /> {isAr ? 'الموقع' : 'Website'}</a>
                     )}
                   </div>
                 )}
 
-                {/* ── Social follow badges ── */}
-                {socialLinks.length > 0 && (
-                  <div className={`px-4 pb-3 flex flex-wrap items-center gap-2 border-t ${isDark ? 'border-white/8' : 'border-slate-100'} pt-3`}>
-                    <span className={`text-[11px] ${labelText} font-medium mr-1`}>{isAr ? 'روابط السوشال:' : 'Social links:'}</span>
-                    {socialLinks.map((social) => (
-                      <a key={social.label} href={social.url} target="_blank" rel="noopener noreferrer"
-                        className={`inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 ${isDark ? 'text-white/85' : 'text-slate-700'} text-xs`}
-                        style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }} title={social.label}>
-                        {social.label === 'Instagram' ? <InstagramIcon size={22} /> : null}
-                        {social.label === 'Facebook' ? <FacebookIcon size={22} /> : null}
-                        {social.label === 'TikTok' ? <TikTokIcon size={22} /> : null}
-                        {social.label === 'WhatsApp' ? <WhatsAppIcon size={22} /> : null}
-                        <span>{social.label}</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
+                {/* SOCIAL LINKS */}
+                <div className={`px-4 pb-3 flex flex-wrap items-center gap-2 border-t ${isDark ? 'border-white/8' : 'border-slate-100'} pt-3`}>
+                  <span className={`text-[11px] ${labelText} font-medium mr-1`}>{isAr ? 'روابط السوشال:' : 'Social links:'}</span>
+                  {socialLinks.length > 0 ? socialLinks.map((social) => (
+                    <a key={social.label} href={social.url} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-2 rounded-xl px-2.5 py-2 hover:opacity-80 transition-opacity active:scale-95 ${isDark ? 'text-white/85' : 'text-slate-700'} text-xs`} style={{ background: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.04)' }} title={social.label}>
+                      {social.label === 'Instagram' ? <InstagramIcon size={22} /> : null}
+                      {social.label === 'Facebook' ? <FacebookIcon size={22} /> : null}
+                      {social.label === 'TikTok' ? <TikTokIcon size={22} /> : null}
+                      {social.label === 'WhatsApp' ? <WhatsAppIcon size={22} /> : null}
+                      <span>{social.label}</span>
+                    </a>
+                  )) : (
+                    <span className={`text-[13px] ${textVal} leading-relaxed`}>{unavailableText}</span>
+                  )}
+                </div>
 
-                {/* ── Recent Reviews ── */}
-                {(reviewCountValue || displayReviews.length > 0) && (
-                  <div className={`border-t ${isDark ? 'border-white/8' : 'border-slate-100'} px-4 py-3 space-y-3`}
-                    style={{ background: isDark ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.02)' }}>
-                    <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-widest ${labelText} font-semibold`}>
-                      <MessageCircle size={11} />
-                      {isAr ? 'مراجعات Google' : 'Google Reviews'}
-                    </div>
-                    {reviewCountValue && (
-                      <div className={`text-[13px] ${textVal} leading-relaxed`}>
-                        {`${reviewCountValue} ${isAr ? 'مراجعة Google' : 'Google reviews'}`}
-                      </div>
-                    )}
-                    {displayReviews.slice(0, 3).map((review: any, reviewIndex: number) => {
-                      const parsed = parseReviewTitle(review.title);
-                      return (
-                        <div key={`${place.placeId || place.name || 'place'}-review-${reviewIndex}`} className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {parsed.author ? (
-                              <span className={`text-xs font-semibold ${isDark ? 'text-white/80' : 'text-slate-800'}`}>{parsed.author}</span>
-                            ) : review.title ? (
-                              <span className={`text-xs font-semibold ${isDark ? 'text-white/80' : 'text-slate-800'}`}>{toCleanString(review.title)}</span>
-                            ) : null}
-                            {typeof parsed.rating === 'number' && (
-                              <span className={`text-[11px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>{parsed.rating.toFixed(1)}/5</span>
-                            )}
-                            {parsed.relTime && (
-                              <span className={`text-[11px] ${isDark ? 'text-white/35' : 'text-slate-400'}`}>{parsed.relTime}</span>
-                            )}
-                          </div>
-                          {review.snippet && (
-                            <p className={`text-[12px] ${isDark ? 'text-white/55' : 'text-slate-600'} leading-relaxed`}>
-                              {truncateReviewText(toCleanString(review.snippet), 200)}
-                            </p>
-                          )}
+                {/* GOOGLE REVIEWS (Max 3) */}
+                <div className={`border-t ${isDark ? 'border-white/8' : 'border-slate-100'} px-4 py-3 space-y-3`} style={{ background: isDark ? 'rgba(0,0,0,0.15)' : 'rgba(0,0,0,0.02)' }}>
+                  <div className={`flex items-center gap-1.5 text-[11px] uppercase tracking-widest ${labelText} font-semibold`}>
+                    <MessageCircle size={11} /> {isAr ? 'مراجعات Google' : 'Google Reviews'}
+                  </div>
+                  {displayReviews.length > 0 ? displayReviews.slice(0, 3).map((review: any, reviewIndex: number) => {
+                    const parsed = parseReviewTitle(review.title);
+                    return (
+                      <div key={`review-${reviewIndex}`} className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-xs font-semibold ${isDark ? 'text-white/80' : 'text-slate-800'}`}>{parsed.author || toCleanString(review.title)}</span>
+                          {typeof parsed.rating === 'number' && <span className={`text-[11px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>{parsed.rating.toFixed(1)}/5</span>}
+                          {parsed.relTime && <span className={`text-[11px] ${isDark ? 'text-white/35' : 'text-slate-400'}`}>{parsed.relTime}</span>}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        {review.snippet && <p className={`text-[12px] ${isDark ? 'text-white/55' : 'text-slate-600'} leading-relaxed`}>{truncateReviewText(toCleanString(review.snippet), 200)}</p>}
+                      </div>
+                    );
+                  }) : (
+                    <div className={`text-[13px] ${textVal} leading-relaxed`}>{unavailableText}</div>
+                  )}
+                </div>
               </div>
             )}
           </div>

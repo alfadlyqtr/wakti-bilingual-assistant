@@ -1816,12 +1816,23 @@ async function streamGemini3WithSearch(
   if (userLocation?.latitude && userLocation?.longitude) {
     locationHint = ` User is at [${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}]. Use this only for internal ranking of nearby and time-sensitive results. Do not rewrite the user's visible query with a city name, country, or coordinates.`;
   }
-  const latestQuery = `${query} (as of ${todayStr}).${nhlHint}${locationHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}.${nhlHint} Use the newest available sources/snippets. Prefer results updated today/this hour when present. If sources conflict, choose the most recently updated. If any result refers to an older season (example: "2023-24"), treat it as STALE and re-search with a stricter query. Do not use memory for live facts.`;
-  const mapsQuery = useMapsGrounding ? buildMapsGroundingQuery(query, userLocation) : query;
+  // CRITICAL: Prevent Google Search from leaking the server's Mumbai IP on "near me" queries.
+  let safeQueryForGemini = query;
+  if (isNearMeQuery || /\b(near me|nearby|around me|closest|nearest)\b/i.test(query)) {
+    const cityTag = [userLocation?.city, userLocation?.country]
+      .map((part) => (typeof part === 'string' ? part.trim() : ''))
+      .filter(Boolean)
+      .join(', ');
+    if (cityTag) {
+      safeQueryForGemini = query.replace(/\b(near me|nearby|around me|closest|nearest)\b/gi, `in ${cityTag}`);
+    }
+  }
+  const latestQuery = `${safeQueryForGemini} (as of ${todayStr}).${nhlHint}${locationHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}. Use the newest available sources/snippets. Prefer results updated today/this hour when present. Do not use memory for live facts.`;
+  const mapsQuery = useMapsGrounding ? buildMapsGroundingQuery(safeQueryForGemini, userLocation) : safeQueryForGemini;
   const effectiveQuery = useMapsGrounding ? mapsQuery : latestQuery;
 
   const searchContents = buildSearchFollowupContents(
-    query,
+    safeQueryForGemini,
     effectiveQuery,
     recentMessages,
     useMapsGrounding ? 'google_maps' : 'google_search'
@@ -1946,7 +1957,7 @@ function buildCombinedSearchSystemPrompt(params: {
 
 LIVE CONTEXT:
 - Time: ${localTime} (${userTimeZone})
-- Location: ${searchLocationContext || 'Unknown (User GPS missing. DO NOT use server IP. Default to Qatar for general queries.)'}
+- Location: ${searchLocationContext || 'Unknown (User GPS missing. DO NOT use server IP.)'}
 - Intent: ${searchIntent}
 - Language: ${language === 'ar' ? 'Arabic' : 'English'}
 ${userNick ? `- User: "${userNick}"` : userDisplayName ? `- User: "${userDisplayName}"` : ''}${aiNick ? `\n- Your name: "${aiNick}"` : ''}${toneVal !== 'neutral' ? `\n- Tone: ${toneVal}` : ''}${styleVal ? `\n- Style: ${styleVal}` : ''}${customNote ? `\n- Extra instruction: ${customNote}` : ''}
@@ -2062,7 +2073,7 @@ function buildLeanSearchSystemPrompt(params: {
 
 LIVE CONTEXT:
 - Current time: ${localTime} (${userTimeZone})
-- Location: ${searchLocationContext || 'Unknown (User GPS missing. DO NOT use server IP. Default to Qatar for general queries.)'}
+- Location: ${searchLocationContext || 'Unknown (User GPS missing. DO NOT use server IP.)'}
 - Intent hint: ${searchIntent}
 - Language: ${language === 'ar' ? 'Arabic' : 'English'}
 ${userNick ? `- User nickname: "${userNick}"` : userDisplayName ? `- User display name: "${userDisplayName}"` : ''}
@@ -5242,6 +5253,8 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
 
             // Detect search intent
             const searchIntent = detectSearchIntent(message);
+            const isNearMeSearchIntent = /\b(near me|nearby|around me|closest|nearest)\b/i.test(message || '');
+            const effectiveSearchIntent = isNearMeSearchIntent ? 'business' : searchIntent;
 
             // Get current time in user's timezone (fallback to UTC)
             const userTimeZone = effectiveTimezone || 'UTC';
@@ -5261,16 +5274,23 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
             let userCity = '';
             let userCountry = '';
             const explicitNearMeRequest = /\b(near me|nearby|around me|closest|nearest)\b/i.test(message || '');
-            let nearMeNoLocationNote = '';
-            if (explicitNearMeRequest && !(requestLocation?.latitude && requestLocation?.longitude)) {
-              nearMeNoLocationNote = language === 'ar'
-                ? '\n\nملاحظة: لم يتمكن النظام من الوصول إلى الموقع الحالي للمستخدم. أخبره بلطف بتفعيل صلاحيات الموقع، واقترح أفضل الخيارات المتاحة بشكل عام كبديل مفيد.'
-                : '\n\nNOTE: User location is unavailable for this nearby search. Politely tell the user to enable location access (GPS or browser), and offer the best general top-rated picks you can find as a helpful fallback.';
+            const hasRequestCoords = typeof requestLocation?.latitude === 'number' && typeof requestLocation?.longitude === 'number';
+            const requestLatitude = hasRequestCoords ? requestLocation.latitude as number : null;
+            const requestLongitude = hasRequestCoords ? requestLocation.longitude as number : null;
+            const gpsPermissionMessage = 'I need your exact location to find the best spots around you. Please ensure your device GPS is enabled and try again.';
+
+            if (explicitNearMeRequest && !hasRequestCoords) {
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: gpsPermissionMessage, content: gpsPermissionMessage })}\n\n`));
+              await emitAiChatTrialFinished(trialRequestId);
+              controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+              controller.close();
+              return;
             }
-            if (requestLocation?.latitude && requestLocation?.longitude) {
+
+            if (hasRequestCoords) {
               if (!explicitNearMeRequest) {
                 try {
-                  const geocoded = await reverseGeocode(requestLocation.latitude, requestLocation.longitude);
+                  const geocoded = await reverseGeocode(requestLatitude as number, requestLongitude as number);
                   userCity = (geocoded.city || '').toString().trim();
                   userCountry = (geocoded.country || '').toString().trim();
                 } catch {}
@@ -5288,13 +5308,12 @@ LOCATION PHRASING RULES ΓÇö STRICT (mandatory for any "near me", "nearby", "a
             if (userCity && userCountry) parts.push(`City: ${userCity}, ${userCountry}`);
             else if (userCity) parts.push(`City: ${userCity}`);
             else if (userCountry) parts.push(`Country: ${userCountry}`);
-            if (requestLocation?.latitude && requestLocation?.longitude) {
-              parts.push(`Coordinates: ${requestLocation.latitude.toFixed(4)}┬░N, ${requestLocation.longitude.toFixed(4)}┬░E`);
+            if (hasRequestCoords) {
+              parts.push(`Coordinates: ${(requestLatitude as number).toFixed(4)}┬░N, ${(requestLongitude as number).toFixed(4)}┬░E`);
             }
             if (parts.length > 0) {
               locationContext = `\n\nUSER LOCATION CONTEXT:\n${parts.join('\n')}`;
             }
-            if (nearMeNoLocationNote) locationContext += nearMeNoLocationNote;
 
             const eliteIntroRule = (() => {
               if (language === 'ar') {
@@ -5560,7 +5579,7 @@ If you are running out of space, keep this order and drop the rest:
               userTimeZone,
               personalSection,
               searchLocationContext,
-              searchIntent,
+              searchIntent: effectiveSearchIntent,
               userNick,
               userDisplayName,
               aiNick,
@@ -5574,13 +5593,17 @@ If you are running out of space, keep this order and drop the rest:
             let groundingMetadata: Gemini3SearchResult['groundingMetadata'] | null = null;
             let searchFinishReason = '';
 
-            // Prepare device GPS location for search query injection (all queries, not just business)
-            const userLocationForSearch = (requestLocation?.latitude && requestLocation?.longitude) 
-              ? { latitude: requestLocation.latitude, longitude: requestLocation.longitude, city: userCity || '', country: userCountry || '' }
+            const userLocationForSearch = hasRequestCoords
+              ? {
+                  latitude: requestLatitude as number,
+                  longitude: requestLongitude as number,
+                  city: requestLocation?.city || userCity || '',
+                  country: requestLocation?.country || userCountry || ''
+                }
               : null;
             const cleanSearchQuery = typeof message === 'string' ? message.trim() : '';
             const isNearMeSearchQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanSearchQuery);
-            const parallelPlacesPromise = searchIntent === 'business' && cleanSearchQuery
+            const parallelPlacesPromise = effectiveSearchIntent === 'business' && cleanSearchQuery
               ? (async () => {
                   const foundPlaces = await searchGooglePlacesForQuery(
                     cleanSearchQuery,
@@ -5593,7 +5616,7 @@ If you are running out of space, keep this order and drop the rest:
 
             // Stream tokens to client
             const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3.1-flash-lite';
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: { searchType: searchIntent, cardType: normalizeSearchCardType(searchIntent), queries: cleanSearchQuery ? [cleanSearchQuery] : [], cards: [], summary: '' } } })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: { searchType: effectiveSearchIntent, cardType: normalizeSearchCardType(effectiveSearchIntent), queries: cleanSearchQuery ? [cleanSearchQuery] : [], cards: [], summary: '', isNearMeQuery: isNearMeSearchQuery } } })}\n\n`));
 
             if (parallelPlacesPromise) {
               parallelPlacesPromise
@@ -5601,14 +5624,14 @@ If you are running out of space, keep this order and drop the rest:
                   if (!Array.isArray(parallelPlaces) || parallelPlaces.length === 0) return;
                   const earlySources = buildSearchSourcesFromPlaces(parallelPlaces);
                   const earlyCardPayload = buildStructuredSearchCards({
-                    searchIntent,
+                    searchIntent: effectiveSearchIntent,
                     responseText: '',
                     sources: earlySources,
                     places: parallelPlaces,
                     language,
                   });
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: {
-                    searchType: searchIntent,
+                    searchType: effectiveSearchIntent,
                     cardType: earlyCardPayload.cardType,
                     queries: cleanSearchQuery ? [cleanSearchQuery] : [],
                     mapSearchQuery: cleanSearchQuery,
@@ -5625,7 +5648,7 @@ If you are running out of space, keep this order and drop the rest:
                 .catch(() => {});
             }
 
-            const searchModelQuery = searchIntent === 'business'
+            const searchModelQuery = effectiveSearchIntent === 'business'
               ? (language === 'ar'
                   ? `${message}\n\n[قاعدة تنسيق إلزامية — يجب الالتزام بها]: يجب عليك تنسيق كل مكان مقترح بدقة كقائمة مهيكلة. ابدأ كل مكان بـ "**[الرقم]. [الاسم]** ([المنطقة])"، متبوعاً بوصف قصير، ثم هذه النقاط التفصيلية تماماً:\n- **Reason:** [سبب وجيه ومحدد لاختيار هذا المكان]\n- **Vibe:** [الكلمات المفتاحية]\n- **Must Try:** [التوصية]\n- **Status:** [مفتوح / مغلق]\n- **Google Maps:** [الرابط]\nلا تكتب فقرات عادية بدون هذه الحقول النقطية المصممة للبطاقات.`
                   : `${message}\n\n[MANDATORY FORMATTING RULE — MUST COMPLY]: You MUST format each recommended place precisely as a structured list. Start each place with "**[Number]. [Name]** ([Area])", followed by a short description, and then exactly these bullet points:\n- **Reason:** [compelling reason to visit / why it made the list]\n- **Vibe:** [keywords]\n- **Must Try:** [recommendation]\n- **Status:** [verified hours]\n- **Google Maps:** [link]\nDO NOT use plain paragraph style without these bullet fields designed for the cards.`)
@@ -5647,7 +5670,7 @@ If you are running out of space, keep this order and drop the rest:
                 searchFinishReason = typeof finishReason === 'string' ? finishReason : '';
               },
               userLocationForSearch,
-              searchIntent,
+              effectiveSearchIntent,
               searchModel,
               normalizedAttachedFiles
             );
@@ -5836,8 +5859,8 @@ If you are running out of space, keep this order and drop the rest:
                   } else {
                     // This recommended place was NOT found in the broad initial search.
                     // Let's run a targeted parallel search on Google Places specifically for this place name + area!
-                    const areaSegment = mergedParsedPlace.address || (userLocationForSearch?.city ? `${userLocationForSearch.city}` : 'Doha');
-                    const lookupQuery = `${mergedParsedPlace.name} ${areaSegment}`;
+                    const areaSegment = mergedParsedPlace.address || (userLocationForSearch?.city ? `${userLocationForSearch.city}` : '');
+                    const lookupQuery = [mergedParsedPlace.name, areaSegment].filter(Boolean).join(' ').trim();
                     
                     const p = (async () => {
                       try {
@@ -5867,7 +5890,7 @@ If you are running out of space, keep this order and drop the rest:
                 }
 
                 let groundedPlaces: GroundedPlaceCard[] = Array.from(groundedPlaceById.values());
-                if (searchIntent === 'business' && groundedPlaces.length === 0) {
+                if (effectiveSearchIntent === 'business' && groundedPlaces.length === 0) {
                   groundedPlaces = parallelPlacesPromise ? await parallelPlacesPromise.catch(() => []) : [];
                 } else if (parallelPlacesPromise) {
                   const parallelPlaces = await parallelPlacesPromise.catch(() => []);
@@ -5906,7 +5929,7 @@ If you are running out of space, keep this order and drop the rest:
                   return Array.from(byUrl.values()).slice(0, 12);
                 })();
                 const cardPayload = buildStructuredSearchCards({
-                  searchIntent,
+                  searchIntent: effectiveSearchIntent,
                   responseText: fullResponseText,
                   sources: builtSources,
                   places: groundedPlaces,
@@ -5915,7 +5938,7 @@ If you are running out of space, keep this order and drop the rest:
                 const metaPayload = {
                   metadata: {
                     geminiSearch: {
-                      searchType: searchIntent,
+                      searchType: effectiveSearchIntent,
                       cardType: cardPayload.cardType,
                       queries: Array.isArray(gm.webSearchQueries) && gm.webSearchQueries.length > 0 ? gm.webSearchQueries : (cleanSearchQuery ? [cleanSearchQuery] : []),
                       mapSearchQuery: cleanSearchQuery,
@@ -5964,7 +5987,7 @@ If you are running out of space, keep this order and drop the rest:
                 const cleanFallbackQuery = typeof message === 'string' ? message.trim() : '';
                 const isNearMeFallbackQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanFallbackQuery);
                 let fallbackPlaces: GroundedPlaceCard[] = [];
-                if (searchIntent === 'business' && cleanFallbackQuery) {
+                if (effectiveSearchIntent === 'business' && cleanFallbackQuery) {
                   fallbackPlaces = parallelPlacesPromise
                     ? await parallelPlacesPromise.catch(() => [])
                     : await (async () => {
@@ -5983,7 +6006,7 @@ If you are running out of space, keep this order and drop the rest:
 
                 if (fallbackSourcePayload.length > 0 || fallbackPlaces.length > 0) {
                   const fallbackCardPayload = buildStructuredSearchCards({
-                    searchIntent,
+                    searchIntent: effectiveSearchIntent,
                     responseText: fullResponseText,
                     sources: fallbackSourcePayload,
                     places: fallbackPlaces,
@@ -5992,7 +6015,7 @@ If you are running out of space, keep this order and drop the rest:
                   const fallbackPayload = {
                     metadata: {
                       geminiSearch: {
-                        searchType: searchIntent,
+                        searchType: effectiveSearchIntent,
                         cardType: fallbackCardPayload.cardType,
                         queries: cleanFallbackQuery ? [cleanFallbackQuery] : [],
                         mapSearchQuery: cleanFallbackQuery,

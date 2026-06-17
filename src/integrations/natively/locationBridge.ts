@@ -60,6 +60,15 @@ const BRIDGE_READY_TIMEOUT = 5000; // max ms to wait for native iOS/Android brid
 let pendingLocationPromise: Promise<NativeLocationResult | null> | null = null;
 let pendingFreshLocationPromise: Promise<NativeLocationResult | null> | null = null;
 
+function hasValidCoordinates(latitude: unknown, longitude: unknown): latitude is number {
+  return typeof latitude === 'number'
+    && typeof longitude === 'number'
+    && Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && latitude !== 0
+    && longitude !== 0;
+}
+
 /**
  * Wait for the Natively NATIVE BRIDGE to be connected (not just CDN script loaded).
  *
@@ -343,12 +352,13 @@ function getCurrentLocation(
       clearTimeout(timer);
       console.log('[NativelyLocation] current() response:', JSON.stringify(resp));
 
-      if ((resp.status === 'Success' || resp.status === 'Timeout') &&
-          typeof resp.latitude === 'number' && typeof resp.longitude === 'number') {
+      if (resp.status === 'Success' && hasValidCoordinates(resp.latitude, resp.longitude)) {
         const result: NativeLocationResult = {
           latitude: resp.latitude,
           longitude: resp.longitude,
           accuracy: resp.accuracy,
+          city: resp.city,
+          country: resp.country,
           source: 'native',
         };
         setCachedLocation(result);
@@ -387,6 +397,11 @@ function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationRe
     console.log('[NativelyLocation] 🌐 Trying browser geolocation fallback...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+        if (!hasValidCoordinates(pos.coords.latitude, pos.coords.longitude)) {
+          console.warn('[NativelyLocation] Browser geolocation returned invalid coordinates');
+          resolve(null);
+          return;
+        }
         const result: NativeLocationResult = {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
@@ -497,6 +512,10 @@ async function _doGetNativeLocation(options?: {
       if (skipCache) {
         console.log('[NativelyLocation] Using foreground tracking for fresh GPS...');
         result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
+        if (!result) {
+          console.warn('[NativelyLocation] Fresh GPS foreground fix unavailable — will use browser fallback');
+          return null;
+        }
       }
       if (!result) {
         console.log('[NativelyLocation] Using current() one-shot...');
@@ -505,11 +524,11 @@ async function _doGetNativeLocation(options?: {
       return result;
     }
     if (perm === 'DENIED') {
-      console.warn('[NativelyLocation] ⚠️ Permission DENIED — trying current() with fallbackToSettings=true');
-      return await getCurrentLocation(instance, minAccuracy, accuracyType, priority, true, timeoutMs);
+      console.warn('[NativelyLocation] ⚠️ Permission DENIED — skipping native current(), using browser fallback only');
+      return null;
     }
-    console.log('[NativelyLocation] Permission unknown — trying current() anyway...');
-    return await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
+    console.log('[NativelyLocation] Permission unknown — skipping native current(), using browser fallback only');
+    return null;
   })().catch((err) => {
     console.warn('[NativelyLocation] Native SDK path threw:', err);
     return null;

@@ -9,7 +9,6 @@ import {
 import { SandpackErrorBoundary } from "./SandpackErrorBoundary";
 import { PREVIEW_ERROR_CAPTURE_SCRIPT, SandpackErrorListener } from "./SandpackErrorListener";
 import { SandpackConsolePanel } from "./SandpackConsolePanel";
-import RunnerPreview from "./RunnerPreview";
 import { CollapsibleFileTree } from "./CollapsibleFileTree";
 import { atomDark } from "@codesandbox/sandpack-themes";
 import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft } from "lucide-react";
@@ -27,6 +26,7 @@ import { clsx } from "clsx";
 import { WAKTI_INSPECTOR_COMPONENT } from "@/utils/waktiInspectorComponent";
 import sandpackI18nBundle from "@/assets/sandpack-i18n-bundle.mjs?raw";
 import { SANDPACK_DEPENDENCIES, assertSandpackPackagesInSync, rootPackageName } from "@/config/sandpackPackages";
+import { SANDPACK_EFFECTIVE_BUNDLER_URL } from "@/config/sandpackBundler";
 
 const SANDPACK_COMPANION_DEPENDENCIES: Record<string, string[]> = {
   "framer-motion": ["@emotion/is-prop-valid"],
@@ -836,7 +836,6 @@ export default function SandpackStudio({
   const [previewSessionKey, setPreviewSessionKey] = useState(0);
   const [previewHealth, setPreviewHealth] = useState<PreviewHealthState>('loading');
   const [previewFailureMessage, setPreviewFailureMessage] = useState('');
-  const [useRunnerFallback, setUseRunnerFallback] = useState(false);
   const [forcedDependencyRoots, setForcedDependencyRoots] = useState<string[]>([]);
   const [forceAllDependencies, setForceAllDependencies] = useState(false);
   const [runtimeDependencies, setRuntimeDependencies] = useState<Record<string, string>>({});
@@ -1043,14 +1042,12 @@ export default function SandpackStudio({
     setForcedDependencyRoots([]);
     setForceAllDependencies(false);
     setRuntimeDependencies({});
-    setUseRunnerFallback(false);
   }, [projectId]);
 
   useEffect(() => {
     autoRecoveryCountRef.current = 0;
     setPreviewFailureMessage('');
     setPreviewHealth('loading');
-    setUseRunnerFallback(false);
   }, [elementSelectMode]);
 
   const handleVisualPreviewFailure = useCallback((reason: string) => {
@@ -1063,18 +1060,6 @@ export default function SandpackStudio({
     }
 
     setPreviewFailureMessage(reason);
-
-    if (!usingVisualPreview) {
-      setUseRunnerFallback(true);
-      setPreviewHealth('recovering');
-      return;
-    }
-
-    setPreviewHealth('failed');
-  }, [usingVisualPreview]);
-
-  const handleRunnerPreviewFailure = useCallback((reason: string) => {
-    setPreviewFailureMessage(reason);
     setPreviewHealth('failed');
   }, []);
 
@@ -1082,7 +1067,6 @@ export default function SandpackStudio({
     autoRecoveryCountRef.current = 0;
     setPreviewFailureMessage('');
     setPreviewHealth('loading');
-    setUseRunnerFallback(false);
 
     if (onRefresh) {
       onRefresh();
@@ -1242,7 +1226,6 @@ export default function App() {
     }
 
     const appEntryPath = APP_COMPONENT_ENTRY_CANDIDATES.find((path) => typeof next[path] === 'string');
-    const hasRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.some((path) => typeof next[path] === 'string');
     const hasMountingRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.some((path) => {
       const source = next[path];
       return typeof source === 'string' && hasReactMountCode(source);
@@ -1257,10 +1240,19 @@ export default function App() {
         }
       }
 
-      // Visual mode injects our custom index.js with the WaktiInspector component.
-      next["/index.js"] = `import React from "react";
+      // Add styles.css if not present
+      if (!next["/styles.css"]) {
+        next["/styles.css"] = "/* Tailwind loaded via CDN */";
+      }
+    }
+
+    if (!hasMountingRuntimeEntry && appEntryPath) {
+      const appImportPath = toImportPath(appEntryPath);
+
+      if (usingVisualPreview) {
+        next['/__wakti_entry.js'] = `import React from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
+import App from "${appImportPath}";
 
 ${WAKTI_INSPECTOR_COMPONENT}
 
@@ -1270,22 +1262,17 @@ root.render(
     <App />
     <WaktiInspector />
   </>
-);`;
-
-      // Add styles.css if not present
-      if (!next["/styles.css"]) {
-        next["/styles.css"] = "/* Tailwind loaded via CDN */";
-      }
-    } else if ((!hasRuntimeEntry || !hasMountingRuntimeEntry) && appEntryPath) {
-      const appImportPath = toImportPath(appEntryPath);
-
-      next['/__wakti_entry.js'] = `import React from "react";
+);
+`;
+      } else {
+        next['/__wakti_entry.js'] = `import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "${appImportPath}";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
 `;
+      }
     }
 
     // If project uses i18n, inject our pre-bundled version under the original package names
@@ -1367,14 +1354,6 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
   }, [normalizedProjectFiles, usingVisualPreview]);
 
   const sandpackEntryFile = useMemo(() => {
-    if (usingVisualPreview && typeof formattedFiles['/index.js'] === 'string') {
-      return '/index.js';
-    }
-
-    if (typeof formattedFiles['/__wakti_entry.js'] === 'string') {
-      return '/__wakti_entry.js';
-    }
-
     const mountedRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.find((path) => {
       const source = formattedFiles[path];
       return typeof source === 'string' && hasReactMountCode(source);
@@ -1384,13 +1363,17 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
       return mountedRuntimeEntry;
     }
 
+    if (typeof formattedFiles['/__wakti_entry.js'] === 'string') {
+      return '/__wakti_entry.js';
+    }
+
     const existingRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.find((path) => typeof formattedFiles[path] === 'string');
     if (existingRuntimeEntry) {
       return existingRuntimeEntry;
     }
 
     return APP_COMPONENT_ENTRY_CANDIDATES.find((path) => typeof formattedFiles[path] === 'string') || '/index.js';
-  }, [formattedFiles, usingVisualPreview]);
+  }, [formattedFiles]);
 
   const {
     activeFile,
@@ -1565,12 +1548,13 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
 
   return (<>
     <SandpackProvider
-      key={`sandpack-provider-${projectId ?? 'local'}-${usesTypeScript ? 'ts' : 'js'}`}
+      key={`sandpack-provider-${projectId ?? 'local'}-${usesTypeScript ? 'ts' : 'js'}-${previewSessionKey}`}
       template={usesTypeScript ? "react-ts" : "react"}
       theme={atomDark}
       files={formattedFiles}
       options={{
         externalResources: ["https://cdn.tailwindcss.com"],
+        bundlerURL: SANDPACK_EFFECTIVE_BUNDLER_URL,
         activeFile,
         visibleFiles: openTabs,
         classes: {
@@ -1643,7 +1627,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
           {/* PREVIEW MODE: Keep mounted; show/hide to avoid iframe blanking on toggle */}
           <div className={clsx(
             "absolute inset-0 h-full w-full min-w-0 relative bg-black overflow-hidden group",
-            viewMode === 'preview' && !useRunnerFallback ? "block" : "hidden"
+            viewMode === 'preview' ? "block" : "hidden"
           )}>
                   {/* CSS to hide the default Sandpack error screen and fix scrollbar styling */}
                   <style dangerouslySetInnerHTML={{ __html: `
@@ -1789,22 +1773,6 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                   )}
 
                   {/* Visual Mode Indicator removed - now handled in ProjectDetail.tsx */}
-          </div>
-
-          <div className={clsx(
-            "absolute inset-0 h-full w-full min-w-0 relative bg-black overflow-hidden",
-            viewMode === 'preview' && useRunnerFallback ? "block" : "hidden"
-          )}>
-            <RunnerPreview
-              projectId={projectId}
-              projectName={projectName}
-              isActive={viewMode === 'preview' && useRunnerFallback && hasValidFiles && !isLoading}
-              isLoading={isLoading || !hasValidFiles}
-              reloadKey={previewSessionKey}
-              isRTL={isRTL}
-              onPreviewReady={handlePreviewReady}
-              onPreviewFailure={handleRunnerPreviewFailure}
-            />
           </div>
 
           {/* INCREMENTAL FILE UPDATER - Prevents full rebuilds on code changes */}

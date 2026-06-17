@@ -901,6 +901,22 @@ class WaktiAIV2ServiceClass {
       const needsLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
       const forceFreshLocation = containsNearMePattern(message);
       const cachedLocation = needsLocation ? this.getCachedUserLocation() : null;
+      const isReliableNearMeLocation = (loc: UserLocationContext | null): boolean => {
+        if (!loc) return false;
+        if (typeof loc.latitude !== 'number' || typeof loc.longitude !== 'number') return false;
+        if (!Number.isFinite(loc.latitude) || !Number.isFinite(loc.longitude)) return false;
+        if (Math.abs(loc.latitude) > 90 || Math.abs(loc.longitude) > 180) return false;
+        if (loc.latitude === 0 || loc.longitude === 0) return false;
+
+        const accuracy = typeof loc.accuracy === 'number' && Number.isFinite(loc.accuracy)
+          ? loc.accuracy
+          : null;
+
+        if (accuracy == null) return false;
+        if (accuracy > 5000) return false;
+
+        return true;
+      };
       const getBestSearchLocation = async (): Promise<UserLocationContext | null> => {
         if (!forceFreshLocation) {
           if (cachedLocation) return cachedLocation;
@@ -912,10 +928,15 @@ class WaktiAIV2ServiceClass {
 
         try {
           const freshLocation = await this.getUserLocation(userId || '', true);
-          if (freshLocation?.latitude && freshLocation?.longitude) return freshLocation;
+          if (isReliableNearMeLocation(freshLocation)) return freshLocation;
         } catch {
           // fall back below
         }
+
+        try {
+          this.locationCache = null;
+          localStorage.removeItem('wakti_user_location');
+        } catch {}
 
         return null;
       };

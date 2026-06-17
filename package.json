@@ -4,7 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/dev-watchdog.mjs",
+    "dev:raw": "vite",
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "build:analyze": "cross-env ANALYZE=true vite build",
