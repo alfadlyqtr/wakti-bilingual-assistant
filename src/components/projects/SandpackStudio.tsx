@@ -69,7 +69,14 @@ const RUNTIME_ENTRY_CANDIDATES = [
   '/src/main.js',
   '/src/main.jsx',
   '/src/main.tsx',
+  '/wakti_entry.js',
+  '/wakti_entry.jsx',
+  '/wakti_entry.tsx',
+  '/src/wakti_entry.js',
+  '/src/wakti_entry.jsx',
+  '/src/wakti_entry.tsx',
 ] as const;
+const VISUAL_PREVIEW_READY_TIMEOUT_MS = 130000;
 const APP_COMPONENT_ENTRY_CANDIDATES = [
   '/App.tsx',
   '/App.jsx',
@@ -150,6 +157,28 @@ function ensureRootMountHtml(html: string): string {
   return `${html}\n<div id="root"></div>`;
 }
 
+function buildReactPreviewShell(html: string): string {
+  const source = typeof html === 'string' ? html.trim() : '';
+  if (!source) {
+    return '<!DOCTYPE html>\n<html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head><body><div id="root"></div></body></html>';
+  }
+
+  const htmlAttrsMatch = source.match(/<html([^>]*)>/i);
+  const htmlAttrs = htmlAttrsMatch?.[1]?.trim() ? ` ${htmlAttrsMatch[1].trim()}` : ' lang="en"';
+  const bodyAttrsMatch = source.match(/<body([^>]*)>/i);
+  const bodyAttrs = bodyAttrsMatch?.[1]?.trim() ? ` ${bodyAttrsMatch[1].trim()}` : '';
+  let headContent = source.match(/<head[^>]*>([\s\S]*?)<\/head>/i)?.[1]?.trim() || '';
+
+  if (!/<meta[^>]+charset=/i.test(headContent)) {
+    headContent = `<meta charset="UTF-8" />${headContent ? `\n${headContent}` : ''}`;
+  }
+  if (!/name=["']viewport["']/i.test(headContent)) {
+    headContent = `${headContent}${headContent ? '\n' : ''}<meta name="viewport" content="width=device-width, initial-scale=1.0" />`;
+  }
+
+  return `<!DOCTYPE html>\n<html${htmlAttrs}>\n<head>\n${headContent}\n</head>\n<body${bodyAttrs}>\n<div id="root"></div>\n</body>\n</html>`;
+}
+
 function parseRequestUrl(input: unknown): URL | null {
   try {
     if (typeof input === 'string') {
@@ -174,7 +203,7 @@ function parseRequestUrl(input: unknown): URL | null {
 function isBlockedSandpackTelemetryRequest(input: unknown): boolean {
   const parsed = parseRequestUrl(input);
   if (!parsed) return false;
-  return parsed.hostname === 'api.csbops.io' && parsed.pathname.startsWith('/data/sandpack');
+  return /(^|\.)csbops\.io$/i.test(parsed.hostname) && parsed.pathname.startsWith('/data/');
 }
 
 function createNoopTelemetryResponse(): Promise<Response> {
@@ -342,7 +371,7 @@ const SANDBOX_NETWORK_GUARD_SCRIPT = `
   const isBlockedSandpackAnalytics = (input) => {
     const url = parseUrl(input);
     if (!url) return false;
-    return url.hostname === "api.csbops.io" && url.pathname.startsWith("/data/sandpack");
+    return /(^|\.)csbops\.io$/i.test(url.hostname) && url.pathname.startsWith("/data/");
   };
 
   const okJsonResponse = () =>
@@ -640,7 +669,7 @@ const InspectablePreview = ({
           ? `Preview did not become ready: ${iframeSrc}`
           : 'Preview iframe did not become ready.'
       );
-    }, 12000);
+    }, VISUAL_PREVIEW_READY_TIMEOUT_MS);
 
     return () => clearTimeout(timeout);
   }, [findIframe, inspectorEnabled, inspectorReady, reportPreviewFailure, sandpackRunning, watchdogEnabled]);
@@ -1230,6 +1259,7 @@ export default function App() {
       const source = next[path];
       return typeof source === 'string' && hasReactMountCode(source);
     });
+    const hasRuntimeEntryFile = RUNTIME_ENTRY_CANDIDATES.some((path) => typeof next[path] === 'string');
 
     if (usingVisualPreview) {
       // Ensure /App.js exists so Sandpack always has a default entry file to open in Code view.
@@ -1329,6 +1359,18 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
   </body>
 </html>`;
 
+    const shouldUseCleanReactShell = hasMountingRuntimeEntry || hasRuntimeEntryFile || !!appEntryPath;
+    const indexHtmlSource = typeof next['/index.html'] === 'string'
+      ? next['/index.html']
+      : typeof next['/public/index.html'] === 'string'
+        ? next['/public/index.html']
+        : indexHtmlContent;
+    const publicIndexHtmlSource = typeof next['/public/index.html'] === 'string'
+      ? next['/public/index.html']
+      : typeof next['/index.html'] === 'string'
+        ? next['/index.html']
+        : indexHtmlContent;
+
     if (!next['/index.html'] && !next['/public/index.html']) {
       next['/index.html'] = indexHtmlContent;
       next['/public/index.html'] = indexHtmlContent;
@@ -1340,13 +1382,17 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
 
     if (typeof next['/index.html'] === 'string') {
       next['/index.html'] = injectPreviewErrorCaptureScript(
-        injectSandboxNetworkGuardScript(ensureRootMountHtml(next['/index.html']))
+        injectSandboxNetworkGuardScript(
+          shouldUseCleanReactShell ? buildReactPreviewShell(indexHtmlSource) : ensureRootMountHtml(next['/index.html'])
+        )
       );
     }
 
     if (typeof next['/public/index.html'] === 'string') {
       next['/public/index.html'] = injectPreviewErrorCaptureScript(
-        injectSandboxNetworkGuardScript(ensureRootMountHtml(next['/public/index.html']))
+        injectSandboxNetworkGuardScript(
+          shouldUseCleanReactShell ? buildReactPreviewShell(publicIndexHtmlSource) : ensureRootMountHtml(next['/public/index.html'])
+        )
       );
     }
 

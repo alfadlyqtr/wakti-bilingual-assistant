@@ -40,7 +40,8 @@ import {
   Globe,
   Server,
   Bot,
-  MessageCircle
+  MessageCircle,
+  Lock
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -65,7 +66,7 @@ interface Project {
 const WaktiAssistant = lazyRetry(() => import('./WaktiAssistant'));
 
 const MAX_PROJECTS = 3;
-const AI_CODER_TEMP_LOCKED = false;
+const AI_CODER_TEMP_LOCKED = true;
 type ScreenshotIntent = 'layout' | 'style' | 'content';
 
 const SCREENSHOT_INTENT_OPTIONS: Array<{
@@ -1982,6 +1983,7 @@ Apply these styles consistently throughout the entire design.`;
                 />
               )}
               <Code2 className="relative z-20 w-4.5 h-4.5" />
+              {AI_CODER_TEMP_LOCKED ? <Lock className="relative z-20 w-4 h-4" /> : null}
               <span className="relative z-20">{isRTL ? 'مبرمج الذكاء' : 'AI CODER'}</span>
             </button>
 
@@ -2030,14 +2032,22 @@ Apply these styles consistently throughout the entire design.`;
       {activeTab === 'coder' && (
       AI_CODER_TEMP_LOCKED ? (
         <div className="min-h-[60vh] flex items-center justify-center px-4 py-16">
-          <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-8 text-center shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300">
+          <div className={cn(
+            "w-full max-w-md rounded-3xl border backdrop-blur-xl p-8 text-center",
+            isDark
+              ? "border-white/10 bg-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.35)]"
+              : "border-[#060541]/15 bg-white/95 shadow-[0_20px_60px_rgba(6,5,65,0.14)]"
+          )}>
+            <div className={cn(
+              "mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl",
+              isDark ? "bg-indigo-500/15 text-indigo-300" : "bg-[#060541]/10 text-[#060541]"
+            )}>
               <Sparkles className="h-6 w-6" />
             </div>
-            <h2 className="text-xl font-bold text-white mb-2">
+            <h2 className={cn("text-xl font-bold mb-2", isDark ? "text-white" : "text-[#060541]")}>
               {isRTL ? 'نقوم بتحديث ميزة مبرمج الذكاء' : 'We are updating AI Coder'}
             </h2>
-            <p className="text-sm text-white/75 leading-6">
+            <p className={cn("text-sm leading-6", isDark ? "text-white/75" : "text-[#060541]/75")}>
               {isRTL ? 'سنعود قريبًا جدًا. شكرًا لصبرك 💙' : 'We will be back very soon. Thank you for your patience 💙'}
             </p>
           </div>

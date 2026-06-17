@@ -1482,6 +1482,27 @@ async function streamGemini(
   }
 }
 
+async function generateGeminiText(
+  model: string,
+  prompt: string,
+  systemInstruction?: string,
+  generationConfig?: Record<string, unknown>,
+  enableSearchTool = false,
+): Promise<string> {
+  let fullText = '';
+  await streamGemini(
+    model,
+    [buildTextContent('user', prompt)],
+    (token: string) => {
+      fullText += token;
+    },
+    systemInstruction,
+    generationConfig,
+    enableSearchTool,
+  );
+  return fullText.trim();
+}
+
 // === GEMINI 3 FLASH WITH GOOGLE SEARCH GROUNDING (STREAMING) ===
 interface Gemini3SearchResult {
   text: string;
@@ -1632,6 +1653,18 @@ function buildMapsGroundingQuery(
     .replace(/^(?:can you|could you|would you|please|find me|show me|give me|i want|i need|looking for|search for|recommend(?: me)?|suggest(?: me)?|what are|where are)\s+/i, '')
     .replace(/\s+/g, ' ')
     .trim();
+
+  const nearMePattern = /\b(near me|nearby|around me|closest|nearest)\b/i;
+  const hasCoords = typeof userLocation?.latitude === 'number'
+    && typeof userLocation?.longitude === 'number'
+    && Number.isFinite(userLocation.latitude)
+    && Number.isFinite(userLocation.longitude);
+
+  if (nearMePattern.test(cleaned) && hasCoords) {
+    const strippedNearMe = cleaned.replace(/\b(near me|nearby|around me|closest|nearest)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+    const anchorBase = strippedNearMe || cleaned;
+    return `${anchorBase} near coordinates ${userLocation!.latitude.toFixed(4)}, ${userLocation!.longitude.toFixed(4)}`;
+  }
 
   const city = (userLocation?.city || '').trim();
   const country = (userLocation?.country || '').trim();
@@ -1809,7 +1842,7 @@ async function streamGemini3WithSearch(
   const isNhlLive = /\bnhl\b/i.test(query) && /(standings?|scores?|results?|schedule|wild\s*card|conference|division|points|gp|games\s*played)/i.test(query);
   const nhlHint = isNhlLive ? ` Current NHL season: ${nhlSeason}.` : '';
   const isNearMeQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(query);
-  const useMapsGrounding = searchIntent === 'business' || searchIntent === 'places' || isNearMeQuery;
+  const useMapsGrounding = searchIntent === 'business' || isNearMeQuery;
   const hasUserCoords = typeof userLocation?.latitude === 'number' && typeof userLocation?.longitude === 'number';
   // Inject device GPS location into the query so google_search returns hyper-local results
   let locationHint = '';
@@ -1818,13 +1851,14 @@ async function streamGemini3WithSearch(
   }
   // CRITICAL: Prevent Google Search from leaking the server's Mumbai IP on "near me" queries.
   let safeQueryForGemini = query;
-  if (isNearMeQuery || /\b(near me|nearby|around me|closest|nearest)\b/i.test(query)) {
-    const cityTag = [userLocation?.city, userLocation?.country]
-      .map((part) => (typeof part === 'string' ? part.trim() : ''))
-      .filter(Boolean)
-      .join(', ');
-    if (cityTag) {
-      safeQueryForGemini = query.replace(/\b(near me|nearby|around me|closest|nearest)\b/gi, `in ${cityTag}`);
+  if (isNearMeQuery) {
+    const nearMePattern = /\b(near me|nearby|around me|closest|nearest)\b/gi;
+    if (hasUserCoords) {
+      const strippedNearMe = query.replace(nearMePattern, ' ').replace(/\s+/g, ' ').trim();
+      const anchorBase = strippedNearMe || query.trim();
+      safeQueryForGemini = `${anchorBase} near coordinates ${userLocation!.latitude.toFixed(4)}, ${userLocation!.longitude.toFixed(4)}`;
+    } else {
+      safeQueryForGemini = query.replace(nearMePattern, ' nearby').replace(/\s+/g, ' ').trim() || query;
     }
   }
   const latestQuery = `${safeQueryForGemini} (as of ${todayStr}).${nhlHint}${locationHint}\n\nLATEST-FIRST RULE (CRITICAL): Today is ${todayStr}. Use the newest available sources/snippets. Prefer results updated today/this hour when present. Do not use memory for live facts.`;
@@ -3044,6 +3078,354 @@ function isGoogleMapsLikeUrl(rawUrl: string): boolean {
       && (normalized.includes('/maps') || normalized.includes('maps/search') || normalized.includes('query_place_id=')))
   );
 }
+
+ type AirportSearchSource = {
+   url: string;
+   title: string;
+   content: string;
+ };
+
+ type AirportQueryDescriptor = {
+   airportLabel: string;
+   direction: 'arrivals' | 'departures';
+   timeWindowText: string;
+   originalQuery: string;
+   discoveryQuery: string;
+   liveQuery: string;
+   needsClarification: boolean;
+   clarificationAirport: string;
+ };
+
+ type AirportPageSnapshot = {
+   finalUrl: string;
+   title: string;
+   text: string;
+   hasLiveRows: boolean;
+ };
+
+ const AIRPORT_QUERY_STOPWORDS = new Set([
+   'the', 'a', 'an', 'airport', 'international', 'intl', 'official', 'page', 'arrivals', 'arrival', 'departures', 'departure', 'flight', 'flights', 'next', 'minutes', 'minute', 'mins', 'min', 'hours', 'hour', 'hrs', 'hr'
+ ]);
+
+ function toTitleCaseWords(value: string): string {
+   return value
+     .split(/\s+/)
+     .map((word) => word ? `${word.charAt(0).toUpperCase()}${word.slice(1)}` : word)
+     .join(' ')
+     .trim();
+ }
+
+ function detectAirportLiveQuery(message: string): AirportQueryDescriptor | null {
+   const raw = toTrimmedString(message);
+   if (!raw) return null;
+   const wantsAirport = /\bairport\b/i.test(raw) || /hamad\s+international/i.test(raw) || /doha\s+airport/i.test(raw) || /\b(?:hia|hai)\b/i.test(raw);
+   const wantsFlightBoard = /\b(arrival|arrivals|departure|departures|landing|landings|land|depart|departing|takeoff|take\s+off|gate|terminal|baggage\s+claim|flight|flights)\b/i.test(raw);
+   if (!wantsAirport || !wantsFlightBoard) return null;
+
+   const direction: 'arrivals' | 'departures' = /\b(departure|departures|departing|takeoff|take\s+off|taking\s+off)\b/i.test(raw)
+     ? 'departures'
+     : 'arrivals';
+   const timeWindowMatch = raw.match(/\bnext\s+(\d{1,3}\s*(?:minutes?|mins?|hours?|hrs?))\b/i);
+   const timeWindowText = toTrimmedString(timeWindowMatch?.[1] || '60 minutes');
+
+   const normalizedDetectorText = raw
+     .normalize('NFKD')
+     .replace(/[\u0300-\u036f]/g, '')
+     .toLowerCase()
+     .replace(/[^a-z0-9]+/g, ' ')
+     .trim();
+   const likelyHamad = /\b(hamad|hammad|hammed|hamaad|doha|hia|hai)\b/.test(normalizedDetectorText);
+   const exactHamad = /\bhamad\b.*\binternational\b.*\bairport\b/.test(normalizedDetectorText)
+     || /\bdoha airport\b/.test(normalizedDetectorText)
+     || /\bhia\b/.test(normalizedDetectorText);
+   const clarificationAirport = likelyHamad && !exactHamad ? 'Hamad International Airport' : '';
+
+   const airportMatch = raw.match(/((?:[A-Za-z0-9&'.-]+\s+){0,6}airport)\b/i);
+   let airportLabel = toTrimmedString(airportMatch?.[1] || '');
+   if (!airportLabel) {
+     if (/hamad\s+international/i.test(raw) || /doha\s+airport/i.test(raw) || /\bhia\b/i.test(raw)) {
+       airportLabel = 'Hamad International Airport';
+     } else {
+       return {
+         airportLabel: '',
+         direction,
+         timeWindowText,
+         originalQuery: raw,
+         discoveryQuery: '',
+         liveQuery: '',
+         needsClarification: true,
+         clarificationAirport,
+       };
+     }
+   }
+
+   if (airportLabel === airportLabel.toLowerCase()) {
+     airportLabel = toTitleCaseWords(airportLabel);
+   }
+
+   return {
+     airportLabel,
+     direction,
+     timeWindowText,
+     originalQuery: raw,
+     discoveryQuery: `${airportLabel} official ${direction} page`,
+     liveQuery: `${airportLabel} ${direction} in the next ${timeWindowText}`,
+     needsClarification: Boolean(clarificationAirport),
+     clarificationAirport,
+   };
+ }
+
+ function getAirportLookupTokens(value: string): string[] {
+   const normalized = (value || '')
+     .normalize('NFKD')
+     .replace(/[\u0300-\u036f]/g, '')
+     .toLowerCase()
+     .replace(/[^a-z0-9]+/g, ' ')
+     .trim();
+   return [...new Set(
+     normalized
+       .split(/\s+/)
+       .filter((token) => token.length >= 3 && !AIRPORT_QUERY_STOPWORDS.has(token))
+   )].slice(0, 6);
+ }
+
+ function isAirportAggregatorHost(host: string): boolean {
+   return hostMatchesAny(host, [
+     'google.com',
+     'flightaware.com',
+     'flightradar24.com',
+     'flightstats.com',
+     'kayak.com',
+     'trip.com',
+     'expedia.com',
+     'skyscanner.net',
+     'wikipedia.org',
+     'facebook.com',
+     'instagram.com',
+     'youtube.com'
+   ]);
+ }
+
+ function normalizeAirportSearchSources(rawResults: unknown[]): AirportSearchSource[] {
+   const byUrl = new Map<string, AirportSearchSource>();
+   for (const entry of Array.isArray(rawResults) ? rawResults : []) {
+     const record = (entry && typeof entry === 'object') ? entry as Record<string, unknown> : {};
+     const url = normalizeExternalUrl(toTrimmedString(record.url));
+     if (!url || byUrl.has(url)) continue;
+     byUrl.set(url, {
+       url,
+       title: toTrimmedString(record.title),
+       content: toTrimmedString(record.content),
+     });
+   }
+   return Array.from(byUrl.values());
+ }
+
+ function scoreAirportOfficialSource(source: AirportSearchSource, descriptor: AirportQueryDescriptor): number {
+   const url = normalizeExternalUrl(source.url);
+   const host = getSafeHostname(url);
+   if (!url || !host) return -100;
+   const path = getSafePathSegments(url).join(' ');
+   const haystack = `${source.title} ${source.content} ${host} ${path}`.toLowerCase();
+   const airportTokens = getAirportLookupTokens(descriptor.airportLabel);
+
+   let score = 0;
+   if (isAirportAggregatorHost(host)) score -= 12;
+   if (host.includes('airport')) score += 4;
+   if (/\bofficial\b/.test(haystack)) score += 3;
+   if (/\bairport\b/.test(haystack)) score += 3;
+   if (descriptor.direction === 'arrivals' && /\barrivals?\b/.test(haystack)) score += 5;
+   if (descriptor.direction === 'departures' && /\bdepartures?\b/.test(haystack)) score += 5;
+   if (/flight\s*(information|info|status)|arrivals?-and-departures|flight-?tracker/.test(haystack)) score += 3;
+   if (/parking|hotel|shopping|duty\s*free|careers|jobs|cargo|advertis/.test(haystack)) score -= 4;
+   for (const token of airportTokens) {
+     if (haystack.includes(token)) score += 2;
+   }
+   return score;
+ }
+
+ function pickAirportOfficialSource(
+   primarySources: AirportSearchSource[],
+   secondarySources: AirportSearchSource[],
+   descriptor: AirportQueryDescriptor,
+ ): AirportSearchSource | null {
+   const deduped = new Map<string, AirportSearchSource>();
+   for (const source of [...primarySources, ...secondarySources]) {
+     const normalizedUrl = normalizeExternalUrl(source.url);
+     if (!normalizedUrl || deduped.has(normalizedUrl)) continue;
+     deduped.set(normalizedUrl, { ...source, url: normalizedUrl });
+   }
+
+   const ranked = Array.from(deduped.values())
+     .map((source) => ({ source, score: scoreAirportOfficialSource(source, descriptor) }))
+     .sort((a, b) => b.score - a.score);
+
+   return ranked[0] && ranked[0].score >= 4 ? ranked[0].source : null;
+ }
+
+ function decodeBasicHtmlEntities(value: string): string {
+   return (value || '')
+     .replace(/&nbsp;/gi, ' ')
+     .replace(/&amp;/gi, '&')
+     .replace(/&quot;/gi, '"')
+     .replace(/&apos;/gi, "'")
+     .replace(/&#39;/gi, "'")
+     .replace(/&lt;/gi, '<')
+     .replace(/&gt;/gi, '>')
+     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+       const parsed = Number.parseInt(hex, 16);
+       return Number.isFinite(parsed) ? String.fromCodePoint(parsed) : ' ';
+     })
+     .replace(/&#(\d+);/g, (_, num) => {
+       const parsed = Number(num);
+       return Number.isFinite(parsed) ? String.fromCodePoint(parsed) : ' ';
+     });
+ }
+
+ function stripHtmlToText(html: string): string {
+   const withBreaks = (html || '')
+     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+     .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
+     .replace(/<!--([\s\S]*?)-->/g, ' ')
+     .replace(/<(?:br|\/p|\/div|\/li|\/tr|\/td|\/th|\/section|\/article|\/header|\/footer|\/h[1-6])\b[^>]*>/gi, '\n')
+     .replace(/<[^>]+>/g, ' ');
+   return decodeBasicHtmlEntities(withBreaks)
+     .replace(/[ \t]+/g, ' ')
+     .replace(/\n{3,}/g, '\n\n')
+     .replace(/\s*\n\s*/g, '\n')
+     .trim();
+ }
+
+ function extractHtmlTitle(html: string): string {
+   const match = (html || '').match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+   return decodeBasicHtmlEntities(toTrimmedString(match?.[1] || '')).replace(/\s+/g, ' ').trim();
+ }
+
+ async function fetchHtmlPageSnapshot(url: string, timeoutMs: number = 4000): Promise<AirportPageSnapshot | null> {
+   const normalizedUrl = normalizeExternalUrl(url);
+   if (!normalizedUrl) return null;
+   try {
+     const controller = new AbortController();
+     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+     const response = await fetch(normalizedUrl, {
+       method: 'GET',
+       headers: { 'Accept': 'text/html,application/xhtml+xml' },
+       redirect: 'follow',
+       signal: controller.signal,
+     });
+     clearTimeout(timeoutId);
+     if (!response.ok) return null;
+     const contentType = (response.headers.get('content-type') || '').toLowerCase();
+     if (!contentType.includes('text/html') && !contentType.includes('application/xhtml')) return null;
+     const html = (await response.text()).slice(0, 200000);
+     const text = stripHtmlToText(html).slice(0, 40000);
+     const title = extractHtmlTitle(html) || toTrimmedString(response.url) || normalizedUrl;
+     const flightMatches = [...new Set((text.match(/\b[A-Z0-9]{2,3}\s?\d{2,4}\b/g) || []).map((item) => item.replace(/\s+/g, '')))].slice(0, 12);
+     const hasLiveSignals = /upcoming\s+arrivals?|estimated\s+arrival|scheduled\s+arrival|baggage\s+claim|terminal|gate|on\s+time|delayed|origin|destination/i.test(text);
+     return {
+       finalUrl: normalizeExternalUrl(response.url) || normalizedUrl,
+       title,
+       text,
+       hasLiveRows: flightMatches.length >= 2 && hasLiveSignals,
+     };
+   } catch {
+     return null;
+   }
+ }
+
+ async function buildAirportOfficialLiveResponse(
+   descriptor: AirportQueryDescriptor,
+   language: string,
+   localTime: string,
+ ): Promise<{ responseText: string; sources: Array<{ url: string; title: string }>; queries: string[] } | null> {
+   const [discoverySearch, liveSearch] = await Promise.all([
+     executeRegularSearch(descriptor.discoveryQuery, language),
+     executeRegularSearch(descriptor.liveQuery, language),
+   ]);
+
+   const discoverySources = normalizeAirportSearchSources(discoverySearch?.data?.results || []);
+   const liveSources = normalizeAirportSearchSources(liveSearch?.data?.results || []);
+   const officialSource = pickAirportOfficialSource(discoverySources, liveSources, descriptor);
+   const officialPage = officialSource ? await fetchHtmlPageSnapshot(officialSource.url) : null;
+
+   const sourcesByUrl = new Map<string, { url: string; title: string }>();
+   const addSource = (rawUrl?: string, rawTitle?: string) => {
+     const normalizedUrl = normalizeExternalUrl(toTrimmedString(rawUrl || ''));
+     if (!normalizedUrl || sourcesByUrl.has(normalizedUrl)) return;
+     sourcesByUrl.set(normalizedUrl, {
+       url: normalizedUrl,
+       title: toTrimmedString(rawTitle || '') || getSearchSourceLabel(normalizedUrl) || normalizedUrl,
+     });
+   };
+
+   addSource(officialPage?.finalUrl || officialSource?.url, officialPage?.title || officialSource?.title || descriptor.airportLabel);
+   for (const source of [...liveSources, ...discoverySources]) {
+     addSource(source.url, source.title);
+   }
+
+   const sources = Array.from(sourcesByUrl.values()).slice(0, 6);
+   if (sources.length === 0) return null;
+
+   const officialUrl = officialPage?.finalUrl || officialSource?.url || '';
+   const officialTitle = officialPage?.title || officialSource?.title || descriptor.airportLabel;
+   const officialTextExcerpt = toTrimmedString(officialPage?.text || '').slice(0, 14000);
+   const liveAnswer = toTrimmedString(liveSearch?.data?.answer || discoverySearch?.data?.answer || '');
+   const liveSnippets = [...liveSources, ...discoverySources]
+     .slice(0, 5)
+     .map((source, index) => `${index + 1}. ${source.title || 'Source'}\n${source.content || ''}\nURL: ${source.url}`)
+     .join('\n\n');
+
+   const systemInstruction = language === 'ar'
+     ? `أنت تتعامل مع طلب مباشر خاص بمطار. استخدم صفحة المطار الرسمية كمصدر أول. إذا احتوت الصفحة الرسمية على رحلات فعلية، لخّص فقط البيانات الموجودة فيها. إذا كانت الصفحة الرسمية لا تعرض الصفوف المباشرة في نسخة الخادم أو كانت تعتمد على جافاسكربت، قل ذلك بوضوح واستخدم نتائج البحث فقط كمصدر ثانوي مساعد بدون اختراع أي رحلة أو وقت أو بوابة أو سير حقائب. اجعل الرد قصيراً وواضحاً، واذكر أن المصدر الرسمي هو الأفضل دائماً.`
+     : `You are handling a live airport board request. Use the official airport page as the primary source of truth. If the official page excerpt contains real flight rows, summarize only what is actually present there. If the official page does not expose live rows in the server-fetched HTML or appears JS-driven, say that clearly and use search snippets only as secondary context. Never invent flights, gates, baggage claims, or times. Keep the answer clean and direct, and make it clear that the official source is the best live source.`;
+
+   const prompt = [
+     `User request: ${descriptor.originalQuery}`,
+     `Airport: ${descriptor.airportLabel}`,
+     `Direction: ${descriptor.direction}`,
+     `Requested window: next ${descriptor.timeWindowText}`,
+     `Current local time: ${localTime}`,
+     officialUrl ? `Official source URL: ${officialUrl}` : 'Official source URL: not found',
+     officialTitle ? `Official source title: ${officialTitle}` : '',
+     `Official page contains clear live rows: ${officialPage?.hasLiveRows ? 'yes' : 'no'}`,
+     officialTextExcerpt ? `Official page excerpt:\n${officialTextExcerpt}` : 'Official page excerpt: unavailable',
+     liveAnswer ? `Search answer:\n${liveAnswer}` : 'Search answer: unavailable',
+     liveSnippets ? `Search snippets:\n${liveSnippets}` : 'Search snippets: unavailable',
+     language === 'ar'
+       ? 'أعطني أفضل إجابة ممكنة الآن. إذا كانت الصفحة الرسمية لا تعرض الرحلات بوضوح، قل ذلك بصراحة ثم وجّه المستخدم إلى الصفحة الرسمية مباشرة.'
+       : 'Give the best answer you can right now. If the official page does not expose the live rows clearly, say that plainly and direct the user to the official page directly.'
+   ].filter(Boolean).join('\n\n');
+
+   let responseText = '';
+   try {
+     responseText = await generateGeminiText(
+       'gemini-3.1-flash-lite',
+       prompt,
+       systemInstruction,
+       { temperature: 0.2, maxOutputTokens: 1800 },
+       false,
+     );
+   } catch {
+     responseText = '';
+   }
+
+   if (!responseText) {
+     responseText = officialUrl
+       ? (language === 'ar'
+           ? `وجدت الصفحة الرسمية لـ ${descriptor.airportLabel}، لكن البيانات المباشرة الكاملة لا تظهر بوضوح في نسخة الخادم من الصفحة حالياً. الأفضل الآن هو فتح الصفحة الرسمية مباشرة للتحديثات الحية.`
+           : `I found the official ${descriptor.direction} page for ${descriptor.airportLabel}, but the full live board is not exposed clearly in the server-fetched page right now. The best next step is to open the official page directly for the live updates.`)
+       : (language === 'ar'
+           ? `لم أستطع تأكيد الصفحة الرسمية مباشرة من النتائج الحالية، لكنني أرفقت أفضل المصادر التي وجدتها الآن.`
+           : `I could not verify the official page directly from the current results, but I attached the best live sources I found right now.`);
+   }
+
+   return {
+     responseText,
+     sources,
+     queries: [descriptor.liveQuery, descriptor.discoveryQuery],
+   };
+ }
 
 function pickVerifiedBusinessLinks(results: Array<Record<string, unknown>>, place: GroundedPlaceCard): Partial<GroundedPlaceCard> {
   const exactName = normalizeBusinessLookupText(place.name);
@@ -5593,16 +5975,105 @@ If you are running out of space, keep this order and drop the rest:
             let groundingMetadata: Gemini3SearchResult['groundingMetadata'] | null = null;
             let searchFinishReason = '';
 
+            const cleanSearchQuery = typeof message === 'string' ? message.trim() : '';
+            const isNearMeSearchQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanSearchQuery);
+            const airportLiveQuery = detectAirportLiveQuery(cleanSearchQuery);
+
+            if (airportLiveQuery) {
+              const airportBoardLabel = airportLiveQuery.direction === 'departures'
+                ? (language === 'ar' ? 'المغادرة المباشرة' : 'live departures')
+                : (language === 'ar' ? 'الوصول المباشر' : 'live arrivals');
+              const clarificationText = airportLiveQuery.needsClarification
+                ? airportLiveQuery.clarificationAirport
+                  ? (language === 'ar'
+                      ? `هل تقصد مطار حمد الدولي في الدوحة؟ اكتب اسم المطار بوضوح وسأتحقق من لوحة ${airportBoardLabel}.`
+                      : `Did you mean Hamad International Airport in Doha? Please send the airport name clearly and I'll check the ${airportBoardLabel} board.`)
+                  : (language === 'ar'
+                      ? `أي مطار تقصد بالضبط؟ اكتب اسم المطار الكامل وسأتحقق من لوحة ${airportBoardLabel}.`
+                      : `Which airport do you mean exactly? Please send the full airport name and I'll check the ${airportBoardLabel} board.`)
+                : '';
+
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: {
+                searchType: 'general',
+                cardType: normalizeSearchCardType('general'),
+                queries: airportLiveQuery.needsClarification ? [cleanSearchQuery] : [airportLiveQuery.liveQuery, airportLiveQuery.discoveryQuery],
+                cards: [],
+                summary: '',
+                isNearMeQuery: false,
+              } } })}\n\n`));
+
+              if (clarificationText) {
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: clarificationText, content: clarificationText })}\n\n`));
+                await emitAiChatTrialFinished(trialRequestId);
+                controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                controller.close();
+                return;
+              }
+
+              try {
+                const airportLiveResponse = await buildAirportOfficialLiveResponse(airportLiveQuery, language, localTime);
+                if (airportLiveResponse) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: airportLiveResponse.responseText, content: airportLiveResponse.responseText })}\n\n`));
+
+                  const airportCardPayload = buildStructuredSearchCards({
+                    searchIntent: 'general',
+                    responseText: airportLiveResponse.responseText,
+                    sources: airportLiveResponse.sources,
+                    places: [],
+                    language,
+                  });
+
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: {
+                    searchType: 'general',
+                    cardType: airportCardPayload.cardType,
+                    queries: airportLiveResponse.queries,
+                    mapSearchQuery: cleanSearchQuery,
+                    isNearMeQuery: false,
+                    sources: airportLiveResponse.sources,
+                    supports: [],
+                    places: [],
+                    summary: airportCardPayload.summary,
+                    cards: airportCardPayload.cards,
+                    finishReason: null,
+                    truncated: false,
+                    googleMapsWidgetContextToken: null,
+                    searchEntryPointHtml: ''
+                  } } })}\n\n`));
+
+                  const airportInputTokens = estimateTokens(cleanSearchQuery);
+                  const airportOutputTokens = estimateTokens(airportLiveResponse.responseText);
+                  logAIUsage({
+                    userId,
+                    functionName: 'brain_stream',
+                    model: 'gemini-3.1-flash-lite',
+                    status: 'success',
+                    prompt: cleanSearchQuery,
+                    response: airportLiveResponse.responseText.slice(0, 500),
+                    metadata: { trigger: 'search', provider: 'airport-official-route', airportQuery: true, queries: airportLiveResponse.queries },
+                    inputTokens: airportInputTokens,
+                    outputTokens: airportOutputTokens,
+                    durationMs: Date.now() - startTime,
+                    costCredits: calculateCost('gemini-3.1-flash-lite', airportInputTokens, airportOutputTokens)
+                  });
+
+                  await emitAiChatTrialFinished(trialRequestId);
+                  controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                  controller.close();
+                  return;
+                }
+              } catch (airportRouteError) {
+                console.warn('airport official route failed', airportRouteError);
+              }
+            }
+
             const userLocationForSearch = hasRequestCoords
               ? {
                   latitude: requestLatitude as number,
                   longitude: requestLongitude as number,
-                  city: requestLocation?.city || userCity || '',
-                  country: requestLocation?.country || userCountry || ''
+                  city: isNearMeSearchQuery ? '' : (requestLocation?.city || userCity || ''),
+                  country: isNearMeSearchQuery ? '' : (requestLocation?.country || userCountry || '')
                 }
               : null;
-            const cleanSearchQuery = typeof message === 'string' ? message.trim() : '';
-            const isNearMeSearchQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanSearchQuery);
             const parallelPlacesPromise = effectiveSearchIntent === 'business' && cleanSearchQuery
               ? (async () => {
                   const foundPlaces = await searchGooglePlacesForQuery(
@@ -5951,7 +6422,7 @@ If you are running out of space, keep this order and drop the rest:
                       finishReason: searchFinishReason || null,
                       truncated: searchFinishReason === 'MAX_TOKENS',
                       googleMapsWidgetContextToken: gm.googleMapsWidgetContextToken || null,
-                      searchEntryPointHtml: isNearMeSearchQuery ? '' : (gm.searchEntryPoint?.renderedContent || '')
+                      searchEntryPointHtml: gm.searchEntryPoint?.renderedContent || ''
                     }
                   }
                 };

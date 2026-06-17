@@ -79,6 +79,8 @@ type UserLocationContext = {
 };
 
 const LOCATION_CACHE_TTL = 30 * 60 * 1000; // 30 minutes - people move around!
+const NEAR_ME_LOCATION_REQUIRED_MESSAGE = 'I need your exact location to find the best spots around you. Please ensure your device GPS is enabled and try again.';
+const STRICT_NEAR_ME_BROWSER_MAX_ACCURACY = 1000;
 
 const extractBackendErrorCode = (payload: any): string | null => {
   if (!payload || typeof payload !== 'object') return null;
@@ -405,6 +407,36 @@ class WaktiAIV2ServiceClass {
     await this.queueLocationWarmup(userId, forceFresh);
   }
 
+  private isReliableNearMeLocation(loc: UserLocationContext | null): boolean {
+    if (!loc) return false;
+    if (typeof loc.latitude !== 'number' || typeof loc.longitude !== 'number') return false;
+    if (!Number.isFinite(loc.latitude) || !Number.isFinite(loc.longitude)) return false;
+    if (Math.abs(loc.latitude) > 90 || Math.abs(loc.longitude) > 180) return false;
+    if (loc.latitude === 0 || loc.longitude === 0) return false;
+
+    const accuracy = typeof loc.accuracy === 'number' && Number.isFinite(loc.accuracy)
+      ? loc.accuracy
+      : null;
+
+    if (accuracy == null) return false;
+    if (accuracy > 5000) return false;
+    if (loc.source === 'browser' && accuracy > STRICT_NEAR_ME_BROWSER_MAX_ACCURACY) return false;
+
+    return true;
+  }
+
+  private buildNearMeLocationRequiredResult() {
+    return {
+      response: NEAR_ME_LOCATION_REQUIRED_MESSAGE,
+      error: false,
+      intent: 'search',
+      metadata: {
+        locationRequired: true,
+        gpsRequired: true,
+      },
+    } as any;
+  }
+
   private async getUserLocation(userId: string, forceFresh: boolean = false): Promise<UserLocationContext> {
     const now = Date.now();
     const previousCached = this.getCachedUserLocation(now);
@@ -429,7 +461,11 @@ class WaktiAIV2ServiceClass {
     // If forceFresh, request fresh location with skipCache
     let hasDeviceGPS = false;
     try {
-      const nativeLoc = await getNativeLocation({ skipCache: forceFresh, timeoutMs: forceFresh ? 10000 : 6000 });
+      const nativeLoc = await getNativeLocation({
+        skipCache: forceFresh,
+        timeoutMs: forceFresh ? 10000 : 6000,
+        allowBrowserFallback: !forceFresh,
+      });
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
         hasDeviceGPS = true;
         resolved = {
@@ -444,6 +480,18 @@ class WaktiAIV2ServiceClass {
       }
     } catch (err) {
       console.warn('[WaktiAIV2Service] Native location error:', err);
+    }
+
+    if (forceFresh && !this.isReliableNearMeLocation(resolved)) {
+      resolved = {
+        ...resolved,
+        latitude: null,
+        longitude: null,
+        accuracy: null,
+        city: null,
+        country: null,
+        source: undefined,
+      };
     }
 
     resolved.timezone = timezone;
@@ -901,22 +949,6 @@ class WaktiAIV2ServiceClass {
       const needsLocation = activeTrigger === 'search' || queryNeedsFreshLocation(message);
       const forceFreshLocation = containsNearMePattern(message);
       const cachedLocation = needsLocation ? this.getCachedUserLocation() : null;
-      const isReliableNearMeLocation = (loc: UserLocationContext | null): boolean => {
-        if (!loc) return false;
-        if (typeof loc.latitude !== 'number' || typeof loc.longitude !== 'number') return false;
-        if (!Number.isFinite(loc.latitude) || !Number.isFinite(loc.longitude)) return false;
-        if (Math.abs(loc.latitude) > 90 || Math.abs(loc.longitude) > 180) return false;
-        if (loc.latitude === 0 || loc.longitude === 0) return false;
-
-        const accuracy = typeof loc.accuracy === 'number' && Number.isFinite(loc.accuracy)
-          ? loc.accuracy
-          : null;
-
-        if (accuracy == null) return false;
-        if (accuracy > 5000) return false;
-
-        return true;
-      };
       const getBestSearchLocation = async (): Promise<UserLocationContext | null> => {
         if (!forceFreshLocation) {
           if (cachedLocation) return cachedLocation;
@@ -928,7 +960,7 @@ class WaktiAIV2ServiceClass {
 
         try {
           const freshLocation = await this.getUserLocation(userId || '', true);
-          if (isReliableNearMeLocation(freshLocation)) return freshLocation;
+          if (this.isReliableNearMeLocation(freshLocation)) return freshLocation;
         } catch {
           // fall back below
         }
@@ -1000,6 +1032,12 @@ class WaktiAIV2ServiceClass {
         sessionPromise,
         locationPromise
       ]);
+      if (forceFreshLocation && !this.isReliableNearMeLocation(location)) {
+        const refusal = this.buildNearMeLocationRequiredResult();
+        onToken?.(refusal.response);
+        onComplete?.(refusal.metadata);
+        return { response: refusal.response, conversationId, metadata: refusal.metadata } as any;
+      }
       userId = resolvedUserId || userId;
       if (needsLocation && userId && !location) {
         this.queueLocationWarmup(userId, forceFreshLocation).catch(() => {});
@@ -1645,6 +1683,9 @@ class WaktiAIV2ServiceClass {
         console.log(`📍 LOCATION (non-streaming): Query needs fresh location - "${message.substring(0, 50)}..."`);
       }
       const location = await this.getUserLocation(userId, needsFreshLocation);
+      if (needsFreshLocation && !this.isReliableNearMeLocation(location)) {
+        return this.buildNearMeLocationRequiredResult();
+      }
 
       // Enhanced message handling with 100-message memory window
       // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions

@@ -51,25 +51,20 @@ export function ExtraPanel({
     setActiveTab(value);
   };
 
-  // Listen for external requests to open the Memory tab (e.g. from the onboarding popup).
+  // Listen for external requests to open tabs from elsewhere in the app.
   useEffect(() => {
-    return onEvent('wakti-open-memory-panel', () => {
+    const offMemory = onEvent('wakti-open-memory-panel', () => {
       setActiveTab('memory');
     });
+    const offConversations = onEvent('wakti-open-conversations-panel', () => {
+      setActiveTab('conversations');
+    });
+    return () => {
+      offMemory();
+      offConversations();
+    };
   }, []);
 
-  // Convert AIConversation to the format expected by ConversationsList
-  const mappedConversations = conversations.map(conv => ({
-    id: conv.id,
-    title: conv.title,
-    last_message_at: conv.lastMessageAt.toISOString(),
-    created_at: conv.createdAt.toISOString(),
-    message_count: (conv as any).message_count ?? (conv as any).messageCount ?? 0,
-    is_active: conv.is_active,
-    conversation_id: conv.conversation_id,
-    is_saved: conv.is_saved,
-    is_custom_title: conv.is_custom_title,
-  }));
 
   return (
     <div className="md:h-full overflow-hidden">
@@ -79,13 +74,13 @@ export function ExtraPanel({
           <div className="sticky top-0 z-10 px-1 pt-1 pb-1">
             <TabsList className="flex gap-2 h-8 p-0 bg-transparent !rounded-none justify-start">
               <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="personal">
-                {language === 'ar' ? 'الشخصية' : 'Personal'}
+                {language === 'ar' ? 'Ã˜Â§Ã™â€žÃ˜Â´Ã˜Â®Ã˜ÂµÃ™Å Ã˜Â©' : 'Personal'}
               </TabsTrigger>
               <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="memory">
-                {language === 'ar' ? 'الذاكرة' : 'Memory'}
+                {language === 'ar' ? 'Ã˜Â§Ã™â€žÃ˜Â°Ã˜Â§Ã™Æ’Ã˜Â±Ã˜Â©' : 'Memory'}
               </TabsTrigger>
               <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="conversations">
-                {language === 'ar' ? 'المحادثات' : 'Convos'}
+                {language === 'ar' ? 'Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â§Ã˜Âª' : 'Conversations'}
               </TabsTrigger>
             </TabsList>
           </div>
@@ -105,10 +100,9 @@ export function ExtraPanel({
             <HelpfulMemoryManager currentConversationId={currentConversationId} />
           </TabsContent>
 
-          {/* Conversations tab content: natural height on mobile, full on desktop */}
           <TabsContent value="conversations" className="md:flex-1 mt-2">
             <ConversationsList
-              conversations={mappedConversations}
+              conversations={conversations}
               currentConversationId={currentConversationId}
               onSelectConversation={onSelectConversation}
               onDeleteConversation={onDeleteConversation}

@@ -1,5 +1,4 @@
 const rawSandpackBundlerUrl = (import.meta.env.VITE_SANDPACK_BUNDLER_URL ?? '').trim();
-const DEFAULT_SANDPACK_BUNDLER_URL = 'https://preview.wakti.ai';
 
 function normalizeBundlerUrl(value: string): string | undefined {
   if (!value) return undefined;
@@ -15,6 +14,10 @@ function normalizeBundlerUrl(value: string): string | undefined {
   }
 }
 
+// Only set when VITE_SANDPACK_BUNDLER_URL is explicitly provided (e.g. a
+// self-hosted bundler). When unset, this stays `undefined` so Sandpack uses
+// its built-in, version-matched bundler — the most reliable option.
 export const SANDPACK_BUNDLER_URL = normalizeBundlerUrl(rawSandpackBundlerUrl);
 
-export const SANDPACK_EFFECTIVE_BUNDLER_URL = SANDPACK_BUNDLER_URL ?? DEFAULT_SANDPACK_BUNDLER_URL;
+// `undefined` => let Sandpack pick its default version-matched bundler.
+export const SANDPACK_EFFECTIVE_BUNDLER_URL = SANDPACK_BUNDLER_URL;

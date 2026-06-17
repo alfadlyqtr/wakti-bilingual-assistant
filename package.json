@@ -11,6 +11,8 @@
     "build:analyze": "cross-env ANALYZE=true vite build",
     "lint": "eslint .",
     "qa:projects-generate-prompts": "node scripts/qa-projects-generate-prompts.mjs",
+    "bundler:prepare": "node scripts/prepare-sandpack-bundler.mjs",
+    "bundler:serve": "node scripts/serve-sandpack-bundler.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
