@@ -65,7 +65,7 @@ type AppItem = {
   nameEn: string;
   nameAr: string;
   path: string;
-  icon: LucideIcon;
+  icon: LucideIcon | React.ElementType;
   accent: string;
   glow: string;
 };
@@ -284,7 +284,7 @@ function parseReminderDate(r: any): number | null {
 const MOOD_EMOJI = ['', '??', '??', '??', '??', '??'];
 const MOOD_COLOR = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#8b5cf6'];
 const MOOD_LABEL_EN = ['', 'Awful', 'Bad', 'Meh', 'Good', 'Amazing'];
-const MOOD_LABEL_AR = ['', '??? ????', '???', '????', '???', '????'];
+const MOOD_LABEL_AR = ['', 'سيئ جدًا', 'سيئ', 'عادي', 'جيد', 'رائع'];
 
 function TRWidgetInline({ shell, navigate, language, pendingTasks, completedToday, total, pct, taskAccent, taskIconBg, reminders }: {
   shell: ShellFn;
@@ -337,7 +337,7 @@ function TRWidgetInline({ shell, navigate, language, pendingTasks, completedToda
               : <Bell className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />}
           </div>
           <span className="text-[11px] font-black text-white uppercase tracking-wide">
-            {activeTab === 'tasks' ? (language === 'ar' ? '??????' : 'Tasks') : (language === 'ar' ? '???????' : 'Alerts')}
+            {activeTab === 'tasks' ? (language === 'ar' ? 'المهام' : 'Tasks') : (language === 'ar' ? 'التنبيهات' : 'Alerts')}
           </span>
         </div>
         <svg width="36" height="36" viewBox="0 0 36 36" className="-rotate-90 flex-shrink-0">
@@ -353,7 +353,7 @@ function TRWidgetInline({ shell, navigate, language, pendingTasks, completedToda
           <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{total}</span>
         </div>
         <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
-          <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{language === 'ar' ? '?????' : 'Done'}</span>
+          <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{language === 'ar' ? 'تم' : 'Done'}</span>
           <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{completedToday}</span>
         </div>
       </div>
@@ -381,7 +381,7 @@ function TRWidgetInline({ shell, navigate, language, pendingTasks, completedToda
                   <div key={r.id} className="flex items-center justify-between rounded-lg px-2 py-1" style={{ background: overdue ? 'rgba(239,68,68,0.2)' : 'rgba(255,255,255,0.1)' }}>
                     <span className="text-[8px] font-bold text-white truncate max-w-[55%]">{r.title}</span>
                     <div className="flex items-center gap-0.5">
-                      {overdue && <span className="text-[7px] font-black text-red-400 uppercase">{language === 'ar' ? '?????' : 'LATE'}</span>}
+                      {overdue && <span className="text-[7px] font-black text-red-400 uppercase">{language === 'ar' ? 'متأخر' : 'LATE'}</span>}
                       <span className={`text-[9px] font-black tabular-nums ${overdue ? 'text-red-300' : 'text-white'}`}>{countdown}</span>
                     </div>
                   </div>
@@ -390,14 +390,14 @@ function TRWidgetInline({ shell, navigate, language, pendingTasks, completedToda
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? '?? ???????' : 'No reminders'}</span>
+              <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? 'لا تذكيرات' : 'No reminders'}</span>
             </div>
           )}
         </div>
         <div className="flex justify-between">
-          <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? '?????' : 'pending'}</span>
+          <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? 'معلق' : 'pending'}</span>
           <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{activeTab === 'tasks' ? pct : 0}%</span>
-          <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? '?????' : 'done'}</span>
+          <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? 'تم' : 'done'}</span>
         </div>
       </div>
     </div>
@@ -448,7 +448,7 @@ function JournalWidgetInline({ shell, navigate, language, journalData }: {
             <BookOpen className="w-3 h-3 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[10px] font-black text-white uppercase tracking-wide">
-            {language === 'ar' ? '???????' : 'Journal'}
+            {language === 'ar' ? 'اليومية' : 'Journal'}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -476,16 +476,16 @@ function JournalWidgetInline({ shell, navigate, language, journalData }: {
               {noteSnippet ? (
                 <span className="text-[7px] text-white/90 leading-snug line-clamp-2">{noteSnippet}</span>
               ) : (
-                <span className="text-[7px] text-white/80">{language === 'ar' ? '?? ???????' : 'No note'}</span>
+                <span className="text-[7px] text-white/80">{language === 'ar' ? 'لا ملاحظة' : 'No note'}</span>
               )}
             </>
           ) : (
-            <span className="text-[8px] text-white/85">{language === 'ar' ? '?? ???? ????? ???' : 'No entry yet today'}</span>
+            <span className="text-[8px] text-white/85">{language === 'ar' ? 'لا توجد كتابة اليوم' : 'No entry yet today'}</span>
           )}
         </div>
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? '??????' : 'Mood'}</span>
+        <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? 'المزاج' : 'Mood'}</span>
         <div className="flex rounded-full overflow-hidden border border-white/20">
           {(['1m','3m','6m'] as const).map(r => (
             <button
@@ -566,7 +566,7 @@ function CalendarWidgetInline({ shell, navigate, language, upcomingCount }: {
           <p className="text-3xl font-black text-white leading-none tabular-nums">{today.getDate()}</p>
         </div>
         <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-orange-400/30 text-orange-200 self-start mt-1">
-          {language === 'ar' ? '?????' : 'Today'}
+          {language === 'ar' ? 'اليوم' : 'Today'}
         </span>
       </div>
       <div className="flex gap-2">
@@ -599,8 +599,8 @@ function CalendarWidgetInline({ shell, navigate, language, upcomingCount }: {
         <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: evAccent }} />
         <p className="text-[10px] font-semibold text-white/80">
           {upcomingCount === 0
-            ? (language === 'ar' ? '?? ?????' : 'No upcoming events')
-            : `${upcomingCount} ${language === 'ar' ? '??? ????' : upcomingCount === 1 ? 'upcoming event' : 'upcoming events'}`}
+            ? (language === 'ar' ? 'لا توجد أحداث قادمة' : 'No upcoming events')
+            : `${upcomingCount} ${language === 'ar' ? 'حدث قادم' : upcomingCount === 1 ? 'upcoming event' : 'upcoming events'}`}
         </p>
       </div>
     </div>
@@ -632,7 +632,7 @@ function Maw3dWidgetInline({ shell, navigate, language, events, attendingCounts 
     try {
       const d = new Date(dateStr + 'T00:00:00');
       const isToday = dateStr === todayStr;
-      if (isToday) return language === 'ar' ? '?????' : 'Today';
+      if (isToday) return language === 'ar' ? 'اليوم' : 'Today';
       return d.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', { month: 'short', day: 'numeric' });
     } catch { return dateStr; }
   };
@@ -655,12 +655,12 @@ function Maw3dWidgetInline({ shell, navigate, language, events, attendingCounts 
             <CalendarDays className="w-3 h-3 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[10px] font-black text-white uppercase tracking-wide">
-            {language === 'ar' ? '??????' : 'Maw3d'}
+            {language === 'ar' ? 'مواعيد' : 'Maw3d'}
           </span>
         </div>
         <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border border-purple-400/30" style={{ background: 'rgba(124,58,237,0.25)' }}>
           <span className="text-[9px] font-black text-purple-200 tabular-nums">{active.length}</span>
-          <span className="text-[7px] text-purple-200 uppercase">{language === 'ar' ? ' ???' : ' event'}{active.length !== 1 ? 's' : ''}</span>
+          <span className="text-[7px] text-purple-200 uppercase">{language === 'ar' ? ' حدث' : ' event'}{active.length !== 1 ? 's' : ''}</span>
         </div>
       </div>
       {active.length > 0 ? (
@@ -688,7 +688,7 @@ function Maw3dWidgetInline({ shell, navigate, language, events, attendingCounts 
                   <div className="flex items-center gap-0.5">
                     <Users className="w-2 h-2 text-green-400 flex-shrink-0" strokeWidth={2.5} />
                     <span className="text-[7px] text-green-300 font-bold tabular-nums">{rsvp}</span>
-                    <span className="text-[6px] text-white/80">{language === 'ar' ? ' ???' : ' going'}</span>
+                    <span className="text-[6px] text-white/80">{language === 'ar' ? ' حاضر' : ' going'}</span>
                   </div>
                 </div>
                 {isToday && <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0 animate-pulse" />}
@@ -698,12 +698,12 @@ function Maw3dWidgetInline({ shell, navigate, language, events, attendingCounts 
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center">
-          <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? '?? ?????? ?????' : 'No upcoming events'}</span>
+          <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? 'لا توجد أحداث قادمة' : 'No upcoming events'}</span>
         </div>
       )}
       <div className="flex items-center justify-between">
         <span className="text-[7px] text-white/85 uppercase font-bold">
-          {language === 'ar' ? '?????? ??????' : 'Total attending'}
+          {language === 'ar' ? 'إجمالي الحضور' : 'Total attending'}
         </span>
         <div className="flex items-center gap-0.5">
           <Users className="w-2.5 h-2.5 text-purple-300" strokeWidth={2.5} />
@@ -797,13 +797,13 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
                 <div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-black text-white tabular-nums leading-none">{Math.round(recovery)}%</span>
-                    <span className="text-[9px] font-black text-white/90 uppercase">{language === 'ar' ? '???????' : 'REC'}</span>
+                    <span className="text-[9px] font-black text-white/90 uppercase">{language === 'ar' ? 'تعافٍ' : 'REC'}</span>
                   </div>
                   {sleepHours != null && (
                     <div className="flex items-center gap-1 mt-0.5">
-                      <span className="text-[9px] text-white/85">{language === 'ar' ? '???' : 'Sleep'}</span>
+                      <span className="text-[9px] text-white/85">{language === 'ar' ? 'نوم' : 'Sleep'}</span>
                       <span className="text-[10px] text-white font-bold">{sleepHours}h</span>
-                      {sleepPerf != null && <span className="text-[8px] text-white/80">Ã‚Â· {Math.round(sleepPerf)}%</span>}
+                      {sleepPerf != null && <span className="text-[8px] text-white/80">· {Math.round(sleepPerf)}%</span>}
                     </div>
                   )}
                 </div>
@@ -811,7 +811,7 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
               {strain != null && (
                 <div>
                   <div className="flex justify-between items-center mb-0.5">
-                    <span className="text-[8px] text-white/85 font-bold uppercase">{language === 'ar' ? '?????' : 'Strain'}</span>
+                    <span className="text-[8px] text-white/85 font-bold uppercase">{language === 'ar' ? 'إجهاد' : 'Strain'}</span>
                     <span className="text-[9px] text-white font-bold">{strain.toFixed(1)}<span className="text-white/80">/21</span></span>
                   </div>
                   <div className="w-full h-1 bg-white/15 rounded-full overflow-hidden">
@@ -834,7 +834,7 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
                 )}
                 {avgHr != null && (
                   <div className="flex flex-col items-center bg-white/10 rounded-lg px-2 py-0.5">
-                    <span className="text-[8px] text-white/90 uppercase">{language === 'ar' ? '?.???' : 'AvgHR'}</span>
+                    <span className="text-[8px] text-white/90 uppercase">{language === 'ar' ? 'نبض' : 'AvgHR'}</span>
                     <span className="text-[11px] text-white font-black">{Math.round(avgHr)}</span>
                   </div>
                 )}
@@ -843,7 +843,7 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
           ) : (
             <div className="flex flex-col justify-end flex-1">
               <p className="text-[13px] font-black text-white">WHOOP</p>
-              <p className="text-[9px] text-white/90">{language === 'ar' ? '??? ????' : 'Not connected'}</p>
+              <p className="text-[9px] text-white/90">{language === 'ar' ? 'غير متصل' : 'Not connected'}</p>
             </div>
           )}
         </div>
@@ -855,30 +855,30 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
               <Heart className="w-4 h-4 text-white" strokeWidth={2} />
             </div>
             <div>
-              <p className="text-[12px] font-black text-white leading-none">{language === 'ar' ? '??? ????' : 'Apple Health'}</p>
-              <p className="text-[8px] text-white/85 mt-0.5">{language === 'ar' ? '?????? ?????' : "Today's data"}</p>
+              <p className="text-[12px] font-black text-white leading-none">{language === 'ar' ? 'صحة أبل' : 'Apple Health'}</p>
+              <p className="text-[8px] text-white/85 mt-0.5">{language === 'ar' ? 'بيانات اليوم' : "Today's data"}</p>
             </div>
           </div>
           {hkLoading ? (
             <div className="flex items-center justify-center flex-1">
-              <p className="text-[9px] text-white/85">{language === 'ar' ? '??? ???????...' : 'Loading...'}</p>
+              <p className="text-[9px] text-white/85">{language === 'ar' ? 'جارٍ التحميل...' : 'Loading...'}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-1">
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? '?????' : 'Steps'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'الخطوات' : 'Steps'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.steps ? hkData.steps.toLocaleString() : '--'}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? '???' : 'Avg HR'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'متوسط النبض' : 'Avg HR'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.avgHr != null ? hkData.avgHr : '--'}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? '???' : 'Sleep'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'النوم' : 'Sleep'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.sleepHours != null ? `${hkData.sleepHours}h` : '--'}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? '??? ????' : 'RHR'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'نبض الراحة' : 'RHR'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.rhr != null ? hkData.rhr : '--'}</p>
               </div>
             </div>
@@ -887,7 +887,7 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
             onClick={(e) => { e.stopPropagation(); navigate('/fitness'); }}
             className="flex items-center justify-center gap-1 bg-white/10 border border-white/20 rounded-lg py-1 active:scale-95 transition-all cursor-pointer"
           >
-            <span className="text-[9px] text-white/90 font-semibold">{language === 'ar' ? '??? ??????? ?' : 'Open Vitality ?'}</span>
+            <span className="text-[9px] text-white/90 font-semibold">{language === 'ar' ? 'افتح الصحة' : 'Open Vitality ?'}</span>
           </div>
         </div>
       )}
@@ -903,7 +903,7 @@ function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: { 
       <div className="absolute inset-0 bg-black/85 backdrop-blur-xl" />
       <div className="relative max-w-md text-center" dir={language === 'ar' ? 'rtl' : 'ltr'}>
         <p className="text-[clamp(19px,5.2vw,27px)] italic font-light leading-[1.72] text-white/95">{quoteText}</p>
-        {quoteAuthor ? <p className="mt-4 text-sm text-white/60">Ã¢â‚¬â€ {quoteAuthor}</p> : null}
+        {quoteAuthor ? <p className="mt-4 text-sm text-white/60">— {quoteAuthor}</p> : null}
       </div>
     </div>
   );
@@ -918,7 +918,7 @@ function QuoteWidgetInline({ shell, language, quote, onExpand }: { shell: ShellF
     onExpand,
     <div className="flex flex-col h-full justify-between p-3">
       <div className="flex items-center gap-1.5">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-200/80">{language === 'ar' ? '?????? ?????' : "Today's Quote"}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-200/80">{language === 'ar' ? 'اقتباس اليوم' : "Today's Quote"}</span>
       </div>
       <p className="text-[13px] font-semibold text-white leading-snug line-clamp-5 italic">&#8220;{text}&#8221;</p>
       {author ? <p className="text-[10px] text-indigo-200/70 font-medium">&mdash; {author}</p> : null}
@@ -1149,9 +1149,9 @@ function HomescreenChatBar({
     : "";
   const placeholder = mode === "search"
     ? (searchSubmode === "youtube"
-        ? (language === "ar" ? "Ø§Ø¨Ø­Ø« Ø¹Ù„Ù‰ ÙŠÙˆØªÙŠÙˆØ¨..." : "Search YouTube: title, topic, or channel...")
-        : (language === "ar" ? "Ø§Ø¨Ø­Ø« ÙÙŠ Ø§Ù„ÙˆÙŠØ¨..." : "Search the web: news, sports, topics..."))
-    : (language === "ar" ? "Ø§ÙƒØªØ¨ Ø±Ø³Ø§Ù„ØªÙƒ Ù„ÙˆÙƒØªÙŠ AI..." : "Type a message for WAKTI AI...");
+        ? (language === "ar" ? "ابحث على يوتيوب..." : "Search YouTube: title, topic, or channel...")
+        : (language === "ar" ? "ابحث في الويب..." : "Search the web: news, sports, topics..."))
+    : (language === "ar" ? "اكتب رسالتك لوكتي AI..." : "Type a message for WAKTI AI...");
 
   const showPlus = mode !== "search";
 
@@ -1287,7 +1287,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const shell = makeShell(isDark);
 
   const ACCOUNT_APP: AppItem = {
-    id: "account", nameEn: "Account", nameAr: "Ø§Ù„Ø­Ø³Ø§Ø¨", path: "/account",
+    id: "account", nameEn: "Account", nameAr: "حسابي", path: "/account",
     icon: Users, accent: "#93c5fd", glow: "rgba(147,197,253,0.45)",
   };
   const [modePickerTrigger, setModePickerTrigger] = useState(0);
@@ -1315,7 +1315,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const modeGlowMap: Record<string, string> = { chat: "rgba(59,130,246,0.45)", search: "rgba(34,197,94,0.45)", study: "rgba(168,85,247,0.45)" };
 
   const MODES_APP: AppItem = {
-    id: "modes", nameEn: "Modes", nameAr: "Ø§Ù„Ø£ÙˆØ¶Ø§Ø¹", path: "/settings",
+    id: "modes", nameEn: "Modes", nameAr: "الأوضاع", path: "/settings",
     icon: activeModeConfig.Icon as React.ElementType,
     accent: modeAccentMap[activeModeKey] ?? "#7fa2ff",
     glow: modeGlowMap[activeModeKey] ?? "rgba(127,162,255,0.42)",
@@ -1441,7 +1441,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
       setHomescreenConversations(list);
     } catch {
       setHomescreenConversations([]);
-      setHomescreenConversationsError(language === "ar" ? "ØªØ¹Ø°Ø± ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª." : "Couldn't load conversations.");
+      setHomescreenConversationsError(language === "ar" ? "تعذر تحميل المحادثات." : "Couldn't load conversations.");
     } finally {
       setHomescreenConversationsLoading(false);
     }
@@ -1488,7 +1488,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
       const nextSelectedConversation: HomescreenSelectedConversation = {
         rowId: conversation.id,
         conversationId,
-        title: normalizeConversationTitle(full.title || conversation.title, language === "ar" ? "Ù…Ø­Ø§Ø¯Ø«Ø©" : "Conversation"),
+        title: normalizeConversationTitle(full.title || conversation.title, language === "ar" ? "محادثة" : "Conversation"),
         messageCount: typeof full.message_count === "number" ? full.message_count : (conversation.message_count ?? messages.length),
         lastMessageAt: full.last_message_at || conversation.last_message_at || null,
         isActive: true,
@@ -1502,7 +1502,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
       })));
       setShowHomescreenConversations(false);
     } catch {
-      setHomescreenConversationsError(language === "ar" ? "ØªØ¹Ø°Ø± ÙØªØ­ Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©." : "Couldn't open the conversation.");
+      setHomescreenConversationsError(language === "ar" ? "تعذر فتح المحادثة." : "Couldn't open the conversation.");
     }
   };
 
@@ -1524,7 +1524,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
       setHomescreenConversations((prev) => prev.filter((item) => ((item.conversation_id || item.id) !== canonicalId)));
       void loadHomescreenConversations();
     } catch {
-      setHomescreenConversationsError(language === "ar" ? "ØªØ¹Ø°Ø± Ø­Ø°Ù Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©." : "Couldn't delete the conversation.");
+      setHomescreenConversationsError(language === "ar" ? "تعذر حذف المحادثة." : "Couldn't delete the conversation.");
     }
   };
 
@@ -1600,7 +1600,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             )} style={{ fontSize: `${greetingFontSize}px` }}>
               {(() => {
                 const h = new Date().getHours();
-                if (language === "ar") return h < 12 ? "ØµØ¨Ø§Ø­ Ø§Ù„Ø®ÙŠØ±" : h < 17 ? "Ù…Ø³Ø§Ø¡ Ø§Ù„Ø®ÙŠØ±" : "Ù…Ø³Ø§Ø¡ Ø§Ù„Ù†ÙˆØ±";
+                if (language === "ar") return h < 12 ? "صباح الخير" : h < 17 ? "مساء الخير" : "مساء النور";
                 return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
               })()}
             </p>
@@ -1632,7 +1632,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                   />
                 </span>
                 <span className="select-none font-semibold text-foreground/70" style={{ fontSize: `${modeLabelSize}px` }}>
-                  {language === "ar" ? "Ø§Ù„Ø£ÙˆØ¶Ø§Ø¹" : "Modes"}
+                  {language === "ar" ? "الأوضاع" : "Modes"}
                 </span>
               </button>
 
@@ -1678,7 +1678,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 }}
               >
                 <MessageCircle style={{ width: `${convosButtonIconSize}px`, height: `${convosButtonIconSize}px` }} />
-                <span className="font-semibold">{language === "ar" ? "Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª" : "Convos"}</span>
+                <span className="font-semibold">{language === "ar" ? "المحادثات" : "Convos"}</span>
               </button>
             </div>
           </div>
@@ -1715,7 +1715,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
         <div className="grid" style={{ gridTemplateColumns: `minmax(0, 1fr) ${systemRailWidth}px`, gap: `${middleRowGap}px` }}>
           <section className={cn("border-[1.5px]", cardShell)} style={{ ...productivitySectionStyle, borderRadius: `${sectionRadius}px`, paddingLeft: `${sectionPaddingX}px`, paddingRight: `${sectionPaddingX}px`, paddingTop: `${sectionPaddingY}px`, paddingBottom: `${sectionPaddingY}px` }}>
             <h3 className={cn(productivityTitleClass, "select-none")} style={{ marginBottom: `${productivityTitleMargin}px`, fontSize: `${productivityTitleSize}px` }}>
-              {language === "ar" ? "Ø§Ù„Ø¥Ù†ØªØ§Ø¬ÙŠØ©" : "Productivity"}
+              {language === "ar" ? "الإنتاجية" : "Productivity"}
             </h3>
             <div className="grid grid-cols-3 md:grid-cols-4" style={{ gap: `${productivityGridGap}px` }}>
               {PRODUCTIVITY_APPS.map((app) => (
@@ -1727,7 +1727,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             {language === "ar" ? (
               <>
                 <h3 className="select-none whitespace-nowrap text-center font-black leading-none tracking-tight text-foreground" style={{ marginBottom: `${systemTitleMargin}px`, fontSize: `${systemTitleSize}px` }}>
-                  Ø§Ù„Ù†Ø¸Ø§Ù…
+                  النظام
                 </h3>
                 <div className="flex flex-1 flex-col items-center justify-center" style={{ gap: `${systemGap}px` }}>
                   {SYSTEM_APPS.map((app) => (
@@ -1755,7 +1755,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
         {/* Creation & Generation */}
         <section className={cn("mt-auto border-[1.5px]", cardShell)} style={{ ...creationSectionStyle, borderRadius: `${creationRadius}px`, paddingLeft: `${sectionPaddingX}px`, paddingRight: `${sectionPaddingX}px`, paddingTop: `${creationPaddingTop}px`, paddingBottom: `${creationPaddingBottom}px`, transform: `translateY(-${creationTranslateY}px)` }}>
           <h3 className={cn(creationTitleClass, "select-none")} style={{ marginBottom: `${creationTitleMargin}px`, fontSize: `${creationTitleSize}px` }}>
-            {language === "ar" ? "Ø§Ù„Ø¥Ù†Ø´Ø§Ø¡ ÙˆØ§Ù„Ø¥Ù†ØªØ§Ø¬" : "Creation & Generation"}
+            {language === "ar" ? "الإنشاء والإنتاج" : "Creation & Generation"}
           </h3>
           <div className="grid grid-cols-5 md:gap-2" style={{ gap: `${creationGridGap}px` }}>
             {CREATION_APPS.map((app) => (
@@ -1766,8 +1766,8 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
 
         <Dialog open={showHomescreenConversations} onOpenChange={setShowHomescreenConversations}>
           <DialogContent
-            title={language === "ar" ? "Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª" : "Conversations"}
-            description={language === "ar" ? "Ø§Ø®ØªØ± Ù…Ø­Ø§Ø¯Ø«Ø© Ù„Ù„Ù…ØªØ§Ø¨Ø¹Ø© Ù…Ù† Ø§Ù„Ø´Ø§Ø´Ø© Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠØ©." : "Choose a conversation to continue from the home screen."}
+            title={language === "ar" ? "المحادثات" : "Conversations"}
+            description={language === "ar" ? "اختر محادثة للمتابعة من الشاشة الرئيسية." : "Choose a conversation to continue from the home screen."}
             className={cn(
               "max-w-[370px] overflow-hidden rounded-[28px] border p-0 shadow-[0_16px_42px_rgba(0,0,0,0.28)]",
               isDark
@@ -1778,9 +1778,9 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             <div className={cn("border-b px-4 py-3.5", isDark ? "border-white/10 bg-white/[0.02]" : "border-[#060541]/10 bg-[#060541]/[0.015]") }>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-lg font-semibold leading-none">{language === "ar" ? "Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø§Øª" : "Convos"}</p>
+                  <p className="text-lg font-semibold leading-none">{language === "ar" ? "المحادثات" : "Convos"}</p>
                   <p className={cn("mt-1.5 text-sm", isDark ? "text-white/60" : "text-[#060541]/55")}>
-                    {language === "ar" ? "Ø§Ø®ØªØ± Ù…Ø­Ø§Ø¯Ø«Ø© Ø£Ùˆ Ø§Ø¨Ø¯Ø£ Ù…Ù† Ø¬Ø¯ÙŠØ¯." : "Choose one or start fresh."}
+                    {language === "ar" ? "اختر محادثة أو ابدأ من جديد." : "Choose one or start fresh."}
                   </p>
                 </div>
               </div>
@@ -1802,10 +1802,10 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className={cn("truncate text-base font-semibold", isDark ? "text-white/95" : "text-[#060541]")}>
-                        {language === "ar" ? "Ù…Ø­Ø§Ø¯Ø«Ø© Ø¬Ø¯ÙŠØ¯Ø©" : "New Chat"}
+                        {language === "ar" ? "محادثة جديدة" : "New Chat"}
                       </p>
                       <p className={cn("mt-1 text-sm", isDark ? "text-white/60" : "text-[#060541]/60")}>
-                        {language === "ar" ? "Ø§Ø¨Ø¯Ø£ Ø¨Ø¯ÙˆÙ† Ø§Ø®ØªÙŠØ§Ø± Ù…Ø­Ø§Ø¯Ø«Ø© Ø³Ø§Ø¨Ù‚Ø©" : "Start without selecting an old conversation"}
+                        {language === "ar" ? "ابدأ بدون اختيار محادثة سابقة" : "Start without selecting an old conversation"}
                       </p>
                     </div>
                     {!selectedHomescreenConversation ? (
@@ -1823,7 +1823,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 {homescreenConversationsLoading ? (
                   <div className="flex items-center justify-center gap-2 py-8 text-sm">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>{language === "ar" ? "Ø¬Ø§Ø±Ù Ø§Ù„ØªØ­Ù…ÙŠÙ„..." : "Loading..."}</span>
+                    <span>{language === "ar" ? "جارٍ التحميل..." : "Loading..."}</span>
                   </div>
                 ) : homescreenConversationsError ? (
                   <div className={cn("rounded-2xl border px-3 py-4 text-sm", isDark ? "border-red-400/20 bg-red-500/10 text-red-100" : "border-red-200 bg-red-50 text-red-600")}>
@@ -1831,7 +1831,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                   </div>
                 ) : homescreenConversations.length === 0 ? (
                   <div className={cn("rounded-2xl border px-3 py-6 text-center text-sm", isDark ? "border-white/10 bg-white/5 text-white/70" : "border-[#060541]/10 bg-[#060541]/[0.03] text-[#060541]/70")}>
-                    {language === "ar" ? "Ù„Ø§ ØªÙˆØ¬Ø¯ Ù…Ø­Ø§Ø¯Ø«Ø§Øª Ù…Ø­ÙÙˆØ¸Ø© Ø¨Ø¹Ø¯." : "No saved conversations yet."}
+                    {language === "ar" ? "لا توجد محادثات محفوظة بعد." : "No saved conversations yet."}
                   </div>
                 ) : (
                   homescreenConversations.map((conversation) => {
@@ -1857,7 +1857,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                               {conversation.title}
                             </p>
                             <p className={cn("mt-1 text-sm", isDark ? "text-white/60" : "text-[#060541]/60")}>
-                              {conversation.message_count ?? 0} {language === "ar" ? "Ø±Ø³Ø§Ù„Ø©" : "msgs"}
+                              {conversation.message_count ?? 0} {language === "ar" ? "رسالة" : "msgs"}
                             </p>
                           </div>
                         </button>
@@ -1868,7 +1868,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                             </div>
                           ) : conversation.is_active ? (
                             <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold", isDark ? "bg-white/10 text-white/70" : "bg-[#060541]/6 text-[#060541]/70")}>
-                              {language === "ar" ? "Ø§Ù„Ø­Ø§Ù„ÙŠØ©" : "Current"}
+                              {language === "ar" ? "الحالية" : "Current"}
                             </span>
                           ) : null}
                           <button
@@ -1880,7 +1880,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                                 ? "border-white/10 bg-white/[0.03] text-white/75 hover:bg-red-500/12 hover:text-red-200"
                                 : "border-[#060541]/10 bg-white text-[#060541]/60 hover:bg-red-50 hover:text-red-600"
                             )}
-                            aria-label={language === "ar" ? "Ø­Ø°Ù Ø§Ù„Ù…Ø­Ø§Ø¯Ø«Ø©" : "Delete conversation"}
+                            aria-label={language === "ar" ? "حذف المحادثة" : "Delete conversation"}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>

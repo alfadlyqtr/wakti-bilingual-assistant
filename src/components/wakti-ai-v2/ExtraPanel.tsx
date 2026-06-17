@@ -74,13 +74,13 @@ export function ExtraPanel({
           <div className="sticky top-0 z-10 px-1 pt-1 pb-1">
             <TabsList className="flex gap-2 h-8 p-0 bg-transparent !rounded-none justify-start">
               <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="personal">
-                {language === 'ar' ? 'Ã˜Â§Ã™â€žÃ˜Â´Ã˜Â®Ã˜ÂµÃ™Å Ã˜Â©' : 'Personal'}
+                {language === 'ar' ? 'الشخصية' : 'Personal'}
               </TabsTrigger>
               <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="memory">
-                {language === 'ar' ? 'Ã˜Â§Ã™â€žÃ˜Â°Ã˜Â§Ã™Æ’Ã˜Â±Ã˜Â©' : 'Memory'}
+                {language === 'ar' ? 'الذاكرة' : 'Memory'}
               </TabsTrigger>
               <TabsTrigger className="h-8 !min-h-0 !min-w-0 !gap-0 px-3 rounded-xl text-sm font-medium border border-white/25 bg-white/70 hover:bg-white data-[state=active]:bg-white data-[state=active]:!text-slate-900 data-[state=inactive]:!text-slate-700 shadow-sm data-[state=active]:shadow" value="conversations">
-                {language === 'ar' ? 'Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â§Ã˜Âª' : 'Conversations'}
+                {language === 'ar' ? 'المحادثات' : 'Conversations'}
               </TabsTrigger>
             </TabsList>
           </div>
