@@ -184,6 +184,12 @@ export const SavedConversationsService = {
 
     if (error) throw error;
 
+    await db
+      .from('ai_saved_conversations')
+      .update({ is_active: false })
+      .eq('user_id', user.id)
+      .neq('id', data.id);
+
     if (!existing) {
       await SavedConversationsService.pruneOldest(user.id);
     }

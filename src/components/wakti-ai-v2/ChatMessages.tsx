@@ -186,12 +186,12 @@ function SearchMessageCard({
 }) {
   const resolvedBrowsingData = resolveGroundedBrowsingData(message as any);
   const sources: SearchSource[] = Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : [];
-  const hasGroundedPlaceCards = hasGroundedPlaces(message as any);
   const rawContent = message.content || '';
   const cleanedContent = stripReminderBlocks(rawContent);
   const searchType = (resolvedBrowsingData?.searchType || 'general').toLowerCase();
   const isNearMeQuery = typeof resolvedBrowsingData?.isNearMeQuery === 'boolean' ? resolvedBrowsingData.isNearMeQuery : false;
   const isPlaceSearch = searchType === 'business' || searchType === 'places' || isNearMeQuery;
+  const hasGroundedPlaceCards = isPlaceSearch && hasGroundedPlaces(message as any);
   const isContentSearch = !isPlaceSearch && ['news', 'sports', 'research', 'general', 'url'].includes(searchType);
 
   let themeColor = 'text-emerald-500';

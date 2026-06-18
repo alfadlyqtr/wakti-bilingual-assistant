@@ -19,5 +19,6 @@ function normalizeBundlerUrl(value: string): string | undefined {
 // its built-in, version-matched bundler — the most reliable option.
 export const SANDPACK_BUNDLER_URL = normalizeBundlerUrl(rawSandpackBundlerUrl);
 
-// `undefined` => let Sandpack pick its default version-matched bundler.
-export const SANDPACK_EFFECTIVE_BUNDLER_URL = SANDPACK_BUNDLER_URL;
+// If no environment variable is provided, default to our highly-robust, same-domain,
+// telemetry-free static copy at `/sandpack-bundler` which we host in the public folder.
+export const SANDPACK_EFFECTIVE_BUNDLER_URL = SANDPACK_BUNDLER_URL || '/sandpack-bundler';

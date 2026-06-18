@@ -1262,29 +1262,62 @@ const WaktiAIV2 = () => {
                 : (typeof returnedBrowsingData?.isNearMeQuery === 'boolean' ? returnedBrowsingData.isNearMeQuery : undefined),
             }
           : undefined;
-        const finalAssistantMessage: AIMessage = {
-          ...assistantPlaceholder,
-          content: finalResponseText,
-          browsingUsed: streamMeta?.browsingUsed === true || trigger === 'search' || !!resolvedBrowsingData,
-          browsingData: resolvedBrowsingData,
-          chatSubmode: effectiveChatSubmode,
-          metadata: { 
-            loading: false, 
-            ...streamMeta,
-            thinkingDuration: streamThinkingDuration,
-            toolsUsed: getCompletedToolCalls().length,
-            toolCalls: getCompletedToolCalls(),
-            studyMode: effectiveChatSubmode === 'study',
-          },
-          intent: trigger,
-        };
 
         // Flush final content into sessionMessages (one-time, not per-token)
-        // Then clear streaming overlay Ã¢â‚¬â€ ChatMessages will switch to rendering message.content
+        // Then clear streaming overlay ── ChatMessages will switch to rendering message.content
         // IMPORTANT: keep setStreamingMessageId + setSessionMessages adjacent (no DOM mutations
         // between them) so React 18 auto-batches both into one render and eliminates flicker.
         setStreamingMessageId(null);
         setSessionMessages(prev => {
+          const existingMsg = prev.find(m => m.id === assistantMessageId);
+          const currentBrowsingData = existingMsg?.browsingData && typeof existingMsg.browsingData === 'object'
+            ? existingMsg.browsingData
+            : {};
+
+          const finalBrowsingData = resolvedBrowsingData || Object.keys(currentBrowsingData).length > 0
+            ? {
+                ...currentBrowsingData,
+                ...(resolvedBrowsingData || {}),
+                queries: Array.from(new Set([
+                  ...(Array.isArray(currentBrowsingData?.queries) ? currentBrowsingData.queries : []),
+                  ...(Array.isArray(resolvedBrowsingData?.queries) ? resolvedBrowsingData.queries : []),
+                ].map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))),
+                sources: [
+                  ...(Array.isArray(currentBrowsingData?.sources) ? currentBrowsingData.sources : []),
+                  ...(Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : []),
+                ].filter((v, i, a) => v?.url && a.findIndex(t => t.url === v.url) === i),
+                supports: [
+                  ...(Array.isArray(currentBrowsingData?.supports) ? currentBrowsingData.supports : []),
+                  ...(Array.isArray(resolvedBrowsingData?.supports) ? resolvedBrowsingData.supports : []),
+                ],
+                cards: deduplicateCards([
+                  ...(Array.isArray(currentBrowsingData?.cards) ? currentBrowsingData.cards : []),
+                  ...(Array.isArray(resolvedBrowsingData?.cards) ? resolvedBrowsingData.cards : []),
+                ]),
+                places: deduplicateAndMergePlaces([
+                  ...(Array.isArray(currentBrowsingData?.places) ? currentBrowsingData.places : []),
+                  ...(Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : []),
+                ]),
+              }
+            : undefined;
+
+          const finalAssistantMessage: AIMessage = {
+            ...assistantPlaceholder,
+            content: finalResponseText,
+            browsingUsed: streamMeta?.browsingUsed === true || trigger === 'search' || !!finalBrowsingData,
+            browsingData: finalBrowsingData,
+            chatSubmode: effectiveChatSubmode,
+            metadata: { 
+              loading: false, 
+              ...streamMeta,
+              thinkingDuration: streamThinkingDuration,
+              toolsUsed: getCompletedToolCalls().length,
+              toolCalls: getCompletedToolCalls(),
+              studyMode: effectiveChatSubmode === 'study',
+            },
+            intent: trigger,
+          };
+
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
           setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
           setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);

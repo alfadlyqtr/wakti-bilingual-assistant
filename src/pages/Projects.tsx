@@ -2033,21 +2033,44 @@ Apply these styles consistently throughout the entire design.`;
       AI_CODER_TEMP_LOCKED ? (
         <div className="min-h-[60vh] flex items-center justify-center px-4 py-16">
           <div className={cn(
-            "w-full max-w-md rounded-3xl border backdrop-blur-xl p-8 text-center",
+            "w-full max-w-md rounded-3xl border backdrop-blur-xl p-8 text-center transition-all duration-300 relative overflow-hidden",
             isDark
-              ? "border-white/10 bg-white/5 shadow-[0_20px_60px_rgba(0,0,0,0.35)]"
-              : "border-[#060541]/15 bg-white/95 shadow-[0_20px_60px_rgba(6,5,65,0.14)]"
+              ? "border-white/15 bg-gradient-to-b from-[#0c0f14]/90 to-[#141822]/90 shadow-[0_4px_32px_hsla(0,0%,0%,0.7),_0_2px_16px_hsla(210,100%,65%,0.15)]"
+              : "border-[#e9ceb0]/40 bg-gradient-to-b from-[#fcfefd]/95 to-[#f5f8f6]/95 shadow-[0_8px_32px_rgba(6,5,65,0.08)]"
           )}>
+            {/* Glowing background blob for Dark Mode */}
+            {isDark && (
+              <div className="absolute -top-24 -left-24 w-48 h-48 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
+            )}
+            
             <div className={cn(
-              "mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl",
-              isDark ? "bg-indigo-500/15 text-indigo-300" : "bg-[#060541]/10 text-[#060541]"
+              "mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl transition-all duration-300",
+              isDark 
+                ? "bg-gradient-to-br from-indigo-500/20 to-purple-500/20 text-indigo-400 border border-indigo-500/20" 
+                : "bg-gradient-to-br from-[#060541]/10 to-[#060541]/5 text-[#060541] border border-[#060541]/10"
             )}>
-              <Sparkles className="h-6 w-6" />
+              <Lock className="h-6 w-6 animate-pulse" />
             </div>
-            <h2 className={cn("text-xl font-bold mb-2", isDark ? "text-white" : "text-[#060541]")}>
-              {isRTL ? 'نقوم بتحديث ميزة مبرمج الذكاء' : 'We are updating AI Coder'}
+            
+            <h2 className={cn(
+              "text-2xl font-bold tracking-tight mb-3 transition-colors duration-300",
+              isDark ? "text-white" : "text-[#060541]"
+            )}>
+              {isRTL ? 'تحديث ميزة مبرمج الذكاء' : 'AI Coder Update'}
             </h2>
-            <p className={cn("text-sm leading-6", isDark ? "text-white/75" : "text-[#060541]/75")}>
+            
+            <p className={cn(
+              "text-sm leading-relaxed mb-1 transition-colors duration-300",
+              isDark ? "text-[#858384]" : "text-zinc-500"
+            )}>
+              {isRTL 
+                ? 'نقوم بتحسين مبرمج الذكاء الاصطناعي لتقديم أفضل تجربة.' 
+                : 'We are enhancing the AI Coder to deliver the ultimate experience.'}
+            </p>
+            <p className={cn(
+              "text-xs font-semibold leading-relaxed transition-colors duration-300",
+              isDark ? "text-indigo-400" : "text-[#060541]/80"
+            )}>
               {isRTL ? 'سنعود قريبًا جدًا. شكرًا لصبرك 💙' : 'We will be back very soon. Thank you for your patience 💙'}
             </p>
           </div>

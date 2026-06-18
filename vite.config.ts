@@ -52,6 +52,16 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        '/_bucket': {
+          target: 'https://prod-packager-packages.codesandbox.io',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/_bucket/, ''),
+        },
+        '/_packager': {
+          target: 'https://aiwi8rnkp5.execute-api.eu-west-1.amazonaws.com/prod/packages',
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/_packager/, ''),
+        },
       },
       // NOTE: COOP/COEP headers removed - they break Sandpack's bundler
       // FFmpeg.wasm may not work without these, but Sandpack requires their removal
