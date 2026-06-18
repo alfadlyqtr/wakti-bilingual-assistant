@@ -5986,10 +5986,15 @@ If you are running out of space, keep this order and drop the rest:
                   country: isNearMeSearchQuery ? '' : (requestLocation?.country || userCountry || '')
                 }
               : null;
+            const placesSearchQuery = cleanSearchQuery
+              .replace(/\b(near me|nearest|closest|around me|nearby)\b/gi, ' ')
+              .replace(/\s+/g, ' ')
+              .trim() || cleanSearchQuery;
+
             const parallelPlacesPromise = effectiveSearchIntent === 'business' && cleanSearchQuery
               ? (async () => {
                   const foundPlaces = await searchGooglePlacesForQuery(
-                    cleanSearchQuery,
+                    placesSearchQuery,
                     userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
                     { strictNearby: Boolean(isNearMeSearchQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
                   );
@@ -6369,13 +6374,18 @@ If you are running out of space, keep this order and drop the rest:
                 })();
                 const cleanFallbackQuery = typeof message === 'string' ? message.trim() : '';
                 const isNearMeFallbackQuery = /\b(near me|nearest|closest|around me|nearby)\b/i.test(cleanFallbackQuery);
+                const fallbackPlacesSearchQuery = cleanFallbackQuery
+                  .replace(/\b(near me|nearest|closest|around me|nearby)\b/gi, ' ')
+                  .replace(/\s+/g, ' ')
+                  .trim() || cleanFallbackQuery;
+
                 let fallbackPlaces: GroundedPlaceCard[] = [];
                 if (effectiveSearchIntent === 'business' && cleanFallbackQuery) {
                   fallbackPlaces = parallelPlacesPromise
                     ? await parallelPlacesPromise.catch(() => [])
                     : await (async () => {
                         const foundPlaces = await searchGooglePlacesForQuery(
-                          cleanFallbackQuery,
+                          fallbackPlacesSearchQuery,
                           userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
                           { strictNearby: Boolean(isNearMeFallbackQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
                         );

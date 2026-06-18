@@ -26,7 +26,7 @@ import { clsx } from "clsx";
 import { WAKTI_INSPECTOR_COMPONENT } from "@/utils/waktiInspectorComponent";
 import sandpackI18nBundle from "@/assets/sandpack-i18n-bundle.mjs?raw";
 import { SANDPACK_DEPENDENCIES, assertSandpackPackagesInSync, rootPackageName } from "@/config/sandpackPackages";
-import { SANDPACK_EFFECTIVE_BUNDLER_URL } from "@/config/sandpackBundler";
+import { SANDPACK_EFFECTIVE_BUNDLER_URL, SANDPACK_START_ROUTE } from "@/config/sandpackBundler";
 
 const SANDPACK_COMPANION_DEPENDENCIES: Record<string, string[]> = {
   "framer-motion": ["@emotion/is-prop-valid"],
@@ -716,6 +716,7 @@ const InspectablePreview = ({
       showSandpackErrorOverlay={true}
       showRefreshButton={false}
       style={{ height: '100%', width: '100%' }}
+      startRoute={SANDPACK_START_ROUTE}
     />
   );
 };

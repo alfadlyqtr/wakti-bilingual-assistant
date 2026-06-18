@@ -53,14 +53,14 @@ export default defineConfig(({ mode }) => {
           secure: false,
         },
         '/_bucket': {
-          target: 'https://prod-packager-packages.codesandbox.io',
+          target: 'https://preview.wakti.ai',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/_bucket/, ''),
+          secure: false,
         },
         '/_packager': {
-          target: 'https://aiwi8rnkp5.execute-api.eu-west-1.amazonaws.com/prod/packages',
+          target: 'https://preview.wakti.ai',
           changeOrigin: true,
-          rewrite: (path) => path.replace(/^\/_packager/, ''),
+          secure: false,
         },
       },
       // NOTE: COOP/COEP headers removed - they break Sandpack's bundler

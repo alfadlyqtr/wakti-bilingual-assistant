@@ -4,7 +4,11 @@ function normalizeBundlerUrl(value: string): string | undefined {
   if (!value) return undefined;
 
   if (value.startsWith('/')) {
-    return value;
+    if (typeof window !== 'undefined') {
+      // Resolve same-origin relative URLs to the origin root to avoid Sandpack's subdirectory bugs
+      return window.location.origin;
+    }
+    return '/';
   }
 
   try {
@@ -20,3 +24,7 @@ function normalizeBundlerUrl(value: string): string | undefined {
 export const SANDPACK_BUNDLER_URL = normalizeBundlerUrl(rawSandpackBundlerUrl);
 
 export const SANDPACK_EFFECTIVE_BUNDLER_URL = SANDPACK_BUNDLER_URL;
+
+// If VITE_SANDPACK_BUNDLER_URL is a same-origin relative path (like /sandbox.html),
+// we use it as the startRoute to ensure the iframe loads the correct file.
+export const SANDPACK_START_ROUTE = rawSandpackBundlerUrl.startsWith('/') ? rawSandpackBundlerUrl : undefined;

@@ -146,25 +146,72 @@ type AppCircleProps = {
 const MODERN_SCALE_BASE_WIDTH = 390;
 const MODERN_SCALE_BASE_HEIGHT = 720;
 
-function getStableModernViewport() {
+const clampModernValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const normalizeModernValue = (value: number, min: number, max: number) => {
+  if (max <= min) return 1;
+  return clampModernValue((value - min) / (max - min), 0, 1);
+};
+
+const lerpModernValue = (min: number, max: number, progress: number) => min + ((max - min) * progress);
+
+function getModernViewport() {
   if (typeof window === "undefined") {
     return { width: MODERN_SCALE_BASE_WIDTH, height: MODERN_SCALE_BASE_HEIGHT };
   }
 
-  const viewportWidth = window.innerWidth || MODERN_SCALE_BASE_WIDTH;
-  const viewportHeight = window.innerHeight || MODERN_SCALE_BASE_HEIGHT;
+  const visualViewport = window.visualViewport;
+  const viewportWidth = Math.round(visualViewport?.width || window.innerWidth || MODERN_SCALE_BASE_WIDTH);
+  const viewportHeight = Math.round(visualViewport?.height || window.innerHeight || MODERN_SCALE_BASE_HEIGHT);
 
   if (viewportWidth >= 768) {
     return { width: viewportWidth, height: viewportHeight };
   }
 
-  const screenWidth = window.screen?.width || viewportWidth;
-  const screenHeight = window.screen?.height || viewportHeight;
-
   return {
-    width: Math.min(screenWidth, screenHeight),
-    height: Math.max(screenWidth, screenHeight),
+    width: Math.min(viewportWidth, viewportHeight),
+    height: Math.max(viewportWidth, viewportHeight),
   };
+}
+
+function useModernViewport() {
+  const [viewport, setViewport] = useState(() => getModernViewport());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let frame = 0;
+    const updateViewport = () => {
+      frame = 0;
+      setViewport((previous) => {
+        const next = getModernViewport();
+        if (previous.width === next.width && previous.height === next.height) {
+          return previous;
+        }
+        return next;
+      });
+    };
+
+    const scheduleViewportUpdate = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateViewport);
+    };
+
+    const visualViewport = window.visualViewport;
+    scheduleViewportUpdate();
+    window.addEventListener("resize", scheduleViewportUpdate);
+    window.addEventListener("orientationchange", scheduleViewportUpdate);
+    visualViewport?.addEventListener("resize", scheduleViewportUpdate);
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("resize", scheduleViewportUpdate);
+      window.removeEventListener("orientationchange", scheduleViewportUpdate);
+      visualViewport?.removeEventListener("resize", scheduleViewportUpdate);
+    };
+  }, []);
+
+  return viewport;
 }
 
 // --- AppCircle ----------------------------------------------------------------
@@ -1266,7 +1313,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const [quoteExiting, setQuoteExiting] = useState(false);
   const [modernWidgetSettings, setModernWidgetSettings] = useState<ModernWidgetSettings>(DEFAULT_MODERN_WIDGET_SETTINGS);
   const [modernWidgetOrder, setModernWidgetOrder] = useState<ModernWidgetKey[]>(DEFAULT_MODERN_WIDGET_ORDER);
-  const [stableViewport] = useState(() => getStableModernViewport());
+  const viewport = useModernViewport();
 
   const { tasks, reminders } = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1354,58 +1401,85 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   );
   const quoteText = getQuoteText(quote, language);
   const quoteAuthor = getQuoteAuthor(quote);
-  const isDesktopLike = stableViewport.width >= 768;
-  const layoutScale = isDesktopLike
+  const isDesktopLike = viewport.width >= 768;
+  const isCompactPhone = !isDesktopLike && (viewport.width <= 360 || viewport.height <= 700);
+  const isTallPhone = !isDesktopLike && viewport.height >= 860;
+  const widthProgress = isDesktopLike ? 1 : normalizeModernValue(viewport.width, 320, 430);
+  const heightProgress = isDesktopLike ? 1 : normalizeModernValue(viewport.height, 640, 940);
+  const fluidSize = (min: number, max: number, mode: "width" | "height" | "mixed" = "mixed") => {
+    const progress = mode === "width" ? widthProgress : mode === "height" ? heightProgress : ((widthProgress * 0.6) + (heightProgress * 0.4));
+    return Number(lerpModernValue(min, max, progress).toFixed(2));
+  };
+  const rootPaddingX = isDesktopLike ? 16 : fluidSize(10, 16, "width");
+  const rootPaddingTop = isDesktopLike ? 12 : fluidSize(10, 16, "height");
+  const containerGap = isDesktopLike ? 16 : fluidSize(10, 16, "height");
+  const topRowGap = isDesktopLike ? 16 : fluidSize(8, 14, "width");
+  const topRowLeadWidth = isDesktopLike
+    ? 116
+    : clampModernValue(viewport.width * (isCompactPhone ? 0.265 : isTallPhone ? 0.305 : 0.285), 92, 118);
+  const topLeadPaddingTop = isDesktopLike ? 4 : fluidSize(3, 6, "height");
+  const modesButtonGap = isDesktopLike ? 4 : fluidSize(3, 5, "width");
+  const modeControlsGap = isDesktopLike ? 8 : fluidSize(6, 10, "width");
+  const modeControlsTopMargin = isDesktopLike ? 12 : fluidSize(8, 14, "height");
+  const greetingFontSize = isDesktopLike ? 15 : fluidSize(language === "ar" ? 13.25 : 13, 16, "width");
+  const modeBubbleHeight = isDesktopLike ? 48 : clampModernValue(viewport.width * (isCompactPhone ? 0.115 : 0.12), 40, 52);
+  const modeBubbleRadius = isDesktopLike ? 16 : fluidSize(12, 17, "width");
+  const modeIconSize = isDesktopLike ? 20 : fluidSize(16, 21, "width");
+  const modeLabelSize = isDesktopLike ? 10 : fluidSize(8.5, 10.5, "width");
+  const widgetsRadius = isDesktopLike ? 32 : fluidSize(24, 32, "width");
+  const widgetsPaddingX = isDesktopLike ? 12 : fluidSize(8.5, 12.5, "width");
+  const widgetsPaddingTop = isDesktopLike ? 8 : fluidSize(6, 9, "height");
+  const widgetsPaddingBottom = isDesktopLike ? 6 : fluidSize(4.5, 7, "height");
+  const widgetCardHeight = isDesktopLike
+    ? 208
+    : clampModernValue(viewport.height * (isCompactPhone ? 0.235 : isTallPhone ? 0.265 : 0.25), 174, 224);
+  const middleRowGap = isDesktopLike ? 10 : fluidSize(8, 12, "width");
+  const systemRailWidth = isDesktopLike
+    ? 108
+    : clampModernValue(viewport.width * (isCompactPhone ? 0.235 : isTallPhone ? 0.255 : 0.245), 88, 112);
+  const sectionRadius = isDesktopLike ? 32 : fluidSize(24, 32, "width");
+  const creationRadius = isDesktopLike ? 35.2 : fluidSize(26, 35.2, "width");
+  const sectionPaddingX = isDesktopLike ? 10 : fluidSize(8, 11.5, "width");
+  const sectionPaddingY = isDesktopLike ? 10 : fluidSize(8, 11.5, "height");
+  const systemPaddingX = isDesktopLike ? 8 : fluidSize(6.5, 9, "width");
+  const systemPaddingTop = isDesktopLike ? 6 : fluidSize(5, 7, "height");
+  const productivityTitleMargin = isDesktopLike ? 10 : fluidSize(7, 11, "height");
+  const productivityTitleSize = isDesktopLike
+    ? (language === "ar" ? 27.52 : 24.8)
+    : fluidSize(language === "ar" ? 21 : 19, language === "ar" ? 28 : 25, "width");
+  const productivityGridGap = isDesktopLike ? 8 : fluidSize(5.5, 9, "width");
+  const systemTitleSize = isDesktopLike ? 21.12 : fluidSize(16.5, 21.12, "width");
+  const systemTitleMargin = isDesktopLike ? 8 : fluidSize(5.5, 9, "height");
+  const systemGap = isDesktopLike ? 12 : fluidSize(8, 12, "height");
+  const systemVerticalFontSize = isDesktopLike ? 13 : fluidSize(10.5, 13, "width");
+  const systemVerticalLetterSpacing = isDesktopLike ? 6.76 : fluidSize(5.1, 6.76, "width");
+  const systemRightPadding = isDesktopLike ? 16 : fluidSize(10, 16, "width");
+  const convosButtonMarginTop = isDesktopLike ? 12 : fluidSize(8, 12, "height");
+  const convosButtonHeight = isDesktopLike ? 32 : fluidSize(28, 34, "height");
+  const convosButtonRadius = isDesktopLike ? 12 : fluidSize(10, 13, "width");
+  const convosButtonFontSize = isDesktopLike ? 12 : fluidSize(10.25, 12.5, "width");
+  const convosButtonIconSize = isDesktopLike ? 13 : fluidSize(11, 13.5, "width");
+  const homescreenBarOffset = isDesktopLike ? 6 : fluidSize(4, 8, "height");
+  const creationTranslateY = isDesktopLike ? 12 : clampModernValue(viewport.height * 0.011, 6, 12);
+  const creationPaddingTop = isDesktopLike ? 4 : fluidSize(4, 8, "height");
+  const creationPaddingBottom = isDesktopLike ? 0 : fluidSize(6, 10, "height");
+  const creationTitleMargin = isDesktopLike ? 4 : fluidSize(4, 8, "height");
+  const creationTitleSize = isDesktopLike
+    ? (language === "ar" ? 24.8 : 19.2)
+    : fluidSize(language === "ar" ? 18.5 : 15.5, language === "ar" ? 25 : 20, "width");
+  const creationGridGap = isDesktopLike ? 6 : fluidSize(4.5, 8, "width");
+  const compactAppScale = isDesktopLike
     ? 1
-    : Math.max(0.78, Math.min(1, stableViewport.width / MODERN_SCALE_BASE_WIDTH, stableViewport.height / MODERN_SCALE_BASE_HEIGHT));
-  const scalePx = (value: number, min = 0) => Math.max(min, Number((value * layoutScale).toFixed(2)));
-  const rootPaddingX = isDesktopLike ? 16 : scalePx(12, 9);
-  const rootPaddingTop = scalePx(12, 9);
-  const containerGap = isDesktopLike ? 16 : scalePx(12, 8);
-  const topRowGap = scalePx(isDesktopLike ? 16 : 12, 8);
-  const topRowLeadWidth = scalePx(isDesktopLike ? 116 : 102, 84);
-  const modesButtonGap = scalePx(4, 3);
-  const modeControlsGap = scalePx(8, 6);
-  const modeControlsTopMargin = scalePx(12, 8);
-  const greetingFontSize = scalePx(15, 12);
-  const modeBubbleHeight = scalePx(48, 38);
-  const modeBubbleRadius = scalePx(16, 12);
-  const modeIconSize = scalePx(20, 16);
-  const modeLabelSize = scalePx(10, 8.5);
-  const widgetsRadius = scalePx(32, 24);
-  const widgetsPaddingX = scalePx(12, 9);
-  const widgetsPaddingTop = scalePx(8, 6);
-  const widgetsPaddingBottom = scalePx(6, 4);
-  const widgetCardHeight = scalePx(208, 170);
-  const middleRowGap = scalePx(10, 7);
-  const systemRailWidth = scalePx(108, 88);
-  const sectionRadius = scalePx(32, 24);
-  const creationRadius = scalePx(35.2, 26);
-  const sectionPaddingX = scalePx(10, 7.5);
-  const sectionPaddingY = scalePx(10, 7.5);
-  const systemPaddingX = scalePx(8, 6);
-  const systemPaddingTop = scalePx(6, 4.5);
-  const productivityTitleMargin = scalePx(10, 7);
-  const productivityTitleSize = scalePx(language === "ar" ? 27.52 : 24.8, language === "ar" ? 21 : 19);
-  const productivityGridGap = scalePx(8, 5.5);
-  const systemTitleSize = scalePx(21.12, 16.5);
-  const systemTitleMargin = scalePx(8, 5.5);
-  const systemGap = scalePx(12, 8);
-  const systemVerticalFontSize = scalePx(13, 10.5);
-  const systemVerticalLetterSpacing = scalePx(6.76, 5.1);
-  const systemRightPadding = scalePx(16, 12);
-  const convosButtonMarginTop = scalePx(12, 8);
-  const convosButtonHeight = scalePx(32, 26);
-  const convosButtonRadius = scalePx(12, 10);
-  const convosButtonFontSize = scalePx(12, 10);
-  const convosButtonIconSize = scalePx(13, 11);
-  const homescreenBarOffset = scalePx(6, 4);
-  const creationTranslateY = scalePx(12, 8);
-  const creationPaddingTop = scalePx(4, 3);
-  const creationPaddingBottom = scalePx(0, 0);
-  const creationTitleMargin = scalePx(4, 3);
-  const creationTitleSize = scalePx(language === "ar" ? 24.8 : 19.2, language === "ar" ? 19 : 15);
-  const creationGridGap = scalePx(6, 4.5);
+    : clampModernValue(0.84 + (widthProgress * 0.14) + (heightProgress * 0.04) - (isCompactPhone ? 0.03 : 0), 0.82, 1);
+  const accountAppScale = isDesktopLike
+    ? 1
+    : clampModernValue(0.9 + (widthProgress * 0.12) + (heightProgress * 0.05), 0.88, 1.06);
+  const systemAppScale = isDesktopLike
+    ? 1
+    : clampModernValue(compactAppScale + 0.02, 0.84, 1.02);
+  const creationAppScale = isDesktopLike
+    ? 1
+    : clampModernValue(compactAppScale - (isCompactPhone ? 0.06 : 0.03), 0.78, 0.95);
 
   const [homescreenWaktiDraft, setHomescreenWaktiDraft] = useState<HomescreenWaktiDraft>(() => {
     try {
@@ -1593,7 +1667,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
       <div className="mx-auto flex h-full min-h-0 w-full max-w-[980px] flex-1 flex-col" style={{ gap: `${containerGap}px` }}>
         {/* Top row: Account + Modes/AI controls | Widgets carousel */}
         <div className="grid items-start" style={{ gridTemplateColumns: `${topRowLeadWidth}px minmax(0, 1fr)`, gap: `${topRowGap}px` }}>
-          <div className="pt-1" style={{ paddingTop: `${scalePx(4, 3)}px` }}>
+          <div className="pt-1" style={{ paddingTop: `${topLeadPaddingTop}px` }}>
             <p className={cn(
               "select-none text-center text-[15px] font-bold leading-tight tracking-tight",
               isDark
@@ -1607,7 +1681,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
               })()}
             </p>
             <div className="flex justify-center">
-              <AppCircle app={ACCOUNT_APP} language={language} onClick={() => navigate(ACCOUNT_APP.path)} avatarUrl={avatarUrl} size="large" scale={layoutScale} />
+              <AppCircle app={ACCOUNT_APP} language={language} onClick={() => navigate(ACCOUNT_APP.path)} avatarUrl={avatarUrl} size="large" scale={accountAppScale} />
             </div>
 
             {/* Modes + WAKTI AI side by side Ã¢â‚¬â€ pushed down */}
@@ -1721,7 +1795,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             </h3>
             <div className="grid grid-cols-3 md:grid-cols-4" style={{ gap: `${productivityGridGap}px` }}>
               {PRODUCTIVITY_APPS.map((app) => (
-                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
+                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={compactAppScale} />
               ))}
             </div>
           </section>
@@ -1733,7 +1807,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 </h3>
                 <div className="flex flex-1 flex-col items-center justify-center" style={{ gap: `${systemGap}px` }}>
                   {SYSTEM_APPS.map((app) => (
-                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
+                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={systemAppScale} />
                   ))}
                 </div>
               </>
@@ -1746,7 +1820,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 </div>
                 <div className="flex h-full flex-col items-center justify-center" style={{ gap: `${systemGap}px`, paddingRight: `${systemRightPadding}px` }}>
                   {SYSTEM_APPS.map((app) => (
-                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
+                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={systemAppScale} />
                   ))}
                 </div>
               </>
@@ -1761,7 +1835,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
           </h3>
           <div className="grid grid-cols-5 md:gap-2" style={{ gap: `${creationGridGap}px` }}>
             {CREATION_APPS.map((app) => (
-              <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
+              <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={creationAppScale} />
             ))}
           </div>
         </section>

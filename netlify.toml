@@ -3,6 +3,18 @@
   publish = "dist"
 
 [[redirects]]
+  from = "/_bucket/*"
+  to = "https://prod-packager-packages.codesandbox.io/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/_packager/*"
+  to = "https://aiwi8rnkp5.execute-api.eu-west-1.amazonaws.com/prod/packages/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

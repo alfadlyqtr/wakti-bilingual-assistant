@@ -66,7 +66,7 @@ interface Project {
 const WaktiAssistant = lazyRetry(() => import('./WaktiAssistant'));
 
 const MAX_PROJECTS = 3;
-const AI_CODER_TEMP_LOCKED = true;
+const AI_CODER_TEMP_LOCKED = false;
 type ScreenshotIntent = 'layout' | 'style' | 'content';
 
 const SCREENSHOT_INTENT_OPTIONS: Array<{
