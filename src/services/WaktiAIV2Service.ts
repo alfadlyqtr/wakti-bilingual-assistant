@@ -418,9 +418,10 @@ class WaktiAIV2ServiceClass {
       ? loc.accuracy
       : null;
 
-    if (accuracy == null) return false;
-    if (accuracy > 5000) return false;
-    if (loc.source === 'browser' && accuracy > STRICT_NEAR_ME_BROWSER_MAX_ACCURACY) return false;
+    if (accuracy !== null) {
+      if (accuracy > 5000) return false;
+      if (loc.source === 'browser' && accuracy > STRICT_NEAR_ME_BROWSER_MAX_ACCURACY) return false;
+    }
 
     return true;
   }
@@ -464,7 +465,7 @@ class WaktiAIV2ServiceClass {
       const nativeLoc = await getNativeLocation({
         skipCache: forceFresh,
         timeoutMs: forceFresh ? 10000 : 6000,
-        allowBrowserFallback: !forceFresh,
+        allowBrowserFallback: true,
       });
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
         hasDeviceGPS = true;

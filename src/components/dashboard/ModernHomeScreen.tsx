@@ -1035,6 +1035,8 @@ function persistHomescreenWaktiNavigationState(state: WaktiAiNavigationState) {
 
     if (state.pendingPayloadId) {
       localStorage.setItem("wakti_pending_payload_id", state.pendingPayloadId);
+    } else {
+      localStorage.removeItem("wakti_pending_payload_id");
     }
 
     if (state.selectedConversationRowId) {

@@ -30,7 +30,7 @@ const src = join(
   'sandpack-client',
   'sandpack'
 );
-const dest = join(root, 'public', 'sandpack-bundler');
+const dest = join(root, 'wakti-sandpack-bundler');
 
 if (!existsSync(src)) {
   console.error('[prepare-bundler] Source not found:', src);

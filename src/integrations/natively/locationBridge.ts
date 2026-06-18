@@ -27,9 +27,6 @@ interface NativelyLocationInstance {
     fallbackToSettings?: boolean
   ) => void;
   stop: () => void;
-  permission: (
-    callback: (resp: { status: string }) => void
-  ) => void;
 }
 
 interface NativelyLocationResponse {
@@ -218,43 +215,6 @@ export function clearLocationCache(): void {
   try {
     localStorage.removeItem(LOCATION_CACHE_KEY);
   } catch {}
-}
-
-/**
- * Check location permission status via Natively SDK.
- * Returns: 'IN_USE' | 'ALWAYS' | 'DENIED' | 'UNKNOWN'
- */
-function checkPermission(instance: NativelyLocationInstance, timeoutMs: number = 3000): Promise<LocationPermissionStatus> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        console.warn('[NativelyLocation] Permission check timed out');
-        resolve('UNKNOWN');
-      }
-    }, timeoutMs);
-
-    try {
-      instance.permission((resp) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        const status = (resp?.status || 'UNKNOWN').toUpperCase();
-        console.log('[NativelyLocation] Permission status:', status);
-        if (status === 'IN_USE' || status === 'ALWAYS') resolve(status as LocationPermissionStatus);
-        else if (status === 'DENIED') resolve('DENIED');
-        else resolve('UNKNOWN');
-      });
-    } catch (err) {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        console.warn('[NativelyLocation] Permission check error:', err);
-        resolve('UNKNOWN');
-      }
-    }
-  });
 }
 
 /**
@@ -536,31 +496,20 @@ async function _doGetNativeLocation(options?: {
       console.warn('[NativelyLocation] SDK instance creation failed');
       return null;
     }
-    const perm = await checkPermission(instance);
-    console.log('[NativelyLocation] Permission:', perm);
 
-    if (perm === 'IN_USE' || perm === 'ALWAYS') {
-      let result: NativeLocationResult | null = null;
-      if (skipCache) {
-        console.log('[NativelyLocation] Using foreground tracking for fresh GPS...');
-        result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
-        if (!result) {
-          console.warn('[NativelyLocation] Fresh GPS foreground fix unavailable — will use browser fallback');
-          return null;
-        }
-      }
+    let result: NativeLocationResult | null = null;
+    if (skipCache) {
+      console.log('[NativelyLocation] Using foreground tracking for fresh GPS...');
+      result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
       if (!result) {
-        console.log('[NativelyLocation] Using current() one-shot...');
-        result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
+        console.warn('[NativelyLocation] Fresh GPS foreground fix unavailable — will try current() next');
       }
-      return result;
     }
-    if (perm === 'DENIED') {
-      console.warn('[NativelyLocation] ⚠️ Permission DENIED — skipping native current(), using browser fallback only');
-      return null;
+    if (!result) {
+      console.log('[NativelyLocation] Using current() one-shot...');
+      result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
     }
-    console.log('[NativelyLocation] Permission unknown — skipping native current(), using browser fallback only');
-    return null;
+    return result;
   })().catch((err) => {
     console.warn('[NativelyLocation] Native SDK path threw:', err);
     return null;

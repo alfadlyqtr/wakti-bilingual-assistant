@@ -150,15 +150,12 @@ const WaktiAIV2 = () => {
     try {
       const routeState = (location.state || {}) as {
         pendingMessage?: string;
-        pendingPayloadId?: string;
         selectedConversationRowId?: string;
       };
       return Boolean(
         routeState.pendingMessage?.trim()
-        || routeState.pendingPayloadId
         || routeState.selectedConversationRowId
         || localStorage.getItem('wakti_pending_message')
-        || localStorage.getItem('wakti_pending_payload_id')
         || localStorage.getItem('wakti_selected_conversation_row_id')
       );
     } catch {
@@ -829,6 +826,7 @@ const WaktiAIV2 = () => {
     const newMessages = [...sessionMessagesRef.current, userMessage];
     sessionMessagesRef.current = newMessages;
     setSessionMessages(newMessages);
+    EnhancedFrontendMemory.saveActiveConversation(newMessages, convId);
 
     const assistantMessageId = `assistant-${Date.now()}`;
     // Detect YouTube-prefixed query to style the loading bubble correctly
@@ -1471,6 +1469,10 @@ const WaktiAIV2 = () => {
         const payloadKey = JSON.stringify({ pending, pendingTrigger, pendingSubmode, pendingSearchSubmode, pendingPayloadId, selectedConversationRowId, openConversations, openExtraTab, openPlus });
 
         if (pendingHomescreenPayloadHandledRef.current === payloadKey || cancelled) return;
+
+        if (pendingPayloadId) {
+          localStorage.removeItem('wakti_pending_payload_id');
+        }
 
         if (pendingSearchSubmode === 'youtube' || pendingSearchSubmode === 'web') {
           localStorage.setItem('wakti_search_submode', pendingSearchSubmode);
