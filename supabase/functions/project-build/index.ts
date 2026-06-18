@@ -7,22 +7,37 @@ import * as esbuild from "https://deno.land/x/esbuild@v0.20.1/wasm.js";
 let esbuildInitialized = false;
 const initializeEsbuild = async () => {
   if (esbuildInitialized) return;
-  try {
-    await esbuild.initialize({
-      wasmURL: "https://unpkg.com/esbuild-wasm@0.20.1/esbuild.wasm",
-      worker: false, // Edge runtime doesn't support workers
-    });
-    esbuildInitialized = true;
-    console.log("esbuild WASM initialized successfully");
-  } catch (error) {
-    // If already initialized, that's fine
-    if (error instanceof Error && error.message.includes("initialized")) {
+  
+  const wasmUrls = [
+    "https://cdn.jsdelivr.net/npm/esbuild-wasm@0.20.1/esbuild.wasm",
+    "https://unpkg.com/esbuild-wasm@0.20.1/esbuild.wasm",
+    "https://cdnjs.cloudflare.com/ajax/libs/esbuild-wasm/0.20.1/esbuild.wasm"
+  ];
+
+  let lastError: Error | null = null;
+  for (const url of wasmUrls) {
+    try {
+      console.log(`Attempting to initialize esbuild WASM from: ${url}`);
+      await esbuild.initialize({
+        wasmURL: url,
+        worker: false, // Edge runtime doesn't support workers
+      });
       esbuildInitialized = true;
-      console.log("esbuild was already initialized");
-    } else {
-      throw error;
+      console.log(`esbuild WASM initialized successfully using: ${url}`);
+      return;
+    } catch (error) {
+      console.warn(`Failed to initialize esbuild WASM from ${url}:`, error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.message.includes("initialized")) {
+        esbuildInitialized = true;
+        console.log("esbuild was already initialized");
+        return;
+      }
+      lastError = error instanceof Error ? error : new Error(String(error));
     }
   }
+  
+  if (lastError) throw lastError;
+  throw new Error("Failed to initialize esbuild with any of the CDN URLs");
 };
 
 const corsHeaders = {
@@ -639,7 +654,7 @@ serve(async (req) => {
         success: false, 
         error: error instanceof Error ? error.message : "Unknown build error" 
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
