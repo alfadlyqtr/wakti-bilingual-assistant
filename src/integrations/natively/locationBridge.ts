@@ -27,9 +27,6 @@ interface NativelyLocationInstance {
     fallbackToSettings?: boolean
   ) => void;
   stop: () => void;
-  permission: (
-    callback: (resp: { status: string }) => void
-  ) => void;
 }
 
 interface NativelyLocationResponse {
@@ -51,6 +48,8 @@ export interface NativeLocationResult {
 }
 
 export type LocationPermissionStatus = 'IN_USE' | 'ALWAYS' | 'DENIED' | 'UNKNOWN';
+
+type BrowserPermissionState = 'granted' | 'prompt' | 'denied' | 'unknown';
 
 const LOCATION_CACHE_KEY = 'wakti_native_location_cache';
 const LOCATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for fresh location
@@ -148,6 +147,12 @@ function logNativelyRuntimeStatus(_context: string): void {
   // Silenced: was causing Tracking Prevention console spam on every page load
 }
 
+function isRunningInsideNativelyApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  const natively = (window as any).natively;
+  return Boolean(natively && (natively.isIOSApp === true || natively.isAndroidApp === true));
+}
+
 function getInstance(): NativelyLocationInstance | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -213,43 +218,6 @@ export function clearLocationCache(): void {
 }
 
 /**
- * Check location permission status via Natively SDK.
- * Returns: 'IN_USE' | 'ALWAYS' | 'DENIED' | 'UNKNOWN'
- */
-function checkPermission(instance: NativelyLocationInstance, timeoutMs: number = 3000): Promise<LocationPermissionStatus> {
-  return new Promise((resolve) => {
-    let settled = false;
-    const timer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        console.warn('[NativelyLocation] Permission check timed out');
-        resolve('UNKNOWN');
-      }
-    }, timeoutMs);
-
-    try {
-      instance.permission((resp) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        const status = (resp?.status || 'UNKNOWN').toUpperCase();
-        console.log('[NativelyLocation] Permission status:', status);
-        if (status === 'IN_USE' || status === 'ALWAYS') resolve(status as LocationPermissionStatus);
-        else if (status === 'DENIED') resolve('DENIED');
-        else resolve('UNKNOWN');
-      });
-    } catch (err) {
-      if (!settled) {
-        settled = true;
-        clearTimeout(timer);
-        console.warn('[NativelyLocation] Permission check error:', err);
-        resolve('UNKNOWN');
-      }
-    }
-  });
-}
-
-/**
  * Get location using foreground tracking (start → wait for fix → stop).
  * This is the "WhatsApp-style" approach: lets the OS acquire a real GPS fix.
  */
@@ -282,9 +250,7 @@ function getForegroundLocation(
       const lat = resp.latitude;
       const lng = resp.longitude;
 
-      if ((resp.status === 'Success' || resp.status === 'Timeout') &&
-          typeof lat === 'number' && typeof lng === 'number' &&
-          lat !== 0 && lng !== 0) {
+      if (resp.status === 'Success' && hasValidCoordinates(lat, lng)) {
         settled = true;
         clearTimeout(timer);
         try { instance.stop(); } catch {}
@@ -387,6 +353,19 @@ function getCurrentLocation(
  * Browser geolocation fallback.
  * Used when Natively SDK is unavailable or fails.
  */
+async function getBrowserPermissionState(): Promise<BrowserPermissionState> {
+  try {
+    const permissionsApi = (navigator as any)?.permissions;
+    if (!permissionsApi || typeof permissionsApi.query !== 'function') return 'unknown';
+    const status = await permissionsApi.query({ name: 'geolocation' });
+    const state = typeof status?.state === 'string' ? status.state : 'unknown';
+    if (state === 'granted' || state === 'prompt' || state === 'denied') return state;
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationResult | null> {
   return new Promise((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
@@ -394,30 +373,40 @@ function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationRe
       resolve(null);
       return;
     }
-    console.log('[NativelyLocation] 🌐 Trying browser geolocation fallback...');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        if (!hasValidCoordinates(pos.coords.latitude, pos.coords.longitude)) {
-          console.warn('[NativelyLocation] Browser geolocation returned invalid coordinates');
-          resolve(null);
-          return;
-        }
-        const result: NativeLocationResult = {
-          latitude: pos.coords.latitude,
-          longitude: pos.coords.longitude,
-          accuracy: pos.coords.accuracy,
-          source: 'browser',
-        };
-        setCachedLocation(result);
-        console.log('[NativelyLocation] ✅ Browser geolocation:', result.latitude, result.longitude);
-        resolve(result);
-      },
-      (err) => {
-        console.warn('[NativelyLocation] Browser geolocation failed:', err.message);
+    void (async () => {
+      const permissionState = await getBrowserPermissionState();
+      console.log('[NativelyLocation] Browser geolocation permission:', permissionState);
+      if (permissionState === 'denied') {
+        console.warn('[NativelyLocation] Browser geolocation permission denied');
         resolve(null);
-      },
-      { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 }
-    );
+        return;
+      }
+
+      console.log('[NativelyLocation] 🌐 Trying browser geolocation fallback...');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          if (!hasValidCoordinates(pos.coords.latitude, pos.coords.longitude)) {
+            console.warn('[NativelyLocation] Browser geolocation returned invalid coordinates');
+            resolve(null);
+            return;
+          }
+          const result: NativeLocationResult = {
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy: pos.coords.accuracy,
+            source: 'browser',
+          };
+          setCachedLocation(result);
+          console.log('[NativelyLocation] ✅ Browser geolocation:', result.latitude, result.longitude, 'accuracy:', result.accuracy);
+          resolve(result);
+        },
+        (err) => {
+          console.warn('[NativelyLocation] Browser geolocation failed:', err.message);
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: timeoutMs, maximumAge: 0 }
+      );
+    })();
   });
 }
 
@@ -437,6 +426,7 @@ export function getNativeLocation(options?: {
   priority?: 'BALANCED' | 'HIGH';
   fallbackToSettings?: boolean;
   skipCache?: boolean;
+  allowBrowserFallback?: boolean;
 }): Promise<NativeLocationResult | null> {
   const skipCache = options?.skipCache === true;
   if (skipCache) {
@@ -467,12 +457,14 @@ async function _doGetNativeLocation(options?: {
   priority?: 'BALANCED' | 'HIGH';
   fallbackToSettings?: boolean;
   skipCache?: boolean;
+  allowBrowserFallback?: boolean;
 }): Promise<NativeLocationResult | null> {
   const {
     timeoutMs = 10000,
     minAccuracy = 50,
     fallbackToSettings = true,
     skipCache = false,
+    allowBrowserFallback = true,
   } = options || {};
 
   // When skipCache (forceFresh), use higher accuracy settings for real GPS
@@ -504,31 +496,20 @@ async function _doGetNativeLocation(options?: {
       console.warn('[NativelyLocation] SDK instance creation failed');
       return null;
     }
-    const perm = await checkPermission(instance);
-    console.log('[NativelyLocation] Permission:', perm);
 
-    if (perm === 'IN_USE' || perm === 'ALWAYS') {
-      let result: NativeLocationResult | null = null;
-      if (skipCache) {
-        console.log('[NativelyLocation] Using foreground tracking for fresh GPS...');
-        result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
-        if (!result) {
-          console.warn('[NativelyLocation] Fresh GPS foreground fix unavailable — will use browser fallback');
-          return null;
-        }
-      }
+    let result: NativeLocationResult | null = null;
+    if (skipCache) {
+      console.log('[NativelyLocation] Using foreground tracking for fresh GPS...');
+      result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
       if (!result) {
-        console.log('[NativelyLocation] Using current() one-shot...');
-        result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
+        console.warn('[NativelyLocation] Fresh GPS foreground fix unavailable — will try current() next');
       }
-      return result;
     }
-    if (perm === 'DENIED') {
-      console.warn('[NativelyLocation] ⚠️ Permission DENIED — skipping native current(), using browser fallback only');
-      return null;
+    if (!result) {
+      console.log('[NativelyLocation] Using current() one-shot...');
+      result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
     }
-    console.log('[NativelyLocation] Permission unknown — skipping native current(), using browser fallback only');
-    return null;
+    return result;
   })().catch((err) => {
     console.warn('[NativelyLocation] Native SDK path threw:', err);
     return null;
@@ -539,6 +520,12 @@ async function _doGetNativeLocation(options?: {
     console.log('[NativelyLocation] ✅ Native SDK location:', nativeWinner.latitude, nativeWinner.longitude);
     setCachedLocation(nativeWinner);
     return nativeWinner;
+  }
+
+  const shouldUseBrowserFallback = allowBrowserFallback || !isRunningInsideNativelyApp();
+  if (!shouldUseBrowserFallback) {
+    console.warn('[NativelyLocation] Browser fallback disabled for this request');
+    return null;
   }
 
   const remainingTimeout = Math.max(1000, timeoutMs - (Date.now() - startedAt));

@@ -52,6 +52,16 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false,
         },
+        '/_bucket': {
+          target: 'https://preview.wakti.ai',
+          changeOrigin: true,
+          secure: false,
+        },
+        '/_packager': {
+          target: 'https://preview.wakti.ai',
+          changeOrigin: true,
+          secure: false,
+        },
       },
       // NOTE: COOP/COEP headers removed - they break Sandpack's bundler
       // FFmpeg.wasm may not work without these, but Sandpack requires their removal

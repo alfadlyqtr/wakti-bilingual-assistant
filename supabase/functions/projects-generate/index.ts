@@ -767,6 +767,76 @@ function assertNoHtml(path: string, value: string): void {
   }
 }
 
+const REACT_RUNTIME_ENTRY_CANDIDATES = [
+  "/index.js",
+  "/index.jsx",
+  "/index.tsx",
+  "/src/index.js",
+  "/src/index.jsx",
+  "/src/index.tsx",
+  "/src/main.js",
+  "/src/main.jsx",
+  "/src/main.tsx",
+  "/wakti_entry.js",
+  "/wakti_entry.jsx",
+  "/wakti_entry.tsx",
+  "/src/wakti_entry.js",
+  "/src/wakti_entry.jsx",
+  "/src/wakti_entry.tsx",
+] as const;
+
+const REACT_APP_ENTRY_CANDIDATES = [
+  "/App.js",
+  "/App.jsx",
+  "/App.tsx",
+  "/src/App.js",
+  "/src/App.jsx",
+  "/src/App.tsx",
+] as const;
+
+function buildReactHtmlShell(html: string): string {
+  const source = typeof html === "string" ? html.trim() : "";
+  if (!source) {
+    return "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\" />\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\n</head>\n<body>\n<div id=\"root\"></div>\n</body>\n</html>";
+  }
+
+  const htmlAttrsMatch = source.match(/<html([^>]*)>/i);
+  const htmlAttrs = htmlAttrsMatch?.[1]?.trim() ? ` ${htmlAttrsMatch[1].trim()}` : ' lang="en"';
+  const bodyAttrsMatch = source.match(/<body([^>]*)>/i);
+  const bodyAttrs = bodyAttrsMatch?.[1]?.trim() ? ` ${bodyAttrsMatch[1].trim()}` : "";
+  let headContent = source.match(/<head[^>]*>([\s\S]*?)<\/head>/i)?.[1]?.trim() || "";
+
+  if (!/<meta[^>]+charset=/i.test(headContent)) {
+    headContent = `<meta charset="UTF-8" />${headContent ? `\n${headContent}` : ""}`;
+  }
+  if (!/name=["']viewport["']/i.test(headContent)) {
+    headContent = `${headContent}${headContent ? "\n" : ""}<meta name="viewport" content="width=device-width, initial-scale=1.0" />`;
+  }
+
+  return `<!DOCTYPE html>\n<html${htmlAttrs}>\n<head>\n${headContent}\n</head>\n<body${bodyAttrs}>\n<div id="root"></div>\n</body>\n</html>`;
+}
+
+function normalizeReactProjectHtmlFiles(files: Record<string, string>): Record<string, string> {
+  const normalizedEntries = Object.entries(files).map(([path, content]) => [normalizeFilePath(path), content] as const);
+  const normalized: Record<string, string> = Object.fromEntries(normalizedEntries);
+  const hasReactRuntime = REACT_RUNTIME_ENTRY_CANDIDATES.some((path) => typeof normalized[path] === "string" && normalized[path].trim().length > 0);
+  const hasReactApp = REACT_APP_ENTRY_CANDIDATES.some((path) => typeof normalized[path] === "string" && normalized[path].trim().length > 0);
+
+  if (!hasReactRuntime && !hasReactApp) {
+    return normalized;
+  }
+
+  if (typeof normalized["/index.html"] === "string") {
+    normalized["/index.html"] = buildReactHtmlShell(normalized["/index.html"]);
+  }
+
+  if (typeof normalized["/public/index.html"] === "string") {
+    normalized["/public/index.html"] = buildReactHtmlShell(normalized["/public/index.html"]);
+  }
+
+  return normalized;
+}
+
 const BANNED_IMAGE_HOST_PATTERN = /https?:\/\/[^"'`\s)]*(?:images\.unsplash\.com|source\.unsplash\.com|unsplash\.com|picsum\.photos|via\.placeholder\.com|placeholder\.com|placehold\.it)/gi;
 
 function replaceBannedImageHosts(content: string, replacementUrls: string[]): string {
@@ -2112,7 +2182,7 @@ async function replaceProjectFiles(supabase: SupabaseAdminClient, projectId: str
   if (delErr) throw new Error(`DB_FILES_DELETE_FAILED: ${delErr.message}`);
 
   // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
-  const resolved = resolveProjectPlaceholdersInFiles(files, projectId);
+  const resolved = normalizeReactProjectHtmlFiles(resolveProjectPlaceholdersInFiles(files, projectId));
 
   const rows = Object.entries(resolved).map(([path, content]) => ({
     project_id: projectId,
@@ -2130,7 +2200,7 @@ async function replaceProjectFiles(supabase: SupabaseAdminClient, projectId: str
 
 async function upsertProjectFiles(supabase: SupabaseAdminClient, projectId: string, files: Record<string, string>) {
   // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
-  const resolved = resolveProjectPlaceholdersInFiles(files, projectId);
+  const resolved = normalizeReactProjectHtmlFiles(resolveProjectPlaceholdersInFiles(files, projectId));
 
   const rows = Object.entries(resolved).map(([path, content]) => ({
     project_id: projectId,

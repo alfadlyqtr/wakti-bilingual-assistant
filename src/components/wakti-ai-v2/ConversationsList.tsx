@@ -23,6 +23,7 @@ interface Conversation {
   id: string;
   title: string;
   message_count?: number;
+  messageCount?: number;
   last_message_at?: string;
   lastMessageAt?: Date;
   created_at?: string;
@@ -284,17 +285,17 @@ export function ConversationsList({
             const isActive = (conversation as any).is_active === true;
             const dateVal = conversation.lastMessageAt || conversation.last_message_at;
             const matchesCurrent = currentConversationId === conversation.id || currentConversationId === conversation.conversation_id;
+            const isCurrent = currentConversationId ? matchesCurrent : isActive;
+            const messageCount = conversation.messageCount ?? conversation.message_count ?? 0;
             return (
               <div
                 key={conversation.id}
                 className={cn(
                   "group relative rounded-2xl border cursor-pointer transition-all duration-200 p-3",
                   "border-[rgba(233,206,176,0.82)] bg-[linear-gradient(180deg,rgba(255,255,255,0.99)_0%,rgba(252,254,253,0.99)_55%,rgba(247,241,232,0.96)_100%)] shadow-[0_10px_24px_rgba(6,5,65,0.07)] hover:border-[rgba(79,141,246,0.34)] hover:shadow-[0_12px_26px_rgba(6,5,65,0.1)]",
-                  isActive
-                    ? "ring-1 ring-primary/20 border-[rgba(79,141,246,0.5)]"
-                    : matchesCurrent
-                      ? "ring-1 ring-primary/20 border-[rgba(79,141,246,0.55)]"
-                      : ""
+                  isCurrent
+                    ? "ring-1 ring-primary/20 border-[rgba(79,141,246,0.55)]"
+                    : ""
                 )}
                 onClick={() => handleSelectConversation(conversation.id)}
               >
@@ -309,7 +310,7 @@ export function ConversationsList({
                           {language === 'ar' ? 'محفوظة' : 'Saved'}
                         </Badge>
                       )}
-                      {isActive && (
+                      {isCurrent && (
                         <div className="shrink-0 rounded-full bg-blue-500/15 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400 flex items-center gap-1">
                           <Zap className="h-2.5 w-2.5" />
                           {language === 'ar' ? 'الآن' : 'Current'}
@@ -319,7 +320,7 @@ export function ConversationsList({
                     <div className="flex items-center gap-2 text-xs text-[hsl(243_20%_34%)]">
                       <span>{formatRelativeTime(dateVal)}</span>
                       <span>•</span>
-                      <span>{conversation.message_count ?? 0} {language === 'ar' ? 'رسالة' : 'msgs'}</span>
+                      <span>{messageCount} {language === 'ar' ? 'رسالة' : 'msgs'}</span>
                     </div>
                   </div>
                   <div className="flex shrink-0 items-center gap-1">

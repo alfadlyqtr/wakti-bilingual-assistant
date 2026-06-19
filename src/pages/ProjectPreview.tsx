@@ -26,6 +26,12 @@ const RUNTIME_ENTRY_CANDIDATES = [
   '/src/main.js',
   '/src/main.jsx',
   '/src/main.tsx',
+  '/wakti_entry.js',
+  '/wakti_entry.jsx',
+  '/wakti_entry.tsx',
+  '/src/wakti_entry.js',
+  '/src/wakti_entry.jsx',
+  '/src/wakti_entry.tsx',
 ] as const;
 
 const APP_ENTRY_CANDIDATES = [
@@ -46,6 +52,28 @@ function toImportPath(filePath: string): string {
   return filePath
     .replace(/^\//, './')
     .replace(/\.(tsx|ts|jsx|js)$/i, '');
+}
+
+function buildReactPreviewShell(html: string): string {
+  const source = typeof html === 'string' ? html.trim() : '';
+  if (!source) {
+    return '<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="UTF-8" />\n<meta name="viewport" content="width=device-width, initial-scale=1.0" />\n</head>\n<body>\n<div id="root"></div>\n</body>\n</html>';
+  }
+
+  const htmlAttrsMatch = source.match(/<html([^>]*)>/i);
+  const htmlAttrs = htmlAttrsMatch?.[1]?.trim() ? ` ${htmlAttrsMatch[1].trim()}` : ' lang="en"';
+  const bodyAttrsMatch = source.match(/<body([^>]*)>/i);
+  const bodyAttrs = bodyAttrsMatch?.[1]?.trim() ? ` ${bodyAttrsMatch[1].trim()}` : '';
+  let headContent = source.match(/<head[^>]*>([\s\S]*?)<\/head>/i)?.[1]?.trim() || '';
+
+  if (!/<meta[^>]+charset=/i.test(headContent)) {
+    headContent = `<meta charset="UTF-8" />${headContent ? `\n${headContent}` : ''}`;
+  }
+  if (!/name=["']viewport["']/i.test(headContent)) {
+    headContent = `${headContent}${headContent ? '\n' : ''}<meta name="viewport" content="width=device-width, initial-scale=1.0" />`;
+  }
+
+  return `<!DOCTYPE html>\n<html${htmlAttrs}>\n<head>\n${headContent}\n</head>\n<body${bodyAttrs}>\n<div id="root"></div>\n</body>\n</html>`;
 }
 
 export default function ProjectPreview({ subdomain: propSubdomain }: ProjectPreviewProps) {
@@ -190,6 +218,15 @@ root.render(<App />);
 
   if (!sandpackEntry && RUNTIME_ENTRY_CANDIDATES.some((path) => typeof sandpackFiles[path] === 'string')) {
     sandpackEntry = RUNTIME_ENTRY_CANDIDATES.find((path) => typeof sandpackFiles[path] === 'string') || '';
+  }
+
+  if (sandpackEntry || appEntry) {
+    if (typeof sandpackFiles['/index.html'] === 'string') {
+      sandpackFiles['/index.html'] = buildReactPreviewShell(sandpackFiles['/index.html']);
+    }
+    if (typeof sandpackFiles['/public/index.html'] === 'string') {
+      sandpackFiles['/public/index.html'] = buildReactPreviewShell(sandpackFiles['/public/index.html']);
+    }
   }
 
   // Ensure we have either a mounted runtime entry or an App file to bootstrap from.

@@ -53,12 +53,37 @@ function stripTrailingActionJSON(text: string): string {
       return text.slice(0, idx).trim();
     }
   } catch {
-    // Not valid JSON — leave content intact
+    // Not valid JSON Ã¢â‚¬â€ leave content intact
   }
   return text.trim();
 }
 
 function deduplicateAndMergePlaces(list: any[]): any[] {
+  const pickText = (current: any, incoming: any) => {
+    const next = typeof incoming === 'string' ? incoming.trim() : '';
+    if (next) return incoming;
+    const prev = typeof current === 'string' ? current.trim() : '';
+    return prev ? current : '';
+  };
+
+  const pickNumber = (current: any, incoming: any) => {
+    if (typeof incoming === 'number' && Number.isFinite(incoming)) return incoming;
+    if (typeof current === 'number' && Number.isFinite(current)) return current;
+    return null;
+  };
+
+  const pickBoolean = (current: any, incoming: any) => {
+    if (typeof incoming === 'boolean') return incoming;
+    if (typeof current === 'boolean') return current;
+    return null;
+  };
+
+  const pickArray = (current: any, incoming: any) => {
+    const prev = Array.isArray(current) ? current : [];
+    const next = Array.isArray(incoming) ? incoming : [];
+    return next.length >= prev.length ? next : prev;
+  };
+
   const merged: any[] = [];
   for (const place of list) {
     if (!place || !place.name) continue;
@@ -73,31 +98,30 @@ function deduplicateAndMergePlaces(list: any[]): any[] {
       merged[existingIndex] = {
         ...existing,
         ...place,
-        placeId: existing.placeId || place.placeId || '',
-        name: existing.name || place.name || '',
-        address: existing.address || place.address || '',
-        latitude: existing.latitude ?? place.latitude ?? null,
-        longitude: existing.longitude ?? place.longitude ?? null,
-        rating: existing.rating ?? place.rating ?? null,
-        userRatingCount: existing.userRatingCount ?? place.userRatingCount ?? null,
-        websiteUrl: existing.websiteUrl || place.websiteUrl || '',
-        phone: existing.phone || place.phone || '',
-        email: existing.email || place.email || '',
-        openNow: existing.openNow ?? place.openNow ?? null,
-        businessStatus: existing.businessStatus || place.businessStatus || '',
-        reason: existing.reason || place.reason || '',
-        vibe: existing.vibe || place.vibe || '',
-        mustTry: existing.mustTry || place.mustTry || '',
-        editorialSummary: existing.editorialSummary || place.editorialSummary || '',
-        mapsUrl: existing.mapsUrl || place.mapsUrl || '',
-        instagramUrl: existing.instagramUrl || place.instagramUrl || '',
-        facebookUrl: existing.facebookUrl || place.facebookUrl || '',
-        tiktokUrl: existing.tiktokUrl || place.tiktokUrl || '',
-        whatsappUrl: existing.whatsappUrl || place.whatsappUrl || '',
-        photoUrl: existing.photoUrl || place.photoUrl || '',
-        reviewSnippets: (Array.isArray(existing.reviewSnippets) && existing.reviewSnippets.length > 0)
-          ? existing.reviewSnippets
-          : (Array.isArray(place.reviewSnippets) ? place.reviewSnippets : []),
+        placeId: pickText(existing.placeId, place.placeId),
+        name: pickText(existing.name, place.name),
+        address: pickText(existing.address, place.address),
+        latitude: pickNumber(existing.latitude, place.latitude),
+        longitude: pickNumber(existing.longitude, place.longitude),
+        rating: pickNumber(existing.rating, place.rating),
+        userRatingCount: pickNumber(existing.userRatingCount, place.userRatingCount),
+        websiteUrl: pickText(existing.websiteUrl, place.websiteUrl),
+        phone: pickText(existing.phone, place.phone),
+        email: pickText(existing.email, place.email),
+        openNow: pickBoolean(existing.openNow, place.openNow),
+        businessStatus: pickText(existing.businessStatus, place.businessStatus),
+        reason: pickText(existing.reason, place.reason),
+        vibe: pickText(existing.vibe, place.vibe),
+        mustTry: pickText(existing.mustTry, place.mustTry),
+        editorialSummary: pickText(existing.editorialSummary, place.editorialSummary),
+        mapsUrl: pickText(existing.mapsUrl, place.mapsUrl),
+        instagramUrl: pickText(existing.instagramUrl, place.instagramUrl),
+        facebookUrl: pickText(existing.facebookUrl, place.facebookUrl),
+        tiktokUrl: pickText(existing.tiktokUrl, place.tiktokUrl),
+        whatsappUrl: pickText(existing.whatsappUrl, place.whatsappUrl),
+        photoUrl: pickText(existing.photoUrl, place.photoUrl),
+        reviewSnippets: pickArray(existing.reviewSnippets, place.reviewSnippets),
+        openingHours: pickArray(existing.openingHours, place.openingHours),
       };
     } else {
       merged.push(place);
@@ -122,10 +146,27 @@ const WaktiAIV2 = () => {
   const { user: authUser, isGuest } = useAuth();
   const location = useLocation();
   const locationState = location.state as { guestUpgradeCompleted?: boolean } | null;
+  const hasHomescreenHandoff = (() => {
+    try {
+      const routeState = (location.state || {}) as {
+        pendingMessage?: string;
+        selectedConversationRowId?: string;
+      };
+      return Boolean(
+        routeState.pendingMessage?.trim()
+        || routeState.selectedConversationRowId
+        || localStorage.getItem('wakti_pending_message')
+        || localStorage.getItem('wakti_selected_conversation_row_id')
+      );
+    } catch {
+      return false;
+    }
+  })();
   const [message, setMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  // Initialize from localStorage cache — instant render of previous messages
+  // Initialize from localStorage cache Ã¢â‚¬â€ instant render of previous messages
   const [sessionMessages, setSessionMessages] = useState<AIMessage[]>(() => {
+    if (hasHomescreenHandoff) return [];
     try {
       const { messages } = EnhancedFrontendMemory.loadActiveConversation();
       return Array.isArray(messages) && messages.length > 0 ? messages : [];
@@ -134,6 +175,7 @@ const WaktiAIV2 = () => {
   const [archivedConversations, setArchivedConversations] = useState<ConversationMetadata[]>([]);
   const [showConversations, setShowConversations] = useState(false);
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(() => {
+    if (hasHomescreenHandoff) return null;
     try {
       const { conversationId } = EnhancedFrontendMemory.loadActiveConversation();
       return conversationId;
@@ -143,6 +185,7 @@ const WaktiAIV2 = () => {
   const [userProfile, setUserProfile] = useState<any>(null);
   const [personalTouch, setPersonalTouch] = useState<any>(null);
   const [isNewConversation, setIsNewConversation] = useState(() => {
+    if (hasHomescreenHandoff) return true;
     try {
       const { messages, conversationId } = EnhancedFrontendMemory.loadActiveConversation();
       return !conversationId || !Array.isArray(messages) || messages.length === 0;
@@ -162,10 +205,10 @@ const WaktiAIV2 = () => {
   const [chatTrialLimitReached, setChatTrialLimitReached] = useState(false);
   const [guestUpgradeOpen, setGuestUpgradeOpen] = useState(false);
   // Streaming isolation: active stream ID tracked in state (one set per message, not per token).
-  // Token content goes directly to DOM via streamingBubbleRef — zero React re-renders per token.
+  // Token content goes directly to DOM via streamingBubbleRef Ã¢â‚¬â€ zero React re-renders per token.
   const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   // Flicker fix (Option A): for place/business searches we hide the streamed raw text and
-  // show a "Finding places…" loader, then reveal the cards once at completion.
+  // show a "Finding placesÃ¢â‚¬Â¦" loader, then reveal the cards once at completion.
   const [streamingIsPlaceSearch, setStreamingIsPlaceSearch] = useState<boolean>(false);
   const streamingBubbleRef = useRef<StreamingBubbleHandle>(null);
   const streamedContentRef = useRef<string>(''); // closure-safe accumulator for final flush
@@ -175,16 +218,19 @@ const WaktiAIV2 = () => {
   const visionInFlightRef = useRef<boolean>(false);
   const lastTriggerRef = useRef<string>('chat');
   const pendingHomescreenPayloadHandledRef = useRef<string | null>(null);
+  const preparedHomescreenConversationRowRef = useRef<string | null>(null);
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveInFlightRef = useRef<boolean>(false);
   const saveDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const sessionMessagesRef = useRef<AIMessage[]>(sessionMessages);
+  const currentConversationIdRef = useRef<string | null>(currentConversationId);
   const guestPromptCountRef = useRef<number>(0);
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
   const { isDesktop } = useIsDesktop();
   const activeConversationTitle = useMemo(() => {
     if (isNewConversation || !currentConversationId) {
-      return language === 'ar' ? 'محادثة جديدة' : 'New Chat';
+      return language === 'ar' ? 'Ã™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©' : 'New Chat';
     }
 
     const activeConversation = archivedConversations.find((conversation) => (
@@ -192,15 +238,23 @@ const WaktiAIV2 = () => {
     ));
 
     if (!activeConversation?.title) {
-      return language === 'ar' ? 'محادثة جديدة' : 'New Chat';
+      return language === 'ar' ? 'Ã™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©' : 'New Chat';
     }
 
-    return normalizeConversationTitle(activeConversation.title, language === 'ar' ? 'محادثة جديدة' : 'New Chat');
+    return normalizeConversationTitle(activeConversation.title, language === 'ar' ? 'Ã™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©' : 'New Chat');
   }, [archivedConversations, currentConversationId, isNewConversation, language]);
 
   const openGuestUpgradeDialog = useCallback((_messageOverride?: string) => {
     setGuestUpgradeOpen(true);
   }, []);
+
+  useEffect(() => {
+    sessionMessagesRef.current = sessionMessages;
+  }, [sessionMessages]);
+
+  useEffect(() => {
+    currentConversationIdRef.current = currentConversationId;
+  }, [currentConversationId]);
 
   const isGuestBlockedAction = useCallback((trigger: string, nextChatSubmode: ChatSubmode, files?: any[]) => {
     if (!isGuest) return false;
@@ -213,21 +267,21 @@ const WaktiAIV2 = () => {
   const getGuestBlockedMessage = useCallback((trigger: string, nextChatSubmode: ChatSubmode, files?: any[]) => {
     if (Array.isArray(files) && files.length > 0) {
       return language === 'ar'
-        ? 'رفع الصور والمرفقات يحتاج إلى حساب كامل. كضيف، يمكنك متابعة الدردشة النصية فقط.'
+        ? 'Ã˜Â±Ã™ÂÃ˜Â¹ Ã˜Â§Ã™â€žÃ˜ÂµÃ™Ë†Ã˜Â± Ã™Ë†Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â±Ã™ÂÃ™â€šÃ˜Â§Ã˜Âª Ã™Å Ã˜Â­Ã˜ÂªÃ˜Â§Ã˜Â¬ Ã˜Â¥Ã™â€žÃ™â€° Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨ Ã™Æ’Ã˜Â§Ã™â€¦Ã™â€ž. Ã™Æ’Ã˜Â¶Ã™Å Ã™ÂÃ˜Å’ Ã™Å Ã™â€¦Ã™Æ’Ã™â€ Ã™Æ’ Ã™â€¦Ã˜ÂªÃ˜Â§Ã˜Â¨Ã˜Â¹Ã˜Â© Ã˜Â§Ã™â€žÃ˜Â¯Ã˜Â±Ã˜Â¯Ã˜Â´Ã˜Â© Ã˜Â§Ã™â€žÃ™â€ Ã˜ÂµÃ™Å Ã˜Â© Ã™ÂÃ™â€šÃ˜Â·.'
         : 'Images and attachments need a full account. As a guest, you can continue with text chat only.';
     }
     if (nextChatSubmode === 'study') {
       return language === 'ar'
-        ? 'وضع الدراسة يحتاج إلى حساب كامل. كضيف، يمكنك متابعة وضع الدردشة فقط.'
+        ? 'Ã™Ë†Ã˜Â¶Ã˜Â¹ Ã˜Â§Ã™â€žÃ˜Â¯Ã˜Â±Ã˜Â§Ã˜Â³Ã˜Â© Ã™Å Ã˜Â­Ã˜ÂªÃ˜Â§Ã˜Â¬ Ã˜Â¥Ã™â€žÃ™â€° Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨ Ã™Æ’Ã˜Â§Ã™â€¦Ã™â€ž. Ã™Æ’Ã˜Â¶Ã™Å Ã™ÂÃ˜Å’ Ã™Å Ã™â€¦Ã™Æ’Ã™â€ Ã™Æ’ Ã™â€¦Ã˜ÂªÃ˜Â§Ã˜Â¨Ã˜Â¹Ã˜Â© Ã™Ë†Ã˜Â¶Ã˜Â¹ Ã˜Â§Ã™â€žÃ˜Â¯Ã˜Â±Ã˜Â¯Ã˜Â´Ã˜Â© Ã™ÂÃ™â€šÃ˜Â·.'
         : 'Study mode needs a full account. As a guest, you can continue in chat mode only.';
     }
     if (trigger === 'search') {
       return language === 'ar'
-        ? 'البحث الذكي غير متاح في وضع الضيف. كضيف، يمكنك متابعة دردشة وقتي فقط.'
+        ? 'Ã˜Â§Ã™â€žÃ˜Â¨Ã˜Â­Ã˜Â« Ã˜Â§Ã™â€žÃ˜Â°Ã™Æ’Ã™Å  Ã˜ÂºÃ™Å Ã˜Â± Ã™â€¦Ã˜ÂªÃ˜Â§Ã˜Â­ Ã™ÂÃ™Å  Ã™Ë†Ã˜Â¶Ã˜Â¹ Ã˜Â§Ã™â€žÃ˜Â¶Ã™Å Ã™Â. Ã™Æ’Ã˜Â¶Ã™Å Ã™ÂÃ˜Å’ Ã™Å Ã™â€¦Ã™Æ’Ã™â€ Ã™Æ’ Ã™â€¦Ã˜ÂªÃ˜Â§Ã˜Â¨Ã˜Â¹Ã˜Â© Ã˜Â¯Ã˜Â±Ã˜Â¯Ã˜Â´Ã˜Â© Ã™Ë†Ã™â€šÃ˜ÂªÃ™Å  Ã™ÂÃ™â€šÃ˜Â·.'
         : 'Smart search is not available in guest mode. As a guest, you can continue with Wakti chat only.';
     }
     return language === 'ar'
-      ? 'هذه الميزة تحتاج إلى حساب كامل. كضيف، يمكنك متابعة دردشة وقتي فقط.'
+      ? 'Ã™â€¡Ã˜Â°Ã™â€¡ Ã˜Â§Ã™â€žÃ™â€¦Ã™Å Ã˜Â²Ã˜Â© Ã˜ÂªÃ˜Â­Ã˜ÂªÃ˜Â§Ã˜Â¬ Ã˜Â¥Ã™â€žÃ™â€° Ã˜Â­Ã˜Â³Ã˜Â§Ã˜Â¨ Ã™Æ’Ã˜Â§Ã™â€¦Ã™â€ž. Ã™Æ’Ã˜Â¶Ã™Å Ã™ÂÃ˜Å’ Ã™Å Ã™â€¦Ã™Æ’Ã™â€ Ã™Æ’ Ã™â€¦Ã˜ÂªÃ˜Â§Ã˜Â¨Ã˜Â¹Ã˜Â© Ã˜Â¯Ã˜Â±Ã˜Â¯Ã˜Â´Ã˜Â© Ã™Ë†Ã™â€šÃ˜ÂªÃ™Å  Ã™ÂÃ™â€šÃ˜Â·.'
       : 'This feature needs a full account. As a guest, you can continue with Wakti chat only.';
   }, [language]);
 
@@ -376,8 +430,10 @@ const WaktiAIV2 = () => {
     const { messages: cachedMsgs, conversationId: cachedConvId } = EnhancedFrontendMemory.loadActiveConversation();
     const hasLocalSession = cachedConvId && Array.isArray(cachedMsgs) && cachedMsgs.length > 0;
 
-    if (hasLocalSession) {
-      // Restore current session immediately from cache — no DB round-trip needed
+    if (hasLocalSession && !hasHomescreenHandoff) {
+      // Restore current session immediately from cache Ã¢â‚¬â€ no DB round-trip needed
+      sessionMessagesRef.current = cachedMsgs;
+      currentConversationIdRef.current = cachedConvId;
       setSessionMessages(cachedMsgs);
       setCurrentConversationId(cachedConvId);
       setIsNewConversation(false);
@@ -390,12 +446,14 @@ const WaktiAIV2 = () => {
         setArchivedConversations(mapConversationList(list));
 
         // Only load from DB if localStorage had no current session
-        if (!hasLocalSession) {
+        if (!hasLocalSession && !hasHomescreenHandoff) {
           const active = list.find((c: any) => c.is_active);
           if (active) {
             const full = await SavedConversationsService.loadConversation(active.id);
             if (full?.messages && Array.isArray(full.messages) && full.messages.length > 0) {
               const msgs = full.messages.map((m: any) => ({ ...m, timestamp: m.timestamp ? new Date(m.timestamp) : new Date() }));
+              sessionMessagesRef.current = msgs;
+              currentConversationIdRef.current = active.conversation_id || active.id;
               setSessionMessages(msgs);
               setCurrentConversationId(active.conversation_id || active.id);
               setIsNewConversation(false);
@@ -407,7 +465,7 @@ const WaktiAIV2 = () => {
       .catch(() => {
         handleRefreshConversations();
       });
-  }, [handleRefreshConversations, mapConversationList]);
+  }, [handleRefreshConversations, hasHomescreenHandoff, mapConversationList]);
 
   useEffect(() => {
     const userId = authUser?.id || userProfile?.id;
@@ -415,7 +473,7 @@ const WaktiAIV2 = () => {
     WaktiAIV2Service.prewarmUserLocation(userId).catch(() => {});
   }, [authUser?.id, userProfile?.id]);
 
-  // One-time Helpful Memory onboarding popup — shows exactly once per user.
+  // One-time Helpful Memory onboarding popup Ã¢â‚¬â€ shows exactly once per user.
   useEffect(() => {
     if (isGuest) return;
     const userId = authUser?.id || userProfile?.id;
@@ -455,14 +513,14 @@ const WaktiAIV2 = () => {
         }
         const { toast } = await import('sonner');
         toast.message(
-          language === 'ar' ? 'اجعل وقتي أذكى لك' : 'Make Wakti smarter for you',
+          language === 'ar' ? 'Ã˜Â§Ã˜Â¬Ã˜Â¹Ã™â€ž Ã™Ë†Ã™â€šÃ˜ÂªÃ™Å  Ã˜Â£Ã˜Â°Ã™Æ’Ã™â€° Ã™â€žÃ™Æ’' : 'Make Wakti smarter for you',
           {
             description: language === 'ar'
-              ? 'جرّب الإعداد السريع لذاكرة وقتي — يستغرق 10 ثوانٍ فقط.'
-              : 'Try Quick Setup for Helpful Memory — takes 10 seconds.',
+              ? 'Ã˜Â¬Ã˜Â±Ã™â€˜Ã˜Â¨ Ã˜Â§Ã™â€žÃ˜Â¥Ã˜Â¹Ã˜Â¯Ã˜Â§Ã˜Â¯ Ã˜Â§Ã™â€žÃ˜Â³Ã˜Â±Ã™Å Ã˜Â¹ Ã™â€žÃ˜Â°Ã˜Â§Ã™Æ’Ã˜Â±Ã˜Â© Ã™Ë†Ã™â€šÃ˜ÂªÃ™Å  Ã¢â‚¬â€ Ã™Å Ã˜Â³Ã˜ÂªÃ˜ÂºÃ˜Â±Ã™â€š 10 Ã˜Â«Ã™Ë†Ã˜Â§Ã™â€ Ã™Â Ã™ÂÃ™â€šÃ˜Â·.'
+              : 'Try Quick Setup for Helpful Memory Ã¢â‚¬â€ takes 10 seconds.',
             duration: 7000,
             action: {
-              label: language === 'ar' ? 'فتح' : 'Open',
+              label: language === 'ar' ? 'Ã™ÂÃ˜ÂªÃ˜Â­' : 'Open',
               onClick: () => {
                 setShowConversations(true);
                 setTimeout(() => emitEvent('wakti-open-memory-panel', { openQuickSetup: true }), 60);
@@ -548,7 +606,7 @@ const WaktiAIV2 = () => {
     return () => window.removeEventListener('wakti-chat-input-resized', handler as EventListener);
   }, []);
 
-  // Auto-save active conversation to DB — debounced + locked to prevent concurrent duplicate inserts
+  // Auto-save active conversation to DB Ã¢â‚¬â€ debounced + locked to prevent concurrent duplicate inserts
   const autoSaveActiveConversation = useCallback((messages: any[], convId: string) => {
     if (!convId || messages.length === 0) return;
     // Always sync localStorage immediately (offline cache, no race condition risk)
@@ -564,7 +622,7 @@ const WaktiAIV2 = () => {
       } catch (error) {
         if (SavedConversationsService.isConversationLimitError(error)) {
           showError(language === 'ar'
-            ? 'كل المحادثات المحفوظة محمية الآن. احذف محادثة واحدة أو ألغِ حفظ واحدة لبدء محادثة جديدة.'
+            ? 'Ã™Æ’Ã™â€ž Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â§Ã˜Âª Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã™ÂÃ™Ë†Ã˜Â¸Ã˜Â© Ã™â€¦Ã˜Â­Ã™â€¦Ã™Å Ã˜Â© Ã˜Â§Ã™â€žÃ˜Â¢Ã™â€ . Ã˜Â§Ã˜Â­Ã˜Â°Ã™Â Ã™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã™Ë†Ã˜Â§Ã˜Â­Ã˜Â¯Ã˜Â© Ã˜Â£Ã™Ë† Ã˜Â£Ã™â€žÃ˜ÂºÃ™Â Ã˜Â­Ã™ÂÃ˜Â¸ Ã™Ë†Ã˜Â§Ã˜Â­Ã˜Â¯Ã˜Â© Ã™â€žÃ˜Â¨Ã˜Â¯Ã˜Â¡ Ã™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©.'
             : 'All kept chats are protected right now. Delete one or un-save one before starting a new chat.');
           handleRefreshConversations();
         }
@@ -601,7 +659,7 @@ const WaktiAIV2 = () => {
       const status = await SavedConversationsService.getRetentionStatus();
       if (!status.canCreate && status.total >= status.limit) {
         showError(language === 'ar'
-          ? 'وصلت إلى الحد الكامل وكل المحادثات محفوظة. احذف واحدة أو ألغِ حفظ واحدة أولاً.'
+          ? 'Ã™Ë†Ã˜ÂµÃ™â€žÃ˜Âª Ã˜Â¥Ã™â€žÃ™â€° Ã˜Â§Ã™â€žÃ˜Â­Ã˜Â¯ Ã˜Â§Ã™â€žÃ™Æ’Ã˜Â§Ã™â€¦Ã™â€ž Ã™Ë†Ã™Æ’Ã™â€ž Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â§Ã˜Âª Ã™â€¦Ã˜Â­Ã™ÂÃ™Ë†Ã˜Â¸Ã˜Â©. Ã˜Â§Ã˜Â­Ã˜Â°Ã™Â Ã™Ë†Ã˜Â§Ã˜Â­Ã˜Â¯Ã˜Â© Ã˜Â£Ã™Ë† Ã˜Â£Ã™â€žÃ˜ÂºÃ™Â Ã˜Â­Ã™ÂÃ˜Â¸ Ã™Ë†Ã˜Â§Ã˜Â­Ã˜Â¯Ã˜Â© Ã˜Â£Ã™Ë†Ã™â€žÃ˜Â§Ã™â€¹.'
           : 'You reached the full limit and all chats are saved. Delete one or un-save one first.');
         handleRefreshConversations();
         return false;
@@ -625,16 +683,16 @@ const WaktiAIV2 = () => {
     await SavedConversationsService.updateConversationMeta(id, updates);
     handleRefreshConversations();
     if (typeof updates.title === 'string') {
-      showSuccess(language === 'ar' ? 'تم تحديث اسم المحادثة' : 'Conversation updated');
+      showSuccess(language === 'ar' ? 'Ã˜ÂªÃ™â€¦ Ã˜ÂªÃ˜Â­Ã˜Â¯Ã™Å Ã˜Â« Ã˜Â§Ã˜Â³Ã™â€¦ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â©' : 'Conversation updated');
       return;
     }
     if (typeof updates.is_saved === 'boolean') {
       showSuccess(updates.is_saved
-        ? (language === 'ar' ? 'تم حفظ المحادثة وحمايتها' : 'Chat saved and protected')
-        : (language === 'ar' ? 'أصبحت المحادثة قابلة للاستبدال التلقائي' : 'Chat can be auto-replaced again'));
+        ? (language === 'ar' ? 'Ã˜ÂªÃ™â€¦ Ã˜Â­Ã™ÂÃ˜Â¸ Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã™Ë†Ã˜Â­Ã™â€¦Ã˜Â§Ã™Å Ã˜ÂªÃ™â€¡Ã˜Â§' : 'Chat saved and protected')
+        : (language === 'ar' ? 'Ã˜Â£Ã˜ÂµÃ˜Â¨Ã˜Â­Ã˜Âª Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã™â€šÃ˜Â§Ã˜Â¨Ã™â€žÃ˜Â© Ã™â€žÃ™â€žÃ˜Â§Ã˜Â³Ã˜ÂªÃ˜Â¨Ã˜Â¯Ã˜Â§Ã™â€ž Ã˜Â§Ã™â€žÃ˜ÂªÃ™â€žÃ™â€šÃ˜Â§Ã˜Â¦Ã™Å ' : 'Chat can be auto-replaced again'));
       return;
     }
-    showSuccess(language === 'ar' ? 'تم تحديث المحادثة' : 'Conversation updated');
+    showSuccess(language === 'ar' ? 'Ã˜ÂªÃ™â€¦ Ã˜ÂªÃ˜Â­Ã˜Â¯Ã™Å Ã˜Â« Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â©' : 'Conversation updated');
   }, [handleRefreshConversations, language, showSuccess]);
 
   const handleDeleteConversation = useCallback(async (id: string) => {
@@ -669,7 +727,7 @@ const WaktiAIV2 = () => {
       if (lastMsg?.role === 'assistant' && (lastMsg as any)?.metadata?.loading) {
         return prev.map((m, i) => i === prev.length - 1 ? {
           ...m,
-          content: m.content || (language === 'ar' ? '(تم الإيقاف)' : '(Stopped)'),
+          content: m.content || (language === 'ar' ? '(Ã˜ÂªÃ™â€¦ Ã˜Â§Ã™â€žÃ˜Â¥Ã™Å Ã™â€šÃ˜Â§Ã™Â)' : '(Stopped)'),
           metadata: { ...m.metadata, loading: false, stopped: true }
         } : m);
       }
@@ -715,9 +773,10 @@ const WaktiAIV2 = () => {
     abortControllerRef.current = controller;
     lastTriggerRef.current = trigger;
     
-    let convId = currentConversationId;
+    let convId = currentConversationIdRef.current;
     if (!convId) {
       convId = EnhancedFrontendMemory.startNewConversation([], null);
+      currentConversationIdRef.current = convId;
       setCurrentConversationId(convId);
       setIsNewConversation(false);
     }
@@ -727,13 +786,13 @@ const WaktiAIV2 = () => {
 
     const effectiveChatSubmode: ChatSubmode = requestedSubmode;
 
-    // Route to Vision path if: explicit vision trigger (NOT Study mode - Study uses brain-stream with OCR→Wolfram)
+    // Route to Vision path if: explicit vision trigger (NOT Study mode - Study uses brain-stream with OCRÃ¢â€ â€™Wolfram)
     const hasImages = attachedFiles && attachedFiles.length > 0 && attachedFiles.some((f: any) => f.type?.startsWith('image/'));
-    // Study mode with images: stays as 'text' inputType but passes images to brain-stream for OCR→Wolfram pipeline
+    // Study mode with images: stays as 'text' inputType but passes images to brain-stream for OCRÃ¢â€ â€™Wolfram pipeline
     // Regular vision trigger: uses 'vision' inputType for general image analysis
     const inputType = (trigger === 'vision' && effectiveChatSubmode !== 'study') ? 'vision' : 'text';
     // Per-message language override: if user explicitly asks for Arabic translation, force 'ar' for this request
-    const wantsArabic = /translate.+to\s+arabic/i.test(messageContent || '') || /إلى العربية/.test(messageContent || '');
+    const wantsArabic = /translate.+to\s+arabic/i.test(messageContent || '') || /Ã˜Â¥Ã™â€žÃ™â€° Ã˜Â§Ã™â€žÃ˜Â¹Ã˜Â±Ã˜Â¨Ã™Å Ã˜Â©/.test(messageContent || '');
     const requestLanguage = wantsArabic ? 'ar' : language;
 
     // If replying to a message, prepend context for the AI (localized) and keep a structured quote for rendering
@@ -747,7 +806,7 @@ const WaktiAIV2 = () => {
         : firstLine;
       replyQuoteStored = replyQuote;
       const marker = language === 'ar'
-        ? `[ردًا على: (وكتي قال) "${replyQuote}"]`
+        ? `[Ã˜Â±Ã˜Â¯Ã™â€¹Ã˜Â§ Ã˜Â¹Ã™â€žÃ™â€°: (Ã™Ë†Ã™Æ’Ã˜ÂªÃ™Å  Ã™â€šÃ˜Â§Ã™â€ž) "${replyQuote}"]`
         : `[Replying to: (wakti said) "${replyQuote}"]`;
       finalMessageContent = `${marker}\n\n${messageContent}`;
     }
@@ -764,8 +823,10 @@ const WaktiAIV2 = () => {
       replyTo: replyContextParam?.messageId, // Store reference to replied message
       replyQuote: replyQuoteStored, // One-line preview for WhatsApp-style rendering
     };
-    const newMessages = [...sessionMessages, userMessage];
+    const newMessages = [...sessionMessagesRef.current, userMessage];
+    sessionMessagesRef.current = newMessages;
     setSessionMessages(newMessages);
+    EnhancedFrontendMemory.saveActiveConversation(newMessages, convId);
 
     const assistantMessageId = `assistant-${Date.now()}`;
     // Detect YouTube-prefixed query to style the loading bubble correctly
@@ -811,6 +872,7 @@ const WaktiAIV2 = () => {
         ...(trigger === 'search' && isYouTubeQuery ? { youtubeLoading: true } : {})
       },
     };
+    sessionMessagesRef.current = [...newMessages, assistantPlaceholder];
     setSessionMessages([...newMessages, assistantPlaceholder]);
     if (effectiveChatSubmode === 'study') {
       setChatSubmode('chat');
@@ -818,7 +880,7 @@ const WaktiAIV2 = () => {
 
     try {
       if (inputType === 'vision') {
-        console.log('🔍 VISION PATH ENTERED:', { inputType, trigger, attachedFilesCount: attachedFiles?.length });
+        console.log('Ã°Å¸â€Â VISION PATH ENTERED:', { inputType, trigger, attachedFilesCount: attachedFiles?.length });
         let streamed = '';
         let streamMeta: any = {};
         let firstToken = false;
@@ -847,14 +909,14 @@ const WaktiAIV2 = () => {
             if (!firstToken) {
               firstToken = true;
               const firstTokenMs = Date.now() - fetchStartTime;
-              console.log(`🎯 VISION FIRST TOKEN [${firstTokenMs}ms from fetch]`);
+              console.log(`Ã°Å¸Å½Â¯ VISION FIRST TOKEN [${firstTokenMs}ms from fetch]`);
               setIsLoading(false);
               // One-time metadata update: clear loading flag on the placeholder bubble
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
             }
             // ZERO React re-renders: write accumulated text directly to DOM via ref
             // Strip only BALANCED [BOX]...[/BOX] blocks. Never the greedy `[BOX].*$`
-            // fallback — it silently wiped everything after a stray [BOX] token and
+            // fallback Ã¢â‚¬â€ it silently wiped everything after a stray [BOX] token and
             // caused the "responses cut off" bug.
             const displayContent = stripTrailingActionJSON(streamed)
               .replace(/\[BOX\][\s\S]*?\[\/BOX\]/g, '')
@@ -868,25 +930,25 @@ const WaktiAIV2 = () => {
             }
           },
           (metadata: any) => { 
-            console.log('🎯 VISION METADATA:', metadata);
+            console.log('Ã°Å¸Å½Â¯ VISION METADATA:', metadata);
             streamMeta = metadata || {}; 
           },
           (err: string) => { 
-            console.error('❌ Vision stream error:', err);
+            console.error('Ã¢ÂÅ’ Vision stream error:', err);
             // CRITICAL: Clear streaming overlay + loading state on error
             setStreamingMessageId(null);
             streamingBubbleRef.current?.reset();
             setIsLoading(false);
             setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { 
               ...m, 
-              content: language === 'ar' ? 'عذراً، حدث خطأ في تحليل الصورة. يرجى المحاولة مرة أخرى.' : 'Sorry, an error occurred analyzing the image. Please try again.',
+              content: language === 'ar' ? 'Ã˜Â¹Ã˜Â°Ã˜Â±Ã˜Â§Ã™â€¹Ã˜Å’ Ã˜Â­Ã˜Â¯Ã˜Â« Ã˜Â®Ã˜Â·Ã˜Â£ Ã™ÂÃ™Å  Ã˜ÂªÃ˜Â­Ã™â€žÃ™Å Ã™â€ž Ã˜Â§Ã™â€žÃ˜ÂµÃ™Ë†Ã˜Â±Ã˜Â©. Ã™Å Ã˜Â±Ã˜Â¬Ã™â€° Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã™Ë†Ã™â€žÃ˜Â© Ã™â€¦Ã˜Â±Ã˜Â© Ã˜Â£Ã˜Â®Ã˜Â±Ã™â€°.' : 'Sorry, an error occurred analyzing the image. Please try again.',
               metadata: { ...(m.metadata || {}), loading: false, error: true }
             } : m));
           },
           controller.signal,
           effectiveChatSubmode // Pass chatSubmode for Study mode support in Vision
         );
-        console.log('✅ VISION STREAM COMPLETED:', { responseLength: streamedResp?.response?.length, streamed: streamed.length });
+        console.log('Ã¢Å“â€¦ VISION STREAM COMPLETED:', { responseLength: streamedResp?.response?.length, streamed: streamed.length });
 
         const visionEndTime = Date.now();
         const visionThinkingDuration = Math.round((visionEndTime - startTime) / 1000);
@@ -912,12 +974,13 @@ const WaktiAIV2 = () => {
         };
 
         // Flush final content into sessionMessages (one-time, not per-token)
-        // Then clear streaming overlay — ChatMessages will switch to rendering message.content
+        // Then clear streaming overlay Ã¢â‚¬â€ ChatMessages will switch to rendering message.content
         // IMPORTANT: keep setStreamingMessageId + setSessionMessages adjacent (no DOM mutations
         // between them) so React 18 auto-batches both into one render and eliminates flicker.
         setStreamingMessageId(null);
         setSessionMessages(prev => {
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
+          sessionMessagesRef.current = finalMessages;
           setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
           setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);
           return finalMessages;
@@ -971,6 +1034,7 @@ const WaktiAIV2 = () => {
 
           setSessionMessages(prev => {
             const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
+            sessionMessagesRef.current = finalMessages;
             setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
             setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);
             return finalMessages;
@@ -1005,7 +1069,7 @@ const WaktiAIV2 = () => {
             if (!firstToken) {
               firstToken = true;
               const firstTokenMs = Date.now() - fetchStartTime;
-              console.log(`🎯 CLIENT: First token [${firstTokenMs}ms from fetch] trigger=${trigger}`);
+              console.log(`Ã°Å¸Å½Â¯ CLIENT: First token [${firstTokenMs}ms from fetch] trigger=${trigger}`);
               setIsLoading(false);
               // One-time metadata update: clear loading flag on the placeholder bubble
               setSessionMessages(prev => prev.map(m => m.id === assistantMessageId ? { ...m, metadata: { ...(m.metadata || {}), loading: false } } : m));
@@ -1100,7 +1164,7 @@ const WaktiAIV2 = () => {
           (err: string) => { 
             console.error('Stream error:', err);
             setIsLoading(false);
-            // Trial limit: remove placeholder silently — overlay handles the UX
+            // Trial limit: remove placeholder silently Ã¢â‚¬â€ overlay handles the UX
             if (err === 'TRIAL_LIMIT_REACHED') {
               setSessionMessages(prev => prev.filter(m => m.id !== assistantMessageId));
               return;
@@ -1196,29 +1260,62 @@ const WaktiAIV2 = () => {
                 : (typeof returnedBrowsingData?.isNearMeQuery === 'boolean' ? returnedBrowsingData.isNearMeQuery : undefined),
             }
           : undefined;
-        const finalAssistantMessage: AIMessage = {
-          ...assistantPlaceholder,
-          content: finalResponseText,
-          browsingUsed: streamMeta?.browsingUsed === true || trigger === 'search' || !!resolvedBrowsingData,
-          browsingData: resolvedBrowsingData,
-          chatSubmode: effectiveChatSubmode,
-          metadata: { 
-            loading: false, 
-            ...streamMeta,
-            thinkingDuration: streamThinkingDuration,
-            toolsUsed: getCompletedToolCalls().length,
-            toolCalls: getCompletedToolCalls(),
-            studyMode: effectiveChatSubmode === 'study',
-          },
-          intent: trigger,
-        };
 
         // Flush final content into sessionMessages (one-time, not per-token)
-        // Then clear streaming overlay — ChatMessages will switch to rendering message.content
+        // Then clear streaming overlay ── ChatMessages will switch to rendering message.content
         // IMPORTANT: keep setStreamingMessageId + setSessionMessages adjacent (no DOM mutations
         // between them) so React 18 auto-batches both into one render and eliminates flicker.
         setStreamingMessageId(null);
         setSessionMessages(prev => {
+          const existingMsg = prev.find(m => m.id === assistantMessageId);
+          const currentBrowsingData = existingMsg?.browsingData && typeof existingMsg.browsingData === 'object'
+            ? existingMsg.browsingData
+            : {};
+
+          const finalBrowsingData = resolvedBrowsingData || Object.keys(currentBrowsingData).length > 0
+            ? {
+                ...currentBrowsingData,
+                ...(resolvedBrowsingData || {}),
+                queries: Array.from(new Set([
+                  ...(Array.isArray(currentBrowsingData?.queries) ? currentBrowsingData.queries : []),
+                  ...(Array.isArray(resolvedBrowsingData?.queries) ? resolvedBrowsingData.queries : []),
+                ].map((item) => typeof item === 'string' ? item.trim() : '').filter(Boolean))),
+                sources: [
+                  ...(Array.isArray(currentBrowsingData?.sources) ? currentBrowsingData.sources : []),
+                  ...(Array.isArray(resolvedBrowsingData?.sources) ? resolvedBrowsingData.sources : []),
+                ].filter((v, i, a) => v?.url && a.findIndex(t => t.url === v.url) === i),
+                supports: [
+                  ...(Array.isArray(currentBrowsingData?.supports) ? currentBrowsingData.supports : []),
+                  ...(Array.isArray(resolvedBrowsingData?.supports) ? resolvedBrowsingData.supports : []),
+                ],
+                cards: deduplicateCards([
+                  ...(Array.isArray(currentBrowsingData?.cards) ? currentBrowsingData.cards : []),
+                  ...(Array.isArray(resolvedBrowsingData?.cards) ? resolvedBrowsingData.cards : []),
+                ]),
+                places: deduplicateAndMergePlaces([
+                  ...(Array.isArray(currentBrowsingData?.places) ? currentBrowsingData.places : []),
+                  ...(Array.isArray(resolvedBrowsingData?.places) ? resolvedBrowsingData.places : []),
+                ]),
+              }
+            : undefined;
+
+          const finalAssistantMessage: AIMessage = {
+            ...assistantPlaceholder,
+            content: finalResponseText,
+            browsingUsed: streamMeta?.browsingUsed === true || trigger === 'search' || !!finalBrowsingData,
+            browsingData: finalBrowsingData,
+            chatSubmode: effectiveChatSubmode,
+            metadata: { 
+              loading: false, 
+              ...streamMeta,
+              thinkingDuration: streamThinkingDuration,
+              toolsUsed: getCompletedToolCalls().length,
+              toolCalls: getCompletedToolCalls(),
+              studyMode: effectiveChatSubmode === 'study',
+            },
+            intent: trigger,
+          };
+
           const finalMessages = prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m);
           setTimeout(() => autoSaveActiveConversation(finalMessages, convId), 0);
           setTimeout(() => emitEvent('wakti-ai-stream-finished'), 0);
@@ -1240,7 +1337,7 @@ const WaktiAIV2 = () => {
         openGuestUpgradeDialog(getGuestBlockedMessage(trigger, effectiveChatSubmode, attachedFiles));
         return;
       }
-      // Trial limit: remove placeholder silently — overlay handles the UX
+      // Trial limit: remove placeholder silently Ã¢â‚¬â€ overlay handles the UX
       if (error?.message === 'TRIAL_LIMIT_REACHED' || String(error?.message).includes('TRIAL_LIMIT')) {
         setSessionMessages(prev => prev.filter(m => m.id !== assistantMessageId));
         setIsLoading(false);
@@ -1263,17 +1360,17 @@ const WaktiAIV2 = () => {
           }
           return {
             ...m,
-            content: language === 'ar' ? 'عذراً، حدث خطأ. يرجى المحاولة مرة أخرى.' : 'Sorry, I encountered an error. Please try again.',
+            content: language === 'ar' ? 'Ã˜Â¹Ã˜Â°Ã˜Â±Ã˜Â§Ã™â€¹Ã˜Å’ Ã˜Â­Ã˜Â¯Ã˜Â« Ã˜Â®Ã˜Â·Ã˜Â£. Ã™Å Ã˜Â±Ã˜Â¬Ã™â€° Ã˜Â§Ã™â€žÃ™â€¦Ã˜Â­Ã˜Â§Ã™Ë†Ã™â€žÃ˜Â© Ã™â€¦Ã˜Â±Ã˜Â© Ã˜Â£Ã˜Â®Ã˜Â±Ã™â€°.' : 'Sorry, I encountered an error. Please try again.',
             metadata: { 
               loading: false, 
               error: true,
-              errorTitle: language === 'ar' ? 'فشل الطلب' : 'Request Failed',
-              errorTitleAr: 'فشل الطلب',
-              errorMessage: error?.message || (language === 'ar' ? 'حدث خطأ غير متوقع' : 'An unexpected error occurred'),
-              errorMessageAr: error?.message || 'حدث خطأ غير متوقع',
+              errorTitle: language === 'ar' ? 'Ã™ÂÃ˜Â´Ã™â€ž Ã˜Â§Ã™â€žÃ˜Â·Ã™â€žÃ˜Â¨' : 'Request Failed',
+              errorTitleAr: 'Ã™ÂÃ˜Â´Ã™â€ž Ã˜Â§Ã™â€žÃ˜Â·Ã™â€žÃ˜Â¨',
+              errorMessage: error?.message || (language === 'ar' ? 'Ã˜Â­Ã˜Â¯Ã˜Â« Ã˜Â®Ã˜Â·Ã˜Â£ Ã˜ÂºÃ™Å Ã˜Â± Ã™â€¦Ã˜ÂªÃ™Ë†Ã™â€šÃ˜Â¹' : 'An unexpected error occurred'),
+              errorMessageAr: error?.message || 'Ã˜Â­Ã˜Â¯Ã˜Â« Ã˜Â®Ã˜Â·Ã˜Â£ Ã˜ÂºÃ™Å Ã˜Â± Ã™â€¦Ã˜ÂªÃ™Ë†Ã™â€šÃ˜Â¹',
               errorSeverity: 'error',
-              suggestedAction: language === 'ar' ? 'حاول مرة أخرى أو أعد صياغة سؤالك' : 'Try again or rephrase your question',
-              suggestedActionAr: 'حاول مرة أخرى أو أعد صياغة سؤالك',
+              suggestedAction: language === 'ar' ? 'Ã˜Â­Ã˜Â§Ã™Ë†Ã™â€ž Ã™â€¦Ã˜Â±Ã˜Â© Ã˜Â£Ã˜Â®Ã˜Â±Ã™â€° Ã˜Â£Ã™Ë† Ã˜Â£Ã˜Â¹Ã˜Â¯ Ã˜ÂµÃ™Å Ã˜Â§Ã˜ÂºÃ˜Â© Ã˜Â³Ã˜Â¤Ã˜Â§Ã™â€žÃ™Æ’' : 'Try again or rephrase your question',
+              suggestedActionAr: 'Ã˜Â­Ã˜Â§Ã™Ë†Ã™â€ž Ã™â€¦Ã˜Â±Ã˜Â© Ã˜Â£Ã˜Â®Ã˜Â±Ã™â€° Ã˜Â£Ã™Ë† Ã˜Â£Ã˜Â¹Ã˜Â¯ Ã˜ÂµÃ™Å Ã˜Â§Ã˜ÂºÃ˜Â© Ã˜Â³Ã˜Â¤Ã˜Â§Ã™â€žÃ™Æ’',
               thinkingDuration,
               toolsUsed: 1,
               toolCalls: [{ id: 'error-1', name: 'AI Processing', icon: 'brain', status: 'completed', duration: thinkingDuration }]
@@ -1306,7 +1403,7 @@ const WaktiAIV2 = () => {
       if (trigger === 'vision') {
         visionInFlightRef.current = false;
         setActiveTrigger('chat');
-        console.log('🔄 AUTO-SWITCH: Vision completed → Chat mode');
+        console.log('Ã°Å¸â€â€ž AUTO-SWITCH: Vision completed Ã¢â€ â€™ Chat mode');
       }
       // Study mode only persists when user explicitly stays in chat trigger
     }
@@ -1345,75 +1442,132 @@ const WaktiAIV2 = () => {
     if (isLoading) return;
     if (!(authUser?.id || userProfile?.id)) return;
 
-    try {
-      const routeState = ((location.state || {}) as {
-        pendingMessage?: string;
-        pendingTrigger?: string;
-        pendingChatSubmode?: 'chat' | 'study';
-        pendingSearchSubmode?: 'web' | 'youtube';
-      });
+    let cancelled = false;
 
-      const pending = (routeState.pendingMessage || localStorage.getItem('wakti_pending_message') || '').trim();
-      const pendingTrigger = routeState.pendingTrigger || localStorage.getItem('wakti_active_trigger') || 'chat';
-      const pendingSubmode = (routeState.pendingChatSubmode || localStorage.getItem('wakti_chat_submode') || null) as 'chat' | 'study' | null;
-      const pendingSearchSubmode = routeState.pendingSearchSubmode || localStorage.getItem('wakti_search_submode');
-      const openPlus = localStorage.getItem('wakti_open_plus');
-      const payloadKey = JSON.stringify({ pending, pendingTrigger, pendingSubmode, pendingSearchSubmode, openPlus });
+    const consumeHomescreenPayload = async () => {
+      try {
+        const routeState = ((location.state || {}) as {
+          pendingMessage?: string;
+          pendingTrigger?: string;
+          pendingChatSubmode?: 'chat' | 'study';
+          pendingSearchSubmode?: 'web' | 'youtube';
+          pendingPayloadId?: string;
+          selectedConversationRowId?: string;
+          openConversations?: boolean;
+          openExtraTab?: 'conversations';
+        });
 
-      if (pendingHomescreenPayloadHandledRef.current === payloadKey) return;
+        const pending = (routeState.pendingMessage || localStorage.getItem('wakti_pending_message') || '').trim();
+        const pendingTrigger = routeState.pendingTrigger || localStorage.getItem('wakti_active_trigger') || 'chat';
+        const pendingSubmode = (routeState.pendingChatSubmode || localStorage.getItem('wakti_chat_submode') || null) as 'chat' | 'study' | null;
+        const pendingSearchSubmode = routeState.pendingSearchSubmode || localStorage.getItem('wakti_search_submode');
+        const pendingPayloadId = routeState.pendingPayloadId || localStorage.getItem('wakti_pending_payload_id') || '';
+        const selectedConversationRowId = routeState.selectedConversationRowId || localStorage.getItem('wakti_selected_conversation_row_id') || '';
+        const openConversations = routeState.openConversations === true || localStorage.getItem('wakti_open_conversations') === '1';
+        const openExtraTab = routeState.openExtraTab || localStorage.getItem('wakti_open_extra_tab');
+        const openPlus = localStorage.getItem('wakti_open_plus');
+        const payloadKey = JSON.stringify({ pending, pendingTrigger, pendingSubmode, pendingSearchSubmode, pendingPayloadId, selectedConversationRowId, openConversations, openExtraTab, openPlus });
 
-      if (pendingSearchSubmode === 'youtube' || pendingSearchSubmode === 'web') {
-        localStorage.setItem('wakti_search_submode', pendingSearchSubmode);
-      }
+        if (pendingHomescreenPayloadHandledRef.current === payloadKey || cancelled) return;
 
-      if (pendingSubmode) {
-        setChatSubmode(pendingSubmode);
-        localStorage.removeItem('wakti_chat_submode');
-      }
+        if (pendingPayloadId) {
+          localStorage.removeItem('wakti_pending_payload_id');
+        }
 
-      if (pending && pending.trim()) {
-        pendingHomescreenPayloadHandledRef.current = payloadKey;
-        localStorage.removeItem('wakti_pending_message');
-        localStorage.removeItem('wakti_active_trigger');
-        setActiveTrigger(pendingTrigger);
-        window.setTimeout(() => {
-          handleSendMessage(pending, pendingTrigger, [], undefined, undefined, pendingSubmode || 'chat');
-        }, 150);
-      } else if (pendingTrigger && pendingTrigger !== 'chat') {
-        pendingHomescreenPayloadHandledRef.current = payloadKey;
-        setActiveTrigger(pendingTrigger);
-        localStorage.removeItem('wakti_active_trigger');
-      }
+        if (pendingSearchSubmode === 'youtube' || pendingSearchSubmode === 'web') {
+          localStorage.setItem('wakti_search_submode', pendingSearchSubmode);
+        }
 
-      if (openPlus === '1') {
-        pendingHomescreenPayloadHandledRef.current = payloadKey;
-        localStorage.removeItem('wakti_open_plus');
-        setTimeout(() => setIsSidebarOpen(true), 400);
-      }
+        if (pendingSubmode) {
+          setChatSubmode(pendingSubmode);
+          localStorage.removeItem('wakti_chat_submode');
+        }
 
-      // Re-dispatch files selected via homescreen PlusMenu
-      const pendingVisionRaw = sessionStorage.getItem('wakti_pending_vision_files');
-      if (pendingVisionRaw) {
-        pendingHomescreenPayloadHandledRef.current = payloadKey;
-        sessionStorage.removeItem('wakti_pending_vision_files');
-        try {
-          const stored: { name: string; type: string; data: string }[] = JSON.parse(pendingVisionRaw);
-          if (stored.length > 0) {
-            const dt = new DataTransfer();
-            for (const f of stored) {
-              const byteStr = atob(f.data.split(',')[1] || '');
-              const arr = new Uint8Array(byteStr.length);
-              for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
-              dt.items.add(new File([arr], f.name, { type: f.type }));
+        if (selectedConversationRowId && preparedHomescreenConversationRowRef.current !== selectedConversationRowId) {
+          try {
+            const full = await SavedConversationsService.loadConversation(selectedConversationRowId);
+            if (!cancelled && full?.messages && Array.isArray(full.messages)) {
+              const msgs = full.messages.map((m: any) => ({ ...m, timestamp: m.timestamp ? new Date(m.timestamp) : new Date() }));
+              const convId = (full as any).conversation_id || selectedConversationRowId;
+              if (currentConversationIdRef.current && currentConversationIdRef.current !== convId) {
+                SavedConversationsService.deactivateConversation(currentConversationIdRef.current).catch(() => {});
+              }
+              await SavedConversationsService.upsertActiveConversation(msgs, convId);
+              if (cancelled) return;
+              sessionMessagesRef.current = msgs;
+              currentConversationIdRef.current = convId;
+              setSessionMessages(msgs);
+              setCurrentConversationId(convId);
+              EnhancedFrontendMemory.saveActiveConversation(msgs, convId);
+              setIsNewConversation(false);
             }
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('wakti-file-selected', { detail: { files: dt.files } }));
-            }, 600);
-          }
-        } catch { /* ignore */ }
-      }
-    } catch { /* ignore */ }
-  }, [authUser?.id, userProfile?.id, isLoading, location.state, handleSendMessage]);
+          } catch { /* ignore */ }
+          preparedHomescreenConversationRowRef.current = selectedConversationRowId;
+          localStorage.removeItem('wakti_selected_conversation_row_id');
+          if (cancelled) return;
+        }
+
+        if (pending && pending.trim()) {
+          pendingHomescreenPayloadHandledRef.current = payloadKey;
+          localStorage.removeItem('wakti_pending_message');
+          localStorage.removeItem('wakti_active_trigger');
+          setActiveTrigger(pendingTrigger);
+          window.setTimeout(() => {
+            handleSendMessage(pending, pendingTrigger, [], undefined, undefined, pendingSubmode || 'chat');
+          }, 150);
+        } else if (pendingTrigger && pendingTrigger !== 'chat') {
+          pendingHomescreenPayloadHandledRef.current = payloadKey;
+          setActiveTrigger(pendingTrigger);
+          localStorage.removeItem('wakti_active_trigger');
+        }
+
+        if (openPlus === '1') {
+          pendingHomescreenPayloadHandledRef.current = payloadKey;
+          localStorage.removeItem('wakti_open_plus');
+          setTimeout(() => setIsSidebarOpen(true), 400);
+        }
+
+        if (openConversations) {
+          pendingHomescreenPayloadHandledRef.current = payloadKey;
+          localStorage.removeItem('wakti_open_conversations');
+          localStorage.removeItem('wakti_open_extra_tab');
+          setShowConversations(true);
+          setTimeout(() => {
+            if (openExtraTab === 'conversations') {
+              emitEvent('wakti-open-conversations-panel');
+            }
+          }, 60);
+        }
+
+        const pendingVisionRaw = sessionStorage.getItem('wakti_pending_vision_files');
+        if (pendingVisionRaw) {
+          pendingHomescreenPayloadHandledRef.current = payloadKey;
+          sessionStorage.removeItem('wakti_pending_vision_files');
+          try {
+            const stored: { name: string; type: string; data: string }[] = JSON.parse(pendingVisionRaw);
+            if (stored.length > 0) {
+              const dt = new DataTransfer();
+              for (const f of stored) {
+                const byteStr = atob(f.data.split(',')[1] || '');
+                const arr = new Uint8Array(byteStr.length);
+                for (let i = 0; i < byteStr.length; i++) arr[i] = byteStr.charCodeAt(i);
+                dt.items.add(new File([arr], f.name, { type: f.type }));
+              }
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('wakti-file-selected', { detail: { files: dt.files } }));
+              }, 600);
+            }
+          } catch { /* ignore */ }
+        }
+      } catch { /* ignore */ }
+    };
+
+    void consumeHomescreenPayload();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.id, currentConversationId, userProfile?.id, isLoading, location.state, handleSendMessage]);
 
   const handleConfirmTask = (taskData: any) => { console.log('Task confirmed:', taskData); setShowTaskConfirmation(false); };
   const handleDeclineTask = () => { console.log('Task declined'); setShowTaskConfirmation(false); };
@@ -1440,7 +1594,7 @@ const WaktiAIV2 = () => {
 
   return (
     <div className="wakti-ai-page-container" style={{ position: 'relative' }}>
-      {chatTrialLimitReached ? <TrialGateOverlay featureKey="ai_chat" limit={15} featureLabel={{ en: 'WAKTI AI Chat', ar: 'دردشة وقتي AI' }} /> : null}
+      {chatTrialLimitReached ? <TrialGateOverlay featureKey="ai_chat" limit={15} featureLabel={{ en: 'WAKTI AI Chat', ar: 'Ã˜Â¯Ã˜Â±Ã˜Â¯Ã˜Â´Ã˜Â© Ã™Ë†Ã™â€šÃ˜ÂªÃ™Å  AI' }} /> : null}
       <StudioGuestLoginDialog
         open={guestUpgradeOpen}
         onOpenChange={setGuestUpgradeOpen}

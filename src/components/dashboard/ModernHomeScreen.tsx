@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -9,6 +9,7 @@ import {
   Calendar,
   CalendarClock,
   CalendarDays,
+  Check,
   CheckSquare,
   Code2,
   ListTodo,
@@ -16,6 +17,7 @@ import {
   Gamepad2,
   Heart,
   HelpCircle,
+  Loader2,
   Mail,
   Mic,
   MoreHorizontal,
@@ -29,6 +31,7 @@ import {
   Users,
   Bot,
   Search as SearchIcon,
+  Trash2,
   X,
   SlidersHorizontal,
 } from "lucide-react";
@@ -46,8 +49,12 @@ import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carouse
 import { cn } from "@/lib/utils";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { PlusMenu } from "@/components/wakti-ai-v2/PlusMenu";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { EnhancedFrontendMemory } from "@/services/EnhancedFrontendMemory";
+import { SavedConversationsService, normalizeConversationTitle, type ConversationListItem } from "@/services/SavedConversationsService";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// --- Types -------------------------------------------------------------------
 
 interface ModernHomeScreenProps {
   displayName: string;
@@ -58,7 +65,7 @@ type AppItem = {
   nameEn: string;
   nameAr: string;
   path: string;
-  icon: LucideIcon;
+  icon: LucideIcon | React.ElementType;
   accent: string;
   glow: string;
 };
@@ -96,13 +103,13 @@ function sanitizeModernWidgetOrder(raw: unknown): ModernWidgetKey[] {
   ];
 }
 
-// ─── App lists ───────────────────────────────────────────────────────────────
+// --- App lists ---------------------------------------------------------------
 
 const CREATION_APPS: AppItem[] = [
   { id: "projects", nameEn: "Code", nameAr: "البرمجة", path: "/projects", icon: Code2, accent: "#60a5fa", glow: "rgba(96,165,250,0.26)" },
   { id: "studio", nameEn: "Studio", nameAr: "الاستوديو", path: "/music", icon: Aperture, accent: "#34d399", glow: "rgba(52,211,153,0.24)" },
-  { id: "text", nameEn: "Text", nameAr: "النص", path: "/tools/text", icon: PenTool, accent: "#f59e0b", glow: "rgba(245,158,11,0.24)" },
-  { id: "voice", nameEn: "Voice", nameAr: "الصوت", path: "/tools/voice-studio", icon: Mic, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
+  { id: "text", nameEn: "Text", nameAr: "نص", path: "/tools/text", icon: PenTool, accent: "#f59e0b", glow: "rgba(245,158,11,0.24)" },
+  { id: "voice", nameEn: "Voice", nameAr: "صوت", path: "/tools/voice-studio", icon: Mic, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
   { id: "maw3d", nameEn: "Maw3d", nameAr: "مواعيد", path: "/maw3d", icon: CalendarClock, accent: "#fb923c", glow: "rgba(251,146,60,0.24)" },
 ];
 
@@ -117,7 +124,7 @@ const PRODUCTIVITY_APPS: AppItem[] = [
   { id: "calendar", nameEn: "Calendar", nameAr: "التقويم", path: "/calendar", icon: Calendar, accent: "#38bdf8", glow: "rgba(56,189,248,0.24)" },
   { id: "tasks", nameEn: "Tasks", nameAr: "المهام", path: "/tr", icon: ListTodo, accent: "#22c55e", glow: "rgba(34,197,94,0.24)" },
   { id: "email", nameEn: "Email", nameAr: "البريد", path: "/tools/email", icon: Mail, accent: "#fbbf24", glow: "rgba(251,191,36,0.24)" },
-  { id: "social", nameEn: "Social", nameAr: "سوشيال", path: "/social", icon: MessageCircle, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
+  { id: "social", nameEn: "Social", nameAr: "التواصل", path: "/social", icon: MessageCircle, accent: "#22d3ee", glow: "rgba(34,211,238,0.24)" },
   { id: "vitality", nameEn: "Health", nameAr: "الصحة", path: "/fitness", icon: Activity, accent: "#84cc16", glow: "rgba(132,204,22,0.24)" },
   { id: "games", nameEn: "Games", nameAr: "الألعاب", path: "/tools/game", icon: Gamepad2, accent: "#f97316", glow: "rgba(249,115,22,0.24)" },
   { id: "deen", nameEn: "Deen", nameAr: "دين", path: "/deen", icon: BookOpen, accent: "#818cf8", glow: "rgba(129,140,248,0.24)" },
@@ -139,28 +146,75 @@ type AppCircleProps = {
 const MODERN_SCALE_BASE_WIDTH = 390;
 const MODERN_SCALE_BASE_HEIGHT = 720;
 
-function getStableModernViewport() {
+const clampModernValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+
+const normalizeModernValue = (value: number, min: number, max: number) => {
+  if (max <= min) return 1;
+  return clampModernValue((value - min) / (max - min), 0, 1);
+};
+
+const lerpModernValue = (min: number, max: number, progress: number) => min + ((max - min) * progress);
+
+function getModernViewport() {
   if (typeof window === "undefined") {
     return { width: MODERN_SCALE_BASE_WIDTH, height: MODERN_SCALE_BASE_HEIGHT };
   }
 
-  const viewportWidth = window.innerWidth || MODERN_SCALE_BASE_WIDTH;
-  const viewportHeight = window.innerHeight || MODERN_SCALE_BASE_HEIGHT;
+  const visualViewport = window.visualViewport;
+  const viewportWidth = Math.round(visualViewport?.width || window.innerWidth || MODERN_SCALE_BASE_WIDTH);
+  const viewportHeight = Math.round(visualViewport?.height || window.innerHeight || MODERN_SCALE_BASE_HEIGHT);
 
   if (viewportWidth >= 768) {
     return { width: viewportWidth, height: viewportHeight };
   }
 
-  const screenWidth = window.screen?.width || viewportWidth;
-  const screenHeight = window.screen?.height || viewportHeight;
-
   return {
-    width: Math.min(screenWidth, screenHeight),
-    height: Math.max(screenWidth, screenHeight),
+    width: Math.min(viewportWidth, viewportHeight),
+    height: Math.max(viewportWidth, viewportHeight),
   };
 }
 
-// ─── AppCircle ────────────────────────────────────────────────────────────────
+function useModernViewport() {
+  const [viewport, setViewport] = useState(() => getModernViewport());
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    let frame = 0;
+    const updateViewport = () => {
+      frame = 0;
+      setViewport((previous) => {
+        const next = getModernViewport();
+        if (previous.width === next.width && previous.height === next.height) {
+          return previous;
+        }
+        return next;
+      });
+    };
+
+    const scheduleViewportUpdate = () => {
+      if (frame) cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(updateViewport);
+    };
+
+    const visualViewport = window.visualViewport;
+    scheduleViewportUpdate();
+    window.addEventListener("resize", scheduleViewportUpdate);
+    window.addEventListener("orientationchange", scheduleViewportUpdate);
+    visualViewport?.addEventListener("resize", scheduleViewportUpdate);
+
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener("resize", scheduleViewportUpdate);
+      window.removeEventListener("orientationchange", scheduleViewportUpdate);
+      visualViewport?.removeEventListener("resize", scheduleViewportUpdate);
+    };
+  }, []);
+
+  return viewport;
+}
+
+// --- AppCircle ----------------------------------------------------------------
 
 function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overrideIcon, overrideAccent, overrideGlow, useWaktiLogo, scale = 1 }: AppCircleProps) {
   const Icon = overrideIcon ?? app.icon;
@@ -199,7 +253,7 @@ function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overri
   );
 }
 
-// ─── Shell renderer (glass card identical to HomeScreen widgets) ──────────────
+// --- Shell renderer (glass card identical to HomeScreen widgets) --------------
 
 type ShellFn = (bg: string, glow: string, onClick: () => void, children: React.ReactNode) => React.ReactNode;
 
@@ -241,7 +295,7 @@ function makeShell(isDark: boolean): ShellFn {
   };
 }
 
-// ─── Helpers (exact copies from HomeScreen.tsx) ───────────────────────────────
+// --- Helpers (exact copies from HomeScreen.tsx) -------------------------------
 
 function useLiveClock() {
   const [now, setNow] = useState(() => Date.now());
@@ -259,7 +313,7 @@ function formatCountdown(diffMs: number, language: string): string {
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
   const pad = (n: number) => String(n).padStart(2, '0');
-  if (h > 0) return language === 'ar' ? `${h}س ${pad(m)}د` : `${h}h ${pad(m)}m`;
+  if (h > 0) return language === 'ar' ? `${h}? ${pad(m)}?` : `${h}h ${pad(m)}m`;
   return `${pad(m)}:${pad(s)}`;
 }
 
@@ -272,12 +326,12 @@ function parseReminderDate(r: any): number | null {
   } catch { return null; }
 }
 
-// ─── Inline widget components (exact copies from HomeScreen.tsx) ──────────────
+// --- Inline widget components (exact copies from HomeScreen.tsx) --------------
 
-const MOOD_EMOJI = ['', '😞', '😕', '😐', '😊', '🤩'];
+const MOOD_EMOJI = ['', '??', '??', '??', '??', '??'];
 const MOOD_COLOR = ['', '#ef4444', '#f97316', '#eab308', '#22c55e', '#8b5cf6'];
 const MOOD_LABEL_EN = ['', 'Awful', 'Bad', 'Meh', 'Good', 'Amazing'];
-const MOOD_LABEL_AR = ['', 'سيء جداً', 'سيء', 'عادي', 'جيد', 'رائع'];
+const MOOD_LABEL_AR = ['', 'سيئ جدًا', 'سيئ', 'عادي', 'جيد', 'رائع'];
 
 function TRWidgetInline({ shell, navigate, language, pendingTasks, completedToday, total, pct, taskAccent, taskIconBg, reminders }: {
   shell: ShellFn;
@@ -330,7 +384,7 @@ function TRWidgetInline({ shell, navigate, language, pendingTasks, completedToda
               : <Bell className="w-3.5 h-3.5 text-white" strokeWidth={2.5} />}
           </div>
           <span className="text-[11px] font-black text-white uppercase tracking-wide">
-            {activeTab === 'tasks' ? (language === 'ar' ? 'المهام' : 'Tasks') : (language === 'ar' ? 'تنبيهات' : 'Alerts')}
+            {activeTab === 'tasks' ? (language === 'ar' ? 'المهام' : 'Tasks') : (language === 'ar' ? 'التنبيهات' : 'Alerts')}
           </span>
         </div>
         <svg width="36" height="36" viewBox="0 0 36 36" className="-rotate-90 flex-shrink-0">
@@ -346,7 +400,7 @@ function TRWidgetInline({ shell, navigate, language, pendingTasks, completedToda
           <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{total}</span>
         </div>
         <div className="bg-white/10 rounded-xl p-2 flex flex-col gap-0.5">
-          <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{language === 'ar' ? 'مكتمل' : 'Done'}</span>
+          <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{language === 'ar' ? 'تم' : 'Done'}</span>
           <span className="text-[20px] font-black leading-none tabular-nums" style={{ color: taskAccent }}>{completedToday}</span>
         </div>
       </div>
@@ -383,14 +437,14 @@ function TRWidgetInline({ shell, navigate, language, pendingTasks, completedToda
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center">
-              <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? 'لا تنبيهات' : 'No reminders'}</span>
+              <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? 'لا تذكيرات' : 'No reminders'}</span>
             </div>
           )}
         </div>
         <div className="flex justify-between">
-          <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? 'معلّق' : 'pending'}</span>
+          <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? 'معلق' : 'pending'}</span>
           <span className="text-[7px] font-bold" style={{ color: taskAccent }}>{activeTab === 'tasks' ? pct : 0}%</span>
-          <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? 'مكتمل' : 'done'}</span>
+          <span className="text-[7px] text-white/85 uppercase font-bold">{language === 'ar' ? 'تم' : 'done'}</span>
         </div>
       </div>
     </div>
@@ -441,22 +495,22 @@ function JournalWidgetInline({ shell, navigate, language, journalData }: {
             <BookOpen className="w-3 h-3 text-white" strokeWidth={2.5} />
           </div>
           <span className="text-[10px] font-black text-white uppercase tracking-wide">
-            {language === 'ar' ? 'يومياتي' : 'Journal'}
+            {language === 'ar' ? 'اليومية' : 'Journal'}
           </span>
         </div>
         <div className="flex items-center gap-1">
           <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-orange-500/30 border border-orange-400/40">
-            <span className="text-[8px]">🔥</span>
+            <span className="text-[8px]">??</span>
             <span className="text-[8px] font-black text-orange-300 tabular-nums">{currentStreak}</span>
           </div>
           <div className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-400/30">
-            <span className="text-[8px]">🏆</span>
+            <span className="text-[8px]">??</span>
             <span className="text-[8px] font-black text-yellow-300 tabular-nums">{bestStreak}</span>
           </div>
         </div>
       </div>
       <div className="rounded-xl bg-white/10 px-2 py-1.5 flex items-start gap-1.5">
-        <span className="text-[18px] leading-none flex-shrink-0 mt-0.5">{mood ? MOOD_EMOJI[mood] : '✍️'}</span>
+        <span className="text-[18px] leading-none flex-shrink-0 mt-0.5">{mood ? MOOD_EMOJI[mood] : '??'}</span>
         <div className="flex flex-col gap-0 min-w-0 flex-1">
           {hasEntry ? (
             <>
@@ -469,11 +523,11 @@ function JournalWidgetInline({ shell, navigate, language, journalData }: {
               {noteSnippet ? (
                 <span className="text-[7px] text-white/90 leading-snug line-clamp-2">{noteSnippet}</span>
               ) : (
-                <span className="text-[7px] text-white/80">{language === 'ar' ? 'لا ملاحظات' : 'No note'}</span>
+                <span className="text-[7px] text-white/80">{language === 'ar' ? 'لا ملاحظة' : 'No note'}</span>
               )}
             </>
           ) : (
-            <span className="text-[8px] text-white/85">{language === 'ar' ? 'لم تكتب اليوم بعد' : 'No entry yet today'}</span>
+            <span className="text-[8px] text-white/85">{language === 'ar' ? 'لا توجد كتابة اليوم' : 'No entry yet today'}</span>
           )}
         </div>
       </div>
@@ -592,7 +646,7 @@ function CalendarWidgetInline({ shell, navigate, language, upcomingCount }: {
         <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: evAccent }} />
         <p className="text-[10px] font-semibold text-white/80">
           {upcomingCount === 0
-            ? (language === 'ar' ? 'لا أحداث' : 'No upcoming events')
+            ? (language === 'ar' ? 'لا توجد أحداث قادمة' : 'No upcoming events')
             : `${upcomingCount} ${language === 'ar' ? 'حدث قادم' : upcomingCount === 1 ? 'upcoming event' : 'upcoming events'}`}
         </p>
       </div>
@@ -681,7 +735,7 @@ function Maw3dWidgetInline({ shell, navigate, language, events, attendingCounts 
                   <div className="flex items-center gap-0.5">
                     <Users className="w-2 h-2 text-green-400 flex-shrink-0" strokeWidth={2.5} />
                     <span className="text-[7px] text-green-300 font-bold tabular-nums">{rsvp}</span>
-                    <span className="text-[6px] text-white/80">{language === 'ar' ? ' قبل' : ' going'}</span>
+                    <span className="text-[6px] text-white/80">{language === 'ar' ? ' حاضر' : ' going'}</span>
                   </div>
                 </div>
                 {isToday && <div className="w-1.5 h-1.5 rounded-full bg-green-400 flex-shrink-0 animate-pulse" />}
@@ -691,7 +745,7 @@ function Maw3dWidgetInline({ shell, navigate, language, events, attendingCounts 
         </div>
       ) : (
         <div className="flex-1 flex items-center justify-center">
-          <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? 'لا مواعيد قادمة' : 'No upcoming events'}</span>
+          <span className="text-[9px] text-white/80 uppercase">{language === 'ar' ? 'لا توجد أحداث قادمة' : 'No upcoming events'}</span>
         </div>
       )}
       <div className="flex items-center justify-between">
@@ -790,7 +844,7 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
                 <div>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-black text-white tabular-nums leading-none">{Math.round(recovery)}%</span>
-                    <span className="text-[9px] font-black text-white/90 uppercase">{language === 'ar' ? 'استشفاء' : 'REC'}</span>
+                    <span className="text-[9px] font-black text-white/90 uppercase">{language === 'ar' ? 'تعافٍ' : 'REC'}</span>
                   </div>
                   {sleepHours != null && (
                     <div className="flex items-center gap-1 mt-0.5">
@@ -827,7 +881,7 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
                 )}
                 {avgHr != null && (
                   <div className="flex flex-col items-center bg-white/10 rounded-lg px-2 py-0.5">
-                    <span className="text-[8px] text-white/90 uppercase">{language === 'ar' ? 'ن.قلب' : 'AvgHR'}</span>
+                    <span className="text-[8px] text-white/90 uppercase">{language === 'ar' ? 'نبض' : 'AvgHR'}</span>
                     <span className="text-[11px] text-white font-black">{Math.round(avgHr)}</span>
                   </div>
                 )}
@@ -848,30 +902,30 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
               <Heart className="w-4 h-4 text-white" strokeWidth={2} />
             </div>
             <div>
-              <p className="text-[12px] font-black text-white leading-none">{language === 'ar' ? 'أبل هيلث' : 'Apple Health'}</p>
+              <p className="text-[12px] font-black text-white leading-none">{language === 'ar' ? 'صحة أبل' : 'Apple Health'}</p>
               <p className="text-[8px] text-white/85 mt-0.5">{language === 'ar' ? 'بيانات اليوم' : "Today's data"}</p>
             </div>
           </div>
           {hkLoading ? (
             <div className="flex items-center justify-center flex-1">
-              <p className="text-[9px] text-white/85">{language === 'ar' ? 'جار التحميل...' : 'Loading...'}</p>
+              <p className="text-[9px] text-white/85">{language === 'ar' ? 'جارٍ التحميل...' : 'Loading...'}</p>
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-1">
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'خطوات' : 'Steps'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'الخطوات' : 'Steps'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.steps ? hkData.steps.toLocaleString() : '--'}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'نبض' : 'Avg HR'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'متوسط النبض' : 'Avg HR'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.avgHr != null ? hkData.avgHr : '--'}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'نوم' : 'Sleep'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'النوم' : 'Sleep'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.sleepHours != null ? `${hkData.sleepHours}h` : '--'}</p>
               </div>
               <div className="bg-white/10 rounded-lg p-1.5">
-                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'نبض راحة' : 'RHR'}</p>
+                <p className="text-[7px] text-white/90 uppercase font-bold">{language === 'ar' ? 'نبض الراحة' : 'RHR'}</p>
                 <p className="text-[12px] font-black text-white leading-tight">{hkData?.rhr != null ? hkData.rhr : '--'}</p>
               </div>
             </div>
@@ -880,7 +934,7 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
             onClick={(e) => { e.stopPropagation(); navigate('/fitness'); }}
             className="flex items-center justify-center gap-1 bg-white/10 border border-white/20 rounded-lg py-1 active:scale-95 transition-all cursor-pointer"
           >
-            <span className="text-[9px] text-white/90 font-semibold">{language === 'ar' ? 'فتح الحيوية →' : 'Open Vitality →'}</span>
+            <span className="text-[9px] text-white/90 font-semibold">{language === 'ar' ? 'افتح الصحة' : 'Open Vitality ?'}</span>
           </div>
         </div>
       )}
@@ -888,7 +942,7 @@ function VitalityWidgetInline({ shell, navigate, language, whoopData }: {
   ) as React.ReactElement;
 }
 
-// ─── Quote Widget Inline ─────────────────────────────────────────────────────
+// --- Quote Widget Inline -----------------------------------------------------
 
 function QuoteOverlay({ quoteText, quoteAuthor, language, onClose, exiting }: { quoteText: string; quoteAuthor: string; language: string; onClose: () => void; exiting: boolean; }) {
   return (
@@ -919,13 +973,13 @@ function QuoteWidgetInline({ shell, language, quote, onExpand }: { shell: ShellF
   ) as React.ReactElement;
 }
 
-// ─── Homescreen Chat Bar ──────────────────────────────────────────────────────
+// --- Homescreen Chat Bar ------------------------------------------------------
 
 type ModeKey = "chat" | "search" | "study";
 const MODES: { key: ModeKey; labelEn: string; labelAr: string; pill: string; Icon: React.ElementType }[] = [
-  { key: "chat",   labelEn: "Chat",   labelAr: "دردشة", pill: "bg-blue-600",   Icon: Bot },
-  { key: "search", labelEn: "Search", labelAr: "بحث",   pill: "bg-green-600",  Icon: SearchIcon },
-  { key: "study",  labelEn: "Study",  labelAr: "دراسة", pill: "bg-purple-600", Icon: BookOpen },
+  { key: "chat",   labelEn: "Chat",   labelAr: "?????", pill: "bg-blue-600",   Icon: Bot },
+  { key: "search", labelEn: "Search", labelAr: "???",   pill: "bg-green-600",  Icon: SearchIcon },
+  { key: "study",  labelEn: "Study",  labelAr: "?????", pill: "bg-purple-600", Icon: BookOpen },
 ];
 
 type WaktiAiNavigationState = {
@@ -933,11 +987,127 @@ type WaktiAiNavigationState = {
   pendingTrigger?: "chat" | "search";
   pendingChatSubmode?: "chat" | "study";
   pendingSearchSubmode?: "web" | "youtube";
+  pendingPayloadId?: string;
+  selectedConversationRowId?: string;
+  openConversations?: boolean;
+  openExtraTab?: "conversations";
 };
 
+type HomescreenWaktiDraft = {
+  text: string;
+  mode: ModeKey;
+  searchSubmode: "web" | "youtube";
+};
+
+type HomescreenSelectedConversation = {
+  rowId: string;
+  conversationId: string;
+  title: string;
+  messageCount: number;
+  lastMessageAt: string | null;
+  isActive: boolean;
+};
+
+const HOMESCREEN_SELECTED_CONVERSATION_KEY = "wakti_homescreen_selected_conversation";
+
+function loadHomescreenSelectedConversation(): HomescreenSelectedConversation | null {
+  try {
+    const raw = localStorage.getItem(HOMESCREEN_SELECTED_CONVERSATION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed.rowId !== "string" || !parsed.rowId.trim()) return null;
+    return {
+      rowId: parsed.rowId,
+      conversationId: typeof parsed.conversationId === "string" && parsed.conversationId.trim() ? parsed.conversationId : parsed.rowId,
+      title: typeof parsed.title === "string" && parsed.title.trim() ? parsed.title : "Conversation",
+      messageCount: typeof parsed.messageCount === "number" ? parsed.messageCount : 0,
+      lastMessageAt: typeof parsed.lastMessageAt === "string" ? parsed.lastMessageAt : null,
+      isActive: parsed.isActive === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistHomescreenSelectedConversation(conversation: HomescreenSelectedConversation | null) {
+  try {
+    if (conversation) {
+      localStorage.setItem(HOMESCREEN_SELECTED_CONVERSATION_KEY, JSON.stringify(conversation));
+    } else {
+      localStorage.removeItem(HOMESCREEN_SELECTED_CONVERSATION_KEY);
+    }
+  } catch { /* ignore */ }
+}
+
+function buildHomescreenWaktiNavigationState(
+  draft: HomescreenWaktiDraft,
+  overrides?: Partial<Pick<WaktiAiNavigationState, "openConversations" | "openExtraTab" | "selectedConversationRowId">>
+): WaktiAiNavigationState {
+  const trimmedText = draft.text.trim();
+  const pendingMessage = (draft.mode === "search" && draft.searchSubmode === "youtube" && trimmedText)
+    ? `yt: ${trimmedText}`
+    : (trimmedText || undefined);
+
+  return {
+    pendingMessage,
+    pendingTrigger: draft.mode === "study" ? "chat" : draft.mode === "search" ? "search" : "chat",
+    pendingChatSubmode: draft.mode === "study" ? "study" : "chat",
+    pendingSearchSubmode: draft.searchSubmode,
+    pendingPayloadId: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    ...overrides,
+  };
+}
+
+function persistHomescreenWaktiNavigationState(state: WaktiAiNavigationState) {
+  try {
+    if (state.pendingMessage) {
+      localStorage.setItem("wakti_pending_message", state.pendingMessage);
+    } else {
+      localStorage.removeItem("wakti_pending_message");
+    }
+
+    if (state.pendingTrigger) {
+      localStorage.setItem("wakti_active_trigger", state.pendingTrigger);
+    }
+
+    if (state.pendingChatSubmode === "study") {
+      localStorage.setItem("wakti_chat_submode", "study");
+    } else {
+      localStorage.removeItem("wakti_chat_submode");
+    }
+
+    if (state.pendingSearchSubmode) {
+      localStorage.setItem("wakti_search_submode", state.pendingSearchSubmode);
+    }
+
+    if (state.pendingPayloadId) {
+      localStorage.setItem("wakti_pending_payload_id", state.pendingPayloadId);
+    } else {
+      localStorage.removeItem("wakti_pending_payload_id");
+    }
+
+    if (state.selectedConversationRowId) {
+      localStorage.setItem("wakti_selected_conversation_row_id", state.selectedConversationRowId);
+    } else {
+      localStorage.removeItem("wakti_selected_conversation_row_id");
+    }
+
+    if (state.openConversations) {
+      localStorage.setItem("wakti_open_conversations", "1");
+    } else {
+      localStorage.removeItem("wakti_open_conversations");
+    }
+
+    if (state.openExtraTab) {
+      localStorage.setItem("wakti_open_extra_tab", state.openExtraTab);
+    } else {
+      localStorage.removeItem("wakti_open_extra_tab");
+    }
+  } catch { /* ignore */ }
+}
 function HomescreenChatBar({
-  language, isDark, cardShell, navigate, triggerOpenModePicker,
-}: { language: "en" | "ar"; isDark: boolean; cardShell: string; navigate: (p: string, options?: { state?: WaktiAiNavigationState }) => void; triggerOpenModePicker?: number }) {
+  language, isDark, cardShell, navigate, triggerOpenModePicker, onDraftChange, selectedConversationRowId,
+}: { language: "en" | "ar"; isDark: boolean; cardShell: string; navigate: (p: string, options?: { state?: WaktiAiNavigationState }) => void; triggerOpenModePicker?: number; onDraftChange?: (draft: HomescreenWaktiDraft) => void; selectedConversationRowId?: string }) {
   const [text, setText] = useState("");
   const [mode, setMode] = useState<ModeKey>(() => {
     try {
@@ -959,13 +1129,17 @@ function HomescreenChatBar({
     try { localStorage.setItem("wakti_search_submode", searchSubmode); } catch { /* ignore */ }
   }, [searchSubmode]);
 
-  // Modes circle pressed → toggle mode pills inside input
+  // Modes circle pressed ? toggle mode pills inside input
   useEffect(() => {
     if (triggerOpenModePicker && triggerOpenModePicker > 0) {
       setShowModePicker(v => !v);
       inputRef.current?.focus();
     }
   }, [triggerOpenModePicker]);
+
+  useEffect(() => {
+    onDraftChange?.({ text, mode, searchSubmode });
+  }, [text, mode, searchSubmode, onDraftChange]);
 
   const pickMode = (m: ModeKey) => {
     setMode(m);
@@ -978,24 +1152,13 @@ function HomescreenChatBar({
   };
 
   const sendMessage = () => {
-    const msg = text.trim();
-    const finalMsg = (mode === "search" && searchSubmode === "youtube" && msg) ? `yt: ${msg}` : msg;
-    const pendingTrigger = mode === "study" ? "chat" : mode;
-    const pendingChatSubmode = mode === "study" ? "study" : "chat";
-    try {
-      if (finalMsg) localStorage.setItem("wakti_pending_message", finalMsg);
-      localStorage.setItem("wakti_active_trigger", pendingTrigger);
-      if (mode === "study") localStorage.setItem("wakti_chat_submode", "study");
-      localStorage.setItem("wakti_search_submode", searchSubmode);
-    } catch { /* ignore */ }
-    navigate("/wakti-ai", {
-      state: {
-        pendingMessage: finalMsg,
-        pendingTrigger,
-        pendingChatSubmode,
-        pendingSearchSubmode: searchSubmode,
-      }
-    });
+    const nextState = buildHomescreenWaktiNavigationState(
+      { text, mode, searchSubmode },
+      selectedConversationRowId ? { selectedConversationRowId } : undefined,
+    );
+    persistHomescreenWaktiNavigationState(nextState);
+    navigate("/wakti-ai", { state: nextState });
+    setText("");
   };
 
   // Listen for files selected via PlusMenu, store as base64 in sessionStorage, then navigate to WAKTI AI in vision mode
@@ -1046,7 +1209,7 @@ function HomescreenChatBar({
       {/* Input card */}
       <div className={cn("relative flex flex-col rounded-2xl border overflow-hidden transition-all", cardShell, modeBorder)}>
 
-        {/* Mode pills — shown when Modes circle is tapped */}
+        {/* Mode pills Ã¢â‚¬â€ shown when Modes circle is tapped */}
         {showModePicker && (
           <div className="flex items-center gap-2 px-3 pt-2 pb-1">
             {MODES.map(m => (
@@ -1067,7 +1230,7 @@ function HomescreenChatBar({
           </div>
         )}
 
-        {/* Search sub-mode pills: Web / YouTube — shown when Search is active */}
+        {/* Search sub-mode pills: Web / YouTube Ã¢â‚¬â€ shown when Search is active */}
         {mode === "search" && (
           <div className="flex items-center gap-1.5 px-3 pt-2 pb-0.5">
             <button
@@ -1081,7 +1244,7 @@ function HomescreenChatBar({
               )}
             >
               <span className={cn("h-1.5 w-1.5 rounded-full", searchSubmode === "web" ? "bg-green-500" : "bg-gray-400")} />
-              {language === "ar" ? "الويب" : "Web"}
+              {language === "ar" ? "?????" : "Web"}
             </button>
             <button
               type="button"
@@ -1115,7 +1278,7 @@ function HomescreenChatBar({
           />
           <button
             type="button"
-            title={language === "ar" ? "إرسال" : "Send"}
+            title={language === "ar" ? "?????" : "Send"}
             onClick={sendMessage}
             className={cn(
               "mr-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-xl transition-all active:scale-95",
@@ -1129,7 +1292,7 @@ function HomescreenChatBar({
         </div>
       </div>
 
-      {/* + button — same PlusMenu as WAKTI AI chat, hidden in search mode */}
+      {/* + button Ã¢â‚¬â€ same PlusMenu as WAKTI AI chat, hidden in search mode */}
       {showPlus && (
         <div className="flex items-center justify-center">
           <PlusMenu onCamera={() => {}} onUpload={() => {}} />
@@ -1139,7 +1302,7 @@ function HomescreenChatBar({
   );
 }
 
-// ─── Main component ───────────────────────────────────────────────────────────
+// --- Main component -----------------------------------------------------------
 
 export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreenProps) {
   const navigate = useNavigate();
@@ -1150,7 +1313,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const [quoteExiting, setQuoteExiting] = useState(false);
   const [modernWidgetSettings, setModernWidgetSettings] = useState<ModernWidgetSettings>(DEFAULT_MODERN_WIDGET_SETTINGS);
   const [modernWidgetOrder, setModernWidgetOrder] = useState<ModernWidgetKey[]>(DEFAULT_MODERN_WIDGET_ORDER);
-  const [stableViewport] = useState(() => getStableModernViewport());
+  const viewport = useModernViewport();
 
   const { tasks, reminders } = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1173,7 +1336,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const shell = makeShell(isDark);
 
   const ACCOUNT_APP: AppItem = {
-    id: "account", nameEn: "Account", nameAr: "الحساب", path: "/account",
+    id: "account", nameEn: "Account", nameAr: "حسابي", path: "/account",
     icon: Users, accent: "#93c5fd", glow: "rgba(147,197,253,0.45)",
   };
   const [modePickerTrigger, setModePickerTrigger] = useState(0);
@@ -1238,52 +1401,208 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   );
   const quoteText = getQuoteText(quote, language);
   const quoteAuthor = getQuoteAuthor(quote);
-  const isDesktopLike = stableViewport.width >= 768;
-  const layoutScale = isDesktopLike
+  const isDesktopLike = viewport.width >= 768;
+  const isCompactPhone = !isDesktopLike && (viewport.width <= 360 || viewport.height <= 700);
+  const isTallPhone = !isDesktopLike && viewport.height >= 860;
+  const widthProgress = isDesktopLike ? 1 : normalizeModernValue(viewport.width, 320, 430);
+  const heightProgress = isDesktopLike ? 1 : normalizeModernValue(viewport.height, 640, 940);
+  const fluidSize = (min: number, max: number, mode: "width" | "height" | "mixed" = "mixed") => {
+    const progress = mode === "width" ? widthProgress : mode === "height" ? heightProgress : ((widthProgress * 0.6) + (heightProgress * 0.4));
+    return Number(lerpModernValue(min, max, progress).toFixed(2));
+  };
+  const rootPaddingX = isDesktopLike ? 16 : fluidSize(10, 16, "width");
+  const rootPaddingTop = isDesktopLike ? 12 : fluidSize(10, 16, "height");
+  const containerGap = isDesktopLike ? 16 : fluidSize(10, 16, "height");
+  const topRowGap = isDesktopLike ? 16 : fluidSize(8, 14, "width");
+  const topRowLeadWidth = isDesktopLike
+    ? 116
+    : clampModernValue(viewport.width * (isCompactPhone ? 0.265 : isTallPhone ? 0.305 : 0.285), 92, 118);
+  const topLeadPaddingTop = isDesktopLike ? 4 : fluidSize(3, 6, "height");
+  const modesButtonGap = isDesktopLike ? 4 : fluidSize(3, 5, "width");
+  const modeControlsGap = isDesktopLike ? 8 : fluidSize(6, 10, "width");
+  const modeControlsTopMargin = isDesktopLike ? 12 : fluidSize(8, 14, "height");
+  const greetingFontSize = isDesktopLike ? 15 : fluidSize(language === "ar" ? 13.25 : 13, 16, "width");
+  const modeBubbleHeight = isDesktopLike ? 48 : clampModernValue(viewport.width * (isCompactPhone ? 0.115 : 0.12), 40, 52);
+  const modeBubbleRadius = isDesktopLike ? 16 : fluidSize(12, 17, "width");
+  const modeIconSize = isDesktopLike ? 20 : fluidSize(16, 21, "width");
+  const modeLabelSize = isDesktopLike ? 10 : fluidSize(8.5, 10.5, "width");
+  const widgetsRadius = isDesktopLike ? 32 : fluidSize(24, 32, "width");
+  const widgetsPaddingX = isDesktopLike ? 12 : fluidSize(8.5, 12.5, "width");
+  const widgetsPaddingTop = isDesktopLike ? 8 : fluidSize(6, 9, "height");
+  const widgetsPaddingBottom = isDesktopLike ? 6 : fluidSize(4.5, 7, "height");
+  const widgetCardHeight = isDesktopLike
+    ? 208
+    : clampModernValue(viewport.height * (isCompactPhone ? 0.235 : isTallPhone ? 0.265 : 0.25), 174, 224);
+  const middleRowGap = isDesktopLike ? 10 : fluidSize(8, 12, "width");
+  const systemRailWidth = isDesktopLike
+    ? 108
+    : clampModernValue(viewport.width * (isCompactPhone ? 0.235 : isTallPhone ? 0.255 : 0.245), 88, 112);
+  const sectionRadius = isDesktopLike ? 32 : fluidSize(24, 32, "width");
+  const creationRadius = isDesktopLike ? 35.2 : fluidSize(26, 35.2, "width");
+  const sectionPaddingX = isDesktopLike ? 10 : fluidSize(8, 11.5, "width");
+  const sectionPaddingY = isDesktopLike ? 10 : fluidSize(8, 11.5, "height");
+  const systemPaddingX = isDesktopLike ? 8 : fluidSize(6.5, 9, "width");
+  const systemPaddingTop = isDesktopLike ? 6 : fluidSize(5, 7, "height");
+  const productivityTitleMargin = isDesktopLike ? 10 : fluidSize(7, 11, "height");
+  const productivityTitleSize = isDesktopLike
+    ? (language === "ar" ? 27.52 : 24.8)
+    : fluidSize(language === "ar" ? 21 : 19, language === "ar" ? 28 : 25, "width");
+  const productivityGridGap = isDesktopLike ? 8 : fluidSize(5.5, 9, "width");
+  const systemTitleSize = isDesktopLike ? 21.12 : fluidSize(16.5, 21.12, "width");
+  const systemTitleMargin = isDesktopLike ? 8 : fluidSize(5.5, 9, "height");
+  const systemGap = isDesktopLike ? 12 : fluidSize(8, 12, "height");
+  const systemVerticalFontSize = isDesktopLike ? 13 : fluidSize(10.5, 13, "width");
+  const systemVerticalLetterSpacing = isDesktopLike ? 6.76 : fluidSize(5.1, 6.76, "width");
+  const systemRightPadding = isDesktopLike ? 16 : fluidSize(10, 16, "width");
+  const convosButtonMarginTop = isDesktopLike ? 12 : fluidSize(8, 12, "height");
+  const convosButtonHeight = isDesktopLike ? 32 : fluidSize(28, 34, "height");
+  const convosButtonRadius = isDesktopLike ? 12 : fluidSize(10, 13, "width");
+  const convosButtonFontSize = isDesktopLike ? 12 : fluidSize(10.25, 12.5, "width");
+  const convosButtonIconSize = isDesktopLike ? 13 : fluidSize(11, 13.5, "width");
+  const homescreenBarOffset = isDesktopLike ? 6 : fluidSize(4, 8, "height");
+  const creationTranslateY = isDesktopLike ? 12 : clampModernValue(viewport.height * 0.011, 6, 12);
+  const creationPaddingTop = isDesktopLike ? 4 : fluidSize(4, 8, "height");
+  const creationPaddingBottom = isDesktopLike ? 0 : fluidSize(6, 10, "height");
+  const creationTitleMargin = isDesktopLike ? 4 : fluidSize(4, 8, "height");
+  const creationTitleSize = isDesktopLike
+    ? (language === "ar" ? 24.8 : 19.2)
+    : fluidSize(language === "ar" ? 18.5 : 15.5, language === "ar" ? 25 : 20, "width");
+  const creationGridGap = isDesktopLike ? 6 : fluidSize(4.5, 8, "width");
+  const compactAppScale = isDesktopLike
     ? 1
-    : Math.max(0.78, Math.min(1, stableViewport.width / MODERN_SCALE_BASE_WIDTH, stableViewport.height / MODERN_SCALE_BASE_HEIGHT));
-  const scalePx = (value: number, min = 0) => Math.max(min, Number((value * layoutScale).toFixed(2)));
-  const rootPaddingX = isDesktopLike ? 16 : scalePx(12, 9);
-  const rootPaddingTop = scalePx(12, 9);
-  const containerGap = isDesktopLike ? 16 : scalePx(12, 8);
-  const topRowGap = scalePx(isDesktopLike ? 16 : 12, 8);
-  const topRowLeadWidth = scalePx(isDesktopLike ? 116 : 102, 84);
-  const modesButtonGap = scalePx(4, 3);
-  const modeControlsGap = scalePx(8, 6);
-  const modeControlsTopMargin = scalePx(12, 8);
-  const greetingFontSize = scalePx(15, 12);
-  const modeBubbleHeight = scalePx(48, 38);
-  const modeBubbleRadius = scalePx(16, 12);
-  const modeIconSize = scalePx(20, 16);
-  const modeLabelSize = scalePx(10, 8.5);
-  const widgetsRadius = scalePx(32, 24);
-  const widgetsPaddingX = scalePx(12, 9);
-  const widgetsPaddingTop = scalePx(8, 6);
-  const widgetsPaddingBottom = scalePx(6, 4);
-  const widgetCardHeight = scalePx(208, 170);
-  const middleRowGap = scalePx(10, 7);
-  const systemRailWidth = scalePx(108, 88);
-  const sectionRadius = scalePx(32, 24);
-  const creationRadius = scalePx(35.2, 26);
-  const sectionPaddingX = scalePx(10, 7.5);
-  const sectionPaddingY = scalePx(10, 7.5);
-  const systemPaddingX = scalePx(8, 6);
-  const systemPaddingTop = scalePx(6, 4.5);
-  const productivityTitleMargin = scalePx(10, 7);
-  const productivityTitleSize = scalePx(language === "ar" ? 27.52 : 24.8, language === "ar" ? 21 : 19);
-  const productivityGridGap = scalePx(8, 5.5);
-  const systemTitleSize = scalePx(21.12, 16.5);
-  const systemTitleMargin = scalePx(8, 5.5);
-  const systemGap = scalePx(12, 8);
-  const systemVerticalFontSize = scalePx(13, 10.5);
-  const systemVerticalLetterSpacing = scalePx(6.76, 5.1);
-  const systemRightPadding = scalePx(16, 12);
-  const creationTranslateY = scalePx(12, 8);
-  const creationPaddingTop = scalePx(4, 3);
-  const creationPaddingBottom = scalePx(0, 0);
-  const creationTitleMargin = scalePx(4, 3);
-  const creationTitleSize = scalePx(language === "ar" ? 24.8 : 19.2, language === "ar" ? 19 : 15);
-  const creationGridGap = scalePx(6, 4.5);
+    : clampModernValue(0.84 + (widthProgress * 0.14) + (heightProgress * 0.04) - (isCompactPhone ? 0.03 : 0), 0.82, 1);
+  const accountAppScale = isDesktopLike
+    ? 1
+    : clampModernValue(0.9 + (widthProgress * 0.12) + (heightProgress * 0.05), 0.88, 1.06);
+  const systemAppScale = isDesktopLike
+    ? 1
+    : clampModernValue(compactAppScale + 0.02, 0.84, 1.02);
+  const creationAppScale = isDesktopLike
+    ? 1
+    : clampModernValue(compactAppScale - (isCompactPhone ? 0.06 : 0.03), 0.78, 0.95);
+
+  const [homescreenWaktiDraft, setHomescreenWaktiDraft] = useState<HomescreenWaktiDraft>(() => {
+    try {
+      const savedMode = localStorage.getItem("wakti_active_trigger");
+      const savedSearchSubmode = localStorage.getItem("wakti_search_submode");
+      return {
+        text: "",
+        mode: savedMode === "search" || savedMode === "study" ? savedMode as ModeKey : "chat",
+        searchSubmode: savedSearchSubmode === "youtube" ? "youtube" : "web",
+      };
+    } catch {
+      return { text: "", mode: "chat", searchSubmode: "web" };
+    }
+  });
+  const [showHomescreenConversations, setShowHomescreenConversations] = useState(false);
+  const [homescreenConversations, setHomescreenConversations] = useState<ConversationListItem[]>([]);
+  const [homescreenConversationsLoading, setHomescreenConversationsLoading] = useState(false);
+  const [homescreenConversationsError, setHomescreenConversationsError] = useState<string | null>(null);
+  const [selectedHomescreenConversation, setSelectedHomescreenConversation] = useState<HomescreenSelectedConversation | null>(() => loadHomescreenSelectedConversation());
+
+  const openWaktiAiFromHomescreen = (draft: HomescreenWaktiDraft) => {
+    const nextState = buildHomescreenWaktiNavigationState(
+      draft,
+      selectedHomescreenConversation?.rowId ? { selectedConversationRowId: selectedHomescreenConversation.rowId } : undefined,
+    );
+    persistHomescreenWaktiNavigationState(nextState);
+    navigate("/wakti-ai", { state: nextState });
+  };
+
+  const loadHomescreenConversations = async () => {
+    setHomescreenConversationsLoading(true);
+    setHomescreenConversationsError(null);
+    try {
+      const list = await SavedConversationsService.listConversations();
+      setHomescreenConversations(list);
+    } catch {
+      setHomescreenConversations([]);
+      setHomescreenConversationsError(language === "ar" ? "تعذر تحميل المحادثات." : "Couldn't load conversations.");
+    } finally {
+      setHomescreenConversationsLoading(false);
+    }
+  };
+
+  const openHomescreenConversationsPopup = () => {
+    setShowHomescreenConversations(true);
+    void loadHomescreenConversations();
+  };
+
+  const handleStartHomescreenNewChat = () => {
+    setSelectedHomescreenConversation(null);
+    persistHomescreenSelectedConversation(null);
+    localStorage.removeItem("wakti_selected_conversation_row_id");
+    EnhancedFrontendMemory.clearActiveConversation();
+    setHomescreenConversationsError(null);
+    setShowHomescreenConversations(false);
+  };
+
+  const handleSelectHomescreenConversation = async (conversation: ConversationListItem) => {
+    setHomescreenConversationsError(null);
+    try {
+      const full = await SavedConversationsService.loadConversation(conversation.id);
+      if (!full) return;
+
+      const messages = Array.isArray(full.messages)
+        ? full.messages.map((message: any) => ({
+            ...message,
+            timestamp: message.timestamp ? new Date(message.timestamp) : new Date(),
+          }))
+        : [];
+      const conversationId = full.conversation_id || conversation.conversation_id || conversation.id;
+      const { conversationId: activeConversationId } = EnhancedFrontendMemory.loadActiveConversation();
+
+      if (activeConversationId && activeConversationId !== conversationId) {
+        SavedConversationsService.deactivateConversation(activeConversationId).catch(() => {});
+      }
+
+      if (messages.length > 0) {
+        await SavedConversationsService.upsertActiveConversation(messages, conversationId);
+        EnhancedFrontendMemory.saveActiveConversation(messages, conversationId);
+      }
+
+      const nextSelectedConversation: HomescreenSelectedConversation = {
+        rowId: conversation.id,
+        conversationId,
+        title: normalizeConversationTitle(full.title || conversation.title, language === "ar" ? "محادثة" : "Conversation"),
+        messageCount: typeof full.message_count === "number" ? full.message_count : (conversation.message_count ?? messages.length),
+        lastMessageAt: full.last_message_at || conversation.last_message_at || null,
+        isActive: true,
+      };
+
+      setSelectedHomescreenConversation(nextSelectedConversation);
+      persistHomescreenSelectedConversation(nextSelectedConversation);
+      setHomescreenConversations((prev) => prev.map((item) => ({
+        ...item,
+        is_active: item.id === conversation.id,
+      })));
+      setShowHomescreenConversations(false);
+    } catch {
+      setHomescreenConversationsError(language === "ar" ? "تعذر فتح المحادثة." : "Couldn't open the conversation.");
+    }
+  };
+
+  const handleDeleteHomescreenConversation = async (conversation: ConversationListItem) => {
+    setHomescreenConversationsError(null);
+    try {
+      await SavedConversationsService.deleteConversation(conversation.id);
+      const canonicalId = conversation.conversation_id || conversation.id;
+      EnhancedFrontendMemory.deleteArchivedConversation(canonicalId);
+      if (
+        selectedHomescreenConversation
+        && (selectedHomescreenConversation.rowId === conversation.id || selectedHomescreenConversation.conversationId === canonicalId)
+      ) {
+        setSelectedHomescreenConversation(null);
+        persistHomescreenSelectedConversation(null);
+        localStorage.removeItem("wakti_selected_conversation_row_id");
+        EnhancedFrontendMemory.clearActiveConversation();
+      }
+      setHomescreenConversations((prev) => prev.filter((item) => ((item.conversation_id || item.id) !== canonicalId)));
+      void loadHomescreenConversations();
+    } catch {
+      setHomescreenConversationsError(language === "ar" ? "تعذر حذف المحادثة." : "Couldn't delete the conversation.");
+    }
+  };
 
   useEffect(() => {
     const settings = (profile?.settings as any)?.dashboardWidgets ?? (profile?.settings as any)?.widgets ?? {};
@@ -1348,7 +1667,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
       <div className="mx-auto flex h-full min-h-0 w-full max-w-[980px] flex-1 flex-col" style={{ gap: `${containerGap}px` }}>
         {/* Top row: Account + Modes/AI controls | Widgets carousel */}
         <div className="grid items-start" style={{ gridTemplateColumns: `${topRowLeadWidth}px minmax(0, 1fr)`, gap: `${topRowGap}px` }}>
-          <div className="pt-1" style={{ paddingTop: `${scalePx(4, 3)}px` }}>
+          <div className="pt-1" style={{ paddingTop: `${topLeadPaddingTop}px` }}>
             <p className={cn(
               "select-none text-center text-[15px] font-bold leading-tight tracking-tight",
               isDark
@@ -1362,12 +1681,12 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
               })()}
             </p>
             <div className="flex justify-center">
-              <AppCircle app={ACCOUNT_APP} language={language} onClick={() => navigate(ACCOUNT_APP.path)} avatarUrl={avatarUrl} size="large" scale={layoutScale} />
+              <AppCircle app={ACCOUNT_APP} language={language} onClick={() => navigate(ACCOUNT_APP.path)} avatarUrl={avatarUrl} size="large" scale={accountAppScale} />
             </div>
 
-            {/* Modes + WAKTI AI side by side — pushed down */}
+            {/* Modes + WAKTI AI side by side Ã¢â‚¬â€ pushed down */}
             <div className="grid grid-cols-2" style={{ gap: `${modeControlsGap}px`, marginTop: `${modeControlsTopMargin}px` }}>
-              {/* Modes button — sliders icon */}
+              {/* Modes button Ã¢â‚¬â€ sliders icon */}
               <button
                 type="button"
                 onClick={() => setModePickerTrigger(v => v + 1)}
@@ -1393,10 +1712,10 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 </span>
               </button>
 
-              {/* WAKTI AI button — sparkles in orange circle */}
+              {/* WAKTI AI button Ã¢â‚¬â€ sparkles in orange circle */}
               <button
                 type="button"
-                onClick={() => navigate("/wakti-ai")}
+                onClick={() => openWaktiAiFromHomescreen(homescreenWaktiDraft)}
                 className="group flex flex-col items-center active:scale-95 transition-all"
                 style={{ gap: `${modesButtonGap}px` }}
               >
@@ -1417,6 +1736,27 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 </span>
               </button>
             </div>
+
+            <div className="flex justify-center" style={{ marginTop: `${convosButtonMarginTop}px` }}>
+              <button
+                type="button"
+                onClick={openHomescreenConversationsPopup}
+                className={cn(
+                  "inline-flex w-full items-center justify-center gap-1.5 border px-3 shadow-sm transition-all active:scale-95",
+                  isDark
+                    ? "border-white/15 bg-white/8 text-white/88 hover:bg-white/12"
+                    : "border-[#060541]/12 bg-white/85 text-[#060541] hover:bg-white"
+                )}
+                style={{
+                  minHeight: `${convosButtonHeight}px`,
+                  borderRadius: `${convosButtonRadius}px`,
+                  fontSize: `${convosButtonFontSize}px`,
+                }}
+              >
+                <MessageCircle style={{ width: `${convosButtonIconSize}px`, height: `${convosButtonIconSize}px` }} />
+                <span className="font-semibold">{language === "ar" ? "المحادثات" : "Convos"}</span>
+              </button>
+            </div>
           </div>
 
           <section className={cn("self-start border-[1.5px]", cardShell)} style={{ ...widgetsSectionStyle, borderRadius: `${widgetsRadius}px`, paddingLeft: `${widgetsPaddingX}px`, paddingRight: `${widgetsPaddingX}px`, paddingTop: `${widgetsPaddingTop}px`, paddingBottom: `${widgetsPaddingBottom}px` }}>
@@ -1434,8 +1774,18 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
           </section>
         </div>
 
-        {/* WAKTI AI chat bar — functional */}
-        <HomescreenChatBar language={language} isDark={isDark} cardShell={cardShell} navigate={navigate} triggerOpenModePicker={modePickerTrigger} />
+        {/* WAKTI AI chat bar Ã¢â‚¬â€ functional */}
+        <div style={{ marginTop: `${homescreenBarOffset}px` }}>
+          <HomescreenChatBar
+            language={language}
+            isDark={isDark}
+            cardShell={cardShell}
+            navigate={navigate}
+            triggerOpenModePicker={modePickerTrigger}
+            onDraftChange={setHomescreenWaktiDraft}
+            selectedConversationRowId={selectedHomescreenConversation?.rowId}
+          />
+        </div>
 
         {/* Productivity + System */}
         <div className="grid" style={{ gridTemplateColumns: `minmax(0, 1fr) ${systemRailWidth}px`, gap: `${middleRowGap}px` }}>
@@ -1445,7 +1795,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             </h3>
             <div className="grid grid-cols-3 md:grid-cols-4" style={{ gap: `${productivityGridGap}px` }}>
               {PRODUCTIVITY_APPS.map((app) => (
-                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
+                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={compactAppScale} />
               ))}
             </div>
           </section>
@@ -1457,7 +1807,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 </h3>
                 <div className="flex flex-1 flex-col items-center justify-center" style={{ gap: `${systemGap}px` }}>
                   {SYSTEM_APPS.map((app) => (
-                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
+                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={systemAppScale} />
                   ))}
                 </div>
               </>
@@ -1470,7 +1820,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
                 </div>
                 <div className="flex h-full flex-col items-center justify-center" style={{ gap: `${systemGap}px`, paddingRight: `${systemRightPadding}px` }}>
                   {SYSTEM_APPS.map((app) => (
-                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
+                    <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={systemAppScale} />
                   ))}
                 </div>
               </>
@@ -1481,14 +1831,144 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
         {/* Creation & Generation */}
         <section className={cn("mt-auto border-[1.5px]", cardShell)} style={{ ...creationSectionStyle, borderRadius: `${creationRadius}px`, paddingLeft: `${sectionPaddingX}px`, paddingRight: `${sectionPaddingX}px`, paddingTop: `${creationPaddingTop}px`, paddingBottom: `${creationPaddingBottom}px`, transform: `translateY(-${creationTranslateY}px)` }}>
           <h3 className={cn(creationTitleClass, "select-none")} style={{ marginBottom: `${creationTitleMargin}px`, fontSize: `${creationTitleSize}px` }}>
-            {language === "ar" ? "الإبداع والتوليد" : "Creation & Generation"}
+            {language === "ar" ? "الإنشاء والإنتاج" : "Creation & Generation"}
           </h3>
           <div className="grid grid-cols-5 md:gap-2" style={{ gap: `${creationGridGap}px` }}>
             {CREATION_APPS.map((app) => (
-              <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={layoutScale} />
+              <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={creationAppScale} />
             ))}
           </div>
         </section>
+
+        <Dialog open={showHomescreenConversations} onOpenChange={setShowHomescreenConversations}>
+          <DialogContent
+            title={language === "ar" ? "المحادثات" : "Conversations"}
+            description={language === "ar" ? "اختر محادثة للمتابعة من الشاشة الرئيسية." : "Choose a conversation to continue from the home screen."}
+            className={cn(
+              "max-w-[370px] overflow-hidden rounded-[28px] border p-0 shadow-[0_16px_42px_rgba(0,0,0,0.28)]",
+              isDark
+                ? "border-white/10 bg-[#141925] text-white"
+                : "border-[#060541]/10 bg-white text-[#060541]"
+            )}
+          >
+            <div className={cn("border-b px-4 py-3.5", isDark ? "border-white/10 bg-white/[0.02]" : "border-[#060541]/10 bg-[#060541]/[0.015]") }>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-lg font-semibold leading-none">{language === "ar" ? "المحادثات" : "Convos"}</p>
+                  <p className={cn("mt-1.5 text-sm", isDark ? "text-white/60" : "text-[#060541]/55")}>
+                    {language === "ar" ? "اختر محادثة أو ابدأ من جديد." : "Choose one or start fresh."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <ScrollArea className="max-h-[420px]">
+              <div className="space-y-2 p-3">
+                <button
+                  type="button"
+                  onClick={handleStartHomescreenNewChat}
+                  className={cn(
+                    "w-full rounded-2xl border px-4 py-3 text-left transition-all duration-200",
+                    isDark
+                      ? "border-white/10 bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.06]"
+                      : "border-[#060541]/10 bg-[#060541]/[0.02] hover:bg-[#060541]/[0.05]",
+                    !selectedHomescreenConversation && (isDark ? "border-blue-400/45 bg-blue-500/10" : "border-blue-300 bg-blue-50")
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className={cn("truncate text-base font-semibold", isDark ? "text-white/95" : "text-[#060541]")}>
+                        {language === "ar" ? "محادثة جديدة" : "New Chat"}
+                      </p>
+                      <p className={cn("mt-1 text-sm", isDark ? "text-white/60" : "text-[#060541]/60")}>
+                        {language === "ar" ? "ابدأ بدون اختيار محادثة سابقة" : "Start without selecting an old conversation"}
+                      </p>
+                    </div>
+                    {!selectedHomescreenConversation ? (
+                      <div className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-full", isDark ? "bg-blue-400/15 text-blue-300" : "bg-blue-100 text-blue-600")}>
+                        <Check className="h-4 w-4" />
+                      </div>
+                    ) : (
+                      <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full border", isDark ? "border-white/10 text-white/70" : "border-[#060541]/10 text-[#060541]/65")}>
+                        <Plus className="h-4 w-4" />
+                      </div>
+                    )}
+                  </div>
+                </button>
+
+                {homescreenConversationsLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-8 text-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>{language === "ar" ? "جارٍ التحميل..." : "Loading..."}</span>
+                  </div>
+                ) : homescreenConversationsError ? (
+                  <div className={cn("rounded-2xl border px-3 py-4 text-sm", isDark ? "border-red-400/20 bg-red-500/10 text-red-100" : "border-red-200 bg-red-50 text-red-600")}>
+                    {homescreenConversationsError}
+                  </div>
+                ) : homescreenConversations.length === 0 ? (
+                  <div className={cn("rounded-2xl border px-3 py-6 text-center text-sm", isDark ? "border-white/10 bg-white/5 text-white/70" : "border-[#060541]/10 bg-[#060541]/[0.03] text-[#060541]/70")}>
+                    {language === "ar" ? "لا توجد محادثات محفوظة بعد." : "No saved conversations yet."}
+                  </div>
+                ) : (
+                  homescreenConversations.map((conversation) => {
+                    const isSelected = selectedHomescreenConversation?.rowId === conversation.id;
+                    return (
+                      <div
+                        key={conversation.id}
+                        className={cn(
+                          "flex items-start justify-between gap-3 rounded-2xl border px-4 py-3 transition-all duration-200",
+                          isDark
+                            ? "border-white/10 bg-white/[0.025] hover:border-white/15 hover:bg-white/[0.05]"
+                            : "border-[#060541]/10 bg-[#060541]/[0.025] hover:bg-[#060541]/[0.05]",
+                          isSelected && (isDark ? "border-blue-400/45 bg-blue-500/10" : "border-blue-300 bg-blue-50")
+                        )}
+                      >
+                        <button
+                          type="button"
+                          onClick={() => { void handleSelectHomescreenConversation(conversation); }}
+                          className="min-w-0 flex-1 text-left"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className={cn("truncate text-base font-semibold", isDark ? "text-white/95" : "text-[#060541]")}>
+                              {conversation.title}
+                            </p>
+                            <p className={cn("mt-1 text-sm", isDark ? "text-white/60" : "text-[#060541]/60")}>
+                              {conversation.message_count ?? 0} {language === "ar" ? "رسالة" : "msgs"}
+                            </p>
+                          </div>
+                        </button>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {isSelected ? (
+                            <div className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full", isDark ? "bg-blue-400/15 text-blue-300" : "bg-blue-100 text-blue-600")}>
+                              <Check className="h-4 w-4" />
+                            </div>
+                          ) : conversation.is_active ? (
+                            <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold", isDark ? "bg-white/10 text-white/70" : "bg-[#060541]/6 text-[#060541]/70")}>
+                              {language === "ar" ? "الحالية" : "Current"}
+                            </span>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => { void handleDeleteHomescreenConversation(conversation); }}
+                            className={cn(
+                              "flex h-8 w-8 items-center justify-center rounded-full border transition-all active:scale-95",
+                              isDark
+                                ? "border-white/10 bg-white/[0.03] text-white/75 hover:bg-red-500/12 hover:text-red-200"
+                                : "border-[#060541]/10 bg-white text-[#060541]/60 hover:bg-red-50 hover:text-red-600"
+                            )}
+                            aria-label={language === "ar" ? "حذف المحادثة" : "Delete conversation"}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
 
         {quoteExpanded && (
           <QuoteOverlay
@@ -1506,3 +1986,4 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
     </div>
   );
 }
+

@@ -184,6 +184,12 @@ export const SavedConversationsService = {
 
     if (error) throw error;
 
+    await db
+      .from('ai_saved_conversations')
+      .update({ is_active: false })
+      .eq('user_id', user.id)
+      .neq('id', data.id);
+
     if (!existing) {
       await SavedConversationsService.pruneOldest(user.id);
     }
@@ -242,9 +248,9 @@ export const SavedConversationsService = {
       .order('is_active', { ascending: false })
       .order('is_saved', { ascending: false })
       .order('last_message_at', { ascending: false })
-      .limit(MAX_CONVERSATIONS);
+      .limit(MAX_CONVERSATIONS * 3);
     if (error) throw error;
-    return (data || []).map((r: any) => ({
+    const ordered = (data || []).map((r: any) => ({
       id: r.id,
       title: normalizeConversationTitle(r.title, 'Conversation'),
       message_count: r.message_count,
@@ -254,6 +260,14 @@ export const SavedConversationsService = {
       is_saved: r.is_saved === true,
       is_custom_title: r.is_custom_title === true,
     }));
+    const deduped = new Map<string, ConversationListItem>();
+    for (const conversation of ordered) {
+      const canonicalId = conversation.conversation_id || conversation.id;
+      if (!deduped.has(canonicalId)) {
+        deduped.set(canonicalId, conversation);
+      }
+    }
+    return Array.from(deduped.values()).slice(0, MAX_CONVERSATIONS);
   },
 
   async loadConversation(id: string): Promise<SavedConversationRow | null> {
@@ -308,10 +322,32 @@ export const SavedConversationsService = {
   },
 
   async deleteConversation(id: string): Promise<boolean> {
-    const { error } = await supabase
+    const { data: { session }, error: userErr } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (userErr || !user) throw new Error('Not authenticated');
+
+    const db = supabase as any;
+    const { data: existing, error: existingError } = await db
+      .from('ai_saved_conversations')
+      .select('id, conversation_id')
+      .eq('user_id', user.id)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (existingError) throw existingError;
+
+    let query = db
       .from('ai_saved_conversations')
       .delete()
-      .eq('id', id);
+      .eq('user_id', user.id);
+
+    if (existing?.conversation_id) {
+      query = query.or(`conversation_id.eq.${existing.conversation_id},id.eq.${id}`);
+    } else {
+      query = query.eq('id', id);
+    }
+
+    const { error } = await query;
     if (error) throw error;
     return true;
   },

@@ -26,3 +26,8 @@ dist-ssr
 
 .windsurf/rules/kluster-code-verify.md
 .kluster
+.vercel
+
+# Generated self-hosted Sandpack bundler (run `npm run bundler:prepare`)
+wakti-sandpack-bundler/
+.tmp-sandpack-bundler/

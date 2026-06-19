@@ -14,9 +14,34 @@ export function resolveGroundedBrowsingData(message: MessageLike | null | undefi
     .filter((item) => item && typeof item === 'object');
   if (candidates.length === 0) return null;
 
+  const pickText = (current: any, incoming: any) => {
+    const next = typeof incoming === 'string' ? incoming.trim() : '';
+    if (next) return incoming;
+    const prev = typeof current === 'string' ? current.trim() : '';
+    return prev ? current : '';
+  };
+
+  const pickNumber = (current: any, incoming: any) => {
+    if (typeof incoming === 'number' && Number.isFinite(incoming)) return incoming;
+    if (typeof current === 'number' && Number.isFinite(current)) return current;
+    return null;
+  };
+
+  const pickBoolean = (current: any, incoming: any) => {
+    if (typeof incoming === 'boolean') return incoming;
+    if (typeof current === 'boolean') return current;
+    return null;
+  };
+
+  const pickArray = (current: any, incoming: any) => {
+    const prev = Array.isArray(current) ? current : [];
+    const next = Array.isArray(incoming) ? incoming : [];
+    return next.length >= prev.length ? next : prev;
+  };
+
   const merged: any = {};
   const seenSourceUrls = new Set<string>();
-  const seenPlaceKeys = new Set<string>();
+  const placeIndexByKey = new Map<string, number>();
 
   for (const candidate of candidates) {
     if (!merged.provider && typeof candidate.provider === 'string') merged.provider = candidate.provider;
@@ -89,8 +114,43 @@ export function resolveGroundedBrowsingData(message: MessageLike | null | undefi
           .map((item) => (typeof item === 'string' ? item.trim() : ''))
           .filter(Boolean)
           .join('|');
-        if (!placeKey || seenPlaceKeys.has(placeKey)) continue;
-        seenPlaceKeys.add(placeKey);
+        if (!placeKey) continue;
+
+        const existingIndex = placeIndexByKey.get(placeKey);
+        if (typeof existingIndex === 'number' && nextPlaces[existingIndex]) {
+          const existing = nextPlaces[existingIndex];
+          nextPlaces[existingIndex] = {
+            ...existing,
+            ...place,
+            placeId: pickText(existing.placeId, place.placeId),
+            name: pickText(existing.name, place.name),
+            address: pickText(existing.address, place.address),
+            latitude: pickNumber(existing.latitude, place.latitude),
+            longitude: pickNumber(existing.longitude, place.longitude),
+            rating: pickNumber(existing.rating, place.rating),
+            userRatingCount: pickNumber(existing.userRatingCount, place.userRatingCount),
+            websiteUrl: pickText(existing.websiteUrl, place.websiteUrl),
+            phone: pickText(existing.phone, place.phone),
+            email: pickText(existing.email, place.email),
+            openNow: pickBoolean(existing.openNow, place.openNow),
+            businessStatus: pickText(existing.businessStatus, place.businessStatus),
+            reason: pickText(existing.reason, place.reason),
+            vibe: pickText(existing.vibe, place.vibe),
+            mustTry: pickText(existing.mustTry, place.mustTry),
+            editorialSummary: pickText(existing.editorialSummary, place.editorialSummary),
+            mapsUrl: pickText(existing.mapsUrl, place.mapsUrl),
+            instagramUrl: pickText(existing.instagramUrl, place.instagramUrl),
+            facebookUrl: pickText(existing.facebookUrl, place.facebookUrl),
+            tiktokUrl: pickText(existing.tiktokUrl, place.tiktokUrl),
+            whatsappUrl: pickText(existing.whatsappUrl, place.whatsappUrl),
+            photoUrl: pickText(existing.photoUrl, place.photoUrl),
+            reviewSnippets: pickArray(existing.reviewSnippets, place.reviewSnippets),
+            openingHours: pickArray(existing.openingHours, place.openingHours),
+          };
+          continue;
+        }
+
+        placeIndexByKey.set(placeKey, nextPlaces.length);
         nextPlaces.push(place);
       }
       merged.places = nextPlaces;
@@ -575,13 +635,10 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
     // the backend card lacks them (these are narrative fields the Places API does not provide).
     const parsedPlaces = parsePlacesFromMessageContent(message?.content);
     if (parsedPlaces.length === 0) return backendPlaces;
-    
-    const matchedParsedNames = new Set<string>();
+
     const mapped = backendPlaces.map((backendPlace: any) => {
       const parsedMatch = parsedPlaces.find((pp: any) => {
-        const match = isNameMatch(backendPlace?.name, pp?.name);
-        if (match && pp?.name) matchedParsedNames.add(pp.name.toLowerCase());
-        return match;
+        return isNameMatch(backendPlace?.name, pp?.name);
       });
       if (!parsedMatch) return backendPlace;
       return {
@@ -595,10 +652,8 @@ export function getGroundedPlaces(message: MessageLike | null | undefined): any[
         whatsappUrl: toCleanString(backendPlace.whatsappUrl) || toCleanString(parsedMatch.whatsappUrl),
       };
     });
-    
-    // Append unmatched parsed fallback places so the user doesn't lose them if Google Places search missed them!
-    const unmatched = parsedPlaces.filter((pp: any) => pp?.name && !matchedParsedNames.has(pp.name.toLowerCase()));
-    return [...mapped, ...unmatched];
+
+    return mapped;
   }
 
   return parsePlacesFromMessageContent(message?.content);
