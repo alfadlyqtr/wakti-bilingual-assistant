@@ -445,7 +445,12 @@ export default function ChatPage() {
         });
       }
       console.error("Error sending message:", error);
-      toast.error("Error sending message");
+      const msg = error instanceof Error ? error.message : "";
+      if (msg === "__BLOCKED_BY_USER__") {
+        toast.error(language === 'ar' ? 'لقد تم حظرك من قبل هذا المستخدم' : 'You are blocked by this user');
+      } else {
+        toast.error("Error sending message");
+      }
     },
     onSuccess: (data, variables, context) => {
       if (context?.tempId) {

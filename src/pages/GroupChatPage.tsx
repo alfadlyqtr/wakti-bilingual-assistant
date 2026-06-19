@@ -25,6 +25,14 @@ import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import { ImageModal } from "@/components/wakti-ai-v2/ImageModal";
 
+function getMentionInfo(text: string): { startIndex: number; filter: string } | null {
+  const match = text.match(/(?:^|\s)(@[^\s]*)$/);
+  if (!match) return null;
+  const word = match[1];
+  const startIndex = text.length - word.length;
+  return { startIndex, filter: word.slice(1) };
+}
+
 export default function GroupChatPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
@@ -64,6 +72,7 @@ export default function GroupChatPage() {
   const [selectedMessageRect, setSelectedMessageRect] = useState<{ top: number; left: number; width: number; height: number; right: number; } | null>(null);
   const [entryLastReadAt, setEntryLastReadAt] = useState<string | null | undefined>(undefined);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+  const [showMentionPicker, setShowMentionPicker] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
   const hasScrolledToUnreadRef = useRef(false);
   const unreadDividerRef = useCallback((node: HTMLDivElement | null) => {
@@ -74,6 +83,7 @@ export default function GroupChatPage() {
   }, []);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const audioRefs = useRef<Record<string, HTMLAudioElement>>({});
@@ -1445,10 +1455,17 @@ export default function GroupChatPage() {
 
             {/* Text input */}
             <Textarea
+              ref={textareaRef}
               value={messageText}
               onChange={(e) => {
                 const text = e.target.value;
                 setMessageText(text);
+                const mentionInfo = getMentionInfo(text);
+                if (mentionInfo) {
+                  setShowMentionPicker(true);
+                } else if (showMentionPicker) {
+                  setShowMentionPicker(false);
+                }
                 if (text.length >= 1) {
                   const now = Date.now();
                   if (now - lastTypingSentRef.current > 800) {
@@ -1466,25 +1483,133 @@ export default function GroupChatPage() {
               className="min-h-[88px] max-h-32 rounded-2xl resize-none flex-1"
               disabled={isRecording || uploading}
               onKeyDown={(e) => {
+                if (showMentionPicker) {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const currentText = e.currentTarget.value;
+                    const info = getMentionInfo(currentText);
+                    const filter = info?.filter.toLowerCase() || "";
+                    const candidates = (conversation?.participants || [])
+                      .filter((p) => p.user_id !== user?.id)
+                      .filter((p) => {
+                        const n = (p.profile?.display_name || p.profile?.username || "").toLowerCase();
+                        return n.includes(filter);
+                      });
+                    if (candidates.length > 0) {
+                      const p = candidates[0];
+                      const n = p.profile?.display_name || p.profile?.username || (language === "ar" ? "عضو" : "Member");
+                      const isAi = p.user_id === WAKTI_AI_ID;
+                      const mention = isAi ? "@wakti " : `@${n} `;
+                      if (info) {
+                        const before = currentText.slice(0, info.startIndex);
+                        setMessageText(before + mention);
+                      } else {
+                        setMessageText((prev) => prev + mention);
+                      }
+                      setShowMentionPicker(false);
+                    }
+                    return;
+                  }
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setShowMentionPicker(false);
+                    return;
+                  }
+                }
                 if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendText(); }
               }}
             />
 
             {/* Right side: @ button + Send */}
             <div className="flex flex-col gap-1 shrink-0">
-              {/* @wakti button */}
-              {waktiInGroup && (
+              {/* @ mention button */}
+              <div className="relative">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-10 w-10 rounded-xl shrink-0 text-[hsl(280_60%_65%)] hover:bg-[hsl(280_60%_65%)]/10"
-                  onClick={() => setMessageText((prev) => prev + "@wakti ")}
+                  className={cn(
+                    "h-10 w-10 rounded-xl shrink-0",
+                    showMentionPicker
+                      ? "text-[hsl(280_60%_65%)] bg-[hsl(280_60%_65%)]/10"
+                      : "text-[hsl(280_60%_65%)] hover:bg-[hsl(280_60%_65%)]/10"
+                  )}
+                  onClick={() => {
+                    if (showMentionPicker) {
+                      setShowMentionPicker(false);
+                    } else {
+                      setMessageText((prev) => prev + "@");
+                      setShowMentionPicker(true);
+                      setTimeout(() => textareaRef.current?.focus(), 0);
+                    }
+                  }}
                   disabled={isRecording || uploading}
-                  title="@wakti"
+                  title="@"
                 >
                   <AtSign className="h-4 w-4" />
                 </Button>
-              )}
+
+                {/* Mention picker popup */}
+                {showMentionPicker && conversation && (
+                  <div className="absolute bottom-full right-0 mb-2 w-56 max-h-64 overflow-y-auto rounded-2xl border border-border/60 bg-card/95 backdrop-blur-sm shadow-lg p-2 z-50">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-2 pt-1 pb-1.5">
+                      {language === "ar" ? "أعضاء المجموعة" : "Group Members"}
+                    </p>
+                    <div className="space-y-0.5">
+                      {(() => {
+                        const info = getMentionInfo(messageText);
+                        const filter = info?.filter.toLowerCase() || "";
+                        const candidates = (conversation?.participants || [])
+                          .filter((p) => p.user_id !== user?.id)
+                          .filter((p) => {
+                            const n = (p.profile?.display_name || p.profile?.username || "").toLowerCase();
+                            return n.includes(filter);
+                          });
+                        if (candidates.length === 0) {
+                          return (
+                            <p className="text-xs text-muted-foreground text-center py-3">
+                              {language === "ar" ? "لا يوجد أعضاء مطابقون" : "No matching members"}
+                            </p>
+                          );
+                        }
+                        return candidates.map((participant) => {
+                          const name = participant.profile?.display_name || participant.profile?.username || (language === "ar" ? "عضو" : "Member");
+                          const isAi = participant.user_id === WAKTI_AI_ID;
+                          const initials = name.slice(0, 2).toUpperCase();
+                          return (
+                            <button
+                              key={participant.user_id}
+                              type="button"
+                              className="w-full flex items-center gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-muted/60 transition-colors"
+                              onClick={() => {
+                                const mention = isAi ? "@wakti " : `@${name} `;
+                                if (info) {
+                                  const before = messageText.slice(0, info.startIndex);
+                                  setMessageText(before + mention);
+                                } else {
+                                  setMessageText((prev) => prev + mention);
+                                }
+                                setShowMentionPicker(false);
+                                setTimeout(() => textareaRef.current?.focus(), 0);
+                              }}
+                            >
+                              <Avatar className="h-7 w-7 shrink-0">
+                                <AvatarImage src={participant.profile?.avatar_url || undefined} />
+                                <AvatarFallback className="text-[10px] bg-muted">{initials}</AvatarFallback>
+                              </Avatar>
+                              <span className="text-sm truncate flex-1">{name}</span>
+                              {isAi && (
+                                <Badge className="bg-[hsl(280_60%_65%)]/15 text-[hsl(280_60%_65%)] border-[hsl(280_60%_65%)]/25 text-[9px] px-1 py-0">
+                                  AI
+                                </Badge>
+                              )}
+                            </button>
+                          );
+                        });
+                      })()}
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Send */}
               <Button

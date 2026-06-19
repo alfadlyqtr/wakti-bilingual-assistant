@@ -225,7 +225,7 @@ export const TimelineTab: React.FC<{ selectedDate?: string }> = ({ selectedDate 
     const isEmptyDay = !hasNote && !hasMorning && !hasMidday && !hasEvening && !hasGratitude && fc.length === 0;
 
     return (
-      <div key={dateStr} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel edge-liquid">
+      <div key={dateStr} className="rounded-2xl border border-border/50 bg-gradient-to-b from-card to-background p-4 shadow-md card-3d inner-bevel">
         <div className="flex items-center justify-between mb-2">
           <div className="text-sm font-medium flex items-center gap-3 group">
             <span>{formatTimelineDate(dateStr, language)}</span>

@@ -92,6 +92,10 @@ export function ContactList({
   const [internalViewMode, setInternalViewMode] = useState<"contacts" | "cards">("cards");
   const compactView = (viewMode ?? internalViewMode) === "contacts";
   
+  // Long-press context menu state
+  const [contextMenu, setContextMenu] = useState<{ contact: ContactType; x: number; y: number } | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   // Debug logging for user and unread data
   useEffect(() => {
     console.log('🔍 ContactList - Current user:', user?.id);
@@ -384,6 +388,32 @@ export function ContactList({
     return name.substring(0, 2).toUpperCase();
   };
 
+  // Long-press handlers
+  const handleLongPressStart = (contact: ContactType, e: React.MouseEvent | React.TouchEvent) => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    longPressTimerRef.current = setTimeout(() => {
+      setContextMenu({ contact, x: clientX, y: clientY });
+    }, 500);
+  };
+
+  const handleLongPressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  // Close context menu on click outside
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenu]);
+
   const handleAvatarError = (contactId: string) => {
     console.log(`Avatar failed to load for contact: ${contactId}`);
     setAvatarErrors(prev => ({ ...prev, [contactId]: true }));
@@ -481,41 +511,68 @@ export function ContactList({
                 return (
                   <div
                     key={contact.id}
-                    className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-[#d9dee9] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,240,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)]`}
+                    className={`relative flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-[#d9dee9] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,240,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)]`}
+                    onMouseDown={(e) => handleLongPressStart(contact, e)}
+                    onMouseUp={handleLongPressEnd}
+                    onMouseLeave={handleLongPressEnd}
+                    onTouchStart={(e) => handleLongPressStart(contact, e)}
+                    onTouchEnd={handleLongPressEnd}
+                    onContextMenu={(e) => e.preventDefault()}
                   >
-                    <div className={`relative shrink-0 rounded-full ${unreadCount > 0 ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-background' : ''}`}>
-                      <Avatar className="h-10 w-10">
-                        {shouldShowAvatar(contact.contact_id, avatarUrl) ? (
-                          <AvatarImage src={avatarUrl} alt={displayName} onError={() => handleAvatarError(contact.contact_id)} />
-                        ) : null}
-                        <AvatarFallback className="text-sm font-bold bg-gradient-to-br from-blue-500 to-purple-500 text-white">
-                          {getInitials(displayName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      {unreadCount > 0 && (
-                        <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-0.5 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center">
-                          {unreadCount}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate leading-tight">{emailOrName || `@${displayName}`}</p>
-                      {emailOrName && <p className="text-[11px] text-muted-foreground truncate">@{displayName}</p>}
+                    {!isSupport && (
+                      <button
+                        onClick={() => handleToggleFavorite(favoriteRecordId, isFavorite)}
+                        aria-label="Favorite"
+                        className="absolute top-1.5 left-1.5 z-10 active:scale-90 transition-transform"
+                      >
+                        <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/30'}`} />
+                      </button>
+                    )}
+
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`relative shrink-0 rounded-full ${unreadCount > 0 ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-background' : ''}`}>
+                        <Avatar className="h-10 w-10">
+                          {shouldShowAvatar(contact.contact_id, avatarUrl) ? (
+                            <AvatarImage src={avatarUrl} alt={displayName} onError={() => handleAvatarError(contact.contact_id)} />
+                          ) : null}
+                          <AvatarFallback className="text-sm font-bold bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                            {getInitials(displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-0.5 rounded-full bg-blue-500 text-white text-[9px] font-bold flex items-center justify-center">
+                            {unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="min-w-0 text-start">
+                        <p className="font-semibold text-sm truncate leading-tight">{emailOrName || `@${displayName}`}</p>
+                        {emailOrName && <p className="text-[11px] text-muted-foreground truncate">@{displayName}</p>}
+                        {!isSupport && (
+                          <div className="mt-0.5">
+                            <ContactRelationshipIndicator status={relationshipStatus} />
+                          </div>
+                        )}
+                      </div>
                     </div>
                     
                     <div className="flex items-center gap-1 shrink-0">
-                      {!isSupport && (
-                        <button onClick={() => handleToggleFavorite(favoriteRecordId, isFavorite)} aria-label="Favorite" className="active:scale-90 transition-transform">
-                          <Star className={`h-4 w-4 ${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground/30'}`} />
-                        </button>
-                      )}
                       <button
                         onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
                         aria-label="Chat"
-                        className={`w-8 h-8 rounded-xl flex items-center justify-center active:scale-90 transition-transform ${unreadCount > 0 ? 'bg-blue-500' : 'bg-blue-500/20 dark:bg-blue-500/15'}`}
+                        className={`relative h-8 px-2.5 rounded-xl inline-flex items-center gap-1.5 active:scale-90 transition-transform ${unreadCount > 0 ? 'bg-blue-500' : 'bg-blue-500/20 dark:bg-blue-500/15'}`}
+                        style={unreadCount > 0 ? { boxShadow: '0 0 15px rgba(59, 130, 246, 0.6), 0 0 30px rgba(59, 130, 246, 0.3)' } : undefined}
                       >
                         <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-500 dark:text-blue-400'}`} />
+                        <span className={`text-[11px] font-semibold leading-none ${unreadCount > 0 ? 'text-white' : 'text-blue-600 dark:text-blue-300'}`}>
+                          {language === 'ar' ? 'دردشة' : 'Chat'}
+                        </span>
+                        {unreadCount > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 h-4 min-w-4 px-0.5 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center ring-2 ring-white dark:ring-[#0c0f14]">
+                            {unreadCount}
+                          </span>
+                        )}
                       </button>
                       {!isSupport && (
                         <>
@@ -535,7 +592,15 @@ export function ContactList({
               return (
                 <Card key={contact.id} dir={language === 'ar' ? 'rtl' : 'ltr'} className="overflow-hidden rounded-[1.75rem] sm:rounded-[2rem] border border-[#e2e8f0] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(250,250,252,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_-20px_40px_rgba(148,163,184,0.08),0_20px_40px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-20px_40px_rgba(0,0,0,0.28),0_18px_40px_rgba(0,0,0,0.34)]">
                   <CardContent className="p-2.5 sm:p-4 md:p-5">
-                    <div className="rounded-[1.35rem] sm:rounded-[1.6rem] border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(249,251,253,0.94))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.95),rgba(16,19,27,0.94))] p-3 sm:p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)]">
+                    <div 
+                      className="rounded-[1.35rem] sm:rounded-[1.6rem] border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(249,251,253,0.94))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.95),rgba(16,19,27,0.94))] p-3 sm:p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)]"
+                      onMouseDown={(e) => handleLongPressStart(contact, e)}
+                      onMouseUp={handleLongPressEnd}
+                      onMouseLeave={handleLongPressEnd}
+                      onTouchStart={(e) => handleLongPressStart(contact, e)}
+                      onTouchEnd={handleLongPressEnd}
+                      onContextMenu={(e) => e.preventDefault()}
+                    >
                       <div className={`flex items-start gap-2.5 sm:gap-3 ${language === 'ar' ? 'flex-row-reverse text-right' : ''}`}>
                         <div className={`relative shrink-0 rounded-full ${unreadCount > 0 ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-background' : ''}`}>
                           <Avatar className="h-16 w-16 ring-1 ring-[#dbe2ec] dark:ring-white/10 shadow-[0_8px_20px_rgba(15,23,42,0.12)]">
@@ -694,6 +759,37 @@ export function ContactList({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      
+      {/* Long-press context menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 bg-white dark:bg-[#1a1d27] rounded-xl shadow-lg border border-[#e2e8f0] dark:border-white/10 py-1 min-w-[140px] animate-in fade-in zoom-in-95 duration-150"
+          style={{ top: contextMenu.y - 10, left: contextMenu.x - 70 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              handleBlock(contextMenu.contact.contact_id);
+              setContextMenu(null);
+            }}
+            className="w-full px-4 py-2.5 text-left flex items-center gap-2 text-[hsl(25,95%,48%)] dark:text-[hsl(25,95%,72%)] hover:bg-[hsl(25,95%,53%)]/10 transition-colors"
+          >
+            <UserX className="h-4 w-4" />
+            <span className="text-sm font-medium">{language === 'ar' ? 'حظر' : 'Block'}</span>
+          </button>
+          <div className="mx-3 h-px bg-[#e2e8f0] dark:bg-white/10" />
+          <button
+            onClick={() => {
+              handleDeleteClick(contextMenu.contact, contextMenu.contact.profile?.username || contextMenu.contact.profile?.display_name || '');
+              setContextMenu(null);
+            }}
+            className="w-full px-4 py-2.5 text-left flex items-center gap-2 text-[hsl(0,75%,54%)] dark:text-[hsl(0,85%,72%)] hover:bg-red-500/10 transition-colors"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span className="text-sm font-medium">{language === 'ar' ? 'حذف' : 'Delete'}</span>
+          </button>
+        </div>
+      )}
     </>
   );
 }

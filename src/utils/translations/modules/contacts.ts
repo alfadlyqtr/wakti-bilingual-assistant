@@ -50,5 +50,6 @@ export const contacts = {
   userUnblocked: "User unblocked",
   userReported: "User reported",
   blocked: "Blocked",
-  unblock: "Unblock"
+  unblock: "Unblock",
+  youAreBlockedByUser: "You are blocked by this user"
 };

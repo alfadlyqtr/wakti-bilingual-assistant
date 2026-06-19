@@ -540,39 +540,56 @@ export async function blockContact(contactId: string) {
   }
   await ensurePassport();
 
-  // First check if contact exists
-  const { data: existingContact, error: checkError } = await supabase
+  // Check both directions separately (reliable, no complex .or() parsing issues)
+  const { data: outgoing, error: outgoingError } = await supabase
     .from("contacts")
     .select("id, user_id, contact_id, status")
-    .or(`and(user_id.eq.${userId},contact_id.eq.${contactId}),and(user_id.eq.${contactId},contact_id.eq.${userId})`)
+    .eq("user_id", userId)
+    .eq("contact_id", contactId)
     .limit(1);
 
-  if (checkError) {
-    console.error("Error checking existing contact:", checkError);
-    throw checkError;
+  if (outgoingError) {
+    console.error("Error checking outgoing contact:", outgoingError);
+    throw outgoingError;
   }
 
+  const { data: incoming, error: incomingError } = await supabase
+    .from("contacts")
+    .select("id, user_id, contact_id, status")
+    .eq("user_id", contactId)
+    .eq("contact_id", userId)
+    .limit(1);
+
+  if (incomingError) {
+    console.error("Error checking incoming contact:", incomingError);
+    throw incomingError;
+  }
+
+  const existingContact = outgoing?.[0] || incoming?.[0] || null;
+
   // If contact exists, update or delete it
-  if (existingContact && existingContact.length > 0) {
-    const contact = existingContact[0];
-    
-    if (contact.user_id === userId) {
+  if (existingContact) {
+    if (existingContact.user_id === userId) {
       // Current user is already the requester, update status
       const { data, error } = await supabase
         .from("contacts")
         .update({ status: "blocked" })
-        .eq("id", contact.id)
+        .eq("id", existingContact.id)
         .select();
 
       if (error) {
         console.error("Error blocking contact:", error);
         throw error;
       }
-      
+
       return data[0];
     } else {
       // Current user is the recipient, delete and create new blocked contact
-      await supabase.from("contacts").delete().eq("id", contact.id);
+      const { error: delError } = await supabase.from("contacts").delete().eq("id", existingContact.id);
+      if (delError) {
+        console.error("Error deleting contact before block:", delError);
+        throw delError;
+      }
     }
   }
 

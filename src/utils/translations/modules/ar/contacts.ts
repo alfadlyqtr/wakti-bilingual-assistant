@@ -48,5 +48,6 @@ export const contactsAr = {
   reportUser: "الإبلاغ عن المستخدم",
   userBlocked: "تم حظر المستخدم",
   userUnblocked: "تم إلغاء حظر المستخدم",
-  userReported: "تم الإبلاغ عن المستخدم"
+  userReported: "تم الإبلاغ عن المستخدم",
+  youAreBlockedByUser: "لقد تم حظرك من قبل هذا المستخدم"
 };
