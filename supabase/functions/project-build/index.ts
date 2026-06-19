@@ -492,6 +492,11 @@ serve(async (req) => {
       setup(build) {
         // Resolve all imports
         build.onResolve({ filter: /.*/ }, (args) => {
+          // External URLs (fonts, external CSS/JS assets) should be marked as external
+          if (args.path.startsWith('http://') || args.path.startsWith('https://') || args.path.startsWith('//')) {
+            return { path: args.path, external: true };
+          }
+
           // Check if it's a shimmed package
           for (const pkg of Object.keys(packageShims)) {
             if (args.path === pkg || args.path.startsWith(pkg + '/')) {
@@ -590,6 +595,7 @@ serve(async (req) => {
       entryPoints: [entryPoint],
       bundle: true,
       write: false,
+      outfile: 'bundle.js', // CRITICAL: Required so esbuild knows where/how to name CSS and JS chunks when write: false is set
       format: 'iife',
       globalName: 'AppBundle',
       platform: 'browser',
