@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown, ChevronLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, CheckCheck, Clock, X, Reply, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, CheckCheck, Clock, X, Reply, Trash2, Mic } from "lucide-react";
 import type { DirectMessage } from "@/services/messageService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMessages, sendMessage, markAsRead, uploadMessageAttachment, addReaction, removeReaction, deleteMessage } from "@/services/messageService";
@@ -48,6 +48,8 @@ export default function ChatPage() {
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
+  const [audioSpeed, setAudioSpeed] = useState<Record<string, number>>({});
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [operatorDraftApplied, setOperatorDraftApplied] = useState(false);
@@ -77,6 +79,7 @@ export default function ChatPage() {
   // Presence and typing indicators
   const { isOnline, getLastSeen, setExternalLastSeen } = usePresence(currentUserId);
   const [isContactTyping, setIsContactTyping] = useState(false);
+  const [isContactRecording, setIsContactRecording] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const [pendingMessageIds, setPendingMessageIds] = useState<Set<string>>(new Set());
@@ -222,6 +225,11 @@ export default function ChatPage() {
           setIsContactTyping(false);
         }
       })
+      .on('broadcast', { event: 'recording' }, (event: any) => {
+        const payload = event.payload;
+        if (!payload || payload.user_id === currentUserId) return;
+        setIsContactRecording(!!payload.recording);
+      })
       .subscribe();
     return () => {
       typingChannelRef.current = null;
@@ -236,6 +244,13 @@ export default function ChatPage() {
     return () => clearTimeout(safety);
   }, [isContactTyping]);
 
+  // Safety: clear recording if no update for 8s
+  useEffect(() => {
+    if (!isContactRecording) return;
+    const safety = setTimeout(() => setIsContactRecording(false), 8000);
+    return () => clearTimeout(safety);
+  }, [isContactRecording]);
+
   // Capture first unread message on first load
   useEffect(() => {
     if (!allMessages?.length || !contactId) return;
@@ -249,9 +264,11 @@ export default function ChatPage() {
   // Mark messages as read when viewing
   useEffect(() => {
     if (contactId && currentUserId && allMessages && allMessages.length > 0) {
-      markAsRead(contactId).catch(() => {});
+      markAsRead(contactId)
+        .then(() => queryClient.invalidateQueries({ queryKey: ['allUnreadCounts'] }))
+        .catch(() => {});
     }
-  }, [contactId, currentUserId, allMessages]);
+  }, [contactId, currentUserId, allMessages, queryClient]);
 
   // Auto scroll on first load and new messages
   useEffect(() => {
@@ -290,6 +307,15 @@ export default function ChatPage() {
     if (!ch || !currentUserId) return;
     try {
       ch.send({ type: 'broadcast', event: 'typing', payload: { user_id: currentUserId, typing } });
+    } catch {}
+  }, [currentUserId]);
+
+  // Broadcast recording status to shared channel
+  const broadcastRecording = useCallback((recording: boolean) => {
+    const ch = typingChannelRef.current;
+    if (!ch || !currentUserId) return;
+    try {
+      ch.send({ type: 'broadcast', event: 'recording', payload: { user_id: currentUserId, recording } });
     } catch {}
   }, [currentUserId]);
 
@@ -618,12 +644,42 @@ export default function ChatPage() {
       }
 
       if (!audioRefs.current[messageId]) {
-        audioRefs.current[messageId] = new Audio(audioUrl);
-        audioRefs.current[messageId].onended = () => setPlayingAudio(null);
+        const audio = new Audio(audioUrl);
+        audioRefs.current[messageId] = audio;
+        audio.playbackRate = audioSpeed[messageId] || 1;
+        audio.onended = () => {
+          setPlayingAudio(null);
+          setAudioProgress((prev) => ({ ...prev, [messageId]: 0 }));
+        };
+        audio.ontimeupdate = () => {
+          setAudioProgress((prev) => ({ ...prev, [messageId]: audio.currentTime }));
+        };
+      } else {
+        audioRefs.current[messageId].playbackRate = audioSpeed[messageId] || 1;
       }
-      
+
       audioRefs.current[messageId].play();
       setPlayingAudio(messageId);
+    }
+  };
+
+  const handleAudioSeek = (e: React.MouseEvent<HTMLDivElement>, messageId: string, duration: number) => {
+    const audio = audioRefs.current[messageId];
+    if (!audio || !duration) return;
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percent = Math.max(0, Math.min(1, clickX / rect.width));
+    audio.currentTime = percent * duration;
+    setAudioProgress((prev) => ({ ...prev, [messageId]: audio.currentTime }));
+  };
+
+  const cycleAudioSpeed = (messageId: string) => {
+    const current = audioSpeed[messageId] || 1;
+    const next = current === 1 ? 1.5 : current === 1.5 ? 2 : 1;
+    setAudioSpeed((prev) => ({ ...prev, [messageId]: next }));
+    const audio = audioRefs.current[messageId];
+    if (audio) {
+      audio.playbackRate = next;
     }
   };
 
@@ -763,7 +819,7 @@ export default function ChatPage() {
         onMouseLeave={endLongPress}
         style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
       >
-        <div className={`flex ${isSentByMe ? 'flex-row-reverse' : 'flex-row'} items-end gap-2 max-w-[80%]`}>
+        <div className={`flex ${isSentByMe ? 'flex-row-reverse' : 'flex-row'} items-end gap-2 ${message.message_type === 'voice' ? 'max-w-[95%]' : 'max-w-[80%]'}`}>
           {/* Avatar for other user messages */}
           {!isSentByMe && showAvatar && (
             <Avatar className="h-8 w-8 mb-1 flex-shrink-0">
@@ -841,21 +897,38 @@ export default function ChatPage() {
                   </div>
                 </div>
               ) : !message.is_deleted && message.message_type === 'voice' ? (
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant={isSentByMe ? "ghost" : "secondary"}
-                      onClick={() => toggleAudioPlayback(message.id, cleanMediaUrl(message.media_url))}
-                      className={`h-8 w-8 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
+                <div className="flex items-center gap-2 min-w-0 w-full min-w-[260px]">
+                  <Button
+                    size="sm"
+                    variant={isSentByMe ? "ghost" : "secondary"}
+                    onClick={() => toggleAudioPlayback(message.id, cleanMediaUrl(message.media_url))}
+                    className={`h-8 w-8 p-0 rounded-full shrink-0 ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
+                  >
+                    {playingAudio === message.id ? 
+                      <Pause className="h-4 w-4" /> : 
+                      <Play className="h-4 w-4" />
+                    }
+                  </Button>
+                  <button
+                    onClick={() => cycleAudioSpeed(message.id)}
+                    className={`shrink-0 h-6 px-1.5 rounded-md text-[10px] font-bold cursor-pointer ${isSentByMe ? 'bg-white/20 text-white hover:bg-white/30' : isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                  >
+                    {audioSpeed[message.id] || 1}x
+                  </button>
+                  <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                    <div
+                      className={`h-1.5 w-full rounded-full cursor-pointer relative overflow-hidden ${isSentByMe ? 'bg-white/30' : isDark ? 'bg-gray-600' : 'bg-gray-300'}`}
+                      onClick={(e) => handleAudioSeek(e, message.id, message.voice_duration || 0)}
                     >
-                      {playingAudio === message.id ? 
-                        <Pause className="h-4 w-4" /> : 
-                        <Play className="h-4 w-4" />
-                      }
-                    </Button>
-                    <span className="text-sm">
-                      {formatDuration(message.voice_duration || 0)}
+                      <div
+                        className={`absolute top-0 left-0 h-full rounded-full ${isSentByMe ? 'bg-white' : 'bg-[#060541]'}`}
+                        style={{
+                          width: `${message.voice_duration ? Math.min(100, ((audioProgress[message.id] || 0) / message.voice_duration) * 100) : 0}%`
+                        }}
+                      />
+                    </div>
+                    <span className={`text-[10px] ${isSentByMe ? 'text-white/80' : isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      {formatDuration(audioProgress[message.id] || 0)} / {formatDuration(message.voice_duration || 0)}
                     </span>
                   </div>
                 </div>
@@ -972,17 +1045,36 @@ export default function ChatPage() {
           referrerPolicy="no-referrer"
         />
       ) : !message.is_deleted && message.message_type === 'voice' ? (
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant={isSentByMe ? "ghost" : "secondary"}
-              onClick={() => toggleAudioPlayback(message.id, cleanMediaUrl(message.media_url))}
-              className={`h-8 w-8 p-0 rounded-full ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
+        <div className="flex items-center gap-2 min-w-0 w-full min-w-[260px]">
+          <Button
+            size="sm"
+            variant={isSentByMe ? "ghost" : "secondary"}
+            onClick={() => toggleAudioPlayback(message.id, cleanMediaUrl(message.media_url))}
+            className={`h-8 w-8 p-0 rounded-full shrink-0 ${isSentByMe ? 'hover:bg-white/20' : 'hover:bg-black/10'}`}
+          >
+            {playingAudio === message.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </Button>
+          <button
+            onClick={() => cycleAudioSpeed(message.id)}
+            className={`shrink-0 h-6 px-1.5 rounded-md text-[10px] font-bold cursor-pointer ${isSentByMe ? 'bg-white/20 text-white hover:bg-white/30' : isDark ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+          >
+            {audioSpeed[message.id] || 1}x
+          </button>
+          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+            <div
+              className={`h-1.5 w-full rounded-full cursor-pointer relative overflow-hidden ${isSentByMe ? 'bg-white/30' : isDark ? 'bg-gray-600' : 'bg-gray-300'}`}
+              onClick={(e) => handleAudioSeek(e, message.id, message.voice_duration || 0)}
             >
-              {playingAudio === message.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            </Button>
-            <span className="text-sm">{formatDuration(message.voice_duration || 0)}</span>
+              <div
+                className={`absolute top-0 left-0 h-full rounded-full ${isSentByMe ? 'bg-white' : 'bg-[#060541]'}`}
+                style={{
+                  width: `${message.voice_duration ? Math.min(100, ((audioProgress[message.id] || 0) / message.voice_duration) * 100) : 0}%`
+                }}
+              />
+            </div>
+            <span className={`text-[10px] ${isSentByMe ? 'text-white/80' : isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              {formatDuration(audioProgress[message.id] || 0)} / {formatDuration(message.voice_duration || 0)}
+            </span>
           </div>
         </div>
       ) : !message.is_deleted && message.message_type === 'pdf' ? (
@@ -1120,6 +1212,21 @@ export default function ChatPage() {
                   </div>
                 )}
 
+                {/* Contact recording indicator */}
+                {isContactRecording && (
+                  <div className="flex justify-start mb-2">
+                    <div className="flex items-end gap-2 max-w-[80%]">
+                      <div className="w-8 flex-shrink-0"></div>
+                      <div className={`flex items-center gap-2 rounded-2xl rounded-bl-sm px-4 py-2.5 ${isDark ? 'bg-dark-secondary/60 text-white' : 'bg-light-secondary/40 text-light-primary'}`}>
+                        <Mic className="h-3.5 w-3.5 text-red-500 animate-pulse" />
+                        <span className="text-xs font-medium">
+                          {language === 'ar' ? 'جارٍ التسجيل الصوتي...' : 'Recording audio...'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div ref={messageEndRef} />
               </div>
             </div>
@@ -1138,7 +1245,7 @@ export default function ChatPage() {
       {showScrollToBottom && allMessages && allMessages.length > 0 && (
         <button
           onClick={scrollToBottom}
-          className={`fixed bottom-20 right-4 z-50 flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-all active:scale-95 border ${
+          className={`fixed bottom-28 right-4 z-50 flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-all active:scale-95 border ${
             isDark
               ? 'bg-[hsl(240_1%_38%)]/90 text-[#f2f2f2] shadow-[0_4px_16px_rgba(0,0,0,0.5)] border-white/30'
               : 'bg-white/95 text-[#060541] shadow-[0_4px_16px_rgba(0,0,0,0.2)] border-[#060541]/15'
@@ -1198,7 +1305,7 @@ export default function ChatPage() {
             >
               <FileText className="h-4 w-4" />
             </Button>
-            <VoiceRecorder onRecordingComplete={handleVoiceRecording} disabled={!canSend || sendMessageMutation.isPending || isUploading} />
+            <VoiceRecorder onRecordingComplete={handleVoiceRecording} onRecordingStart={() => broadcastRecording(true)} onRecordingStop={() => broadcastRecording(false)} disabled={!canSend || sendMessageMutation.isPending || isUploading} />
           </div>
 
           {!canSend && sendBlockedReason && (

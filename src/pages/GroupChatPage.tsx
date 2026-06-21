@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AtSign, Camera, ChevronDown, Clock, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Trash2, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, Camera, ChevronDown, Clock, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Square, Trash2, UserPlus, Users, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,8 +59,12 @@ export default function GroupChatPage() {
   const [waktiTyping, setWaktiTyping] = useState(false);
   const [pendingWaktiSince, setPendingWaktiSince] = useState<string | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
+  const [audioSpeed, setAudioSpeed] = useState<Record<string, number>>({});
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
+  const [recordingUserIds, setRecordingUserIds] = useState<Set<string>>(new Set());
   const typingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const recordingTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastTypingSentRef = useRef<number>(0);
   const [pendingMessageIds, setPendingMessageIds] = useState<Set<string>>(new Set());
@@ -83,6 +87,7 @@ export default function GroupChatPage() {
   }, []);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -327,7 +332,9 @@ export default function GroupChatPage() {
     setWaktiTyping(false);
     setPendingWaktiSince(null);
     setTypingUserIds(new Set());
+    setRecordingUserIds(new Set());
     typingTimeoutsRef.current = {};
+    recordingTimeoutsRef.current = {};
     lastTypingSentRef.current = 0;
     setPendingMessageIds(new Set());
   }, [conversationId]);
@@ -485,6 +492,40 @@ export default function GroupChatPage() {
           }
         }
       })
+      .on('broadcast', { event: 'recording' }, (event: any) => {
+        const payload = event.payload;
+        if (!payload?.user_id || payload.user_id === user.id) return;
+        if (payload.recording) {
+          setRecordingUserIds((prev) => {
+            if (prev.has(payload.user_id)) return prev;
+            const next = new Set(prev);
+            next.add(payload.user_id);
+            return next;
+          });
+          if (recordingTimeoutsRef.current[payload.user_id]) {
+            clearTimeout(recordingTimeoutsRef.current[payload.user_id]);
+          }
+          recordingTimeoutsRef.current[payload.user_id] = setTimeout(() => {
+            setRecordingUserIds((prev) => {
+              if (!prev.has(payload.user_id)) return prev;
+              const next = new Set(prev);
+              next.delete(payload.user_id);
+              return next;
+            });
+          }, 8000);
+        } else {
+          setRecordingUserIds((prev) => {
+            if (!prev.has(payload.user_id)) return prev;
+            const next = new Set(prev);
+            next.delete(payload.user_id);
+            return next;
+          });
+          if (recordingTimeoutsRef.current[payload.user_id]) {
+            clearTimeout(recordingTimeoutsRef.current[payload.user_id]);
+            delete recordingTimeoutsRef.current[payload.user_id];
+          }
+        }
+      })
       .subscribe();
     return () => {
       typingChannelRef.current = null;
@@ -587,6 +628,15 @@ export default function GroupChatPage() {
     if (!ch || !user?.id) return;
     try {
       ch.send({ type: 'broadcast', event: 'typing', payload: { user_id: user.id, typing } });
+    } catch {}
+  }, [user?.id]);
+
+  // Broadcast recording status to group channel
+  const broadcastRecording = useCallback((recording: boolean) => {
+    const ch = typingChannelRef.current;
+    if (!ch || !user?.id) return;
+    try {
+      ch.send({ type: 'broadcast', event: 'recording', payload: { user_id: user.id, recording } });
     } catch {}
   }, [user?.id]);
 
@@ -704,6 +754,36 @@ export default function GroupChatPage() {
     }
   }, []);
 
+  const handlePDFSelected = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error(language === "ar" ? "ملف PDF كبير جداً" : "PDF file is too large");
+      return;
+    }
+    try {
+      setUploading(true);
+      const url = await uploadGroupMessageAttachment(file, "pdf");
+      await sendGroupConversationMessage(conversationId!, {
+        message_type: "pdf",
+        content: file.name,
+        media_url: url,
+        media_type: file.type,
+        file_size: file.size,
+        reply_to_id: replyingTo?.id || null,
+      });
+      setReplyingTo(null);
+      queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
+    } catch (err: any) {
+      toast.error(err?.message || (language === "ar" ? "تعذر رفع الملف" : "Failed to upload PDF"));
+    } finally {
+      setUploading(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  }, [conversationId, language, queryClient, replyingTo]);
+
   const startRecording = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -743,10 +823,11 @@ export default function GroupChatPage() {
       setIsRecording(true);
       setRecordingSeconds(0);
       recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
+      broadcastRecording(true);
     } catch {
       toast.error(language === "ar" ? "لا يمكن الوصول إلى الميكروفون" : "Cannot access microphone");
     }
-  }, [conversationId, language, queryClient, recordingSeconds]);
+  }, [conversationId, language, queryClient, recordingSeconds, broadcastRecording]);
 
   const stopRecording = useCallback(() => {
     if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
@@ -754,7 +835,8 @@ export default function GroupChatPage() {
       mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
-  }, []);
+    broadcastRecording(false);
+  }, [broadcastRecording]);
 
   const formatSeconds = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -921,12 +1003,42 @@ export default function GroupChatPage() {
     }
 
     if (!audioRefs.current[messageId]) {
-      audioRefs.current[messageId] = new Audio(audioUrl);
-      audioRefs.current[messageId].onended = () => setPlayingAudio(null);
+      const audio = new Audio(audioUrl);
+      audioRefs.current[messageId] = audio;
+      audio.playbackRate = audioSpeed[messageId] || 1;
+      audio.onended = () => {
+        setPlayingAudio(null);
+        setAudioProgress((prev) => ({ ...prev, [messageId]: 0 }));
+      };
+      audio.ontimeupdate = () => {
+        setAudioProgress((prev) => ({ ...prev, [messageId]: audio.currentTime }));
+      };
+    } else {
+      audioRefs.current[messageId].playbackRate = audioSpeed[messageId] || 1;
     }
 
     audioRefs.current[messageId].play();
     setPlayingAudio(messageId);
+  };
+
+  const cycleAudioSpeed = (messageId: string) => {
+    const current = audioSpeed[messageId] || 1;
+    const next = current === 1 ? 1.5 : current === 1.5 ? 2 : 1;
+    setAudioSpeed((prev) => ({ ...prev, [messageId]: next }));
+    const audio = audioRefs.current[messageId];
+    if (audio) {
+      audio.playbackRate = next;
+    }
+  };
+
+  const handleAudioSeek = (e: React.MouseEvent<HTMLDivElement>, messageId: string, duration: number) => {
+    const audio = audioRefs.current[messageId];
+    if (!audio || !duration) return;
+    const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const percent = Math.max(0, Math.min(1, clickX / rect.width));
+    audio.currentTime = percent * duration;
+    setAudioProgress((prev) => ({ ...prev, [messageId]: audio.currentTime }));
   };
 
   const renderReplySnippet = (message: GroupChatMessage, isSentByMe: boolean) => {
@@ -1004,17 +1116,42 @@ export default function GroupChatPage() {
 
     if (message.message_type === "voice" && message.media_url) {
       return (
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              variant={isSentByMe ? "ghost" : "secondary"}
-              onClick={() => toggleAudioPlayback(message.id, cleanMediaUrl(message.media_url))}
-              className={cn("h-8 w-8 p-0 rounded-full", isSentByMe ? "hover:bg-white/20" : "hover:bg-black/10")}
+        <div className="flex items-center gap-2 min-w-0 w-full min-w-[260px]">
+          <Button
+            size="sm"
+            variant={isSentByMe ? "ghost" : "secondary"}
+            onClick={() => toggleAudioPlayback(message.id, cleanMediaUrl(message.media_url))}
+            className={cn("h-8 w-8 p-0 rounded-full shrink-0", isSentByMe ? "hover:bg-white/20" : "hover:bg-black/10")}
+          >
+            {playingAudio === message.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+          </Button>
+          <button
+            onClick={() => cycleAudioSpeed(message.id)}
+            className={cn(
+              "shrink-0 h-6 px-1.5 rounded-md text-[10px] font-bold cursor-pointer",
+              isSentByMe ? "bg-white/20 text-white hover:bg-white/30" : isDark ? "bg-gray-700 text-gray-300 hover:bg-gray-600" : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+            )}
+          >
+            {audioSpeed[message.id] || 1}x
+          </button>
+          <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+            <div
+              className={cn(
+                "h-1.5 w-full rounded-full cursor-pointer relative overflow-hidden",
+                isSentByMe ? "bg-white/30" : isDark ? "bg-gray-600" : "bg-gray-300"
+              )}
+              onClick={(e) => handleAudioSeek(e, message.id, message.voice_duration || 0)}
             >
-              {playingAudio === message.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            </Button>
-            <span className="text-sm">{formatSeconds(message.voice_duration || 0)}</span>
+              <div
+                className={cn("absolute top-0 left-0 h-full rounded-full", isSentByMe ? "bg-white" : "bg-[#060541]")}
+                style={{
+                  width: `${message.voice_duration ? Math.min(100, ((audioProgress[message.id] || 0) / message.voice_duration) * 100) : 0}%`
+                }}
+              />
+            </div>
+            <span className={cn("text-[10px]", isSentByMe ? "text-white/80" : isDark ? "text-gray-400" : "text-gray-500")}>
+              {formatSeconds(audioProgress[message.id] || 0)} / {formatSeconds(message.voice_duration || 0)}
+            </span>
           </div>
         </div>
       );
@@ -1179,7 +1316,7 @@ export default function GroupChatPage() {
                       onMouseLeave={endLongPress}
                       style={{ WebkitTouchCallout: "none", WebkitUserSelect: "none", userSelect: "none" }}
                     >
-                      <div className={cn("flex min-w-0 max-w-[85%] flex-col sm:max-w-[70%]", mine ? "items-end" : "items-start")}>
+                      <div className={cn("flex min-w-0 flex-col", message.message_type === "voice" ? "max-w-[95%] sm:max-w-[90%]" : "max-w-[85%] sm:max-w-[70%]", mine ? "items-end" : "items-start")}>
                         {!mine && (
                           <div className="mb-1 flex items-center gap-2 px-1">
                             <Avatar className="h-7 w-7">
@@ -1345,6 +1482,65 @@ export default function GroupChatPage() {
             );
           })()}
 
+          {/* Members recording indicator */}
+          {(() => {
+            const activeRecordingIds = Array.from(recordingUserIds).filter(
+              (id) => id !== user?.id && id !== WAKTI_AI_ID
+            );
+            if (activeRecordingIds.length === 0) return null;
+
+            const getName = (uid: string) => {
+              const p = conversation?.participants.find((pt) => pt.user_id === uid);
+              return p?.profile?.display_name || p?.profile?.username || (language === "ar" ? "عضو" : "Member");
+            };
+            const getAvatar = (uid: string) => {
+              const p = conversation?.participants.find((pt) => pt.user_id === uid);
+              return p?.profile?.avatar_url;
+            };
+            const getInitials = (uid: string) => {
+              const p = conversation?.participants.find((pt) => pt.user_id === uid);
+              const name = p?.profile?.display_name || p?.profile?.username || "M";
+              return name.slice(0, 2).toUpperCase();
+            };
+
+            const names = activeRecordingIds.map(getName);
+            let label: string;
+            if (names.length === 1) {
+              label = language === "ar" ? `${names[0]} يسجل صوتياً...` : `${names[0]} is recording audio...`;
+            } else if (names.length === 2) {
+              label = language === "ar" ? `${names[0]} و ${names[1]} يسجلان صوتياً...` : `${names[0]} and ${names[1]} are recording audio...`;
+            } else {
+              label = language === "ar" ? "أشخاص عدة يسجلون صوتياً..." : "Several people are recording audio...";
+            }
+
+            return (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] sm:max-w-[70%] flex flex-col items-start">
+                  <div className="mb-1 flex items-center gap-2 px-1">
+                    {activeRecordingIds.slice(0, 2).map((uid) => (
+                      <Avatar key={uid} className="h-7 w-7">
+                        {getAvatar(uid) && <AvatarImage src={getAvatar(uid)} />}
+                        <AvatarFallback className="bg-[linear-gradient(135deg,hsl(210_100%_65%)_0%,hsl(280_70%_65%)_100%)] text-white text-[10px] font-bold">
+                          {getInitials(uid)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ))}
+                    <span className="text-xs font-medium text-muted-foreground">{label}</span>
+                  </div>
+                  <div className={`rounded-3xl px-4 py-3 shadow-sm border text-foreground ${
+                    isDark
+                      ? 'bg-dark-secondary/60 border-white/10'
+                      : 'bg-light-secondary/40 border-black/10'
+                  }`}>
+                    <div className="flex gap-1.5 items-center h-5">
+                      <Mic className={`h-4 w-4 text-red-500 animate-pulse ${isDark ? 'text-red-400' : ''}`} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div ref={endRef} />
         </div>
 
@@ -1355,7 +1551,7 @@ export default function GroupChatPage() {
         <button
           onClick={scrollToBottom}
           className={cn(
-            "fixed bottom-24 right-4 z-50 flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-all active:scale-95 border",
+            "fixed bottom-32 right-4 z-50 flex h-9 w-9 items-center justify-center rounded-full shadow-lg transition-all active:scale-95 border",
             isDark
               ? "bg-[hsl(240_1%_38%)]/90 text-[#f2f2f2] shadow-[0_4px_16px_rgba(0,0,0,0.5)] border-white/30"
               : "bg-white/95 text-[#060541] shadow-[0_4px_16px_rgba(0,0,0,0.2)] border-[#060541]/15"
@@ -1372,11 +1568,14 @@ export default function GroupChatPage() {
 
           {/* Recording indicator */}
           {isRecording && (
-            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-sm">
-              <div className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-              <span>{language === "ar" ? "جارٍ التسجيل" : "Recording"} {formatSeconds(recordingSeconds)}</span>
-              <button onClick={stopRecording} className="ml-auto" aria-label={language === "ar" ? "إلغاء التسجيل" : "Cancel recording"}>
-                <X className="h-4 w-4" />
+            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 animate-in fade-in slide-in-from-bottom-1 duration-200">
+              <div className="flex items-center gap-1.5">
+                <div className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">{language === "ar" ? "جارٍ التسجيل" : "Recording"}</span>
+              </div>
+              <span className="text-sm font-mono font-bold text-red-600">{formatSeconds(recordingSeconds)}</span>
+              <button onClick={stopRecording} className="ml-auto h-7 w-7 flex items-center justify-center rounded-md text-red-600 hover:bg-red-500/20" aria-label={language === "ar" ? "إلغاء التسجيل" : "Cancel recording"}>
+                <Square className="h-3.5 w-3.5 fill-current" />
               </button>
             </div>
           )}
@@ -1421,39 +1620,140 @@ export default function GroupChatPage() {
             </div>
           )}
 
-          <div className="flex items-end gap-2">
-            {/* Left side: Image + Mic stacked vertically */}
-            <div className="flex flex-col gap-1 shrink-0">
-              {/* Image picker */}
-              <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} aria-label={language === "ar" ? "اختر صورة" : "Choose image"} />
+          {/* Top toolbar: icons + @ button */}
+          <div className="flex items-center gap-1">
+            {/* Image picker */}
+            <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} aria-label={language === "ar" ? "اختر صورة" : "Choose image"} />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md shrink-0 text-muted-foreground hover:text-foreground"
+              disabled={uploading || sendMutation.isPending || isRecording || !!attachedImage}
+              onClick={() => imageInputRef.current?.click()}
+            >
+              {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Image className="h-4 w-4" />}
+            </Button>
+
+            {/* Mic */}
+            <Button
+              variant={isRecording ? "destructive" : "ghost"}
+              size="icon"
+              className={cn(
+                "h-8 w-8 rounded-md shrink-0",
+                !isRecording && "text-muted-foreground hover:text-foreground"
+              )}
+              onPointerDown={startRecording}
+              onPointerUp={stopRecording}
+              onPointerLeave={stopRecording}
+              disabled={uploading || sendMutation.isPending}
+            >
+              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </Button>
+
+            {/* PDF picker */}
+            <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} aria-label={language === "ar" ? "اختر ملف PDF" : "Choose PDF"} />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-md shrink-0 text-muted-foreground hover:text-foreground"
+              disabled={uploading || sendMutation.isPending || isRecording}
+              onClick={() => pdfInputRef.current?.click()}
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+
+            {/* @ mention button — pushed to right */}
+            <div className="relative ml-auto">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10 rounded-xl shrink-0 text-muted-foreground hover:text-foreground"
-                disabled={uploading || sendMutation.isPending || isRecording || !!attachedImage}
-                onClick={() => imageInputRef.current?.click()}
-              >
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Image className="h-4 w-4" />}
-              </Button>
-
-              {/* Mic */}
-              <Button
-                variant={isRecording ? "destructive" : "ghost"}
-                size="icon"
                 className={cn(
-                  "h-10 w-10 rounded-xl shrink-0",
-                  !isRecording && "text-muted-foreground hover:text-foreground"
+                  "h-8 w-8 rounded-md shrink-0",
+                  showMentionPicker
+                    ? "text-[hsl(280_60%_65%)] bg-[hsl(280_60%_65%)]/10"
+                    : "text-[hsl(280_60%_65%)] hover:bg-[hsl(280_60%_65%)]/10"
                 )}
-                onPointerDown={startRecording}
-                onPointerUp={stopRecording}
-                onPointerLeave={stopRecording}
-                disabled={uploading || sendMutation.isPending}
+                onClick={() => {
+                  if (showMentionPicker) {
+                    setShowMentionPicker(false);
+                  } else {
+                    setMessageText((prev) => prev + "@");
+                    setShowMentionPicker(true);
+                    setTimeout(() => textareaRef.current?.focus(), 0);
+                  }
+                }}
+                disabled={isRecording || uploading}
+                title="@"
               >
-                {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                <AtSign className="h-4 w-4" />
               </Button>
-            </div>
 
-            {/* Text input */}
+              {/* Mention picker popup */}
+              {showMentionPicker && conversation && (
+                <div className="absolute bottom-full right-0 mb-2 w-56 max-h-64 overflow-y-auto rounded-2xl border border-border/60 bg-card/95 backdrop-blur-sm shadow-lg p-2 z-50">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-2 pt-1 pb-1.5">
+                    {language === "ar" ? "أعضاء المجموعة" : "Group Members"}
+                  </p>
+                  <div className="space-y-0.5">
+                    {(() => {
+                      const info = getMentionInfo(messageText);
+                      const filter = info?.filter.toLowerCase() || "";
+                      const candidates = (conversation?.participants || [])
+                        .filter((p) => p.user_id !== user?.id)
+                        .filter((p) => {
+                          const n = (p.profile?.display_name || p.profile?.username || "").toLowerCase();
+                          return n.includes(filter);
+                        });
+                      if (candidates.length === 0) {
+                        return (
+                          <p className="text-xs text-muted-foreground text-center py-3">
+                            {language === "ar" ? "لا يوجد أعضاء مطابقون" : "No matching members"}
+                          </p>
+                        );
+                      }
+                      return candidates.map((participant) => {
+                        const name = participant.profile?.display_name || participant.profile?.username || (language === "ar" ? "عضو" : "Member");
+                        const isAi = participant.user_id === WAKTI_AI_ID;
+                        const initials = name.slice(0, 2).toUpperCase();
+                        return (
+                          <button
+                            key={participant.user_id}
+                            type="button"
+                            className="w-full flex items-center gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-muted/60 transition-colors"
+                            onClick={() => {
+                              const mention = isAi ? "@wakti " : `@${name} `;
+                              if (info) {
+                                const before = messageText.slice(0, info.startIndex);
+                                setMessageText(before + mention);
+                              } else {
+                                setMessageText((prev) => prev + mention);
+                              }
+                              setShowMentionPicker(false);
+                              setTimeout(() => textareaRef.current?.focus(), 0);
+                            }}
+                          >
+                            <Avatar className="h-7 w-7 shrink-0">
+                              <AvatarImage src={participant.profile?.avatar_url || undefined} />
+                              <AvatarFallback className="text-[10px] bg-muted">{initials}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm truncate flex-1">{name}</span>
+                            {isAi && (
+                              <Badge className="bg-[hsl(280_60%_65%)]/15 text-[hsl(280_60%_65%)] border-[hsl(280_60%_65%)]/25 text-[9px] px-1 py-0">
+                                AI
+                              </Badge>
+                            )}
+                          </button>
+                        );
+                      });
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom row: compact input + send */}
+          <div className="flex items-center gap-2">
             <Textarea
               ref={textareaRef}
               value={messageText}
@@ -1480,7 +1780,11 @@ export default function GroupChatPage() {
                 ? (language === "ar" ? "أضف تعليق... (اختياري)" : "Add a caption... (optional)")
                 : (language === "ar" ? "اكتب رسالة للمجموعة" : "Write a message to the group")
               }
-              className="min-h-[88px] max-h-32 rounded-2xl resize-none flex-1"
+              rows={1}
+              className={cn(
+                "min-h-[36px] max-h-[100px] h-[36px] rounded-xl resize-none flex-1 text-sm px-3 py-[6px] leading-[1.35] overflow-y-auto border",
+                isDark ? "bg-transparent text-white placeholder:text-gray-400 border-gray-700" : "bg-white text-light-primary placeholder:text-gray-500 border-gray-200"
+              )}
               disabled={isRecording || uploading}
               onKeyDown={(e) => {
                 if (showMentionPicker) {
@@ -1520,106 +1824,20 @@ export default function GroupChatPage() {
               }}
             />
 
-            {/* Right side: @ button + Send */}
-            <div className="flex flex-col gap-1 shrink-0">
-              {/* @ mention button */}
-              <div className="relative">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={cn(
-                    "h-10 w-10 rounded-xl shrink-0",
-                    showMentionPicker
-                      ? "text-[hsl(280_60%_65%)] bg-[hsl(280_60%_65%)]/10"
-                      : "text-[hsl(280_60%_65%)] hover:bg-[hsl(280_60%_65%)]/10"
-                  )}
-                  onClick={() => {
-                    if (showMentionPicker) {
-                      setShowMentionPicker(false);
-                    } else {
-                      setMessageText((prev) => prev + "@");
-                      setShowMentionPicker(true);
-                      setTimeout(() => textareaRef.current?.focus(), 0);
-                    }
-                  }}
-                  disabled={isRecording || uploading}
-                  title="@"
-                >
-                  <AtSign className="h-4 w-4" />
-                </Button>
-
-                {/* Mention picker popup */}
-                {showMentionPicker && conversation && (
-                  <div className="absolute bottom-full right-0 mb-2 w-56 max-h-64 overflow-y-auto rounded-2xl border border-border/60 bg-card/95 backdrop-blur-sm shadow-lg p-2 z-50">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-2 pt-1 pb-1.5">
-                      {language === "ar" ? "أعضاء المجموعة" : "Group Members"}
-                    </p>
-                    <div className="space-y-0.5">
-                      {(() => {
-                        const info = getMentionInfo(messageText);
-                        const filter = info?.filter.toLowerCase() || "";
-                        const candidates = (conversation?.participants || [])
-                          .filter((p) => p.user_id !== user?.id)
-                          .filter((p) => {
-                            const n = (p.profile?.display_name || p.profile?.username || "").toLowerCase();
-                            return n.includes(filter);
-                          });
-                        if (candidates.length === 0) {
-                          return (
-                            <p className="text-xs text-muted-foreground text-center py-3">
-                              {language === "ar" ? "لا يوجد أعضاء مطابقون" : "No matching members"}
-                            </p>
-                          );
-                        }
-                        return candidates.map((participant) => {
-                          const name = participant.profile?.display_name || participant.profile?.username || (language === "ar" ? "عضو" : "Member");
-                          const isAi = participant.user_id === WAKTI_AI_ID;
-                          const initials = name.slice(0, 2).toUpperCase();
-                          return (
-                            <button
-                              key={participant.user_id}
-                              type="button"
-                              className="w-full flex items-center gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-muted/60 transition-colors"
-                              onClick={() => {
-                                const mention = isAi ? "@wakti " : `@${name} `;
-                                if (info) {
-                                  const before = messageText.slice(0, info.startIndex);
-                                  setMessageText(before + mention);
-                                } else {
-                                  setMessageText((prev) => prev + mention);
-                                }
-                                setShowMentionPicker(false);
-                                setTimeout(() => textareaRef.current?.focus(), 0);
-                              }}
-                            >
-                              <Avatar className="h-7 w-7 shrink-0">
-                                <AvatarImage src={participant.profile?.avatar_url || undefined} />
-                                <AvatarFallback className="text-[10px] bg-muted">{initials}</AvatarFallback>
-                              </Avatar>
-                              <span className="text-sm truncate flex-1">{name}</span>
-                              {isAi && (
-                                <Badge className="bg-[hsl(280_60%_65%)]/15 text-[hsl(280_60%_65%)] border-[hsl(280_60%_65%)]/25 text-[9px] px-1 py-0">
-                                  AI
-                                </Badge>
-                              )}
-                            </button>
-                          );
-                        });
-                      })()}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Send */}
-              <Button
-                className="h-10 w-10 rounded-xl shrink-0 p-0"
-                onClick={handleSendText}
-                disabled={(!messageText.trim() && !attachedImage) || sendMutation.isPending || uploading}
-              >
-                {sendMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
-            </div>
+            <Button
+              type="button"
+              size="icon"
+              className={cn(
+                "h-10 w-10 rounded-xl shrink-0 p-0 transition-colors",
+                messageText.trim() || attachedImage
+                  ? "bg-blue-500 hover:bg-blue-600 text-white"
+                  : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+              )}
+              onClick={handleSendText}
+              disabled={(!messageText.trim() && !attachedImage) || sendMutation.isPending || uploading}
+            >
+              {sendMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+            </Button>
           </div>
         </div>
       </div>

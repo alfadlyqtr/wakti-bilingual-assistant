@@ -744,26 +744,28 @@ export async function deleteContact(contactId: string): Promise<boolean> {
   
   console.log('Deleting contact with ID:', contactId);
 
-  // Resolve the actual contact user id when a relationship row id is passed
-  const { data: relationshipRow, error: relationshipLookupError } = await supabase
+  const { data: candidateRows, error: candidatesError } = await supabase
     .from("contacts")
-    .select("contact_id")
-    .eq("id", contactId)
+    .select("id, contact_id")
     .eq("user_id", userId)
-    .maybeSingle();
+    .or(`id.eq.${contactId},contact_id.eq.${contactId}`);
 
-  if (relationshipLookupError) {
-    console.error("Error resolving contact relationship for delete:", relationshipLookupError);
-    throw relationshipLookupError;
+  if (candidatesError) {
+    console.error("Error finding candidate contact rows for delete:", candidatesError);
+    throw candidatesError;
   }
 
-  const targetContactUserId = relationshipRow?.contact_id || contactId;
+  if (!candidateRows || candidateRows.length === 0) {
+    return true;
+  }
+
+  const targetContactUserIds = Array.from(new Set(candidateRows.map((row) => row.contact_id)));
 
   const { data: rowsToDelete, error: rowsLookupError } = await supabase
     .from("contacts")
     .select("id")
     .eq("user_id", userId)
-    .eq("contact_id", targetContactUserId);
+    .in("contact_id", targetContactUserIds);
 
   if (rowsLookupError) {
     console.error("Error finding contact rows for delete:", rowsLookupError);
@@ -776,14 +778,19 @@ export async function deleteContact(contactId: string): Promise<boolean> {
   }
 
   // Remove all rows on current user's side for this contact (handles duplicate rows safely)
-  const { error: deleteByContactIdError } = await supabase
+  const { data: deletedRows, error: deleteByContactIdError } = await supabase
     .from("contacts")
     .delete()
-    .in("id", rowIds);
+    .in("id", rowIds)
+    .select("id");
 
   if (deleteByContactIdError) {
     console.error("Error deleting contact by contact_id:", deleteByContactIdError);
     throw deleteByContactIdError;
+  }
+
+  if (!deletedRows || deletedRows.length === 0) {
+    throw new Error("Delete was blocked by database policy");
   }
 
   return true;

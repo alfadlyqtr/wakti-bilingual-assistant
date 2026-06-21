@@ -95,6 +95,7 @@ export function ContactList({
   // Long-press context menu state
   const [contextMenu, setContextMenu] = useState<{ contact: ContactType; x: number; y: number } | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [pressedContactId, setPressedContactId] = useState<string | null>(null);
   
   // Debug logging for user and unread data
   useEffect(() => {
@@ -390,15 +391,18 @@ export function ContactList({
 
   // Long-press handlers
   const handleLongPressStart = (contact: ContactType, e: React.MouseEvent | React.TouchEvent) => {
+    setPressedContactId(contact.id);
     if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     longPressTimerRef.current = setTimeout(() => {
+      setPressedContactId(null);
       setContextMenu({ contact, x: clientX, y: clientY });
     }, 500);
   };
 
   const handleLongPressEnd = () => {
+    setPressedContactId(null);
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
@@ -511,11 +515,12 @@ export function ContactList({
                 return (
                   <div
                     key={contact.id}
-                    className={`relative flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-[#d9dee9] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,240,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)]`}
+                    className={`relative flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-[#d9dee9] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,240,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)] select-none transition-transform duration-150 ${pressedContactId === contact.id ? 'scale-[1.03]' : ''}`}
                     onMouseDown={(e) => handleLongPressStart(contact, e)}
                     onMouseUp={handleLongPressEnd}
                     onMouseLeave={handleLongPressEnd}
                     onTouchStart={(e) => handleLongPressStart(contact, e)}
+                    onTouchMove={handleLongPressEnd}
                     onTouchEnd={handleLongPressEnd}
                     onContextMenu={(e) => e.preventDefault()}
                   >
@@ -593,11 +598,12 @@ export function ContactList({
                 <Card key={contact.id} dir={language === 'ar' ? 'rtl' : 'ltr'} className="overflow-hidden rounded-[1.75rem] sm:rounded-[2rem] border border-[#e2e8f0] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(250,250,252,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,1),inset_0_-20px_40px_rgba(148,163,184,0.08),0_20px_40px_rgba(15,23,42,0.08)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-20px_40px_rgba(0,0,0,0.28),0_18px_40px_rgba(0,0,0,0.34)]">
                   <CardContent className="p-2.5 sm:p-4 md:p-5">
                     <div 
-                      className="rounded-[1.35rem] sm:rounded-[1.6rem] border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(249,251,253,0.94))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.95),rgba(16,19,27,0.94))] p-3 sm:p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)]"
+                      className={`rounded-[1.35rem] sm:rounded-[1.6rem] border border-[#dbe2ec] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.97),rgba(249,251,253,0.94))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.95),rgba(16,19,27,0.94))] p-3 sm:p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)] select-none transition-transform duration-150 ${pressedContactId === contact.id ? 'scale-[1.02]' : ''}`}
                       onMouseDown={(e) => handleLongPressStart(contact, e)}
                       onMouseUp={handleLongPressEnd}
                       onMouseLeave={handleLongPressEnd}
                       onTouchStart={(e) => handleLongPressStart(contact, e)}
+                      onTouchMove={handleLongPressEnd}
                       onTouchEnd={handleLongPressEnd}
                       onContextMenu={(e) => e.preventDefault()}
                     >

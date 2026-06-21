@@ -6,10 +6,12 @@ import { toast } from "sonner";
 
 interface VoiceRecorderProps {
   onRecordingComplete: (audioBlob: Blob, duration: number) => void;
+  onRecordingStart?: () => void;
+  onRecordingStop?: () => void;
   disabled?: boolean;
 }
 
-export function VoiceRecorder({ onRecordingComplete, disabled }: VoiceRecorderProps) {
+export function VoiceRecorder({ onRecordingComplete, onRecordingStart, onRecordingStop, disabled }: VoiceRecorderProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -56,6 +58,7 @@ export function VoiceRecorder({ onRecordingComplete, disabled }: VoiceRecorderPr
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
+      onRecordingStart?.();
 
       // Start timer
       timerRef.current = setInterval(() => {
@@ -78,6 +81,7 @@ export function VoiceRecorder({ onRecordingComplete, disabled }: VoiceRecorderPr
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      onRecordingStop?.();
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
@@ -153,18 +157,22 @@ export function VoiceRecorder({ onRecordingComplete, disabled }: VoiceRecorderPr
   return (
     <div className="flex items-center gap-2">
       {isRecording ? (
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={stopRecording}
-            className="h-8 w-8 p-0"
-          >
-            <Square className="h-4 w-4" />
-          </Button>
-          <span className="text-sm font-mono text-red-600">
+        <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 animate-in fade-in slide-in-from-bottom-1 duration-200">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
+            <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">Recording</span>
+          </div>
+          <span className="text-sm font-mono font-bold text-red-600">
             {formatTime(recordingTime)} / {formatTime(MAX_DURATION)}
           </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={stopRecording}
+            className="h-7 w-7 p-0 ml-1 text-red-600 hover:bg-red-500/20 hover:text-red-700"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" />
+          </Button>
         </div>
       ) : (
         <Button

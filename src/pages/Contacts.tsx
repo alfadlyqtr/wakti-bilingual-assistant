@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ContactSearch } from "@/components/contacts/ContactSearch";
 import { ContactRequests } from "@/components/contacts/ContactRequests";
@@ -8,10 +8,13 @@ import { GroupChatTab } from "@/components/contacts/GroupChatTab";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { readWaktiOperatorPayload } from "@/utils/waktiOperator";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Contact, Bell, ShieldCheck, Users, LayoutGrid, LayoutList } from "lucide-react";
 import { getPendingRequestsCount } from "@/services/contactsService";
 import { getAllUnreadCounts } from "@/services/messageService";
+import { getMyGroupConversations } from "@/services/groupChatService";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const resolveContactsTab = (searchParams: URLSearchParams) => {
   const nextTab = (searchParams.get("tab") || "contacts").toLowerCase();
@@ -140,6 +143,59 @@ export function ContactsContent({
     refetchOnWindowFocus: true,
   });
 
+  // Fetch group conversations for unread indicator
+  const { data: groups = [] } = useQuery({
+    queryKey: ['groupConversations'],
+    queryFn: getMyGroupConversations,
+    staleTime: 15000,
+    refetchInterval: 60000,
+    refetchOnWindowFocus: true,
+  });
+
+  const totalDirectUnread = Object.values(perContactUnread).reduce((sum, count) => sum + (count || 0), 0);
+  const hasGroupUnread = groups.some((g) => g.unread);
+
+  // Realtime: instant unread count updates
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const realtimeSetupRef = useRef(false);
+
+  useEffect(() => {
+    if (!user?.id || realtimeSetupRef.current) return;
+    realtimeSetupRef.current = true;
+
+    const dmChannel = supabase
+      .channel(`contacts-unread-dm:${user.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'messages',
+        filter: `recipient_id=eq.${user.id}`
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['allUnreadCounts'] });
+      })
+      .subscribe();
+
+    const groupChannel = supabase
+      .channel(`contacts-unread-group:${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'group_chat_messages'
+      }, (payload: any) => {
+        if (payload?.new?.sender_id !== user.id) {
+          queryClient.invalidateQueries({ queryKey: ['groupConversations'] });
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(dmChannel);
+      supabase.removeChannel(groupChannel);
+      realtimeSetupRef.current = false;
+    };
+  }, [user?.id, queryClient]);
+
   // Handler for unblock success
   const handleUnblockSuccess = () => {
     setActiveTab("contacts");
@@ -153,6 +209,11 @@ export function ContactsContent({
           <button type="button" onClick={() => setActiveTab("contacts")} className={`rounded-xl text-xs font-bold transition-all flex gap-1.5 items-center justify-center ${isContactsAreaActive ? 'bg-[hsl(210,100%,55%)] text-white shadow-none' : 'text-foreground/50'}`}>
             <Contact className="h-3.5 w-3.5" />
             <span>{language === 'ar' ? 'الأصدقاء' : t("contacts", language)}</span>
+            {totalDirectUnread > 0 && (
+              <span className="bg-red-500 text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-0.5 flex items-center justify-center">
+                {totalDirectUnread > 99 ? '99+' : totalDirectUnread}
+              </span>
+            )}
           </button>
           <button type="button" onClick={() => setActiveTab("requests")} className={`rounded-xl text-xs font-bold transition-all flex gap-1.5 items-center justify-center ${activeTab === 'requests' ? 'bg-[hsl(142,76%,45%)] text-white shadow-none' : 'text-foreground/50'}`}>
             <Bell className="h-3.5 w-3.5" />
@@ -183,6 +244,9 @@ export function ContactsContent({
             <button type="button" onClick={() => setContactView("groups")} className={`flex min-w-0 items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-full text-xs font-semibold transition-all ${activeTab === 'groups' ? 'bg-[hsl(280,70%,55%)] text-white shadow-[0_8px_18px_rgba(168,85,247,0.24)]' : 'text-muted-foreground hover:text-foreground'}`}>
               <Users className="h-3.5 w-3.5" />
               <span className="truncate">{language === 'ar' ? 'المجموعات' : 'Group Chat'}</span>
+              {hasGroupUnread && (
+                <span className="shrink-0 h-2 w-2 rounded-full bg-red-500" />
+              )}
             </button>
           </div>
         </div>
