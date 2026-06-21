@@ -41,6 +41,8 @@ export interface UserSearchResult {
 
 export type ContactRelationshipStatus = 'approved' | 'pending' | 'blocked' | 'none';
 
+export type DirectChatPermissionState = 'allowed' | 'blocked_by_user' | 'you_blocked_user' | 'disconnected';
+
 // Get all approved contacts for the current user
 export async function getContacts() {
   const userId = await getCurrentUserId();
@@ -81,9 +83,23 @@ export async function getContacts() {
     throw incomingError;
   }
 
+  const { data: blockedRows, error: blockedError } = await supabase
+    .from('contacts')
+    .select('contact_id')
+    .eq('user_id', userId)
+    .eq('status', 'blocked');
+
+  if (blockedError) {
+    console.error("Error fetching blocked contacts for filtering:", blockedError);
+    throw blockedError;
+  }
+
+  const blockedContactIds = new Set((blockedRows || []).map((row) => row.contact_id));
+
   const outgoingContactIds = (outgoingRows || []).map(contact => contact.contact_id);
   const incomingContactIds = (incomingRows || []).map(contact => contact.user_id);
-  const allContactIds = Array.from(new Set([...outgoingContactIds, ...incomingContactIds]));
+  const allContactIds = Array.from(new Set([...outgoingContactIds, ...incomingContactIds]))
+    .filter((contactId) => !blockedContactIds.has(contactId));
 
   const outgoingMap = new Map((outgoingRows || []).map((contact) => [contact.contact_id, contact]));
   const incomingMap = new Map((incomingRows || []).map((contact) => [contact.user_id, contact]));
@@ -619,7 +635,7 @@ export async function unblockContact(contactId: string) {
   }
   await ensurePassport();
 
-  // Get the contact record before deleting it (for logging)
+  // Get the blocked relationship row before restoring it
   const { data: contactRecord } = await supabase
     .from("contacts")
     .select("*")
@@ -630,9 +646,13 @@ export async function unblockContact(contactId: string) {
 
   console.log("Unblocking contact record:", contactRecord);
 
+  if (!contactRecord || contactRecord.length === 0) {
+    return true;
+  }
+
   const { error } = await supabase
     .from("contacts")
-    .delete()
+    .update({ status: "approved" })
     .eq("user_id", userId)
     .eq("contact_id", contactId)
     .eq("status", "blocked");
@@ -796,6 +816,48 @@ export async function getBlockStatus(userId: string): Promise<{
   ]);
   
   return { isBlocked, isBlockedBy };
+}
+
+// Resolve direct chat permission state once (used by chat UI + realtime refresh)
+export async function getDirectChatPermission(userId: string): Promise<DirectChatPermissionState> {
+  const currentUserId = await getCurrentUserId();
+  if (!currentUserId) {
+    throw new Error("User not authenticated");
+  }
+  await ensurePassport();
+
+  const { data: outgoing, error: outgoingError } = await supabase
+    .from("contacts")
+    .select("status")
+    .eq("user_id", currentUserId)
+    .eq("contact_id", userId)
+    .limit(1);
+
+  if (outgoingError) {
+    console.error("Error checking outgoing relationship:", outgoingError);
+    throw outgoingError;
+  }
+
+  const { data: incoming, error: incomingError } = await supabase
+    .from("contacts")
+    .select("status")
+    .eq("user_id", userId)
+    .eq("contact_id", currentUserId)
+    .limit(1);
+
+  if (incomingError) {
+    console.error("Error checking incoming relationship:", incomingError);
+    throw incomingError;
+  }
+
+  const outgoingStatus = outgoing?.[0]?.status as ContactRelationshipStatus | undefined;
+  const incomingStatus = incoming?.[0]?.status as ContactRelationshipStatus | undefined;
+
+  if (incomingStatus === 'blocked') return 'blocked_by_user';
+  if (outgoingStatus === 'blocked') return 'you_blocked_user';
+  if (outgoingStatus === 'approved' && incomingStatus === 'approved') return 'allowed';
+
+  return 'disconnected';
 }
 
 /**

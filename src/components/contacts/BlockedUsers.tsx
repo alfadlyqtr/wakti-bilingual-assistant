@@ -1,13 +1,12 @@
 
-import { useState } from "react";
-import { UserPlus, UserX } from "lucide-react";
+import { Trash2, UserPlus, UserX } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getBlockedContacts, unblockContact, sendContactRequest } from "@/services/contactsService";
+import { deleteContact, getBlockedContacts, unblockContact } from "@/services/contactsService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { toast } from "sonner";
 
@@ -39,19 +38,33 @@ export function BlockedUsers({ onUnblockSuccess }: BlockedUsersProps) {
     queryFn: getBlockedContacts,
   });
 
+  const deleteBlockedUserMutation = useMutation({
+    mutationFn: (relationshipRowId: string) => deleteContact(relationshipRowId),
+    onSuccess: () => {
+      toast.success(t("contactDeleted", language));
+      queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+    },
+    onError: (error) => {
+      console.error("Error deleting blocked user:", error);
+      toast.error(t("errorDeletingContact", language));
+    }
+  });
+
   // Unblock contact mutation
   const unblockContactMutation = useMutation({
     mutationFn: (contactId: string) => unblockContact(contactId),
-    onSuccess: (result, contactId) => {
+    onSuccess: () => {
       // Show success message
       toast.success(t("contactUnblocked", language));
-      
-      // After unblocking, automatically send a contact request to add them back to contacts
-      addToContactsMutation.mutate(contactId);
-      
+
       // Invalidate both blocked contacts and regular contacts queries
       queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
+
+      if (onUnblockSuccess) {
+        onUnblockSuccess();
+      }
     },
     onError: (error) => {
       console.error("Error unblocking contact:", error);
@@ -59,31 +72,12 @@ export function BlockedUsers({ onUnblockSuccess }: BlockedUsersProps) {
     }
   });
 
-  // Add to contacts mutation
-  const addToContactsMutation = useMutation({
-    mutationFn: (contactId: string) => sendContactRequest(contactId),
-    onSuccess: () => {
-      toast.success(t("userUnblockedDescription", language));
-      
-      // Invalidate contacts query to show the updated list
-      queryClient.invalidateQueries({ queryKey: ['contacts'] });
-      
-      // Switch to contacts tab after successful unblock
-      if (onUnblockSuccess) {
-        onUnblockSuccess();
-      }
-    },
-    onError: (error) => {
-      console.error("Error adding contact after unblock:", error);
-      // Even if adding back to contacts fails, we still switch tabs because the unblock was successful
-      if (onUnblockSuccess) {
-        onUnblockSuccess();
-      }
-    }
-  });
-
   const handleUnblock = (contactId: string) => {
     unblockContactMutation.mutate(contactId);
+  };
+
+  const handleDeleteBlockedUser = (relationshipRowId: string) => {
+    deleteBlockedUserMutation.mutate(relationshipRowId);
   };
 
   const getInitials = (name: string) => {
@@ -138,20 +132,37 @@ export function BlockedUsers({ onUnblockSuccess }: BlockedUsersProps) {
                       <p className="text-sm text-muted-foreground">@{username}</p>
                     </div>
                   </div>
-                  <Button 
-                    size="sm" 
-                    variant="outline"
-                    onClick={() => handleUnblock(user.contact_id)}
-                    disabled={unblockContactMutation.isPending || addToContactsMutation.isPending}
-                    className="flex gap-1"
-                  >
-                    {(unblockContactMutation.isPending || addToContactsMutation.isPending) ? (
-                      <LoadingSpinner size="sm" className="mr-2" />
-                    ) : (
-                      <UserPlus className="h-4 w-4 mr-1" />
-                    )}
-                    {t("unblock", language)}
-                  </Button>
+                  <div className="flex flex-col items-end gap-2">
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => handleUnblock(user.contact_id)}
+                      disabled={unblockContactMutation.isPending || deleteBlockedUserMutation.isPending}
+                      className="flex gap-1"
+                    >
+                      {unblockContactMutation.isPending ? (
+                        <LoadingSpinner size="sm" className="mr-2" />
+                      ) : (
+                        <UserPlus className="h-4 w-4 mr-1" />
+                      )}
+                      {t("unblock", language)}
+                    </Button>
+
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteBlockedUser(user.id)}
+                      disabled={unblockContactMutation.isPending || deleteBlockedUserMutation.isPending}
+                      className="h-8 px-2 text-red-500 hover:text-red-600"
+                    >
+                      {deleteBlockedUserMutation.isPending ? (
+                        <LoadingSpinner size="sm" className="mr-2" />
+                      ) : (
+                        <Trash2 className="h-4 w-4 mr-1" />
+                      )}
+                      {language === 'ar' ? 'حذف المستخدم' : 'Delete user'}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

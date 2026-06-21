@@ -18,6 +18,7 @@ import { VoiceRecorder } from "./VoiceRecorder";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePresence } from "@/hooks/usePresence";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
+import { useRealtimeRelationshipStatus } from "@/hooks/useRealtimeRelationshipStatus";
 
 interface ChatPopupProps {
   isOpen: boolean;
@@ -59,6 +60,15 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const [isContactTyping, setIsContactTyping] = useState(false);
   const typingTimeoutRef = useRef<NodeJS.Timeout>();
   const isContactOnline = isOnline(contactId);
+  const { permission, canSend } = useRealtimeRelationshipStatus(contactId, isOpen);
+
+  const sendBlockedReason = permission === 'blocked_by_user'
+    ? t('youAreBlockedByUser', language)
+    : permission === 'you_blocked_user'
+      ? t('unblockToSendMessages', language)
+      : permission === 'disconnected'
+        ? t('reconnectToSendMessages', language)
+        : null;
 
   // Auto scroll to bottom on new messages
   const scrollToBottom = () => {
@@ -268,7 +278,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       console.error("Error sending message:", error);
       const msg = error instanceof Error ? error.message : "";
       if (msg === "__BLOCKED_BY_USER__") {
-        toast.error(language === 'ar' ? 'لقد تم حظرك من قبل هذا المستخدم' : 'You are blocked by this user');
+        toast.error(t('youAreBlockedByUser', language));
       } else {
         toast.error("Error sending message");
       }
@@ -383,6 +393,13 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
   // Send text message
   const sendTextMessage = () => {
+    if (!canSend) {
+      if (sendBlockedReason) {
+        toast.error(sendBlockedReason);
+      }
+      return;
+    }
+
     if (messageText.trim() && !isOverLimit) {
       sendMessageMutation.mutate({
         message_type: "text",
@@ -904,7 +921,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   size="icon"
                   className="h-7 w-7 rounded-md text-gray-500 hover:text-gray-700"
                   onClick={() => fileInputRef.current?.click()}
-                  disabled={sendMessageMutation.isPending || isUploading}
+                  disabled={!canSend || sendMessageMutation.isPending || isUploading}
                 >
                   <Image className="h-4 w-4" />
                 </Button>
@@ -913,12 +930,18 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   size="icon"
                   className="h-7 w-7 rounded-md text-gray-500 hover:text-gray-700"
                   onClick={() => pdfInputRef.current?.click()}
-                  disabled={sendMessageMutation.isPending || isUploading}
+                  disabled={!canSend || sendMessageMutation.isPending || isUploading}
                 >
                   <FileText className="h-4 w-4" />
                 </Button>
-                <VoiceRecorder onRecordingComplete={handleVoiceRecording} disabled={sendMessageMutation.isPending || isUploading} />
+                <VoiceRecorder onRecordingComplete={handleVoiceRecording} disabled={!canSend || sendMessageMutation.isPending || isUploading} />
               </div>
+
+              {!canSend && sendBlockedReason && (
+                <p className={`px-2 text-[11px] ${isDark ? 'text-red-300' : 'text-red-600'}`}>
+                  {sendBlockedReason}
+                </p>
+              )}
 
               {/* Hidden file inputs */}
               <input ref={fileInputRef} type="file" accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" className="hidden" onChange={handleImageSelected} aria-label="Upload image" />
@@ -941,7 +964,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                     maxLength={MAX_CHARS}
                     rows={1}
                     className={`min-h-[32px] max-h-[100px] h-[32px] px-2 py-[5px] text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
-                    disabled={sendMessageMutation.isPending || isUploading}
+                    disabled={!canSend || sendMessageMutation.isPending || isUploading}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -965,7 +988,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   type="button"
                   size="icon"
                   onClick={sendTextMessage}
-                  disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+                  disabled={!canSend || !messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
                   className={`rounded-md h-8 w-8 ${messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'} transition-colors`}
                 >
                   <Send className={`h-4 w-4 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />

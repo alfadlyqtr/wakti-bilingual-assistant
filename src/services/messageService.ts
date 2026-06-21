@@ -382,12 +382,6 @@ export async function sendMessage(recipientId: string, messageData: {
 
   console.log("📤 Sending message:", { recipientId, messageData, userId });
 
-  // Check if current user is blocked by the recipient BEFORE generic validation
-  const blockStatus = await getBlockStatus(recipientId);
-  if (blockStatus.isBlockedBy) {
-    throw new Error("__BLOCKED_BY_USER__");
-  }
-
   const canMessage = await validateCanMessage(recipientId);
   if (!canMessage) {
     throw new Error("You cannot send messages to this user. Make sure you are both in each other's contact lists.");

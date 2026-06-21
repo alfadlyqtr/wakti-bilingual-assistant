@@ -24,6 +24,7 @@ import { VoiceRecorder } from "@/components/contacts/VoiceRecorder";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePresence } from "@/hooks/usePresence";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
+import { useRealtimeRelationshipStatus } from "@/hooks/useRealtimeRelationshipStatus";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const MAX_CHARS = 200;
@@ -80,7 +81,16 @@ export default function ChatPage() {
   const typingChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const [pendingMessageIds, setPendingMessageIds] = useState<Set<string>>(new Set());
   const isContactOnline = contactId ? isOnline(contactId) : false;
+  const { permission, canSend } = useRealtimeRelationshipStatus(contactId);
   const entrySource = searchParams.get("from");
+
+  const sendBlockedReason = permission === 'blocked_by_user'
+    ? t('youAreBlockedByUser', language)
+    : permission === 'you_blocked_user'
+      ? t('unblockToSendMessages', language)
+      : permission === 'disconnected'
+        ? t('reconnectToSendMessages', language)
+        : null;
 
   const clearOperatorFlow = useCallback(() => {
     if (!operatorPayloadId) return;
@@ -447,7 +457,7 @@ export default function ChatPage() {
       console.error("Error sending message:", error);
       const msg = error instanceof Error ? error.message : "";
       if (msg === "__BLOCKED_BY_USER__") {
-        toast.error(language === 'ar' ? 'لقد تم حظرك من قبل هذا المستخدم' : 'You are blocked by this user');
+        toast.error(t('youAreBlockedByUser', language));
       } else {
         toast.error("Error sending message");
       }
@@ -579,6 +589,13 @@ export default function ChatPage() {
 
   // Send text message
   const sendTextMessage = () => {
+    if (!canSend) {
+      if (sendBlockedReason) {
+        toast.error(sendBlockedReason);
+      }
+      return;
+    }
+
     if (messageText.trim() && !isOverLimit) {
       sendMessageMutation.mutate({
         message_type: "text",
@@ -1168,7 +1185,7 @@ export default function ChatPage() {
               size="icon"
               className="h-8 w-8 rounded-md text-gray-500 hover:text-gray-700"
               onClick={() => fileInputRef.current?.click()}
-              disabled={sendMessageMutation.isPending || isUploading}
+              disabled={!canSend || sendMessageMutation.isPending || isUploading}
             >
               <Image className="h-4 w-4" />
             </Button>
@@ -1177,12 +1194,18 @@ export default function ChatPage() {
               size="icon"
               className="h-8 w-8 rounded-md text-gray-500 hover:text-gray-700"
               onClick={() => pdfInputRef.current?.click()}
-              disabled={sendMessageMutation.isPending || isUploading}
+              disabled={!canSend || sendMessageMutation.isPending || isUploading}
             >
               <FileText className="h-4 w-4" />
             </Button>
-            <VoiceRecorder onRecordingComplete={handleVoiceRecording} disabled={sendMessageMutation.isPending || isUploading} />
+            <VoiceRecorder onRecordingComplete={handleVoiceRecording} disabled={!canSend || sendMessageMutation.isPending || isUploading} />
           </div>
+
+          {!canSend && sendBlockedReason && (
+            <p className={`px-2 text-[11px] ${isDark ? 'text-red-300' : 'text-red-600'}`}>
+              {sendBlockedReason}
+            </p>
+          )}
 
           {/* Hidden file inputs */}
           <input ref={fileInputRef} type="file" accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" className="hidden" onChange={handleImageSelected} aria-label="Upload image" />
@@ -1203,7 +1226,7 @@ export default function ChatPage() {
                 maxLength={MAX_CHARS}
                 rows={1}
                 className={`min-h-[36px] max-h-[100px] h-[36px] px-3 py-[6px] text-sm rounded-xl border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
-                disabled={sendMessageMutation.isPending || isUploading}
+                disabled={!canSend || sendMessageMutation.isPending || isUploading}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -1225,7 +1248,7 @@ export default function ChatPage() {
               type="button"
               size="icon"
               onClick={sendTextMessage}
-              disabled={!messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
+              disabled={!canSend || !messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
               className={`rounded-xl h-10 w-10 ${messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'} transition-colors`}
             >
               <Send className={`h-5 w-5 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />

@@ -49,5 +49,7 @@ export const contactsAr = {
   userBlocked: "تم حظر المستخدم",
   userUnblocked: "تم إلغاء حظر المستخدم",
   userReported: "تم الإبلاغ عن المستخدم",
-  youAreBlockedByUser: "لقد تم حظرك من قبل هذا المستخدم"
+  youAreBlockedByUser: "لقد تم حظرك من قبل هذا المستخدم",
+  unblockToSendMessages: "قم بإلغاء الحظر لإرسال الرسائل",
+  reconnectToSendMessages: "أعد الاتصال لإرسال الرسائل"
 };
