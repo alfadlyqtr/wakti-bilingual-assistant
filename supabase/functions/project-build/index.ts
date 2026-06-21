@@ -119,6 +119,8 @@ serve(async (req) => {
         export const createRoot = window.ReactDOM.createRoot;
         export const hydrateRoot = window.ReactDOM.hydrateRoot;
       `,
+      'react-router': getReactRouterShim(),
+      'react-router-dom': getReactRouterShim(),
       'framer-motion': `
         // CRITICAL: Use REAL framer-motion from CDN.
         // NOTE: The UMD build from unpkg registers on window as window.Motion (not window.FramerMotion).
@@ -719,6 +721,309 @@ ${bundledJs}
 `;
 
   return { js: wrappedJs, css };
+}
+
+function getReactRouterShim(): string {
+  return `
+const RouterContext = window.React.createContext({
+  location: { pathname: window.location.pathname || '/', search: window.location.search || '', hash: window.location.hash || '' },
+  params: {},
+  outlet: null,
+  navigate: () => {},
+});
+
+const normalizePathname = (value) => {
+  const raw = typeof value === 'string' && value.length > 0 ? value : '/';
+  const noQuery = raw.split('?')[0].split('#')[0] || '/';
+  const withLeadingSlash = noQuery.startsWith('/') ? noQuery : '/' + noQuery;
+  const collapsed = withLeadingSlash.replace(/\/+/g, '/');
+  if (collapsed.length > 1 && collapsed.endsWith('/')) {
+    return collapsed.slice(0, -1);
+  }
+  return collapsed || '/';
+};
+
+const currentLocation = () => ({
+  pathname: normalizePathname(window.location.pathname || '/'),
+  search: window.location.search || '',
+  hash: window.location.hash || '',
+});
+
+const createHref = (to, location) => {
+  const fallbackLocation = location || currentLocation();
+  if (typeof to === 'string') return to || fallbackLocation.pathname;
+  if (!to || typeof to !== 'object') return fallbackLocation.pathname + (fallbackLocation.search || '') + (fallbackLocation.hash || '');
+  const pathname = typeof to.pathname === 'string' ? to.pathname : fallbackLocation.pathname;
+  const search = to.search ? (String(to.search).startsWith('?') ? String(to.search) : '?' + String(to.search)) : '';
+  const hash = to.hash ? (String(to.hash).startsWith('#') ? String(to.hash) : '#' + String(to.hash)) : '';
+  return pathname + search + hash;
+};
+
+const navigateTo = (to, options) => {
+  const opts = options || {};
+  const href = createHref(to, currentLocation());
+  if (opts.replace) {
+    window.history.replaceState({}, '', href);
+  } else {
+    window.history.pushState({}, '', href);
+  }
+  window.dispatchEvent(new Event('wakti-router:navigate'));
+};
+
+const joinPaths = (base, path) => {
+  if (!path) return normalizePathname(base || '/');
+  if (path === '*') return '*';
+  if (path.startsWith('/')) return normalizePathname(path);
+  return normalizePathname((base || '/') + '/' + path);
+};
+
+const matchPathname = (pattern, pathname, allowPartial) => {
+  const normalizedPattern = pattern === '*' ? '*' : normalizePathname(pattern || '/');
+  const normalizedPathnameValue = normalizePathname(pathname || '/');
+  if (normalizedPattern === '*') {
+    return { matched: true, params: {}, matchedPath: normalizedPathnameValue };
+  }
+  const patternSegments = normalizedPattern === '/' ? [] : normalizedPattern.split('/').filter(Boolean);
+  const pathSegments = normalizedPathnameValue === '/' ? [] : normalizedPathnameValue.split('/').filter(Boolean);
+  const params = {};
+  const consumed = [];
+  for (let i = 0; i < patternSegments.length; i += 1) {
+    const patternSegment = patternSegments[i];
+    const pathSegment = pathSegments[i];
+    if (patternSegment === '*') {
+      params['*'] = pathSegments.slice(i).join('/');
+      return {
+        matched: true,
+        params,
+        matchedPath: '/' + pathSegments.join('/'),
+      };
+    }
+    if (typeof pathSegment === 'undefined') {
+      return { matched: false, params: {}, matchedPath: null };
+    }
+    if (patternSegment.startsWith(':')) {
+      params[patternSegment.slice(1)] = decodeURIComponent(pathSegment);
+      consumed.push(pathSegment);
+      continue;
+    }
+    if (patternSegment !== pathSegment) {
+      return { matched: false, params: {}, matchedPath: null };
+    }
+    consumed.push(pathSegment);
+  }
+  if (!allowPartial && patternSegments.length !== pathSegments.length) {
+    return { matched: false, params: {}, matchedPath: null };
+  }
+  return {
+    matched: true,
+    params,
+    matchedPath: consumed.length > 0 ? '/' + consumed.join('/') : '/',
+  };
+};
+
+const renderMatchedRoutes = (routeNodes, pathname, basePath, inheritedParams, location) => {
+  const routes = window.React.Children.toArray(routeNodes);
+  for (let i = 0; i < routes.length; i += 1) {
+    const route = routes[i];
+    if (!window.React.isValidElement(route)) continue;
+    const props = route.props || {};
+    const childRoutes = window.React.Children.toArray(props.children);
+    const hasChildren = childRoutes.length > 0;
+    const isIndex = props.index === true;
+    const routePath = typeof props.path === 'string' ? props.path : '';
+    const fullPattern = isIndex
+      ? normalizePathname(basePath || '/')
+      : routePath
+        ? joinPaths(basePath || '/', routePath)
+        : normalizePathname(basePath || '/');
+    const match = isIndex
+      ? {
+          matched: normalizePathname(pathname || '/') === normalizePathname(basePath || '/'),
+          params: {},
+          matchedPath: normalizePathname(basePath || '/'),
+        }
+      : matchPathname(fullPattern, pathname, hasChildren || routePath === '*' || !props.element);
+    if (!match.matched) continue;
+    const params = Object.assign({}, inheritedParams || {}, match.params || {});
+    const outlet = hasChildren
+      ? renderMatchedRoutes(childRoutes, pathname, match.matchedPath || fullPattern, params, location)
+      : null;
+    const contextValue = {
+      location,
+      params,
+      outlet,
+      navigate: navigateTo,
+    };
+    if (props.element) {
+      return window.React.createElement(RouterContext.Provider, { value: contextValue }, props.element);
+    }
+    if (outlet) {
+      return window.React.createElement(RouterContext.Provider, { value: contextValue }, outlet);
+    }
+  }
+  return null;
+};
+
+const BrowserRouter = ({ children }) => {
+  const [location, setLocation] = window.React.useState(currentLocation());
+  window.React.useEffect(() => {
+    const handleChange = () => setLocation(currentLocation());
+    window.addEventListener('popstate', handleChange);
+    window.addEventListener('wakti-router:navigate', handleChange);
+    return () => {
+      window.removeEventListener('popstate', handleChange);
+      window.removeEventListener('wakti-router:navigate', handleChange);
+    };
+  }, []);
+  const contextValue = window.React.useMemo(() => ({
+    location,
+    params: {},
+    outlet: null,
+    navigate: navigateTo,
+  }), [location]);
+  return window.React.createElement(RouterContext.Provider, { value: contextValue }, children);
+};
+
+const HashRouter = BrowserRouter;
+const MemoryRouter = BrowserRouter;
+const Router = BrowserRouter;
+const Route = () => null;
+
+const Routes = ({ children }) => {
+  const context = window.React.useContext(RouterContext);
+  const location = context.location || currentLocation();
+  return renderMatchedRoutes(children, location.pathname, '/', context.params || {}, location);
+};
+
+const Outlet = () => {
+  const context = window.React.useContext(RouterContext);
+  return context.outlet || null;
+};
+
+const useNavigate = () => navigateTo;
+const useLocation = () => {
+  const context = window.React.useContext(RouterContext);
+  return context.location || currentLocation();
+};
+const useParams = () => {
+  const context = window.React.useContext(RouterContext);
+  return context.params || {};
+};
+const useHref = (to) => createHref(to, useLocation());
+const useResolvedPath = (to) => {
+  const href = createHref(to, useLocation());
+  return {
+    pathname: normalizePathname(href),
+    search: typeof to === 'object' && to && to.search ? String(to.search) : '',
+    hash: typeof to === 'object' && to && to.hash ? String(to.hash) : '',
+  };
+};
+const createSearchParams = (init) => new URLSearchParams(init || '');
+const useSearchParams = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const searchParams = window.React.useMemo(() => new URLSearchParams(location.search || ''), [location.search]);
+  const setSearchParams = (nextInit, options) => {
+    const nextParams = nextInit instanceof URLSearchParams
+      ? nextInit
+      : new URLSearchParams(nextInit || '');
+    navigate({ pathname: location.pathname, search: '?' + nextParams.toString() }, options || {});
+  };
+  return [searchParams, setSearchParams];
+};
+const useMatch = (pattern) => matchPathname(typeof pattern === 'string' ? pattern : pattern && pattern.path ? pattern.path : '/', useLocation().pathname, false);
+const useOutlet = () => {
+  const context = window.React.useContext(RouterContext);
+  return context.outlet || null;
+};
+const useInRouterContext = () => true;
+const useNavigationType = () => 'POP';
+
+const Link = window.React.forwardRef(({ onClick, replace, to, children, ...rest }, ref) => {
+  const location = useLocation();
+  const href = createHref(to, location);
+  const handleClick = (event) => {
+    if (typeof onClick === 'function') onClick(event);
+    if (event.defaultPrevented) return;
+    if (event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+    const target = event.currentTarget.getAttribute('target');
+    if (target && target !== '_self') return;
+    event.preventDefault();
+    navigateTo(to, { replace: !!replace });
+  };
+  return window.React.createElement('a', Object.assign({}, rest, { href, onClick: handleClick, ref }), children);
+});
+
+const NavLink = window.React.forwardRef(({ className, style, end, to, ...rest }, ref) => {
+  const location = useLocation();
+  const href = createHref(to, location);
+  const currentPath = normalizePathname(location.pathname || '/');
+  const targetPath = normalizePathname(href || '/');
+  const isActive = end ? currentPath === targetPath : (targetPath === '/' ? currentPath === '/' : currentPath === targetPath || currentPath.startsWith(targetPath + '/'));
+  const resolvedClassName = typeof className === 'function' ? className({ isActive, isPending: false }) : className;
+  const resolvedStyle = typeof style === 'function' ? style({ isActive, isPending: false }) : style;
+  return window.React.createElement(Link, Object.assign({}, rest, { ref, to, className: resolvedClassName, style: resolvedStyle }), rest.children);
+});
+
+const Navigate = ({ to, replace }) => {
+  const navigate = useNavigate();
+  window.React.useEffect(() => {
+    navigate(to, { replace: !!replace });
+  }, [to, replace]);
+  return null;
+};
+
+const RouterProvider = ({ children }) => children;
+const createBrowserRouter = () => ({});
+const createHashRouter = () => ({});
+const createRoutesFromElements = (elements) => elements;
+
+export {
+  BrowserRouter,
+  HashRouter,
+  MemoryRouter,
+  Router,
+  RouterProvider,
+  Routes,
+  Route,
+  Outlet,
+  Navigate,
+  Link,
+  NavLink,
+  createBrowserRouter,
+  createHashRouter,
+  createRoutesFromElements,
+  createSearchParams,
+  useNavigate,
+  useLocation,
+  useParams,
+  useSearchParams,
+  useHref,
+  useResolvedPath,
+  useMatch,
+  useOutlet,
+  useInRouterContext,
+  useNavigationType,
+};
+
+export default {
+  BrowserRouter,
+  HashRouter,
+  MemoryRouter,
+  Router,
+  RouterProvider,
+  Routes,
+  Route,
+  Outlet,
+  Navigate,
+  Link,
+  NavLink,
+  useNavigate,
+  useLocation,
+  useParams,
+  useSearchParams,
+};
+`;
 }
 
 // Generate Lucide icons shim as ES module exports
