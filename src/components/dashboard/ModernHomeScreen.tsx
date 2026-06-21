@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+﻿import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
@@ -141,6 +143,7 @@ type AppCircleProps = {
   overrideGlow?: string;
   useWaktiLogo?: boolean;
   scale?: number;
+  badgeCount?: number;
 };
 
 const MODERN_SCALE_BASE_WIDTH = 390;
@@ -514,7 +517,7 @@ function useModernViewport() {
 
 // --- AppCircle ----------------------------------------------------------------
 
-function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overrideIcon, overrideAccent, overrideGlow, useWaktiLogo, scale = 1 }: AppCircleProps) {
+function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overrideIcon, overrideAccent, overrideGlow, useWaktiLogo, scale = 1, badgeCount = 0 }: AppCircleProps) {
   const Icon = overrideIcon ?? app.icon;
   const accent = overrideAccent ?? app.accent;
   const glow = overrideGlow ?? app.glow;
@@ -526,23 +529,30 @@ function AppCircle({ app, language, onClick, size = "regular", avatarUrl, overri
   const isAccount = app.id === "account";
 
   return (
-    <button type="button" onClick={onClick} className="group flex min-w-0 select-none flex-col items-center" style={{ gap: `${gapPx}px` }}>
-      <span
-        className="relative flex items-center justify-center rounded-full border transition-all duration-200 overflow-hidden border-white/40 group-hover:scale-105"
-        style={{
-          width: `${bubblePx}px`,
-          height: `${bubblePx}px`,
-          background: `radial-gradient(circle at 30% 20%, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.1) 48%, rgba(10,20,40,0.1) 100%), linear-gradient(135deg, ${accent}22 0%, ${accent}42 100%)`,
-          borderColor: `${accent}66`,
-          boxShadow: `0 7px 16px ${glow}, inset 0 1px 0 rgba(255,255,255,0.52)`,
-        }}
-      >
-        {isAccount && avatarUrl
-          ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-          : useWaktiLogo
-            ? <WaktiIcon style={{ color: accent, width: `${iconPx}px`, height: `${iconPx}px` }} />
-            : Icon ? <Icon style={{ color: accent, width: `${iconPx}px`, height: `${iconPx}px` }} /> : null
-        }
+    <button type="button" onClick={onClick} className="group flex min-w-0 select-none flex-col items-center relative" style={{ gap: `${gapPx}px` }}>
+      <span className="relative">
+        <span
+          className="relative flex items-center justify-center rounded-full border transition-all duration-200 overflow-hidden border-white/40 group-hover:scale-105"
+          style={{
+            width: `${bubblePx}px`,
+            height: `${bubblePx}px`,
+            background: `radial-gradient(circle at 30% 20%, rgba(255,255,255,0.34) 0%, rgba(255,255,255,0.1) 48%, rgba(10,20,40,0.1) 100%), linear-gradient(135deg, ${accent}22 0%, ${accent}42 100%)`,
+            borderColor: `${accent}66`,
+            boxShadow: `0 7px 16px ${glow}, inset 0 1px 0 rgba(255,255,255,0.52)`,
+          }}
+        >
+          {isAccount && avatarUrl
+            ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+            : useWaktiLogo
+              ? <WaktiIcon style={{ color: accent, width: `${iconPx}px`, height: `${iconPx}px` }} />
+              : Icon ? <Icon style={{ color: accent, width: `${iconPx}px`, height: `${iconPx}px` }} /> : null
+          }
+        </span>
+        {badgeCount > 0 && (
+          <span className="absolute -top-1 -right-1 z-10 bg-red-500 text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-0.5 flex items-center justify-center border-2 border-white dark:border-[#0C0F14] shadow-sm">
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        )}
       </span>
       <span className={cn("text-center font-semibold leading-tight text-foreground/90 select-none", size === "compact" ? "whitespace-nowrap" : "line-clamp-2")} style={{ fontSize: `${labelPx}px` }}>
         {language === "ar" ? app.nameAr : app.nameEn}
@@ -1606,6 +1616,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const navigate = useNavigate();
   const { language, theme } = useTheme();
   const { profile } = useUserProfile();
+  const { user } = useAuth();
   const [quote] = useState(() => getQuoteForDisplay());
   const [quoteExpanded, setQuoteExpanded] = useState(false);
   const [quoteExiting, setQuoteExiting] = useState(false);
@@ -1615,6 +1626,40 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
   const [activeWidgetIndex, setActiveWidgetIndex] = useState(0);
   const [showDots, setShowDots] = useState(false);
+
+  // Social unread badge
+  const [connectBadge, setConnectBadge] = useState(0);
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchBadge = async () => {
+      try {
+        const [{ count: msgs }, { count: reqs }, { data: groupData }] = await Promise.all([
+          supabase.from('messages').select('*', { count: 'exact', head: true }).eq('recipient_id', user.id).eq('is_read', false),
+          supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('contact_id', user.id).eq('status', 'pending'),
+          supabase
+            .from('conversation_participants')
+            .select('conversation_id, last_read_at, conversations!inner(last_message_at, last_message_by)')
+            .eq('user_id', user.id)
+            .eq('conversations.is_group', true)
+            .not('conversations.last_message_at', 'is', null)
+            .neq('conversations.last_message_by', user.id),
+        ]);
+        const groupUnread = (groupData || []).filter((row: any) => {
+          const lastRead = row.last_read_at ? new Date(row.last_read_at).getTime() : 0;
+          const lastMsg = row.conversations?.last_message_at ? new Date(row.conversations.last_message_at).getTime() : 0;
+          return lastMsg > lastRead;
+        }).length;
+        setConnectBadge((msgs || 0) + (reqs || 0) + groupUnread);
+      } catch {}
+    };
+    fetchBadge();
+    const channel = supabase.channel(`modern-hs-badge-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `recipient_id=eq.${user.id}` }, fetchBadge)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts', filter: `contact_id=eq.${user.id}` }, fetchBadge)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_chat_messages' }, () => { setTimeout(fetchBadge, 500); })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user?.id]);
 
   const { tasks, reminders } = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -2119,7 +2164,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             </h3>
             <div className="grid grid-cols-3 md:grid-cols-4" style={{ gap: `${productivityGridGap}px` }}>
               {PRODUCTIVITY_APPS.map((app) => (
-                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={compactAppScale} />
+                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={compactAppScale} badgeCount={app.id === 'social' ? connectBadge : 0} />
               ))}
             </div>
           </section>

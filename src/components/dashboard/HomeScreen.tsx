@@ -970,98 +970,100 @@ function LiquidIcon({ app, size = 64, editMode, glowEnabled = false, avatarUrl, 
     ? `linear-gradient(180deg, rgba(255,255,255,0.26) 0%, rgba(255,255,255,0.11) 18%, rgba(255,255,255,0.02) 100%), rgba(30,33,42,0.18)`
     : `linear-gradient(180deg, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0.12) 22%, rgba(255,255,255,0.02) 100%), radial-gradient(circle at 32% 14%, rgba(255,255,255,0.2) 0%, transparent 44%), rgba(30,33,42,0.18)`;
   return (
-    <div
-      className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
-      style={{ width: px, height: px }}
-    >
-      {/* Main gradient body with iOS-style frosted glass */}
+    <div className="relative inline-block flex-shrink-0">
       <div
-        className="absolute inset-0"
-        style={{
-          borderRadius: shellRadius,
-          background: resolvedShellFill,
-          backdropFilter: isGridVariant ? 'blur(56px) saturate(220%)' : 'blur(52px) saturate(210%)',
-          WebkitBackdropFilter: isGridVariant ? 'blur(56px) saturate(220%)' : 'blur(52px) saturate(210%)',
-          boxShadow: resolvedGlassShadow,
-          border: isGridVariant ? `1px solid rgba(255,255,255,${isAppleMobile ? '0.12' : '0.14'})` : `1px solid rgba(255,255,255,${isAppleMobile ? '0.13' : '0.16'})`,
-        }}
-      />
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          inset: 0,
-          borderRadius: shellRadius,
-          background: isGridVariant
-            ? `linear-gradient(165deg, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.14) 16%, rgba(255,255,255,0.04) 34%, transparent 60%)`
-            : `linear-gradient(160deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.14) 20%, rgba(255,255,255,0.04) 44%, transparent 70%)`,
-        }}
-      />
-      {isDockVariant && (
+        className={`relative flex-shrink-0 ${editMode ? "animate-wiggle" : ""}`}
+        style={{ width: px, height: px }}
+      >
+        {/* Main gradient body with iOS-style frosted glass */}
+        <div
+          className="absolute inset-0"
+          style={{
+            borderRadius: shellRadius,
+            background: resolvedShellFill,
+            backdropFilter: isGridVariant ? 'blur(56px) saturate(220%)' : 'blur(52px) saturate(210%)',
+            WebkitBackdropFilter: isGridVariant ? 'blur(56px) saturate(220%)' : 'blur(52px) saturate(210%)',
+            boxShadow: resolvedGlassShadow,
+            border: isGridVariant ? `1px solid rgba(255,255,255,${isAppleMobile ? '0.12' : '0.14'})` : `1px solid rgba(255,255,255,${isAppleMobile ? '0.13' : '0.16'})`,
+          }}
+        />
         <div
           className="absolute pointer-events-none"
           style={{
-            inset: '8% 10% 50% 10%',
-            borderRadius: '999px',
-            background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.045) 100%)`,
-            filter: 'blur(4px)',
-            opacity: 0.58,
+            inset: 0,
+            borderRadius: shellRadius,
+            background: isGridVariant
+              ? `linear-gradient(165deg, rgba(255,255,255,0.38) 0%, rgba(255,255,255,0.14) 16%, rgba(255,255,255,0.04) 34%, transparent 60%)`
+              : `linear-gradient(160deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.14) 20%, rgba(255,255,255,0.04) 44%, transparent 70%)`,
           }}
         />
-      )}
-      {isDockVariant && (
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            left: '16%',
-            right: '16%',
-            bottom: '8%',
-            height: '24%',
-            borderRadius: '999px',
-            background: `radial-gradient(circle at 50% 50%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.028) 54%, transparent 100%)`,
-            filter: 'blur(10px)',
-            opacity: 0.52,
-          }}
-        />
-      )}
+        {isDockVariant && (
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              inset: '8% 10% 50% 10%',
+              borderRadius: '999px',
+              background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.045) 100%)`,
+              filter: 'blur(4px)',
+              opacity: 0.58,
+            }}
+          />
+        )}
+        {isDockVariant && (
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              left: '16%',
+              right: '16%',
+              bottom: '8%',
+              height: '24%',
+              borderRadius: '999px',
+              background: `radial-gradient(circle at 50% 50%, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.028) 54%, transparent 100%)`,
+              filter: 'blur(10px)',
+              opacity: 0.52,
+            }}
+          />
+        )}
 
-      {isGridVariant && (
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            inset: '7% 11% 52% 11%',
-            borderRadius: '999px',
-            background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.048) 100%)`,
-            filter: 'blur(3px)',
-            opacity: 0.58,
-          }}
-        />
-      )}
-      {isGridVariant && (
-        <div
-          className="absolute pointer-events-none"
-          style={{
-            left: '12%',
-            right: '12%',
-            bottom: '10%',
-            height: '22%',
-            borderRadius: '999px',
-            background: `linear-gradient(90deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.024) 35%, rgba(255,255,255,0.07) 100%)`,
-            filter: 'blur(10px)',
-            opacity: 0.44,
-          }}
-        />
-      )}
+        {isGridVariant && (
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              inset: '7% 11% 52% 11%',
+              borderRadius: '999px',
+              background: `linear-gradient(180deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0.048) 100%)`,
+              filter: 'blur(3px)',
+              opacity: 0.58,
+            }}
+          />
+        )}
+        {isGridVariant && (
+          <div
+            className="absolute pointer-events-none"
+            style={{
+              left: '12%',
+              right: '12%',
+              bottom: '10%',
+              height: '22%',
+              borderRadius: '999px',
+              background: `linear-gradient(90deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.024) 35%, rgba(255,255,255,0.07) 100%)`,
+              filter: 'blur(10px)',
+              opacity: 0.44,
+            }}
+          />
+        )}
 
-      <div className="absolute inset-0 flex items-center justify-center"
-        style={{ borderRadius: shellRadius, overflow: app.isAvatarIcon ? 'hidden' : 'visible' }}>
-        {app.isAvatarIcon && avatarUrl
-          ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" style={{ transform: isGridVariant ? 'scale(1.03)' : undefined }} />
-          : app.isWaktiIcon
-            ? <div className="absolute flex items-center justify-center" style={{ inset: iconInset, overflow: 'visible' }}><WaktiIcon style={{ width: size * iconScale, height: size * iconScale, color: iconTint, filter: iconFilter, opacity: 1 }} /></div>
-            : app.icon && <div className="absolute flex items-center justify-center" style={{ inset: iconInset, overflow: 'visible' }}><app.icon style={{ width: size * iconScale, height: size * iconScale, color: iconTint, filter: iconFilter, opacity: 1 }} strokeWidth={1.8} /></div>
-        }
+        <div className="absolute inset-0 flex items-center justify-center"
+          style={{ borderRadius: shellRadius, overflow: app.isAvatarIcon ? 'hidden' : 'visible' }}>
+          {app.isAvatarIcon && avatarUrl
+            ? <img src={avatarUrl} alt="avatar" className="w-full h-full object-cover" style={{ transform: isGridVariant ? 'scale(1.03)' : undefined }} />
+            : app.isWaktiIcon
+              ? <div className="absolute flex items-center justify-center" style={{ inset: iconInset, overflow: 'visible' }}><WaktiIcon style={{ width: size * iconScale, height: size * iconScale, color: iconTint, filter: iconFilter, opacity: 1 }} /></div>
+              : app.icon && <div className="absolute flex items-center justify-center" style={{ inset: iconInset, overflow: 'visible' }}><app.icon style={{ width: size * iconScale, height: size * iconScale, color: iconTint, filter: iconFilter, opacity: 1 }} strokeWidth={1.8} /></div>
+          }
+        </div>
       </div>
-      {/* Notification badge */}
+      {/* Notification badge — outside exact-dimension div for full visibility */}
       {!editMode && badgeCount > 0 && (
         <div className="absolute -top-1 -right-1 z-20 min-w-[18px] h-[18px] rounded-full bg-red-500 border-2 border-white flex items-center justify-center shadow-lg">
           <span className="text-white font-bold leading-none" style={{ fontSize: 10 }}>{badgeCount > 99 ? '99+' : badgeCount}</span>

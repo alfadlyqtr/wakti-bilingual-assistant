@@ -1066,7 +1066,8 @@ export default function GroupChatPage() {
     );
   };
 
-  const renderMessageContent = (message: GroupChatMessage, isSentByMe: boolean, compact = false) => {
+  const renderMessageContent = (message: GroupChatMessage, isSentByMe: boolean, compact = false, index = -1, totalMessages = 0) => {
+    const isLastTwoImages = index >= totalMessages - 2;
     if (message.is_deleted) {
       return (
         <div className={cn("text-sm italic", isDark ? "text-gray-300" : "text-gray-500")}>
@@ -1088,7 +1089,7 @@ export default function GroupChatPage() {
                 "block h-auto w-full max-w-full cursor-pointer rounded-lg object-contain",
                 compact ? "max-h-[260px]" : "max-h-[320px]"
               )}
-              loading="lazy"
+              loading={isLastTwoImages ? undefined : "lazy"}
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
               onClick={(event) => handleImageExpand(event, imageUrl)}
@@ -1269,7 +1270,7 @@ export default function GroupChatPage() {
             </Card>
           ) : (
             <AnimatePresence>
-              {messages.map((message) => {
+              {messages.map((message, index) => {
                 const mine = message.sender_id === user?.id;
                 const isWakti = message.sender_id === WAKTI_AI_ID;
                 const showUnreadDivider = unreadSeparatorMessageId === message.id;
@@ -1357,7 +1358,7 @@ export default function GroupChatPage() {
                             style={{ WebkitUserSelect: "none", userSelect: "none", WebkitTouchCallout: "none" }}
                           >
                             {renderReplySnippet(message, mine)}
-                            {renderMessageContent(message, mine)}
+                            {renderMessageContent(message, mine, false, index, messages.length)}
                           </div>
 
                           {displayedReaction && (

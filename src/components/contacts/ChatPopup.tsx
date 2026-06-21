@@ -652,7 +652,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                   <img 
                     src={cleanMediaUrl(message.media_url)} 
                     alt="Image message" 
-                    className="max-w-full h-auto rounded-lg cursor-pointer"
+                    className="max-w-full max-w-[420px] h-auto rounded-lg cursor-pointer"
                     loading="lazy"
                     crossOrigin="anonymous"
                     referrerPolicy="no-referrer"
@@ -829,7 +829,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
         <img
           src={cleanMediaUrl(message.media_url)}
           alt="Image message"
-          className="max-w-full h-auto rounded-lg"
+          className="max-w-full max-w-[420px] h-auto rounded-lg"
           loading="lazy"
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"

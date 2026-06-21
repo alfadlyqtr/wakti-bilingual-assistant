@@ -65,7 +65,7 @@ export default function ChatPage() {
   const hasScrolledToUnreadRef = useRef(false);
   const isNearBottomRef = useRef(true);
   const initialScrollDoneRef = useRef(false);
-  const unreadMessageIdRef = useRef<string | null>(null);
+  const [firstUnreadMessageId, setFirstUnreadMessageId] = useState<string | null>(null);
   const unreadDividerRef = useCallback((node: HTMLDivElement | null) => {
     if (node && !hasScrolledToUnreadRef.current) {
       node.scrollIntoView({ behavior: "auto", block: "start", inline: "nearest" });
@@ -202,7 +202,7 @@ export default function ChatPage() {
     if (!contactId) return;
     initialScrollDoneRef.current = false;
     hasScrolledToUnreadRef.current = false;
-    unreadMessageIdRef.current = null;
+    setFirstUnreadMessageId(null);
     isNearBottomRef.current = true;
     setShowScrollToBottom(false);
     setIsContactTyping(false);
@@ -254,12 +254,12 @@ export default function ChatPage() {
   // Capture first unread message on first load
   useEffect(() => {
     if (!allMessages?.length || !contactId) return;
-    if (unreadMessageIdRef.current !== null) return;
+    if (firstUnreadMessageId !== null) return;
     const firstUnread = allMessages.find(
       (m) => m.sender_id === contactId && !m.is_read
     );
-    unreadMessageIdRef.current = firstUnread?.id || null;
-  }, [allMessages, contactId]);
+    setFirstUnreadMessageId(firstUnread?.id || null);
+  }, [allMessages, contactId, firstUnreadMessageId]);
 
   // Mark messages as read when viewing
   useEffect(() => {
@@ -788,6 +788,7 @@ export default function ChatPage() {
     const isSentByMe = message.sender_id === currentUserId;
     const showAvatar = !isSentByMe && (index === 0 || messages[index - 1]?.sender_id !== message.sender_id);
     const isLastOfGroup = index === messages.length - 1 || messages[index + 1]?.sender_id !== message.sender_id;
+    const isLastTwoImages = index >= messages.length - 2;
     const displayedReaction = !message.is_deleted && message.reactions && message.reactions.length > 0
       ? [...message.reactions].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
       : null;
@@ -871,8 +872,8 @@ export default function ChatPage() {
                   <img 
                     src={cleanMediaUrl(message.media_url)} 
                     alt="Image message" 
-                    className="max-w-full h-auto rounded-lg cursor-pointer"
-                    loading="lazy"
+                    className="max-w-full max-w-[420px] h-auto rounded-lg cursor-pointer"
+                    loading={isLastTwoImages ? undefined : "lazy"}
                     crossOrigin="anonymous"
                     referrerPolicy="no-referrer"
                     onClick={() => setExpandedImage(cleanMediaUrl(message.media_url))}
@@ -1039,7 +1040,7 @@ export default function ChatPage() {
         <img
           src={cleanMediaUrl(message.media_url)}
           alt="Image message"
-          className="max-w-full h-auto rounded-lg"
+          className="max-w-full max-w-[420px] h-auto rounded-lg"
           loading="lazy"
           crossOrigin="anonymous"
           referrerPolicy="no-referrer"
@@ -1170,7 +1171,7 @@ export default function ChatPage() {
                 <AnimatePresence>
                   {allMessages.map((message, index) => (
                     <Fragment key={message.id}>
-                      {unreadMessageIdRef.current === message.id && (
+                      {firstUnreadMessageId === message.id && (
                         <div ref={unreadDividerRef} className="my-2 flex items-center gap-3 px-1">
                           <div className="h-px flex-1 bg-border/80" />
                           <span className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(210_100%_55%)]">
