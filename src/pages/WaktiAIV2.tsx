@@ -467,12 +467,6 @@ const WaktiAIV2 = () => {
       });
   }, [handleRefreshConversations, hasHomescreenHandoff, mapConversationList]);
 
-  useEffect(() => {
-    const userId = authUser?.id || userProfile?.id;
-    if (!userId) return;
-    WaktiAIV2Service.prewarmUserLocation(userId).catch(() => {});
-  }, [authUser?.id, userProfile?.id]);
-
   // One-time Helpful Memory onboarding popup Ã¢â‚¬â€ shows exactly once per user.
   useEffect(() => {
     if (isGuest) return;

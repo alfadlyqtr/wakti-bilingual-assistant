@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
-import { getExactLocation, getNativeLocation, queryNeedsFreshLocation, containsNearMePattern } from '@/integrations/natively/locationBridge';
+import { clearLocationCache, getExactLocation, getNativeLocation, queryNeedsFreshLocation, containsNearMePattern } from '@/integrations/natively/locationBridge';
 import { emitEvent } from '@/utils/eventBus';
 
 // Module-level session cache — avoids a Supabase network round-trip on every message send.
@@ -459,6 +459,11 @@ class WaktiAIV2ServiceClass {
     };
 
     try {
+      if (forceFresh) {
+        this.locationCache = null;
+        try { localStorage.removeItem('wakti_user_location'); } catch {}
+        clearLocationCache();
+      }
       const nativeLoc = forceFresh
         ? await getExactLocation({
             timeoutMs: 10000,

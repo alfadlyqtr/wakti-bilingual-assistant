@@ -58,12 +58,39 @@ export function buildProjectRuntimeHtml({
   const safeTitle = escapeHtml(projectName || 'Wakti Preview');
   const safeJs = escapeInlineScript(bundledJs || '');
   const safeCss = escapeInlineStyle(bundledCss || '');
-  const babelScriptTag = useBabelRuntime
-    ? '<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>'
-    : '';
-  const runtimeScriptTag = useBabelRuntime
-    ? `<script type="text/babel" data-presets="react,typescript">${safeJs}</script>`
-    : `<script>${safeJs}</script>`;
+  const encodedBundledJs = JSON.stringify(safeJs);
+  const reactUrls = JSON.stringify([
+    'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js',
+    'https://unpkg.com/react@18/umd/react.production.min.js',
+  ]);
+  const reactDomUrls = JSON.stringify([
+    'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js',
+    'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+  ]);
+  const reactIsUrls = JSON.stringify([
+    'https://cdn.jsdelivr.net/npm/react-is@18/umd/react-is.production.min.js',
+    'https://unpkg.com/react-is/umd/react-is.production.min.js',
+  ]);
+  const framerMotionUrls = JSON.stringify([
+    'https://cdn.jsdelivr.net/npm/framer-motion@6.5.1/dist/framer-motion.js',
+    'https://unpkg.com/framer-motion@6.5.1/dist/framer-motion.js',
+  ]);
+  const lucideUrls = JSON.stringify([
+    'https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js',
+    'https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js',
+  ]);
+  const rechartsUrls = JSON.stringify([
+    'https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js',
+    'https://unpkg.com/recharts/umd/Recharts.min.js',
+  ]);
+  const tailwindUrls = JSON.stringify([
+    'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4',
+    'https://cdn.tailwindcss.com',
+  ]);
+  const babelUrls = JSON.stringify([
+    'https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js',
+    'https://unpkg.com/@babel/standalone/babel.min.js',
+  ]);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -71,14 +98,6 @@ export function buildProjectRuntimeHtml({
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${safeTitle}</title>
-  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/react-is/umd/react-is.production.min.js"></script>
-  <script src="https://unpkg.com/framer-motion@6.5.1/dist/framer-motion.js"></script>
-  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
-  <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
-  ${babelScriptTag}
-  <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&family=Oswald:wght@400;500;600;700&family=Cairo:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script>
     tailwind.config = {
@@ -196,10 +215,113 @@ export function buildProjectRuntimeHtml({
     } else {
       waktiLog('Recharts available: false');
     }
+
+    function setBootError(message, details) {
+      var bootDiv = document.getElementById('wakti-boot-status');
+      if (!bootDiv) {
+        return;
+      }
+      bootDiv.innerHTML = '<div style="color:#f87171;font-size:18px;margin-bottom:16px;">❌ Error</div>' +
+        '<pre style="background:#1e1e1e;padding:16px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;color:#f87171;white-space:pre-wrap;">' +
+        String(message || 'Unknown runtime error') + (details ? '\n\n' + details : '') + '</pre>' +
+        '<div style="color:#9ca3af;margin-top:16px;font-size:12px;">The published app could not start.</div>';
+    }
+
+    function loadScriptWithTimeout(url, timeoutMs) {
+      return new Promise(function(resolve, reject) {
+        var script = document.createElement('script');
+        var settled = false;
+        var timeout = window.setTimeout(function() {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          script.remove();
+          reject(new Error('Timed out loading ' + url));
+        }, timeoutMs);
+
+        script.src = url;
+        script.async = true;
+        script.crossOrigin = 'anonymous';
+        script.onload = function() {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          window.clearTimeout(timeout);
+          resolve(url);
+        };
+        script.onerror = function() {
+          if (settled) {
+            return;
+          }
+          settled = true;
+          window.clearTimeout(timeout);
+          script.remove();
+          reject(new Error('Failed to load ' + url));
+        };
+
+        document.head.appendChild(script);
+      });
+    }
+
+    async function loadFirstAvailable(label, urls, required) {
+      var errors = [];
+      for (var i = 0; i < urls.length; i += 1) {
+        var url = urls[i];
+        try {
+          waktiLog('Loading ' + label + ' from ' + url);
+          await loadScriptWithTimeout(url, 6000);
+          waktiLog('Loaded ' + label + ' from ' + url);
+          return url;
+        } catch (error) {
+          var message = error && error.message ? error.message : String(error);
+          errors.push(message);
+          waktiLog('Failed ' + label + ' from ' + url + ': ' + message);
+        }
+      }
+
+      if (required) {
+        throw new Error(label + ' failed to load. ' + errors.join(' | '));
+      }
+
+      return null;
+    }
+
+    async function ensureRuntimeDependencies() {
+      await loadFirstAvailable('React', ${reactUrls}, true);
+      await loadFirstAvailable('ReactDOM', ${reactDomUrls}, true);
+      await loadFirstAvailable('ReactIs', ${reactIsUrls}, false);
+      await loadFirstAvailable('Framer Motion', ${framerMotionUrls}, false);
+      await loadFirstAvailable('Lucide', ${lucideUrls}, false);
+      await loadFirstAvailable('Recharts', ${rechartsUrls}, false);
+      if (${useBabelRuntime ? 'true' : 'false'}) {
+        await loadFirstAvailable('Babel', ${babelUrls}, true);
+      }
+      await loadFirstAvailable('Tailwind Browser Runtime', ${tailwindUrls}, false);
+    }
+
+    function executeBundledApp() {
+      var source = ${encodedBundledJs};
+      if (!source) {
+        throw new Error('Bundled app source is empty');
+      }
+
+      if (${useBabelRuntime ? 'true' : 'false'}) {
+        if (!window.Babel || typeof window.Babel.transform !== 'function') {
+          throw new Error('Babel is not available for runtime compilation');
+        }
+        source = window.Babel.transform(source, { presets: ['react', 'typescript'] }).code;
+      }
+
+      var script = document.createElement('script');
+      script.text = source;
+      document.body.appendChild(script);
+      script.remove();
+      waktiLog('Bundled code executed');
+    }
   </script>
-  ${runtimeScriptTag}
   <script>
-    waktiLog('Bundled code executed');
     function renderApp(retries) {
       retries = retries || 0;
       try {
@@ -223,10 +345,40 @@ export function buildProjectRuntimeHtml({
         document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#f87171;font-family:Inter,sans-serif;"><h2>Error loading app</h2><pre style="background:#1e1e1e;padding:20px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;">' + message + '</pre><details style="margin-top:20px;text-align:left;"><summary style="cursor:pointer;color:#9ca3af;">Boot Log</summary><pre style="background:#1e1e1e;padding:12px;border-radius:4px;font-size:10px;margin-top:8px;">' + (window.__waktiBootLog || []).join('\n') + '</pre></details></div>';
       }
     }
+
+    async function bootPublishedApp() {
+      try {
+        await ensureRuntimeDependencies();
+
+        const FM = window.FramerMotion || window.Motion;
+        waktiLog('Framer Motion available after load: ' + (!!FM));
+        if (typeof FM !== 'undefined' && FM) {
+          window.FramerMotion = FM;
+          window.motion = FM.motion;
+          window.AnimatePresence = FM.AnimatePresence;
+          window.useAnimation = FM.useAnimation;
+          window.useInView = FM.useInView;
+          window.useScroll = FM.useScroll;
+          window.useTransform = FM.useTransform;
+          window.useMotionValue = FM.useMotionValue;
+        }
+        if (typeof window.lucide !== 'undefined' && window.lucide) {
+          window.__lucideIcons = window.lucide;
+        }
+
+        executeBundledApp();
+        renderApp(0);
+      } catch (error) {
+        var message = error && error.message ? error.message : String(error);
+        waktiLog('BOOT ERROR: ' + message);
+        setBootError(message, (window.__waktiBootLog || []).join('\n'));
+      }
+    }
+
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', function() { renderApp(0); });
+      document.addEventListener('DOMContentLoaded', function() { bootPublishedApp(); });
     } else {
-      renderApp(0);
+      bootPublishedApp();
     }
   </script>
 </body>

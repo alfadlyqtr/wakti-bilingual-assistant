@@ -2311,12 +2311,32 @@ export default function ProjectDetail() {
       console.log('Project files:', Object.keys(projectFiles));
       
       // Step 1: Call project-build to bundle the files properly
-      const { data: buildResult, error: buildError } = await supabase.functions.invoke('project-build', {
-        body: {
-          files: projectFiles,
-          entryPoint: '/App.js'
+      let buildResult: any = null;
+      let buildError: any = null;
+
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        const response = await supabase.functions.invoke('project-build', {
+          body: {
+            files: projectFiles,
+            entryPoint: '/App.js'
+          }
+        });
+
+        buildResult = response.data;
+        buildError = response.error;
+
+        if (!buildError) {
+          break;
         }
-      });
+
+        console.error(`Build transport error on attempt ${attempt}:`, buildError);
+
+        if (attempt === 3) {
+          break;
+        }
+
+        await new Promise((resolve) => window.setTimeout(resolve, attempt * 1200));
+      }
 
       if (buildError) {
         console.error('Build error:', buildError);

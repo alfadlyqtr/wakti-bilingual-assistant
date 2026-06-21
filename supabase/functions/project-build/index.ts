@@ -60,6 +60,49 @@ interface BuildResponse {
   error?: string;
 }
 
+function transformLucideReactImports(code: string): string {
+  if (!code.includes("lucide-react")) {
+    return code;
+  }
+
+  let importIndex = 0;
+  return code.replace(/^([ \t]*)import\s*\{([^}]*)\}\s*from\s*["']lucide-react["']\s*;?[ \t]*$/gm, (_, indentation: string, importList: string) => {
+    const proxyName = `__waktiLucideIcons${importIndex += 1}`;
+    const specifiers = String(importList)
+      .split(",")
+      .map((value) => value.replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+
+    const assignments = specifiers
+      .map((specifier) => {
+        if (specifier.startsWith("type ")) {
+          return "";
+        }
+
+        const parts = specifier.split(/\s+as\s+/i);
+        const importedName = parts[0]?.trim();
+        const localName = (parts[1] || importedName || "").trim();
+
+        if (!importedName || !localName) {
+          return "";
+        }
+
+        if (importedName === "icons") {
+          return `${indentation}const ${localName} = ${proxyName};`;
+        }
+
+        return `${indentation}const ${localName} = ${proxyName}.${importedName};`;
+      })
+      .filter(Boolean);
+
+    if (assignments.length === 0) {
+      return "";
+    }
+
+    return `${indentation}import { icons as ${proxyName} } from "lucide-react";\n${assignments.join("\n")}`;
+  });
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -572,7 +615,11 @@ serve(async (req) => {
           if (args.path.endsWith('.json')) loader = 'json';
           if (args.path.endsWith('.css')) loader = 'css';
 
-          return { contents: content, loader };
+          const transformedContent = loader === 'json' || loader === 'css'
+            ? content
+            : transformLucideReactImports(content);
+
+          return { contents: transformedContent, loader };
         });
       }
     };

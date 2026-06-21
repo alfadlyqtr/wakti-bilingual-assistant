@@ -68,6 +68,7 @@ const LOCATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for fresh location
 const BRIDGE_READY_TIMEOUT = 5000; // max ms to wait for native iOS/Android bridge
 
 const EXACT_BRIDGE_READY_TIMEOUT = 3000;
+const EXACT_MIN_WATCH_MS = 2500;
 const MIN_CONTEXT_ATTEMPT_TIMEOUT = 2500;
 const MIN_EXACT_ATTEMPT_TIMEOUT = 4000;
 
@@ -243,16 +244,26 @@ function getForegroundLocation(
   accuracyType: string,
   priority: string,
   fallbackToSettings: boolean,
-  timeoutMs: number
+  timeoutMs: number,
+  minimumWatchMs: number = 0
 ): Promise<NativeLocationResult | null> {
   return new Promise((resolve) => {
     let settled = false;
     const interval = 3000; // poll every 3s
+    const startedAt = Date.now();
+    let delayedFix: NativeLocationResult | null = null;
+    let delayedFixAt = 0;
 
     const timer = setTimeout(() => {
       if (!settled) {
         settled = true;
         try { instance.stop(); } catch {}
+        if (delayedFix && (delayedFixAt - startedAt) >= minimumWatchMs) {
+          setCachedLocation(delayedFix);
+          console.log('[NativelyLocation] ✅ Foreground tracking settled on delayed fix:', delayedFix.latitude, delayedFix.longitude, 'accuracy:', delayedFix.accuracy);
+          resolve(delayedFix);
+          return;
+        }
         console.warn('[NativelyLocation] Foreground tracking timed out after', timeoutMs, 'ms');
         resolve(null);
       }
@@ -267,15 +278,22 @@ function getForegroundLocation(
       const lng = resp.longitude;
 
       if (resp.status === 'Success' && hasValidCoordinates(lat, lng)) {
-        settled = true;
-        clearTimeout(timer);
-        try { instance.stop(); } catch {}
         const result: NativeLocationResult = {
           latitude: lat,
           longitude: lng,
           accuracy: resp.accuracy,
           source: 'native',
         };
+        const elapsedMs = Date.now() - startedAt;
+        if (minimumWatchMs > 0 && elapsedMs < minimumWatchMs) {
+          delayedFix = result;
+          delayedFixAt = Date.now();
+          console.log('[NativelyLocation] Foreground tracking provisional fix:', lat, lng, 'accuracy:', resp.accuracy, 'elapsed:', elapsedMs);
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        try { instance.stop(); } catch {}
         setCachedLocation(result);
         console.log('[NativelyLocation] ✅ Foreground tracking got fix:', lat, lng, 'accuracy:', resp.accuracy);
         resolve(result);
@@ -445,6 +463,8 @@ async function tryNativeSdkLocation(options: {
   priority: 'BALANCED' | 'HIGH';
   fallbackToSettings: boolean;
   useForeground: boolean;
+  minimumWatchMs: number;
+  allowCurrentFallback: boolean;
 }): Promise<NativeLocationResult | null> {
   const bridgeReady = await waitForNativeBridge(options.bridgeTimeoutMs);
   if (!bridgeReady) {
@@ -468,13 +488,14 @@ async function tryNativeSdkLocation(options: {
       options.priority,
       options.fallbackToSettings,
       options.timeoutMs,
+      options.minimumWatchMs,
     );
-    if (!result) {
+    if (!result && options.allowCurrentFallback) {
       console.warn(`[NativelyLocation] ${options.mode} flow: foreground GPS unavailable — trying current()`);
     }
   }
 
-  if (!result) {
+  if (!result && options.allowCurrentFallback) {
     console.log(`[NativelyLocation] ${options.mode} flow: using current() one-shot...`);
     result = await getCurrentLocation(
       instance,
@@ -508,6 +529,7 @@ async function _doGetExactLocation(options?: GetLocationOptions): Promise<Native
     allowBrowserFallback = true,
   } = options || {};
 
+  clearLocationCache();
   const accuracyType = options?.accuracyType || 'Best';
   const priority = options?.priority || 'HIGH';
   const nativeTimeoutMs = getExactAttemptTimeout(timeoutMs);
@@ -525,6 +547,8 @@ async function _doGetExactLocation(options?: GetLocationOptions): Promise<Native
     priority,
     fallbackToSettings,
     useForeground: true,
+    minimumWatchMs: EXACT_MIN_WATCH_MS,
+    allowCurrentFallback: false,
   }).catch((err) => {
     console.warn('[NativelyLocation] Exact native path threw:', err);
     return null;
@@ -613,6 +637,8 @@ async function _doGetNativeLocation(options?: GetLocationOptions): Promise<Nativ
     priority,
     fallbackToSettings,
     useForeground: false,
+    minimumWatchMs: 0,
+    allowCurrentFallback: true,
   }).catch((err) => {
     console.warn('[NativelyLocation] Context native path threw:', err);
     return null;
