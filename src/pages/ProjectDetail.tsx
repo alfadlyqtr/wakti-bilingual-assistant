@@ -3667,26 +3667,27 @@ ${fixInstructions}
   ): { success: boolean; updatedFiles: Record<string, string>; targetFile: string | null } => {
     if (!elementInfo) return { success: false, updatedFiles: files, targetFile: null };
     
-    const className = elementInfo.className?.split(' ')[0] || '';
-    const tag = elementInfo.tagName?.toLowerCase() || '';
+    const resolvedClassName = ('imageTargetClassName' in elementInfo ? (elementInfo as any).imageTargetClassName : '') || elementInfo.className || '';
+    const resolvedTag = ('imageTargetTagName' in elementInfo ? (elementInfo as any).imageTargetTagName : '') || elementInfo.tagName || '';
+    const resolvedOpeningTag = ('imageTargetOpeningTag' in elementInfo ? (elementInfo as any).imageTargetOpeningTag : '') || elementInfo.openingTag || '';
+    const imageTargetMode = ('imageTargetMode' in elementInfo ? (elementInfo as any).imageTargetMode : '') || 'src';
+    const className = resolvedClassName.split(' ')[0] || '';
+    const tag = resolvedTag.toLowerCase();
+    const attributeName = imageTargetMode === 'poster' ? 'poster' : 'src';
     
-    // Extract old src from opening tag
-    let oldSrc = '';
-    if (elementInfo.openingTag) {
-      const srcMatch = elementInfo.openingTag.match(/src=["']([^"']+)["']/);
+    let oldSrc = ('imageUrl' in elementInfo ? (elementInfo as any).imageUrl : '') || '';
+    if (!oldSrc && resolvedOpeningTag) {
+      const srcMatch = resolvedOpeningTag.match(/(?:src|poster)=["']([^"']+)["']/);
       if (srcMatch) oldSrc = srcMatch[1];
     }
     
-    // Priority order of files to check
     const fileKeys = Object.keys(files).sort((a, b) => {
-      // Prioritize files likely to contain component code
       const priorityPatterns = [/carousel/i, /slider/i, /image/i, /gallery/i, /hero/i, /banner/i];
       const aScore = priorityPatterns.some(p => p.test(a)) ? 0 : 1;
       const bScore = priorityPatterns.some(p => p.test(b)) ? 0 : 1;
       return aScore - bScore;
     });
     
-    // Strategy 1: Find file containing the exact oldSrc
     if (oldSrc) {
       for (const filePath of fileKeys) {
         const content = files[filePath];
@@ -3712,9 +3713,10 @@ ${fixInstructions}
     // Strategy 2: Match by className across all files
     if (className) {
       const escapedClass = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const assetTagPattern = tag || '[a-zA-Z0-9_.-]+';
       const patterns = [
-        new RegExp(`(<img[^>]*?src=)(["'])([^"']+)(\\2)([^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'])`, 'g'),
-        new RegExp(`(<img[^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'][^>]*?src=)(["'])([^"']+)(\\2)`, 'g')
+        new RegExp(`(<${assetTagPattern}[^>]*?${attributeName}=)(["'])([^"']+)(\\2)([^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'][^>]*>)`, 'g'),
+        new RegExp(`(<${assetTagPattern}[^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'][^>]*?${attributeName}=)(["'])([^"']+)(\\2)([^>]*>)`, 'g')
       ];
       
       for (const filePath of fileKeys) {
@@ -3725,11 +3727,7 @@ ${fixInstructions}
           let replaced = false;
           const newContent = content.replace(pattern, (match, ...groups) => {
             replaced = true;
-            if (groups.length === 5) {
-              return `${groups[0]}${groups[1]}${newUrl}${groups[3]}${groups[4]}`;
-            } else {
-              return `${groups[0]}${groups[1]}${newUrl}${groups[3]}`;
-            }
+            return `${groups[0]}${groups[1]}${newUrl}${groups[3]}${groups[4]}`;
           });
           
           if (replaced) {
@@ -3744,19 +3742,18 @@ ${fixInstructions}
       }
     }
     
-    // Strategy 3: Single img tag replacement (last resort)
-    if (tag === 'img') {
+    if (tag === 'img' || tag === 'video') {
       for (const filePath of fileKeys) {
         const content = files[filePath];
         if (!content || typeof content !== 'string') continue;
         
-        const imgCount = (content.match(/<img\s/g) || []).length;
-        if (imgCount === 1) {
-          const singleImgPattern = /(<img[^>]*?src=)(["'])([^"']+)(\2)/;
+        const assetCount = (content.match(new RegExp(`<${tag}\\s`, 'g')) || []).length;
+        if (assetCount === 1) {
+          const singleImgPattern = new RegExp(`(<${tag}[^>]*?${attributeName}=)(["'])([^"']+)(\\2)`);
           const newContent = content.replace(singleImgPattern, `$1$2${newUrl}$4`);
           
           if (newContent !== content) {
-            console.log(`Image replaced in ${filePath} using single img match`);
+            console.log(`Image replaced in ${filePath} using single ${tag} match`);
             return { 
               success: true, 
               updatedFiles: { ...files, [filePath]: newContent },
@@ -3769,6 +3766,23 @@ ${fixInstructions}
     
     return { success: false, updatedFiles: files, targetFile: null };
   };
+
+  const applySelectedElementImageChange = useCallback((elementInfo: SelectedElementInfo | null, imageUrl: string): boolean => {
+    if (!elementInfo || !imageUrl) {
+      return false;
+    }
+
+    const { success, updatedFiles } = replaceImageInAllFiles(generatedFiles, elementInfo, imageUrl);
+
+    if (!success) {
+      return false;
+    }
+
+    visualEditHistory.pushState(generatedFiles, isRTL ? 'تحديث الصورة' : 'Image update');
+    void saveCode(updatedFiles);
+    toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
+    return true;
+  }, [generatedFiles, isRTL, saveCode, visualEditHistory]);
 
   // Helper: Check if URL is already from Supabase storage
   const isSupabaseStorageUrl = (url: string): boolean => {
@@ -3820,51 +3834,17 @@ ${fixInstructions}
 
   // Handle stock photo selection
   const handleStockPhotoSelect = async (photo: { url: string; title: string }) => {
-    // Check if this is for an element image edit (from Image tab or AI Edit)
     if (pendingElementImageEdit) {
       const { elementInfo } = pendingElementImageEdit;
       
       try {
-        // Use the photo URL directly — no waiting for storage import (avoids stuck toast)
-        // Storage import runs silently in the background for persistence
         const imageUrl = photo.url;
-        importExternalImage(photo.url, photo.title).catch(() => {}); // fire-and-forget
-        
-        // Now replace in code across ALL files
-        const { success, updatedFiles, targetFile } = replaceImageInAllFiles(
-          generatedFiles,
-          elementInfo,
-          imageUrl
-        );
-        
-        if (success && targetFile) {
-          // Push current state to history before applying changes
-          visualEditHistory.pushState(generatedFiles, isRTL ? 'تحديث الصورة' : 'Image update');
-          
-          // Save code to database and refresh preview
-          void saveCode(updatedFiles);
-          toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
+        importExternalImage(photo.url, photo.title).catch(() => {});
+
+        if (applySelectedElementImageChange(elementInfo, imageUrl)) {
+          setShowElementEditPopover(false);
         } else {
-          // Fallback: Use AI prompt with the URL
-          const contextInfo = elementInfo?.className 
-            ? `the ${elementInfo.tagName} element with class "${elementInfo.className.split(' ')[0]}"`
-            : elementInfo?.tagName 
-              ? `the ${elementInfo.tagName} element`
-              : 'the selected image';
-          
-          const promptText = isRTL
-            ? `قم بتحديث صورة ${contextInfo} إلى هذا الرابط: ${imageUrl}`
-            : `Update the image source for ${contextInfo} to this URL: ${imageUrl}`;
-          
-          setLeftPanelMode('code');
-          setChatInput(promptText);
-          toast.info(isRTL ? 'جاري تطبيق التغيير...' : 'Applying change...');
-          
-          // Auto-submit with slight delay to allow state update
-          setTimeout(() => {
-            const formEl = document.querySelector('form[data-chat-form]') as HTMLFormElement;
-            if (formEl) formEl.requestSubmit?.();
-          }, 100);
+          toast.error(isRTL ? 'تعذر تحديث هذه الصورة مباشرة. اضغط على الصورة نفسها ثم حاول مرة أخرى.' : 'Could not update this image directly. Click the exact image and try again.');
         }
       } catch (err) {
         toast.error(isRTL ? 'فشل في تحديث الصورة' : 'Failed to update image');
@@ -9047,67 +9027,15 @@ ${fixInstructions}
             setSelectedElementInfo(null);
           }}
           onDirectEdit={(changes) => {
-            // Handle direct image URL change - NO AI needed!
             if (changes.imageUrl) {
-              const currentCode = generatedFiles['/App.js'] || '';
-              const className = selectedElementInfo.className?.split(' ')[0];
-              const tag = selectedElementInfo.tagName.toLowerCase();
-              
-              // Pattern to find and replace img src
-              let newCode = currentCode;
-              let replaced = false;
-              
-              // Try to find img element with matching class
-              if (className) {
-                const imgClassPattern = new RegExp(
-                  `(<img[^>]*?(?:className|class)=["'][^"']*${className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^"']*["'][^>]*?src=)(["'])([^"']+)(\\2)`,
-                  'g'
-                );
-                newCode = newCode.replace(imgClassPattern, (match, prefix, quote, oldUrl, endQuote) => {
-                  replaced = true;
-                  return `${prefix}${quote}${changes.imageUrl}${endQuote}`;
-                });
-              }
-              
-              // Fallback: try simple img src replacement based on context
-              if (!replaced && tag === 'img') {
-                // If we have the opening tag, try to find it
-                const openingTag = selectedElementInfo.openingTag;
-                if (openingTag && openingTag.includes('src=')) {
-                  const srcMatch = openingTag.match(/src=["']([^"']+)["']/);
-                  if (srcMatch) {
-                    const oldSrc = srcMatch[1];
-                    newCode = newCode.replace(
-                      new RegExp(`src=["']${oldSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'g'),
-                      `src="${changes.imageUrl}"`
-                    );
-                    replaced = newCode !== currentCode;
-                  }
-                }
-              }
-              
-              if (replaced) {
-                // Push current state to history before applying changes
-                visualEditHistory.pushState(generatedFiles, isRTL ? 'تحديث الصورة' : 'Image update');
-                const updatedFiles = { ...generatedFiles, '/App.js': newCode };
-                setGeneratedFiles(updatedFiles);
-                setCodeContent(newCode);
-                void saveCode(updatedFiles);
-                toast.success(isRTL ? 'تم تحديث الصورة!' : 'Image updated!');
+              if (applySelectedElementImageChange(selectedElementInfo, changes.imageUrl)) {
+                setShowElementEditPopover(false);
+                setSelectedElementInfo(null);
               } else {
-                // Fallback: send to AI if direct replacement fails
-                const contextPrompt = `Change the image src in the ${selectedElementInfo.tagName} element${className ? ` with class "${className}"` : ''} to: ${changes.imageUrl}`;
-                setLeftPanelMode('code');
-                setChatInput(contextPrompt);
-                toast.info(isRTL ? 'جاري تطبيق التغيير...' : 'Applying change...');
-                setTimeout(() => {
-                  const formEl = document.querySelector('form[data-chat-form]') as HTMLFormElement | null;
-                  if (formEl) formEl.requestSubmit?.();
-                }, 100);
+                toast.error(isRTL ? 'تعذر تحديث هذه الصورة مباشرة. اضغط على الصورة نفسها ثم حاول مرة أخرى.' : 'Could not update this image directly. Click the exact image and try again.');
+                setShowElementEditPopover(false);
+                setSelectedElementInfo(null);
               }
-              
-              setShowElementEditPopover(false);
-              setSelectedElementInfo(null);
               return;
             }
             

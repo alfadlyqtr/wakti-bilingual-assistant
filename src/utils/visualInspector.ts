@@ -44,18 +44,100 @@ export const INSPECTOR_SCRIPT = `
   
   document.body.appendChild(overlay);
 
-  const buildElementInfo = (target) => ({
-    tagName: target.tagName.toLowerCase(),
-    className: target.className || '',
-    id: target.id || '',
-    innerText: (target.innerText || '').trim().substring(0, 100),
-    openingTag: target.outerHTML.split('>')[0] + '>',
-    computedStyle: {
-      color: getComputedStyle(target).color,
-      backgroundColor: getComputedStyle(target).backgroundColor,
-      fontSize: getComputedStyle(target).fontSize,
-    }
+  const extractCssUrl = (value) => {
+    if (typeof value !== 'string') return '';
+    const match = value.match(/url\((['"]?)(.*?)\\1\)/i);
+    return match && match[2] ? match[2] : '';
+  };
+
+  const buildAssetInfo = (node, mode, url) => ({
+    url: url || '',
+    mode,
+    tagName: node?.tagName ? node.tagName.toLowerCase() : '',
+    className: node?.className || '',
+    openingTag: node?.outerHTML ? node.outerHTML.split('>')[0] + '>' : '',
   });
+
+  const readAssetFromNode = (node) => {
+    if (!node || node === document.body || node === document.documentElement) {
+      return null;
+    }
+
+    const tagName = node.tagName ? node.tagName.toLowerCase() : '';
+
+    if (tagName === 'img' && node.currentSrc) {
+      return buildAssetInfo(node, 'src', node.currentSrc);
+    }
+
+    if (tagName === 'img' && node.getAttribute) {
+      const src = node.getAttribute('src') || node.getAttribute('data-src') || '';
+      if (src) return buildAssetInfo(node, 'src', src);
+    }
+
+    if (tagName === 'video' && node.getAttribute) {
+      const poster = node.getAttribute('poster') || '';
+      if (poster) return buildAssetInfo(node, 'poster', poster);
+      const src = node.currentSrc || node.getAttribute('src') || '';
+      if (src) return buildAssetInfo(node, 'src', src);
+    }
+
+    if (tagName === 'source' && node.getAttribute) {
+      const src = node.getAttribute('src') || '';
+      if (src) return buildAssetInfo(node, 'src', src);
+    }
+
+    const bgUrl = extractCssUrl(getComputedStyle(node).backgroundImage);
+    if (bgUrl) {
+      return buildAssetInfo(node, 'background', bgUrl);
+    }
+
+    return null;
+  };
+
+  const resolveImageAsset = (target) => {
+    const directAsset = readAssetFromNode(target);
+    if (directAsset) return directAsset;
+
+    if (target && typeof target.querySelector === 'function') {
+      const descendant = target.querySelector('img[src], img[data-src], video[poster], video[src], source[src]');
+      if (descendant) {
+        const descendantAsset = readAssetFromNode(descendant);
+        if (descendantAsset) return descendantAsset;
+      }
+    }
+
+    let current = target?.parentElement || null;
+    while (current && current !== document.body && current !== document.documentElement) {
+      const ancestorAsset = readAssetFromNode(current);
+      if (ancestorAsset) return ancestorAsset;
+      current = current.parentElement;
+    }
+
+    return null;
+  };
+
+  const buildElementInfo = (target) => {
+    const computedStyle = getComputedStyle(target);
+    const assetInfo = resolveImageAsset(target);
+
+    return {
+      tagName: target.tagName.toLowerCase(),
+      className: target.className || '',
+      id: target.id || '',
+      innerText: (target.innerText || '').trim().substring(0, 100),
+      openingTag: target.outerHTML.split('>')[0] + '>',
+      imageUrl: assetInfo?.url || '',
+      imageTargetTagName: assetInfo?.tagName || '',
+      imageTargetClassName: assetInfo?.className || '',
+      imageTargetOpeningTag: assetInfo?.openingTag || '',
+      imageTargetMode: assetInfo?.mode || undefined,
+      computedStyle: {
+        color: computedStyle.color,
+        backgroundColor: computedStyle.backgroundColor,
+        fontSize: computedStyle.fontSize,
+      }
+    };
+  };
 
   const emitElementSelection = (target) => {
     if (!target || target === overlay || target === document.body || target === document.documentElement || target.id === 'root') {

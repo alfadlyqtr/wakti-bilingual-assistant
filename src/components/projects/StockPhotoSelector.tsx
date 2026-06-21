@@ -85,9 +85,9 @@ export function StockPhotoSelector({
 
   // Grid size classes
   const gridClasses: Record<GridSize, string> = {
-    small: 'grid-cols-4 gap-2',
-    medium: 'grid-cols-2 gap-3',
-    large: 'grid-cols-1 gap-4'
+    small: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2',
+    medium: 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3',
+    large: 'grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4'
   };
 
   // Selection count for display
@@ -403,7 +403,7 @@ export function StockPhotoSelector({
         className={cn(
           "bg-background shadow-lg w-full flex flex-col",
           "h-[100dvh] rounded-none", // Full screen on mobile
-          "sm:h-auto sm:max-h-[90vh] sm:rounded-xl sm:max-w-3xl"
+          "sm:h-auto sm:max-h-[92vh] sm:rounded-xl sm:max-w-6xl"
         )}
         dir={isRTL ? 'rtl' : 'ltr'}
       >
@@ -585,27 +585,27 @@ export function StockPhotoSelector({
                       key={photo.id}
                       className={cn(
                         "relative overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
-                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-square rounded-lg",
-                        isPhotoSelected(photo.image.source.url) 
+                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-[4/3] rounded-lg",
+                        isPhotoSelected(photo.url || photo.image.source.url) 
                           ? "ring-2 ring-primary ring-offset-1 ring-offset-background" 
                           : "border border-border/50"
                       )}
                       onClick={() => handleSelectPhoto({
-                        url: photo.image.source.url,
+                        url: photo.url || photo.image.source.url,
                         title: photo.title
                       })}
                     >
                       <img 
-                        src={photo.image.source.url} 
+                        src={photo.image.source.url || photo.url} 
                         alt={photo.title}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain bg-muted/20 p-2"
                       />
                       {/* Selection overlay */}
-                      {isPhotoSelected(photo.image.source.url) && (
+                      {isPhotoSelected(photo.url || photo.image.source.url) && (
                         <div className="absolute inset-0 bg-primary/20" />
                       )}
                       {/* Checkmark badge */}
-                      {isPhotoSelected(photo.image.source.url) && (
+                      {isPhotoSelected(photo.url || photo.image.source.url) && (
                         <div className={cn(
                           "absolute bg-primary text-primary-foreground rounded-full shadow-lg",
                           gridSize === 'small' ? "top-1 right-1 p-0.5" : "top-2 right-2 p-1.5"
@@ -697,7 +697,7 @@ export function StockPhotoSelector({
                       key={photo.id}
                       className={cn(
                         "relative overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
-                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-square rounded-lg",
+                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-[4/3] rounded-lg",
                         isPhotoSelected(photo.url) 
                           ? "ring-2 ring-primary ring-offset-1 ring-offset-background" 
                           : "border border-border/50"
@@ -710,7 +710,7 @@ export function StockPhotoSelector({
                       <img 
                         src={photo.url} 
                         alt={photo.filename}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain bg-muted/20 p-2"
                       />
                       {/* Selection overlay */}
                       {isPhotoSelected(photo.url) && (
@@ -739,7 +739,7 @@ export function StockPhotoSelector({
                     onClick={handleUploadClick}
                     className={cn(
                       "border-2 border-dashed border-muted-foreground/30 hover:border-primary/50 flex flex-col items-center justify-center gap-2 transition-colors",
-                      gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-square rounded-lg"
+                      gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-[4/3] rounded-lg"
                     )}
                   >
                     <Upload className={gridSize === 'small' ? "h-4 w-4 text-muted-foreground" : "h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground"} />
@@ -800,7 +800,7 @@ export function StockPhotoSelector({
                       key={photo.id}
                       className={cn(
                         "relative overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
-                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-square rounded-lg",
+                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-[4/3] rounded-lg",
                         isPhotoSelected(photo.image_url) 
                           ? "ring-2 ring-primary ring-offset-1 ring-offset-background" 
                           : "border border-border/50"
@@ -813,7 +813,7 @@ export function StockPhotoSelector({
                       <img 
                         src={photo.image_url} 
                         alt={photo.prompt || 'Generated image'}
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain bg-muted/20 p-2"
                       />
                       {/* Selection overlay */}
                       {isPhotoSelected(photo.image_url) && (

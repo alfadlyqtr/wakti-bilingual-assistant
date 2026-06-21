@@ -6,6 +6,11 @@ export interface SelectedElementInfo {
   id: string;
   innerText: string;
   openingTag: string;
+  imageUrl?: string;
+  imageTargetTagName?: string;
+  imageTargetClassName?: string;
+  imageTargetOpeningTag?: string;
+  imageTargetMode?: 'src' | 'poster' | 'background';
   computedStyle?: {
     color: string;
     backgroundColor: string;

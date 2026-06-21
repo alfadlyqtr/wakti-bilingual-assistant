@@ -62,14 +62,15 @@ interface BackendFreepikImage {
 
 function mapBackendImageToResource(image: BackendFreepikImage, index: number): FreepikResource {
   const imageUrl = image.url || image.thumbnail || '';
+  const previewUrl = image.thumbnail || image.url || '';
 
   return {
     id: image.id ?? `freepik-${index}`,
     title: image.title || 'Freepik image',
-    url: image.freepikUrl || imageUrl,
+    url: imageUrl || image.freepikUrl || previewUrl,
     image: {
       source: {
-        url: imageUrl,
+        url: previewUrl || imageUrl,
       },
       type: image.type || 'photo',
       orientation: image.orientation || 'landscape',
