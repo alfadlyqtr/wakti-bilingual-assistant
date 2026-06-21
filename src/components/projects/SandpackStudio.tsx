@@ -78,6 +78,7 @@ const RUNTIME_ENTRY_CANDIDATES = [
 ] as const;
 const VISUAL_PREVIEW_READY_TIMEOUT_MS = 130000;
 const VISUAL_INSPECTOR_MARKER = 'wakti-visual-inspector-v1';
+const VISUAL_INSPECTOR_MODULE_PATH = '/__wakti_visual_inspector__.js';
 const APP_COMPONENT_ENTRY_CANDIDATES = [
   '/App.tsx',
   '/App.jsx',
@@ -96,6 +97,30 @@ function toImportPath(filePath: string): string {
   return filePath
     .replace(/^\//, './')
     .replace(/\.(tsx|ts|jsx|js)$/i, '');
+}
+
+function toRelativeFileImportPath(fromPath: string, toPath: string): string {
+  const fromSegments = fromPath.replace(/^\//, '').split('/');
+  fromSegments.pop();
+
+  const toSegments = toPath.replace(/^\//, '').split('/');
+
+  while (fromSegments.length > 0 && toSegments.length > 0 && fromSegments[0] === toSegments[0]) {
+    fromSegments.shift();
+    toSegments.shift();
+  }
+
+  const upwardSegments = fromSegments.map(() => '..');
+  const joined = [...upwardSegments, ...toSegments].join('/');
+  return joined.startsWith('.') ? joined : `./${joined}`;
+}
+
+function injectInspectorImport(source: string, importPath: string): string {
+  if (typeof source !== 'string' || source.includes(VISUAL_INSPECTOR_MODULE_PATH)) {
+    return source;
+  }
+
+  return `import "${importPath}";\n${source}`;
 }
 
 function isLikelyPackageSpecifier(specifier: string): boolean {
@@ -423,24 +448,6 @@ function injectSandboxNetworkGuardScript(html: string): string {
 
   if (html.includes('</body>')) {
     return html.replace('</body>', `${scriptTag}\n</body>`);
-  }
-
-  return `${html}\n${scriptTag}`;
-}
-
-function injectVisualInspectorScript(html: string): string {
-  if (!html || html.includes(VISUAL_INSPECTOR_MARKER)) {
-    return html;
-  }
-
-  const scriptTag = `<script>\n/* ${VISUAL_INSPECTOR_MARKER} */\n${INSPECTOR_SCRIPT}\n</script>`;
-
-  if (html.includes('</body>')) {
-    return html.replace('</body>', `${scriptTag}\n</body>`);
-  }
-
-  if (html.includes('</head>')) {
-    return html.replace('</head>', `${scriptTag}\n</head>`);
   }
 
   return `${html}\n${scriptTag}`;
@@ -1286,6 +1293,17 @@ root.render(<App />);
 `;
     }
 
+    const inspectorEntryPath = RUNTIME_ENTRY_CANDIDATES.find((path) => {
+      const source = next[path];
+      return typeof source === 'string' && hasReactMountCode(source);
+    }) ?? (typeof next['/__wakti_entry.js'] === 'string' ? '/__wakti_entry.js' : null);
+
+    if (inspectorEntryPath) {
+      next[VISUAL_INSPECTOR_MODULE_PATH] = `/* ${VISUAL_INSPECTOR_MARKER} */\n${INSPECTOR_SCRIPT}`;
+      const inspectorImportPath = toRelativeFileImportPath(inspectorEntryPath, VISUAL_INSPECTOR_MODULE_PATH);
+      next[inspectorEntryPath] = injectInspectorImport(next[inspectorEntryPath], inspectorImportPath);
+    }
+
     // If project uses i18n, inject our pre-bundled version under the original package names
     // This way Sandpack resolves imports to our bundle instead of trying to fetch from npm
     if (next["/i18n.js"]) {
@@ -1362,21 +1380,17 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
     }
 
     if (typeof next['/index.html'] === 'string') {
-      next['/index.html'] = injectVisualInspectorScript(
-        injectPreviewErrorCaptureScript(
-          injectSandboxNetworkGuardScript(
-            shouldUseCleanReactShell ? buildReactPreviewShell(indexHtmlSource) : ensureRootMountHtml(next['/index.html'])
-          )
+      next['/index.html'] = injectPreviewErrorCaptureScript(
+        injectSandboxNetworkGuardScript(
+          shouldUseCleanReactShell ? buildReactPreviewShell(indexHtmlSource) : ensureRootMountHtml(next['/index.html'])
         )
       );
     }
 
     if (typeof next['/public/index.html'] === 'string') {
-      next['/public/index.html'] = injectVisualInspectorScript(
-        injectPreviewErrorCaptureScript(
-          injectSandboxNetworkGuardScript(
-            shouldUseCleanReactShell ? buildReactPreviewShell(publicIndexHtmlSource) : ensureRootMountHtml(next['/public/index.html'])
-          )
+      next['/public/index.html'] = injectPreviewErrorCaptureScript(
+        injectSandboxNetworkGuardScript(
+          shouldUseCleanReactShell ? buildReactPreviewShell(publicIndexHtmlSource) : ensureRootMountHtml(next['/public/index.html'])
         )
       );
     }
