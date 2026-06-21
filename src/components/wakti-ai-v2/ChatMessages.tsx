@@ -195,6 +195,7 @@ function SearchMessageCard({
   const isContentSearch = !isPlaceSearch && ['news', 'sports', 'research', 'general', 'url'].includes(searchType);
   const nearMeLocationDebug = (message as any)?.metadata?.nearMeLocationDebug;
   const bridgeDebug = nearMeLocationDebug?.bridge || null;
+  const nearMeBackendDebug = resolvedBrowsingData?.nearMeDebug || (message as any)?.metadata?.geminiSearch?.nearMeDebug || null;
 
   let themeColor = 'text-emerald-500';
   let themeBg = 'bg-emerald-500/10';
@@ -255,6 +256,18 @@ function SearchMessageCard({
             <div><strong>{language === 'ar' ? 'إحداثيات المتصفح:' : 'Browser coords:'}</strong> {typeof bridgeDebug?.browserLatitude === 'number' && typeof bridgeDebug?.browserLongitude === 'number' ? `${bridgeDebug.browserLatitude.toFixed(6)}, ${bridgeDebug.browserLongitude.toFixed(6)}` : 'none'}</div>
             <div><strong>{language === 'ar' ? 'دقة المتصفح:' : 'Browser accuracy:'}</strong> {typeof bridgeDebug?.browserAccuracy === 'number' ? `${Math.round(bridgeDebug.browserAccuracy)}m` : 'none'}</div>
             <div><strong>{language === 'ar' ? 'المصدر النهائي:' : 'Final source:'}</strong> {bridgeDebug?.finalStatus || 'none'}</div>
+            {nearMeBackendDebug && (
+              <>
+                <div className="mt-2 border-t border-amber-500/20 pt-2"><strong>{language === 'ar' ? 'تشخيص البحث الخلفي' : 'Backend search debug'}</strong></div>
+                <div><strong>{language === 'ar' ? 'استلم الإحداثيات:' : 'Coords received:'}</strong> {nearMeBackendDebug.coordsReceived ? 'yes' : 'no'}</div>
+                <div><strong>{language === 'ar' ? 'استعلام الأماكن:' : 'Places query:'}</strong> {nearMeBackendDebug.placeQuery || 'none'}</div>
+                <div><strong>{language === 'ar' ? 'استعلام الخرائط:' : 'Maps query:'}</strong> {nearMeBackendDebug.mapsGroundingQuery || 'none'}</div>
+                <div><strong>{language === 'ar' ? 'وضع القريب الصارم:' : 'Strict nearby:'}</strong> {nearMeBackendDebug.strictNearby ? 'yes' : 'no'}</div>
+                <div><strong>{language === 'ar' ? 'عدد نتائج الأماكن:' : 'Places found:'}</strong> {typeof nearMeBackendDebug.placesCount === 'number' ? String(nearMeBackendDebug.placesCount) : '0'}</div>
+                <div><strong>{language === 'ar' ? 'استخدم Places أولاً:' : 'Used Places first:'}</strong> {nearMeBackendDebug.usedPlacesFirst ? 'yes' : 'no'}</div>
+                <div><strong>{language === 'ar' ? 'سبب الخلفية:' : 'Backend reason:'}</strong> {nearMeBackendDebug.reason || 'unknown'}</div>
+              </>
+            )}
           </div>
         </div>
       )}

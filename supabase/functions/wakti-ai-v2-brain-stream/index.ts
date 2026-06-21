@@ -2893,6 +2893,31 @@ function buildSearchSourceCards(
   });
 }
 
+function buildNearMeSearchDebug(params: {
+  latitude: number | null;
+  longitude: number | null;
+  placeQuery: string;
+  mapsGroundingQuery: string;
+  strictNearby: boolean;
+  placesCount: number;
+  usedPlacesFirst: boolean;
+}) {
+  const { latitude, longitude, placeQuery, mapsGroundingQuery, strictNearby, placesCount, usedPlacesFirst } = params;
+  return {
+    coordsReceived: typeof latitude === 'number' && typeof longitude === 'number',
+    latitude: typeof latitude === 'number' ? Number(latitude.toFixed(6)) : null,
+    longitude: typeof longitude === 'number' ? Number(longitude.toFixed(6)) : null,
+    placeQuery,
+    mapsGroundingQuery,
+    strictNearby,
+    placesCount,
+    usedPlacesFirst,
+    reason: usedPlacesFirst
+      ? 'places_first_near_me'
+      : (placesCount > 0 ? 'places_found_but_ai_path_used' : 'no_places_found_yet'),
+  };
+}
+
 function buildPlaceSearchCards(places: GroundedPlaceCard[], language: string): SearchCardItem[] {
   return places.slice(0, 6).map((place, index) => {
     const summary = truncateSearchCardText(
@@ -2912,6 +2937,33 @@ function buildPlaceSearchCards(places: GroundedPlaceCard[], language: string): S
         : (language === 'ar' ? 'أفضل اختيار' : 'Top pick'),
     };
   });
+}
+
+function buildPlacesFirstNearMeText(params: {
+  places: GroundedPlaceCard[];
+  language: string;
+  placeQuery: string;
+}): string {
+  const { places, language, placeQuery } = params;
+  const queryLabel = cleanSearchCardText(placeQuery || '').toLowerCase() || (language === 'ar' ? 'الأماكن' : 'places');
+  const topNames = places
+    .slice(0, 3)
+    .map((place) => cleanSearchCardText(place.name || ''))
+    .filter(Boolean);
+  const namesText = topNames.join(language === 'ar' ? '، ' : ', ');
+
+  if (language === 'ar') {
+    if (namesText) {
+      return `وجدت لك أفضل النتائج القريبة والموثقة لـ ${queryLabel}. أبرز الخيارات الآن: ${namesText}. البطاقات بالأسفل مبنية على Google Places الحقيقي وتشمل الخريطة وساعات العمل والهاتف والموقع عند توفرها.`;
+    }
+    return `وجدت لك أفضل النتائج القريبة والموثقة لـ ${queryLabel}. البطاقات بالأسفل مبنية على Google Places الحقيقي وتشمل الخريطة وساعات العمل والهاتف والموقع عند توفرها.`;
+  }
+
+  if (namesText) {
+    return `I found the strongest verified nearby ${queryLabel} results for you. Top picks right now: ${namesText}. The cards below come from real Google Places data with maps, hours, phone, and website when available.`;
+  }
+
+  return `I found the strongest verified nearby ${queryLabel} results for you. The cards below come from real Google Places data with maps, hours, phone, and website when available.`;
 }
 
 function buildStructuredSearchCards(params: {
@@ -5990,21 +6042,33 @@ If you are running out of space, keep this order and drop the rest:
               .replace(/\b(near me|nearest|closest|around me|nearby)\b/gi, ' ')
               .replace(/\s+/g, ' ')
               .trim() || cleanSearchQuery;
+            const strictNearbySearch = Boolean(isNearMeSearchQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude);
+            const nearMeMapsGroundingQuery = buildMapsGroundingQuery(cleanSearchQuery, userLocationForSearch);
+            const buildCurrentNearMeDebug = (placesCount: number, usedPlacesFirst: boolean) => buildNearMeSearchDebug({
+              latitude: requestLatitude,
+              longitude: requestLongitude,
+              placeQuery: placesSearchQuery,
+              mapsGroundingQuery: nearMeMapsGroundingQuery,
+              strictNearby: strictNearbySearch,
+              placesCount,
+              usedPlacesFirst,
+            });
 
             const parallelPlacesPromise = effectiveSearchIntent === 'business' && cleanSearchQuery
               ? (async () => {
                   const foundPlaces = await searchGooglePlacesForQuery(
                     placesSearchQuery,
                     userLocationForSearch ? { latitude: userLocationForSearch.latitude, longitude: userLocationForSearch.longitude } : null,
-                    { strictNearby: Boolean(isNearMeSearchQuery && userLocationForSearch?.latitude && userLocationForSearch?.longitude) }
+                    { strictNearby: strictNearbySearch }
                   );
                   return await enrichGroundedPlacesWithOfficialLinks(foundPlaces);
                 })()
               : null;
+            let resolvedParallelPlaces: GroundedPlaceCard[] | null = null;
 
             // Stream tokens to client
             const searchModel = engineTier === 'intelligence' ? 'gemini-3.1-pro-preview' : 'gemini-3.1-flash-lite';
-            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: { searchType: effectiveSearchIntent, cardType: normalizeSearchCardType(effectiveSearchIntent), queries: cleanSearchQuery ? [cleanSearchQuery] : [], cards: [], summary: '', isNearMeQuery: isNearMeSearchQuery } } })}\n\n`));
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ metadata: { geminiSearch: { searchType: effectiveSearchIntent, cardType: normalizeSearchCardType(effectiveSearchIntent), queries: cleanSearchQuery ? [cleanSearchQuery] : [], cards: [], summary: '', isNearMeQuery: isNearMeSearchQuery, nearMeDebug: buildCurrentNearMeDebug(0, false) } } })}\n\n`));
 
             if (parallelPlacesPromise) {
               parallelPlacesPromise
@@ -6029,6 +6093,7 @@ If you are running out of space, keep this order and drop the rest:
                     places: parallelPlaces,
                     summary: earlyCardPayload.summary,
                     cards: earlyCardPayload.cards,
+                    nearMeDebug: buildCurrentNearMeDebug(parallelPlaces.length, Boolean(isNearMeSearchQuery && effectiveSearchIntent === 'business' && parallelPlaces.length > 0)),
                     googleMapsWidgetContextToken: null,
                     searchEntryPointHtml: ''
                   } } })}\n\n`));
@@ -6038,30 +6103,45 @@ If you are running out of space, keep this order and drop the rest:
 
             const searchModelQuery = effectiveSearchIntent === 'business'
               ? (language === 'ar'
-                  ? `${message}\n\n[قاعدة تنسيق إلزامية — يجب الالتزام بها]: يجب عليك تنسيق كل مكان مقترح بدقة كقائمة مهيكلة. ابدأ كل مكان بـ "**[الرقم]. [الاسم]** ([المنطقة])"، متبوعاً بوصف قصير، ثم هذه النقاط التفصيلية تماماً:\n- **Reason:** [سبب وجيه ومحدد لاختيار هذا المكان]\n- **Vibe:** [الكلمات المفتاحية]\n- **Must Try:** [التوصية]\n- **Status:** [مفتوح / مغلق]\n- **Google Maps:** [الرابط]\nلا تكتب فقرات عادية بدون هذه الحقول النقطية المصممة للبطاقات.`
+                  ? `${message}\n\n[قاعدة تنسيق إلزامية — يجب الالتزام بها]: يجب عليك تنسيق كل مكان مقترح بدقة كقائمة مهيكلة. ابدأ كل مكان بـ "**[الرقم]. [الاسم]** ([المنطقة])", متبوعاً بوصف قصير، ثم هذه النقاط التفصيلية تماماً:\n- **Reason:** [سبب وجيه ومحدد لاختيار هذا المكان]\n- **Vibe:** [الكلمات المفتاحية]\n- **Must Try:** [التوصية]\n- **Status:** [مفتوح / مغلق]\n- **Google Maps:** [الرابط]\nلا تكتب فقرات عادية بدون هذه الحقول النقطية المصممة للبطاقات.`
                   : `${message}\n\n[MANDATORY FORMATTING RULE — MUST COMPLY]: You MUST format each recommended place precisely as a structured list. Start each place with "**[Number]. [Name]** ([Area])", followed by a short description, and then exactly these bullet points:\n- **Reason:** [compelling reason to visit / why it made the list]\n- **Vibe:** [keywords]\n- **Must Try:** [recommendation]\n- **Status:** [verified hours]\n- **Google Maps:** [link]\nDO NOT use plain paragraph style without these bullet fields designed for the cards.`)
               : message;
 
-            await streamGemini3WithSearch(
-              searchModelQuery,
-              searchSystemPrompt,
-              { temperature: 0.3, maxOutputTokens: 8000 },
-              recentMessages,
-              (token: string) => {
-                fullResponseText += token;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
-              },
-              (meta: Gemini3SearchResult['groundingMetadata']) => {
-                groundingMetadata = meta;
-              },
-              (finishReason?: string) => {
-                searchFinishReason = typeof finishReason === 'string' ? finishReason : '';
-              },
-              userLocationForSearch,
-              effectiveSearchIntent,
-              searchModel,
-              normalizedAttachedFiles
-            );
+            const shouldTryPlacesFirst = Boolean(isNearMeSearchQuery && effectiveSearchIntent === 'business' && parallelPlacesPromise);
+            if (shouldTryPlacesFirst && parallelPlacesPromise) {
+              resolvedParallelPlaces = await parallelPlacesPromise.catch(() => []);
+              if (resolvedParallelPlaces.length > 0) {
+                fullResponseText = buildPlacesFirstNearMeText({
+                  places: resolvedParallelPlaces,
+                  language,
+                  placeQuery: placesSearchQuery,
+                });
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token: fullResponseText, content: fullResponseText })}\n\n`));
+              }
+            }
+
+            if (!fullResponseText) {
+              await streamGemini3WithSearch(
+                searchModelQuery,
+                searchSystemPrompt,
+                { temperature: 0.3, maxOutputTokens: 8000 },
+                recentMessages,
+                (token: string) => {
+                  fullResponseText += token;
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ token, content: token })}\n\n`));
+                },
+                (meta: Gemini3SearchResult['groundingMetadata']) => {
+                  groundingMetadata = meta;
+                },
+                (finishReason?: string) => {
+                  searchFinishReason = typeof finishReason === 'string' ? finishReason : '';
+                },
+                userLocationForSearch,
+                effectiveSearchIntent,
+                searchModel,
+                normalizedAttachedFiles
+              );
+            }
             fullResponseText = trimIncompleteSearchResponse(fullResponseText, searchFinishReason);
 
             // Emit grounding metadata for frontend citation injection
@@ -6279,9 +6359,9 @@ If you are running out of space, keep this order and drop the rest:
 
                 let groundedPlaces: GroundedPlaceCard[] = Array.from(groundedPlaceById.values());
                 if (effectiveSearchIntent === 'business' && groundedPlaces.length === 0) {
-                  groundedPlaces = parallelPlacesPromise ? await parallelPlacesPromise.catch(() => []) : [];
+                  groundedPlaces = resolvedParallelPlaces ?? (parallelPlacesPromise ? await parallelPlacesPromise.catch(() => []) : []);
                 } else if (parallelPlacesPromise) {
-                  const parallelPlaces = await parallelPlacesPromise.catch(() => []);
+                  const parallelPlaces = resolvedParallelPlaces ?? await parallelPlacesPromise.catch(() => []);
                   groundedPlaces = mergeGroundedPlaceLists(groundedPlaces, parallelPlaces);
                 }
                 const builtSources = (() => {
@@ -6336,6 +6416,7 @@ If you are running out of space, keep this order and drop the rest:
                       places: groundedPlaces,
                       summary: cardPayload.summary,
                       cards: cardPayload.cards,
+                      nearMeDebug: buildCurrentNearMeDebug(groundedPlaces.length, Boolean(resolvedParallelPlaces && resolvedParallelPlaces.length > 0)),
                       finishReason: searchFinishReason || null,
                       truncated: searchFinishReason === 'MAX_TOKENS',
                       googleMapsWidgetContextToken: gm.googleMapsWidgetContextToken || null,
@@ -6381,7 +6462,9 @@ If you are running out of space, keep this order and drop the rest:
 
                 let fallbackPlaces: GroundedPlaceCard[] = [];
                 if (effectiveSearchIntent === 'business' && cleanFallbackQuery) {
-                  fallbackPlaces = parallelPlacesPromise
+                  fallbackPlaces = resolvedParallelPlaces
+                    ? resolvedParallelPlaces
+                    : parallelPlacesPromise
                     ? await parallelPlacesPromise.catch(() => [])
                     : await (async () => {
                         const foundPlaces = await searchGooglePlacesForQuery(
@@ -6418,6 +6501,7 @@ If you are running out of space, keep this order and drop the rest:
                         places: fallbackPlaces,
                         summary: fallbackCardPayload.summary,
                         cards: fallbackCardPayload.cards,
+                        nearMeDebug: buildCurrentNearMeDebug(fallbackPlaces.length, Boolean(resolvedParallelPlaces && resolvedParallelPlaces.length > 0)),
                         finishReason: searchFinishReason || null,
                         truncated: searchFinishReason === 'MAX_TOKENS',
                         googleMapsWidgetContextToken: null,

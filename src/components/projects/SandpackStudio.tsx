@@ -23,7 +23,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { clsx } from "clsx";
-import { WAKTI_INSPECTOR_COMPONENT } from "@/utils/waktiInspectorComponent";
+import { INSPECTOR_SCRIPT } from "@/utils/visualInspector";
 import sandpackI18nBundle from "@/assets/sandpack-i18n-bundle.mjs?raw";
 import { SANDPACK_DEPENDENCIES, assertSandpackPackagesInSync, rootPackageName } from "@/config/sandpackPackages";
 import { SANDPACK_EFFECTIVE_BUNDLER_URL, SANDPACK_START_ROUTE } from "@/config/sandpackBundler";
@@ -77,6 +77,7 @@ const RUNTIME_ENTRY_CANDIDATES = [
   '/src/wakti_entry.tsx',
 ] as const;
 const VISUAL_PREVIEW_READY_TIMEOUT_MS = 130000;
+const VISUAL_INSPECTOR_MARKER = 'wakti-visual-inspector-v1';
 const APP_COMPONENT_ENTRY_CANDIDATES = [
   '/App.tsx',
   '/App.jsx',
@@ -422,6 +423,24 @@ function injectSandboxNetworkGuardScript(html: string): string {
 
   if (html.includes('</body>')) {
     return html.replace('</body>', `${scriptTag}\n</body>`);
+  }
+
+  return `${html}\n${scriptTag}`;
+}
+
+function injectVisualInspectorScript(html: string): string {
+  if (!html || html.includes(VISUAL_INSPECTOR_MARKER)) {
+    return html;
+  }
+
+  const scriptTag = `<script>\n/* ${VISUAL_INSPECTOR_MARKER} */\n${INSPECTOR_SCRIPT}\n</script>`;
+
+  if (html.includes('</body>')) {
+    return html.replace('</body>', `${scriptTag}\n</body>`);
+  }
+
+  if (html.includes('</head>')) {
+    return html.replace('</head>', `${scriptTag}\n</head>`);
   }
 
   return `${html}\n${scriptTag}`;
@@ -870,7 +889,6 @@ export default function SandpackStudio({
   const [forceAllDependencies, setForceAllDependencies] = useState(false);
   const [runtimeDependencies, setRuntimeDependencies] = useState<Record<string, string>>({});
   const autoRecoveryCountRef = useRef(0);
-  const usingVisualPreview = !!elementSelectMode;
 
   const knownDependencyRoots = useMemo(() => {
     const roots = new Set<string>();
@@ -1074,12 +1092,6 @@ export default function SandpackStudio({
     setRuntimeDependencies({});
   }, [projectId]);
 
-  useEffect(() => {
-    autoRecoveryCountRef.current = 0;
-    setPreviewFailureMessage('');
-    setPreviewHealth('loading');
-  }, [elementSelectMode]);
-
   const handleVisualPreviewFailure = useCallback((reason: string) => {
     if (autoRecoveryCountRef.current < 1) {
       autoRecoveryCountRef.current += 1;
@@ -1262,48 +1274,16 @@ export default function App() {
     });
     const hasRuntimeEntryFile = RUNTIME_ENTRY_CANDIDATES.some((path) => typeof next[path] === 'string');
 
-    if (usingVisualPreview) {
-      // Ensure /App.js exists so Sandpack always has a default entry file to open in Code view.
-      // Many generated projects place App under /src, which would leave Sandpack with no obvious active file.
-      if (!next['/App.js']) {
-        if (next['/src/App.js'] || next['/src/App.jsx'] || next['/src/App.tsx']) {
-          next['/App.js'] = "export { default } from './src/App';\n";
-        }
-      }
-
-      // Add styles.css if not present
-      if (!next["/styles.css"]) {
-        next["/styles.css"] = "/* Tailwind loaded via CDN */";
-      }
-    }
-
     if (!hasMountingRuntimeEntry && appEntryPath) {
       const appImportPath = toImportPath(appEntryPath);
 
-      if (usingVisualPreview) {
-        next['/__wakti_entry.js'] = `import React from "react";
-import { createRoot } from "react-dom/client";
-import App from "${appImportPath}";
-
-${WAKTI_INSPECTOR_COMPONENT}
-
-const root = createRoot(document.getElementById("root"));
-root.render(
-  <>
-    <App />
-    <WaktiInspector />
-  </>
-);
-`;
-      } else {
-        next['/__wakti_entry.js'] = `import React from "react";
+      next['/__wakti_entry.js'] = `import React from "react";
 import { createRoot } from "react-dom/client";
 import App from "${appImportPath}";
 
 const root = createRoot(document.getElementById("root"));
 root.render(<App />);
 `;
-      }
     }
 
     // If project uses i18n, inject our pre-bundled version under the original package names
@@ -1382,23 +1362,27 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
     }
 
     if (typeof next['/index.html'] === 'string') {
-      next['/index.html'] = injectPreviewErrorCaptureScript(
-        injectSandboxNetworkGuardScript(
-          shouldUseCleanReactShell ? buildReactPreviewShell(indexHtmlSource) : ensureRootMountHtml(next['/index.html'])
+      next['/index.html'] = injectVisualInspectorScript(
+        injectPreviewErrorCaptureScript(
+          injectSandboxNetworkGuardScript(
+            shouldUseCleanReactShell ? buildReactPreviewShell(indexHtmlSource) : ensureRootMountHtml(next['/index.html'])
+          )
         )
       );
     }
 
     if (typeof next['/public/index.html'] === 'string') {
-      next['/public/index.html'] = injectPreviewErrorCaptureScript(
-        injectSandboxNetworkGuardScript(
-          shouldUseCleanReactShell ? buildReactPreviewShell(publicIndexHtmlSource) : ensureRootMountHtml(next['/public/index.html'])
+      next['/public/index.html'] = injectVisualInspectorScript(
+        injectPreviewErrorCaptureScript(
+          injectSandboxNetworkGuardScript(
+            shouldUseCleanReactShell ? buildReactPreviewShell(publicIndexHtmlSource) : ensureRootMountHtml(next['/public/index.html'])
+          )
         )
       );
     }
 
     return next;
-  }, [normalizedProjectFiles, usingVisualPreview]);
+  }, [normalizedProjectFiles]);
 
   const sandpackEntryFile = useMemo(() => {
     const mountedRuntimeEntry = RUNTIME_ENTRY_CANDIDATES.find((path) => {
@@ -1756,7 +1740,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     />
                   )}
 
-                  {usingVisualPreview && viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'recovering' && (
+                  {viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'recovering' && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0c0f14]/70 backdrop-blur-sm p-4">
                       <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#0c0f14] px-5 py-4 text-center shadow-2xl">
                         <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-indigo-500/10 text-indigo-400">
@@ -1772,7 +1756,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                     </div>
                   )}
 
-                  {usingVisualPreview && viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'failed' && (
+                  {viewMode === 'preview' && hasValidFiles && !isLoading && previewHealth === 'failed' && (
                     <div className="absolute inset-0 z-20 flex items-center justify-center bg-[#0c0f14]/80 backdrop-blur-sm p-4">
                       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#0c0f14] p-6 text-center shadow-2xl">
                         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10 text-amber-400">
@@ -1808,10 +1792,10 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                       }}
                     >
                       <InspectablePreview
-                        key={`inspectable-preview-${usingVisualPreview ? 'visual' : 'standard'}-${previewSessionKey}`}
+                        key={`inspectable-preview-standard-${previewSessionKey}`}
                         elementSelectMode={elementSelectMode}
                         onElementSelect={onElementSelect}
-                        inspectorEnabled={usingVisualPreview}
+                        inspectorEnabled={true}
                         watchdogEnabled={viewMode === 'preview' && !isLoading && hasValidFiles}
                         onPreviewReady={handlePreviewReady}
                         onPreviewFailure={handleVisualPreviewFailure}
@@ -1830,7 +1814,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
         </div>
 
         {/* CONSOLE PANEL - Integrated at bottom */}
-        {viewMode === 'preview' && usingVisualPreview && (
+        {viewMode === 'preview' && elementSelectMode && (
           <SandpackConsolePanel 
             isOpen={consoleOpen}
             onToggle={() => setConsoleOpen(prev => !prev)}

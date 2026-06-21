@@ -5,6 +5,7 @@ export const INSPECTOR_SCRIPT = `
 (function() {
   let isInspectMode = false;
   let selectedElement = null;
+  let hoveredElement = null;
 
   // ========== HANDSHAKE: Notify parent that inspector is loaded ==========
   window.parent.postMessage({ type: 'WAKTI_INSPECTOR_READY' }, '*');
@@ -43,6 +44,35 @@ export const INSPECTOR_SCRIPT = `
   
   document.body.appendChild(overlay);
 
+  const buildElementInfo = (target) => ({
+    tagName: target.tagName.toLowerCase(),
+    className: target.className || '',
+    id: target.id || '',
+    innerText: (target.innerText || '').trim().substring(0, 100),
+    openingTag: target.outerHTML.split('>')[0] + '>',
+    computedStyle: {
+      color: getComputedStyle(target).color,
+      backgroundColor: getComputedStyle(target).backgroundColor,
+      fontSize: getComputedStyle(target).fontSize,
+    }
+  });
+
+  const emitElementSelection = (target) => {
+    if (!target || target === overlay || target === document.body || target === document.documentElement || target.id === 'root') {
+      return;
+    }
+
+    selectedElement = target;
+
+    const elementInfo = buildElementInfo(target);
+    console.log('[Wakti Inspector] Element selected:', elementInfo.tagName);
+
+    window.parent.postMessage({
+      type: 'WAKTI_ELEMENT_SELECTED',
+      payload: elementInfo
+    }, '*');
+  };
+
   // 2. Listen for messages from Wakti parent
   window.addEventListener('message', (event) => {
     // Clone event.data to avoid readonly property errors
@@ -56,6 +86,7 @@ export const INSPECTOR_SCRIPT = `
     if (data.type === 'WAKTI_TOGGLE_INSPECT') {
       isInspectMode = data.enabled;
       console.log('[Wakti Inspector] Inspect mode:', isInspectMode);
+      document.body.style.cursor = isInspectMode ? 'crosshair' : '';
       
       // Send acknowledgment back to parent
       window.parent.postMessage({ 
@@ -66,11 +97,34 @@ export const INSPECTOR_SCRIPT = `
       if (!isInspectMode) {
         overlay.style.display = 'none';
         selectedElement = null;
+        hoveredElement = null;
       }
     }
     // Ping/pong for debugging connection
     if (data.type === 'WAKTI_INSPECTOR_PING') {
       window.parent.postMessage({ type: 'WAKTI_INSPECTOR_PONG' }, '*');
+    }
+    if (data.type === 'WAKTI_SELECT_PARENT') {
+      const target = selectedElement?.parentElement || hoveredElement?.parentElement;
+      if (!target || target === document.body || target === document.documentElement || target.id === 'root') {
+        return;
+      }
+
+      const rect = target.getBoundingClientRect();
+      overlay.style.display = 'block';
+      overlay.style.top = rect.top + 'px';
+      overlay.style.left = rect.left + 'px';
+      overlay.style.width = rect.width + 'px';
+      overlay.style.height = rect.height + 'px';
+
+      let labelText = target.tagName.toLowerCase();
+      if (target.className && typeof target.className === 'string') {
+        const firstClass = target.className.split(' ').filter(c => c && !c.includes('wakti'))[0];
+        if (firstClass) labelText += '.' + firstClass;
+      }
+      label.innerText = labelText;
+
+      emitElementSelection(target);
     }
   });
 
@@ -85,6 +139,7 @@ export const INSPECTOR_SCRIPT = `
     }
 
     const rect = target.getBoundingClientRect();
+    hoveredElement = target;
     
     overlay.style.display = 'block';
     overlay.style.top = rect.top + 'px';
@@ -113,6 +168,7 @@ export const INSPECTOR_SCRIPT = `
     }
 
     const rect = target.getBoundingClientRect();
+    hoveredElement = target;
     
     overlay.style.display = 'block';
     overlay.style.top = rect.top + 'px';
@@ -137,32 +193,7 @@ export const INSPECTOR_SCRIPT = `
 
     const target = e.target;
     if (!target || target === overlay) return;
-    
-    selectedElement = target;
-    
-    // Get detailed info about the element
-    const elementInfo = {
-      tagName: target.tagName.toLowerCase(),
-      className: target.className || '',
-      id: target.id || '',
-      innerText: (target.innerText || '').trim().substring(0, 100),
-      // Get just the opening tag for context
-      openingTag: target.outerHTML.split('>')[0] + '>',
-      // Get computed styles for context
-      computedStyle: {
-        color: getComputedStyle(target).color,
-        backgroundColor: getComputedStyle(target).backgroundColor,
-        fontSize: getComputedStyle(target).fontSize,
-      }
-    };
-
-    console.log('[Wakti Inspector] Element selected:', elementInfo.tagName);
-
-    // Send to Parent (Wakti)
-    window.parent.postMessage({ 
-      type: 'WAKTI_ELEMENT_SELECTED', 
-      payload: elementInfo 
-    }, '*');
+    emitElementSelection(target);
     
     // Flash effect to confirm selection
     overlay.style.backgroundColor = 'rgba(99, 102, 241, 0.3)';
@@ -181,24 +212,7 @@ export const INSPECTOR_SCRIPT = `
     if (!target || target === overlay) return;
     
     e.preventDefault();
-    
-    const elementInfo = {
-      tagName: target.tagName.toLowerCase(),
-      className: target.className || '',
-      id: target.id || '',
-      innerText: (target.innerText || '').trim().substring(0, 100),
-      openingTag: target.outerHTML.split('>')[0] + '>',
-      computedStyle: {
-        color: getComputedStyle(target).color,
-        backgroundColor: getComputedStyle(target).backgroundColor,
-        fontSize: getComputedStyle(target).fontSize,
-      }
-    };
-
-    window.parent.postMessage({ 
-      type: 'WAKTI_ELEMENT_SELECTED', 
-      payload: elementInfo 
-    }, '*');
+    emitElementSelection(target);
     
   }, { passive: false });
 
