@@ -193,6 +193,8 @@ function SearchMessageCard({
   const isPlaceSearch = searchType === 'business' || searchType === 'places' || isNearMeQuery;
   const hasGroundedPlaceCards = isPlaceSearch && hasGroundedPlaces(message as any);
   const isContentSearch = !isPlaceSearch && ['news', 'sports', 'research', 'general', 'url'].includes(searchType);
+  const nearMeLocationDebug = (message as any)?.metadata?.nearMeLocationDebug;
+  const bridgeDebug = nearMeLocationDebug?.bridge || null;
 
   let themeColor = 'text-emerald-500';
   let themeBg = 'bg-emerald-500/10';
@@ -234,6 +236,28 @@ function SearchMessageCard({
 
   return (
     <div className="w-full space-y-4">
+      {nearMeLocationDebug && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-3 text-xs text-foreground/90">
+          <div className="font-semibold text-amber-700 dark:text-amber-300 mb-2">
+            {language === 'ar' ? 'تشخيص GPS المؤقت' : 'Temporary GPS Debug'}
+          </div>
+          <div className="space-y-1">
+            <div><strong>{language === 'ar' ? 'قبله التطبيق:' : 'App accepted:'}</strong> {nearMeLocationDebug.appAccepted ? 'yes' : 'no'}</div>
+            <div><strong>{language === 'ar' ? 'مصدر التطبيق:' : 'App source:'}</strong> {nearMeLocationDebug.appSource || 'none'}</div>
+            <div><strong>{language === 'ar' ? 'دقة التطبيق:' : 'App accuracy:'}</strong> {typeof nearMeLocationDebug.appAccuracy === 'number' ? `${Math.round(nearMeLocationDebug.appAccuracy)}m` : 'none'}</div>
+            <div><strong>{language === 'ar' ? 'سبب النتيجة:' : 'Result reason:'}</strong> {nearMeLocationDebug.finalReason || 'unknown'}</div>
+            <div><strong>{language === 'ar' ? 'الجسر جاهز:' : 'Bridge ready:'}</strong> {bridgeDebug?.bridgeReady === true ? 'yes' : bridgeDebug?.bridgeReady === false ? 'no' : 'unknown'}</div>
+            <div><strong>{language === 'ar' ? 'الحالة الأصلية:' : 'Native status:'}</strong> {[bridgeDebug?.nativeStatus || 'none', bridgeDebug?.nativeSource || null].filter(Boolean).join(' / ') || 'none'}</div>
+            <div><strong>{language === 'ar' ? 'إحداثيات الأصلية:' : 'Native coords:'}</strong> {typeof bridgeDebug?.nativeLatitude === 'number' && typeof bridgeDebug?.nativeLongitude === 'number' ? `${bridgeDebug.nativeLatitude.toFixed(6)}, ${bridgeDebug.nativeLongitude.toFixed(6)}` : 'none'}</div>
+            <div><strong>{language === 'ar' ? 'دقة الأصلية:' : 'Native accuracy:'}</strong> {typeof bridgeDebug?.nativeAccuracy === 'number' ? `${Math.round(bridgeDebug.nativeAccuracy)}m` : 'none'}</div>
+            <div><strong>{language === 'ar' ? 'إذن المتصفح:' : 'Browser permission:'}</strong> {bridgeDebug?.browserPermission || 'unknown'}</div>
+            <div><strong>{language === 'ar' ? 'حالة المتصفح:' : 'Browser status:'}</strong> {bridgeDebug?.browserStatus || 'none'}</div>
+            <div><strong>{language === 'ar' ? 'إحداثيات المتصفح:' : 'Browser coords:'}</strong> {typeof bridgeDebug?.browserLatitude === 'number' && typeof bridgeDebug?.browserLongitude === 'number' ? `${bridgeDebug.browserLatitude.toFixed(6)}, ${bridgeDebug.browserLongitude.toFixed(6)}` : 'none'}</div>
+            <div><strong>{language === 'ar' ? 'دقة المتصفح:' : 'Browser accuracy:'}</strong> {typeof bridgeDebug?.browserAccuracy === 'number' ? `${Math.round(bridgeDebug.browserAccuracy)}m` : 'none'}</div>
+            <div><strong>{language === 'ar' ? 'المصدر النهائي:' : 'Final source:'}</strong> {bridgeDebug?.finalStatus || 'none'}</div>
+          </div>
+        </div>
+      )}
       {isContentSearch ? (
         <div className={`w-full rounded-2xl overflow-hidden border ${themeBorder} bg-card/60 shadow-sm`}>
           {/* Beautiful Header with Dropdown Sources */}

@@ -100,7 +100,8 @@ export function buildProjectRuntimeHtml({
   <title>${safeTitle}</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&family=Oswald:wght@400;500;600;700&family=Cairo:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <script>
-    tailwind.config = {
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
       theme: {
         extend: {
           fontFamily: {
@@ -195,21 +196,25 @@ export function buildProjectRuntimeHtml({
     waktiLog('Script block starting');
     waktiLog('React available: ' + (typeof React !== 'undefined'));
     waktiLog('ReactDOM available: ' + (typeof ReactDOM !== 'undefined'));
-    const FM = window.FramerMotion || window.Motion;
-    waktiLog('Framer Motion available: ' + (!!FM));
-    if (typeof FM !== 'undefined' && FM) {
-      window.FramerMotion = FM;
-      window.motion = FM.motion;
-      window.AnimatePresence = FM.AnimatePresence;
-      window.useAnimation = FM.useAnimation;
-      window.useInView = FM.useInView;
-      window.useScroll = FM.useScroll;
-      window.useTransform = FM.useTransform;
-      window.useMotionValue = FM.useMotionValue;
+    function syncRuntimeGlobals(motionLabel) {
+      var runtimeMotion = window.FramerMotion || window.Motion;
+      waktiLog(motionLabel + ': ' + (!!runtimeMotion));
+      if (runtimeMotion) {
+        window.FramerMotion = runtimeMotion;
+        window.motion = runtimeMotion.motion;
+        window.AnimatePresence = runtimeMotion.AnimatePresence;
+        window.useAnimation = runtimeMotion.useAnimation;
+        window.useInView = runtimeMotion.useInView;
+        window.useScroll = runtimeMotion.useScroll;
+        window.useTransform = runtimeMotion.useTransform;
+        window.useMotionValue = runtimeMotion.useMotionValue;
+      }
+      if (typeof window.lucide !== 'undefined' && window.lucide) {
+        window.__lucideIcons = window.lucide;
+      }
+      return runtimeMotion;
     }
-    if (typeof window.lucide !== 'undefined' && window.lucide) {
-      window.__lucideIcons = window.lucide;
-    }
+    syncRuntimeGlobals('Framer Motion available');
     if (typeof window.Recharts !== 'undefined' && window.Recharts) {
       waktiLog('Recharts available: true');
     } else {
@@ -350,21 +355,7 @@ export function buildProjectRuntimeHtml({
       try {
         await ensureRuntimeDependencies();
 
-        const FM = window.FramerMotion || window.Motion;
-        waktiLog('Framer Motion available after load: ' + (!!FM));
-        if (typeof FM !== 'undefined' && FM) {
-          window.FramerMotion = FM;
-          window.motion = FM.motion;
-          window.AnimatePresence = FM.AnimatePresence;
-          window.useAnimation = FM.useAnimation;
-          window.useInView = FM.useInView;
-          window.useScroll = FM.useScroll;
-          window.useTransform = FM.useTransform;
-          window.useMotionValue = FM.useMotionValue;
-        }
-        if (typeof window.lucide !== 'undefined' && window.lucide) {
-          window.__lucideIcons = window.lucide;
-        }
+        syncRuntimeGlobals('Framer Motion available after load');
 
         executeBundledApp();
         renderApp(0);

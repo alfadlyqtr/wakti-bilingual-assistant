@@ -61,6 +61,25 @@ interface GetLocationOptions {
   allowBrowserFallback?: boolean;
 }
 
+export interface ExactLocationDebugInfo {
+  flow: 'exact-near-me';
+  bridgeReady?: boolean;
+  nativeAttempted?: boolean;
+  nativeStatus?: string;
+  nativeSource?: 'foreground' | 'current';
+  nativeLatitude?: number | null;
+  nativeLongitude?: number | null;
+  nativeAccuracy?: number | null;
+  browserAttempted?: boolean;
+  browserPermission?: BrowserPermissionState;
+  browserStatus?: string;
+  browserLatitude?: number | null;
+  browserLongitude?: number | null;
+  browserAccuracy?: number | null;
+  finalStatus?: 'native' | 'browser' | 'none';
+  finalReason?: string;
+}
+
 type BrowserPermissionState = 'granted' | 'prompt' | 'denied' | 'unknown';
 
 const LOCATION_CACHE_KEY = 'wakti_native_location_cache';
@@ -75,6 +94,20 @@ const MIN_EXACT_ATTEMPT_TIMEOUT = 4000;
 // In-flight Promise cache: prevents multiple simultaneous GPS hardware calls
 let pendingLocationPromise: Promise<NativeLocationResult | null> | null = null;
 let pendingFreshLocationPromise: Promise<NativeLocationResult | null> | null = null;
+let lastExactLocationDebug: ExactLocationDebugInfo | null = null;
+
+function updateExactLocationDebug(patch: Partial<ExactLocationDebugInfo>): void {
+  lastExactLocationDebug = {
+    flow: 'exact-near-me',
+    ...(lastExactLocationDebug || {}),
+    ...patch,
+  };
+}
+
+export function getLastExactLocationDebug(): ExactLocationDebugInfo | null {
+  if (!lastExactLocationDebug) return null;
+  return { ...lastExactLocationDebug };
+}
 
 function hasValidCoordinates(latitude: unknown, longitude: unknown): latitude is number {
   return typeof latitude === 'number'
@@ -259,11 +292,18 @@ function getForegroundLocation(
         settled = true;
         try { instance.stop(); } catch {}
         if (delayedFix && (delayedFixAt - startedAt) >= minimumWatchMs) {
+          updateExactLocationDebug({
+            nativeStatus: 'Success',
+            nativeLatitude: delayedFix.latitude,
+            nativeLongitude: delayedFix.longitude,
+            nativeAccuracy: delayedFix.accuracy ?? null,
+          });
           setCachedLocation(delayedFix);
           console.log('[NativelyLocation] ✅ Foreground tracking settled on delayed fix:', delayedFix.latitude, delayedFix.longitude, 'accuracy:', delayedFix.accuracy);
           resolve(delayedFix);
           return;
         }
+        updateExactLocationDebug({ nativeStatus: 'Timeout' });
         console.warn('[NativelyLocation] Foreground tracking timed out after', timeoutMs, 'ms');
         resolve(null);
       }
@@ -284,6 +324,12 @@ function getForegroundLocation(
           accuracy: resp.accuracy,
           source: 'native',
         };
+        updateExactLocationDebug({
+          nativeStatus: 'Success',
+          nativeLatitude: lat,
+          nativeLongitude: lng,
+          nativeAccuracy: resp.accuracy ?? null,
+        });
         const elapsedMs = Date.now() - startedAt;
         if (minimumWatchMs > 0 && elapsedMs < minimumWatchMs) {
           delayedFix = result;
@@ -304,6 +350,7 @@ function getForegroundLocation(
         settled = true;
         clearTimeout(timer);
         try { instance.stop(); } catch {}
+        updateExactLocationDebug({ nativeStatus: 'Error' });
         console.warn('[NativelyLocation] Foreground tracking error');
         resolve(null);
       }
@@ -403,14 +450,17 @@ async function getBrowserPermissionState(): Promise<BrowserPermissionState> {
 function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationResult | null> {
   return new Promise((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) {
+      updateExactLocationDebug({ browserAttempted: true, browserStatus: 'unavailable' });
       console.warn('[NativelyLocation] Browser geolocation not available');
       resolve(null);
       return;
     }
     void (async () => {
       const permissionState = await getBrowserPermissionState();
+      updateExactLocationDebug({ browserAttempted: true, browserPermission: permissionState });
       console.log('[NativelyLocation] Browser geolocation permission:', permissionState);
       if (permissionState === 'denied') {
+        updateExactLocationDebug({ browserStatus: 'denied' });
         console.warn('[NativelyLocation] Browser geolocation permission denied');
         resolve(null);
         return;
@@ -420,6 +470,7 @@ function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationRe
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           if (!hasValidCoordinates(pos.coords.latitude, pos.coords.longitude)) {
+            updateExactLocationDebug({ browserStatus: 'invalid' });
             console.warn('[NativelyLocation] Browser geolocation returned invalid coordinates');
             resolve(null);
             return;
@@ -430,11 +481,18 @@ function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationRe
             accuracy: pos.coords.accuracy,
             source: 'browser',
           };
+          updateExactLocationDebug({
+            browserStatus: 'Success',
+            browserLatitude: pos.coords.latitude,
+            browserLongitude: pos.coords.longitude,
+            browserAccuracy: pos.coords.accuracy,
+          });
           setCachedLocation(result);
           console.log('[NativelyLocation] ✅ Browser geolocation:', result.latitude, result.longitude, 'accuracy:', result.accuracy);
           resolve(result);
         },
         (err) => {
+          updateExactLocationDebug({ browserStatus: err?.code === 3 ? 'Timeout' : (err?.message || 'error') });
           console.warn('[NativelyLocation] Browser geolocation failed:', err.message);
           resolve(null);
         },
@@ -467,6 +525,13 @@ async function tryNativeSdkLocation(options: {
   allowCurrentFallback: boolean;
 }): Promise<NativeLocationResult | null> {
   const bridgeReady = await waitForNativeBridge(options.bridgeTimeoutMs);
+  if (options.mode === 'exact') {
+    updateExactLocationDebug({
+      bridgeReady,
+      nativeAttempted: true,
+      nativeSource: options.useForeground ? 'foreground' : 'current',
+    });
+  }
   if (!bridgeReady) {
     console.warn(`[NativelyLocation] ${options.mode} flow: native bridge not available`);
     return null;
@@ -529,6 +594,11 @@ async function _doGetExactLocation(options?: GetLocationOptions): Promise<Native
     allowBrowserFallback = true,
   } = options || {};
 
+  lastExactLocationDebug = {
+    flow: 'exact-near-me',
+    nativeAttempted: false,
+    browserAttempted: false,
+  };
   clearLocationCache();
   const accuracyType = options?.accuracyType || 'Best';
   const priority = options?.priority || 'HIGH';
@@ -555,6 +625,10 @@ async function _doGetExactLocation(options?: GetLocationOptions): Promise<Native
   });
 
   if (nativeWinner && typeof nativeWinner.latitude === 'number' && typeof nativeWinner.longitude === 'number') {
+    updateExactLocationDebug({
+      finalStatus: 'native',
+      finalReason: 'native_fix_accepted',
+    });
     console.log('[NativelyLocation] ✅ Exact native location:', nativeWinner.latitude, nativeWinner.longitude);
     setCachedLocation(nativeWinner);
     return nativeWinner;
@@ -562,6 +636,10 @@ async function _doGetExactLocation(options?: GetLocationOptions): Promise<Native
 
   const shouldUseBrowserFallback = allowBrowserFallback || !isRunningInsideNativelyApp();
   if (!shouldUseBrowserFallback) {
+    updateExactLocationDebug({
+      finalStatus: 'none',
+      finalReason: 'browser_fallback_disabled',
+    });
     console.warn('[NativelyLocation] Exact flow: browser fallback disabled for this request');
     return null;
   }
@@ -573,11 +651,19 @@ async function _doGetExactLocation(options?: GetLocationOptions): Promise<Native
   });
 
   if (browserWinner && typeof browserWinner.latitude === 'number' && typeof browserWinner.longitude === 'number') {
+    updateExactLocationDebug({
+      finalStatus: 'browser',
+      finalReason: 'browser_fix_accepted',
+    });
     console.log('[NativelyLocation] ✅ Exact browser fallback location:', browserWinner.latitude, browserWinner.longitude);
     setCachedLocation(browserWinner);
     return browserWinner;
   }
 
+  updateExactLocationDebug({
+    finalStatus: 'none',
+    finalReason: 'no_usable_location',
+  });
   console.warn('[NativelyLocation] ❌ Exact flow: no location from Natively SDK or browser fallback');
   return null;
 }

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
-import { clearLocationCache, getExactLocation, getNativeLocation, queryNeedsFreshLocation, containsNearMePattern } from '@/integrations/natively/locationBridge';
+import { clearLocationCache, getExactLocation, getLastExactLocationDebug, getNativeLocation, queryNeedsFreshLocation, containsNearMePattern } from '@/integrations/natively/locationBridge';
 import { emitEvent } from '@/utils/eventBus';
 
 // Module-level session cache — avoids a Supabase network round-trip on every message send.
@@ -108,6 +108,7 @@ class WaktiAIV2ServiceClass {
   private conversationStorage = new Map<string, AIMessage[]>();
   private locationCache: UserLocationContext | null = null;
   private locationWarmupPromise: Promise<UserLocationContext> | null = null;
+  private lastNearMeLocationDebug: any = null;
   private lastPTFetchAt: number | null = null;
 
   constructor() {
@@ -434,8 +435,27 @@ class WaktiAIV2ServiceClass {
       metadata: {
         locationRequired: true,
         gpsRequired: true,
+        nearMeLocationDebug: this.lastNearMeLocationDebug,
       },
     } as any;
+  }
+
+  private setNearMeLocationDebug(debug: any) {
+    this.lastNearMeLocationDebug = debug;
+  }
+
+  private buildNearMeLocationDebug(loc: UserLocationContext | null, extra: Record<string, any> = {}) {
+    const bridge = getLastExactLocationDebug();
+    return {
+      mode: 'exact-near-me-debug',
+      appAccepted: this.isReliableNearMeLocation(loc),
+      appSource: loc?.source || null,
+      appLatitude: typeof loc?.latitude === 'number' ? Number(loc.latitude.toFixed(6)) : null,
+      appLongitude: typeof loc?.longitude === 'number' ? Number(loc.longitude.toFixed(6)) : null,
+      appAccuracy: typeof loc?.accuracy === 'number' ? loc.accuracy : null,
+      bridge,
+      ...extra,
+    };
   }
 
   private async getUserLocation(userId: string, forceFresh: boolean = false): Promise<UserLocationContext> {
@@ -463,6 +483,7 @@ class WaktiAIV2ServiceClass {
         this.locationCache = null;
         try { localStorage.removeItem('wakti_user_location'); } catch {}
         clearLocationCache();
+        this.setNearMeLocationDebug(null);
       }
       const nativeLoc = forceFresh
         ? await getExactLocation({
@@ -486,9 +507,20 @@ class WaktiAIV2ServiceClass {
       }
     } catch (err) {
       console.warn('[WaktiAIV2Service] Native location error:', err);
+      if (forceFresh) {
+        this.setNearMeLocationDebug(this.buildNearMeLocationDebug(null, {
+          appAccepted: false,
+          finalReason: 'native_location_exception',
+          errorMessage: err instanceof Error ? err.message : String(err || ''),
+        }));
+      }
     }
 
     if (forceFresh && !this.isReliableNearMeLocation(resolved)) {
+      this.setNearMeLocationDebug(this.buildNearMeLocationDebug(resolved, {
+        appAccepted: false,
+        finalReason: 'rejected_by_app_reliability_rules',
+      }));
       resolved = {
         ...resolved,
         latitude: null,
@@ -498,6 +530,11 @@ class WaktiAIV2ServiceClass {
         country: null,
         source: undefined,
       };
+    } else if (forceFresh) {
+      this.setNearMeLocationDebug(this.buildNearMeLocationDebug(resolved, {
+        appAccepted: true,
+        finalReason: 'accepted_by_app',
+      }));
     }
 
     resolved.timezone = timezone;
@@ -1057,6 +1094,10 @@ class WaktiAIV2ServiceClass {
       const pt = await this.ensurePersonalTouchAwaitingDB(userId, { forceRefresh: activeTrigger === 'search' });
 
       const clientTimezone = location?.timezone || this.getClientTimezone();
+      const nearMeLocationDebug = forceFreshLocation ? this.buildNearMeLocationDebug(location, {
+        appAccepted: this.isReliableNearMeLocation(location),
+        finalReason: this.isReliableNearMeLocation(location) ? 'attached_to_search_request' : 'not_attached_to_search_request',
+      }) : null;
 
       const maybeAnonKey = this.getAnonKey();
 
@@ -1080,6 +1121,9 @@ class WaktiAIV2ServiceClass {
         const normalizeStreamMetadata = (incoming: any) => {
           if (!incoming || typeof incoming !== 'object') return {};
           const next = { ...incoming };
+          if (nearMeLocationDebug) {
+            next.nearMeLocationDebug = nearMeLocationDebug;
+          }
           const geminiSearch = next.geminiSearch && typeof next.geminiSearch === 'object'
             ? next.geminiSearch
             : null;
@@ -1692,6 +1736,10 @@ class WaktiAIV2ServiceClass {
       if (needsFreshLocation && !this.isReliableNearMeLocation(location)) {
         return this.buildNearMeLocationRequiredResult();
       }
+      const nearMeLocationDebug = needsFreshLocation ? this.buildNearMeLocationDebug(location, {
+        appAccepted: this.isReliableNearMeLocation(location),
+        finalReason: this.isReliableNearMeLocation(location) ? 'attached_to_non_streaming_search' : 'not_attached_to_non_streaming_search',
+      }) : null;
 
       // Enhanced message handling with 100-message memory window
       // CRITICAL: Strip large data to avoid huge request bodies that crash Edge Functions
@@ -1808,7 +1856,11 @@ class WaktiAIV2ServiceClass {
         browsingData: meta?.browsingData,
         modelUsed: meta?.model,
         responseTime: meta?.responseTime,
-        fallbackUsed: meta?.fallbackUsed
+        fallbackUsed: meta?.fallbackUsed,
+        metadata: {
+          ...meta,
+          nearMeLocationDebug: nearMeLocationDebug || meta?.nearMeLocationDebug,
+        }
       };
     } catch (error: any) {
       console.error('❌ FRONTEND BOSS: sendMessage failed:', error);
