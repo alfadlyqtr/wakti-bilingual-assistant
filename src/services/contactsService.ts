@@ -97,8 +97,7 @@ export async function getContacts() {
   const blockedContactIds = new Set((blockedRows || []).map((row) => row.contact_id));
 
   const outgoingContactIds = (outgoingRows || []).map(contact => contact.contact_id);
-  const incomingContactIds = (incomingRows || []).map(contact => contact.user_id);
-  const allContactIds = Array.from(new Set([...outgoingContactIds, ...incomingContactIds]))
+  const allContactIds = Array.from(new Set(outgoingContactIds))
     .filter((contactId) => !blockedContactIds.has(contactId));
 
   const outgoingMap = new Map((outgoingRows || []).map((contact) => [contact.contact_id, contact]));
@@ -738,18 +737,40 @@ export async function updateAutoApproveContacts(autoApprove: boolean) {
 // Delete a contact
 export async function deleteContact(contactId: string): Promise<boolean> {
   await ensurePassport();
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("User not authenticated");
+  }
   
   console.log('Deleting contact with ID:', contactId);
   
-  // Delete the contact record directly using its ID
-  const { error } = await supabase
+  // First try deleting by relationship row id, scoped to current user's side only
+  const { data: deletedByRowId, error: deleteByRowIdError } = await supabase
     .from("contacts")
     .delete()
-    .eq("id", contactId);
+    .eq("id", contactId)
+    .eq("user_id", userId)
+    .select("id");
 
-  if (error) {
-    console.error("Error deleting contact:", error);
-    throw error;
+  if (deleteByRowIdError) {
+    console.error("Error deleting contact by row id:", deleteByRowIdError);
+    throw deleteByRowIdError;
+  }
+
+  if (deletedByRowId && deletedByRowId.length > 0) {
+    return true;
+  }
+
+  // Fallback: treat input as contact user id and delete only current user's row
+  const { error: deleteByContactIdError } = await supabase
+    .from("contacts")
+    .delete()
+    .eq("user_id", userId)
+    .eq("contact_id", contactId);
+
+  if (deleteByContactIdError) {
+    console.error("Error deleting contact by contact_id:", deleteByContactIdError);
+    throw deleteByContactIdError;
   }
 
   return true;
