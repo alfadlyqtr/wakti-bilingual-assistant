@@ -743,30 +743,28 @@ export async function deleteContact(contactId: string): Promise<boolean> {
   }
   
   console.log('Deleting contact with ID:', contactId);
-  
-  // First try deleting by relationship row id, scoped to current user's side only
-  const { data: deletedByRowId, error: deleteByRowIdError } = await supabase
+
+  // Resolve the actual contact user id when a relationship row id is passed
+  const { data: relationshipRow, error: relationshipLookupError } = await supabase
     .from("contacts")
-    .delete()
+    .select("contact_id")
     .eq("id", contactId)
     .eq("user_id", userId)
-    .select("id");
+    .maybeSingle();
 
-  if (deleteByRowIdError) {
-    console.error("Error deleting contact by row id:", deleteByRowIdError);
-    throw deleteByRowIdError;
+  if (relationshipLookupError) {
+    console.error("Error resolving contact relationship for delete:", relationshipLookupError);
+    throw relationshipLookupError;
   }
 
-  if (deletedByRowId && deletedByRowId.length > 0) {
-    return true;
-  }
+  const targetContactUserId = relationshipRow?.contact_id || contactId;
 
-  // Fallback: treat input as contact user id and delete only current user's row
+  // Remove all rows on current user's side for this contact (handles duplicate rows safely)
   const { error: deleteByContactIdError } = await supabase
     .from("contacts")
     .delete()
     .eq("user_id", userId)
-    .eq("contact_id", contactId);
+    .eq("contact_id", targetContactUserId);
 
   if (deleteByContactIdError) {
     console.error("Error deleting contact by contact_id:", deleteByContactIdError);
