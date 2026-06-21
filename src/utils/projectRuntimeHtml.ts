@@ -44,6 +44,124 @@ function escapeInlineStyle(source: string): string {
   return source.replace(/<\/style/gi, '<\\/style');
 }
 
+export function buildProjectStaticPublishFiles({
+  projectName,
+  bundledJs,
+  bundledCss,
+}: {
+  projectName: string;
+  bundledJs: string;
+  bundledCss: string;
+}): {
+  indexHtml: string;
+  appJs: string;
+  appCss: string;
+} {
+  const safeTitle = escapeHtml(projectName || 'Wakti Preview');
+  const appJs = bundledJs || '';
+  const appCss = bundledCss || '';
+
+  const indexHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${safeTitle}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Tajawal:wght@300;400;500;700&family=Oswald:wght@400;500;600;700&family=Cairo:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Roboto:wght@300;400;500;700&family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            inter: ['Inter', 'sans-serif'],
+            tajawal: ['Tajawal', 'sans-serif'],
+            oswald: ['Oswald', 'sans-serif'],
+            cairo: ['Cairo', 'sans-serif'],
+            playfair: ['Playfair Display', 'serif'],
+            roboto: ['Roboto', 'sans-serif'],
+            poppins: ['Poppins', 'sans-serif'],
+          },
+          colors: {
+            gray: {
+              50: '#f9fafb', 100: '#f3f4f6', 200: '#e5e7eb', 300: '#d1d5db', 400: '#9ca3af',
+              500: '#6b7280', 600: '#4b5563', 700: '#374151', 800: '#1f2937', 900: '#111827', 950: '#030712',
+            },
+            zinc: {
+              50: '#fafafa', 100: '#f4f4f5', 200: '#e4e4e7', 300: '#d4d4d8', 400: '#a1a1aa',
+              500: '#71717a', 600: '#52525b', 700: '#3f3f46', 800: '#27272a', 900: '#18181b', 950: '#09090b',
+            },
+            slate: {
+              50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8',
+              500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617',
+            },
+            purple: {
+              50: '#faf5ff', 100: '#f3e8ff', 200: '#e9d5ff', 300: '#d8b4fe', 400: '#c084fc',
+              500: '#a855f7', 600: '#9333ea', 700: '#7e22ce', 800: '#6b21a8', 900: '#581c87', 950: '#3b0764',
+            },
+            pink: {
+              50: '#fdf2f8', 100: '#fce7f3', 200: '#fbcfe8', 300: '#f9a8d4', 400: '#f472b6',
+              500: '#ec4899', 600: '#db2777', 700: '#be185d', 800: '#9d174d', 900: '#831843', 950: '#500724',
+            },
+            rose: {
+              50: '#fff1f2', 100: '#ffe4e6', 200: '#fecdd3', 300: '#fda4af', 400: '#fb7185',
+              500: '#f43f5e', 600: '#e11d48', 700: '#be123c', 800: '#9f1239', 900: '#881337', 950: '#4c0519',
+            },
+            amber: {
+              50: '#fffbeb', 100: '#fef3c7', 200: '#fde68a', 300: '#fcd34d', 400: '#fbbf24',
+              500: '#f59e0b', 600: '#d97706', 700: '#b45309', 800: '#92400e', 900: '#78350f', 950: '#451a03',
+            },
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-is@18/umd/react-is.production.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/framer-motion@6.5.1/dist/framer-motion.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script>
+    window.FramerMotion = window.FramerMotion || window.Motion || null;
+    if (typeof window.lucide !== 'undefined' && window.lucide) {
+      window.__lucideIcons = window.lucide;
+    }
+  </script>
+  <script src="./app.js"></script>
+  <script>
+    (function() {
+      var rootElement = document.getElementById('root');
+      if (!rootElement) {
+        throw new Error('Root element not found');
+      }
+      if (!window.React || !window.ReactDOM || typeof window.ReactDOM.createRoot !== 'function') {
+        rootElement.innerHTML = '<div style="padding:24px;font-family:Inter,system-ui,sans-serif;color:#dc2626;">Failed to load React runtime.</div>';
+        throw new Error('React runtime not available');
+      }
+      if (typeof window.App === 'undefined' || window.App === null) {
+        rootElement.innerHTML = '<div style="padding:24px;font-family:Inter,system-ui,sans-serif;color:#dc2626;">Failed to load app bundle.</div>';
+        throw new Error('App component not found after loading app.js');
+      }
+      var root = window.ReactDOM.createRoot(rootElement);
+      root.render(window.React.createElement(window.App));
+    })();
+  </script>
+</body>
+</html>`;
+
+  return {
+    indexHtml,
+    appJs,
+    appCss,
+  };
+}
+
 export function buildProjectRuntimeHtml({
   projectName,
   bundledJs,

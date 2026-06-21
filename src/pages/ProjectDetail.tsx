@@ -117,7 +117,7 @@ import {
   detectChatIntent,
   ChatIntent
 } from '@/utils/chatIntents';
-import { buildProjectRuntimeHtml } from '@/utils/projectRuntimeHtml';
+import { buildProjectStaticPublishFiles, getProjectEntryPoint } from '@/utils/projectRuntimeHtml';
 import {
   analyzeIntent,
   IntentResult,
@@ -2309,6 +2309,7 @@ export default function ProjectDetail() {
       // ============================================
       console.log('Bundling project with esbuild via project-build...');
       console.log('Project files:', Object.keys(projectFiles));
+      const entryPoint = getProjectEntryPoint(projectFiles);
       
       // Step 1: Call project-build to bundle the files properly
       let buildResult: any = null;
@@ -2318,7 +2319,7 @@ export default function ProjectDetail() {
         const response = await supabase.functions.invoke('project-build', {
           body: {
             files: projectFiles,
-            entryPoint: '/App.js'
+            entryPoint
           }
         });
 
@@ -2352,13 +2353,17 @@ export default function ProjectDetail() {
       console.log(`Bundle successful: ${bundledJs.length} bytes JS, ${bundledCss.length} bytes CSS`);
 
       const projectName = project.name || 'Wakti Project';
-      const indexHtml = buildProjectRuntimeHtml({
+      const publishFiles = buildProjectStaticPublishFiles({
         projectName,
         bundledJs,
         bundledCss,
       });
 
-      console.log('Generated index.html size:', indexHtml.length);
+      console.log('Generated publish files sizes:', {
+        indexHtml: publishFiles.indexHtml.length,
+        appJs: publishFiles.appJs.length,
+        appCss: publishFiles.appCss.length,
+      });
 
       const { data: publishResult, error: publishError } = await supabase.functions.invoke('projects-publish', {
         headers: {
@@ -2371,7 +2376,15 @@ export default function ProjectDetail() {
           files: [
             {
               path: 'index.html',
-              content: indexHtml,
+              content: publishFiles.indexHtml,
+            },
+            {
+              path: 'app.js',
+              content: publishFiles.appJs,
+            },
+            {
+              path: 'app.css',
+              content: publishFiles.appCss,
             },
           ],
         }
