@@ -49,11 +49,27 @@ export interface NativeLocationResult {
 
 export type LocationPermissionStatus = 'IN_USE' | 'ALWAYS' | 'DENIED' | 'UNKNOWN';
 
+type LocationAccuracyType = 'BestForNavigation' | 'Best' | 'NearestTenMeters' | 'HundredMeters' | 'Kilometer' | 'ThreeKilometers';
+
+interface GetLocationOptions {
+  timeoutMs?: number;
+  minAccuracy?: number;
+  accuracyType?: LocationAccuracyType;
+  priority?: 'BALANCED' | 'HIGH';
+  fallbackToSettings?: boolean;
+  skipCache?: boolean;
+  allowBrowserFallback?: boolean;
+}
+
 type BrowserPermissionState = 'granted' | 'prompt' | 'denied' | 'unknown';
 
 const LOCATION_CACHE_KEY = 'wakti_native_location_cache';
 const LOCATION_CACHE_TTL = 5 * 60 * 1000; // 5 minutes for fresh location
 const BRIDGE_READY_TIMEOUT = 5000; // max ms to wait for native iOS/Android bridge
+
+const EXACT_BRIDGE_READY_TIMEOUT = 3000;
+const MIN_CONTEXT_ATTEMPT_TIMEOUT = 2500;
+const MIN_EXACT_ATTEMPT_TIMEOUT = 4000;
 
 // In-flight Promise cache: prevents multiple simultaneous GPS hardware calls
 let pendingLocationPromise: Promise<NativeLocationResult | null> | null = null;
@@ -410,33 +426,142 @@ function getBrowserLocation(timeoutMs: number = 10000): Promise<NativeLocationRe
   });
 }
 
-/**
- * Get current location — races Browser geolocation and Natively SDK in parallel.
- * First valid result wins. If neither resolves within `timeoutMs`, returns null.
- *
- * Flow:
- * 1. Check cache (unless skipCache)
- * 2. Fire browser + native requests at the same time
- * 3. Resolve with the first truthy winner, or null if both fail / time out
- */
-export function getNativeLocation(options?: {
-  timeoutMs?: number;
-  minAccuracy?: number;
-  accuracyType?: 'BestForNavigation' | 'Best' | 'NearestTenMeters' | 'HundredMeters' | 'Kilometer' | 'ThreeKilometers';
-  priority?: 'BALANCED' | 'HIGH';
-  fallbackToSettings?: boolean;
-  skipCache?: boolean;
-  allowBrowserFallback?: boolean;
+function getContextAttemptTimeout(timeoutMs: number): number {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return MIN_CONTEXT_ATTEMPT_TIMEOUT;
+  return Math.max(MIN_CONTEXT_ATTEMPT_TIMEOUT, Math.min(Math.round(timeoutMs * 0.6), timeoutMs));
+}
+
+function getExactAttemptTimeout(timeoutMs: number): number {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return MIN_EXACT_ATTEMPT_TIMEOUT;
+  return Math.max(MIN_EXACT_ATTEMPT_TIMEOUT, timeoutMs);
+}
+
+async function tryNativeSdkLocation(options: {
+  mode: 'context' | 'exact';
+  timeoutMs: number;
+  bridgeTimeoutMs: number;
+  minAccuracy: number;
+  accuracyType: LocationAccuracyType;
+  priority: 'BALANCED' | 'HIGH';
+  fallbackToSettings: boolean;
+  useForeground: boolean;
 }): Promise<NativeLocationResult | null> {
+  const bridgeReady = await waitForNativeBridge(options.bridgeTimeoutMs);
+  if (!bridgeReady) {
+    console.warn(`[NativelyLocation] ${options.mode} flow: native bridge not available`);
+    return null;
+  }
+
+  const instance = getInstance();
+  if (!instance) {
+    console.warn(`[NativelyLocation] ${options.mode} flow: SDK instance creation failed`);
+    return null;
+  }
+
+  let result: NativeLocationResult | null = null;
+  if (options.useForeground) {
+    console.log(`[NativelyLocation] ${options.mode} flow: using foreground GPS first...`);
+    result = await getForegroundLocation(
+      instance,
+      options.minAccuracy,
+      options.accuracyType,
+      options.priority,
+      options.fallbackToSettings,
+      options.timeoutMs,
+    );
+    if (!result) {
+      console.warn(`[NativelyLocation] ${options.mode} flow: foreground GPS unavailable — trying current()`);
+    }
+  }
+
+  if (!result) {
+    console.log(`[NativelyLocation] ${options.mode} flow: using current() one-shot...`);
+    result = await getCurrentLocation(
+      instance,
+      options.minAccuracy,
+      options.accuracyType,
+      options.priority,
+      options.fallbackToSettings,
+      options.timeoutMs,
+    );
+  }
+
+  return result;
+}
+
+export function getExactLocation(options?: GetLocationOptions): Promise<NativeLocationResult | null> {
+  if (pendingFreshLocationPromise) {
+    return pendingFreshLocationPromise;
+  }
+
+  pendingFreshLocationPromise = _doGetExactLocation(options).finally(() => {
+    pendingFreshLocationPromise = null;
+  });
+  return pendingFreshLocationPromise;
+}
+
+async function _doGetExactLocation(options?: GetLocationOptions): Promise<NativeLocationResult | null> {
+  const {
+    timeoutMs = 8000,
+    minAccuracy = 50,
+    fallbackToSettings = true,
+    allowBrowserFallback = true,
+  } = options || {};
+
+  const accuracyType = options?.accuracyType || 'Best';
+  const priority = options?.priority || 'HIGH';
+  const nativeTimeoutMs = getExactAttemptTimeout(timeoutMs);
+  const browserTimeoutMs = getExactAttemptTimeout(timeoutMs);
+
+  logNativelyRuntimeStatus('getExactLocation');
+  console.log('[NativelyLocation] Exact location flow: trying Natively GPS first');
+
+  const nativeWinner = await tryNativeSdkLocation({
+    mode: 'exact',
+    timeoutMs: nativeTimeoutMs,
+    bridgeTimeoutMs: Math.min(EXACT_BRIDGE_READY_TIMEOUT, nativeTimeoutMs),
+    minAccuracy,
+    accuracyType,
+    priority,
+    fallbackToSettings,
+    useForeground: true,
+  }).catch((err) => {
+    console.warn('[NativelyLocation] Exact native path threw:', err);
+    return null;
+  });
+
+  if (nativeWinner && typeof nativeWinner.latitude === 'number' && typeof nativeWinner.longitude === 'number') {
+    console.log('[NativelyLocation] ✅ Exact native location:', nativeWinner.latitude, nativeWinner.longitude);
+    setCachedLocation(nativeWinner);
+    return nativeWinner;
+  }
+
+  const shouldUseBrowserFallback = allowBrowserFallback || !isRunningInsideNativelyApp();
+  if (!shouldUseBrowserFallback) {
+    console.warn('[NativelyLocation] Exact flow: browser fallback disabled for this request');
+    return null;
+  }
+
+  console.log(`[NativelyLocation] Exact flow: native unavailable, trying browser geolocation (${browserTimeoutMs}ms)`);
+  const browserWinner = await getBrowserLocation(browserTimeoutMs).catch((err) => {
+    console.warn('[NativelyLocation] Exact browser path threw:', err);
+    return null;
+  });
+
+  if (browserWinner && typeof browserWinner.latitude === 'number' && typeof browserWinner.longitude === 'number') {
+    console.log('[NativelyLocation] ✅ Exact browser fallback location:', browserWinner.latitude, browserWinner.longitude);
+    setCachedLocation(browserWinner);
+    return browserWinner;
+  }
+
+  console.warn('[NativelyLocation] ❌ Exact flow: no location from Natively SDK or browser fallback');
+  return null;
+}
+
+export function getNativeLocation(options?: GetLocationOptions): Promise<NativeLocationResult | null> {
   const skipCache = options?.skipCache === true;
   if (skipCache) {
-    if (pendingFreshLocationPromise) {
-      return pendingFreshLocationPromise;
-    }
-    pendingFreshLocationPromise = _doGetNativeLocation(options).finally(() => {
-      pendingFreshLocationPromise = null;
-    });
-    return pendingFreshLocationPromise;
+    return getExactLocation(options);
   }
 
   // If a GPS request is already in-flight, return the same promise — no duplicate hardware calls
@@ -450,15 +575,7 @@ export function getNativeLocation(options?: {
   return pendingLocationPromise;
 }
 
-async function _doGetNativeLocation(options?: {
-  timeoutMs?: number;
-  minAccuracy?: number;
-  accuracyType?: 'BestForNavigation' | 'Best' | 'NearestTenMeters' | 'HundredMeters' | 'Kilometer' | 'ThreeKilometers';
-  priority?: 'BALANCED' | 'HIGH';
-  fallbackToSettings?: boolean;
-  skipCache?: boolean;
-  allowBrowserFallback?: boolean;
-}): Promise<NativeLocationResult | null> {
+async function _doGetNativeLocation(options?: GetLocationOptions): Promise<NativeLocationResult | null> {
   const {
     timeoutMs = 10000,
     minAccuracy = 50,
@@ -482,67 +599,51 @@ async function _doGetNativeLocation(options?: {
     }
   }
 
-  console.log(`[NativelyLocation] Trying Natively SDK first (budget: ${timeoutMs}ms)`);
-
-  const startedAt = Date.now();
-  const nativeResult: Promise<NativeLocationResult | null> = (async () => {
-    const bridgeReady = await waitForNativeBridge(Math.min(BRIDGE_READY_TIMEOUT, timeoutMs));
-    if (!bridgeReady) {
-      console.warn('[NativelyLocation] Native bridge not available');
-      return null;
-    }
-    const instance = getInstance();
-    if (!instance) {
-      console.warn('[NativelyLocation] SDK instance creation failed');
-      return null;
-    }
-
-    let result: NativeLocationResult | null = null;
-    if (skipCache) {
-      console.log('[NativelyLocation] Using foreground tracking for fresh GPS...');
-      result = await getForegroundLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
-      if (!result) {
-        console.warn('[NativelyLocation] Fresh GPS foreground fix unavailable — will try current() next');
-      }
-    }
-    if (!result) {
-      console.log('[NativelyLocation] Using current() one-shot...');
-      result = await getCurrentLocation(instance, minAccuracy, accuracyType, priority, fallbackToSettings, timeoutMs);
-    }
-    return result;
-  })().catch((err) => {
-    console.warn('[NativelyLocation] Native SDK path threw:', err);
+  const nativeTimeoutMs = getContextAttemptTimeout(timeoutMs);
+  const browserTimeoutMs = getContextAttemptTimeout(timeoutMs);
+ 
+  console.log(`[NativelyLocation] Context location flow: trying Natively first (${nativeTimeoutMs}ms)`);
+ 
+  const nativeWinner = await tryNativeSdkLocation({
+    mode: 'context',
+    timeoutMs: nativeTimeoutMs,
+    bridgeTimeoutMs: Math.min(BRIDGE_READY_TIMEOUT, nativeTimeoutMs),
+    minAccuracy,
+    accuracyType,
+    priority,
+    fallbackToSettings,
+    useForeground: false,
+  }).catch((err) => {
+    console.warn('[NativelyLocation] Context native path threw:', err);
     return null;
   });
 
-  const nativeWinner = await nativeResult;
   if (nativeWinner && typeof nativeWinner.latitude === 'number' && typeof nativeWinner.longitude === 'number') {
-    console.log('[NativelyLocation] ✅ Native SDK location:', nativeWinner.latitude, nativeWinner.longitude);
+    console.log('[NativelyLocation] ✅ Context native location:', nativeWinner.latitude, nativeWinner.longitude);
     setCachedLocation(nativeWinner);
     return nativeWinner;
   }
 
   const shouldUseBrowserFallback = allowBrowserFallback || !isRunningInsideNativelyApp();
   if (!shouldUseBrowserFallback) {
-    console.warn('[NativelyLocation] Browser fallback disabled for this request');
+    console.warn('[NativelyLocation] Context flow: browser fallback disabled for this request');
     return null;
   }
 
-  const remainingTimeout = Math.max(1000, timeoutMs - (Date.now() - startedAt));
-  console.log(`[NativelyLocation] Native SDK unavailable, falling back to browser geolocation (${remainingTimeout}ms)`);
+  console.log(`[NativelyLocation] Context flow: native unavailable, trying browser geolocation (${browserTimeoutMs}ms)`);
 
-  const browserWinner = await getBrowserLocation(remainingTimeout).catch((err) => {
-    console.warn('[NativelyLocation] Browser geolocation threw:', err);
+  const browserWinner = await getBrowserLocation(browserTimeoutMs).catch((err) => {
+    console.warn('[NativelyLocation] Context browser path threw:', err);
     return null;
   });
 
   if (browserWinner && typeof browserWinner.latitude === 'number' && typeof browserWinner.longitude === 'number') {
-    console.log('[NativelyLocation] ✅ Browser fallback location:', browserWinner.latitude, browserWinner.longitude);
+    console.log('[NativelyLocation] ✅ Context browser fallback location:', browserWinner.latitude, browserWinner.longitude);
     setCachedLocation(browserWinner);
     return browserWinner;
   }
 
-  console.warn('[NativelyLocation] ❌ No location from Natively SDK or browser fallback');
+  console.warn('[NativelyLocation] ❌ Context flow: no location from Natively SDK or browser fallback');
   return null;
 }
 

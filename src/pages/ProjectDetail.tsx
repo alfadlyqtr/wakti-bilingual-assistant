@@ -227,6 +227,10 @@ const inferScreenshotIntentFromFiles = (files: File[]): ScreenshotIntent => {
   return hasDocument ? 'content' : 'style';
 };
 
+const hasLiveDeployment = (projectLike: { status?: string | null; deployment_id?: string | null } | null | undefined) => {
+  return !!projectLike?.deployment_id && (projectLike.status === 'published' || projectLike.status === 'live');
+};
+
 // Lovable-style Thinking Timer Component - Amber/Gold badge style
 const ThinkingTimerDisplay: React.FC<{ startTime: number; isRTL: boolean }> = ({ startTime, isRTL }) => {
   const [elapsedSeconds, setElapsedSeconds] = React.useState(0);
@@ -664,7 +668,7 @@ export default function ProjectDetail() {
     }
     
     // Check if published
-    const isPublished = project.status === 'published';
+    const isPublished = hasLiveDeployment(project);
     items.push({ label: 'Published live', labelAr: 'منشور', done: isPublished, priority: 'medium' });
     
     // Calculate score
@@ -1047,6 +1051,7 @@ export default function ProjectDetail() {
   const [subdomainInput, setSubdomainInput] = useState('');
   const [subdomainError, setSubdomainError] = useState<string | null>(null);
   const [checkingSubdomain, setCheckingSubdomain] = useState(false);
+  const projectHasLiveDeployment = hasLiveDeployment(project);
 
   // Track if we've already started generation to prevent double-runs
   const generationStartedRef = useRef(false);
@@ -2335,8 +2340,36 @@ export default function ProjectDetail() {
 
       console.log('Generated index.html size:', indexHtml.length);
 
-      const subdomainUrl = `https://${finalSubdomain}.wakti.ai`;
-      console.log('Published (wildcard routing) to:', subdomainUrl);
+      const { data: publishResult, error: publishError } = await supabase.functions.invoke('projects-publish', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: {
+          projectId: project.id,
+          projectName,
+          projectSlug: finalSubdomain,
+          files: [
+            {
+              path: 'index.html',
+              content: indexHtml,
+            },
+          ],
+        }
+      });
+
+      if (publishError) {
+        console.error('Publish error:', publishError);
+        throw new Error(publishError.message || 'Failed to publish project');
+      }
+
+      if (!publishResult?.ok || !publishResult?.deploymentId || !publishResult?.url) {
+        console.error('Publish failed:', publishResult);
+        throw new Error(publishResult?.error || 'Project deployment failed');
+      }
+
+      const subdomainUrl = publishResult.url;
+      const deploymentId = publishResult.deploymentId;
+      console.log('Published to Vercel:', subdomainUrl, deploymentId);
 
       // Update project in database with the published URL
       const { error: updateError } = await supabase
@@ -2345,7 +2378,7 @@ export default function ProjectDetail() {
           status: 'published',
           published_url: subdomainUrl,
           subdomain: finalSubdomain,
-          deployment_id: null,
+          deployment_id: deploymentId,
           bundled_code: JSON.stringify(projectFiles),
           published_at: new Date().toISOString(),
         })
@@ -2369,7 +2402,7 @@ export default function ProjectDetail() {
         status: 'published',
         published_url: subdomainUrl,
         subdomain: finalSubdomain,
-        deployment_id: null,
+        deployment_id: deploymentId,
       } : null);
 
       setShowPublishModal(false);
@@ -5640,6 +5673,7 @@ ${fixInstructions}
     template_type: 'ai-generated',
     status: 'generating',
     published_url: null,
+    deployment_id: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   } : null);
@@ -8375,13 +8409,13 @@ ${fixInstructions}
             {/* Status Badge - Enhanced */}
             <div className={cn(
               "px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase tracking-wider shrink-0 backdrop-blur-sm border",
-              displayProject.status === 'published' 
+              hasLiveDeployment(displayProject)
                 ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30 shadow-lg shadow-emerald-500/10" 
                 : displayProject.status === 'generating'
                 ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30 shadow-lg shadow-indigo-500/10 animate-pulse"
                 : "bg-amber-500/20 text-amber-300 border-amber-500/30 shadow-lg shadow-amber-500/10"
             )}>
-              {displayProject.status === 'published' ? (isRTL ? 'منشور' : 'Live') : 
+              {hasLiveDeployment(displayProject) ? (isRTL ? 'منشور' : 'Live') : 
                displayProject.status === 'generating' ? (isRTL ? 'بناء' : 'Building') :
                (isRTL ? 'مسودة' : 'Draft')}
             </div>
@@ -8620,13 +8654,13 @@ ${fixInstructions}
                 <ExternalLink className="h-7 w-7 text-white" />
               </div>
               <h2 className="text-xl font-bold text-zinc-900 dark:text-white">
-                {project?.subdomain 
+                {projectHasLiveDeployment 
                   ? (isRTL ? 'تحديث المشروع' : 'Update Project')
                   : (isRTL ? 'نشر المشروع' : 'Publish Project')
                 }
               </h2>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                {project?.subdomain 
+                {projectHasLiveDeployment 
                   ? (isRTL ? 'سيتم تحديث موقعك الحالي' : 'Your existing site will be updated')
                   : (isRTL ? 'اختر اسم موقعك الفريد' : 'Choose your unique site name')
                 }
@@ -8637,31 +8671,31 @@ ${fixInstructions}
             <div>
               <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block mb-2">
                 {isRTL ? 'اسم الموقع' : 'Site Name'}
-                {project?.subdomain && (
+                {projectHasLiveDeployment && (
                   <span className="text-amber-600 dark:text-amber-400 ml-2">
                     ({isRTL ? 'مُقفل' : 'Locked'})
                   </span>
                 )}
               </label>
               <div className={`flex items-center gap-0 rounded-xl border overflow-hidden ${
-                project?.subdomain 
+                projectHasLiveDeployment 
                   ? 'border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50' 
                   : 'border-zinc-300 dark:border-zinc-700 focus-within:ring-2 focus-within:ring-indigo-500/50'
               }`}>
                 <input
                   type="text"
                   value={subdomainInput}
-                  onChange={(e) => !project?.subdomain && handleSubdomainChange(e.target.value)}
+                  onChange={(e) => !projectHasLiveDeployment && handleSubdomainChange(e.target.value)}
                   placeholder={isRTL ? 'my-app' : 'my-app'}
                   className={`flex-1 px-4 py-3 text-base focus:outline-none ${
-                    project?.subdomain 
+                    projectHasLiveDeployment 
                       ? 'bg-zinc-50 dark:bg-zinc-800/50 text-zinc-500 dark:text-zinc-400 cursor-not-allowed' 
                       : 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder:text-zinc-400'
                   }`}
-                  autoFocus={!project?.subdomain}
+                  autoFocus={!projectHasLiveDeployment}
                   maxLength={30}
-                  readOnly={!!project?.subdomain}
-                  disabled={!!project?.subdomain}
+                  readOnly={projectHasLiveDeployment}
+                  disabled={projectHasLiveDeployment}
                 />
                 <span className="px-3 py-3 bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 text-sm font-medium border-l border-zinc-300 dark:border-zinc-600">
                   .wakti.ai
@@ -8669,7 +8703,7 @@ ${fixInstructions}
               </div>
               
               {/* Locked notice for existing subdomain */}
-              {project?.subdomain && (
+              {projectHasLiveDeployment && (
                 <div className="mt-2 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50">
                   <p className="text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1.5">
                     <Lock className="h-3 w-3 flex-shrink-0" />
@@ -8682,7 +8716,7 @@ ${fixInstructions}
               )}
               
               {/* First-time warning */}
-              {!project?.subdomain && subdomainInput && !subdomainError && (
+              {!projectHasLiveDeployment && subdomainInput && !subdomainError && (
                 <div className="mt-2 p-2.5 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50">
                   <p className="text-xs text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
                     <AlertTriangle className="h-3 w-3 flex-shrink-0" />
@@ -8695,7 +8729,7 @@ ${fixInstructions}
               )}
               
               {/* Error message */}
-              {subdomainError && !project?.subdomain && (
+              {subdomainError && !projectHasLiveDeployment && (
                 <p className="text-xs text-red-500 mt-2 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
                   {subdomainError}
@@ -8733,7 +8767,7 @@ ${fixInstructions}
                 ) : (
                   <>
                     <ExternalLink className="h-4 w-4" />
-                    {project?.subdomain 
+                    {projectHasLiveDeployment 
                       ? (isRTL ? 'تحديث' : 'Update')
                       : (isRTL ? 'نشر' : 'Publish')
                     }

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { supabase, ensurePassport, getCurrentUserId, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
-import { getNativeLocation, queryNeedsFreshLocation, containsNearMePattern } from '@/integrations/natively/locationBridge';
+import { getExactLocation, getNativeLocation, queryNeedsFreshLocation, containsNearMePattern } from '@/integrations/natively/locationBridge';
 import { emitEvent } from '@/utils/eventBus';
 
 // Module-level session cache — avoids a Supabase network round-trip on every message send.
@@ -458,17 +458,17 @@ class WaktiAIV2ServiceClass {
       updatedAt: now,
     };
 
-    // Try native location first (Natively SDK + browser geolocation fallback)
-    // If forceFresh, request fresh location with skipCache
-    let hasDeviceGPS = false;
     try {
-      const nativeLoc = await getNativeLocation({
-        skipCache: forceFresh,
-        timeoutMs: forceFresh ? 10000 : 6000,
-        allowBrowserFallback: true,
-      });
+      const nativeLoc = forceFresh
+        ? await getExactLocation({
+            timeoutMs: 10000,
+            allowBrowserFallback: true,
+          })
+        : await getNativeLocation({
+            timeoutMs: 6000,
+            allowBrowserFallback: true,
+          });
       if (nativeLoc && typeof nativeLoc.latitude === 'number' && typeof nativeLoc.longitude === 'number') {
-        hasDeviceGPS = true;
         resolved = {
           ...resolved,
           latitude: nativeLoc.latitude,

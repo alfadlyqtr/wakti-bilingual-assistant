@@ -146,14 +146,312 @@ type AppCircleProps = {
 const MODERN_SCALE_BASE_WIDTH = 390;
 const MODERN_SCALE_BASE_HEIGHT = 720;
 
-const clampModernValue = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+type ModernMobilePresetKey = "compact" | "standard" | "tall" | "large";
 
-const normalizeModernValue = (value: number, min: number, max: number) => {
-  if (max <= min) return 1;
-  return clampModernValue((value - min) / (max - min), 0, 1);
+type ModernMobilePreset = {
+  rootPaddingX: number;
+  rootPaddingTop: number;
+  containerGap: number;
+  topRowGap: number;
+  topRowLeadWidth: number;
+  topLeadPaddingTop: number;
+  modesButtonGap: number;
+  modeControlsGap: number;
+  modeControlsTopMargin: number;
+  greetingFontSizeEn: number;
+  greetingFontSizeAr: number;
+  modeBubbleHeight: number;
+  modeBubbleRadius: number;
+  modeIconSize: number;
+  modeLabelSize: number;
+  widgetsRadius: number;
+  widgetsPaddingX: number;
+  widgetsPaddingTop: number;
+  widgetsPaddingBottom: number;
+  widgetCardHeight: number;
+  middleRowGap: number;
+  systemRailWidth: number;
+  sectionRadius: number;
+  creationRadius: number;
+  sectionPaddingX: number;
+  sectionPaddingY: number;
+  systemPaddingX: number;
+  systemPaddingTop: number;
+  productivityTitleMargin: number;
+  productivityTitleSizeEn: number;
+  productivityTitleSizeAr: number;
+  productivityGridGap: number;
+  systemTitleSize: number;
+  systemTitleMargin: number;
+  systemGap: number;
+  systemVerticalFontSize: number;
+  systemVerticalLetterSpacing: number;
+  systemRightPadding: number;
+  convosButtonMarginTop: number;
+  convosButtonHeight: number;
+  convosButtonRadius: number;
+  convosButtonFontSize: number;
+  convosButtonIconSize: number;
+  homescreenBarOffset: number;
+  creationTranslateY: number;
+  creationPaddingTop: number;
+  creationPaddingBottom: number;
+  creationTitleMargin: number;
+  creationTitleSizeEn: number;
+  creationTitleSizeAr: number;
+  creationGridGap: number;
+  compactAppScale: number;
+  accountAppScale: number;
+  systemAppScale: number;
+  creationAppScale: number;
 };
 
-const lerpModernValue = (min: number, max: number, progress: number) => min + ((max - min) * progress);
+const MODERN_MOBILE_PRESETS: Record<ModernMobilePresetKey, ModernMobilePreset> = {
+  compact: {
+    rootPaddingX: 10,
+    rootPaddingTop: 10,
+    containerGap: 10,
+    topRowGap: 8,
+    topRowLeadWidth: 94,
+    topLeadPaddingTop: 3,
+    modesButtonGap: 3,
+    modeControlsGap: 6,
+    modeControlsTopMargin: 8,
+    greetingFontSizeEn: 13,
+    greetingFontSizeAr: 13.25,
+    modeBubbleHeight: 40,
+    modeBubbleRadius: 12,
+    modeIconSize: 16,
+    modeLabelSize: 8.5,
+    widgetsRadius: 24,
+    widgetsPaddingX: 8.5,
+    widgetsPaddingTop: 6,
+    widgetsPaddingBottom: 4.5,
+    widgetCardHeight: 178,
+    middleRowGap: 8,
+    systemRailWidth: 88,
+    sectionRadius: 24,
+    creationRadius: 26,
+    sectionPaddingX: 8,
+    sectionPaddingY: 8,
+    systemPaddingX: 6.5,
+    systemPaddingTop: 5,
+    productivityTitleMargin: 7,
+    productivityTitleSizeEn: 19,
+    productivityTitleSizeAr: 21,
+    productivityGridGap: 5.5,
+    systemTitleSize: 16.5,
+    systemTitleMargin: 5.5,
+    systemGap: 8,
+    systemVerticalFontSize: 10.5,
+    systemVerticalLetterSpacing: 5.1,
+    systemRightPadding: 10,
+    convosButtonMarginTop: 8,
+    convosButtonHeight: 28,
+    convosButtonRadius: 10,
+    convosButtonFontSize: 10.25,
+    convosButtonIconSize: 11,
+    homescreenBarOffset: 4,
+    creationTranslateY: 6,
+    creationPaddingTop: 4,
+    creationPaddingBottom: 6,
+    creationTitleMargin: 4,
+    creationTitleSizeEn: 15.5,
+    creationTitleSizeAr: 18.5,
+    creationGridGap: 4.5,
+    compactAppScale: 0.82,
+    accountAppScale: 0.88,
+    systemAppScale: 0.84,
+    creationAppScale: 0.78,
+  },
+  standard: {
+    rootPaddingX: 12,
+    rootPaddingTop: 12,
+    containerGap: 12,
+    topRowGap: 10,
+    topRowLeadWidth: 102,
+    topLeadPaddingTop: 4,
+    modesButtonGap: 4,
+    modeControlsGap: 8,
+    modeControlsTopMargin: 10,
+    greetingFontSizeEn: 14,
+    greetingFontSizeAr: 14.25,
+    modeBubbleHeight: 44,
+    modeBubbleRadius: 14,
+    modeIconSize: 18,
+    modeLabelSize: 9.25,
+    widgetsRadius: 28,
+    widgetsPaddingX: 10,
+    widgetsPaddingTop: 7,
+    widgetsPaddingBottom: 5.5,
+    widgetCardHeight: 192,
+    middleRowGap: 9,
+    systemRailWidth: 96,
+    sectionRadius: 28,
+    creationRadius: 30,
+    sectionPaddingX: 9,
+    sectionPaddingY: 9,
+    systemPaddingX: 7,
+    systemPaddingTop: 5.5,
+    productivityTitleMargin: 8,
+    productivityTitleSizeEn: 21.5,
+    productivityTitleSizeAr: 24,
+    productivityGridGap: 6.5,
+    systemTitleSize: 18.5,
+    systemTitleMargin: 6.5,
+    systemGap: 9.5,
+    systemVerticalFontSize: 11.5,
+    systemVerticalLetterSpacing: 5.8,
+    systemRightPadding: 12,
+    convosButtonMarginTop: 10,
+    convosButtonHeight: 30,
+    convosButtonRadius: 11,
+    convosButtonFontSize: 11,
+    convosButtonIconSize: 12,
+    homescreenBarOffset: 5,
+    creationTranslateY: 8,
+    creationPaddingTop: 5,
+    creationPaddingBottom: 7,
+    creationTitleMargin: 5,
+    creationTitleSizeEn: 17,
+    creationTitleSizeAr: 21,
+    creationGridGap: 5.5,
+    compactAppScale: 0.88,
+    accountAppScale: 0.95,
+    systemAppScale: 0.9,
+    creationAppScale: 0.83,
+  },
+  tall: {
+    rootPaddingX: 13,
+    rootPaddingTop: 14,
+    containerGap: 14,
+    topRowGap: 11,
+    topRowLeadWidth: 108,
+    topLeadPaddingTop: 5,
+    modesButtonGap: 4,
+    modeControlsGap: 8,
+    modeControlsTopMargin: 12,
+    greetingFontSizeEn: 15,
+    greetingFontSizeAr: 15.25,
+    modeBubbleHeight: 46,
+    modeBubbleRadius: 15,
+    modeIconSize: 19,
+    modeLabelSize: 9.75,
+    widgetsRadius: 30,
+    widgetsPaddingX: 11,
+    widgetsPaddingTop: 8,
+    widgetsPaddingBottom: 6,
+    widgetCardHeight: 208,
+    middleRowGap: 10,
+    systemRailWidth: 100,
+    sectionRadius: 30,
+    creationRadius: 33,
+    sectionPaddingX: 10,
+    sectionPaddingY: 10,
+    systemPaddingX: 7.5,
+    systemPaddingTop: 6,
+    productivityTitleMargin: 9,
+    productivityTitleSizeEn: 23.5,
+    productivityTitleSizeAr: 26,
+    productivityGridGap: 7,
+    systemTitleSize: 20,
+    systemTitleMargin: 7,
+    systemGap: 10.5,
+    systemVerticalFontSize: 12.25,
+    systemVerticalLetterSpacing: 6.2,
+    systemRightPadding: 14,
+    convosButtonMarginTop: 11,
+    convosButtonHeight: 32,
+    convosButtonRadius: 12,
+    convosButtonFontSize: 11.5,
+    convosButtonIconSize: 12.5,
+    homescreenBarOffset: 6,
+    creationTranslateY: 10,
+    creationPaddingTop: 6,
+    creationPaddingBottom: 8,
+    creationTitleMargin: 6,
+    creationTitleSizeEn: 18.5,
+    creationTitleSizeAr: 23,
+    creationGridGap: 6,
+    compactAppScale: 0.93,
+    accountAppScale: 1,
+    systemAppScale: 0.95,
+    creationAppScale: 0.87,
+  },
+  large: {
+    rootPaddingX: 14,
+    rootPaddingTop: 14,
+    containerGap: 14,
+    topRowGap: 12,
+    topRowLeadWidth: 112,
+    topLeadPaddingTop: 5,
+    modesButtonGap: 4,
+    modeControlsGap: 9,
+    modeControlsTopMargin: 12,
+    greetingFontSizeEn: 15.5,
+    greetingFontSizeAr: 15.75,
+    modeBubbleHeight: 48,
+    modeBubbleRadius: 16,
+    modeIconSize: 20,
+    modeLabelSize: 10,
+    widgetsRadius: 32,
+    widgetsPaddingX: 12,
+    widgetsPaddingTop: 8,
+    widgetsPaddingBottom: 6,
+    widgetCardHeight: 210,
+    middleRowGap: 10,
+    systemRailWidth: 104,
+    sectionRadius: 31,
+    creationRadius: 35.2,
+    sectionPaddingX: 10.5,
+    sectionPaddingY: 10,
+    systemPaddingX: 8,
+    systemPaddingTop: 6,
+    productivityTitleMargin: 9,
+    productivityTitleSizeEn: 24.5,
+    productivityTitleSizeAr: 27,
+    productivityGridGap: 7.5,
+    systemTitleSize: 21,
+    systemTitleMargin: 7.5,
+    systemGap: 11,
+    systemVerticalFontSize: 12.75,
+    systemVerticalLetterSpacing: 6.5,
+    systemRightPadding: 15,
+    convosButtonMarginTop: 12,
+    convosButtonHeight: 33,
+    convosButtonRadius: 12,
+    convosButtonFontSize: 12,
+    convosButtonIconSize: 13,
+    homescreenBarOffset: 6,
+    creationTranslateY: 10,
+    creationPaddingTop: 6,
+    creationPaddingBottom: 8,
+    creationTitleMargin: 6,
+    creationTitleSizeEn: 19.2,
+    creationTitleSizeAr: 24.8,
+    creationGridGap: 6.5,
+    compactAppScale: 0.96,
+    accountAppScale: 1.03,
+    systemAppScale: 0.98,
+    creationAppScale: 0.9,
+  },
+};
+
+function getModernMobilePreset(viewport: { width: number; height: number }): ModernMobilePreset {
+  if (viewport.width <= 360 || viewport.height <= 700) {
+    return MODERN_MOBILE_PRESETS.compact;
+  }
+
+  if (viewport.width >= 414) {
+    return MODERN_MOBILE_PRESETS.large;
+  }
+
+  if (viewport.height >= 860) {
+    return MODERN_MOBILE_PRESETS.tall;
+  }
+
+  return MODERN_MOBILE_PRESETS.standard;
+}
 
 function getModernViewport() {
   if (typeof window === "undefined") {
@@ -1402,84 +1700,63 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const quoteText = getQuoteText(quote, language);
   const quoteAuthor = getQuoteAuthor(quote);
   const isDesktopLike = viewport.width >= 768;
-  const isCompactPhone = !isDesktopLike && (viewport.width <= 360 || viewport.height <= 700);
-  const isTallPhone = !isDesktopLike && viewport.height >= 860;
-  const widthProgress = isDesktopLike ? 1 : normalizeModernValue(viewport.width, 320, 430);
-  const heightProgress = isDesktopLike ? 1 : normalizeModernValue(viewport.height, 640, 940);
-  const fluidSize = (min: number, max: number, mode: "width" | "height" | "mixed" = "mixed") => {
-    const progress = mode === "width" ? widthProgress : mode === "height" ? heightProgress : ((widthProgress * 0.6) + (heightProgress * 0.4));
-    return Number(lerpModernValue(min, max, progress).toFixed(2));
-  };
-  const rootPaddingX = isDesktopLike ? 16 : fluidSize(10, 16, "width");
-  const rootPaddingTop = isDesktopLike ? 12 : fluidSize(10, 16, "height");
-  const containerGap = isDesktopLike ? 16 : fluidSize(10, 16, "height");
-  const topRowGap = isDesktopLike ? 16 : fluidSize(8, 14, "width");
-  const topRowLeadWidth = isDesktopLike
-    ? 116
-    : clampModernValue(viewport.width * (isCompactPhone ? 0.265 : isTallPhone ? 0.305 : 0.285), 92, 118);
-  const topLeadPaddingTop = isDesktopLike ? 4 : fluidSize(3, 6, "height");
-  const modesButtonGap = isDesktopLike ? 4 : fluidSize(3, 5, "width");
-  const modeControlsGap = isDesktopLike ? 8 : fluidSize(6, 10, "width");
-  const modeControlsTopMargin = isDesktopLike ? 12 : fluidSize(8, 14, "height");
-  const greetingFontSize = isDesktopLike ? 15 : fluidSize(language === "ar" ? 13.25 : 13, 16, "width");
-  const modeBubbleHeight = isDesktopLike ? 48 : clampModernValue(viewport.width * (isCompactPhone ? 0.115 : 0.12), 40, 52);
-  const modeBubbleRadius = isDesktopLike ? 16 : fluidSize(12, 17, "width");
-  const modeIconSize = isDesktopLike ? 20 : fluidSize(16, 21, "width");
-  const modeLabelSize = isDesktopLike ? 10 : fluidSize(8.5, 10.5, "width");
-  const widgetsRadius = isDesktopLike ? 32 : fluidSize(24, 32, "width");
-  const widgetsPaddingX = isDesktopLike ? 12 : fluidSize(8.5, 12.5, "width");
-  const widgetsPaddingTop = isDesktopLike ? 8 : fluidSize(6, 9, "height");
-  const widgetsPaddingBottom = isDesktopLike ? 6 : fluidSize(4.5, 7, "height");
-  const widgetCardHeight = isDesktopLike
-    ? 208
-    : clampModernValue(viewport.height * (isCompactPhone ? 0.235 : isTallPhone ? 0.265 : 0.25), 174, 224);
-  const middleRowGap = isDesktopLike ? 10 : fluidSize(8, 12, "width");
-  const systemRailWidth = isDesktopLike
-    ? 108
-    : clampModernValue(viewport.width * (isCompactPhone ? 0.235 : isTallPhone ? 0.255 : 0.245), 88, 112);
-  const sectionRadius = isDesktopLike ? 32 : fluidSize(24, 32, "width");
-  const creationRadius = isDesktopLike ? 35.2 : fluidSize(26, 35.2, "width");
-  const sectionPaddingX = isDesktopLike ? 10 : fluidSize(8, 11.5, "width");
-  const sectionPaddingY = isDesktopLike ? 10 : fluidSize(8, 11.5, "height");
-  const systemPaddingX = isDesktopLike ? 8 : fluidSize(6.5, 9, "width");
-  const systemPaddingTop = isDesktopLike ? 6 : fluidSize(5, 7, "height");
-  const productivityTitleMargin = isDesktopLike ? 10 : fluidSize(7, 11, "height");
+  const mobilePreset = isDesktopLike ? null : getModernMobilePreset(viewport);
+  const rootPaddingX = isDesktopLike ? 16 : mobilePreset.rootPaddingX;
+  const rootPaddingTop = isDesktopLike ? 12 : mobilePreset.rootPaddingTop;
+  const containerGap = isDesktopLike ? 16 : mobilePreset.containerGap;
+  const topRowGap = isDesktopLike ? 16 : mobilePreset.topRowGap;
+  const topRowLeadWidth = isDesktopLike ? 116 : mobilePreset.topRowLeadWidth;
+  const topLeadPaddingTop = isDesktopLike ? 4 : mobilePreset.topLeadPaddingTop;
+  const modesButtonGap = isDesktopLike ? 4 : mobilePreset.modesButtonGap;
+  const modeControlsGap = isDesktopLike ? 8 : mobilePreset.modeControlsGap;
+  const modeControlsTopMargin = isDesktopLike ? 12 : mobilePreset.modeControlsTopMargin;
+  const greetingFontSize = isDesktopLike ? 15 : (language === "ar" ? mobilePreset.greetingFontSizeAr : mobilePreset.greetingFontSizeEn);
+  const modeBubbleHeight = isDesktopLike ? 48 : mobilePreset.modeBubbleHeight;
+  const modeBubbleRadius = isDesktopLike ? 16 : mobilePreset.modeBubbleRadius;
+  const modeIconSize = isDesktopLike ? 20 : mobilePreset.modeIconSize;
+  const modeLabelSize = isDesktopLike ? 10 : mobilePreset.modeLabelSize;
+  const widgetsRadius = isDesktopLike ? 32 : mobilePreset.widgetsRadius;
+  const widgetsPaddingX = isDesktopLike ? 12 : mobilePreset.widgetsPaddingX;
+  const widgetsPaddingTop = isDesktopLike ? 8 : mobilePreset.widgetsPaddingTop;
+  const widgetsPaddingBottom = isDesktopLike ? 6 : mobilePreset.widgetsPaddingBottom;
+  const widgetCardHeight = isDesktopLike ? 208 : mobilePreset.widgetCardHeight;
+  const middleRowGap = isDesktopLike ? 10 : mobilePreset.middleRowGap;
+  const systemRailWidth = isDesktopLike ? 108 : mobilePreset.systemRailWidth;
+  const sectionRadius = isDesktopLike ? 32 : mobilePreset.sectionRadius;
+  const creationRadius = isDesktopLike ? 35.2 : mobilePreset.creationRadius;
+  const sectionPaddingX = isDesktopLike ? 10 : mobilePreset.sectionPaddingX;
+  const sectionPaddingY = isDesktopLike ? 10 : mobilePreset.sectionPaddingY;
+  const systemPaddingX = isDesktopLike ? 8 : mobilePreset.systemPaddingX;
+  const systemPaddingTop = isDesktopLike ? 6 : mobilePreset.systemPaddingTop;
+  const productivityTitleMargin = isDesktopLike ? 10 : mobilePreset.productivityTitleMargin;
   const productivityTitleSize = isDesktopLike
     ? (language === "ar" ? 27.52 : 24.8)
-    : fluidSize(language === "ar" ? 21 : 19, language === "ar" ? 28 : 25, "width");
-  const productivityGridGap = isDesktopLike ? 8 : fluidSize(5.5, 9, "width");
-  const systemTitleSize = isDesktopLike ? 21.12 : fluidSize(16.5, 21.12, "width");
-  const systemTitleMargin = isDesktopLike ? 8 : fluidSize(5.5, 9, "height");
-  const systemGap = isDesktopLike ? 12 : fluidSize(8, 12, "height");
-  const systemVerticalFontSize = isDesktopLike ? 13 : fluidSize(10.5, 13, "width");
-  const systemVerticalLetterSpacing = isDesktopLike ? 6.76 : fluidSize(5.1, 6.76, "width");
-  const systemRightPadding = isDesktopLike ? 16 : fluidSize(10, 16, "width");
-  const convosButtonMarginTop = isDesktopLike ? 12 : fluidSize(8, 12, "height");
-  const convosButtonHeight = isDesktopLike ? 32 : fluidSize(28, 34, "height");
-  const convosButtonRadius = isDesktopLike ? 12 : fluidSize(10, 13, "width");
-  const convosButtonFontSize = isDesktopLike ? 12 : fluidSize(10.25, 12.5, "width");
-  const convosButtonIconSize = isDesktopLike ? 13 : fluidSize(11, 13.5, "width");
-  const homescreenBarOffset = isDesktopLike ? 6 : fluidSize(4, 8, "height");
-  const creationTranslateY = isDesktopLike ? 12 : clampModernValue(viewport.height * 0.011, 6, 12);
-  const creationPaddingTop = isDesktopLike ? 4 : fluidSize(4, 8, "height");
-  const creationPaddingBottom = isDesktopLike ? 0 : fluidSize(6, 10, "height");
-  const creationTitleMargin = isDesktopLike ? 4 : fluidSize(4, 8, "height");
+    : (language === "ar" ? mobilePreset.productivityTitleSizeAr : mobilePreset.productivityTitleSizeEn);
+  const productivityGridGap = isDesktopLike ? 8 : mobilePreset.productivityGridGap;
+  const systemTitleSize = isDesktopLike ? 21.12 : mobilePreset.systemTitleSize;
+  const systemTitleMargin = isDesktopLike ? 8 : mobilePreset.systemTitleMargin;
+  const systemGap = isDesktopLike ? 12 : mobilePreset.systemGap;
+  const systemVerticalFontSize = isDesktopLike ? 13 : mobilePreset.systemVerticalFontSize;
+  const systemVerticalLetterSpacing = isDesktopLike ? 6.76 : mobilePreset.systemVerticalLetterSpacing;
+  const systemRightPadding = isDesktopLike ? 16 : mobilePreset.systemRightPadding;
+  const convosButtonMarginTop = isDesktopLike ? 12 : mobilePreset.convosButtonMarginTop;
+  const convosButtonHeight = isDesktopLike ? 32 : mobilePreset.convosButtonHeight;
+  const convosButtonRadius = isDesktopLike ? 12 : mobilePreset.convosButtonRadius;
+  const convosButtonFontSize = isDesktopLike ? 12 : mobilePreset.convosButtonFontSize;
+  const convosButtonIconSize = isDesktopLike ? 13 : mobilePreset.convosButtonIconSize;
+  const homescreenBarOffset = isDesktopLike ? 6 : mobilePreset.homescreenBarOffset;
+  const creationTranslateY = isDesktopLike ? 12 : mobilePreset.creationTranslateY;
+  const creationPaddingTop = isDesktopLike ? 4 : mobilePreset.creationPaddingTop;
+  const creationPaddingBottom = isDesktopLike ? 0 : mobilePreset.creationPaddingBottom;
+  const creationTitleMargin = isDesktopLike ? 4 : mobilePreset.creationTitleMargin;
   const creationTitleSize = isDesktopLike
     ? (language === "ar" ? 24.8 : 19.2)
-    : fluidSize(language === "ar" ? 18.5 : 15.5, language === "ar" ? 25 : 20, "width");
-  const creationGridGap = isDesktopLike ? 6 : fluidSize(4.5, 8, "width");
-  const compactAppScale = isDesktopLike
-    ? 1
-    : clampModernValue(0.84 + (widthProgress * 0.14) + (heightProgress * 0.04) - (isCompactPhone ? 0.03 : 0), 0.82, 1);
-  const accountAppScale = isDesktopLike
-    ? 1
-    : clampModernValue(0.9 + (widthProgress * 0.12) + (heightProgress * 0.05), 0.88, 1.06);
-  const systemAppScale = isDesktopLike
-    ? 1
-    : clampModernValue(compactAppScale + 0.02, 0.84, 1.02);
-  const creationAppScale = isDesktopLike
-    ? 1
-    : clampModernValue(compactAppScale - (isCompactPhone ? 0.06 : 0.03), 0.78, 0.95);
+    : (language === "ar" ? mobilePreset.creationTitleSizeAr : mobilePreset.creationTitleSizeEn);
+  const creationGridGap = isDesktopLike ? 6 : mobilePreset.creationGridGap;
+  const compactAppScale = isDesktopLike ? 1 : mobilePreset.compactAppScale;
+  const accountAppScale = isDesktopLike ? 1 : mobilePreset.accountAppScale;
+  const systemAppScale = isDesktopLike ? 1 : mobilePreset.systemAppScale;
+  const creationAppScale = isDesktopLike ? 1 : mobilePreset.creationAppScale;
 
   const [homescreenWaktiDraft, setHomescreenWaktiDraft] = useState<HomescreenWaktiDraft>(() => {
     try {

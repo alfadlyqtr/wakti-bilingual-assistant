@@ -10,6 +10,11 @@ type ProjectRow = {
   slug: string;
   status: string;
   published_url: string | null;
+  deployment_id: string | null;
+};
+
+const hasLiveDeployment = (project: ProjectRow | null) => {
+  return !!project?.deployment_id && (project.status === "published" || project.status === "live");
 };
 
 const RESERVED_PATHS = new Set([
@@ -58,7 +63,7 @@ export default function ProjectSlugRedirect() {
 
         const { data, error: dbError } = await (supabase
           .from("projects" as any)
-          .select("id,name,slug,status,published_url")
+          .select("id,name,slug,status,published_url,deployment_id")
           .eq("slug", normalizedSlug)
           .maybeSingle() as any);
 
@@ -68,7 +73,7 @@ export default function ProjectSlugRedirect() {
         const p = (data || null) as ProjectRow | null;
         setProject(p);
 
-        if (p?.published_url && (p.status === "published" || p.status === "live")) {
+        if (p?.published_url && hasLiveDeployment(p)) {
           window.location.replace(p.published_url);
           return;
         }

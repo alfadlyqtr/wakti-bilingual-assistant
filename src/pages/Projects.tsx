@@ -56,12 +56,17 @@ interface Project {
   template_type: string | null;
   status: string;
   published_url: string | null;
+  deployment_id?: string | null;
   subdomain: string | null;
   created_at: string;
   updated_at: string;
   thumbnail_url?: string | null;
   files?: Record<string, string>;
 }
+
+const hasLiveDeployment = (project: { status: string; deployment_id?: string | null }) => {
+  return !!project.deployment_id && (project.status === 'published' || project.status === 'live');
+};
 
 const WaktiAssistant = lazyRetry(() => import('./WaktiAssistant'));
 
@@ -2786,14 +2791,14 @@ Apply these styles consistently throughout the entire design.`;
                           <span
                             className={cn(
                               "shrink-0 px-3 py-1.5 text-[10px] rounded-full font-bold uppercase tracking-widest",
-                              project.status === 'published'
+                              hasLiveDeployment(project)
                                 ? "bg-emerald-500/30 text-emerald-600 dark:text-emerald-300 border border-emerald-500/50 shadow-lg shadow-emerald-500/20"
                                 : project.status === 'generating'
                                 ? "bg-indigo-500/30 text-indigo-600 dark:text-indigo-300 border border-indigo-500/50 shadow-lg shadow-indigo-500/20 animate-pulse"
                                 : "bg-amber-500/30 text-amber-600 dark:text-amber-300 border border-amber-500/50 shadow-lg shadow-amber-500/20"
                             )}
                           >
-                            {project.status === 'published' ? (isRTL ? 'منشور' : 'Live') : project.status === 'generating' ? (isRTL ? 'بناء' : 'Building') : (isRTL ? 'مسودة' : 'Draft')}
+                            {hasLiveDeployment(project) ? (isRTL ? 'منشور' : 'Live') : project.status === 'generating' ? (isRTL ? 'بناء' : 'Building') : (isRTL ? 'مسودة' : 'Draft')}
                           </span>
                           {/* Server Status Badge */}
                           <span
@@ -2813,7 +2818,7 @@ Apply these styles consistently throughout the entire design.`;
                       </div>
                       
                       {/* Site URL - Show subdomain if published */}
-                      {project.subdomain && project.status === 'published' ? (
+                      {project.subdomain && hasLiveDeployment(project) ? (
                         <div className="flex items-center gap-1.5 text-xs text-indigo-600 dark:text-indigo-400 font-medium">
                           <Globe className="h-3 w-3" />
                           <span className="font-mono truncate">{project.subdomain}.wakti.ai</span>
@@ -2828,7 +2833,7 @@ Apply these styles consistently throughout the entire design.`;
                     {/* Actions - Top right */}
                     <div className="absolute top-4 right-4 flex gap-2 z-10">
                       {/* Share Button */}
-                      {project.status === 'published' && project.subdomain && (
+                      {hasLiveDeployment(project) && project.subdomain && (
                         <div onClick={(e) => e.stopPropagation()}>
                           <ShareButton
                             shareUrl={`https://${project.subdomain}.wakti.ai`}
