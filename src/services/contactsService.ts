@@ -759,12 +759,27 @@ export async function deleteContact(contactId: string): Promise<boolean> {
 
   const targetContactUserId = relationshipRow?.contact_id || contactId;
 
+  const { data: rowsToDelete, error: rowsLookupError } = await supabase
+    .from("contacts")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("contact_id", targetContactUserId);
+
+  if (rowsLookupError) {
+    console.error("Error finding contact rows for delete:", rowsLookupError);
+    throw rowsLookupError;
+  }
+
+  const rowIds = (rowsToDelete || []).map((row) => row.id);
+  if (rowIds.length === 0) {
+    return true;
+  }
+
   // Remove all rows on current user's side for this contact (handles duplicate rows safely)
   const { error: deleteByContactIdError } = await supabase
     .from("contacts")
     .delete()
-    .eq("user_id", userId)
-    .eq("contact_id", targetContactUserId);
+    .in("id", rowIds);
 
   if (deleteByContactIdError) {
     console.error("Error deleting contact by contact_id:", deleteByContactIdError);
@@ -875,6 +890,7 @@ export async function getDirectChatPermission(userId: string): Promise<DirectCha
   if (incomingStatus === 'blocked') return 'blocked_by_user';
   if (outgoingStatus === 'blocked') return 'you_blocked_user';
   if (outgoingStatus === 'approved' && incomingStatus === 'approved') return 'allowed';
+  if (outgoingStatus === 'approved' && !incomingStatus) return 'blocked_by_user';
 
   return 'disconnected';
 }
