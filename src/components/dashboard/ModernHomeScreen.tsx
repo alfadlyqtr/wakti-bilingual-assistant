@@ -45,7 +45,7 @@ import { getTodayHealthSummary, getSleepAnalysis } from "@/integrations/natively
 import { getScopedStorageItem, setScopedStorageItem } from "@/utils/userScopedStorage";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
 import { onEvent } from "@/utils/eventBus";
-import { Carousel, CarouselContent, CarouselItem } from "@/components/ui/carousel";
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
 import { PlusMenu } from "@/components/wakti-ai-v2/PlusMenu";
@@ -1612,6 +1612,9 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const [modernWidgetSettings, setModernWidgetSettings] = useState<ModernWidgetSettings>(DEFAULT_MODERN_WIDGET_SETTINGS);
   const [modernWidgetOrder, setModernWidgetOrder] = useState<ModernWidgetKey[]>(DEFAULT_MODERN_WIDGET_ORDER);
   const viewport = useModernViewport();
+  const [carouselApi, setCarouselApi] = useState<CarouselApi | null>(null);
+  const [activeWidgetIndex, setActiveWidgetIndex] = useState(0);
+  const [showDots, setShowDots] = useState(false);
 
   const { tasks, reminders } = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
@@ -1657,6 +1660,27 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
     window.addEventListener("wakti-homescreen-mode-changed", handler as EventListener);
     return () => window.removeEventListener("wakti-homescreen-mode-changed", handler as EventListener);
   }, []);
+  useEffect(() => {
+    if (!carouselApi) return;
+    const onSelect = () => setActiveWidgetIndex(carouselApi.selectedScrollSnap());
+    carouselApi.on("select", onSelect);
+    onSelect();
+
+    const onScroll = () => setShowDots(true);
+    const onPointerDown = () => setShowDots(true);
+    const onSettle = () => setShowDots(false);
+
+    carouselApi.on("scroll", onScroll);
+    carouselApi.on("pointerDown", onPointerDown);
+    carouselApi.on("settle", onSettle);
+    return () => {
+      carouselApi.off("select", onSelect);
+      carouselApi.off("scroll", onScroll);
+      carouselApi.off("pointerDown", onPointerDown);
+      carouselApi.off("settle", onSettle);
+    };
+  }, [carouselApi]);
+
   const activeModeConfig = MODES.find(m => m.key === activeModeKey) ?? MODES[0];
   const modeAccentMap: Record<string, string> = { chat: "#3b82f6", search: "#22c55e", study: "#a855f7" };
   const modeGlowMap: Record<string, string> = { chat: "rgba(59,130,246,0.45)", search: "rgba(34,197,94,0.45)", study: "rgba(168,85,247,0.45)" };
@@ -2037,17 +2061,40 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
           </div>
 
           <section className={cn("self-start border-[1.5px]", cardShell)} style={{ ...widgetsSectionStyle, borderRadius: `${widgetsRadius}px`, paddingLeft: `${widgetsPaddingX}px`, paddingRight: `${widgetsPaddingX}px`, paddingTop: `${widgetsPaddingTop}px`, paddingBottom: `${widgetsPaddingBottom}px` }}>
-            <Carousel opts={{ align: "start", direction: "ltr" }} className="w-full" dir="ltr">
-              <CarouselContent className="sm:-ml-2">
-                {visibleModernWidgetOrder.map((key) => (
-                  <CarouselItem key={key} className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-full">
-                    <div style={{ height: `${widgetCardHeight}px` }}>
-                      {modernWidgetCards[key]}
-                    </div>
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-            </Carousel>
+            <div className="relative w-full">
+              <Carousel opts={{ align: "start", direction: "ltr", loop: true }} setApi={setCarouselApi} className="w-full" dir="ltr">
+                <CarouselContent className="sm:-ml-2">
+                  {visibleModernWidgetOrder.map((key) => (
+                    <CarouselItem key={key} className="basis-full sm:basis-[88%] sm:pl-2 lg:basis-full">
+                      <div style={{ height: `${widgetCardHeight}px` }}>
+                        {modernWidgetCards[key]}
+                      </div>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+              </Carousel>
+              {visibleModernWidgetOrder.length > 1 && (
+                <div className={cn(
+                  "absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-[5px] transition-opacity duration-300 pointer-events-auto",
+                  showDots ? "opacity-100" : "opacity-0"
+                )}>
+                  {visibleModernWidgetOrder.map((_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => { carouselApi?.scrollTo(i); setShowDots(true); }}
+                      className={cn(
+                        "rounded-full transition-all duration-300",
+                        i === activeWidgetIndex
+                          ? (isDark ? "w-4 h-1 bg-white/70" : "w-4 h-1 bg-[#060541]/70")
+                          : (isDark ? "w-1 h-1 bg-white/30" : "w-1 h-1 bg-[#060541]/30")
+                      )}
+                      aria-label={`Go to widget ${i + 1}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         </div>
 

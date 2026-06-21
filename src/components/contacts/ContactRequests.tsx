@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { Check, X, User, UserCog } from "lucide-react";
+import { Check, X, UserCog } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getContactRequests, acceptContactRequest, rejectContactRequest, blockContact } from "@/services/contactsService";
+import { getContactRequests, acceptContactRequest, rejectContactRequest } from "@/services/contactsService";
 import { LoadingSpinner } from "@/components/ui/loading";
 import { formatDistanceToNow } from "date-fns";
 import { ar, enUS } from "date-fns/locale";
@@ -72,6 +72,7 @@ export function ContactRequests() {
       // Invalidate queries to refresh the contacts list and requests list
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] });
     },
     onError: (error) => {
       console.error("Error accepting request:", error);
@@ -96,35 +97,11 @@ export function ContactRequests() {
         position: 'bottom-center'
       });
       queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
+      queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] });
     },
     onError: (error) => {
       console.error("Error rejecting request:", error);
       toast.error(`${t("errorRejectingRequest", language)}: ${error.message || 'Unknown error'}`);
-    }
-  });
-
-  // Block user mutation
-  const blockUserMutation = useMutation({
-    mutationFn: (userId: string) => {
-      if (!userId) {
-        console.error("Attempted to block with undefined userId");
-        throw new Error("User ID is undefined");
-      }
-      
-      console.log("Blocking user with ID:", userId);
-      return blockContact(userId);
-    },
-    onSuccess: () => {
-      toast.success(t("contactBlocked", language), { 
-        duration: 2000,
-        position: 'bottom-center'
-      });
-      queryClient.invalidateQueries({ queryKey: ['contactRequests'] });
-      queryClient.invalidateQueries({ queryKey: ['blockedContacts'] });
-    },
-    onError: (error) => {
-      console.error("Error blocking user:", error);
-      toast.error(`${t("errorBlockingUser", language)}: ${error.message || 'Unknown error'}`);
     }
   });
 
@@ -150,18 +127,6 @@ export function ContactRequests() {
 
     console.log("Reject button clicked with requestId:", requestId);
     rejectRequestMutation.mutate(requestId);
-  };
-
-  const handleBlock = (userId: string | undefined) => {
-    // Added safety check
-    if (!userId) {
-      console.error("Cannot block user: userId is undefined");
-      toast.error(t("errorBlockingUser", language));
-      return;
-    }
-
-    console.log("Block button clicked with userId:", userId);
-    blockUserMutation.mutate(userId);
   };
 
   const getInitials = (name: string) => {
@@ -251,15 +216,6 @@ export function ContactRequests() {
                       disabled={rejectRequestMutation.isPending || !request.id}
                     >
                       <X className="h-4 w-4 text-red-500" />
-                    </Button>
-                    <Button 
-                      size="icon" 
-                      variant="outline"
-                      className="h-8 w-8 rounded-full"
-                      onClick={() => handleBlock(request.user_id)}
-                      disabled={blockUserMutation.isPending || !request.user_id}
-                    >
-                      <User className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>

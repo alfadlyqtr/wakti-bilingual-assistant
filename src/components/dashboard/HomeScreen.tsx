@@ -2609,17 +2609,33 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     if (!user?.id) return;
     const fetchBadge = async () => {
       try {
-        const [{ count: msgs }, { count: reqs }] = await Promise.all([
+        const [{ count: msgs }, { count: reqs }, { data: groupData }] = await Promise.all([
           supabase.from('messages').select('*', { count: 'exact', head: true }).eq('recipient_id', user.id).eq('is_read', false),
           supabase.from('contacts').select('*', { count: 'exact', head: true }).eq('contact_id', user.id).eq('status', 'pending'),
+          supabase
+            .from('conversation_participants')
+            .select('conversation_id, last_read_at, conversations!inner(last_message_at, last_message_by)')
+            .eq('user_id', user.id)
+            .eq('conversations.is_group', true)
+            .not('conversations.last_message_at', 'is', null)
+            .neq('conversations.last_message_by', user.id),
         ]);
-        setConnectBadge((msgs || 0) + (reqs || 0));
+        const groupUnread = (groupData || []).filter((row: any) => {
+          const lastRead = row.last_read_at ? new Date(row.last_read_at).getTime() : 0;
+          const lastMsg = row.conversations?.last_message_at ? new Date(row.conversations.last_message_at).getTime() : 0;
+          return lastMsg > lastRead;
+        }).length;
+        setConnectBadge((msgs || 0) + (reqs || 0) + groupUnread);
       } catch {}
     };
     fetchBadge();
     const channel = supabase.channel(`hs-connect-badge-${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'messages', filter: `recipient_id=eq.${user.id}` }, fetchBadge)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contacts', filter: `contact_id=eq.${user.id}` }, fetchBadge)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'group_chat_messages' }, () => {
+        // Group message changes refresh badge after a small delay to ensure DB consistency
+        setTimeout(fetchBadge, 500);
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user?.id]);

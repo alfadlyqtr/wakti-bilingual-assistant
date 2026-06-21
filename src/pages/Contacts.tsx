@@ -25,11 +25,11 @@ const resolveContactsTab = (searchParams: URLSearchParams) => {
 };
 
 const resolveContactsView = (searchParams: URLSearchParams) => {
-  const nextView = (searchParams.get("view") || "cards").toLowerCase();
+  const nextView = (searchParams.get("view") || "contacts").toLowerCase();
   if (["contacts", "cards"].includes(nextView)) {
     return nextView as "contacts" | "cards";
   }
-  return "cards" as const;
+  return "contacts" as const;
 };
 
 export default function Contacts() {
@@ -153,7 +153,9 @@ export function ContactsContent({
   });
 
   const totalDirectUnread = Object.values(perContactUnread).reduce((sum, count) => sum + (count || 0), 0);
-  const hasGroupUnread = groups.some((g) => g.unread);
+  const unreadGroupCount = groups.filter((g) => g.unread).length;
+  const hasGroupUnread = unreadGroupCount > 0;
+  const totalUnread = totalDirectUnread + unreadGroupCount;
 
   // Realtime: instant unread count updates
   const { user } = useAuth();
@@ -189,9 +191,22 @@ export function ContactsContent({
       })
       .subscribe();
 
+    const requestChannel = supabase
+      .channel(`contacts-pending-request:${user.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'contacts',
+        filter: `contact_id=eq.${user.id},status=eq.pending`
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] });
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(dmChannel);
       supabase.removeChannel(groupChannel);
+      supabase.removeChannel(requestChannel);
       realtimeSetupRef.current = false;
     };
   }, [user?.id, queryClient]);
@@ -209,9 +224,9 @@ export function ContactsContent({
           <button type="button" onClick={() => setActiveTab("contacts")} className={`rounded-xl text-xs font-bold transition-all flex gap-1.5 items-center justify-center ${isContactsAreaActive ? 'bg-[hsl(210,100%,55%)] text-white shadow-none' : 'text-foreground/50'}`}>
             <Contact className="h-3.5 w-3.5" />
             <span>{language === 'ar' ? 'الأصدقاء' : t("contacts", language)}</span>
-            {totalDirectUnread > 0 && (
+            {totalUnread > 0 && (
               <span className="bg-red-500 text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-0.5 flex items-center justify-center">
-                {totalDirectUnread > 99 ? '99+' : totalDirectUnread}
+                {totalUnread > 99 ? '99+' : totalUnread}
               </span>
             )}
           </button>
@@ -232,15 +247,22 @@ export function ContactsContent({
 
       {isContactsAreaActive && (
         <div className="pb-3">
-          <div className="grid grid-cols-3 w-full rounded-full border border-[#e2d8cd] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,237,231,0.88))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.96),rgba(16,19,27,0.96))] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_10px_24px_rgba(0,0,0,0.26)]">
+          <div className="grid grid-cols-2 w-full rounded-full border border-[#e2d8cd] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.92),rgba(243,237,231,0.88))] dark:bg-[linear-gradient(180deg,rgba(24,28,38,0.96),rgba(16,19,27,0.96))] p-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_rgba(15,23,42,0.06)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_10px_24px_rgba(0,0,0,0.26)]">
             <button type="button" onClick={() => setContactView("contacts")} className={`flex min-w-0 items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-full text-xs font-semibold transition-all ${activeTab === 'contacts' && contactView === 'contacts' ? 'bg-[hsl(210,100%,55%)] text-white shadow-[0_8px_18px_rgba(59,130,246,0.28)]' : 'text-muted-foreground hover:text-foreground'}`}>
               <LayoutList className="h-3.5 w-3.5" />
               <span className="truncate">{language === 'ar' ? 'جهات الاتصال' : 'Contacts'}</span>
+              {totalDirectUnread > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-0.5 flex items-center justify-center">
+                  {totalDirectUnread > 99 ? '99+' : totalDirectUnread}
+                </span>
+              )}
             </button>
+            {/* Cards tab — hidden but code preserved
             <button type="button" onClick={() => setContactView("cards")} className={`flex min-w-0 items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-full text-xs font-semibold transition-all ${activeTab === 'contacts' && contactView === 'cards' ? 'bg-[hsl(25,95%,55%)] text-white shadow-[0_8px_18px_rgba(249,115,22,0.24)]' : 'text-muted-foreground hover:text-foreground'}`}>
               <LayoutGrid className="h-3.5 w-3.5" />
               <span className="truncate">{language === 'ar' ? 'بطاقات' : 'Cards'}</span>
             </button>
+            */}
             <button type="button" onClick={() => setContactView("groups")} className={`flex min-w-0 items-center justify-center gap-1.5 px-2.5 py-2.5 rounded-full text-xs font-semibold transition-all ${activeTab === 'groups' ? 'bg-[hsl(280,70%,55%)] text-white shadow-[0_8px_18px_rgba(168,85,247,0.24)]' : 'text-muted-foreground hover:text-foreground'}`}>
               <Users className="h-3.5 w-3.5" />
               <span className="truncate">{language === 'ar' ? 'المجموعات' : 'Group Chat'}</span>
