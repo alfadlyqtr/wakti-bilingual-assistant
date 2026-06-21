@@ -84,6 +84,9 @@ function escapeInlineStyleRuntime(source: string): string {
   return source.replace(/<\/style/gi, "<\\/style");
 }
 
+const BUNDLED_APP_MARKER = "// ========== BUNDLED APP WITH SHIMS ==========";
+const RUNTIME_EXECUTE_BUNDLE_MARKER = "function executeBundledApp()";
+
 function buildPublishedRuntimeHtml(params: {
   projectName: string;
   bundledJs: string;
@@ -396,19 +399,69 @@ function buildPublishedRuntimeHtml(params: {
 </html>`;
 }
 
+function tryParseJsStringLiteral(literal: string): string | null {
+  const trimmed = (literal || "").trim();
+  if (!trimmed.startsWith("\"") || !trimmed.endsWith("\"")) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed) as string;
+  } catch (error) {
+    console.warn("[projects-publish] Failed to parse bundled runtime source literal:", error);
+    return null;
+  }
+}
+
+function extractBundledSourceFromRuntimeSource(source: string): string | null {
+  const match = source.match(/function executeBundledApp\(\)\s*{\s*var source = ([\s\S]*?);\s*if \(!source\)/);
+  if (!match?.[1]) {
+    return null;
+  }
+
+  return tryParseJsStringLiteral(match[1]);
+}
+
+function unwrapNestedBundledSource(source: string): string {
+  let current = source;
+
+  for (let depth = 0; depth < 5; depth += 1) {
+    const nestedSource = extractBundledSourceFromRuntimeSource(current);
+    if (!nestedSource) {
+      return current;
+    }
+
+    console.warn(`[projects-publish] Detected nested runtime wrapper at depth ${depth + 1}, unwrapping`);
+    current = nestedSource;
+  }
+
+  return current;
+}
+
 function upgradeLegacyPublishedHtml(html: string, fallbackProjectName: string): string {
-  if (!html.includes("Loading app...") || !html.includes("// ========== BUNDLED APP WITH SHIMS ==========")) {
+  const looksLikeRuntimeHtml = html.includes("Loading app...") && html.includes(RUNTIME_EXECUTE_BUNDLE_MARKER);
+  if (!looksLikeRuntimeHtml && !html.includes(BUNDLED_APP_MARKER)) {
     return html;
   }
 
   const titleMatch = html.match(/<title>([\s\S]*?)<\/title>/i);
   const styleMatch = html.match(/<style>([\s\S]*?)<\/style>/i);
   const scriptMatches = Array.from(html.matchAll(/<script(?:[^>]*)>([\s\S]*?)<\/script>/gi));
-  const bundledScript = scriptMatches
-    .map((match) => match[1] || "")
-    .find((script) => script.includes("// ========== BUNDLED APP WITH SHIMS =========="));
+  const runtimeBundledSource = extractBundledSourceFromRuntimeSource(html);
+  const bundledScript = unwrapNestedBundledSource(
+    runtimeBundledSource ||
+      scriptMatches
+        .map((match) => match[1] || "")
+        .find((script) => script.includes(BUNDLED_APP_MARKER)) ||
+      "",
+  );
 
   if (!bundledScript) {
+    return html;
+  }
+
+  if (!bundledScript.includes(BUNDLED_APP_MARKER)) {
+    console.warn("[projects-publish] Unable to isolate bundled app source from runtime HTML; leaving content unchanged");
     return html;
   }
 
@@ -633,7 +686,7 @@ async function assignVercelAlias(params: {
   }
 }
 
-const CODE_VERSION = "2026-06-21-V6";
+const CODE_VERSION = "2026-06-21-V7";
 
 serve(async (req) => {
   console.log(`[projects-publish] CODE_VERSION=${CODE_VERSION}`);
