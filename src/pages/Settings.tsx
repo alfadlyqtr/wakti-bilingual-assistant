@@ -54,7 +54,6 @@ const LS_HSBG_ACTIVE_BASE = "homescreen_bg_style_active";
 const LS_BG_CHOICE_BASE = "homescreen_bg_choice_v1";
 const LS_DOCK_COLOR_BASE = "homescreen_dock_color";
 const DEFAULT_DASHBOARD_LOOK = 'modern' as const;
-const DASHBOARD_LOOK_MIGRATION_FLAG = 'wakti_dashboard_look_default_migrated_v1';
 const MODERN_WIDGET_ORDER_KEYS = [
   'showCalendarWidget',
   'showTRWidget',
@@ -81,6 +80,24 @@ const sanitizeModernWidgetOrder = (raw: unknown): ModernWidgetKey[] => {
 const isBgChoiceValue = (value: unknown): value is 'default' | 'wallpaper' | 'style' => value === 'default' || value === 'wallpaper' || value === 'style';
 const isDefaultBgAsset = (value?: string | null) => !value || value === DEFAULT_BG_DARK || value === DEFAULT_BG_LIGHT;
 const sanitizeDockIds = (raw: string[]) => Array.from(new Set(raw.filter(Boolean))).slice(0, MAX_HOMESCREEN_DOCK);
+
+const parseStoredHomescreenBg = (raw: string | null) => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      mode: parsed.mode === 'gradient' ? 'gradient' as const : 'solid' as const,
+      color1: typeof parsed.color1 === 'string' ? parsed.color1 : '',
+      color2: typeof parsed.color2 === 'string' ? parsed.color2 : '',
+      color3: typeof parsed.color3 === 'string' ? parsed.color3 : '',
+      angle: typeof parsed.angle === 'number' ? parsed.angle : 180,
+      glow: typeof parsed.glow === 'boolean' ? parsed.glow : false,
+    };
+  } catch {
+    return null;
+  }
+};
 
 const HOMESCREEN_APPS = [
   { id: "calendar", labelEn: "Calendar", labelAr: "التقويم" },
@@ -229,39 +246,6 @@ export default function Settings() {
     return nextSettings;
   };
 
-  useEffect(() => {
-    if (!user?.id || !cachedProfile) return;
-    const hasMigrated = getScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, user.id, DASHBOARD_LOOK_MIGRATION_FLAG);
-    if (hasMigrated === 'true') return;
-
-    const currentSettings = (cachedProfile.settings as any) || {};
-
-    if (currentSettings.dashboardLook === DEFAULT_DASHBOARD_LOOK) {
-      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
-      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user.id);
-      setScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, 'true', user.id);
-      return;
-    }
-
-    const applyModernLookDefault = async () => {
-      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
-      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user.id);
-      const { error } = await supabase
-        .from('profiles')
-        .update({ settings: { ...currentSettings, dashboardLook: DEFAULT_DASHBOARD_LOOK } })
-        .eq('id', user.id);
-
-      if (error) {
-        console.error('Error applying default modern dashboard look from settings:', error);
-        return;
-      }
-
-      setScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, 'true', user.id);
-    };
-
-    void applyModernLookDefault();
-  }, [user?.id, cachedProfile]);
-
   const loadSettingsFromProfile = () => {
     try {
       const s = cachedProfile?.settings as any;
@@ -364,9 +348,17 @@ export default function Settings() {
         setHsBgColor3('');
         setHsBgAngle(180);
         setHsGlow(true);
-        removeScopedStorageItem(LS_HSBG_BASE, user?.id);
       }
 
+      const localStyleBg = parseStoredHomescreenBg(getScopedStorageItem(LS_HSBG_BASE, user?.id));
+      if (!s?.homescreenBg && localStyleBg) {
+        setHsBgMode(localStyleBg.mode);
+        setHsBgColor1(localStyleBg.color1);
+        setHsBgColor2(localStyleBg.color2);
+        setHsBgColor3(localStyleBg.color3);
+        setHsBgAngle(localStyleBg.angle);
+        setHsGlow(localStyleBg.glow);
+      }
       const localBgChoice = getScopedStorageItem(LS_BG_CHOICE_BASE, user?.id);
       const localBgImage = getScopedStorageItem(LS_BG_BASE, user?.id);
       const localBgPositionRaw = getScopedStorageItem(LS_BG_POS_Y_BASE, user?.id);
@@ -376,14 +368,18 @@ export default function Settings() {
       const localWallpaper = typeof localBgImage === 'string' && localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
       const remoteChoice = isBgChoiceValue(hs?.bgChoice) ? hs.bgChoice : null;
       const remoteWallpaper = typeof hs?.bgImage === 'string' && hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
-      const resolvedChoice = hasRemoteHomescreenState
-        ? (remoteChoice || (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : 'default'))
-        : (localChoice || (localWallpaper ? 'wallpaper' : 'default'));
+      const resolvedChoice = remoteChoice
+        || (remoteWallpaper ? 'wallpaper' : '')
+        || (s?.homescreenBg ? 'style' : '')
+        || localChoice
+        || (localWallpaper ? 'wallpaper' : '')
+        || (localStyleBg ? 'style' : '')
+        || 'default';
       setHomescreenBgChoice(resolvedChoice);
       setScopedStorageItem(LS_BG_CHOICE_BASE, resolvedChoice, user?.id);
       setScopedStorageItem(LS_HSBG_ACTIVE_BASE, String(resolvedChoice === 'style'), user?.id);
       if (resolvedChoice === 'wallpaper') {
-        const resolvedWallpaper = hasRemoteHomescreenState ? remoteWallpaper : localWallpaper;
+        const resolvedWallpaper = remoteWallpaper || localWallpaper;
         if (resolvedWallpaper) {
           setHomescreenBgImage(resolvedWallpaper);
           setScopedStorageItem(LS_BG_BASE, resolvedWallpaper, user?.id);
@@ -394,7 +390,7 @@ export default function Settings() {
       const resolvedBgPosition = resolvedChoice === 'wallpaper'
         ? (typeof hs?.bgPositionY === 'number'
             ? Math.max(0, Math.min(100, hs.bgPositionY))
-            : !hasRemoteHomescreenState && localChoice === 'wallpaper'
+            : (remoteWallpaper || localChoice === 'wallpaper' || localWallpaper)
               ? localBgPosition
               : 50)
         : 50;
@@ -404,29 +400,29 @@ export default function Settings() {
       if (typeof hs?.headerColor === 'string') {
         setHomescreenHeaderColor(hs.headerColor);
         if (hs.headerColor) setScopedStorageItem(LS_HEADER_COLOR_BASE, hs.headerColor, user?.id);
-      } else if (!hasRemoteHomescreenState) {
-        setHomescreenHeaderColor(getScopedStorageItem(LS_HEADER_COLOR_BASE, user?.id) || '');
       } else {
-        setHomescreenHeaderColor('');
-        removeScopedStorageItem(LS_HEADER_COLOR_BASE, user?.id);
+        const localHeaderColor = getScopedStorageItem(LS_HEADER_COLOR_BASE, user?.id) || '';
+        setHomescreenHeaderColor(localHeaderColor);
+        if (!localHeaderColor) removeScopedStorageItem(LS_HEADER_COLOR_BASE, user?.id);
       }
 
       if (typeof hs?.dockColor === 'string') {
         setHomescreenDockColor(hs.dockColor);
         if (hs.dockColor) setScopedStorageItem(LS_DOCK_COLOR_BASE, hs.dockColor, user?.id);
-      } else if (!hasRemoteHomescreenState) {
-        setHomescreenDockColor(getScopedStorageItem(LS_DOCK_COLOR_BASE, user?.id) || '');
       } else {
-        setHomescreenDockColor('');
-        removeScopedStorageItem(LS_DOCK_COLOR_BASE, user?.id);
+        const localDockColor = getScopedStorageItem(LS_DOCK_COLOR_BASE, user?.id) || '';
+        setHomescreenDockColor(localDockColor);
+        if (!localDockColor) removeScopedStorageItem(LS_DOCK_COLOR_BASE, user?.id);
       }
 
       // Load dashboard look preference
       const savedLook = s?.dashboardLook;
       if (savedLook === 'dashboard' || savedLook === 'homescreen' || savedLook === 'modern') {
         setDashboardLook(savedLook);
+        setScopedStorageItem('wakti_dashboard_look', savedLook, user?.id);
       } else {
         setDashboardLook(DEFAULT_DASHBOARD_LOOK);
+        setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user?.id);
       }
 
       setPrivacySettings({

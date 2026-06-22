@@ -3767,6 +3767,43 @@ ${fixInstructions}
     return { success: false, updatedFiles: files, targetFile: null };
   };
 
+  const hasConcreteSelectedImageTarget = useCallback((elementInfo: SelectedElementInfo | null): boolean => {
+    if (!elementInfo) {
+      return false;
+    }
+
+    const targetTag = (elementInfo.imageTargetTagName || elementInfo.tagName || '').toLowerCase();
+    const targetMode = elementInfo.imageTargetMode || '';
+    const targetOpeningTag = elementInfo.imageTargetOpeningTag || elementInfo.openingTag || '';
+    const hasDirectAssetUrl = Boolean(elementInfo.imageUrl?.trim());
+    const hasDirectAssetAttribute = /(?:src|poster)=['"][^'"]+['"]/.test(targetOpeningTag);
+
+    if (targetMode === 'background') {
+      return hasDirectAssetUrl;
+    }
+
+    return ['img', 'picture', 'video', 'source'].includes(targetTag) && (hasDirectAssetUrl || hasDirectAssetAttribute);
+  }, []);
+
+  const shouldTreatSelectionAsMultiImageContext = useCallback((elementInfo: SelectedElementInfo | null): boolean => {
+    if (!elementInfo) {
+      return false;
+    }
+
+    if (hasConcreteSelectedImageTarget(elementInfo)) {
+      return false;
+    }
+
+    const combinedContext = [
+      elementInfo.className || '',
+      elementInfo.imageTargetClassName || '',
+      elementInfo.openingTag || '',
+      elementInfo.imageTargetOpeningTag || '',
+    ].join(' ');
+
+    return /carousel|slider|swiper|slick|embla|gallery|grid.*image|photo.*grid/i.test(combinedContext);
+  }, [hasConcreteSelectedImageTarget]);
+
   const applySelectedElementImageChange = useCallback((elementInfo: SelectedElementInfo | null, imageUrl: string): boolean => {
     if (!elementInfo || !imageUrl) {
       return false;
@@ -4074,6 +4111,23 @@ ${fixInstructions}
     if (pendingElementImageEdit && photos.length === 1) {
       handleStockPhotoSelect(photos[0]);
       return;
+    }
+
+    if (photos.length === 1 && selectedElementInfo && hasConcreteSelectedImageTarget(selectedElementInfo)) {
+      try {
+        importExternalImage(photos[0].url, photos[0].title).catch(() => {});
+
+        if (applySelectedElementImageChange(selectedElementInfo, photos[0].url)) {
+          setIsChangingCarouselImages(false);
+          setPendingElementImageEdit(null);
+          setSelectedElementInfo(null);
+          setShowStockPhotoSelector(false);
+          setShowElementEditPopover(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Direct single-photo recovery failed:', err);
+      }
     }
 
     // Special case: Carousel image replacement flow
@@ -8940,13 +8994,12 @@ ${fixInstructions}
             setSelectedElementInfo(null);
           }}
           onImageChange={() => {
-            const className = selectedElementInfo?.className || '';
-            const openingTag = selectedElementInfo?.openingTag || '';
-            const isMultiImageContext = /carousel|slider|swiper|slick|embla|gallery|grid.*image|photo.*grid/i.test(className + ' ' + openingTag);
+            const isMultiImageContext = shouldTreatSelectionAsMultiImageContext(selectedElementInfo);
             if (isMultiImageContext) {
               setIsChangingCarouselImages(true);
               setPhotoSelectorMultiSelect(true);
             } else {
+              setIsChangingCarouselImages(false);
               setPendingElementImageEdit({ elementInfo: selectedElementInfo, originalPrompt: 'Replace image' });
               setPhotoSelectorMultiSelect(false);
             }
@@ -9122,10 +9175,7 @@ ${fixInstructions}
             setSelectedElementInfo(null);
           }}
           onImageChange={() => {
-            // Detect if this is a carousel/gallery (multi-image) context
-            const className = selectedElementInfo?.className || '';
-            const openingTag = selectedElementInfo?.openingTag || '';
-            const isMultiImageContext = /carousel|slider|swiper|slick|embla|gallery|grid.*image|photo.*grid/i.test(className + ' ' + openingTag);
+            const isMultiImageContext = shouldTreatSelectionAsMultiImageContext(selectedElementInfo);
             
             if (isMultiImageContext) {
               // Carousel/Gallery: enable multi-select
@@ -9133,6 +9183,7 @@ ${fixInstructions}
               setPhotoSelectorMultiSelect(true);
             } else {
               // Single image replacement
+              setIsChangingCarouselImages(false);
               setPendingElementImageEdit({
                 elementInfo: selectedElementInfo,
                 originalPrompt: 'Replace image'
@@ -9156,9 +9207,7 @@ ${fixInstructions}
             const imageOfMatch = prompt.match(imageOfPattern);
 
             // If user is editing a carousel/gallery and asks to change images (plural), enable multi-select
-            const selClass = selectedElementInfo?.className || '';
-            const selTag = selectedElementInfo?.openingTag || '';
-            const isMultiImageContext = /carousel|slider|swiper|slick|embla|gallery|grid.*image|photo.*grid/i.test(selClass + ' ' + selTag);
+            const isMultiImageContext = shouldTreatSelectionAsMultiImageContext(selectedElementInfo);
             const wantsMultiFromPrompt = /\b(images|photos|pictures|slides)\b/i.test(prompt) || /(?:غير\s*الصور|تغيير\s*الصور|صور)/i.test(prompt);
 
             if (isMultiImageContext && wantsMultiFromPrompt) {
