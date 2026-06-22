@@ -9029,27 +9029,32 @@ ${fixInstructions}
             // Apply text change directly
             const candidatePaths = Object.keys(generatedFiles).filter((p) => /\.(jsx?|tsx?)$/.test(p));
             candidatePaths.sort((a, b) => (a === '/App.js' ? -1 : b === '/App.js' ? 1 : 0));
+            let appliedPath: string | null = null;
+            let result: { success: boolean; code: string; message: string } | null = null;
             for (const path of candidatePaths) {
               const currentCode = generatedFiles[path] || '';
-              const oldText = selectedElementInfo.innerText;
-              if (oldText && currentCode.includes(oldText)) {
-                const newCode = currentCode.replace(oldText, newText);
-                if (validateJSX(newCode)) {
-                  visualEditHistory.pushState(generatedFiles, isRTL ? 'تعديل النص' : 'Text edit');
-                  const newFiles = { ...generatedFiles, [path]: newCode };
-                  setGeneratedFiles(newFiles);
-                  if (path === '/App.js') setCodeContent(newCode);
-                  toast.success(isRTL ? 'تم تحديث النص!' : 'Text updated!');
-                  // Auto-save
-                  (async () => {
-                    try {
-                      const rows = Object.entries(newFiles).map(([p, c]) => ({ project_id: id, path: p, content: c }));
-                      await (supabase.from('project_files' as any).upsert(rows, { onConflict: 'project_id,path' }) as any);
-                    } catch (err) { console.error('[Visual Edit] Text save failed:', err); }
-                  })();
-                  break;
-                }
+              const attempt = applyDirectEdits(currentCode, selectedElementInfo, { text: newText });
+              if (attempt.success && validateJSX(attempt.code)) {
+                appliedPath = path;
+                result = attempt;
+                break;
               }
+            }
+            if (appliedPath && result) {
+              visualEditHistory.pushState(generatedFiles, isRTL ? 'تعديل النص' : 'Text edit');
+              const newFiles = { ...generatedFiles, [appliedPath]: result.code };
+              setGeneratedFiles(newFiles);
+              if (appliedPath === '/App.js') setCodeContent(result.code);
+              toast.success(isRTL ? 'تم تحديث النص!' : 'Text updated!');
+              // Auto-save
+              (async () => {
+                try {
+                  const rows = Object.entries(newFiles).map(([p, c]) => ({ project_id: id, path: p, content: c }));
+                  await (supabase.from('project_files' as any).upsert(rows, { onConflict: 'project_id,path' }) as any);
+                } catch (err) { console.error('[Visual Edit] Text save failed:', err); }
+              })();
+            } else {
+              toast.error(isRTL ? 'تعذر تحديث النص. جرّب "تعديل بالذكاء الاصطناعي".' : 'Could not update text. Try "AI Edit".');
             }
           }}
           isRTL={isRTL}

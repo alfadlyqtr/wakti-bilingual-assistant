@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
 import { useIsDesktop, useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
+import { ChevronDown } from 'lucide-react';
 import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { isGuestRestrictionCode } from '@/utils/guestAuth';
 
@@ -198,6 +199,7 @@ const WaktiAIV2 = () => {
   const [portalRoot, setPortalRoot] = useState<HTMLElement | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [inputReservePx, setInputReservePx] = useState<number>(120);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [chatSubmode, setChatSubmode] = useState<ChatSubmode>('chat');
   const [showMemoryOnboarding, setShowMemoryOnboarding] = useState(false);
   const reminderShownRef = useRef<boolean>(false);
@@ -229,6 +231,12 @@ const WaktiAIV2 = () => {
   const { showError, showSuccess } = useToastHelper();
   const { isMobile } = useIsMobile();
   const { isDesktop } = useIsDesktop();
+  const messagesAreaPaddingBottomPx = useMemo(() => Math.max(72, inputReservePx + 8), [inputReservePx]);
+  const visibleBottomPeekPx = useMemo(() => isMobile ? 18 : 24, [isMobile]);
+  const hiddenBottomReservePx = useMemo(
+    () => Math.max(0, messagesAreaPaddingBottomPx - visibleBottomPeekPx),
+    [messagesAreaPaddingBottomPx, visibleBottomPeekPx]
+  );
   const activeConversationTitle = useMemo(() => {
     if (isNewConversation || !currentConversationId) {
       return language === 'ar' ? 'Ã™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©' : 'New Chat';
@@ -249,6 +257,22 @@ const WaktiAIV2 = () => {
     setGuestUpgradeOpen(true);
   }, []);
 
+  const scrollToLatest = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    const targetTop = Math.max(0, el.scrollHeight - el.clientHeight - hiddenBottomReservePx);
+    el.scrollTo({ top: targetTop, behavior });
+    setShowScrollToBottom(false);
+  }, [hiddenBottomReservePx]);
+
+  const updateScrollToBottomVisibility = useCallback(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+    const distanceFromLatest = Math.max(0, el.scrollHeight - (el.scrollTop + el.clientHeight) - hiddenBottomReservePx);
+    const threshold = Math.max(60, el.clientHeight * 0.1);
+    setShowScrollToBottom(distanceFromLatest > threshold);
+  }, [hiddenBottomReservePx]);
+
   useEffect(() => {
     sessionMessagesRef.current = sessionMessages;
   }, [sessionMessages]);
@@ -256,6 +280,28 @@ const WaktiAIV2 = () => {
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId;
   }, [currentConversationId]);
+
+  useEffect(() => {
+    const el = scrollAreaRef.current;
+    if (!el) return;
+
+    updateScrollToBottomVisibility();
+    const handleScroll = () => updateScrollToBottomVisibility();
+    const handleResize = () => updateScrollToBottomVisibility();
+
+    el.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      el.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [updateScrollToBottomVisibility]);
+
+  useEffect(() => {
+    const rafId = window.requestAnimationFrame(() => updateScrollToBottomVisibility());
+    return () => window.cancelAnimationFrame(rafId);
+  }, [sessionMessages.length, inputReservePx, updateScrollToBottomVisibility]);
 
   const isGuestBlockedAction = useCallback((trigger: string, nextChatSubmode: ChatSubmode, files?: any[]) => {
     if (!isGuest) return false;
@@ -1678,7 +1724,7 @@ const WaktiAIV2 = () => {
         style={{
           height: `calc(100dvh - var(--app-header-h))`,
           overflowY: 'auto',
-          paddingBottom: `${inputReservePx + 12}px`
+          paddingBottom: `${messagesAreaPaddingBottomPx}px`
         }}
       >
         <ChatMessages
@@ -1698,11 +1744,25 @@ const WaktiAIV2 = () => {
             conversationId={currentConversationId}
             isNewConversation={isNewConversation}
             onReplyToMessage={handleReplyToMessage}
+            onScrollToLatest={scrollToLatest}
             streamingMessageId={streamingMessageId}
             streamingIsPlaceSearch={streamingIsPlaceSearch}
             streamingBubbleRef={streamingBubbleRef}
           />
       </div>
+
+      {showScrollToBottom && sessionMessages.length > 0 && (
+        <Button
+          type="button"
+          size="icon"
+          onClick={() => scrollToLatest('smooth')}
+          className="fixed right-4 z-[810] h-10 w-10 rounded-full border border-white/20 bg-primary/90 text-primary-foreground shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:bg-primary"
+          style={{ bottom: `${Math.max(84, inputReservePx + 18)}px` }}
+          aria-label={language === 'ar' ? 'الانتقال للأسفل' : 'Scroll to bottom'}
+        >
+          <ChevronDown className="h-4 w-4" />
+        </Button>
+      )}
 
         {isMobile && portalRoot ? createPortal(chatComposer, portalRoot) : chatComposer}
     </div>

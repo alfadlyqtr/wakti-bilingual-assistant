@@ -522,6 +522,7 @@ interface ChatMessagesProps {
   isNewConversation: boolean;
   onUpdateMessage?: (messageId: string, content: string) => void;
   onReplyToMessage?: (messageId: string, content: string) => void;
+  onScrollToLatest?: (behavior?: ScrollBehavior) => void;
   streamingMessageId?: string | null;
   streamingText?: string;
   streamingIsPlaceSearch?: boolean;
@@ -546,6 +547,7 @@ export function ChatMessages({
   isNewConversation,
   onUpdateMessage,
   onReplyToMessage,
+  onScrollToLatest,
   streamingMessageId,
   streamingText = '',
   streamingIsPlaceSearch = false,
@@ -807,10 +809,12 @@ export function ChatMessages({
   }, []);
 
   useEffect(() => {
-    if (messagesEndRef.current) {
+    if (onScrollToLatest) {
+      onScrollToLatest('smooth');
+    } else if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [sessionMessages, showTaskConfirmation]);
+  }, [onScrollToLatest, sessionMessages, showTaskConfirmation]);
 
   // Keep scrolled to bottom when input height changes (maintain consistent gap)
   useEffect(() => {
@@ -826,13 +830,15 @@ export function ChatMessages({
         }
       } catch {}
       // Always pin to bottom so the visual gap remains exact after resize
-      if (messagesEndRef.current) {
+      if (onScrollToLatest) {
+        onScrollToLatest('auto');
+      } else if (messagesEndRef.current) {
         messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
       }
     };
     window.addEventListener('wakti-chat-input-resized', handler as EventListener);
     return () => window.removeEventListener('wakti-chat-input-resized', handler as EventListener);
-  }, [scrollAreaRef]);
+  }, [onScrollToLatest, scrollAreaRef]);
 
   // Initialize input height from the nearest chat container after mount
   useEffect(() => {

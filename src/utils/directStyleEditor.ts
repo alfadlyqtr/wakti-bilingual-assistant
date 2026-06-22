@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Direct Style Editor - Applies style changes directly to JSX code
  * WITHOUT using AI prompts. This saves credits for users!
  * 
@@ -20,6 +20,7 @@ interface StyleChanges {
   text?: string;
   color?: string;
   bgColor?: string;
+  backgroundColor?: string;
   fontSize?: string;
   fontFamily?: string;
   // Additional CSS properties
@@ -51,6 +52,62 @@ interface StyleChanges {
   textDecoration?: string;
 }
 
+const selfClosingTags = ['img', 'input', 'br', 'hr', 'meta', 'link', 'area', 'base', 'col', 'embed', 'param', 'source', 'track', 'wbr'];
+const genericClasses = [
+  'w-full', 'h-full', 'flex', 'block', 'hidden', 'relative', 'absolute', 'p-', 'm-', 'text-', 'bg-',
+  'font-', 'min-', 'max-', 'justify-', 'items-', 'gap-', 'border-', 'shadow-', 'rounded-', 'transition-'
+];
+
+function escapeForRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getTagCandidates(tagName: string): string[] {
+  const candidates = [tagName, `motion.${tagName}`];
+
+  if (tagName.toLowerCase() === 'a') {
+    candidates.push('Link', 'NavLink', 'MotionLink', 'motion.Link');
+  } else if (tagName.toLowerCase() === 'button') {
+    candidates.push('Button', 'MotionButton', 'motion.button');
+  }
+
+  return Array.from(new Set(candidates));
+}
+
+function getFlexibleTextPattern(value: string): string {
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(escapeForRegex)
+    .join('\\s+');
+}
+
+function extractStaticAttributeValue(openingTag: string, attributeName: string): string | null {
+  if (!openingTag) return null;
+
+  const match = openingTag.match(new RegExp(`${attributeName}\\s*=\\s*["']([^"']+)["']`, 'i'));
+  return match?.[1]?.trim() || null;
+}
+
+function buildAttributePattern(attributeName: string, attributeValue: string): string {
+  const escapedValue = escapeForRegex(attributeValue);
+  return `${attributeName}\\s*=\\s*(?:"[^"]*${escapedValue}[^"]*"|'[^']*${escapedValue}[^']*'|\\{[^}]*${escapedValue}[^}]*\\})`;
+}
+
+function getClassTokens(className: string): string[] {
+  return Array.from(
+    new Set(
+      className
+        .split(' ')
+        .map((token) => token.trim())
+        .filter((token) => token && !token.includes('hover:') && !token.includes(':'))
+        .filter((token) => !genericClasses.some((genericClass) => token === genericClass || (genericClass.endsWith('-') && token.startsWith(genericClass))))
+        .sort((a, b) => b.length - a.length)
+    )
+  );
+}
+
 /**
  * Find an element in JSX code by matching its tag, text content, class, or src.
  * NOTE: DOM tagName may come from components like framer-motion (e.g. <motion.h1> renders <h1>),
@@ -65,164 +122,139 @@ function findElementInCode(
   code: string,
   element: ElementInfo
 ): { fullMatch: string; openingTag: string; startIndex: number; endIndex: number } | null {
-  const { tagName, innerText, className, openingTag: elementOpeningTag } = element;
+  const { tagName, innerText, className, id, openingTag: elementOpeningTag } = element;
 
-  const tagCandidates = [tagName, `motion.${tagName}`];
-  if (tagName.toLowerCase() === 'a') {
-    tagCandidates.push('Link', 'NavLink', 'MotionLink', 'motion.Link');
-  } else if (tagName.toLowerCase() === 'button') {
-    tagCandidates.push('Button', 'MotionButton', 'motion.button');
-  }
-  
-  const escapeTagForRegex = (t: string) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  
-  // Self-closing tags that don't have closing tags
-  const selfClosingTags = ['img', 'input', 'br', 'hr', 'meta', 'link', 'area', 'base', 'col', 'embed', 'param', 'source', 'track', 'wbr'];
+  const tagCandidates = getTagCandidates(tagName);
   const isSelfClosing = selfClosingTags.includes(tagName.toLowerCase());
+  const attributeNames = ['src', 'href', 'alt', 'title', 'aria-label', 'name', 'placeholder', 'type', 'role'];
 
-  // Strategy 0: For images, try to match by src attribute (most reliable for imgs)
-  if (tagName.toLowerCase() === 'img' && elementOpeningTag) {
-    // Extract src from the opening tag we have
-    const srcMatch = elementOpeningTag.match(/src=["']([^"']+)["']/);
-    if (srcMatch) {
-      const srcValue = srcMatch[1];
-      // Only use if src is specific enough (not a placeholder/variable)
-      if (srcValue.length > 10 && !srcValue.startsWith('{')) {
-        const escapedSrc = srcValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        
-        for (const cand of tagCandidates) {
-          const t = escapeTagForRegex(cand);
-          // Match img with this specific src (handles both <img ... /> and <img ... >)
-          const srcPattern = new RegExp(`<${t}[^>]*src=["']${escapedSrc}["'][^>]*(?:\\/>|>)`, 'g');
-          
-          const match = srcPattern.exec(code);
-          if (match) {
+  const matchByOpeningTag = (openingTagPattern: string) => {
+    for (const cand of tagCandidates) {
+      const t = escapeForRegex(cand);
+
+      if (isSelfClosing) {
+        const pattern = new RegExp(`<${t}[^>]*${openingTagPattern}[^>]*(?:\\/>|>)`, 'g');
+        const match = pattern.exec(code);
+
+        if (match) {
+          return {
+            fullMatch: match[0],
+            openingTag: match[0],
+            startIndex: match.index,
+            endIndex: match.index + match[0].length,
+          };
+        }
+      } else {
+        const pattern = new RegExp(`(<${t}[^>]*${openingTagPattern}[^>]*>)`, 'g');
+        const match = pattern.exec(code);
+
+        if (match) {
+          const afterOpening = code.slice(match.index + match[1].length);
+          const closingPattern = new RegExp(`</${t}>`);
+          const closingMatch = closingPattern.exec(afterOpening);
+
+          if (closingMatch) {
+            const fullMatch = code.slice(
+              match.index,
+              match.index + match[1].length + closingMatch.index + closingMatch[0].length
+            );
+
             return {
-              fullMatch: match[0],
-              openingTag: match[0],
+              fullMatch,
+              openingTag: match[1],
               startIndex: match.index,
-              endIndex: match.index + match[0].length,
+              endIndex: match.index + fullMatch.length,
             };
           }
         }
       }
     }
+
+    return null;
+  };
+
+  const idValue = id || extractStaticAttributeValue(elementOpeningTag, 'id');
+  if (idValue) {
+    const idMatch = matchByOpeningTag(buildAttributePattern('id', idValue));
+    if (idMatch) {
+      return idMatch;
+    }
   }
 
-  // Strategy 1: Find by tag + exact text content (for non-self-closing tags)
+  for (const attributeName of attributeNames) {
+    const attributeValue = extractStaticAttributeValue(elementOpeningTag, attributeName);
+    if (!attributeValue || attributeValue.length < 2) continue;
+
+    const attributeMatch = matchByOpeningTag(buildAttributePattern(attributeName, attributeValue));
+    if (attributeMatch) {
+      return attributeMatch;
+    }
+  }
+
+  const classTokens = getClassTokens(className);
+  const classToMatch = classTokens[0];
+  const classPattern = classToMatch
+    ? `(?:className|class)\\s*=\\s*(?:"[^"]*${escapeForRegex(classToMatch)}[^"]*"|'[^']*${escapeForRegex(classToMatch)}[^']*'|\\{[^>]*${escapeForRegex(classToMatch)}[^>]*\\})`
+    : null;
+
   if (!isSelfClosing && innerText && innerText.length > 0 && innerText.length < 200) {
-    const escapedText = innerText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const flexibleText = getFlexibleTextPattern(innerText);
 
     for (const cand of tagCandidates) {
-      const t = escapeTagForRegex(cand);
-      const pattern = new RegExp(`(<${t}[^>]*>)\\s*${escapedText}\\s*</${t}>`, 'g');
+      const t = escapeForRegex(cand);
+      const exactPattern = new RegExp(`(<${t}[^>]*>)\\s*${flexibleText}\\s*</${t}>`, 'g');
+      let exactMatch;
 
-      let match;
-      while ((match = pattern.exec(code)) !== null) {
+      while ((exactMatch = exactPattern.exec(code)) !== null) {
         return {
-          fullMatch: match[0],
-          openingTag: match[1],
-          startIndex: match.index,
-          endIndex: match.index + match[0].length,
+          fullMatch: exactMatch[0],
+          openingTag: exactMatch[1],
+          startIndex: exactMatch.index,
+          endIndex: exactMatch.index + exactMatch[0].length,
         };
       }
-    }
-  }
 
-  // Strategy 2: Find by tag + className (prefer unique/specific classes)
-  if (className) {
-    // Filter out generic Tailwind utility classes for better matching
-    const genericClasses = [
-      'w-full', 'h-full', 'flex', 'block', 'hidden', 'relative', 'absolute', 'p-', 'm-', 'text-', 'bg-',
-      'font-', 'min-', 'max-', 'justify-', 'items-', 'gap-', 'border-', 'shadow-', 'rounded-', 'transition-'
-    ];
-    const classes = className.split(' ').filter((c) => c && !c.includes('hover:') && !c.includes(':'));
-    
-    // Try to find a more specific class first
-    const specificClass = classes.find(c => {
-      const isGeneric = genericClasses.some(g => c === g || (g.endsWith('-') && c.startsWith(g)));
-      return !isGeneric && c.length > 4;
-    });
-    
-    const classToMatch = specificClass || classes[0];
-    
-    if (classToMatch) {
-      const escapedClass = classToMatch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (classPattern) {
+        const nestedPattern = new RegExp(`(<${t}[^>]*${classPattern}[^>]*>)[\\s\\S]{0,1200}?${flexibleText}[\\s\\S]{0,1200}?</${t}>`, 'g');
+        let nestedMatch;
 
-      // We first try with specific tag candidates, and if those fail, we try with ANY tag name
-      const expandedCandidates = [...tagCandidates, '[a-zA-Z0-9_.-]+'];
-
-      for (const cand of expandedCandidates) {
-        const t = cand === '[a-zA-Z0-9_.-]+' ? cand : escapeTagForRegex(cand);
-        
-        if (isSelfClosing) {
-          // For self-closing tags, match the whole tag including />
-          const selfClosingPattern = new RegExp(
-            `<${t}[^>]*className=["'{][^"'}]*${escapedClass}[^"'}]*["'}][^>]*(?:\\/>|>)`,
-            'g'
-          );
-          
-          const match = selfClosingPattern.exec(code);
-          if (match) {
-            return {
-              fullMatch: match[0],
-              openingTag: match[0],
-              startIndex: match.index,
-              endIndex: match.index + match[0].length,
-            };
-          }
-        } else {
-          // For regular tags, find opening and closing
-          const classPattern = new RegExp(
-            `<${t}[^>]*className=["'{][^"'}]*${escapedClass}[^"'}]*["'}][^>]*>`,
-            'g'
-          );
-
-          const match = classPattern.exec(code);
-          if (match) {
-            const afterOpening = code.slice(match.index + match[0].length);
-            const closingPattern = new RegExp(`</${t}>`);
-            const closingMatch = closingPattern.exec(afterOpening);
-
-            if (closingMatch) {
-              const fullMatch = code.slice(
-                match.index,
-                match.index + match[0].length + closingMatch.index + closingMatch[0].length
-              );
-
-              return {
-                fullMatch,
-                openingTag: match[0],
-                startIndex: match.index,
-                endIndex: match.index + fullMatch.length,
-              };
-            }
-          }
+        while ((nestedMatch = nestedPattern.exec(code)) !== null) {
+          return {
+            fullMatch: nestedMatch[0],
+            openingTag: nestedMatch[1],
+            startIndex: nestedMatch.index,
+            endIndex: nestedMatch.index + nestedMatch[0].length,
+          };
         }
       }
     }
   }
 
-  // Strategy 3: For self-closing tags, try matching by tag alone if there's only one
+  if (classPattern) {
+    const classMatch = matchByOpeningTag(classPattern);
+    if (classMatch) {
+      return classMatch;
+    }
+  }
+
   if (isSelfClosing) {
     for (const cand of tagCandidates) {
-      const t = escapeTagForRegex(cand);
+      const t = escapeForRegex(cand);
       const allMatches: RegExpExecArray[] = [];
       const tagPattern = new RegExp(`<${t}[^>]*(?:\\/>|>)`, 'g');
-      
-      let m;
-      while ((m = tagPattern.exec(code)) !== null) {
-        allMatches.push(m);
+
+      let match;
+      while ((match = tagPattern.exec(code)) !== null) {
+        allMatches.push(match);
       }
-      
-      // If only one match, use it
+
       if (allMatches.length === 1) {
-        const match = allMatches[0];
+        const singleMatch = allMatches[0];
         return {
-          fullMatch: match[0],
-          openingTag: match[0],
-          startIndex: match.index,
-          endIndex: match.index + match[0].length,
+          fullMatch: singleMatch[0],
+          openingTag: singleMatch[0],
+          startIndex: singleMatch.index,
+          endIndex: singleMatch.index + singleMatch[0].length,
         };
       }
     }
@@ -247,7 +279,7 @@ function updateOpeningTagStyles(
   }
 
   // Check if element already has a style prop
-  const styleMatch = openingTag.match(/style=\{\{([^}]*)\}\}/);
+  const styleMatch = openingTag.match(/style=\{\{([\s\S]*?)\}\}/);
   
   if (styleMatch) {
     // Element has existing style - merge our changes
@@ -256,7 +288,7 @@ function updateOpeningTagStyles(
     for (const [prop, value] of validStyles) {
       if (!value) continue;
       
-      const propRegex = new RegExp(`${prop}:\\s*['"][^'"]*['"]`, 'g');
+      const propRegex = new RegExp(`${prop}:\\s*[^,}]+`, 'g');
       if (existingStyles.match(propRegex)) {
         existingStyles = existingStyles.replace(propRegex, `${prop}: '${value}'`);
       } else {
@@ -264,7 +296,7 @@ function updateOpeningTagStyles(
       }
     }
     
-    return openingTag.replace(/style=\{\{[^}]*\}\}/, `style={{${existingStyles}}}`);
+    return openingTag.replace(/style=\{\{[\s\S]*?\}\}/, `style={{${existingStyles}}}`);
   } else {
     // Element has no style prop - add one before the closing >
     const styleObj = validStyles.map(([prop, value]) => `${prop}: '${value}'`);
@@ -282,11 +314,28 @@ function updateOpeningTagStyles(
 /**
  * Update text content within an element
  */
-function updateTextContent(code: string, oldText: string, newText: string): string {
+function updateTextContent(code: string, element: ElementInfo, newText: string): string {
   // Simple but effective - just replace the text
   // Be careful with very short or common strings
+  const oldText = element.innerText;
+
   if (oldText.length < 3) {
     console.warn('[directStyleEditor] Text too short for reliable replacement');
+    return code;
+  }
+
+  const found = findElementInCode(code, element);
+  if (found && found.fullMatch.includes(oldText)) {
+    const updatedMatch = found.fullMatch.replace(oldText, newText);
+
+    if (updatedMatch !== found.fullMatch) {
+      return code.slice(0, found.startIndex) + updatedMatch + code.slice(found.endIndex);
+    }
+  }
+
+  const exactMatchCount = code.split(oldText).length - 1;
+  if (exactMatchCount !== 1) {
+    console.warn('[directStyleEditor] Text match is not unique enough for replacement');
     return code;
   }
   
@@ -307,7 +356,7 @@ export function applyDirectEdits(
   
   // Handle text changes first (simplest)
   if (changes.text && element.innerText && changes.text !== element.innerText) {
-    modifiedCode = updateTextContent(modifiedCode, element.innerText, changes.text);
+    modifiedCode = updateTextContent(modifiedCode, element, changes.text);
     if (modifiedCode !== code) {
       appliedChanges.push('text');
     }
@@ -317,8 +366,9 @@ export function applyDirectEdits(
   const styleUpdates: Record<string, string | undefined> = {};
   
   if (changes.color) styleUpdates.color = changes.color;
-  if (changes.bgColor && changes.bgColor !== 'transparent' && changes.bgColor !== 'inherit') {
-    styleUpdates.backgroundColor = changes.bgColor;
+  const backgroundColor = changes.backgroundColor || changes.bgColor;
+  if (backgroundColor && backgroundColor !== 'transparent' && backgroundColor !== 'inherit') {
+    styleUpdates.backgroundColor = backgroundColor;
   }
   if (changes.fontSize) styleUpdates.fontSize = changes.fontSize;
   if (changes.fontFamily && changes.fontFamily !== 'inherit') styleUpdates.fontFamily = changes.fontFamily;
@@ -329,11 +379,18 @@ export function applyDirectEdits(
   if (changes.alignItems) styleUpdates.alignItems = changes.alignItems;
   if (changes.justifyContent) styleUpdates.justifyContent = changes.justifyContent;
   if (changes.border) styleUpdates.border = changes.border;
+  if (changes.borderWidth) styleUpdates.borderWidth = changes.borderWidth;
+  if (changes.borderStyle && changes.borderStyle !== 'none') styleUpdates.borderStyle = changes.borderStyle;
+  if (changes.borderColor && changes.borderColor !== 'inherit') styleUpdates.borderColor = changes.borderColor;
   if (changes.borderRadius && changes.borderRadius !== '0') styleUpdates.borderRadius = changes.borderRadius;
   if (changes.boxShadow && changes.boxShadow !== 'none') styleUpdates.boxShadow = changes.boxShadow;
   if (changes.opacity && changes.opacity !== '1') styleUpdates.opacity = changes.opacity;
   if (changes.width) styleUpdates.width = changes.width;
   if (changes.height) styleUpdates.height = changes.height;
+  if (changes.minWidth) styleUpdates.minWidth = changes.minWidth;
+  if (changes.minHeight) styleUpdates.minHeight = changes.minHeight;
+  if (changes.maxWidth) styleUpdates.maxWidth = changes.maxWidth;
+  if (changes.maxHeight) styleUpdates.maxHeight = changes.maxHeight;
   if (changes.display) styleUpdates.display = changes.display;
   if (changes.textAlign) styleUpdates.textAlign = changes.textAlign;
   if (changes.fontWeight) styleUpdates.fontWeight = changes.fontWeight;
@@ -343,9 +400,10 @@ export function applyDirectEdits(
   if (changes.textDecoration) styleUpdates.textDecoration = changes.textDecoration;
   
   const hasStyleChanges = Object.keys(styleUpdates).length > 0;
+  const styleTargetElement = changes.text ? { ...element, innerText: changes.text } : element;
   
   if (hasStyleChanges) {
-    const found = findElementInCode(modifiedCode, element);
+    const found = findElementInCode(modifiedCode, styleTargetElement);
     
     if (found) {
       const newOpeningTag = updateOpeningTagStyles(found.openingTag, styleUpdates);
@@ -372,8 +430,7 @@ export function applyDirectEdits(
       // Fallback: If we can't find the element precisely, try a simpler approach
       console.warn('[directStyleEditor] Could not find element precisely, trying fallback');
       
-      const tagCandidates = [element.tagName, `motion.${element.tagName}`];
-      const selfClosingTags = ['img', 'input', 'br', 'hr', 'meta', 'link', 'area', 'base', 'col', 'embed', 'param', 'source', 'track', 'wbr'];
+      const tagCandidates = getTagCandidates(element.tagName);
       const isSelfClosing = selfClosingTags.includes(element.tagName.toLowerCase());
       
       // For self-closing tags, try matching by the opening tag we have
@@ -381,10 +438,10 @@ export function applyDirectEdits(
         // Extract a unique identifier from the opening tag (like src for images)
         const srcMatch = element.openingTag.match(/src=["']([^"']+)["']/);
         if (srcMatch) {
-          const escapedSrc = srcMatch[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const escapedSrc = escapeForRegex(srcMatch[1]);
           
           for (const cand of tagCandidates) {
-            const t = cand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const t = escapeForRegex(cand);
             const pattern = new RegExp(`(<${t}[^>]*src=["']${escapedSrc}["'][^>]*)(\\/?>)`, 'g');
             const match = pattern.exec(modifiedCode);
             
@@ -396,7 +453,7 @@ export function applyDirectEdits(
               modifiedCode = modifiedCode.replace(match[0], newOpeningTag);
               
               // Track applied changes
-              Object.keys(styleUpdates).forEach(key => {
+              Object.keys(styleUpdates).forEach((key) => {
                 if (!appliedChanges.includes(key)) appliedChanges.push(key);
               });
               break;
@@ -405,11 +462,11 @@ export function applyDirectEdits(
         }
       }
       // For non-self-closing tags, try to find element by its text content
-      else if (element.innerText) {
-        const escapedText = element.innerText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      else if (styleTargetElement.innerText) {
+        const escapedText = getFlexibleTextPattern(styleTargetElement.innerText);
 
         for (const cand of tagCandidates) {
-          const t = cand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const t = escapeForRegex(cand);
           const simplePattern = new RegExp(`(<${t}[^>]*)>\\s*${escapedText}`, 'g');
           const match = simplePattern.exec(modifiedCode);
 
@@ -417,10 +474,10 @@ export function applyDirectEdits(
             const openingTagPart = match[1];
             const newOpeningTag = updateOpeningTagStyles(openingTagPart + '>', styleUpdates);
 
-            modifiedCode = modifiedCode.replace(match[0], newOpeningTag.slice(0, -1) + `>${element.innerText}`);
+            modifiedCode = modifiedCode.replace(match[0], newOpeningTag.slice(0, -1) + `>${styleTargetElement.innerText}`);
             
             // Track applied changes
-            Object.keys(styleUpdates).forEach(key => {
+            Object.keys(styleUpdates).forEach((key) => {
               if (!appliedChanges.includes(key)) appliedChanges.push(key);
             });
             break;
