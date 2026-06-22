@@ -1083,8 +1083,8 @@ export default function Settings() {
                 {[
                   {
                     value: 'dashboard',
-                    titleEn: 'Default Look (Dashboard)',
-                    titleAr: 'الشكل الافتراضي (لوحة التحكم)',
+                    titleEn: 'Dashboard Look',
+                    titleAr: 'مظهر لوحة التحكم',
                     descEn: 'Show widgets as customizable cards',
                     descAr: 'عرض الأدوات كبطاقات قابلة للتخصيص',
                   },
@@ -1097,10 +1097,10 @@ export default function Settings() {
                   },
                   {
                     value: 'modern',
-                    titleEn: 'Modern Look',
-                    titleAr: 'المظهر الحديث',
-                    descEn: 'Grouped app sections with widget carousel and WAKTI AI chat bar',
-                    descAr: 'مجموعات تطبيقات حديثة مع كاروسيل للودجتس وشريط دردشة وكتي AI',
+                    titleEn: 'Modern Look (Default)',
+                    titleAr: 'المظهر الحديث (الافتراضي)',
+                    descEn: 'Default for new users, with grouped app sections, widget carousel, and WAKTI AI chat bar',
+                    descAr: 'الافتراضي للمستخدمين الجدد، مع مجموعات تطبيقات حديثة وكاروسيل للودجتس وشريط دردشة وكتي AI',
                   },
                 ].map((option) => {
                   const isActive = dashboardLook === option.value;

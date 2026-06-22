@@ -67,9 +67,9 @@ export function ExtraPanel({
 
 
   return (
-    <div className="md:h-full overflow-hidden">
-      <div className="px-2 pb-0 md:pb-2 pt-0 md:h-full flex flex-col">
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex flex-col md:h-full">
+    <div className="h-full min-h-0 overflow-hidden">
+      <div className="flex h-full min-h-0 flex-col px-2 pb-0 pt-0 md:pb-2">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="flex h-full min-h-0 flex-col">
           {/* Sticky compact tabs header (inside the same Tabs) */}
           <div className="sticky top-0 z-10 px-1 pt-1 pb-1">
             <TabsList className="flex gap-2 h-8 p-0 bg-transparent !rounded-none justify-start">
@@ -86,7 +86,7 @@ export function ExtraPanel({
           </div>
 
           {/* Personal tab content: natural height on mobile, full on desktop */}
-          <TabsContent value="personal" className="md:flex-1">
+          <TabsContent value="personal" className="mt-2 md:flex-1">
             <div className="mt-2 mb-3 grid grid-cols-1 gap-2 w-full">
               <TalkBackSettings compact />
             </div>
@@ -96,11 +96,11 @@ export function ExtraPanel({
             </div>
           </TabsContent>
 
-          <TabsContent value="memory" className="md:flex-1 mt-2">
+          <TabsContent value="memory" className="mt-2 flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
             <HelpfulMemoryManager currentConversationId={currentConversationId} />
           </TabsContent>
 
-          <TabsContent value="conversations" className="md:flex-1 mt-2">
+          <TabsContent value="conversations" className="mt-2 min-h-0 md:flex-1">
             <ConversationsList
               conversations={conversations}
               currentConversationId={currentConversationId}

@@ -57,14 +57,136 @@ export function SimplifiedFileUpload({
 
   // Convert File to base64
   const fileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result); // Return full data URL
-      };
-      reader.onerror = error => reject(error);
+    return new Promise(async (resolve, reject) => {
+      try {
+        const orientation = await new Promise<number>((res) => {
+          if (!file.type.includes('jpeg') && !file.type.includes('jpg') && !file.name.toLowerCase().match(/\.(jpe?g|heic|heif)$/)) {
+            res(1);
+            return;
+          }
+
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            try {
+              const view = new DataView(e.target?.result as ArrayBuffer);
+              if (view.getUint16(0, false) !== 0xFFD8) {
+                res(1);
+                return;
+              }
+
+              const length = view.byteLength;
+              let offset = 2;
+
+              while (offset < length) {
+                if (offset + 2 > length) break;
+                const marker = view.getUint16(offset, false);
+                offset += 2;
+
+                if (marker === 0xFFE1) {
+                  if (offset + 8 > length) break;
+                  if (view.getUint32(offset + 2, false) !== 0x45786966 || view.getUint16(offset + 6, false) !== 0x0000) {
+                    res(1);
+                    return;
+                  }
+
+                  const tiffOffset = offset + 8;
+                  if (tiffOffset + 8 > length) break;
+                  const littleEndian = view.getUint16(tiffOffset, false) === 0x4949;
+                  const ifdOffset = view.getUint32(tiffOffset + 4, littleEndian) + tiffOffset;
+                  if (ifdOffset + 2 > length) break;
+                  const tags = view.getUint16(ifdOffset, littleEndian);
+
+                  for (let i = 0; i < tags; i++) {
+                    const tagOffset = ifdOffset + 2 + i * 12;
+                    if (tagOffset + 12 > length) break;
+                    if (view.getUint16(tagOffset, littleEndian) === 0x0112) {
+                      res(view.getUint16(tagOffset + 8, littleEndian));
+                      return;
+                    }
+                  }
+
+                  res(1);
+                  return;
+                }
+
+                if ((marker & 0xFF00) !== 0xFF00) {
+                  break;
+                }
+
+                if (offset + 2 > length) break;
+                offset += view.getUint16(offset, false);
+              }
+
+              res(1);
+            } catch {
+              res(1);
+            }
+          };
+          reader.onerror = () => res(1);
+          reader.readAsArrayBuffer(file.slice(0, 65536));
+        });
+
+        if (orientation === 1) {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = error => reject(error);
+          return;
+        }
+
+        const img = new Image();
+        const objectUrl = URL.createObjectURL(file);
+
+        img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
+
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+
+          const width = img.width;
+          const height = img.height;
+
+          if (orientation >= 5 && orientation <= 8) {
+            canvas.width = height;
+            canvas.height = width;
+          } else {
+            canvas.width = width;
+            canvas.height = height;
+          }
+
+          switch (orientation) {
+            case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
+            case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
+            case 4: ctx.transform(1, 0, 0, -1, 0, height); break;
+            case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+            case 6: ctx.transform(0, 1, -1, 0, height, 0); break;
+            case 7: ctx.transform(0, -1, -1, 0, height, width); break;
+            case 8: ctx.transform(0, -1, 1, 0, 0, width); break;
+            default: break;
+          }
+
+          ctx.drawImage(img, 0, 0);
+          const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+          const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
+          resolve(canvas.toDataURL(mimeType, quality));
+        };
+
+        img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = error => reject(error);
+        };
+
+        img.src = objectUrl;
+      } catch (error) {
+        reject(error);
+      }
     });
   };
 
