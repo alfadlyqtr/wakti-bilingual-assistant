@@ -108,6 +108,71 @@ function getClassTokens(className: string): string[] {
   );
 }
 
+function findClosingTagIndex(code: string, tagName: string, fromIndex: number): number {
+  const closingPattern = new RegExp(`</${escapeForRegex(tagName)}>`,'g');
+  closingPattern.lastIndex = fromIndex;
+  const closingMatch = closingPattern.exec(code);
+  return closingMatch ? closingMatch.index + closingMatch[0].length : -1;
+}
+
+function findElementByUniqueTextAnchor(
+  code: string,
+  element: ElementInfo,
+  tagCandidates: string[]
+): { fullMatch: string; openingTag: string; startIndex: number; endIndex: number } | null {
+  const text = (element.innerText || '').trim();
+  if (!text || text.length < 3) return null;
+
+  const normalizedNeedle = text.replace(/\s+/g, ' ').trim().toLowerCase();
+  const escapedText = escapeForRegex(text).replace(/\s+/g, '\\s+');
+  const textPattern = new RegExp(escapedText, 'gi');
+  const textMatches: Array<{ index: number; text: string }> = [];
+  let textMatch;
+
+  while ((textMatch = textPattern.exec(code)) !== null) {
+    const matchedText = textMatch[0].replace(/\s+/g, ' ').trim().toLowerCase();
+    if (matchedText === normalizedNeedle) {
+      textMatches.push({ index: textMatch.index, text: textMatch[0] });
+    }
+  }
+
+  if (textMatches.length !== 1) return null;
+
+  const textIndex = textMatches[0].index;
+
+  for (const cand of tagCandidates) {
+    const openingPattern = new RegExp(`(<${escapeForRegex(cand)}[^>]*>)`, 'g');
+    const openings: Array<{ openingTag: string; startIndex: number; endIndex: number }> = [];
+    let openingMatch;
+
+    while ((openingMatch = openingPattern.exec(code)) !== null) {
+      if (openingMatch.index < textIndex) {
+        openings.push({
+          openingTag: openingMatch[1],
+          startIndex: openingMatch.index,
+          endIndex: openingMatch.index + openingMatch[1].length,
+        });
+      }
+    }
+
+    for (let i = openings.length - 1; i >= 0; i -= 1) {
+      const opening = openings[i];
+      const closingEnd = findClosingTagIndex(code, cand, opening.endIndex);
+      if (closingEnd === -1) continue;
+      if (textIndex < closingEnd) {
+        return {
+          fullMatch: code.slice(opening.startIndex, closingEnd),
+          openingTag: opening.openingTag,
+          startIndex: opening.startIndex,
+          endIndex: closingEnd,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 /**
  * Find an element in JSX code by matching its tag, text content, class, or src.
  * NOTE: DOM tagName may come from components like framer-motion (e.g. <motion.h1> renders <h1>),
@@ -252,6 +317,11 @@ function findElementInCode(
     if (classMatch) {
       return classMatch;
     }
+  }
+
+  const anchoredTextMatch = findElementByUniqueTextAnchor(code, element, tagCandidates);
+  if (anchoredTextMatch) {
+    return anchoredTextMatch;
   }
 
   if (isSelfClosing) {
