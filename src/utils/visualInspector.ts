@@ -142,20 +142,51 @@ export const INSPECTOR_SCRIPT = `
     const tagName = node.tagName ? node.tagName.toLowerCase() : '';
     if (!tagName) return false;
 
-    if (/^(button|a|input|textarea|select|label|img|video|picture|section|article|nav|header|footer|main|aside|form|li|ul|ol|card)$/i.test(tagName)) {
+    if (/^(button|a|input|textarea|select|label|img|video|picture|svg)$/i.test(tagName)) {
       return true;
     }
 
     if (node.getAttribute) {
       if (node.getAttribute('role') === 'button') return true;
       if (node.getAttribute('data-wakti-visual-target') === 'true') return true;
+      if (node.getAttribute('contenteditable') === 'true') return true;
     }
 
-    if (typeof node.className === 'string' && /\b(btn|button|cta|card|hero|banner|nav|menu|tile|panel|section|wrapper|container)\b/i.test(node.className)) {
+    if (typeof node.className === 'string' && /\b(btn|button|cta|link|chip|tab|pill|badge)\b/i.test(node.className)) {
       return true;
     }
 
     if (typeof node.onclick === 'function') return true;
+
+    const text = (node.innerText || '').trim();
+    if (/^(span|p|h1|h2|h3|h4|h5|h6|strong|em|small)$/i.test(tagName) && text.length > 0 && text.length <= 140) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const isLayoutContainer = (node) => {
+    if (!node || !node.tagName) return false;
+
+    const tagName = node.tagName.toLowerCase();
+    const className = typeof node.className === 'string' ? node.className : '';
+    const text = (node.innerText || '').trim();
+    const rect = typeof node.getBoundingClientRect === 'function' ? node.getBoundingClientRect() : null;
+
+    if (/^(section|article|main|aside|nav|header|footer|form|ul|ol|div)$/i.test(tagName)) {
+      if (rect && (rect.width > window.innerWidth * 0.45 || rect.height > window.innerHeight * 0.35)) {
+        return true;
+      }
+
+      if (/\b(hero|banner|section|wrapper|container|layout|grid|row|col|content|inner|outer)\b/i.test(className)) {
+        return true;
+      }
+
+      if (text.length > 140) {
+        return true;
+      }
+    }
 
     return false;
   };
@@ -177,6 +208,54 @@ export const INSPECTOR_SCRIPT = `
     }
 
     return best;
+  };
+
+  const getOverlayTarget = (target) => {
+    const normalized = normalizeSelectionTarget(target);
+
+    if (normalized && !isLayoutContainer(normalized)) {
+      return normalized;
+    }
+
+    if (!target) return null;
+
+    let current = target;
+    let maxDepth = 5;
+
+    while (current && current !== document.body && current !== document.documentElement && maxDepth > 0) {
+      if (!isLayoutContainer(current)) {
+        return current;
+      }
+      current = current.parentElement;
+      maxDepth -= 1;
+    }
+
+    return normalized || target;
+  };
+
+  const updateOverlayForTarget = (target) => {
+    const displayTarget = getOverlayTarget(target);
+
+    if (!displayTarget || displayTarget === overlay || displayTarget === document.body || displayTarget === document.documentElement) {
+      overlay.style.display = 'none';
+      return null;
+    }
+
+    const rect = displayTarget.getBoundingClientRect();
+    overlay.style.display = 'block';
+    overlay.style.top = rect.top + 'px';
+    overlay.style.left = rect.left + 'px';
+    overlay.style.width = rect.width + 'px';
+    overlay.style.height = rect.height + 'px';
+
+    let labelText = displayTarget.tagName.toLowerCase();
+    if (displayTarget.className && typeof displayTarget.className === 'string') {
+      const firstClass = displayTarget.className.split(' ').filter(c => c && !c.includes('wakti'))[0];
+      if (firstClass) labelText += '.' + firstClass;
+    }
+    label.innerText = labelText;
+
+    return displayTarget;
   };
 
   const buildElementInfo = (target) => {
@@ -258,21 +337,8 @@ export const INSPECTOR_SCRIPT = `
         return;
       }
 
-      const rect = target.getBoundingClientRect();
-      overlay.style.display = 'block';
-      overlay.style.top = rect.top + 'px';
-      overlay.style.left = rect.left + 'px';
-      overlay.style.width = rect.width + 'px';
-      overlay.style.height = rect.height + 'px';
-
-      let labelText = target.tagName.toLowerCase();
-      if (target.className && typeof target.className === 'string') {
-        const firstClass = target.className.split(' ').filter(c => c && !c.includes('wakti'))[0];
-        if (firstClass) labelText += '.' + firstClass;
-      }
-      label.innerText = labelText;
-
-      emitElementSelection(target);
+      const parentTarget = updateOverlayForTarget(target) || target;
+      emitElementSelection(parentTarget);
     }
   });
 
@@ -286,22 +352,8 @@ export const INSPECTOR_SCRIPT = `
       return;
     }
 
-    const rect = target.getBoundingClientRect();
-    hoveredElement = target;
-    
-    overlay.style.display = 'block';
-    overlay.style.top = rect.top + 'px';
-    overlay.style.left = rect.left + 'px';
-    overlay.style.width = rect.width + 'px';
-    overlay.style.height = rect.height + 'px';
-    
-    // Build label text
-    let labelText = target.tagName.toLowerCase();
-    if (target.className && typeof target.className === 'string') {
-      const firstClass = target.className.split(' ').filter(c => c && !c.includes('wakti'))[0];
-      if (firstClass) labelText += '.' + firstClass;
-    }
-    label.innerText = labelText;
+    hoveredElement = getOverlayTarget(target) || target;
+    updateOverlayForTarget(target);
   });
 
   // 4. Touch support for mobile
@@ -315,21 +367,8 @@ export const INSPECTOR_SCRIPT = `
       return;
     }
 
-    const rect = target.getBoundingClientRect();
-    hoveredElement = target;
-    
-    overlay.style.display = 'block';
-    overlay.style.top = rect.top + 'px';
-    overlay.style.left = rect.left + 'px';
-    overlay.style.width = rect.width + 'px';
-    overlay.style.height = rect.height + 'px';
-    
-    let labelText = target.tagName.toLowerCase();
-    if (target.className && typeof target.className === 'string') {
-      const firstClass = target.className.split(' ').filter(c => c && !c.includes('wakti'))[0];
-      if (firstClass) labelText += '.' + firstClass;
-    }
-    label.innerText = labelText;
+    hoveredElement = getOverlayTarget(target) || target;
+    updateOverlayForTarget(target);
   }, { passive: true });
 
   // 5. Selection Click - Capture the element

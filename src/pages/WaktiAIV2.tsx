@@ -227,6 +227,7 @@ const WaktiAIV2 = () => {
   const sessionMessagesRef = useRef<AIMessage[]>(sessionMessages);
   const currentConversationIdRef = useRef<string | null>(currentConversationId);
   const guestPromptCountRef = useRef<number>(0);
+  const showScrollToBottomRef = useRef(false);
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
   const { isMobile } = useIsMobile();
@@ -266,7 +267,11 @@ const WaktiAIV2 = () => {
     if (!el) return;
     const distanceFromLatest = Math.max(0, el.scrollHeight - (el.scrollTop + el.clientHeight));
     const threshold = Math.max(60, el.clientHeight * 0.1);
-    setShowScrollToBottom(distanceFromLatest > threshold);
+    const nextVisible = distanceFromLatest > threshold;
+    if (showScrollToBottomRef.current !== nextVisible) {
+      showScrollToBottomRef.current = nextVisible;
+      setShowScrollToBottom(nextVisible);
+    }
   }, []);
 
   useEffect(() => {
@@ -276,6 +281,10 @@ const WaktiAIV2 = () => {
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId;
   }, [currentConversationId]);
+
+  useEffect(() => {
+    showScrollToBottomRef.current = showScrollToBottom;
+  }, [showScrollToBottom]);
 
   useEffect(() => {
     const el = scrollAreaRef.current;
@@ -1747,12 +1756,17 @@ const WaktiAIV2 = () => {
           />
       </div>
 
-      {showScrollToBottom && sessionMessages.length > 0 && (
+      {sessionMessages.length > 0 && (
         <Button
           type="button"
           size="icon"
           onClick={() => scrollToLatest('smooth')}
-          className="fixed right-4 z-[810] h-10 w-10 rounded-full border border-white/20 bg-primary/90 text-primary-foreground shadow-lg backdrop-blur-sm transition-all duration-200 hover:scale-110 hover:bg-primary"
+          className={cn(
+            'fixed right-4 z-[810] h-10 w-10 rounded-full border border-white/20 bg-primary/90 text-primary-foreground shadow-lg backdrop-blur-sm transition-all duration-200 hover:bg-primary',
+            showScrollToBottom
+              ? 'translate-y-0 opacity-100 pointer-events-auto hover:scale-110'
+              : 'translate-y-2 opacity-0 pointer-events-none'
+          )}
           style={{ bottom: `${Math.max(84, inputReservePx + 18)}px` }}
           aria-label={language === 'ar' ? 'الانتقال للأسفل' : 'Scroll to bottom'}
         >
