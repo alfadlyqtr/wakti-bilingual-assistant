@@ -22,6 +22,7 @@ export interface SelectedElementInfo {
     width: number;
     height: number;
   };
+  breadcrumb?: string[];
 }
 
 export interface DirectEditChanges {

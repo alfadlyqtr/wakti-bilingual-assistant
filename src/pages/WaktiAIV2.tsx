@@ -231,12 +231,8 @@ const WaktiAIV2 = () => {
   const { showError, showSuccess } = useToastHelper();
   const { isMobile } = useIsMobile();
   const { isDesktop } = useIsDesktop();
-  const messagesAreaPaddingBottomPx = useMemo(() => Math.max(72, inputReservePx + 8), [inputReservePx]);
-  const visibleBottomPeekPx = useMemo(() => isMobile ? 18 : 24, [isMobile]);
-  const hiddenBottomReservePx = useMemo(
-    () => Math.max(0, messagesAreaPaddingBottomPx - visibleBottomPeekPx),
-    [messagesAreaPaddingBottomPx, visibleBottomPeekPx]
-  );
+  const messagesAreaOffsetPx = useMemo(() => Math.max(72, inputReservePx + 8), [inputReservePx]);
+  const messagesAreaPaddingBottomPx = useMemo(() => isMobile ? 8 : 12, [isMobile]);
   const activeConversationTitle = useMemo(() => {
     if (isNewConversation || !currentConversationId) {
       return language === 'ar' ? 'Ã™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©' : 'New Chat';
@@ -260,18 +256,18 @@ const WaktiAIV2 = () => {
   const scrollToLatest = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = scrollAreaRef.current;
     if (!el) return;
-    const targetTop = Math.max(0, el.scrollHeight - el.clientHeight - hiddenBottomReservePx);
+    const targetTop = Math.max(0, el.scrollHeight - el.clientHeight);
     el.scrollTo({ top: targetTop, behavior });
     setShowScrollToBottom(false);
-  }, [hiddenBottomReservePx]);
+  }, []);
 
   const updateScrollToBottomVisibility = useCallback(() => {
     const el = scrollAreaRef.current;
     if (!el) return;
-    const distanceFromLatest = Math.max(0, el.scrollHeight - (el.scrollTop + el.clientHeight) - hiddenBottomReservePx);
+    const distanceFromLatest = Math.max(0, el.scrollHeight - (el.scrollTop + el.clientHeight));
     const threshold = Math.max(60, el.clientHeight * 0.1);
     setShowScrollToBottom(distanceFromLatest > threshold);
-  }, [hiddenBottomReservePx]);
+  }, []);
 
   useEffect(() => {
     sessionMessagesRef.current = sessionMessages;
@@ -1722,7 +1718,7 @@ const WaktiAIV2 = () => {
         className="wakti-ai-messages-area"
         ref={scrollAreaRef}
         style={{
-          height: `calc(100dvh - var(--app-header-h))`,
+          height: `calc(100dvh - var(--app-header-h) - ${messagesAreaOffsetPx}px)`,
           overflowY: 'auto',
           paddingBottom: `${messagesAreaPaddingBottomPx}px`
         }}

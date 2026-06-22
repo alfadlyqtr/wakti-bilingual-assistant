@@ -1087,7 +1087,7 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                   {getContextAwarePrompts(element, isRTL).map((quick) => (
                     <button
                       key={quick}
-                      onClick={() => setAiPrompt(quick)}
+                      onClick={() => onAIEdit(quick)}
                       className="px-2.5 py-1 text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors"
                     >
                       {quick}

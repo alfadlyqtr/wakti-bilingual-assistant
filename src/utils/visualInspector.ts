@@ -116,6 +116,69 @@ export const INSPECTOR_SCRIPT = `
     return null;
   };
 
+  const buildBreadcrumb = (target) => {
+    const breadcrumb = [];
+    let current = target;
+    let maxDepth = 6;
+
+    while (current && current !== document.body && current !== document.documentElement && maxDepth > 0) {
+      const tag = current.tagName ? current.tagName.toLowerCase() : '';
+      const firstClass = current.className && typeof current.className === 'string'
+        ? current.className.split(' ').filter((c) => c && !c.includes('wakti'))[0]
+        : '';
+      breadcrumb.unshift(firstClass ? tag + '.' + firstClass : tag);
+      current = current.parentElement;
+      maxDepth -= 1;
+    }
+
+    return breadcrumb;
+  };
+
+  const isMeaningfulSelectionTarget = (node) => {
+    if (!node || node === document.body || node === document.documentElement || node.id === 'root') {
+      return false;
+    }
+
+    const tagName = node.tagName ? node.tagName.toLowerCase() : '';
+    if (!tagName) return false;
+
+    if (/^(button|a|input|textarea|select|label|img|video|picture|section|article|nav|header|footer|main|aside|form|li|ul|ol|card)$/i.test(tagName)) {
+      return true;
+    }
+
+    if (node.getAttribute) {
+      if (node.getAttribute('role') === 'button') return true;
+      if (node.getAttribute('data-wakti-visual-target') === 'true') return true;
+    }
+
+    if (typeof node.className === 'string' && /\b(btn|button|cta|card|hero|banner|nav|menu|tile|panel|section|wrapper|container)\b/i.test(node.className)) {
+      return true;
+    }
+
+    if (typeof node.onclick === 'function') return true;
+
+    return false;
+  };
+
+  const normalizeSelectionTarget = (target) => {
+    if (!target) return null;
+
+    let current = target;
+    let best = target;
+    let maxDepth = 5;
+
+    while (current && current !== document.body && current !== document.documentElement && maxDepth > 0) {
+      if (isMeaningfulSelectionTarget(current)) {
+        best = current;
+        break;
+      }
+      current = current.parentElement;
+      maxDepth -= 1;
+    }
+
+    return best;
+  };
+
   const buildElementInfo = (target) => {
     const computedStyle = getComputedStyle(target);
     const assetInfo = resolveImageAsset(target);
@@ -135,18 +198,21 @@ export const INSPECTOR_SCRIPT = `
         color: computedStyle.color,
         backgroundColor: computedStyle.backgroundColor,
         fontSize: computedStyle.fontSize,
-      }
+      },
+      breadcrumb: buildBreadcrumb(target)
     };
   };
 
   const emitElementSelection = (target) => {
-    if (!target || target === overlay || target === document.body || target === document.documentElement || target.id === 'root') {
+    const normalizedTarget = normalizeSelectionTarget(target);
+
+    if (!normalizedTarget || normalizedTarget === overlay || normalizedTarget === document.body || normalizedTarget === document.documentElement || normalizedTarget.id === 'root') {
       return;
     }
 
-    selectedElement = target;
+    selectedElement = normalizedTarget;
 
-    const elementInfo = buildElementInfo(target);
+    const elementInfo = buildElementInfo(normalizedTarget);
     console.log('[Wakti Inspector] Element selected:', elementInfo.tagName);
 
     window.parent.postMessage({
