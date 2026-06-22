@@ -1577,8 +1577,8 @@ export default function GroupChatPage() {
       )}
 
       {/* ── Fixed Input Bar ── */}
-      <div className="shrink-0 border-t border-border/60 bg-background/95 backdrop-blur px-4 pt-3" style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}>
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-2">
+      <div className="shrink-0 border-t border-border/60 bg-background/95 backdrop-blur px-4 pt-2" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5">
 
           {/* Recording indicator */}
           {isRecording && (

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { getDirectChatPermission, type DirectChatPermissionState } from '@/services/contactsService';
 
 export function useRealtimeRelationshipStatus(contactId: string | null | undefined, enabled = true) {
+  const queryClient = useQueryClient();
   const [permission, setPermission] = useState<DirectChatPermissionState>('disconnected');
   const [isLoading, setIsLoading] = useState(true);
 
@@ -32,8 +34,23 @@ export function useRealtimeRelationshipStatus(contactId: string | null | undefin
       }
     };
 
-    setIsLoading(true);
-    refreshPermission();
+    // Read contacts cache first to avoid the 1-2s DB flash on every chat open.
+    const contacts = queryClient.getQueryData<any[]>(['contacts']);
+    const cachedContact = contacts?.find((c: any) => c.contact_id === contactId);
+
+    if (cachedContact) {
+      // Cache hit: set permission immediately so the UI never shows "reconnect to send messages".
+      // The DB check still runs silently in the background for accuracy.
+      const cachedPermission: DirectChatPermissionState =
+        cachedContact.relationshipStatus === 'mutual' ? 'allowed' : 'disconnected';
+      setPermission(cachedPermission);
+      setIsLoading(false);
+      refreshPermission();
+    } else {
+      // Cache miss (deep link, push notification, etc.): fall back to DB check.
+      setIsLoading(true);
+      refreshPermission();
+    }
 
     const channel = supabase
       .channel(`relationship-${contactId}`)
@@ -54,7 +71,7 @@ export function useRealtimeRelationshipStatus(contactId: string | null | undefin
       active = false;
       supabase.removeChannel(channel);
     };
-  }, [contactId, enabled]);
+  }, [contactId, enabled, queryClient]);
 
   return { permission, isLoading, canSend: permission === 'allowed' && !isLoading };
 }
