@@ -24,11 +24,13 @@ import {
   isWaktiInGroup,
   removeWaktiFromGroup,
   renameGroupConversation,
+  type GroupChatConversation,
   updateGroupAiSettings,
   updateGroupAvatar,
 } from "@/services/groupChatService";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
+import { prepareAvatarUploadFile } from "@/utils/avatarUpload";
 
 interface GroupChatTabProps {
   embedded?: boolean;
@@ -122,6 +124,19 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
 
   const avatarMutation = useMutation({
     mutationFn: (avatarUrl: string) => updateGroupAvatar(activeGroupId!, avatarUrl),
+    onMutate: (avatarUrl: string) => {
+      queryClient.setQueryData<GroupChatConversation | null>(["groupConversation", activeGroupId], (current) => {
+        if (!current) return current;
+        return { ...current, avatar_url: avatarUrl };
+      });
+
+      queryClient.setQueryData<GroupChatConversation[]>(["groupConversations"], (current) => {
+        if (!current) return current;
+        return current.map((item) => (
+          item.id === activeGroupId ? { ...item, avatar_url: avatarUrl } : item
+        ));
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
       queryClient.invalidateQueries({ queryKey: ["groupConversation", activeGroupId] });
@@ -129,6 +144,8 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
     },
     onError: (error: any) => {
       toast.error(error?.message || (language === "ar" ? "تعذر تحديث الصورة" : "Failed to update group picture"));
+      queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversation", activeGroupId] });
     },
   });
 
@@ -140,11 +157,17 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
       return;
     }
     try {
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const prepared = await prepareAvatarUploadFile(file);
+      const uploadFile = prepared.file;
+      const ext = prepared.extension;
       const fileName = `${user.id}/groups/${activeGroupId}/avatar-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(fileName, file, { upsert: true });
+        .upload(fileName, uploadFile, {
+          upsert: true,
+          contentType: uploadFile.type || file.type,
+          cacheControl: "3600",
+        });
       if (uploadError) throw uploadError;
       const { data: publicData } = supabase.storage.from("avatars").getPublicUrl(fileName);
       const cleanUrl = (publicData?.publicUrl || "").trim().replace(/^(%20)+/i, "").trim();

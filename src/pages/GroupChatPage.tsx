@@ -19,11 +19,12 @@ import { GroupAvatar } from "@/components/GroupAvatar";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatMessage } from "@/services/groupChatService";
+import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatConversation, type GroupChatMessage } from "@/services/groupChatService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import { ImageModal } from "@/components/wakti-ai-v2/ImageModal";
+import { prepareAvatarUploadFile } from "@/utils/avatarUpload";
 
 function getMentionInfo(text: string): { startIndex: number; filter: string } | null {
   const match = text.match(/(?:^|\s)(@[^\s]*)$/);
@@ -236,6 +237,19 @@ export default function GroupChatPage() {
 
   const avatarMutation = useMutation({
     mutationFn: (avatarUrl: string) => updateGroupAvatar(conversationId!, avatarUrl),
+    onMutate: (avatarUrl: string) => {
+      queryClient.setQueryData<GroupChatConversation | null>(["groupConversation", conversationId], (current) => {
+        if (!current) return current;
+        return { ...current, avatar_url: avatarUrl };
+      });
+
+      queryClient.setQueryData<GroupChatConversation[]>(["groupConversations"], (current) => {
+        if (!current) return current;
+        return current.map((item) => (
+          item.id === conversationId ? { ...item, avatar_url: avatarUrl } : item
+        ));
+      });
+    },
     onSuccess: () => {
       toast.success(language === "ar" ? "تم تحديث صورة المجموعة" : "Group picture updated");
       queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
@@ -243,6 +257,8 @@ export default function GroupChatPage() {
     },
     onError: (error: any) => {
       toast.error(error?.message || (language === "ar" ? "تعذر تحديث الصورة" : "Failed to update group picture"));
+      queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
     },
   });
 
@@ -254,11 +270,17 @@ export default function GroupChatPage() {
       return;
     }
     try {
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const prepared = await prepareAvatarUploadFile(file);
+      const uploadFile = prepared.file;
+      const ext = prepared.extension;
       const fileName = `${user.id}/groups/${conversationId}/avatar-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(fileName, file, { upsert: true });
+        .upload(fileName, uploadFile, {
+          upsert: true,
+          contentType: uploadFile.type || file.type,
+          cacheControl: "3600",
+        });
       if (uploadError) throw uploadError;
       const { data: publicData } = supabase.storage.from("avatars").getPublicUrl(fileName);
       const cleanUrl = (publicData?.publicUrl || "").trim().replace(/^(%20)+/i, "").trim();

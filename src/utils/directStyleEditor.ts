@@ -173,6 +173,103 @@ function findElementByUniqueTextAnchor(
   return null;
 }
 
+function extractReplaceableTextSegments(markup: string): Array<{ raw: string; start: number; end: number }> {
+  const segments: Array<{ raw: string; start: number; end: number }> = [];
+  const textPattern = />([^<]+)</g;
+  let match;
+
+  while ((match = textPattern.exec(markup)) !== null) {
+    const raw = match[1];
+    if (!raw || !raw.trim()) continue;
+
+    const leadingWhitespace = raw.match(/^\s*/)?.[0]?.length || 0;
+    const trailingWhitespace = raw.match(/\s*$/)?.[0]?.length || 0;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+
+    const start = match.index + 1 + leadingWhitespace;
+    const end = match.index + 1 + raw.length - trailingWhitespace;
+    segments.push({ raw: trimmed, start, end });
+  }
+
+  return segments;
+}
+
+function splitTextForSegments(originalSegments: string[], newText: string): string[] | null {
+  if (originalSegments.length === 0) return null;
+
+  const newlineParts = newText
+    .split(/\r?\n/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (newlineParts.length === originalSegments.length) {
+    return newlineParts;
+  }
+
+  if (originalSegments.length === 1) {
+    return [newText.trim()];
+  }
+
+  const normalizedWords = newText.trim().split(/\s+/).filter(Boolean);
+  if (normalizedWords.length === 0) return null;
+
+  const originalWordCounts = originalSegments.map((segment) => Math.max(segment.trim().split(/\s+/).filter(Boolean).length, 1));
+  const totalOriginalWords = originalWordCounts.reduce((sum, count) => sum + count, 0);
+
+  if (normalizedWords.length < originalSegments.length) {
+    return null;
+  }
+
+  const result: string[] = [];
+  let cursor = 0;
+
+  for (let i = 0; i < originalSegments.length; i += 1) {
+    const remainingSegments = originalSegments.length - i;
+    const remainingWords = normalizedWords.length - cursor;
+
+    if (i === originalSegments.length - 1) {
+      result.push(normalizedWords.slice(cursor).join(' '));
+      break;
+    }
+
+    const proportionalCount = Math.max(
+      1,
+      Math.round((originalWordCounts[i] / totalOriginalWords) * normalizedWords.length)
+    );
+    const maxTake = remainingWords - (remainingSegments - 1);
+    const takeCount = Math.max(1, Math.min(proportionalCount, maxTake));
+
+    result.push(normalizedWords.slice(cursor, cursor + takeCount).join(' '));
+    cursor += takeCount;
+  }
+
+  return result.length === originalSegments.length && result.every(Boolean) ? result : null;
+}
+
+function replaceNestedTextSegments(fullMatch: string, newText: string): string | null {
+  const segments = extractReplaceableTextSegments(fullMatch);
+  if (segments.length === 0) return null;
+
+  const replacements = splitTextForSegments(
+    segments.map((segment) => segment.raw),
+    newText
+  );
+
+  if (!replacements || replacements.length !== segments.length) {
+    return null;
+  }
+
+  let updated = fullMatch;
+
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
+    const segment = segments[i];
+    updated = updated.slice(0, segment.start) + replacements[i] + updated.slice(segment.end);
+  }
+
+  return updated;
+}
+
 /**
  * Find an element in JSX code by matching its tag, text content, class, or src.
  * NOTE: DOM tagName may come from components like framer-motion (e.g. <motion.h1> renders <h1>),
@@ -405,6 +502,7 @@ function updateTextContent(code: string, element: ElementInfo, newText: string):
   // Simple but effective - just replace the text
   // Be careful with very short or common strings
   const oldText = element.innerText;
+  const normalizedNewText = newText.trim();
 
   if (oldText.length < 3) {
     console.warn('[directStyleEditor] Text too short for reliable replacement');
@@ -413,10 +511,18 @@ function updateTextContent(code: string, element: ElementInfo, newText: string):
 
   const found = findElementInCode(code, element);
   if (found && found.fullMatch.includes(oldText)) {
-    const updatedMatch = found.fullMatch.replace(oldText, newText);
+    const updatedMatch = found.fullMatch.replace(oldText, normalizedNewText);
 
     if (updatedMatch !== found.fullMatch) {
       return code.slice(0, found.startIndex) + updatedMatch + code.slice(found.endIndex);
+    }
+  }
+
+  if (found) {
+    const nestedUpdatedMatch = replaceNestedTextSegments(found.fullMatch, normalizedNewText);
+
+    if (nestedUpdatedMatch && nestedUpdatedMatch !== found.fullMatch) {
+      return code.slice(0, found.startIndex) + nestedUpdatedMatch + code.slice(found.endIndex);
     }
   }
 
@@ -426,7 +532,7 @@ function updateTextContent(code: string, element: ElementInfo, newText: string):
     return code;
   }
   
-  return code.replace(oldText, newText);
+  return code.replace(oldText, normalizedNewText);
 }
 
 /**
