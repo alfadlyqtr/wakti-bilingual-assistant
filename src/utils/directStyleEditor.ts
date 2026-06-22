@@ -595,9 +595,9 @@ export function applyDirectEdits(
  */
 export function validateJSX(code: string): boolean {
   // Simple validation: check for balanced tags and quotes
-  const openTags = (code.match(/<[a-zA-Z][^>]*(?<!\/)\s*>/g) || []).length;
-  const closeTags = (code.match(/<\/[a-zA-Z]+>/g) || []).length;
-  const selfClosing = (code.match(/<[a-zA-Z][^>]*\/>/g) || []).length;
+  const openTags = (code.match(/<[A-Za-z][A-Za-z0-9._:-]*\b[^>]*(?<!\/)\s*>/g) || []).length;
+  const closeTags = (code.match(/<\/[A-Za-z][A-Za-z0-9._:-]*\s*>/g) || []).length;
+  const selfClosing = (code.match(/<[A-Za-z][A-Za-z0-9._:-]*\b[^>]*\/>/g) || []).length;
   
   // Very rough check - open + self-closing should roughly equal or exceed close tags
   // This isn't perfect but catches major issues

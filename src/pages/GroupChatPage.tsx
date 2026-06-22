@@ -255,7 +255,7 @@ export default function GroupChatPage() {
     }
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `groups/${conversationId}/avatar-${Date.now()}.${ext}`;
+      const fileName = `${user.id}/groups/${conversationId}/avatar-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(fileName, file, { upsert: true });

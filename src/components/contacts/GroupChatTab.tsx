@@ -141,7 +141,7 @@ export function GroupChatTab({ embedded = false, source = "contacts" }: GroupCha
     }
     try {
       const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `groups/${activeGroupId}/avatar-${Date.now()}.${ext}`;
+      const fileName = `${user.id}/groups/${activeGroupId}/avatar-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(fileName, file, { upsert: true });
