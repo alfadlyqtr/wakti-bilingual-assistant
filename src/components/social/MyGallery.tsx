@@ -6,7 +6,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import {
-  ImageIcon, Lock, Users, Eye, EyeOff, Download, Trash2,
+  ImageIcon, Lock, Users, Eye, Download, Trash2,
   X, Loader2, Sparkles, Heart, MessageCircle, ChevronDown, ChevronUp, Send
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ interface GalleryImage {
   like_count: number;
   comment_count: number;
   liked_by_me: boolean;
+  meta?: any;
 }
 
 interface Comment {
@@ -102,7 +103,7 @@ export function MyGallery() {
     try {
       const { data: imgs, error } = await (supabase as any)
         .from('user_generated_images')
-        .select('id, image_url, prompt, submode, created_at, visibility, is_profile_visible')
+        .select('id, image_url, prompt, submode, created_at, visibility, is_profile_visible, meta')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
@@ -162,10 +163,11 @@ export function MyGallery() {
     });
   };
 
-  const toggleVisibility = async (img: GalleryImage) => {
+  const togglePublicPrivate = async (img: GalleryImage) => {
     setTogglingId(img.id);
-    const newVis: 'private' | 'contacts' = img.visibility === 'private' ? 'contacts' : 'private';
-    const newProfile = newVis === 'contacts' ? img.is_profile_visible : false;
+    const isPrivate = img.visibility === 'private';
+    const newVis: 'private' | 'contacts' = isPrivate ? 'contacts' : 'private';
+    const newProfile = isPrivate ? true : false;
     try {
       const { error } = await (supabase as any)
         .from('user_generated_images')
@@ -175,27 +177,12 @@ export function MyGallery() {
       setImages(prev => prev.map(i => i.id === img.id
         ? { ...i, visibility: newVis, is_profile_visible: newProfile } : i));
       if (lightbox?.id === img.id) setLightbox(lb => lb ? { ...lb, visibility: newVis, is_profile_visible: newProfile } : lb);
+      toast.success(isPrivate
+        ? (language === 'ar' ? 'أصبحت الصورة عامة' : 'Image is now public')
+        : (language === 'ar' ? 'أصبحت الصورة خاصة' : 'Image is now private')
+      );
     } catch {
       toast.error('Failed to update visibility');
-    } finally {
-      setTogglingId(null);
-    }
-  };
-
-  const toggleProfileVisible = async (img: GalleryImage) => {
-    if (img.visibility !== 'contacts') return;
-    setTogglingId(img.id);
-    const newVal = !img.is_profile_visible;
-    try {
-      const { error } = await (supabase as any)
-        .from('user_generated_images')
-        .update({ is_profile_visible: newVal })
-        .eq('id', img.id);
-      if (error) throw error;
-      setImages(prev => prev.map(i => i.id === img.id ? { ...i, is_profile_visible: newVal } : i));
-      if (lightbox?.id === img.id) setLightbox(lb => lb ? { ...lb, is_profile_visible: newVal } : lb);
-    } catch {
-      toast.error('Failed to update profile visibility');
     } finally {
       setTogglingId(null);
     }
@@ -355,20 +342,25 @@ export function MyGallery() {
   // ── Feed ──
   return (
     <>
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-8 w-full max-w-[470px] mx-auto">
         {images.map(img => (
           <div key={img.id} className="flex flex-col">
             {/* Post header */}
             <div className="flex items-center justify-between pb-2.5">
               <div className="flex items-center gap-2.5">
                 <Avatar className="w-8 h-8 shrink-0">
-                  <AvatarImage src={profile?.avatar_url || ''} />
+                  <AvatarImage src={img.meta?.shared_received ? img.meta?.sender_avatar_url || '' : profile?.avatar_url || ''} />
                   <AvatarFallback className="text-[10px] bg-white/10 text-white">
-                    {(profile?.display_name || profile?.username || '?').substring(0, 2).toUpperCase()}
+                    {(img.meta?.shared_received
+                      ? (img.meta?.sender_name || img.meta?.sender_username || '?')
+                      : (profile?.display_name || profile?.username || '?')
+                    ).substring(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 <span className={`text-sm font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-                  {profile?.display_name || profile?.username || (language === 'ar' ? 'أنت' : 'You')}
+                  {img.meta?.shared_received
+                    ? (img.meta?.sender_name || img.meta?.sender_username || 'User')
+                    : (profile?.display_name || profile?.username || (language === 'ar' ? 'أنت' : 'You'))}
                 </span>
               </div>
               <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
@@ -489,32 +481,17 @@ export function MyGallery() {
             <div className="flex items-center gap-2">
               <button
                 disabled={!!togglingId}
-                onClick={() => toggleVisibility(lightbox)}
+                onClick={() => togglePublicPrivate(lightbox)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95 ${
-                  lightbox.visibility === 'contacts'
-                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
-                    : 'bg-white/10 text-white/60 border border-white/15'
+                  lightbox.visibility === 'private'
+                    ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                 }`}
               >
-                {lightbox.visibility === 'contacts'
-                  ? <><Users className="w-3 h-3" />{language === 'ar' ? 'جهات الاتصال' : 'Contacts'}</>
-                  : <><Lock className="w-3 h-3" />{language === 'ar' ? 'خاص' : 'Private'}</>}
+                {lightbox.visibility === 'private'
+                  ? <><Lock className="w-3 h-3" />{language === 'ar' ? 'خاص' : 'Private'}</>
+                  : <><Eye className="w-3 h-3" />{language === 'ar' ? 'عام' : 'Public'}</>}
               </button>
-              {lightbox.visibility === 'contacts' && (
-                <button
-                  disabled={!!togglingId}
-                  onClick={() => toggleProfileVisible(lightbox)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all active:scale-95 ${
-                    lightbox.is_profile_visible
-                      ? 'bg-green-500/20 text-green-300 border border-green-500/30'
-                      : 'bg-white/10 text-white/50 border border-white/15'
-                  }`}
-                >
-                  {lightbox.is_profile_visible
-                    ? <><Eye className="w-3 h-3" />{language === 'ar' ? 'على الملف' : 'Profile'}</>
-                    : <><EyeOff className="w-3 h-3" />{language === 'ar' ? 'مخفي' : 'Hidden'}</>}
-                </button>
-              )}
               <button aria-label="Download" onClick={() => handleDownload(lightbox.image_url)} className="w-9 h-9 rounded-full bg-white/10 flex items-center justify-center active:scale-90 transition-transform">
                 <Download className="w-4 h-4 text-white/70" />
               </button>
@@ -528,13 +505,13 @@ export function MyGallery() {
             </div>
           </div>
 
-          {/* Image — fixed height, never squished */}
-          <div className="shrink-0 px-0">
+          {/* Image — full size, never cropped */}
+          <div className="shrink-0 flex items-center justify-center px-0">
             <img
               src={lightbox.image_url}
               alt={lightbox.prompt || 'Image'}
-              className="w-full object-cover"
-              style={{ maxHeight: '52vh' }}
+              className="w-full object-contain"
+              style={{ maxHeight: '65vh' }}
             />
           </div>
 

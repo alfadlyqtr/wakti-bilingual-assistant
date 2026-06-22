@@ -39,6 +39,43 @@ interface ContactProfile {
   avatar_url: string | null;
 }
 
+function formatPostDate(dateStr: string, lang: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const postDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.floor((today.getTime() - postDay.getTime()) / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return lang === 'ar' ? 'اليوم' : 'Today';
+  if (diffDays === 1) return lang === 'ar' ? 'أمس' : 'Yesterday';
+
+  if (diffDays < 7) {
+    if (lang === 'ar') {
+      const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+      return days[date.getDay()];
+    }
+    return date.toLocaleDateString('en-US', { weekday: 'long' });
+  }
+
+  if (lang === 'ar') {
+    const months = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+    return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
+  }
+
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const day = date.getDate();
+  const suffix = (() => {
+    if (day >= 11 && day <= 13) return 'th';
+    switch (day % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
+    }
+  })();
+  return `${months[date.getMonth()]} ${day}${suffix}, ${date.getFullYear()}`;
+}
+
 const COMMENTS_PAGE_SIZE = 15;
 
 export default function ContactGallery() {
@@ -61,6 +98,8 @@ export default function ContactGallery() {
   const [replyTarget, setReplyTarget] = useState<string | null>(null);
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [latestComments, setLatestComments] = useState<Record<string, Comment>>({});
+  const [expandedCaptions, setExpandedCaptions] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     if (!userId || !user?.id) return;
@@ -101,16 +140,25 @@ export default function ContactGallery() {
       let likedSet = new Set<string>();
       let commentsMap: Record<string, number> = {};
 
+      let latestMap: Record<string, Comment> = {};
       if (ids.length > 0) {
-        const [{ data: likes }, { data: myLikes }, { data: cmts }] = await Promise.all([
+        const [{ data: likes }, { data: myLikes }, { data: cmts }, { data: latestCmts }] = await Promise.all([
           supabase.from('post_likes' as any).select('post_id').in('post_id', ids),
           supabase.from('post_likes' as any).select('post_id').in('post_id', ids).eq('user_id', user.id),
           supabase.from('post_comments' as any).select('post_id').in('post_id', ids),
+          supabase.from('post_comments' as any)
+            .select('id, content, created_at, user_id, post_id, profiles:user_id(display_name, username, avatar_url)')
+            .in('post_id', ids)
+            .order('created_at', { ascending: false }),
         ]);
         (likes || []).forEach((l: any) => { likesMap[l.post_id] = (likesMap[l.post_id] || 0) + 1; });
         (myLikes || []).forEach((l: any) => likedSet.add(l.post_id));
         (cmts || []).forEach((c: any) => { commentsMap[c.post_id] = (commentsMap[c.post_id] || 0) + 1; });
+        (latestCmts || []).forEach((c: any) => {
+          if (!latestMap[c.post_id]) latestMap[c.post_id] = c;
+        });
       }
+      setLatestComments(latestMap);
 
       setImages((imgs || []).map((img: any) => ({
         ...img,
@@ -126,6 +174,20 @@ export default function ContactGallery() {
   }, [userId, user?.id, language]);
 
   useEffect(() => { load(); }, [load]);
+
+  const CAPTION_LIMIT = 100;
+  const COMMENT_LIMIT = 80;
+  const MORE_LABEL = language === 'ar' ? 'المزيد' : 'more';
+  const LESS_LABEL = language === 'ar' ? 'أقل' : 'less';
+
+  const toggleCaption = (id: string) => {
+    setExpandedCaptions(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const toggleLike = async (img: GalleryImage) => {
     if (!user?.id) return;
@@ -282,30 +344,103 @@ export default function ContactGallery() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="flex flex-col gap-8 w-full max-w-[470px] mx-auto">
             {images.map(img => (
-              <div
-                key={img.id}
-                className={`relative aspect-square rounded-2xl overflow-hidden cursor-pointer active:scale-[0.98] transition-transform border ${isDark ? 'border-white/10' : 'border-black/5'}`}
-                onClick={() => openLightbox(img)}
-              >
-                <img
-                  src={img.image_url}
-                  alt={img.prompt || 'Image'}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
-                <div className="absolute bottom-2 right-2 flex items-center gap-2">
-                  <span className="flex items-center gap-1 text-white text-[10px]">
-                    <Heart className={`w-3 h-3 ${img.liked_by_me ? 'fill-red-400 text-red-400' : ''}`} />
-                    {img.like_count}
-                  </span>
-                  <span className="flex items-center gap-1 text-white text-[10px]">
-                    <MessageCircle className="w-3 h-3" />
-                    {img.comment_count}
-                  </span>
+              <div key={img.id} className="flex flex-col">
+                {/* Post header */}
+                <div className="flex items-center justify-end pb-2.5">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                    {formatPostDate(img.created_at, language)}
+                  </p>
                 </div>
+
+                {/* Image */}
+                <div
+                  className={`relative w-full aspect-[4/5] rounded-2xl overflow-hidden cursor-pointer border active:scale-[0.98] transition-transform ${isDark ? 'border-white/10' : 'border-black/5'}`}
+                  onClick={() => openLightbox(img)}
+                >
+                  <img
+                    src={img.image_url}
+                    alt={img.prompt || 'Image'}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-start gap-4 pt-2.5 pb-1">
+                  <div className="flex flex-col items-start">
+                    <button
+                      aria-label="Like"
+                      onClick={() => toggleLike(img)}
+                      className="active:scale-90 transition-transform"
+                    >
+                      <Heart className={`w-6 h-6 transition-colors ${img.liked_by_me ? 'fill-red-500 text-red-500' : isDark ? 'text-white' : 'text-gray-800'}`} />
+                    </button>
+                    {img.like_count > 0 && (
+                      <p className={`mt-0.5 text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {img.like_count} {language === 'ar' ? (img.like_count === 1 ? 'إعجاب' : 'إعجاب') : (img.like_count === 1 ? 'like' : 'likes')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <button
+                      aria-label="Comments"
+                      onClick={() => openLightbox(img)}
+                      className="active:scale-90 transition-transform"
+                    >
+                      <MessageCircle className={`w-6 h-6 ${isDark ? 'text-white' : 'text-gray-800'}`} />
+                    </button>
+                    {img.comment_count > 0 && (
+                      <p className={`mt-0.5 text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {img.comment_count}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Caption */}
+                {img.prompt && (
+                  <p className={`pt-1 text-sm text-start ${isDark ? 'text-white/80' : 'text-gray-700'}`}>
+                    {expandedCaptions.has(img.id) ? img.prompt : (
+                      img.prompt.length > CAPTION_LIMIT ? `${img.prompt.slice(0, CAPTION_LIMIT)}...` : img.prompt
+                    )}
+                    {img.prompt.length > CAPTION_LIMIT && (
+                      <button
+                        onClick={() => toggleCaption(img.id)}
+                        className="ms-1 text-sm text-muted-foreground active:scale-95 transition-transform"
+                      >
+                        {expandedCaptions.has(img.id) ? LESS_LABEL : MORE_LABEL}
+                      </button>
+                    )}
+                  </p>
+                )}
+
+                {/* Latest comment */}
+                {latestComments[img.id] && (
+                  <p className="pt-1 text-sm text-start">
+                    <span className={`font-semibold me-1 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      {latestComments[img.id].profiles?.display_name || latestComments[img.id].profiles?.username || 'User'}
+                    </span>
+                    <span className={isDark ? 'text-white/50' : 'text-gray-500'}>
+                      {latestComments[img.id].content.length > COMMENT_LIMIT
+                        ? `${latestComments[img.id].content.slice(0, COMMENT_LIMIT)}...`
+                        : latestComments[img.id].content}
+                    </span>
+                  </p>
+                )}
+
+                {/* View all comments */}
+                {img.comment_count > 0 && (
+                  <button
+                    onClick={() => openLightbox(img)}
+                    className="pt-1 text-sm text-start text-muted-foreground active:scale-95 transition-transform"
+                  >
+                    {language === 'ar'
+                      ? `عرض جميع التعليقات (${img.comment_count})`
+                      : `View ${img.comment_count === 1 ? '1 comment' : `all ${img.comment_count} comments`}`}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -329,13 +464,13 @@ export default function ContactGallery() {
             </div>
           </div>
 
-          {/* Image — full width, capped height */}
-          <div className="shrink-0">
+          {/* Image — full size, never cropped */}
+          <div className="shrink-0 flex items-center justify-center">
             <img
               src={lightbox.image_url}
               alt={lightbox.prompt || 'Image'}
-              className="w-full object-cover"
-              style={{ maxHeight: '52vh' }}
+              className="w-full object-contain"
+              style={{ maxHeight: '65vh' }}
             />
           </div>
 

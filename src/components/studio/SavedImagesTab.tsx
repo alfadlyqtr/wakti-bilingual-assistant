@@ -502,7 +502,7 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
             >
               {/* Image */}
               <div
-                className="aspect-square cursor-pointer"
+                className="relative aspect-square cursor-pointer"
                 onClick={() => setLightboxImage(img)}
               >
                 <img
@@ -511,6 +511,20 @@ export default function SavedImagesTab({ onCreate, refreshKey }: SavedImagesTabP
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
+                {/* Shared-from badge */}
+                {(img.meta?.shared_received as boolean) && (
+                  <div className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm">
+                    <img
+                      src={(img.meta?.sender_avatar_url as string) || ''}
+                      alt=""
+                      className="w-4 h-4 rounded-full object-cover"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                    />
+                    <span className="text-[10px] font-semibold text-white">
+                      {(img.meta?.sender_name as string) || (img.meta?.sender_username as string) || 'User'}
+                    </span>
+                  </div>
+                )}
               </div>
               {/* Bottom info bar */}
               <div className="p-2 space-y-1.5">
