@@ -1382,6 +1382,19 @@ export default function GroupChatPage() {
                           {mine && pendingMessageIds.has(message.id) && (
                             <Clock className="h-3 w-3 text-muted-foreground" />
                           )}
+                          {mine && !pendingMessageIds.has(message.id) && conversation?.participants && (
+                            <span className="text-[10px] opacity-70">
+                              {(() => {
+                                const msgTime = new Date(message.created_at).getTime();
+                                const readCount = conversation.participants.filter(
+                                  (p: any) => p.user_id !== user?.id && p.last_read_at && new Date(p.last_read_at).getTime() >= msgTime
+                                ).length;
+                                const totalOthers = conversation.participants.length - 1;
+                                if (totalOthers === 0) return null;
+                                return language === "ar" ? `مقروء ${readCount}/${totalOthers}` : `Read ${readCount}/${totalOthers}`;
+                              })()}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </motion.div>

@@ -231,7 +231,7 @@ const MODERN_MOBILE_PRESETS: Record<ModernMobilePresetKey, ModernMobilePreset> =
     widgetsPaddingX: 8.5,
     widgetsPaddingTop: 6,
     widgetsPaddingBottom: 4.5,
-    widgetCardHeight: 178,
+    widgetCardHeight: 195,
     middleRowGap: 8,
     systemRailWidth: 88,
     sectionRadius: 24,
@@ -288,7 +288,7 @@ const MODERN_MOBILE_PRESETS: Record<ModernMobilePresetKey, ModernMobilePreset> =
     widgetsPaddingX: 10,
     widgetsPaddingTop: 7,
     widgetsPaddingBottom: 5.5,
-    widgetCardHeight: 192,
+    widgetCardHeight: 210,
     middleRowGap: 9,
     systemRailWidth: 96,
     sectionRadius: 28,
@@ -345,7 +345,7 @@ const MODERN_MOBILE_PRESETS: Record<ModernMobilePresetKey, ModernMobilePreset> =
     widgetsPaddingX: 11,
     widgetsPaddingTop: 8,
     widgetsPaddingBottom: 6,
-    widgetCardHeight: 208,
+    widgetCardHeight: 225,
     middleRowGap: 10,
     systemRailWidth: 100,
     sectionRadius: 30,
@@ -402,7 +402,7 @@ const MODERN_MOBILE_PRESETS: Record<ModernMobilePresetKey, ModernMobilePreset> =
     widgetsPaddingX: 12,
     widgetsPaddingTop: 8,
     widgetsPaddingBottom: 6,
-    widgetCardHeight: 210,
+    widgetCardHeight: 228,
     middleRowGap: 10,
     systemRailWidth: 104,
     sectionRadius: 31,
@@ -1759,7 +1759,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const widgetsPaddingX = isDesktopLike ? 12 : mobilePreset.widgetsPaddingX;
   const widgetsPaddingTop = isDesktopLike ? 8 : mobilePreset.widgetsPaddingTop;
   const widgetsPaddingBottom = isDesktopLike ? 6 : mobilePreset.widgetsPaddingBottom;
-  const widgetCardHeight = isDesktopLike ? 208 : mobilePreset.widgetCardHeight;
+  const widgetCardHeight = isDesktopLike ? 225 : mobilePreset.widgetCardHeight;
   const middleRowGap = isDesktopLike ? 10 : mobilePreset.middleRowGap;
   const systemRailWidth = isDesktopLike ? 108 : mobilePreset.systemRailWidth;
   const sectionRadius = isDesktopLike ? 32 : mobilePreset.sectionRadius;
