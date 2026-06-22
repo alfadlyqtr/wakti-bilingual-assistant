@@ -7,6 +7,7 @@ type UnreadContextType = {
   maw3dEventCount: number;
   contactCount: number;
   sharedTaskCount: number;
+  groupUnreadCount: number;
   perContactUnread: Record<string, number>;
   refetch: () => void;
 };
@@ -17,6 +18,7 @@ const defaultUnreadContext: UnreadContextType = {
   maw3dEventCount: 0,
   contactCount: 0,
   sharedTaskCount: 0,
+  groupUnreadCount: 0,
   perContactUnread: {},
   refetch: () => {},
 };

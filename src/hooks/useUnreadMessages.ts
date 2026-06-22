@@ -22,6 +22,7 @@ type UnreadMessagesState = {
   maw3dEventCount: number;
   taskCount: number;
   sharedTaskCount: number;
+  groupUnreadCount: number;
   perContactUnread: Record<string, number>;
 };
 
@@ -31,6 +32,7 @@ const EMPTY_UNREAD_STATE: UnreadMessagesState = {
   maw3dEventCount: 0,
   taskCount: 0,
   sharedTaskCount: 0,
+  groupUnreadCount: 0,
   perContactUnread: {}
 };
 
@@ -61,7 +63,8 @@ const fetchGlobalUnreadCounts = async (userId: string, DEV: boolean) => {
         { data: perContactData, error: perContactError },
         { count: contactRequestCount },
         { count: eventRsvpCount },
-        { count: sharedTaskResponseCount }
+        { count: sharedTaskResponseCount },
+        { data: groupParticipantsData, error: groupError }
       ] = await Promise.all([
         supabase
           .from('messages')
@@ -98,10 +101,21 @@ const fetchGlobalUnreadCounts = async (userId: string, DEV: boolean) => {
           `, { count: 'exact', head: true })
           .eq('tr_tasks.user_id', userId)
           .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()),
+
+        supabase
+          .from('conversation_participants')
+          .select('last_read_at, conversations!inner(last_message_at, last_message_by)')
+          .eq('user_id', userId)
+          .eq('conversations.is_group', true)
+          .not('conversations.last_message_at', 'is', null)
+          .neq('conversations.last_message_by', userId),
       ]);
 
       if (perContactError) {
         console.error('❌ Error fetching per-contact unread:', perContactError);
+      }
+      if (groupError) {
+        console.error('❌ Error fetching group unread:', groupError);
       }
 
       const perContactCounts: Record<string, number> = {};
@@ -109,12 +123,19 @@ const fetchGlobalUnreadCounts = async (userId: string, DEV: boolean) => {
         perContactCounts[msg.sender_id] = (perContactCounts[msg.sender_id] || 0) + 1;
       });
 
+      const groupUnreadCount = (groupParticipantsData || []).filter((row: any) => {
+        const lastRead = row.last_read_at ? new Date(row.last_read_at).getTime() : 0;
+        const lastMsg = row.conversations?.last_message_at ? new Date(row.conversations.last_message_at).getTime() : 0;
+        return lastMsg > lastRead;
+      }).length;
+
       globalUnreadState = {
         unreadTotal: messageCount || 0,
         contactCount: contactRequestCount || 0,
         maw3dEventCount: eventRsvpCount || 0,
         taskCount: 0,
         sharedTaskCount: sharedTaskResponseCount || 0,
+        groupUnreadCount,
         perContactUnread: perContactCounts
       };
 
@@ -125,7 +146,8 @@ const fetchGlobalUnreadCounts = async (userId: string, DEV: boolean) => {
           messages: messageCount,
           contacts: contactRequestCount,
           events: eventRsvpCount,
-          sharedTasks: sharedTaskResponseCount
+          sharedTasks: sharedTaskResponseCount,
+          groupUnread: groupUnreadCount
         });
         if (snapshot !== globalLastCountsSnapshot) {
           globalLastCountsSnapshot = snapshot;
@@ -134,6 +156,7 @@ const fetchGlobalUnreadCounts = async (userId: string, DEV: boolean) => {
             contacts: contactRequestCount,
             events: eventRsvpCount,
             sharedTasks: sharedTaskResponseCount,
+            groupUnread: groupUnreadCount,
             perContact: perContactCounts
           });
         }
@@ -224,6 +247,7 @@ export function useUnreadMessages() {
     let contactsChannel: any;
     let maw3dChannel: any;
     let sharedTaskChannel: any;
+    let groupMessagesChannel: any;
 
     const setup = async () => {
       try {
@@ -385,6 +409,21 @@ export function useUnreadMessages() {
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to shared task channel (non-fatal):', e);
         }
+
+        try {
+          groupMessagesChannel = supabase
+            .channel(`group-chat-messages:${user.id}`)
+            .on('postgres_changes', {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'group_chat_messages'
+            }, () => {
+              scheduleGlobalUnreadFetch(user.id, DEV);
+            })
+            .subscribe();
+        } catch (e) {
+          console.warn('⚠️ Failed to subscribe to group messages channel (non-fatal):', e);
+        }
       } catch (error) {
         console.error('❌ Error setting up unread message tracking:', error);
       }
@@ -396,6 +435,7 @@ export function useUnreadMessages() {
       if (contactsChannel) supabase.removeChannel(contactsChannel);
       if (maw3dChannel) supabase.removeChannel(maw3dChannel);
       if (sharedTaskChannel) supabase.removeChannel(sharedTaskChannel);
+      if (groupMessagesChannel) supabase.removeChannel(groupMessagesChannel);
       
       // Reset global state
       globalSetupInProgress = false;
@@ -424,6 +464,7 @@ export function useUnreadMessages() {
     maw3dEventCount: state.maw3dEventCount,
     taskCount: state.taskCount,
     sharedTaskCount: state.sharedTaskCount,
+    groupUnreadCount: state.groupUnreadCount,
     perContactUnread: state.perContactUnread,
     refetch: fetchUnreadCounts
   };
