@@ -232,7 +232,7 @@ const WaktiAIV2 = () => {
   const { isMobile } = useIsMobile();
   const { isDesktop } = useIsDesktop();
   const messagesAreaOffsetPx = useMemo(() => Math.max(72, inputReservePx + 8), [inputReservePx]);
-  const messagesAreaPaddingBottomPx = useMemo(() => isMobile ? 8 : 12, [isMobile]);
+  const messagesAreaPaddingBottomPx = useMemo(() => isMobile ? 20 : 24, [isMobile]);
   const activeConversationTitle = useMemo(() => {
     if (isNewConversation || !currentConversationId) {
       return language === 'ar' ? 'Ã™â€¦Ã˜Â­Ã˜Â§Ã˜Â¯Ã˜Â«Ã˜Â© Ã˜Â¬Ã˜Â¯Ã™Å Ã˜Â¯Ã˜Â©' : 'New Chat';

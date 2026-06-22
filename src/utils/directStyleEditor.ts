@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Direct Style Editor - Applies style changes directly to JSX code
  * WITHOUT using AI prompts. This saves credits for users!
  * 
@@ -212,6 +212,23 @@ function findElementInCode(
           startIndex: exactMatch.index,
           endIndex: exactMatch.index + exactMatch[0].length,
         };
+      }
+
+      const nestedTextMatches: Array<{ fullMatch: string; openingTag: string; startIndex: number; endIndex: number }> = [];
+      const nestedTextPattern = new RegExp(`(<${t}[^>]*>)[\\s\\S]{0,1200}?${flexibleText}[\\s\\S]{0,1200}?</${t}>`, 'g');
+      let textOnlyNestedMatch;
+
+      while ((textOnlyNestedMatch = nestedTextPattern.exec(code)) !== null) {
+        nestedTextMatches.push({
+          fullMatch: textOnlyNestedMatch[0],
+          openingTag: textOnlyNestedMatch[1],
+          startIndex: textOnlyNestedMatch.index,
+          endIndex: textOnlyNestedMatch.index + textOnlyNestedMatch[0].length,
+        });
+      }
+
+      if (nestedTextMatches.length === 1) {
+        return nestedTextMatches[0];
       }
 
       if (classPattern) {
@@ -521,3 +538,4 @@ export function validateJSX(code: string): boolean {
   
   return true;
 }
+
