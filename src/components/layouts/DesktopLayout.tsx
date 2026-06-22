@@ -4,19 +4,39 @@ import { DesktopHeader } from "@/components/DesktopHeader";
 import { DesktopSidebar } from "@/components/DesktopSidebar";
 import { useLocation } from "react-router-dom";
 import { getScopedStorageItem } from "@/utils/userScopedStorage";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 interface DesktopLayoutProps {
   children: React.ReactNode;
 }
 
+const DEFAULT_DASHBOARD_LOOK = 'modern' as const;
+const parseDashboardLook = (value: unknown): 'dashboard' | 'homescreen' | 'modern' | null => {
+  return value === 'dashboard' || value === 'homescreen' || value === 'modern' ? value : null;
+};
+
 export function DesktopLayout({ children }: DesktopLayoutProps) {
   const location = useLocation();
-  const [dashboardLook, setDashboardLook] = useState<string>(
-    () => getScopedStorageItem('wakti_dashboard_look', undefined, 'wakti_dashboard_look') || 'homescreen'
+  const { profile } = useUserProfile();
+  const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen' | 'modern'>(
+    () => parseDashboardLook(getScopedStorageItem('wakti_dashboard_look', undefined, 'wakti_dashboard_look')) || DEFAULT_DASHBOARD_LOOK
   );
 
   useEffect(() => {
-    return onEvent('dashboardLookChanged', (detail) => setDashboardLook(detail));
+    const profileLook = parseDashboardLook((profile?.settings as any)?.dashboardLook);
+    if (profileLook) {
+      setDashboardLook(profileLook);
+      return;
+    }
+    const cachedLook = parseDashboardLook(getScopedStorageItem('wakti_dashboard_look', undefined, 'wakti_dashboard_look'));
+    setDashboardLook(cachedLook || DEFAULT_DASHBOARD_LOOK);
+  }, [profile]);
+
+  useEffect(() => {
+    return onEvent('dashboardLookChanged', (detail) => {
+      const nextLook = parseDashboardLook(detail);
+      if (nextLook) setDashboardLook(nextLook);
+    });
   }, []);
 
   const isHomescreenLook = dashboardLook === 'homescreen';

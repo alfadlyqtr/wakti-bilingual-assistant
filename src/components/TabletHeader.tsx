@@ -78,7 +78,10 @@ export function TabletHeader() {
     ? (immediateAvatarUrl ? getCacheBustedAvatarUrl(immediateAvatarUrl.trim()) : undefined)
     : (profile?.avatar_url ? getCacheBustedAvatarUrl(profile.avatar_url.trim()) : undefined);
   
-  const isHomescreenMode = (getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
+  const savedLook = ((profile?.settings as any)?.dashboardLook === 'dashboard' || (profile?.settings as any)?.dashboardLook === 'homescreen' || (profile?.settings as any)?.dashboardLook === 'modern')
+    ? (profile?.settings as any)?.dashboardLook
+    : getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
+  const isHomescreenMode = savedLook !== 'dashboard';
 
   // Define menu items with icons
   const menuItems = [

@@ -317,8 +317,16 @@ export const useWidgetManager = (language: "en" | "ar") => {
     if (!user) return;
 
     try {
+      const { data, error: fetchError } = await supabase
+        .from("profiles")
+        .select("settings")
+        .eq("id", user.id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
       const baseSettings =
-        profileSettings && typeof profileSettings === "object" ? { ...profileSettings } : {};
+        data?.settings && typeof data.settings === "object" ? { ...(data.settings as Record<string, any>) } : {};
 
       const widgetsSettings = {
         ...(baseSettings.widgets || {}),

@@ -50,8 +50,10 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
   // Check if we're on the Wakti AI V2 page
   const isWaktiAIPage = location.pathname === '/wakti-ai';
 
-  // Detect homescreen mode from localStorage — default is 'homescreen' when key absent
-  const isHomescreenMode = (getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
+  const savedLook = ((profile?.settings as any)?.dashboardLook === 'dashboard' || (profile?.settings as any)?.dashboardLook === 'homescreen' || (profile?.settings as any)?.dashboardLook === 'modern')
+    ? (profile?.settings as any)?.dashboardLook
+    : getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
+  const isHomescreenMode = savedLook !== 'dashboard';
 
   const handleLogout = async () => {
     await signOut();

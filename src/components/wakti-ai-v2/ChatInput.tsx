@@ -194,15 +194,26 @@ export function ChatInput({
   
   // Reference to the chat input container for direct style application
   const chatInputContainerRef = useRef<HTMLDivElement | null>(null);
+
+  const resolveChatInputContainer = () => {
+    if (chatInputContainerRef.current) {
+      return chatInputContainerRef.current;
+    }
+
+    const el = inputCardRef.current;
+    if (!el) {
+      return null;
+    }
+
+    const container = el.closest('.chat-input-container') as HTMLDivElement | null;
+    chatInputContainerRef.current = container;
+    return container;
+  };
   
   // Find and store reference to the parent chat-input-container on mount
   useEffect(() => {
     // Find the parent container by traversing up from inputCardRef
-    const el = inputCardRef.current;
-    if (el) {
-      const container = el.closest('.chat-input-container') as HTMLDivElement | null;
-      chatInputContainerRef.current = container;
-    }
+    resolveChatInputContainer();
   }, []);
 
   // Recompute Quick Modes anchor position when opened/resized/scrolled
@@ -236,12 +247,39 @@ export function ChatInput({
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    const applyKeyboardViewportState = (visible: boolean, composerBottom: number, viewportHeight: number) => {
+      const nextBottom = Math.max(0, Math.round(composerBottom));
+      const nextViewportHeight = Math.max(0, Math.round(viewportHeight));
+
+      document.documentElement.style.setProperty('--keyboard-height', `${nextBottom}px`);
+      document.documentElement.style.setProperty('--visual-viewport-height', `${nextViewportHeight}px`);
+      document.body.classList.toggle('keyboard-visible', visible);
+
+      const container = resolveChatInputContainer();
+      if (!container) {
+        return;
+      }
+
+      if (visible) {
+        container.style.bottom = `${nextBottom}px`;
+        container.style.paddingBottom = '0px';
+        container.style.transform = 'translateY(0)';
+      } else {
+        container.style.bottom = '0px';
+        container.style.paddingBottom = '';
+        container.style.transform = '';
+      }
+    };
+
     const handleKeyboardDetection = () => {
       const vv = window.visualViewport;
-      const vvH = vv?.height ?? window.innerHeight;
-      const threshold = 150;
-      const kbHeight = window.innerHeight - vvH;
-      const viewportShrank = kbHeight > threshold;
+      const layoutViewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+      const visualViewportHeight = vv?.height ?? layoutViewportHeight;
+      const visualViewportOffsetTop = vv?.offsetTop ?? 0;
+      const visibleViewportBottom = visualViewportOffsetTop + visualViewportHeight;
+      const keyboardInset = Math.max(0, layoutViewportHeight - visibleViewportBottom);
+      const threshold = 120;
+      const viewportShrank = keyboardInset > threshold;
       
       const ae = document.activeElement as HTMLElement | null;
       const isEditableActive = !!ae && (
@@ -252,19 +290,8 @@ export function ChatInput({
       
       const visible = isEditableActive && viewportShrank;
       setIsKeyboardVisible(visible);
-      setKeyboardHeight(visible ? kbHeight : 0);
-      
-      // Apply styles directly to the chat input container element (since it's portaled to body)
-      const container = chatInputContainerRef.current;
-      if (container) {
-        if (visible) {
-          container.style.bottom = `${kbHeight}px`;
-          container.style.paddingBottom = '0px';
-        } else {
-          container.style.bottom = '0px';
-          container.style.paddingBottom = '';
-        }
-      }
+      setKeyboardHeight(visible ? keyboardInset : 0);
+      applyKeyboardViewportState(visible, visible ? keyboardInset : 0, visualViewportHeight);
     };
 
     const handleFocusIn = (e: FocusEvent) => {
@@ -287,9 +314,12 @@ export function ChatInput({
       window.visualViewport.addEventListener('scroll', handleKeyboardDetection);
     }
     window.addEventListener('resize', handleKeyboardDetection);
+    window.addEventListener('orientationchange', handleKeyboardDetection);
     
     document.addEventListener('focusin', handleFocusIn);
     document.addEventListener('focusout', handleFocusOut);
+
+    handleKeyboardDetection();
 
     return () => {
       if (window.visualViewport) {
@@ -297,8 +327,20 @@ export function ChatInput({
         window.visualViewport.removeEventListener('scroll', handleKeyboardDetection);
       }
       window.removeEventListener('resize', handleKeyboardDetection);
+      window.removeEventListener('orientationchange', handleKeyboardDetection);
       document.removeEventListener('focusin', handleFocusIn);
       document.removeEventListener('focusout', handleFocusOut);
+
+      document.body.classList.remove('keyboard-visible');
+      document.documentElement.style.removeProperty('--keyboard-height');
+      document.documentElement.style.removeProperty('--visual-viewport-height');
+
+      const container = resolveChatInputContainer();
+      if (container) {
+        container.style.bottom = '0px';
+        container.style.paddingBottom = '';
+        container.style.transform = '';
+      }
     };
   }, []);
   
@@ -929,10 +971,10 @@ export function ChatInput({
 
       {/* Main Input Area - Edge to edge on mobile, tight spacing, keyboard aware */}
       <div 
-        className="w-full px-0 md:px-4 pb-0 md:pb-0 pt-1 mt-0"
+        className="w-full px-0 pb-0 pt-1 mt-0"
         ref={inputCardRef}
       >  
-        <div className="w-full px-0 md:px-6">
+        <div className="w-full px-0">
           <div
             className={`
               relative group flex flex-col bg-white/40 dark:bg-black/30 border-2

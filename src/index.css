@@ -1038,8 +1038,19 @@ textarea::placeholder {
     -webkit-backdrop-filter: none !important;
   }
 
+  .chat-input-container.desktop-tablet-composer {
+    background: transparent !important;
+    border-top: 0 !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    padding-bottom: 0 !important;
+  }
+
   /* Ensure chat input stays at bottom and flush with keyboard when visible */
-  .wakti-ai-container.keyboard-visible .chat-input-container {
+  body.wakti-ai-page.keyboard-visible .chat-input-container,
+  .wakti-ai-container.keyboard-visible .chat-input-container,
+  .wakti-ai-page-container.keyboard-visible .chat-input-container {
     position: fixed !important;
     bottom: var(--keyboard-height, 0px) !important;
     left: 0 !important;
@@ -1061,7 +1072,9 @@ textarea::placeholder {
     transition: opacity 0.3s ease, visibility 0.3s ease;
   }
 
-  .wakti-ai-container.keyboard-visible .hide-on-keyboard {
+  body.wakti-ai-page.keyboard-visible .chat-input-container .hide-on-keyboard,
+  .wakti-ai-container.keyboard-visible .hide-on-keyboard,
+  .wakti-ai-page-container.keyboard-visible .hide-on-keyboard {
     opacity: 0;
     visibility: hidden;
   }
@@ -1202,54 +1215,12 @@ header.app-header-fixed {
     margin-left: 0 !important;
     margin-right: 0 !important;
   }
-  
-  /* Fix container width for Wakti AI chat input */
-  .app-layout-desktop .chat-input-container,
-  .app-layout-tablet .chat-input-container {
-    width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 240px)) - 1.5rem) !important;
-    left: calc(var(--current-sidebar-width, var(--sidebar-width, 240px)) + 0.5rem) !important;
-    right: 1rem !important;
-    margin: 0 !important;
-  }
-  
-  /* Make ChatInput match the container width and style on desktop/tablet */
-  @media (min-width: 768px) {
+
     .app-layout-desktop .chat-input-container .w-full,
     .app-layout-tablet .chat-input-container .w-full {
       max-width: 100% !important;
       width: 100% !important;
       margin: 0 auto !important;
-      border-radius: 1rem !important;
-    }
-    
-    /* Match the 3D effect and styling */
-    .app-layout-desktop .chat-input-container.solid-bg,
-    .app-layout-tablet .chat-input-container.solid-bg {
-      background-color: hsl(var(--background)) !important;
-      border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
-      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08) !important;
-      padding: 1rem 0 0 0 !important;
-    }
-    
-    /* Enhanced 3D effect for the chat input itself on desktop */
-    .app-layout-desktop .chat-input-container [class*="border-blue-400"],
-    /* Mobile: keep the input opaque as well */
-    .app-layout-mobile .chat-input-container.solid-bg {
-      background-color: hsl(var(--background)) !important;
-      border-top: 1px solid rgba(0, 0, 0, 0.08) !important;
-      box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.08) !important;
-      padding-top: 0.75rem !important; /* slight space for the center handle */
-    }
-
-    .app-layout-tablet .chat-input-container [class*="border-blue-400"] {
-      border: 1px solid rgba(255, 255, 255, 0.2) !important;
-      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25),
-                0 0 0 1px rgba(255, 255, 255, 0.05),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1),
-                0 8px 32px rgba(0, 0, 0, 0.12) !important;
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 50%, rgba(255, 255, 255, 0.1) 100%), var(--gradient-background) !important;
-      backdrop-filter: blur(20px) !important;
-      -webkit-backdrop-filter: blur(20px) !important;
     }
     
     /* Make ChatMessages full width */
@@ -1270,7 +1241,6 @@ header.app-header-fixed {
       margin-left: 0 !important;
       margin-right: 0 !important;
     }
-  }
 }
 
 /* For tablet, use tablet sidebar width */
@@ -1284,11 +1254,6 @@ header.app-header-fixed {
   .app-layout-tablet .wakti-ai-container {
     max-width: calc(100% - var(--tablet-sidebar-width, 180px) - 1.5rem) !important;
     margin-left: calc(var(--tablet-sidebar-width, 180px) + 0.5rem) !important;
-  }
-  
-  .app-layout-tablet .chat-input-container {
-    width: calc(100% - var(--tablet-sidebar-width, 180px) - 1.5rem) !important;
-    left: calc(var(--tablet-sidebar-width, 180px) + 0.5rem) !important;
   }
 }
 
@@ -1441,6 +1406,10 @@ body.public-page #root > div {
     right: 1rem !important;
     width: calc(100% - var(--current-sidebar-width, var(--sidebar-width, 220px)) - 2rem) !important;
   }
+
+  .chat-input-container.desktop-tablet-composer {
+    bottom: 1rem !important;
+  }
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
@@ -1448,6 +1417,10 @@ body.public-page #root > div {
     left: calc(var(--tablet-sidebar-width, 180px) + 0.5rem) !important;
     right: 1rem !important;
     width: calc(100% - var(--tablet-sidebar-width, 180px) - 1.5rem) !important;
+  }
+
+  .chat-input-container.desktop-tablet-composer {
+    bottom: 0.75rem !important;
   }
 }
 

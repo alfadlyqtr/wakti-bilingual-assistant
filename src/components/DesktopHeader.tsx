@@ -162,7 +162,10 @@ export function DesktopHeader() {
     shouldGlowLogo && "wakti-logo-glow--pulse"
   );
 
-  const isHomescreenMode = (getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look') ?? 'homescreen') !== 'dashboard';
+  const savedLook = ((profile?.settings as any)?.dashboardLook === 'dashboard' || (profile?.settings as any)?.dashboardLook === 'homescreen' || (profile?.settings as any)?.dashboardLook === 'modern')
+    ? (profile?.settings as any)?.dashboardLook
+    : getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
+  const isHomescreenMode = savedLook !== 'dashboard';
 
   const [bgMusicSrc, setBgMusicSrc] = useState<string | null>(null);
 

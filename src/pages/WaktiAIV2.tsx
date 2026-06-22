@@ -20,7 +20,7 @@ import { AnnouncementService } from '@/services/AnnouncementService';
 import { HelpfulMemoryService } from '@/services/HelpfulMemoryService';
 import { cn } from '@/lib/utils';
 import { createPortal } from 'react-dom';
-import { useIsDesktop } from '@/hooks/use-mobile';
+import { useIsDesktop, useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/ui/button';
 import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { isGuestRestrictionCode } from '@/utils/guestAuth';
@@ -227,6 +227,7 @@ const WaktiAIV2 = () => {
   const guestPromptCountRef = useRef<number>(0);
   const { language } = useTheme();
   const { showError, showSuccess } = useToastHelper();
+  const { isMobile } = useIsMobile();
   const { isDesktop } = useIsDesktop();
   const activeConversationTitle = useMemo(() => {
     if (isNewConversation || !currentConversationId) {
@@ -1586,6 +1587,44 @@ const WaktiAIV2 = () => {
     });
   }, [currentConversationId, autoSaveActiveConversation]);
 
+  const chatComposer = (
+    <div className={cn('chat-input-container solid-bg', isMobile ? 'glass-edge' : 'desktop-tablet-composer')}>
+      <ChatInput
+        message={message}
+        setMessage={setMessage}
+        isLoading={canSendMessage ? isLoading : true}
+        sessionMessages={sessionMessages}
+        activeConversationTitle={activeConversationTitle}
+        onSendMessage={handleSendMessage}
+        onClearChat={handleClearChat}
+        onOpenPlusDrawer={() => setIsSidebarOpen(true)}
+        onOpenConversations={() => setShowConversations(true)}
+        activeTrigger={activeTrigger}
+        onTriggerChange={(nextTrigger) => {
+          if (isGuest && nextTrigger !== 'chat') {
+            openGuestUpgradeDialog(getGuestBlockedMessage(nextTrigger, chatSubmode));
+            return;
+          }
+          setActiveTrigger(nextTrigger);
+        }}
+        chatSubmode={chatSubmode}
+        onChatSubmodeChange={(nextSubmode) => {
+          if (isGuest && nextSubmode !== 'chat') {
+            openGuestUpgradeDialog(getGuestBlockedMessage('chat', nextSubmode));
+            return;
+          }
+          setChatSubmode(nextSubmode);
+        }}
+        onAddTalkMessage={handleAddTalkMessage}
+        replyContext={replyContext}
+        onClearReply={handleClearReply}
+        onStop={handleStop}
+        isGuest={isGuest}
+        onGuestBlockedAction={openGuestUpgradeDialog}
+      />
+    </div>
+  );
+
   return (
     <div className="wakti-ai-page-container" style={{ position: 'relative' }}>
       {chatTrialLimitReached ? <TrialGateOverlay featureKey="ai_chat" limit={15} featureLabel={{ en: 'WAKTI AI Chat', ar: 'Ã˜Â¯Ã˜Â±Ã˜Â¯Ã˜Â´Ã˜Â© Ã™Ë†Ã™â€šÃ˜ÂªÃ™Å  AI' }} /> : null}
@@ -1665,80 +1704,7 @@ const WaktiAIV2 = () => {
           />
       </div>
 
-        {portalRoot ? createPortal(
-          <div className='chat-input-container solid-bg glass-edge'>
-            <ChatInput
-              message={message}
-              setMessage={setMessage}
-              isLoading={canSendMessage ? isLoading : true}
-              sessionMessages={sessionMessages}
-              activeConversationTitle={activeConversationTitle}
-              onSendMessage={handleSendMessage}
-              onClearChat={handleClearChat}
-              onOpenPlusDrawer={() => setIsSidebarOpen(true)}
-              onOpenConversations={() => setShowConversations(true)}
-              activeTrigger={activeTrigger}
-              onTriggerChange={(nextTrigger) => {
-                if (isGuest && nextTrigger !== 'chat') {
-                  openGuestUpgradeDialog(getGuestBlockedMessage(nextTrigger, chatSubmode));
-                  return;
-                }
-                setActiveTrigger(nextTrigger);
-              }}
-              chatSubmode={chatSubmode}
-              onChatSubmodeChange={(nextSubmode) => {
-                if (isGuest && nextSubmode !== 'chat') {
-                  openGuestUpgradeDialog(getGuestBlockedMessage('chat', nextSubmode));
-                  return;
-                }
-                setChatSubmode(nextSubmode);
-              }}
-              onAddTalkMessage={handleAddTalkMessage}
-              replyContext={replyContext}
-              onClearReply={handleClearReply}
-              onStop={handleStop}
-              isGuest={isGuest}
-              onGuestBlockedAction={openGuestUpgradeDialog}
-            />
-          </div>,
-          portalRoot
-        ) : (
-          <div className='chat-input-container solid-bg glass-edge'>
-            <ChatInput
-              message={message}
-              setMessage={setMessage}
-              isLoading={canSendMessage ? isLoading : true}
-              sessionMessages={sessionMessages}
-              activeConversationTitle={activeConversationTitle}
-              onSendMessage={handleSendMessage}
-              onClearChat={handleClearChat}
-              onOpenPlusDrawer={() => setIsSidebarOpen(true)}
-              onOpenConversations={() => setShowConversations(true)}
-              activeTrigger={activeTrigger}
-              onTriggerChange={(nextTrigger) => {
-                if (isGuest && nextTrigger !== 'chat') {
-                  openGuestUpgradeDialog(getGuestBlockedMessage(nextTrigger, chatSubmode));
-                  return;
-                }
-                setActiveTrigger(nextTrigger);
-              }}
-              chatSubmode={chatSubmode}
-              onChatSubmodeChange={(nextSubmode) => {
-                if (isGuest && nextSubmode !== 'chat') {
-                  openGuestUpgradeDialog(getGuestBlockedMessage('chat', nextSubmode));
-                  return;
-                }
-                setChatSubmode(nextSubmode);
-              }}
-              onAddTalkMessage={handleAddTalkMessage}
-              replyContext={replyContext}
-              onClearReply={handleClearReply}
-              onStop={handleStop}
-              isGuest={isGuest}
-              onGuestBlockedAction={openGuestUpgradeDialog}
-            />
-          </div>
-        )}
+        {isMobile && portalRoot ? createPortal(chatComposer, portalRoot) : chatComposer}
     </div>
   );
 };

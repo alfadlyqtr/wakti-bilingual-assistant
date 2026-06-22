@@ -37,6 +37,17 @@ export const PrivacySettings: React.FC = () => {
     });
   }, [cachedProfile]);
 
+  const fetchLatestProfileSettings = async () => {
+    if (!user) return {};
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('settings')
+      .eq('id', user.id)
+      .single();
+    if (error) throw error;
+    return (data?.settings as any) || {};
+  };
+
   const updatePrivacySetting = async (key: keyof PrivacySettings, value: boolean) => {
     try {
       if (!user) return;
@@ -50,8 +61,7 @@ export const PrivacySettings: React.FC = () => {
           .update({ auto_approve_contacts: value })
           .eq('id', user.id);
       } else {
-        // Use cached profile settings as merge base
-        const currentSettings = (cachedProfile?.settings as any) || {};
+        const currentSettings = await fetchLatestProfileSettings();
         const privacySettings = currentSettings.privacy || {};
 
         const updatedPrivacy = {
