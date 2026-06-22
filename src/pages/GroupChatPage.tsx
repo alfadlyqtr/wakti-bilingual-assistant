@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AtSign, Camera, ChevronDown, Clock, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, MicOff, Pause, Pencil, Play, Reply, Send, Sparkles, Square, Trash2, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, Camera, ChevronDown, Clock, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, Pause, Pencil, Play, Reply, Send, Sparkles, Square, Trash2, UserPlus, Users, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +25,7 @@ import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import { ImageModal } from "@/components/wakti-ai-v2/ImageModal";
 import { prepareAvatarUploadFile } from "@/utils/avatarUpload";
+import { VoiceRecorder } from "@/components/contacts/VoiceRecorder";
 
 function getMentionInfo(text: string): { startIndex: number; filter: string } | null {
   const match = text.match(/(?:^|\s)(@[^\s]*)$/);
@@ -42,8 +43,6 @@ export default function GroupChatPage() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [messageText, setMessageText] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingSeconds, setRecordingSeconds] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
@@ -90,10 +89,7 @@ export default function GroupChatPage() {
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const pdfInputRef = useRef<HTMLInputElement | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
   const audioRefs = useRef<Record<string, HTMLAudioElement>>({});
-  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const initialScrollDoneRef = useRef(false);
   const isNearBottomRef = useRef(true);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -577,16 +573,6 @@ export default function GroupChatPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [conversationId, waktiInGroup]);
 
-  // Cleanup recording timer on unmount
-  useEffect(() => {
-    return () => {
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        mediaRecorderRef.current.stop();
-      }
-    };
-  }, []);
-
   const participantNames = useMemo(() => {
     if (!conversation) return "";
     return conversation.participants
@@ -806,59 +792,38 @@ export default function GroupChatPage() {
     }
   }, [conversationId, language, queryClient, replyingTo]);
 
-  const startRecording = useCallback(async () => {
+  const handleVoiceRecording = useCallback(async (audioBlob: Blob, duration: number) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const duration = recordingSeconds;
-        setRecordingSeconds(0);
-        if (blob.size < 1000) return;
-        setUploading(true);
-        try {
-          const file = new File([blob], `voice-${Date.now()}.webm`, { type: "audio/webm" });
-          const url = await uploadGroupMessageAttachment(file, "voice");
-          await sendGroupConversationMessage(conversationId!, {
-            message_type: "voice",
-            media_url: url,
-            media_type: "audio/webm",
-            voice_duration: duration,
-            file_size: blob.size,
-            reply_to_id: replyingTo?.id || null,
-          });
-          setReplyingTo(null);
-          queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
-          queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
-          queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
-        } catch (err: any) {
-          toast.error(err?.message || (language === "ar" ? "تعذر إرسال الصوت" : "Failed to send voice"));
-        } finally {
-          setUploading(false);
-        }
-      };
-      recorder.start();
-      mediaRecorderRef.current = recorder;
-      setIsRecording(true);
-      setRecordingSeconds(0);
-      recordingTimerRef.current = setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
-      broadcastRecording(true);
-    } catch {
-      toast.error(language === "ar" ? "لا يمكن الوصول إلى الميكروفون" : "Cannot access microphone");
-    }
-  }, [conversationId, language, queryClient, recordingSeconds, broadcastRecording]);
+      setUploading(true);
+      const recordedType = (audioBlob as Blob).type || 'audio/webm';
+      const ext = recordedType.includes('webm')
+        ? 'webm'
+        : recordedType.includes('ogg')
+          ? 'ogg'
+          : recordedType.includes('wav')
+            ? 'wav'
+            : (recordedType.includes('mpeg') || recordedType.includes('mp3'))
+              ? 'mp3'
+              : (recordedType.includes('mp4') || recordedType.includes('aac'))
+                ? 'm4a'
+                : 'webm';
 
-  const stopRecording = useCallback(() => {
-    if (recordingTimerRef.current) { clearInterval(recordingTimerRef.current); recordingTimerRef.current = null; }
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
+      const file = new File([audioBlob], `voice-${Date.now()}.${ext}`, { type: recordedType });
+      const url = await uploadGroupMessageAttachment(file, 'voice');
+      sendMutation.mutate({
+        message_type: 'voice',
+        media_url: url,
+        media_type: recordedType,
+        voice_duration: Math.max(0, Math.round(duration || 0)),
+        file_size: file.size,
+        reply_to_id: replyingTo?.id || null,
+      });
+    } catch (error: any) {
+      toast.error(error?.message || (language === 'ar' ? 'تعذر إرسال الصوت' : 'Failed to send voice'));
+    } finally {
+      setUploading(false);
     }
-    setIsRecording(false);
-    broadcastRecording(false);
-  }, [broadcastRecording]);
+  }, [language, replyingTo]);
 
   const formatSeconds = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
@@ -1108,7 +1073,7 @@ export default function GroupChatPage() {
               src={imageUrl}
               alt="sent image"
               className={cn(
-                "block h-auto w-full max-w-full cursor-pointer rounded-lg object-contain",
+                "block h-auto max-w-full cursor-pointer rounded-lg object-contain",
                 compact ? "max-h-[260px]" : "max-h-[320px]"
               )}
               loading={isLastTwoImages ? undefined : "lazy"}
@@ -1602,20 +1567,6 @@ export default function GroupChatPage() {
       <div className="shrink-0 border-t border-border/60 bg-background/95 backdrop-blur px-4 pt-2" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5">
 
-          {/* Recording indicator */}
-          {isRecording && (
-            <div className="flex items-center gap-3 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20 animate-in fade-in slide-in-from-bottom-1 duration-200">
-              <div className="flex items-center gap-1.5">
-                <div className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-xs font-semibold text-red-600 uppercase tracking-wide">{language === "ar" ? "جارٍ التسجيل" : "Recording"}</span>
-              </div>
-              <span className="text-sm font-mono font-bold text-red-600">{formatSeconds(recordingSeconds)}</span>
-              <button onClick={stopRecording} className="ml-auto h-7 w-7 flex items-center justify-center rounded-md text-red-600 hover:bg-red-500/20" aria-label={language === "ar" ? "إلغاء التسجيل" : "Cancel recording"}>
-                <Square className="h-3.5 w-3.5 fill-current" />
-              </button>
-            </div>
-          )}
-
           {replyingTo && (
             <div className={cn(
               "flex items-center gap-2 px-3 py-2 rounded-xl text-xs",
@@ -1664,27 +1615,18 @@ export default function GroupChatPage() {
               variant="ghost"
               size="icon"
               className="h-8 w-8 rounded-md shrink-0 text-muted-foreground hover:text-foreground"
-              disabled={uploading || sendMutation.isPending || isRecording || !!attachedImage}
+              disabled={uploading || sendMutation.isPending || !!attachedImage}
               onClick={() => imageInputRef.current?.click()}
             >
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Image className="h-4 w-4" />}
             </Button>
 
-            {/* Mic */}
-            <Button
-              variant={isRecording ? "destructive" : "ghost"}
-              size="icon"
-              className={cn(
-                "h-8 w-8 rounded-md shrink-0",
-                !isRecording && "text-muted-foreground hover:text-foreground"
-              )}
-              onPointerDown={startRecording}
-              onPointerUp={stopRecording}
-              onPointerLeave={stopRecording}
+            <VoiceRecorder
+              onRecordingComplete={handleVoiceRecording}
+              onRecordingStart={() => broadcastRecording(true)}
+              onRecordingStop={() => broadcastRecording(false)}
               disabled={uploading || sendMutation.isPending}
-            >
-              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-            </Button>
+            />
 
             {/* PDF picker */}
             <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} aria-label={language === "ar" ? "اختر ملف PDF" : "Choose PDF"} />
@@ -1692,7 +1634,7 @@ export default function GroupChatPage() {
               variant="ghost"
               size="icon"
               className="h-8 w-8 rounded-md shrink-0 text-muted-foreground hover:text-foreground"
-              disabled={uploading || sendMutation.isPending || isRecording}
+              disabled={uploading || sendMutation.isPending}
               onClick={() => pdfInputRef.current?.click()}
             >
               <FileText className="h-4 w-4" />
@@ -1718,7 +1660,7 @@ export default function GroupChatPage() {
                     setTimeout(() => textareaRef.current?.focus(), 0);
                   }
                 }}
-                disabled={isRecording || uploading}
+                disabled={uploading}
                 title="@"
               >
                 <AtSign className="h-4 w-4" />
@@ -1821,7 +1763,7 @@ export default function GroupChatPage() {
                 "min-h-[36px] max-h-[100px] h-[36px] rounded-xl resize-none flex-1 text-sm px-3 py-[6px] leading-[1.35] overflow-y-auto border",
                 isDark ? "bg-transparent text-white placeholder:text-gray-400 border-gray-700" : "bg-white text-light-primary placeholder:text-gray-500 border-gray-200"
               )}
-              disabled={isRecording || uploading}
+              disabled={uploading}
               onKeyDown={(e) => {
                 if (showMentionPicker) {
                   if (e.key === "Enter") {

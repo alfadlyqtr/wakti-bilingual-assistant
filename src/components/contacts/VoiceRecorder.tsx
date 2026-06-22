@@ -3,6 +3,8 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Mic, Square, Play, Pause } from "lucide-react";
 import { toast } from "sonner";
+import { useTheme } from "@/providers/ThemeProvider";
+import { cn } from "@/lib/utils";
 
 interface VoiceRecorderProps {
   onRecordingComplete: (audioBlob: Blob, duration: number) => void;
@@ -12,6 +14,8 @@ interface VoiceRecorderProps {
 }
 
 export function VoiceRecorder({ onRecordingComplete, onRecordingStart, onRecordingStop, disabled }: VoiceRecorderProps) {
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -134,20 +138,23 @@ export function VoiceRecorder({ onRecordingComplete, onRecordingStart, onRecordi
 
   if (audioBlob) {
     return (
-      <div className="flex items-center gap-2 p-2 bg-blue-50 rounded-lg">
+      <div className={cn(
+        "flex items-center gap-2 p-2 rounded-lg border",
+        isDark ? "bg-blue-900/20 border-blue-800/30" : "bg-blue-50 border-transparent"
+      )}>
         <Button
           size="sm"
           variant="ghost"
           onClick={isPlaying ? pauseRecording : playRecording}
-          className="h-8 w-8 p-0"
+          className={cn("h-8 w-8 p-0", isDark ? "text-foreground hover:bg-white/10" : "text-foreground hover:bg-blue-100")}
         >
           {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
-        <span className="text-sm font-mono">{formatTime(recordingTime)}</span>
-        <Button size="sm" onClick={sendRecording} className="h-7 px-3 text-xs">
+        <span className={cn("text-sm font-mono", isDark ? "text-foreground" : "text-gray-700")}>{formatTime(recordingTime)}</span>
+        <Button size="sm" onClick={sendRecording} className="h-7 px-3 text-xs bg-blue-500 hover:bg-blue-600 text-white">
           Send
         </Button>
-        <Button size="sm" variant="outline" onClick={discardRecording} className="h-7 px-3 text-xs">
+        <Button size="sm" variant="outline" onClick={discardRecording} className={cn("h-7 px-3 text-xs", isDark ? "border-white/20 text-foreground hover:bg-white/10" : "")}>
           Discard
         </Button>
       </div>
@@ -180,7 +187,7 @@ export function VoiceRecorder({ onRecordingComplete, onRecordingStart, onRecordi
           variant="ghost"
           onClick={startRecording}
           disabled={disabled}
-          className="h-8 w-8 p-0 hover:bg-blue-50"
+          className={cn("h-8 w-8 p-0", isDark ? "hover:bg-white/10" : "hover:bg-blue-50")}
         >
           <Mic className="h-4 w-4" />
         </Button>
