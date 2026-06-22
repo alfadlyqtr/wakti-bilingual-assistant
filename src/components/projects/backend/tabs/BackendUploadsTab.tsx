@@ -62,6 +62,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
   const [savedPickerOpen, setSavedPickerOpen] = useState(false);
+  const [importingImageId, setImportingImageId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [mediaType, setMediaType] = useState<'image' | 'audio' | 'video' | 'all'>('image');
@@ -290,7 +291,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
       );
 
       if (!result.success || !result.data) {
-        toast.error(isRTL ? 'فشل في البحث عن الصور' : 'Failed to search photos');
+        toast.error(result.error || (isRTL ? 'فشل في البحث عن الصور' : 'Failed to search photos'));
         setStockPhotos([]);
         return;
       }
@@ -306,6 +307,74 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
       setSearchingStock(false);
     }
   }, [stockQuery, isRTL, projectId]);
+
+  const importImageIntoProject = useCallback(async (sourceUrl: string, filenameHint?: string) => {
+    const { data, error } = await supabase.functions.invoke('import-external-image', {
+      body: {
+        projectId,
+        sourceUrl,
+        filenameHint,
+      },
+    });
+
+    if (error) {
+      throw new Error(error.message || 'Import failed');
+    }
+
+    if (data?.error) {
+      throw new Error(data.error);
+    }
+
+    if (!data?.url) {
+      throw new Error('No URL returned after import');
+    }
+
+    return data.url as string;
+  }, [projectId]);
+
+  const handleSavedImageImport = useCallback(async (image: SavedImage) => {
+    if (!image.image_url) {
+      toast.error(isRTL ? 'رابط الصورة غير صالح' : 'Invalid image URL');
+      return;
+    }
+
+    const importId = `saved-${image.id}`;
+    setImportingImageId(importId);
+
+    try {
+      await importImageIntoProject(image.image_url, image.prompt || 'saved-image');
+      toast.success(isRTL ? 'تمت إضافة الصورة إلى الوسائط' : 'Image added to backend media');
+      setSavedPickerOpen(false);
+      onRefresh();
+    } catch (err: any) {
+      console.error('Saved image import failed:', err);
+      toast.error(err?.message || (isRTL ? 'فشل إضافة الصورة' : 'Failed to add image'));
+    } finally {
+      setImportingImageId(null);
+    }
+  }, [importImageIntoProject, isRTL, onRefresh]);
+
+  const handleStockImageImport = useCallback(async (photo: FreepikResource) => {
+    const sourceUrl = resolveStockDisplayUrl(photo);
+    if (!sourceUrl) {
+      toast.error(isRTL ? 'لا يوجد رابط صالح للصورة' : 'No valid image URL');
+      return;
+    }
+
+    const importId = `stock-${photo.id}`;
+    setImportingImageId(importId);
+
+    try {
+      await importImageIntoProject(sourceUrl, photo.title || 'stock-image');
+      toast.success(isRTL ? 'تم حفظ الصورة في وسائط المشروع' : 'Stock image saved to backend media');
+      onRefresh();
+    } catch (err: any) {
+      console.error('Stock image import failed:', err);
+      toast.error(err?.message || (isRTL ? 'فشل حفظ صورة المخزون' : 'Failed to save stock image'));
+    } finally {
+      setImportingImageId(null);
+    }
+  }, [importImageIntoProject, isRTL, onRefresh]);
 
   return (
     <div className={cn("space-y-6", isRTL && "rtl")}>
@@ -477,6 +546,7 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {stockPhotos.map((photo) => {
                     const imageUrl = resolveStockDisplayUrl(photo);
+                    const isImporting = importingImageId === `stock-${photo.id}`;
                     return (
                       <div key={photo.id} className="group relative rounded-lg overflow-hidden border border-border/50 bg-muted/20">
                         <div className="aspect-[4/3] bg-muted/20 p-2">
@@ -497,8 +567,21 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
                             </div>
                           )}
                         </div>
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-2">
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-2 space-y-2">
                           <p className="text-[10px] text-white/90 font-medium truncate">{photo.title}</p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-7 w-full text-xs"
+                            disabled={isImporting || !imageUrl}
+                            onClick={() => void handleStockImageImport(photo)}
+                          >
+                            {isImporting ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              isRTL ? 'حفظ في الوسائط' : 'Save to media'
+                            )}
+                          </Button>
                         </div>
                       </div>
                     );
@@ -752,23 +835,40 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
           <div className="p-4 max-h-[72vh] overflow-y-auto">
             {savedImages.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {savedImages.map((image) => (
-                  <div key={image.id} className="group relative rounded-lg overflow-hidden border border-border/50 bg-muted/20">
-                    <div className="aspect-[4/3] bg-muted/20 p-2">
-                      <img
-                        src={image.image_url}
-                        alt={image.prompt || 'Generated image'}
-                        className="w-full h-full object-contain rounded-md"
-                        loading="lazy"
-                      />
+                {savedImages.map((image) => {
+                  const isImporting = importingImageId === `saved-${image.id}`;
+
+                  return (
+                    <div key={image.id} className="group relative rounded-lg overflow-hidden border border-border/50 bg-muted/20">
+                      <div className="aspect-[4/3] bg-muted/20 p-2">
+                        <img
+                          src={image.image_url}
+                          alt={image.prompt || 'Generated image'}
+                          className="w-full h-full object-contain rounded-md"
+                          loading="lazy"
+                        />
+                      </div>
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2 space-y-2">
+                        <p className="text-[10px] text-white/90 font-medium truncate">
+                          {image.prompt || (isRTL ? 'صورة مولدة' : 'Generated image')}
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="h-7 w-full text-xs"
+                          disabled={isImporting}
+                          onClick={() => void handleSavedImageImport(image)}
+                        >
+                          {isImporting ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            isRTL ? 'إضافة إلى الوسائط' : 'Add to media'
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                      <p className="text-[10px] text-white/90 font-medium truncate">
-                        {image.prompt || (isRTL ? 'صورة مولدة' : 'Generated image')}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="flex items-center justify-center py-12 text-center text-sm text-muted-foreground">

@@ -1383,8 +1383,24 @@ async function handleComments(action: string, projectId: string, ownerId: string
 }
 
 // Handle FreePik stock media search (images and videos)
-const FREEPIK_API_KEY = Deno.env.get('MAGNIFIC_API_KEY') || Deno.env.get('FREEPIK_API_KEY') || '';
-const FREEPIK_API_BASE_URL = 'https://api.magnific.com/v1';
+type FreepikApiKeyConfig = { name: string; value: string };
+const FREEPIK_API_KEYS: FreepikApiKeyConfig[] = [
+  { name: 'FREEPIK_API_KEY', value: (Deno.env.get('FREEPIK_API_KEY') || '').trim() },
+  { name: 'MAGNIFIC_API_KEY', value: (Deno.env.get('MAGNIFIC_API_KEY') || '').trim() },
+].filter((entry) => Boolean(entry.value));
+const FREEPIK_API_BASE_URLS = [
+  'https://api.magnific.com/v1',
+  'https://api.freepik.com/v1',
+];
+
+function buildFreepikHeaders(apiKey: string, language?: string) {
+  return {
+    'x-magnific-api-key': apiKey,
+    'x-freepik-api-key': apiKey,
+    'Accept': 'application/json',
+    ...(language ? { 'Accept-Language': language } : {}),
+  };
+}
 
 function toFreepikLimit(limit: unknown, max = 20): number {
   const parsed = Number(limit);
@@ -1440,17 +1456,14 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
       const { query, page = 1, limit = 20, filters, language = 'en-US' } = data;
       if (!query) throw new Error('query required');
 
-      if (!FREEPIK_API_KEY) {
+      if (FREEPIK_API_KEYS.length === 0) {
         return buildFreepikFallbackResponse(query, page, limit, 'Freepik API key not configured');
       }
 
-      const headers = {
-        'x-magnific-api-key': FREEPIK_API_KEY,
-        'Accept': 'application/json',
-      };
-
       const normalizedQuery = String(query).trim();
       const normalizedFilters = normalizeFreepikFilters(filters);
+      const normalizedLanguage = String(language || 'en-US');
+      const normalizedLimit = toFreepikLimit(limit, 100);
       const queryCandidates = Array.from(new Set([
         normalizedQuery,
         normalizedQuery.replace(/\b(detail|texture|fabric|editorial|instagram post)\b/gi, '').replace(/\s+/g, ' ').trim(),
@@ -1463,7 +1476,7 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
         const params = new URLSearchParams({
           term: candidate,
           page: String(page),
-          limit: String(Math.min(limit as number, 100)),
+          limit: String(normalizedLimit),
           'filters[content_type][photo]': '1',
         });
 
@@ -1475,43 +1488,47 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
         if (normalizedFilters.orientation) params.set(`filters[orientation][${normalizedFilters.orientation}]`, '1');
         if (normalizedFilters.color) params.set('filters[color]', normalizedFilters.color);
 
-        const response = await fetch(`${FREEPIK_API_BASE_URL}/resources?${params}`, {
-          headers: {
-            ...headers,
-            'Accept-Language': String(language),
-          },
-        });
+        for (const baseUrl of FREEPIK_API_BASE_URLS) {
+          for (const keyConfig of FREEPIK_API_KEYS) {
+            const response = await fetch(`${baseUrl}/resources?${params}`, {
+              headers: buildFreepikHeaders(keyConfig.value, normalizedLanguage),
+            });
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`[Freepik] Images search error for "${candidate}":`, errorText);
-          upstreamErrors.push(`${response.status}: ${errorText || 'Unknown upstream error'}`);
-          continue;
-        }
+            if (!response.ok) {
+              const errorText = await response.text();
+              const compactError = errorText?.trim() || 'Unknown upstream error';
+              const provider = baseUrl.includes('magnific') ? 'magnific' : 'freepik';
+              console.error(`[Freepik] Images search error (${provider}, ${keyConfig.name}) for "${candidate}":`, compactError);
+              upstreamErrors.push(`${response.status} (${provider}, ${keyConfig.name}): ${compactError}`);
 
-        const result = await response.json();
-        const images = (result.data || []).map((item: any) => ({
-          id: item.id,
-          title: item.title,
-          url: item.image?.source?.url || item.image?.source_url || '',
-          thumbnail: item.image?.source?.url || '',
-          size: item.image?.source?.size || '',
-          orientation: item.image?.orientation || 'horizontal',
-          type: item.image?.type || 'photo',
-          author: item.author?.name || 'Freepik',
-          authorAvatar: item.author?.avatar || '',
-          freepikUrl: item.url || '',
-          downloads: item.stats?.downloads || 0,
-          likes: item.stats?.likes || 0,
-        })).filter((img: any) => img.url);
+              continue;
+            }
 
-        if (images.length > 0) {
-          return {
-            images,
-            total: result.meta?.total || images.length,
-            page: result.meta?.current_page || page,
-            lastPage: result.meta?.last_page || 1,
-          };
+            const result = await response.json();
+            const images = (result.data || []).map((item: any) => ({
+              id: item.id,
+              title: item.title,
+              url: item.image?.source?.url || item.image?.source_url || '',
+              thumbnail: item.image?.source?.url || '',
+              size: item.image?.source?.size || '',
+              orientation: item.image?.orientation || 'horizontal',
+              type: item.image?.type || 'photo',
+              author: item.author?.name || 'Freepik',
+              authorAvatar: item.author?.avatar || '',
+              freepikUrl: item.url || '',
+              downloads: item.stats?.downloads || 0,
+              likes: item.stats?.likes || 0,
+            })).filter((img: any) => img.url);
+
+            if (images.length > 0) {
+              return {
+                images,
+                total: result.meta?.total || images.length,
+                page: result.meta?.current_page || page,
+                lastPage: result.meta?.last_page || 1,
+              };
+            }
+          }
         }
       }
 
@@ -1532,19 +1549,14 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
       const { query, page = 1, limit = 20, filters } = data;
       if (!query) throw new Error('query required');
 
-      if (!FREEPIK_API_KEY) {
+      if (FREEPIK_API_KEYS.length === 0) {
         return { videos: [], total: 0, page, fallback: true, error: 'Freepik API key not configured' };
       }
-
-      const headers = {
-        'x-magnific-api-key': FREEPIK_API_KEY,
-        'Accept': 'application/json',
-      };
 
       const params = new URLSearchParams({
         term: query as string,
         page: String(page),
-        limit: String(Math.min(limit as number, 50)),
+        limit: String(toFreepikLimit(limit, 50)),
       });
 
       // Add optional filters
@@ -1554,36 +1566,50 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
         if (f.orientation) params.append('filters[orientation]', f.orientation);
       }
 
-      const response = await fetch(`${FREEPIK_API_BASE_URL}/videos?${params}`, {
-        headers: {
-          ...headers,
-          'Accept-Language': 'en-US',
-        },
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[Freepik] Videos search error:`, errorText);
-        throw new Error(`Freepik API error: ${response.status}`);
+      const upstreamErrors: string[] = [];
+
+      for (const baseUrl of FREEPIK_API_BASE_URLS) {
+        for (const keyConfig of FREEPIK_API_KEYS) {
+          const response = await fetch(`${baseUrl}/videos?${params}`, {
+            headers: buildFreepikHeaders(keyConfig.value, 'en-US'),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            const compactError = errorText?.trim() || 'Unknown upstream error';
+            const provider = baseUrl.includes('magnific') ? 'magnific' : 'freepik';
+            console.error(`[Freepik] Videos search error (${provider}, ${keyConfig.name}):`, compactError);
+            upstreamErrors.push(`${response.status} (${provider}, ${keyConfig.name}): ${compactError}`);
+            continue;
+          }
+
+          const result = await response.json();
+
+          // Transform to simpler format for AI
+          const videos = (result.data || []).map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            thumbnail: item.thumbnails?.[0]?.url,
+            preview_url: item.video?.preview_url,
+            duration: item.video?.duration,
+            author: item.author?.name,
+            premium: item.is_premium,
+          }));
+
+          return {
+            videos,
+            total: result.meta?.pagination?.total || videos.length,
+            page: result.meta?.pagination?.current_page || page,
+          };
+        }
       }
 
-      const result = await response.json();
-      
-      // Transform to simpler format for AI
-      const videos = (result.data || []).map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        thumbnail: item.thumbnails?.[0]?.url,
-        preview_url: item.video?.preview_url,
-        duration: item.video?.duration,
-        author: item.author?.name,
-        premium: item.is_premium,
-      }));
-
-      return { 
-        videos, 
-        total: result.meta?.pagination?.total || videos.length,
-        page: result.meta?.pagination?.current_page || page,
+      return {
+        videos: [],
+        total: 0,
+        page,
+        fallback: true,
+        error: `Freepik video search failed: ${upstreamErrors[0] || 'Unknown upstream error'}`,
       };
     }
 
@@ -1592,32 +1618,38 @@ async function handleFreepik(action: string, _projectId: string, _ownerId: strin
       const { resourceId, type = 'image' } = data;
       if (!resourceId) throw new Error('resourceId required');
 
-      if (!FREEPIK_API_KEY) {
+      if (FREEPIK_API_KEYS.length === 0) {
         throw new Error('Freepik API key not configured');
       }
 
-      const headers = {
-        'x-magnific-api-key': FREEPIK_API_KEY,
-        'Accept': 'application/json',
-      };
+      const upstreamErrors: string[] = [];
 
-      const endpoint = type === 'video' 
-        ? `${FREEPIK_API_BASE_URL}/videos/${resourceId}/download`
-        : `${FREEPIK_API_BASE_URL}/resources/${resourceId}/download`;
+      for (const baseUrl of FREEPIK_API_BASE_URLS) {
+        const endpoint = type === 'video'
+          ? `${baseUrl}/videos/${resourceId}/download`
+          : `${baseUrl}/resources/${resourceId}/download`;
 
-      const response = await fetch(endpoint, { headers });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[Freepik] Download error:`, errorText);
-        throw new Error(`Freepik API error: ${response.status}`);
+        for (const keyConfig of FREEPIK_API_KEYS) {
+          const response = await fetch(endpoint, { headers: buildFreepikHeaders(keyConfig.value) });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            const compactError = errorText?.trim() || 'Unknown upstream error';
+            const provider = baseUrl.includes('magnific') ? 'magnific' : 'freepik';
+            console.error(`[Freepik] Download error (${provider}, ${keyConfig.name}):`, compactError);
+            upstreamErrors.push(`${response.status} (${provider}, ${keyConfig.name}): ${compactError}`);
+            continue;
+          }
+
+          const result = await response.json();
+          return {
+            url: result.data?.url || result.url,
+            filename: result.data?.filename,
+          };
+        }
       }
 
-      const result = await response.json();
-      return { 
-        url: result.data?.url || result.url,
-        filename: result.data?.filename,
-      };
+      throw new Error(`Freepik API error: ${upstreamErrors[0] || 'Unknown upstream error'}`);
     }
 
     default:

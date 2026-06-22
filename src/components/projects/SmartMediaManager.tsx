@@ -280,7 +280,7 @@ export function SmartMediaManager({
         setStockTotalPages(result.data.meta?.last_page || 1);
         setStockPage(page);
       } else {
-        toast.error(isRTLMode ? 'فشل البحث عن الصور' : 'Failed to search photos');
+        toast.error(result.error || (isRTLMode ? 'فشل البحث عن الصور' : 'Failed to search photos'));
       }
     } catch (err) {
       console.error('Stock search error:', err);
@@ -299,11 +299,16 @@ export function SmartMediaManager({
     setUploadProgress(0);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) {
+        throw new Error(isRTLMode ? 'يجب تسجيل الدخول أولاً' : 'Please sign in first');
+      }
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
-        const storagePath = `${projectId}/${fileName}`;
+        const safeFilename = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `${user.id}/${projectId}/${Date.now()}-${safeFilename}`;
 
         // Upload to Supabase Storage
         const { error: uploadError } = await supabase.storage
@@ -313,24 +318,27 @@ export function SmartMediaManager({
         if (uploadError) throw uploadError;
 
         // Save to project_uploads table
-        await supabase
+        const { error: dbError } = await supabase
           .from('project_uploads' as any)
           .insert({
             project_id: projectId,
+            user_id: user.id,
             filename: file.name,
             storage_path: storagePath,
             file_type: file.type,
-            file_size: file.size
+            size_bytes: file.size
           } as any);
+
+        if (dbError) throw dbError;
 
         setUploadProgress(((i + 1) / files.length) * 100);
       }
 
       toast.success(isRTLMode ? 'تم رفع الملفات بنجاح!' : 'Files uploaded successfully!');
       loadBackendImages();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Upload error:', err);
-      toast.error(isRTLMode ? 'فشل رفع الملفات' : 'Failed to upload files');
+      toast.error(err?.message || (isRTLMode ? 'فشل رفع الملفات' : 'Failed to upload files'));
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
