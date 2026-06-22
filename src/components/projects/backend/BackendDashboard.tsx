@@ -351,7 +351,7 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
       if (error) throw error;
       
       await fetchBackendStatus();
-      toast.success(isRTL ? 'تم تفعيل السيرفر!' : 'Backend enabled!');
+      toast.success(isRTL ? 'تم تفعيل الخلفية!' : 'Backend enabled!');
     } catch (err: any) {
       console.error('Error enabling backend:', err);
       toast.error(err.message || (isRTL ? 'فشل في التفعيل' : 'Failed to enable'));
@@ -575,7 +575,6 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
               </button>
             )}
             
-            {/* Server Icon with Glow */}
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/30 to-purple-500/30 rounded-xl blur-lg" />
               <div className="relative p-2.5 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20">
@@ -586,7 +585,7 @@ export function BackendDashboard({ projectId, isRTL, onBack, initialTab, onTabCh
             {/* Title & Status */}
             <div className={isRTL ? "text-right" : "text-left"}>
               <h2 className="text-base md:text-lg font-bold text-foreground">
-                {isRTL ? 'لوحة السيرفر' : 'Backend'}
+                {isRTL ? 'لوحة الخلفية' : 'Backend'}
               </h2>
               <div className={cn("flex items-center gap-1.5 text-[10px] md:text-xs", isRTL && "flex-row-reverse")}>
                 <span className="flex items-center gap-1 text-emerald-500">

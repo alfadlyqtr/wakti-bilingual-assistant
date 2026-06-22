@@ -5824,7 +5824,7 @@ ${fixInstructions}
         </div>
       )}
 
-      {/* Server Tab Content */}
+      {/* Backend Tab Content */}
       {mainTab === 'server' ? (
         <div className="flex-1 min-h-0 overflow-hidden">
           <BackendDashboard
@@ -5982,10 +5982,10 @@ ${fixInstructions}
                 <button
                   onClick={() => setMainTab('server')}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all text-muted-foreground hover:text-foreground"
-                  title={isRTL ? 'السيرفر' : 'Server'}
+                  title={isRTL ? 'الخلفية' : 'Backend'}
                 >
                   <Server className="h-3.5 w-3.5" />
-                  {isRTL ? 'سيرفر' : 'Server'}
+                  {isRTL ? 'الخلفية' : 'Backend'}
                 </button>
               </div>
             </div>

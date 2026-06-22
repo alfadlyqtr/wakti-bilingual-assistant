@@ -39,6 +39,37 @@ interface SavedImage {
 
 type GridSize = 'small' | 'medium' | 'large';
 
+function isUsableImageUrl(value?: string | null): boolean {
+  if (!value) return false;
+  return /^https?:\/\//i.test(value) && !/freepik\.com\/(?:[^\s]+\/)?search/i.test(value);
+}
+
+function resolvePhotoDisplayUrl(photo: FreepikResource): string {
+  const candidates = [
+    photo.image?.source?.url,
+    photo.url,
+    (photo as any)?.thumbnail,
+    (photo as any)?.previewUrl,
+    (photo as any)?.image?.thumbnail?.url,
+    (photo as any)?.image?.url,
+  ];
+
+  return candidates.find((candidate) => isUsableImageUrl(candidate)) || '';
+}
+
+function resolvePhotoSelectionUrl(photo: FreepikResource): string {
+  const candidates = [
+    photo.url,
+    photo.image?.source?.url,
+    (photo as any)?.previewUrl,
+    (photo as any)?.thumbnail,
+    (photo as any)?.image?.url,
+    (photo as any)?.image?.thumbnail?.url,
+  ];
+
+  return candidates.find((candidate) => isUsableImageUrl(candidate)) || '';
+}
+
 export function StockPhotoSelector({ 
   userId, 
   projectId,
@@ -580,47 +611,72 @@ export function StockPhotoSelector({
                 </div>
               ) : stockPhotos.length > 0 ? (
                 <div className={cn("grid", gridClasses[gridSize])}>
-                  {stockPhotos.map((photo) => (
-                    <div 
-                      key={photo.id}
-                      className={cn(
-                        "relative overflow-hidden cursor-pointer transition-all active:scale-[0.98]",
-                        gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-[4/3] rounded-lg",
-                        isPhotoSelected(photo.url || photo.image.source.url) 
-                          ? "ring-2 ring-primary ring-offset-1 ring-offset-background" 
-                          : "border border-border/50"
-                      )}
-                      onClick={() => handleSelectPhoto({
-                        url: photo.url || photo.image.source.url,
-                        title: photo.title
-                      })}
-                    >
-                      <img 
-                        src={photo.image.source.url || photo.url} 
-                        alt={photo.title}
-                        className="w-full h-full object-contain bg-muted/20 p-2"
-                      />
-                      {/* Selection overlay */}
-                      {isPhotoSelected(photo.url || photo.image.source.url) && (
-                        <div className="absolute inset-0 bg-primary/20" />
-                      )}
-                      {/* Checkmark badge */}
-                      {isPhotoSelected(photo.url || photo.image.source.url) && (
-                        <div className={cn(
-                          "absolute bg-primary text-primary-foreground rounded-full shadow-lg",
-                          gridSize === 'small' ? "top-1 right-1 p-0.5" : "top-2 right-2 p-1.5"
-                        )}>
-                          <Check className={gridSize === 'small' ? "h-3 w-3" : "h-4 w-4"} strokeWidth={3} />
-                        </div>
-                      )}
-                      {/* Title on large view */}
-                      {gridSize === 'large' && (
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                          <p className="text-white text-sm font-medium truncate">{photo.title}</p>
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {stockPhotos.map((photo) => {
+                    const displayUrl = resolvePhotoDisplayUrl(photo);
+                    const selectionUrl = resolvePhotoSelectionUrl(photo);
+                    const selected = isPhotoSelected(selectionUrl);
+
+                    return (
+                      <div 
+                        key={photo.id}
+                        className={cn(
+                          "relative overflow-hidden cursor-pointer transition-all active:scale-[0.98] bg-muted/20",
+                          gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-[4/3] rounded-lg",
+                          selected
+                            ? "ring-2 ring-primary ring-offset-1 ring-offset-background" 
+                            : "border border-border/50"
+                        )}
+                        onClick={() => {
+                          if (!selectionUrl) return;
+                          handleSelectPhoto({
+                            url: selectionUrl,
+                            title: photo.title
+                          });
+                        }}
+                      >
+                        {displayUrl ? (
+                          <img 
+                            src={displayUrl} 
+                            alt={photo.title}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              if (selectionUrl && target.src !== selectionUrl) {
+                                target.src = selectionUrl;
+                                return;
+                              }
+                              target.style.display = 'none';
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                            {photo.title}
+                          </div>
+                        )}
+                        {/* Selection overlay */}
+                        {selected && (
+                          <div className="absolute inset-0 bg-primary/20" />
+                        )}
+                        {/* Checkmark badge */}
+                        {selected && (
+                          <div className={cn(
+                            "absolute bg-primary text-primary-foreground rounded-full shadow-lg",
+                            gridSize === 'small' ? "top-1 right-1 p-0.5" : "top-2 right-2 p-1.5"
+                          )}>
+                            <Check className={gridSize === 'small' ? "h-3 w-3" : "h-4 w-4"} strokeWidth={3} />
+                          </div>
+                        )}
+                        {/* Title on large view */}
+                        {gridSize === 'large' && (
+                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
+                            <p className="text-white text-sm font-medium truncate">{photo.title}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : searchQuery ? (
                 <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
