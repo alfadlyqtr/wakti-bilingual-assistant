@@ -14,6 +14,9 @@ import { getScopedStorageItem, migrateLegacyScopedStorage, setScopedStorageItem 
 import { getGuestDisplayName } from "@/utils/guestAuth";
 
 const DEFAULT_DASHBOARD_LOOK = 'modern' as const;
+const parseDashboardLook = (value: unknown): 'dashboard' | 'homescreen' | 'modern' | null => {
+  return value === 'dashboard' || value === 'homescreen' || value === 'modern' ? value : null;
+};
 
 export default function Dashboard() {
   const { language } = useTheme();
@@ -24,7 +27,7 @@ export default function Dashboard() {
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen' | 'modern'>(() => {
     // Instant load from localStorage — no flash
     const cached = getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
-    return cached === 'dashboard' || cached === 'homescreen' || cached === 'modern' ? cached : DEFAULT_DASHBOARD_LOOK;
+    return parseDashboardLook(cached) || DEFAULT_DASHBOARD_LOOK;
   });
 
   useEffect(() => {
@@ -35,15 +38,19 @@ export default function Dashboard() {
   // Sync from cached profile (source of truth) + cache to localStorage
   useEffect(() => {
     if (!profile) return;
-    const savedLook = (profile.settings as any)?.dashboardLook;
-    if (savedLook === 'dashboard' || savedLook === 'homescreen' || savedLook === 'modern') {
-      setDashboardLook(savedLook);
-      setScopedStorageItem('wakti_dashboard_look', savedLook, user?.id);
-    } else {
-      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
-      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user?.id);
+    const profileLook = parseDashboardLook((profile.settings as any)?.dashboardLook);
+    if (profileLook) {
+      setDashboardLook(profileLook);
+      setScopedStorageItem('wakti_dashboard_look', profileLook, user?.id);
+      return;
     }
-  }, [profile]);
+    const cachedLook = parseDashboardLook(getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look'));
+    const resolvedLook = cachedLook || DEFAULT_DASHBOARD_LOOK;
+    setDashboardLook(resolvedLook);
+    if (!cachedLook) {
+      setScopedStorageItem('wakti_dashboard_look', resolvedLook, user?.id);
+    }
+  }, [profile, user?.id]);
 
   // Listen for dashboard look changes from Settings page
   useEffect(() => {

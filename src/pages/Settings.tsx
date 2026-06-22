@@ -54,6 +54,9 @@ const LS_HSBG_ACTIVE_BASE = "homescreen_bg_style_active";
 const LS_BG_CHOICE_BASE = "homescreen_bg_choice_v1";
 const LS_DOCK_COLOR_BASE = "homescreen_dock_color";
 const DEFAULT_DASHBOARD_LOOK = 'modern' as const;
+const parseDashboardLook = (value: unknown): 'dashboard' | 'homescreen' | 'modern' | null => {
+  return value === 'dashboard' || value === 'homescreen' || value === 'modern' ? value : null;
+};
 const MODERN_WIDGET_ORDER_KEYS = [
   'showCalendarWidget',
   'showTRWidget',
@@ -188,7 +191,7 @@ export default function Settings() {
   // Dashboard look preference ('dashboard' = default widget grid, 'homescreen' = iPhone look, 'modern' = grouped modern look)
   const [dashboardLook, setDashboardLook] = useState<'dashboard' | 'homescreen' | 'modern'>(() => {
     const cached = getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look');
-    return cached === 'dashboard' || cached === 'homescreen' || cached === 'modern' ? cached : DEFAULT_DASHBOARD_LOOK;
+    return parseDashboardLook(cached) || DEFAULT_DASHBOARD_LOOK;
   });
 
   // Active widget settings based on current mode
@@ -202,7 +205,7 @@ export default function Settings() {
     showActivityStatus: true
   });
 
-  const { profile: cachedProfile, refetch: refetchProfile } = useUserProfile();
+  const { profile: cachedProfile, refetch: refetchProfile, applyFreshProfile } = useUserProfile();
   const isHomescreenLook = dashboardLook === 'homescreen';
   const homescreenWidgetEntries: { key: keyof WidgetConfig; labelEn: string; labelAr: string }[] = [
     { key: 'showCalendarWidget', labelEn: 'Calendar', labelAr: 'التقويم' },
@@ -243,6 +246,12 @@ export default function Settings() {
       .update({ settings: nextSettings })
       .eq('id', user?.id);
     if (error) throw error;
+    if (cachedProfile) {
+      applyFreshProfile({
+        ...cachedProfile,
+        settings: nextSettings,
+      } as any);
+    }
     return nextSettings;
   };
 
@@ -416,13 +425,17 @@ export default function Settings() {
       }
 
       // Load dashboard look preference
-      const savedLook = s?.dashboardLook;
-      if (savedLook === 'dashboard' || savedLook === 'homescreen' || savedLook === 'modern') {
-        setDashboardLook(savedLook);
-        setScopedStorageItem('wakti_dashboard_look', savedLook, user?.id);
+      const profileLook = parseDashboardLook(s?.dashboardLook);
+      if (profileLook) {
+        setDashboardLook(profileLook);
+        setScopedStorageItem('wakti_dashboard_look', profileLook, user?.id);
       } else {
-        setDashboardLook(DEFAULT_DASHBOARD_LOOK);
-        setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user?.id);
+        const cachedLook = parseDashboardLook(getScopedStorageItem('wakti_dashboard_look', user?.id, 'wakti_dashboard_look'));
+        const resolvedLook = cachedLook || DEFAULT_DASHBOARD_LOOK;
+        setDashboardLook(resolvedLook);
+        if (!cachedLook) {
+          setScopedStorageItem('wakti_dashboard_look', resolvedLook, user?.id);
+        }
       }
 
       setPrivacySettings({

@@ -2449,7 +2449,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const { user }  = useAuth();
   const navigate  = useNavigate();
 
-  const { profile } = useUserProfile();
+  const { profile, applyFreshProfile } = useUserProfile();
   const LS_AVATAR_CACHE = user?.id ? `wakti_avatar_${user.id}` : null;
   const defaultHomescreenState = useMemo(() => createDefaultHomescreenSnapshot(theme), [theme]);
   const getLocalHomescreenState = (explicitUid?: string | null) => {
@@ -2796,6 +2796,12 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       };
       const { error: updateError } = await supabase.from("profiles").update({ settings: nextSettings }).eq("id", user.id);
       if (updateError) throw updateError;
+      if (profile) {
+        applyFreshProfile({
+          ...profile,
+          settings: nextSettings,
+        } as any);
+      }
       homescreenDirtyRef.current = false;
       settleSaveState('saved');
       return true;
@@ -2804,7 +2810,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       reportSaveError();
       return false;
     }
-  }, [clearSaveStateTimer, reportSaveError, settleSaveState, user]);
+  }, [applyFreshProfile, clearSaveStateTimer, profile, reportSaveError, settleSaveState, user]);
 
   const clampHsWidgets = (raw: Record<string, boolean>) => {
     const result = { ...raw, showNavWidget: false } as typeof hsWidgets;
