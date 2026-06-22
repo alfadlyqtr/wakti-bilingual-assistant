@@ -102,6 +102,7 @@ export function StockPhotoSelector({
   const [totalPages, setTotalPages] = useState(1);
   const [noPhotosFound, setNoPhotosFound] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [stockError, setStockError] = useState('');
   // Load gridSize from localStorage for persistence
   const [gridSize, setGridSize] = useState<GridSize>(() => {
     const stored = localStorage.getItem('stockPhotoSelectorGridSize');
@@ -238,6 +239,7 @@ export function StockPhotoSelector({
     
     setIsSearching(true);
     setStockPhotos([]);
+    setStockError('');
     
     try {
       const filters: any = {};
@@ -270,10 +272,12 @@ export function StockPhotoSelector({
         setTotalPages(result.data.meta.last_page || 1);
       } else {
         console.error('Failed to search photos:', result.error);
+        setStockError(result.error || 'Failed to search photos');
         toast.error(isRTL ? 'فشل في البحث عن الصور' : 'Failed to search photos');
       }
     } catch (err) {
       console.error('Error searching photos:', err);
+      setStockError(err instanceof Error ? err.message : 'Failed to search photos');
     } finally {
       setIsSearching(false);
     }
@@ -434,7 +438,7 @@ export function StockPhotoSelector({
         className={cn(
           "bg-background shadow-lg w-full flex flex-col",
           "h-[100dvh] rounded-none", // Full screen on mobile
-          "sm:h-auto sm:max-h-[92vh] sm:rounded-xl sm:max-w-6xl"
+          "sm:h-auto sm:max-h-[92vh] sm:rounded-xl sm:max-w-7xl"
         )}
         dir={isRTL ? 'rtl' : 'ltr'}
       >
@@ -635,21 +639,23 @@ export function StockPhotoSelector({
                         }}
                       >
                         {displayUrl ? (
-                          <img 
-                            src={displayUrl} 
-                            alt={photo.title}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            referrerPolicy="no-referrer"
-                            onError={(e) => {
-                              const target = e.currentTarget;
-                              if (selectionUrl && target.src !== selectionUrl) {
-                                target.src = selectionUrl;
-                                return;
-                              }
-                              target.style.display = 'none';
-                            }}
-                          />
+                          <div className="w-full h-full p-2 bg-muted/20">
+                            <img 
+                              src={displayUrl} 
+                              alt={photo.title}
+                              className="w-full h-full object-contain rounded-md"
+                              loading="lazy"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (selectionUrl && target.src !== selectionUrl) {
+                                  target.src = selectionUrl;
+                                  return;
+                                }
+                                target.style.display = 'none';
+                              }}
+                            />
+                          </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center px-4 text-center text-sm text-muted-foreground">
                             {photo.title}
@@ -682,8 +688,13 @@ export function StockPhotoSelector({
                 <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
                   <Image className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
                   <p className="text-sm sm:text-base text-muted-foreground">
-                    {isRTL ? 'لم يتم العثور على صور. جرب كلمات بحث مختلفة.' : 'No photos found. Try different search terms.'}
+                    {stockError
+                      ? (isRTL ? 'البحث في Freepik غير متاح الآن' : 'Freepik search is unavailable right now')
+                      : (isRTL ? 'لم يتم العثور على صور. جرب كلمات بحث مختلفة.' : 'No photos found. Try different search terms.')}
                   </p>
+                  {stockError && (
+                    <p className="text-xs text-muted-foreground/70 mt-2 max-w-xl">{stockError}</p>
+                  )}
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">

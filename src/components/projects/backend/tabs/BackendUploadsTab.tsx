@@ -35,6 +35,8 @@ interface SavedImage {
   id: string;
   image_url: string;
   prompt: string | null;
+  submode?: string | null;
+  meta?: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -147,13 +149,18 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
 
         const { data, error } = await supabase
           .from('user_generated_images' as any)
-          .select('id, image_url, prompt, created_at')
+          .select('id, image_url, prompt, submode, meta, created_at')
           .eq('user_id', user.id)
           .order('created_at', { ascending: false })
           .limit(50) as any;
 
         if (error) throw error;
-        setSavedImages((data || []) as SavedImage[]);
+        const filtered = ((data || []) as SavedImage[]).filter((image) => {
+          if (!image.image_url) return false;
+          const submode = image.submode || '';
+          return ['text2image', 'image2image', 'draw', 'visual-ads'].includes(submode);
+        });
+        setSavedImages(filtered);
       } catch (err) {
         console.error('Error loading saved generated images:', err);
       } finally {
@@ -404,11 +411,11 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
           <div className="rounded-xl border border-border/50 bg-card/40 p-4 space-y-3">
             <div className={cn("flex items-center justify-between gap-3 flex-wrap", isRTL && "flex-row-reverse")}>
               <div>
-                <h3 className="text-sm font-semibold text-foreground">{isRTL ? 'الصور المخزنة والمحفوظة' : 'Saved image library'}</h3>
-                <p className="text-xs text-muted-foreground">{isRTL ? 'المرفوعات وصور الذكاء الاصطناعي المحفوظة في مكان واحد' : 'Uploads and saved AI images in one place'}</p>
+                <h3 className="text-sm font-semibold text-foreground">{isRTL ? 'الصور المولدة المحفوظة' : 'Saved generated images'}</h3>
+                <p className="text-xs text-muted-foreground">{isRTL ? 'صور الذكاء الاصطناعي المحفوظة فقط' : 'Only your saved AI-generated images'}</p>
               </div>
               {(loadingSavedImages || savedImages.length > 0) && (
-                <span className="text-xs text-muted-foreground">{uploads.filter(u => u.file_type?.startsWith('image/')).length + savedImages.length} {isRTL ? 'صورة' : 'images'}</span>
+                <span className="text-xs text-muted-foreground">{savedImages.length} {isRTL ? 'صورة محفوظة' : 'saved images'}</span>
               )}
             </div>
 
@@ -420,8 +427,8 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {savedImages.map((image) => (
                   <div key={image.id} className="group relative rounded-lg overflow-hidden border border-border/50 bg-muted/20">
-                    <div className="aspect-square bg-muted/20">
-                      <img src={image.image_url} alt={image.prompt || 'Generated image'} className="w-full h-full object-cover" loading="lazy" />
+                    <div className="aspect-[4/3] bg-muted/20 p-2">
+                      <img src={image.image_url} alt={image.prompt || 'Generated image'} className="w-full h-full object-contain rounded-md" loading="lazy" />
                     </div>
                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-2">
                       <p className="text-[10px] text-white/90 font-medium truncate">{image.prompt || (isRTL ? 'صورة مولدة' : 'Generated image')}</p>
@@ -470,12 +477,12 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
                     const imageUrl = resolveStockDisplayUrl(photo);
                     return (
                       <div key={photo.id} className="group relative rounded-lg overflow-hidden border border-border/50 bg-muted/20">
-                        <div className="aspect-[4/3] bg-muted/20">
+                        <div className="aspect-[4/3] bg-muted/20 p-2">
                           {imageUrl ? (
                             <img
                               src={imageUrl}
                               alt={photo.title}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain rounded-md"
                               loading="lazy"
                               referrerPolicy="no-referrer"
                               onError={(e) => {

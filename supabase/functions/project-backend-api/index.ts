@@ -1393,37 +1393,11 @@ function toFreepikLimit(limit: unknown, max = 20): number {
 }
 
 function buildFreepikFallbackResponse(query: unknown, page: unknown, limit: unknown, reason: string) {
-  const safeLimit = toFreepikLimit(limit, 20);
   const safePage = Math.max(1, Number(page) || 1);
-  const label = (typeof query === 'string' && query.trim() ? query : 'stock image')
-    .trim()
-    .split(/\s+/)
-    .slice(0, 4)
-    .join(' ');
-
-  const images = Array.from({ length: safeLimit }, (_, index) => {
-    const text = encodeURIComponent(`${label} ${index + 1}`);
-    const url = `https://placehold.co/1200x800/1a1a2e/eaeaea?text=${text}`;
-    return {
-      id: `fallback-${index + 1}`,
-      title: `${label} ${index + 1}`,
-      url,
-      thumbnail: url,
-      size: '1200x800',
-      orientation: 'horizontal',
-      type: 'placeholder',
-      author: 'Wakti Fallback',
-      authorAvatar: '',
-      freepikUrl: '',
-      downloads: 0,
-      likes: 0,
-      fallback: true,
-    };
-  });
 
   return {
-    images,
-    total: images.length,
+    images: [],
+    total: 0,
     page: safePage,
     lastPage: 1,
     fallback: true,

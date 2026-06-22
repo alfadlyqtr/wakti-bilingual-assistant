@@ -158,6 +158,13 @@ class FreepikServiceClass {
       }
 
       const data = await response.json();
+      if (data?.fallback) {
+        return {
+          success: false,
+          error: data?.error || 'Freepik search is currently unavailable',
+        };
+      }
+
       const mappedImages = Array.isArray(data?.images)
         ? data.images
             .map((image: BackendFreepikImage, index: number) => mapBackendImageToResource(image, index))
