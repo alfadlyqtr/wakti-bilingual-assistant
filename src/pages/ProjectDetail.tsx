@@ -334,7 +334,7 @@ export default function ProjectDetail() {
   // Stock photo selector state
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
-  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user'>('stock');
+  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user' | 'saved'>('stock');
   const [photoSelectorMultiSelect, setPhotoSelectorMultiSelect] = useState(false);
   const [isChangingCarouselImages, setIsChangingCarouselImages] = useState(false);
   const [savedPromptForPhotos, setSavedPromptForPhotos] = useState('');
@@ -9200,6 +9200,25 @@ ${fixInstructions}
             setShowStockPhotoSelector(true);
             setShowElementEditPopover(false);
             // Don't clear selectedElementInfo - we need it for the image replacement
+          }}
+          onSavedImageChange={() => {
+            const isMultiImageContext = shouldTreatSelectionAsMultiImageContext(selectedElementInfo);
+
+            if (isMultiImageContext) {
+              setIsChangingCarouselImages(true);
+              setPhotoSelectorMultiSelect(true);
+            } else {
+              setIsChangingCarouselImages(false);
+              setPendingElementImageEdit({
+                elementInfo: selectedElementInfo,
+                originalPrompt: 'Replace image'
+              });
+              setPhotoSelectorMultiSelect(false);
+            }
+
+            setPhotoSelectorInitialTab('saved');
+            setShowStockPhotoSelector(true);
+            setShowElementEditPopover(false);
           }}
           onAIEdit={(prompt) => {
             // Detect image-related requests

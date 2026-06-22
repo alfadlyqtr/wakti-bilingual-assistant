@@ -129,9 +129,24 @@ class FreepikServiceClass {
         return { success: false, error: 'Project ID not available' };
       }
 
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      const accessToken = session?.access_token;
+
+      if (!accessToken) {
+        return {
+          success: false,
+          error: 'Please sign in again to search stock photos',
+        };
+      }
+
       const response = await fetch(BACKEND_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({
           projectId: resolvedProjectId,
           action: 'freepik/images',
@@ -147,11 +162,19 @@ class FreepikServiceClass {
 
       if (!response.ok) {
         let errorMessage = `Freepik search failed (${response.status})`;
+        const rawError = await response.text();
 
         try {
-          const errorData = await response.json();
+          const errorData = rawError ? JSON.parse(rawError) : null;
           errorMessage = errorData?.error || errorData?.message || errorMessage;
         } catch {
+          if (rawError?.trim()) {
+            errorMessage = rawError.trim();
+          }
+        }
+
+        if (response.status === 401) {
+          errorMessage = 'Session expired. Please sign in again';
         }
 
         return { success: false, error: errorMessage };

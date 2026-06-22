@@ -61,6 +61,7 @@ function resolveStockDisplayUrl(photo: FreepikResource): string {
 export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: BackendUploadsTabProps) {
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
+  const [savedPickerOpen, setSavedPickerOpen] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [mediaType, setMediaType] = useState<'image' | 'audio' | 'video' | 'all'>('image');
@@ -423,22 +424,23 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
               <div className="flex items-center justify-center py-10 text-muted-foreground">
                 <Loader2 className="h-5 w-5 animate-spin" />
               </div>
-            ) : savedImages.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                {savedImages.map((image) => (
-                  <div key={image.id} className="group relative rounded-lg overflow-hidden border border-border/50 bg-muted/20">
-                    <div className="aspect-[4/3] bg-muted/20 p-2">
-                      <img src={image.image_url} alt={image.prompt || 'Generated image'} className="w-full h-full object-contain rounded-md" loading="lazy" />
-                    </div>
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-2">
-                      <p className="text-[10px] text-white/90 font-medium truncate">{image.prompt || (isRTL ? 'صورة مولدة' : 'Generated image')}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
             ) : (
-              <div className="flex items-center justify-center py-10 text-center text-sm text-muted-foreground">
-                {isRTL ? 'لا توجد صور مولدة محفوظة بعد' : 'No saved generated images yet'}
+              <div className={cn("flex items-center justify-between gap-3 flex-wrap", isRTL && "flex-row-reverse")}>
+                <p className="text-sm text-muted-foreground">
+                  {savedImages.length > 0
+                    ? (isRTL ? 'افتح نافذة المحفوظات لاختيار الصور بسرعة' : 'Open the saved popup to pick your generated images quickly')
+                    : (isRTL ? 'لا توجد صور مولدة محفوظة بعد' : 'No saved generated images yet')}
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setSavedPickerOpen(true)}
+                  disabled={savedImages.length === 0}
+                  className="gap-2"
+                >
+                  <Sparkles className="h-4 w-4" />
+                  {isRTL ? 'اختر من المحفوظات' : 'Pick from Saved'}
+                </Button>
               </div>
             )}
           </div>
@@ -738,6 +740,42 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={savedPickerOpen} onOpenChange={setSavedPickerOpen}>
+        <DialogContent className="max-w-5xl p-0 overflow-hidden" title={isRTL ? 'اختر من الصور المحفوظة' : 'Pick from Saved'}>
+          <DialogHeader className="p-4 pb-2 border-b border-border/40">
+            <DialogTitle className="truncate">{isRTL ? 'الصور المولدة المحفوظة' : 'Saved generated images'}</DialogTitle>
+          </DialogHeader>
+
+          <div className="p-4 max-h-[72vh] overflow-y-auto">
+            {savedImages.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {savedImages.map((image) => (
+                  <div key={image.id} className="group relative rounded-lg overflow-hidden border border-border/50 bg-muted/20">
+                    <div className="aspect-[4/3] bg-muted/20 p-2">
+                      <img
+                        src={image.image_url}
+                        alt={image.prompt || 'Generated image'}
+                        className="w-full h-full object-contain rounded-md"
+                        loading="lazy"
+                      />
+                    </div>
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
+                      <p className="text-[10px] text-white/90 font-medium truncate">
+                        {image.prompt || (isRTL ? 'صورة مولدة' : 'Generated image')}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-12 text-center text-sm text-muted-foreground">
+                {isRTL ? 'لا توجد صور مولدة محفوظة بعد' : 'No saved generated images yet'}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

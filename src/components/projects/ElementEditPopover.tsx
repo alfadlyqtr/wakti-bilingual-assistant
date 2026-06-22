@@ -52,6 +52,7 @@ interface ElementEditPopoverProps {
   onDirectEdit: (changes: Record<string, string | undefined>) => void;
   onAIEdit: (prompt: string) => void;
   onImageChange?: () => void;
+  onSavedImageChange?: () => void;
   onSelectParent?: () => void;
   onResize?: (dimensions: ResizeDimensions) => void;
   onInlineTextSave?: (newText: string) => void;
@@ -331,6 +332,7 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
   onDirectEdit,
   onAIEdit,
   onImageChange,
+  onSavedImageChange,
   onSelectParent,
   onResize,
   onInlineTextSave,
@@ -1033,6 +1035,15 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                 >
                   <ImageIcon className="h-4 w-4 mr-2" />
                   {isRTL ? 'اختر من المكتبة' : 'Choose from Library'}
+                </Button>
+
+                <Button
+                  onClick={() => onSavedImageChange?.()}
+                  variant="outline"
+                  className="w-full border-zinc-700 bg-zinc-800/40 hover:bg-zinc-800 text-white"
+                >
+                  <ImageIcon className="h-4 w-4 mr-2" />
+                  {isRTL ? 'اختر من المحفوظات' : 'Pick from Saved'}
                 </Button>
                 
                 <div className="relative">

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { FreepikService, FreepikResource } from '@/services/FreepikService';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ interface StockPhotoSelectorProps {
   multiSelect?: boolean;
   onClose: () => void;
   searchTerm?: string;
-  initialTab?: 'stock' | 'user';
+  initialTab?: 'stock' | 'user' | 'saved';
   showOnlyUserPhotos?: boolean; // Hide stock photos tab entirely
 }
 
@@ -34,6 +35,7 @@ interface SavedImage {
   id: string;
   image_url: string;
   prompt: string | null;
+  submode?: string | null;
   created_at: string;
 }
 
@@ -83,8 +85,9 @@ export function StockPhotoSelector({
 }: StockPhotoSelectorProps) {
   const { language } = useTheme();
   const isRTL = language === 'ar';
+  const [portalReady, setPortalReady] = useState(false);
   // If showOnlyUserPhotos, force user tab
-  const [activeTab, setActiveTab] = useState<'stock' | 'user' | 'saved'>(showOnlyUserPhotos ? 'user' : (initialTab as any));
+  const [activeTab, setActiveTab] = useState<'stock' | 'user' | 'saved'>(showOnlyUserPhotos ? 'user' : initialTab);
   const [searchQuery, setSearchQuery] = useState(''); // Always start empty - user must type search
   const [isSearching, setIsSearching] = useState(false);
   const [stockPhotos, setStockPhotos] = useState<FreepikResource[]>([]);
@@ -135,6 +138,16 @@ export function StockPhotoSelector({
     }
   }, [projectId, activeTab]);
 
+  useEffect(() => {
+    setPortalReady(true);
+    return () => setPortalReady(false);
+  }, []);
+
+  useEffect(() => {
+    if (!searchTerm?.trim()) return;
+    setSearchQuery(searchTerm.trim());
+  }, [searchTerm]);
+
   // Removed: auto-search on mount - user must manually search
 
   const loadSavedImages = async () => {
@@ -149,13 +162,18 @@ export function StockPhotoSelector({
       
       const { data, error } = await supabase
         .from('user_generated_images' as any)
-        .select('id, image_url, prompt, created_at')
+        .select('id, image_url, prompt, submode, created_at')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
         .limit(50) as any;
         
       if (error) throw error;
-      setSavedImages((data || []) as SavedImage[]);
+      const filtered = ((data || []) as SavedImage[]).filter((image) => {
+        if (!image.image_url) return false;
+        const submode = image.submode || '';
+        return ['text2image', 'image2image', 'draw', 'visual-ads'].includes(submode);
+      });
+      setSavedImages(filtered);
     } catch (err) {
       console.error('Error loading saved images:', err);
       toast.error(isRTL ? 'فشل في تحميل الصور المحفوظة' : 'Failed to load saved images');
@@ -432,8 +450,12 @@ export function StockPhotoSelector({
     }
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-stretch sm:items-center justify-center p-0 sm:p-4 isolate">
+  if (!portalReady || typeof document === 'undefined') {
+    return null;
+  }
+
+  const modalContent = (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[10000] flex items-stretch sm:items-center justify-center p-0 sm:p-4">
       <div 
         className={cn(
           "bg-background shadow-lg w-full flex flex-col",
@@ -975,4 +997,6 @@ export function StockPhotoSelector({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

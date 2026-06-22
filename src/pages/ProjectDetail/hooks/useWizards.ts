@@ -4,7 +4,7 @@ import type { ClarifyingQuestion } from '@/components/projects/ClarifyingQuestio
 interface PhotoSelectorState {
   show: boolean;
   searchTerm: string;
-  initialTab: 'stock' | 'user';
+  initialTab: 'stock' | 'user' | 'saved';
   multiSelect: boolean;
   showOnlyUserPhotos: boolean;
   isChangingCarouselImages: boolean;
@@ -39,7 +39,7 @@ interface UseWizardsReturn {
   photoSelector: PhotoSelectorState;
   setPhotoSelectorShow: (show: boolean) => void;
   setPhotoSearchTerm: (term: string) => void;
-  setPhotoSelectorInitialTab: (tab: 'stock' | 'user') => void;
+  setPhotoSelectorInitialTab: (tab: 'stock' | 'user' | 'saved') => void;
   setPhotoSelectorMultiSelect: (multi: boolean) => void;
   setPhotoSelectorShowOnlyUserPhotos: (only: boolean) => void;
   setIsChangingCarouselImages: (changing: boolean) => void;
@@ -97,7 +97,7 @@ export function useWizards(): UseWizardsReturn {
   // Stock photo selector
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
-  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user'>('stock');
+  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user' | 'saved'>('stock');
   const [photoSelectorMultiSelect, setPhotoSelectorMultiSelect] = useState(false);
   const [photoSelectorShowOnlyUserPhotos, setPhotoSelectorShowOnlyUserPhotos] = useState(false);
   const [isChangingCarouselImages, setIsChangingCarouselImages] = useState(false);
