@@ -263,6 +263,8 @@ function SearchMessageCard({
                 <div><strong>{language === 'ar' ? 'استعلام الأماكن:' : 'Places query:'}</strong> {nearMeBackendDebug.placeQuery || 'none'}</div>
                 <div><strong>{language === 'ar' ? 'استعلام الخرائط:' : 'Maps query:'}</strong> {nearMeBackendDebug.mapsGroundingQuery || 'none'}</div>
                 <div><strong>{language === 'ar' ? 'وضع القريب الصارم:' : 'Strict nearby:'}</strong> {nearMeBackendDebug.strictNearby ? 'yes' : 'no'}</div>
+                <div><strong>{language === 'ar' ? 'نطاق البحث:' : 'Search radius:'}</strong> {typeof nearMeBackendDebug.searchRadiusMeters === 'number' ? `${Math.round(nearMeBackendDebug.searchRadiusMeters)}m` : 'none'}</div>
+                <div><strong>{language === 'ar' ? 'استراتيجية البحث:' : 'Search strategy:'}</strong> {nearMeBackendDebug.strategy || 'unknown'}</div>
                 <div><strong>{language === 'ar' ? 'عدد نتائج الأماكن:' : 'Places found:'}</strong> {typeof nearMeBackendDebug.placesCount === 'number' ? String(nearMeBackendDebug.placesCount) : '0'}</div>
                 <div><strong>{language === 'ar' ? 'استخدم Places أولاً:' : 'Used Places first:'}</strong> {nearMeBackendDebug.usedPlacesFirst ? 'yes' : 'no'}</div>
                 <div><strong>{language === 'ar' ? 'سبب الخلفية:' : 'Backend reason:'}</strong> {nearMeBackendDebug.reason || 'unknown'}</div>

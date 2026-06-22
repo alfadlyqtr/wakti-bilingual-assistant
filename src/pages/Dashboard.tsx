@@ -9,13 +9,11 @@ import { WidgetGrid } from "@/components/dashboard/WidgetGrid";
 import { HomeScreen } from "@/components/dashboard/HomeScreen";
 import { ModernHomeScreen } from "@/components/dashboard/ModernHomeScreen";
 import { useWidgetManager } from "@/hooks/useWidgetManager";
-import { supabase } from "@/integrations/supabase/client";
 import { t } from "@/utils/translations";
 import { getScopedStorageItem, migrateLegacyScopedStorage, setScopedStorageItem } from "@/utils/userScopedStorage";
 import { getGuestDisplayName } from "@/utils/guestAuth";
 
 const DEFAULT_DASHBOARD_LOOK = 'modern' as const;
-const DASHBOARD_LOOK_MIGRATION_FLAG = 'wakti_dashboard_look_default_migrated_v1';
 
 export default function Dashboard() {
   const { language } = useTheme();
@@ -34,38 +32,6 @@ export default function Dashboard() {
     migrateLegacyScopedStorage('wakti_dashboard_look', user.id, 'wakti_dashboard_look');
   }, [user?.id, isGuest]);
 
-  useEffect(() => {
-    if (!user?.id || !profile || isGuest) return;
-    const hasMigrated = getScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, user.id, DASHBOARD_LOOK_MIGRATION_FLAG);
-    if (hasMigrated === 'true') return;
-    const currentSettings = (profile.settings as any) || {};
-
-    if (currentSettings.dashboardLook === DEFAULT_DASHBOARD_LOOK) {
-      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
-      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user.id);
-      setScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, 'true', user.id);
-      return;
-    }
-
-    const applyModernLookDefault = async () => {
-      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
-      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user.id);
-      const { error } = await supabase
-        .from('profiles')
-        .update({ settings: { ...currentSettings, dashboardLook: DEFAULT_DASHBOARD_LOOK } })
-        .eq('id', user.id);
-
-      if (error) {
-        console.error('Error applying default modern dashboard look:', error);
-        return;
-      }
-
-      setScopedStorageItem(DASHBOARD_LOOK_MIGRATION_FLAG, 'true', user.id);
-    };
-
-    void applyModernLookDefault();
-  }, [user?.id, profile, isGuest]);
-
   // Sync from cached profile (source of truth) + cache to localStorage
   useEffect(() => {
     if (!profile) return;
@@ -73,6 +39,9 @@ export default function Dashboard() {
     if (savedLook === 'dashboard' || savedLook === 'homescreen' || savedLook === 'modern') {
       setDashboardLook(savedLook);
       setScopedStorageItem('wakti_dashboard_look', savedLook, user?.id);
+    } else {
+      setDashboardLook(DEFAULT_DASHBOARD_LOOK);
+      setScopedStorageItem('wakti_dashboard_look', DEFAULT_DASHBOARD_LOOK, user?.id);
     }
   }, [profile]);
 

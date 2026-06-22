@@ -2901,8 +2901,10 @@ function buildNearMeSearchDebug(params: {
   strictNearby: boolean;
   placesCount: number;
   usedPlacesFirst: boolean;
+  searchRadiusMeters?: number;
+  strategy?: string;
 }) {
-  const { latitude, longitude, placeQuery, mapsGroundingQuery, strictNearby, placesCount, usedPlacesFirst } = params;
+  const { latitude, longitude, placeQuery, mapsGroundingQuery, strictNearby, placesCount, usedPlacesFirst, searchRadiusMeters, strategy } = params;
   return {
     coordsReceived: typeof latitude === 'number' && typeof longitude === 'number',
     latitude: typeof latitude === 'number' ? Number(latitude.toFixed(6)) : null,
@@ -2910,6 +2912,8 @@ function buildNearMeSearchDebug(params: {
     placeQuery,
     mapsGroundingQuery,
     strictNearby,
+    searchRadiusMeters: typeof searchRadiusMeters === 'number' ? searchRadiusMeters : null,
+    strategy: strategy || (strictNearby ? 'nearby_type_then_text_fallback' : 'text_search_bias'),
     placesCount,
     usedPlacesFirst,
     reason: usedPlacesFirst
@@ -4395,10 +4399,90 @@ async function fetchGooglePlaceByText(place: GroundedPlaceCard, locationBias?: {
   }
 }
 
-async function searchGooglePlacesForQuery(
+const STRICT_NEARBY_RADIUS_METERS = 2000;
+const STRICT_NEARBY_TEXT_FALLBACK_RADIUS_METERS = 5000;
+
+function detectNearbyPlaceType(query: string): string | null {
+  const normalizedQuery = toTrimmedString(query).toLowerCase();
+  if (!normalizedQuery) return null;
+
+  const typeMatchers: Array<{ type: string; patterns: RegExp[] }> = [
+    { type: 'pharmacy', patterns: [/\bpharmacy\b/i, /\bdrugstore\b/i, /\bchemist\b/i, /صيدلية/, /صيدليه/] },
+    { type: 'hospital', patterns: [/\bhospital\b/i, /\bmedical center\b/i, /مستشفى/, /طوارئ/] },
+    { type: 'gas_station', patterns: [/\bgas station\b/i, /\bpetrol station\b/i, /\bfuel station\b/i, /\bgas\b/i, /\bpetrol\b/i, /بنزين/, /وقود/, /محطة/] },
+    { type: 'cafe', patterns: [/\bcafe\b/i, /\bcoffee\b/i, /\bcoffee shop\b/i, /مقهى/, /قهوة/, /كوفي/] },
+    { type: 'restaurant', patterns: [/\brestaurant\b/i, /\bfood\b/i, /\beat\b/i, /مطعم/, /أكل/, /اكل/] },
+    { type: 'supermarket', patterns: [/\bsupermarket\b/i, /\bgrocery\b/i, /\bmarket\b/i, /\bhypermarket\b/i, /سوبرماركت/, /بقالة/, /تموينات/] },
+    { type: 'atm', patterns: [/\batm\b/i, /صراف/] },
+    { type: 'bank', patterns: [/\bbank\b/i, /بنك/] },
+    { type: 'hotel', patterns: [/\bhotel\b/i, /\bresort\b/i, /فندق/, /منتجع/] },
+    { type: 'shopping_mall', patterns: [/\bmall\b/i, /\bshopping center\b/i, /مول/, /مجمع/] },
+    { type: 'gym', patterns: [/\bgym\b/i, /\bfitness\b/i, /نادي/, /جيم/] },
+    { type: 'doctor', patterns: [/\bdoctor\b/i, /\bclinic\b/i, /عيادة/, /دكتور/] },
+    { type: 'dentist', patterns: [/\bdentist\b/i, /أسنان/] },
+    { type: 'bakery', patterns: [/\bbakery\b/i, /مخبز/, /خبز/] },
+    { type: 'mosque', patterns: [/\bmosque\b/i, /مسجد/] },
+  ];
+
+  for (const matcher of typeMatchers) {
+    if (matcher.patterns.some((pattern) => pattern.test(normalizedQuery))) {
+      return matcher.type;
+    }
+  }
+
+  return null;
+}
+
+function mapPlacesApiResultsToCards(results: unknown[]): GroundedPlaceCard[] {
+  return results
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const placeData = entry as Record<string, unknown>;
+      const mapped = mapPlaceV1ToCard(placeData);
+      const placeId = toTrimmedString(mapped.placeId);
+      const fallbackName = toTrimmedString(mapped.name) || toTrimmedString(placeData.formattedAddress) || 'Place';
+      const latitude = typeof mapped.latitude === 'number' ? mapped.latitude : null;
+      const longitude = typeof mapped.longitude === 'number' ? mapped.longitude : null;
+      const defaultMapsUrl = placeId
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackName)}&query_place_id=${encodeURIComponent(placeId)}`
+        : (latitude != null && longitude != null
+            ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
+            : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackName)}`);
+
+      return {
+        placeId,
+        name: fallbackName,
+        address: toTrimmedString(mapped.address),
+        latitude,
+        longitude,
+        rating: typeof mapped.rating === 'number' ? mapped.rating : null,
+        userRatingCount: typeof mapped.userRatingCount === 'number' ? mapped.userRatingCount : null,
+        websiteUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.websiteUrl)),
+        phone: toTrimmedString(mapped.phone),
+        email: normalizeEmail(mapped.email),
+        openNow: typeof mapped.openNow === 'boolean' ? mapped.openNow : null,
+        businessStatus: toTrimmedString(mapped.businessStatus),
+        reason: '',
+        vibe: '',
+        mustTry: '',
+        editorialSummary: toTrimmedString(mapped.editorialSummary),
+        reviewSnippets: Array.isArray(mapped.reviewSnippets) ? mapped.reviewSnippets : [],
+        mapsUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.mapsUrl)) || defaultMapsUrl,
+        instagramUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.instagramUrl)),
+        facebookUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.facebookUrl)),
+        tiktokUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.tiktokUrl)),
+        whatsappUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.whatsappUrl)),
+        photoUrl: toTrimmedString(mapped.photoUrl),
+        openingHours: Array.isArray(mapped.openingHours) ? mapped.openingHours : [],
+      } as GroundedPlaceCard;
+    })
+    .filter((place): place is GroundedPlaceCard => Boolean(place && (place.name || place.placeId)));
+}
+
+async function searchGooglePlacesTextQuery(
   query: string,
   locationContext?: { latitude: number; longitude: number } | null,
-  options?: { strictNearby?: boolean }
+  options?: { radiusMeters?: number; restrictToCircle?: boolean }
 ): Promise<GroundedPlaceCard[]> {
   if (!GOOGLE_PLACES_API_KEY) return [];
   const textQuery = toTrimmedString(query);
@@ -4411,9 +4495,9 @@ async function searchGooglePlacesForQuery(
     if (locationContext?.latitude != null && locationContext?.longitude != null) {
       const circle = {
         center: { latitude: locationContext.latitude, longitude: locationContext.longitude },
-        radius: options?.strictNearby ? 5000 : 30000,
+        radius: options?.radiusMeters ?? 30000,
       };
-      if (options?.strictNearby) {
+      if (options?.restrictToCircle) {
         body.locationRestriction = { circle };
       } else {
         body.locationBias = { circle };
@@ -4439,52 +4523,100 @@ async function searchGooglePlacesForQuery(
 
     const data = await response.json().catch(() => null) as Record<string, unknown> | null;
     const results = data && Array.isArray(data.places) ? data.places : [];
-    return results
-      .map((entry) => {
-        if (!entry || typeof entry !== 'object') return null;
-        const placeData = entry as Record<string, unknown>;
-        const mapped = mapPlaceV1ToCard(placeData);
-        const placeId = toTrimmedString(mapped.placeId);
-        const fallbackName = toTrimmedString(mapped.name) || toTrimmedString(placeData.formattedAddress) || 'Place';
-        const latitude = typeof mapped.latitude === 'number' ? mapped.latitude : null;
-        const longitude = typeof mapped.longitude === 'number' ? mapped.longitude : null;
-        const defaultMapsUrl = placeId
-          ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackName)}&query_place_id=${encodeURIComponent(placeId)}`
-          : (latitude != null && longitude != null
-              ? `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`
-              : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(fallbackName)}`);
-
-        return {
-          placeId,
-          name: fallbackName,
-          address: toTrimmedString(mapped.address),
-          latitude,
-          longitude,
-          rating: typeof mapped.rating === 'number' ? mapped.rating : null,
-          userRatingCount: typeof mapped.userRatingCount === 'number' ? mapped.userRatingCount : null,
-          websiteUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.websiteUrl)),
-          phone: toTrimmedString(mapped.phone),
-          email: normalizeEmail(mapped.email),
-          openNow: typeof mapped.openNow === 'boolean' ? mapped.openNow : null,
-          businessStatus: toTrimmedString(mapped.businessStatus),
-          reason: '',
-          vibe: '',
-          mustTry: '',
-          editorialSummary: toTrimmedString(mapped.editorialSummary),
-          reviewSnippets: Array.isArray(mapped.reviewSnippets) ? mapped.reviewSnippets : [],
-          mapsUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.mapsUrl)) || defaultMapsUrl,
-          instagramUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.instagramUrl)),
-          facebookUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.facebookUrl)),
-          tiktokUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.tiktokUrl)),
-          whatsappUrl: normalizeLikelyExternalUrl(toTrimmedString(mapped.whatsappUrl)),
-          photoUrl: toTrimmedString(mapped.photoUrl),
-          openingHours: Array.isArray(mapped.openingHours) ? mapped.openingHours : [],
-        } as GroundedPlaceCard;
-      })
-      .filter((place): place is GroundedPlaceCard => Boolean(place && (place.name || place.placeId)));
+    return mapPlacesApiResultsToCards(results);
   } catch {
     return [];
   }
+}
+
+async function searchGooglePlacesNearbyByType(
+  placeType: string,
+  locationContext: { latitude: number; longitude: number },
+  radiusMeters: number
+): Promise<GroundedPlaceCard[]> {
+  if (!GOOGLE_PLACES_API_KEY) return [];
+  if (!placeType) return [];
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4200);
+    const response = await fetch('https://places.googleapis.com/v1/places:searchNearby', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_PLACES_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.googleMapsUri,places.websiteUri,places.internationalPhoneNumber,places.nationalPhoneNumber,places.rating,places.userRatingCount,places.businessStatus,places.currentOpeningHours,places.regularOpeningHours,places.reviews,places.editorialSummary,places.photos',
+      },
+      body: JSON.stringify({
+        includedTypes: [placeType],
+        maxResultCount: 6,
+        rankPreference: 'DISTANCE',
+        locationRestriction: {
+          circle: {
+            center: {
+              latitude: locationContext.latitude,
+              longitude: locationContext.longitude,
+            },
+            radius: radiusMeters,
+          },
+        },
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) {
+      const errText = await response.text().catch(() => '');
+      console.error('❌ PLACES NEARBY SEARCH ERROR:', response.status, errText.slice(0, 300), '| type=', placeType, '| radius=', radiusMeters);
+      return [];
+    }
+
+    const data = await response.json().catch(() => null) as Record<string, unknown> | null;
+    const results = data && Array.isArray(data.places) ? data.places : [];
+    return mapPlacesApiResultsToCards(results);
+  } catch {
+    return [];
+  }
+}
+
+async function searchGooglePlacesForQuery(
+  query: string,
+  locationContext?: { latitude: number; longitude: number } | null,
+  options?: { strictNearby?: boolean }
+): Promise<GroundedPlaceCard[]> {
+  if (!GOOGLE_PLACES_API_KEY) return [];
+  const textQuery = toTrimmedString(query);
+  if (!textQuery) return [];
+
+  if (options?.strictNearby && locationContext?.latitude != null && locationContext?.longitude != null) {
+    const nearbyPlaceType = detectNearbyPlaceType(textQuery);
+    if (nearbyPlaceType) {
+      const nearbyResults = await searchGooglePlacesNearbyByType(
+        nearbyPlaceType,
+        locationContext,
+        STRICT_NEARBY_RADIUS_METERS,
+      );
+      if (nearbyResults.length > 0) {
+        return nearbyResults;
+      }
+    }
+
+    const strictTextResults = await searchGooglePlacesTextQuery(
+      textQuery,
+      locationContext,
+      { radiusMeters: STRICT_NEARBY_RADIUS_METERS, restrictToCircle: true },
+    );
+    if (strictTextResults.length > 0) {
+      return strictTextResults;
+    }
+
+    return await searchGooglePlacesTextQuery(
+      textQuery,
+      locationContext,
+      { radiusMeters: STRICT_NEARBY_TEXT_FALLBACK_RADIUS_METERS, restrictToCircle: false },
+    );
+  }
+
+  return await searchGooglePlacesTextQuery(textQuery, locationContext, { radiusMeters: 30000, restrictToCircle: false });
 }
 
 function extractSocialLinksFromHtml(html: string, baseUrl: string): Partial<GroundedPlaceCard> {
@@ -6050,6 +6182,8 @@ If you are running out of space, keep this order and drop the rest:
               placeQuery: placesSearchQuery,
               mapsGroundingQuery: nearMeMapsGroundingQuery,
               strictNearby: strictNearbySearch,
+              searchRadiusMeters: strictNearbySearch ? STRICT_NEARBY_RADIUS_METERS : 30000,
+              strategy: strictNearbySearch ? 'nearby_type_then_text_fallback' : 'text_search_bias',
               placesCount,
               usedPlacesFirst,
             });

@@ -3110,23 +3110,40 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
       else removeScopedStorageItem(LS_DOCK_COLOR_BASE, user.id);
     }
 
-    const allowLocalBgFallback = homescreenBootstrapSource === 'cache' && !hasRemoteBgState;
-    const localBgImage = allowLocalBgFallback ? getScopedStorageItem(LS_BG_BASE, user.id) : null;
-    const localBgChoice = allowLocalBgFallback ? getScopedStorageItem(LS_BG_CHOICE_BASE, user.id) : null;
-    const localBgPositionRaw = allowLocalBgFallback ? getScopedStorageItem(LS_BG_POS_Y_BASE, user.id) : null;
+    const localBgImage = getScopedStorageItem(LS_BG_BASE, user.id);
+    const localBgChoice = getScopedStorageItem(LS_BG_CHOICE_BASE, user.id);
+    const localBgPositionRaw = getScopedStorageItem(LS_BG_POS_Y_BASE, user.id);
     const parsedLocalBgPosition = localBgPositionRaw === null ? NaN : Number(localBgPositionRaw);
     const localBgPosition = Number.isFinite(parsedLocalBgPosition) ? Math.max(0, Math.min(100, parsedLocalBgPosition)) : 50;
     const localChoice = isBgChoiceValue(localBgChoice) ? localBgChoice : null;
-    const localWallpaper = allowLocalBgFallback && typeof localBgImage === 'string' && !!localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
+    const localWallpaper = typeof localBgImage === 'string' && !!localBgImage && !isDefaultBgAsset(localBgImage) ? localBgImage : '';
     const remoteWallpaper = typeof hs.bgImage === 'string' && !!hs.bgImage && !isDefaultBgAsset(hs.bgImage) ? hs.bgImage : '';
     const remoteChoice = isBgChoiceValue(hs.bgChoice) ? hs.bgChoice : null;
     const inferredChoice: BgChoice = remoteChoice
-      ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : allowLocalBgFallback ? (localChoice ?? (localWallpaper ? 'wallpaper' : 'default')) : 'default');
-    const resolvedChoice: BgChoice = inferredChoice === 'wallpaper' && !(remoteWallpaper || (allowLocalBgFallback && localWallpaper))
+      ?? (remoteWallpaper ? 'wallpaper' : s?.homescreenBg ? 'style' : localChoice ?? (localWallpaper ? 'wallpaper' : 'default'));
+    const resolvedChoice: BgChoice = inferredChoice === 'wallpaper' && !(remoteWallpaper || localWallpaper)
       ? 'default'
       : inferredChoice;
 
     setBgChoiceState(resolvedChoice);
+
+    let localStyleBg: { mode: 'solid'|'gradient'; color1: string; color2: string; color3: string; angle: number; glow: boolean } | null = null;
+    try {
+      const rawLocalStyleBg = getScopedStorageItem(LS_HSBG_BASE, user.id);
+      if (rawLocalStyleBg) {
+        const parsedLocalStyleBg = JSON.parse(rawLocalStyleBg);
+        if (parsedLocalStyleBg && typeof parsedLocalStyleBg === 'object') {
+          localStyleBg = {
+            mode: parsedLocalStyleBg.mode === 'gradient' ? 'gradient' : 'solid',
+            color1: typeof parsedLocalStyleBg.color1 === 'string' ? parsedLocalStyleBg.color1 : '',
+            color2: typeof parsedLocalStyleBg.color2 === 'string' ? parsedLocalStyleBg.color2 : '',
+            color3: typeof parsedLocalStyleBg.color3 === 'string' ? parsedLocalStyleBg.color3 : '',
+            angle: typeof parsedLocalStyleBg.angle === 'number' ? parsedLocalStyleBg.angle : 180,
+            glow: typeof parsedLocalStyleBg.glow === 'boolean' ? parsedLocalStyleBg.glow : false,
+          };
+        }
+      }
+    } catch {}
 
     const remoteBg = s?.homescreenBg
       ? {
@@ -3138,16 +3155,17 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
           angle: typeof s.homescreenBg.angle === 'number' ? s.homescreenBg.angle : 180,
           glow: typeof s.homescreenBg.glow === 'boolean' ? s.homescreenBg.glow : false,
         }
-      : { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false };
+      : (resolvedChoice === 'style' && localStyleBg
+          ? localStyleBg
+          : { mode: 'solid', color1: '', color2: '', color3: '', angle: 180, glow: false });
     const remoteBgJson = JSON.stringify(remoteBg);
     setHsBg(prev => JSON.stringify(prev) === remoteBgJson ? prev : remoteBg);
     if (s?.homescreenBg) localStorage.setItem(LS_HSBG_KEY(), remoteBgJson);
-    else removeScopedStorageItem(LS_HSBG_BASE, user.id);
 
     const nextBgPosition = resolvedChoice === 'wallpaper'
       ? (typeof hs.bgPositionY === 'number'
           ? Math.max(0, Math.min(100, hs.bgPositionY))
-          : allowLocalBgFallback && localChoice === 'wallpaper'
+          : (localChoice === 'wallpaper' || !!localWallpaper)
             ? localBgPosition
             : 50)
       : 50;
@@ -3155,7 +3173,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     setScopedStorageItem(LS_BG_POS_Y_BASE, String(nextBgPosition), user.id);
 
     if (resolvedChoice === 'wallpaper') {
-      const resolvedBgImage = remoteWallpaper || (allowLocalBgFallback && localChoice === 'wallpaper' ? localWallpaper : '');
+      const resolvedBgImage = remoteWallpaper || (localChoice === 'wallpaper' || !!localWallpaper ? localWallpaper : '');
       if (resolvedBgImage) {
         setBgImage(prev => prev === resolvedBgImage ? prev : resolvedBgImage);
         setScopedStorageItem(LS_BG_BASE, resolvedBgImage, user.id);
