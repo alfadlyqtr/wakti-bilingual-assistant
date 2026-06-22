@@ -15,6 +15,7 @@ import { getAllUnreadCounts } from "@/services/messageService";
 import { getMyGroupConversations } from "@/services/groupChatService";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUnreadContext } from "@/contexts/UnreadContext";
 
 const resolveContactsTab = (searchParams: URLSearchParams) => {
   const nextTab = (searchParams.get("tab") || "contacts").toLowerCase();
@@ -125,6 +126,9 @@ export function ContactsContent({
   operatorPayload?: ReturnType<typeof readWaktiOperatorPayload>;
   operatorPayloadId?: string | null;
 }) {
+  const { unreadTotal, groupUnreadCount } = useUnreadContext();
+  const contactsTabBadge = unreadTotal + groupUnreadCount;
+
   // Fetch pending requests count for the badge
   const { data: pendingRequestsCount = 0 } = useQuery({
     queryKey: ['pendingRequestsCount'],
@@ -224,9 +228,9 @@ export function ContactsContent({
           <button type="button" onClick={() => setActiveTab("contacts")} className={`rounded-xl text-xs font-bold transition-all flex gap-1.5 items-center justify-center ${isContactsAreaActive ? 'bg-[hsl(210,100%,55%)] text-white shadow-none' : 'text-foreground/50'}`}>
             <Contact className="h-3.5 w-3.5" />
             <span>{language === 'ar' ? 'الأصدقاء' : t("contacts", language)}</span>
-            {totalUnread > 0 && (
+            {contactsTabBadge > 0 && (
               <span className="bg-red-500 text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-0.5 flex items-center justify-center">
-                {totalUnread > 99 ? '99+' : totalUnread}
+                {contactsTabBadge > 99 ? '99+' : contactsTabBadge}
               </span>
             )}
           </button>

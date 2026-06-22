@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, Images } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
+import { useUnreadContext } from "@/contexts/UnreadContext";
 import { ContactsContent } from "@/pages/Contacts";
 import { MyGallery } from "@/components/social/MyGallery";
 import { emitEvent } from "@/utils/eventBus";
@@ -54,6 +55,8 @@ const resolveSocialView = (searchParams: URLSearchParams) => {
 
 export default function Social() {
   const { language } = useTheme();
+  const { unreadTotal, contactCount, groupUnreadCount } = useUnreadContext();
+  const socialBadge = unreadTotal + contactCount + groupUnreadCount;
   const [searchParams, setSearchParams] = useSearchParams();
   const operatorPayloadId = searchParams.get("waktiOperator");
   const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
@@ -180,9 +183,14 @@ export default function Social() {
     <div dir={language === "ar" ? "rtl" : "ltr"} className="flex flex-col px-2.5 sm:px-4 pb-24 pt-4">
       <Tabs value={activeSection} onValueChange={handleSectionChange}>
         <TabsList className="w-full grid grid-cols-2 mb-4 min-h-12 rounded-2xl bg-black/5 dark:bg-white/5 p-1.5 border-0">
-          <TabsTrigger value="contacts" className="rounded-xl text-sm font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all py-2.5 flex items-center gap-2">
+          <TabsTrigger value="contacts" className="rounded-xl text-sm font-bold text-foreground/50 data-[state=active]:bg-[hsl(210,100%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all py-2.5 flex items-center gap-2 relative">
             <Users className="h-4 w-4" />
             <span>{language === "ar" ? "التواصل" : "Social"}</span>
+            {socialBadge > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full h-4 min-w-4 px-0.5 flex items-center justify-center">
+                {socialBadge > 99 ? '99+' : socialBadge}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="gallery" className="rounded-xl text-sm font-bold text-foreground/50 data-[state=active]:bg-[hsl(25,95%,55%)] data-[state=active]:text-white data-[state=active]:shadow-none transition-all py-2.5 flex items-center gap-2">
             <Images className="h-4 w-4" />

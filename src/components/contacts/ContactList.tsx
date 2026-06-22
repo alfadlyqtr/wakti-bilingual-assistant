@@ -515,7 +515,7 @@ export function ContactList({
                 return (
                   <div
                     key={contact.id}
-                    className={`relative flex items-center justify-between gap-2 px-3.5 py-2.5 rounded-xl border border-[#d9dee9] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,240,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)] select-none transition-transform duration-150 ${pressedContactId === contact.id ? 'scale-[1.03]' : ''}`}
+                    className={`relative flex items-center justify-between gap-1.5 px-3.5 py-2.5 rounded-xl border border-[#d9dee9] dark:border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(247,244,240,0.98))] dark:bg-[linear-gradient(180deg,rgba(20,24,34,0.98),rgba(15,18,27,0.98))] shadow-[inset_0_1px_0_rgba(255,255,255,0.98),inset_0_12px_24px_rgba(255,255,255,0.16),inset_0_-10px_24px_rgba(148,163,184,0.05),0_10px_24px_rgba(15,23,42,0.04)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),inset_0_-14px_28px_rgba(0,0,0,0.24)] select-none transition-transform duration-150 ${pressedContactId === contact.id ? 'scale-[1.03]' : ''}`}
                     onMouseDown={(e) => handleLongPressStart(contact, e)}
                     onMouseUp={handleLongPressEnd}
                     onMouseLeave={handleLongPressEnd}
@@ -534,7 +534,7 @@ export function ContactList({
                       </button>
                     )}
 
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
                       <div className={`relative shrink-0 rounded-full ${unreadCount > 0 ? 'ring-2 ring-blue-500 ring-offset-1 ring-offset-background' : ''}`}>
                         <Avatar className="h-10 w-10">
                           {shouldShowAvatar(contact.contact_id, avatarUrl) ? (
@@ -562,11 +562,11 @@ export function ContactList({
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0">
                       <button
                         onClick={() => handleOpenChat(contact.contact_id, displayName, avatarUrl)}
                         aria-label="Chat"
-                        className={`relative h-8 px-2.5 rounded-xl inline-flex items-center gap-1.5 active:scale-90 transition-transform ${unreadCount > 0 ? 'bg-blue-500' : 'bg-blue-500/20 dark:bg-blue-500/15'}`}
+                        className={`relative h-8 px-4 rounded-xl inline-flex items-center gap-1.5 active:scale-90 transition-transform ${unreadCount > 0 ? 'bg-blue-500' : 'bg-blue-500/20 dark:bg-blue-500/15'}`}
                         style={unreadCount > 0 ? { boxShadow: '0 0 15px rgba(59, 130, 246, 0.6), 0 0 30px rgba(59, 130, 246, 0.3)' } : undefined}
                       >
                         <MessageSquare className={`h-4 w-4 ${unreadCount > 0 ? 'text-white' : 'text-blue-500 dark:text-blue-400'}`} />
@@ -580,14 +580,14 @@ export function ContactList({
                         )}
                       </button>
                       {!isSupport && (
-                        <>
-                          <button onClick={() => navigate(`/gallery/${contact.contact_id}`)} aria-label="Gallery" className="w-8 h-8 rounded-xl bg-orange-500/20 dark:bg-orange-500/15 flex items-center justify-center active:scale-90 transition-transform">
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => navigate(`/gallery/${contact.contact_id}`)} aria-label="Gallery" className="w-9 h-9 rounded-xl bg-orange-500/20 dark:bg-orange-500/15 flex items-center justify-center active:scale-90 transition-transform">
                             <Images className="h-4 w-4 text-orange-500 dark:text-orange-400" />
                           </button>
-                          <button onClick={() => navigate(`/wishlists?contact=${contact.contact_id}`)} aria-label="Wishlist" className="w-8 h-8 rounded-xl bg-pink-500/20 dark:bg-pink-500/15 flex items-center justify-center active:scale-90 transition-transform">
+                          <button onClick={() => navigate(`/wishlists?contact=${contact.contact_id}`)} aria-label="Wishlist" className="w-9 h-9 rounded-xl bg-pink-500/20 dark:bg-pink-500/15 flex items-center justify-center active:scale-90 transition-transform">
                             <Gift className="h-4 w-4 text-pink-500 dark:text-pink-400" />
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   </div>

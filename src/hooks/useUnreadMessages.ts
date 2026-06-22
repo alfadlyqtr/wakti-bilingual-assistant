@@ -248,6 +248,7 @@ export function useUnreadMessages() {
     let maw3dChannel: any;
     let sharedTaskChannel: any;
     let groupMessagesChannel: any;
+    let pollingInterval: ReturnType<typeof setInterval> | null = null;
 
     const setup = async () => {
       try {
@@ -272,31 +273,26 @@ export function useUnreadMessages() {
           messagesChannel = supabase
             .channel(`unread-messages:${user.id}`)
             .on('postgres_changes', {
-              event: 'INSERT',
+              event: '*',
               schema: 'public',
               table: 'messages',
               filter: `recipient_id=eq.${user.id}`
             }, async (payload) => {
-              console.log('📨 New message received:', payload);
-              
-              // Show notification
-              await waktiToast.show({
-                id: `message-${payload.new.id}`,
-                type: 'message',
-                title: 'New Message',
-                message: 'You have received a new message',
-                priority: 'normal',
-                sound: 'chime'
-              });
-              
-              scheduleGlobalUnreadFetch(user.id, DEV);
-            })
-            .on('postgres_changes', {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'messages',
-              filter: `recipient_id=eq.${user.id}`
-            }, () => {
+              console.log('📨 Message change received:', payload);
+
+              if (payload.eventType === 'INSERT') {
+                try {
+                  await waktiToast.show({
+                    id: `message-${payload.new.id}`,
+                    type: 'message',
+                    title: 'New Message',
+                    message: 'You have received a new message',
+                    priority: 'normal',
+                    sound: 'chime'
+                  });
+                } catch {}
+              }
+
               scheduleGlobalUnreadFetch(user.id, DEV);
             })
             .subscribe();
@@ -316,16 +312,18 @@ export function useUnreadMessages() {
               console.log('👥 New contact request:', payload);
               
               if (payload.new.status === 'pending') {
-                await waktiToast.show({
-                  id: `contact-${payload.new.id}`,
-                  type: 'contact',
-                  title: 'Contact Request',
-                  message: 'Someone wants to connect with you',
-                  priority: 'normal',
-                  sound: 'ding'
-                });
+                try {
+                  await waktiToast.show({
+                    id: `contact-${payload.new.id}`,
+                    type: 'contact',
+                    title: 'Contact Request',
+                    message: 'Someone wants to connect with you',
+                    priority: 'normal',
+                    sound: 'ding'
+                  });
+                } catch {}
               }
-              
+
               scheduleGlobalUnreadFetch(user.id, DEV);
             })
             .subscribe();
@@ -351,15 +349,17 @@ export function useUnreadMessages() {
                 .single();
                 
               if (event?.created_by === user.id) {
-                await waktiToast.show({
-                  id: `rsvp-${payload.new.id}`,
-                  type: 'event',
-                  title: 'RSVP Response',
-                  message: `${payload.new.guest_name} responded to ${event.title}`,
-                  priority: 'normal',
-                  sound: 'beep'
-                });
-                
+                try {
+                  await waktiToast.show({
+                    id: `rsvp-${payload.new.id}`,
+                    type: 'event',
+                    title: 'RSVP Response',
+                    message: `${payload.new.guest_name} responded to ${event.title}`,
+                    priority: 'normal',
+                    sound: 'beep'
+                  });
+                } catch {}
+
                 scheduleGlobalUnreadFetch(user.id, DEV);
               }
             })
@@ -393,15 +393,17 @@ export function useUnreadMessages() {
                   message = `${payload.new.visitor_name} commented on: ${task.title}`;
                 }
                 
-                await waktiToast.show({
-                  id: `task-${payload.new.id}`,
-                  type: 'shared_task',
-                  title: 'Task Update',
-                  message,
-                  priority: 'normal',
-                  sound: 'chime'
-                });
-                
+                try {
+                  await waktiToast.show({
+                    id: `task-${payload.new.id}`,
+                    type: 'shared_task',
+                    title: 'Task Update',
+                    message,
+                    priority: 'normal',
+                    sound: 'chime'
+                  });
+                } catch {}
+
                 scheduleGlobalUnreadFetch(user.id, DEV);
               }
             })
@@ -424,6 +426,11 @@ export function useUnreadMessages() {
         } catch (e) {
           console.warn('⚠️ Failed to subscribe to group messages channel (non-fatal):', e);
         }
+
+        // Polling fallback: refresh every 6 seconds in case WebSocket drops (iOS WebView)
+        pollingInterval = setInterval(() => {
+          scheduleGlobalUnreadFetch(user.id, DEV, true);
+        }, 6000);
       } catch (error) {
         console.error('❌ Error setting up unread message tracking:', error);
       }
@@ -431,6 +438,7 @@ export function useUnreadMessages() {
 
     const cleanup = () => {
       if (globalFetchTimeout) clearTimeout(globalFetchTimeout);
+      if (pollingInterval) clearInterval(pollingInterval);
       if (messagesChannel) supabase.removeChannel(messagesChannel);
       if (contactsChannel) supabase.removeChannel(contactsChannel);
       if (maw3dChannel) supabase.removeChannel(maw3dChannel);

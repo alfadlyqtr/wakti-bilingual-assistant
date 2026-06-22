@@ -499,11 +499,10 @@ export async function renameGroupConversation(conversationId: string, newName: s
   if (!trimmed) throw new Error("Group name is required");
   if (trimmed.length > 80) throw new Error("Group name is too long");
   await ensurePassport();
-  const { error } = await (supabase as any)
-    .from("conversations")
-    .update({ name: trimmed, updated_at: new Date().toISOString() })
-    .eq("id", conversationId)
-    .eq("created_by", userId);
+  const { error } = await (supabase as any).rpc("rename_group_conversation", {
+    group_conversation_id: conversationId,
+    new_name: trimmed,
+  });
   if (error) throw error;
 }
 
@@ -511,11 +510,10 @@ export async function updateGroupAvatar(conversationId: string, avatarUrl: strin
   const userId = await getCurrentUserId();
   if (!userId) throw new Error("User not authenticated");
   await ensurePassport();
-  const { error } = await (supabase as any)
-    .from("conversations")
-    .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
-    .eq("id", conversationId)
-    .eq("created_by", userId);
+  const { error } = await (supabase as any).rpc("update_group_avatar", {
+    group_conversation_id: conversationId,
+    avatar_url: avatarUrl,
+  });
   if (error) throw error;
 }
 
