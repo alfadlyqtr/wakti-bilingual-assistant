@@ -33,6 +33,46 @@ const toDataUrl = (file: File): Promise<string> =>
     reader.readAsDataURL(file);
   });
 
+const MAX_REFERENCE_IMAGE_DIMENSION = 1536;
+const REFERENCE_IMAGE_JPEG_QUALITY = 0.86;
+
+const optimizeReferenceImageForGeneration = async (file: File): Promise<string> => {
+  if (typeof createImageBitmap !== 'function') {
+    return toDataUrl(file);
+  }
+
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions);
+    const largestSide = Math.max(bitmap.width, bitmap.height);
+    const scale = largestSide > MAX_REFERENCE_IMAGE_DIMENSION
+      ? MAX_REFERENCE_IMAGE_DIMENSION / largestSide
+      : 1;
+
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      if (typeof bitmap.close === 'function') bitmap.close();
+      return toDataUrl(file);
+    }
+
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    if (typeof bitmap.close === 'function') bitmap.close();
+
+    const outputMime = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+    return outputMime === 'image/jpeg'
+      ? canvas.toDataURL(outputMime, REFERENCE_IMAGE_JPEG_QUALITY)
+      : canvas.toDataURL(outputMime);
+  } catch {
+    return toDataUrl(file);
+  }
+};
+
 const normalizeUrl = (url: string) => (url || '').replace(/%20/g, ' ').trim();
 
 const resolveImageTargetFromPrompt = (value: string): ProjectImageTarget => {
@@ -114,7 +154,7 @@ export function ProjectImageGeneratorPanel({
     }
 
     try {
-      const dataUrl = await toDataUrl(file);
+      const dataUrl = await optimizeReferenceImageForGeneration(file);
       setReferenceFile(file);
       setReferenceDataUrl(dataUrl);
     } catch (err: any) {
@@ -227,23 +267,35 @@ export function ProjectImageGeneratorPanel({
 
     setIsGenerating(true);
     try {
+      const { data: authData } = await supabase.auth.getUser();
+      const user = authData?.user;
+      if (!user) {
+        throw new Error(isRTL ? 'يرجى تسجيل الدخول أولاً' : 'Please log in first');
+      }
+
       const userPrompt = prompt.trim();
       const resolvedTarget = resolveImageTargetFromPrompt(userPrompt);
       const projectContextHint = buildImageTargetHint(resolvedTarget, userPrompt, isRTL);
       const generationPrompt = `${userPrompt}\n\n${projectContextHint}`.trim();
 
-      const body: Record<string, unknown> = {
-        prompt: generationPrompt,
-        quality: 'best_fast',
-        aspect_ratio: aspectRatio,
-        model: 'nano-banana-2',
-        project_context: resolvedTarget,
-      };
-
       const functionName = submode === 'image2image' ? 'wakti-image2image' : 'wakti-text2image';
-      if (submode === 'image2image') {
-        body.image = referenceDataUrl;
-      }
+      const body: Record<string, unknown> = submode === 'image2image'
+        ? {
+          user_prompt: generationPrompt,
+          user_id: user.id,
+          image: referenceDataUrl,
+          quality: 'best_fast',
+          aspect_ratio: aspectRatio,
+          project_context: resolvedTarget,
+        }
+        : {
+          prompt: generationPrompt,
+          user_id: user.id,
+          quality: 'best_fast',
+          aspect_ratio: aspectRatio,
+          model: 'nano-banana-2',
+          project_context: resolvedTarget,
+        };
 
       const { data, error } = await supabase.functions.invoke(functionName, { body });
       if (error) {
@@ -366,8 +418,8 @@ export function ProjectImageGeneratorPanel({
               <input type="file" accept="image/*" className="hidden" onChange={handleReferencePick} />
             </label>
           ) : (
-            <div className="rounded-md border border-border p-2">
-              <div className="relative aspect-[4/3] overflow-hidden rounded-md bg-muted/30">
+            <div className={cn('rounded-md border border-border p-2 w-full max-w-[260px]', isRTL && 'ml-auto')}>
+              <div className="relative h-40 w-full overflow-hidden rounded-md bg-muted/30">
                 <img src={referenceDataUrl} alt="Reference" className="h-full w-full object-contain" />
                 <button
                   type="button"
