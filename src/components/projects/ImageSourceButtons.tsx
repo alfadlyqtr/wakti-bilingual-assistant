@@ -1,10 +1,10 @@
 import React from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Image, FolderOpen, Wand2 } from 'lucide-react';
+import { FolderOpen, Wand2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type ImageSourceChoice = 'stock' | 'uploads' | 'generate' | 'urls';
+export type ImageSourceChoice = 'uploads' | 'generate' | 'urls';
 
 interface ImageSourceButtonsProps {
   onSelect: (choice: ImageSourceChoice) => void;
@@ -23,13 +23,6 @@ export function ImageSourceButtons({ onSelect, prompt }: ImageSourceButtonsProps
     title: string;
     titleAr: string;
   }[] = [
-    {
-      id: 'stock',
-      icon: <Image className="w-4 h-4" />,
-      emoji: '📷',
-      title: 'Pick from Stock',
-      titleAr: 'من المخزون',
-    },
     {
       id: 'uploads',
       icon: <FolderOpen className="w-4 h-4" />,

@@ -33,7 +33,7 @@ auto-injected when the user's request matches.
 
 | Capability      | When to use                                                           |
 |-----------------|-----------------------------------------------------------------------|
-| stock_images    | ANY image (hero, section, gallery). Uses Freepik API.                 |
+| stock_images    | ANY image (hero, section, gallery). Uses Nano Banana generated assets. |
 | forms           | Contact, quote, newsletter, feedback, waitlist forms.                 |
 | booking         | Appointments, scheduling, services (barber, salon, spa, clinic).      |
 | ecommerce       | Shop, store, products, cart.                                          |
@@ -119,7 +119,7 @@ const RULES: DetectionRule[] = [
   {
     capability: "stock_images",
     keywords: [
-      // Default-on for most site types; keep broad so nearly every project gets it.
+      // Default-on for most site types; keep broad so nearly every project gets image guidance.
       /\b(landing|website|portfolio|hero|gallery|images?|photos?|showcase|restaurant|cafe|hotel|fitness|gym|about|team|agency|studio|business|brand)\b/i,
     ],
   },

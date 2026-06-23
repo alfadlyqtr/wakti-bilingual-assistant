@@ -1,22 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   Upload, 
-  Search, 
   Image as ImageIcon,
   X,
   Check,
   Loader2,
-  Download,
-  ExternalLink,
   Plus,
   RefreshCw,
-  Sparkles,
-  Grid3X3,
-  LayoutList,
   Eye,
   Trash2,
   Copy
@@ -24,7 +17,6 @@ import {
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { FreepikService, FreepikResource } from '@/services/FreepikService';
 
 interface SiteImage {
   src: string;
@@ -46,7 +38,7 @@ interface SmartMediaManagerProps {
   generatedFiles?: Record<string, string>;
   onInsertImage: (imageUrl: string, imageAlt: string) => void;
   onClose: () => void;
-  initialTab?: 'site' | 'stock' | 'upload';
+  initialTab?: 'site' | 'upload';
   isRTL?: boolean;
 }
 
@@ -61,18 +53,11 @@ export function SmartMediaManager({
   const { language } = useTheme();
   const isRTLMode = isRTL || language === 'ar';
   
-  const [activeTab, setActiveTab] = useState<'site' | 'stock' | 'upload'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'site' | 'upload'>(initialTab);
   
   // Site Images State
   const [siteImages, setSiteImages] = useState<SiteImage[]>([]);
   const [loadingSiteImages, setLoadingSiteImages] = useState(true);
-  
-  // Stock Photos State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [stockPhotos, setStockPhotos] = useState<FreepikResource[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [stockPage, setStockPage] = useState(1);
-  const [stockTotalPages, setStockTotalPages] = useState(1);
   
   // Upload State
   const [backendImages, setBackendImages] = useState<BackendImage[]>([]);
@@ -83,8 +68,6 @@ export function SmartMediaManager({
   
   // Selection State - support multiple selection
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [isDownloadingStock, setIsDownloadingStock] = useState(false);
 
   // Extract images from generated files on mount
   useEffect(() => {
@@ -192,8 +175,7 @@ export function SmartMediaManager({
             alt_text: img.alt,
             location: img.location,
             file_path: img.file,
-            source: img.src.includes('placehold.co') ? 'placeholder' :
-                   img.src.includes('freepik.com') ? 'freepik' : 'site'
+            source: img.src.includes('placehold.co') ? 'placeholder' : 'site'
           }))
         );
 
@@ -257,36 +239,6 @@ export function SmartMediaManager({
       console.error('Error loading backend images:', err);
     } finally {
       setLoadingBackend(false);
-    }
-  };
-
-  // Search Freepik stock photos
-  const handleStockSearch = async (page: number = 1) => {
-    if (!searchQuery.trim()) return;
-    
-    setIsSearching(true);
-    try {
-      const result = await FreepikService.searchImages(
-        searchQuery,
-        { content_type: { photo: 1 } },
-        page,
-        12,
-        isRTLMode ? 'ar-SA' : 'en-US',
-        projectId
-      );
-
-      if (result.success && result.data) {
-        setStockPhotos(result.data.data || []);
-        setStockTotalPages(result.data.meta?.last_page || 1);
-        setStockPage(page);
-      } else {
-        toast.error(result.error || (isRTLMode ? 'فشل البحث عن الصور' : 'Failed to search photos'));
-      }
-    } catch (err) {
-      console.error('Stock search error:', err);
-      toast.error(isRTLMode ? 'حدث خطأ' : 'An error occurred');
-    } finally {
-      setIsSearching(false);
     }
   };
 
@@ -364,15 +316,6 @@ export function SmartMediaManager({
     toast.success(isRTLMode ? 'تم نسخ الرابط' : 'URL copied!');
   };
 
-  // Suggested search terms based on site content
-  const suggestedSearches = [
-    { en: 'business team', ar: 'فريق عمل' },
-    { en: 'modern office', ar: 'مكتب حديث' },
-    { en: 'professional service', ar: 'خدمة احترافية' },
-    { en: 'happy customers', ar: 'عملاء سعداء' },
-    { en: 'technology', ar: 'تكنولوجيا' },
-  ];
-
   return (
     <div className="w-full max-w-2xl mx-auto bg-card border border-border rounded-2xl shadow-lg overflow-hidden" dir={isRTLMode ? 'rtl' : 'ltr'}>
       {/* Header */}
@@ -408,10 +351,6 @@ export function SmartMediaManager({
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="stock" className="flex-1 text-xs gap-1.5">
-              <Search className="h-3.5 w-3.5" />
-              {isRTLMode ? 'صور مجانية' : 'Stock Photos'}
-            </TabsTrigger>
             <TabsTrigger value="upload" className="flex-1 text-xs gap-1.5">
               <Upload className="h-3.5 w-3.5" />
               {isRTLMode ? 'رفع' : 'Upload'}
@@ -437,7 +376,7 @@ export function SmartMediaManager({
                 {isRTLMode ? 'لا توجد صور في الموقع حالياً' : 'No images found on the site yet'}
               </p>
               <p className="text-xs text-muted-foreground/70 mt-1">
-                {isRTLMode ? 'ابحث عن صور مجانية أو ارفع صورك' : 'Search stock photos or upload your own'}
+                {isRTLMode ? 'استخدم الصور المولدة أو ارفع صورك' : 'Use generated images or upload your own'}
               </p>
             </div>
           ) : (
@@ -493,132 +432,6 @@ export function SmartMediaManager({
               </div>
             </div>
           )}
-        </TabsContent>
-
-        {/* Stock Photos Tab */}
-        <TabsContent value="stock" className="p-4 pt-3 min-h-[300px] max-h-[400px] overflow-y-auto">
-          <div className="space-y-3">
-            {/* Search */}
-            <div className="flex gap-2">
-              <Input
-                placeholder={isRTLMode ? 'ابحث عن صور...' : 'Search photos...'}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleStockSearch(1)}
-                className="h-9 text-sm"
-              />
-              <Button 
-                onClick={() => handleStockSearch(1)} 
-                disabled={isSearching}
-                size="sm"
-                className="h-9 px-3"
-              >
-                {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              </Button>
-            </div>
-
-            {/* Suggested Searches */}
-            {stockPhotos.length === 0 && !isSearching && (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground">
-                  {isRTLMode ? 'اقتراحات:' : 'Suggestions:'}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedSearches.map((term, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        setSearchQuery(isRTLMode ? term.ar : term.en);
-                        handleStockSearch(1);
-                      }}
-                      className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 rounded-full transition-colors"
-                    >
-                      {isRTLMode ? term.ar : term.en}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Results */}
-            {isSearching ? (
-              <div className="flex items-center justify-center h-40">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : stockPhotos.length > 0 ? (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  {stockPhotos.map((photo) => {
-                    const photoUrl = photo.image?.source?.url || '';
-                    return (
-                      <div 
-                        key={photo.id}
-                        className={cn(
-                          "group relative rounded-lg overflow-hidden border transition-all cursor-pointer",
-                          selectedImages.includes(photoUrl) 
-                            ? "ring-2 ring-primary border-primary" 
-                            : "border-border hover:border-primary/50"
-                        )}
-                        onClick={() => {
-                          if (!photoUrl) return;
-                          setSelectedImages(prev => 
-                            prev.includes(photoUrl) 
-                              ? prev.filter(url => url !== photoUrl)
-                              : [...prev, photoUrl]
-                          );
-                        }}
-                      >
-                        <div className="aspect-video bg-muted">
-                          <img 
-                            src={photoUrl} 
-                            alt={photo.title}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        </div>
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-2">
-                          <p className="text-[10px] text-white font-medium truncate">{photo.title}</p>
-                          <p className="text-[9px] text-white/70">Freepik</p>
-                        </div>
-                        {selectedImages.includes(photoUrl) && (
-                          <div className="absolute top-2 right-2 p-1 rounded-full bg-primary">
-                            <Check className="h-3 w-3 text-white" />
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Pagination */}
-                {stockTotalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 pt-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={stockPage <= 1}
-                      onClick={() => handleStockSearch(stockPage - 1)}
-                      className="h-7 text-xs"
-                    >
-                      {isRTLMode ? 'السابق' : 'Prev'}
-                    </Button>
-                    <span className="text-xs text-muted-foreground">
-                      {stockPage} / {stockTotalPages}
-                    </span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={stockPage >= stockTotalPages}
-                      onClick={() => handleStockSearch(stockPage + 1)}
-                      className="h-7 text-xs"
-                    >
-                      {isRTLMode ? 'التالي' : 'Next'}
-                    </Button>
-                  </div>
-                )}
-              </>
-            ) : null}
-          </div>
         </TabsContent>
 
         {/* Upload Tab */}
@@ -755,7 +568,7 @@ export function SmartMediaManager({
           )}
           <Button
             size="sm"
-            disabled={selectedImages.length === 0 || isDownloadingStock}
+            disabled={selectedImages.length === 0}
             onClick={async () => {
               if (selectedImages.length > 0) {
                 // Insert all selected images
@@ -768,11 +581,7 @@ export function SmartMediaManager({
             }}
             className="text-xs bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
           >
-            {isDownloadingStock ? (
-              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-            ) : (
-              <Plus className="h-3 w-3 mr-1" />
-            )}
+            <Plus className="h-3 w-3 mr-1" />
             {isRTLMode ? `إدراج (${selectedImages.length})` : `Insert (${selectedImages.length})`}
           </Button>
         </div>

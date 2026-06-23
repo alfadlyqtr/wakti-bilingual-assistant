@@ -129,7 +129,6 @@ import {
   getModalType,
   getResponse
 } from '@/utils/IntentManager';
-import { FreepikService } from '@/services/FreepikService';
 
 type AgentExecutionMode = 'surgical_edit' | 'design_rebuild';
 
@@ -334,7 +333,7 @@ export default function ProjectDetail() {
   // Stock photo selector state
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
-  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'stock' | 'user' | 'saved'>('stock');
+  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'user' | 'saved'>('saved');
   const [photoSelectorMultiSelect, setPhotoSelectorMultiSelect] = useState(false);
   const [isChangingCarouselImages, setIsChangingCarouselImages] = useState(false);
   const [savedPromptForPhotos, setSavedPromptForPhotos] = useState('');
@@ -359,7 +358,7 @@ export default function ProjectDetail() {
   const [showAuthWizard, setShowAuthWizard] = useState(false);
   const [showMediaWizard, setShowMediaWizard] = useState(false);
   const [showSmartMediaManager, setShowSmartMediaManager] = useState(false);
-  const [smartMediaInitialTab, setSmartMediaInitialTab] = useState<'site' | 'stock' | 'upload'>('site');
+  const [smartMediaInitialTab, setSmartMediaInitialTab] = useState<'site' | 'upload'>('site');
   const [showProductFormCard, setShowProductFormCard] = useState(false);
   const [activeProductCardId, setActiveProductCardId] = useState<string | null>(null);
   const [pendingFormPrompt, setPendingFormPrompt] = useState('');
@@ -3912,14 +3911,13 @@ ${fixInstructions}
       });
   };
   
-  // Open stock photo selector - always starts fresh (empty search)
-  // Now also saves the current prompt so it can be restored after photo selection
-  const openStockPhotoSelector = (initialTab: 'stock' | 'user' = 'stock', multiSelect: boolean = true, promptToSave?: string, options?: { showOnlyUserPhotos?: boolean }) => {
+  // Open photo selector (saved generated images + user uploads)
+  const openStockPhotoSelector = (initialTab: 'user' | 'saved' = 'saved', multiSelect: boolean = true, promptToSave?: string, options?: { showOnlyUserPhotos?: boolean }) => {
     // Save the prompt if provided (from handleChatSubmit when photo request detected)
     if (promptToSave) {
       setSavedPromptForPhotos(promptToSave);
     }
-    setPhotoSearchTerm(''); // Always empty - user types their own search
+    setPhotoSearchTerm('');
     setPhotoSelectorInitialTab(initialTab);
     setPhotoSelectorMultiSelect(multiSelect);
     setPhotoSelectorShowOnlyUserPhotos(options?.showOnlyUserPhotos ?? false);
@@ -3936,11 +3934,6 @@ ${fixInstructions}
     setPendingImagePrompt('');
     
     switch (choice) {
-      case 'stock':
-        // Open stock photo selector
-        openStockPhotoSelector('stock', true, prompt);
-        break;
-        
       case 'uploads':
         // Open user uploads tab
         openStockPhotoSelector('user', true, prompt, { showOnlyUserPhotos: true });
@@ -4435,7 +4428,8 @@ ${fixInstructions}
         if (requiresModal(intentResult)) {
           const modalType = getModalType(intentResult);
           if (modalType === 'SmartMediaManager') {
-            setSmartMediaInitialTab(intentResult.payload.modalProps?.initialTab || 'site');
+            const requestedTab = intentResult.payload.modalProps?.initialTab;
+            setSmartMediaInitialTab(requestedTab === 'upload' ? 'upload' : 'site');
             setShowSmartMediaManager(true);
           }
         }
@@ -4751,7 +4745,7 @@ ${fixInstructions}
       // 🎯 SMART MEDIA DETECTION - Show images, don't try to edit code
       const showGalleryPattern = /\b(show|see|view|what|which|list)\s*(all\s*)?(the\s*)?(images?|photos?|pictures?|gallery)\b/i;
       const galleryAltPattern = /\b(images?|photos?|pictures?|gallery)\s*(on|in|of)\s*(the|this)?\s*(site|page|website)\b/i;
-      const stockPhotoPattern = /\b(search|find|browse|get|freepik|stock)\s*(images?|photos?|pictures?)\b/i;
+      const stockPhotoPattern = /\b(search|find|browse|get|stock|freepik)\s*(images?|photos?|pictures?)\b/i;
       
       // Intent 3: User wants to upload → Show SmartMediaManager with "upload" tab
       const uploadPatterns = /\b(upload|add\s*my|my\s*own)\s*(images?|photos?|pictures?|files?)/i;
@@ -4764,11 +4758,11 @@ ${fixInstructions}
       const isUploadRequest = uploadPatterns.test(userMessage);
       const isBuildUploadComponent = buildUploadComponent.test(userMessage);
 
-      // Show SmartMediaManager for gallery/stock/upload requests (NOT the old wizard)
+      // Show SmartMediaManager for gallery/image/upload requests (NOT the old wizard)
       if (isGalleryQuery || isStockSearch || isUploadRequest) {
         // Determine which tab to open
-        let initialTab: 'site' | 'stock' | 'upload' = 'site';
-        if (isStockSearch) initialTab = 'stock';
+        let initialTab: 'site' | 'upload' = 'site';
+        if (isStockSearch) initialTab = 'upload';
         else if (isUploadRequest) initialTab = 'upload';
         
         setSmartMediaInitialTab(initialTab);
@@ -4786,12 +4780,12 @@ ${fixInstructions}
           ? isGalleryQuery
             ? `🖼️ **إليك جميع الصور في موقعك!**\n\nيمكنك:\n• عرض الصور\n• تحميل الصور\n• نسخ روابط الصور`
             : isStockSearch
-            ? `🔍 **جاري البحث عن صور مجانية...**\n\nيمكنك:\n• البحث عن صور Freepik\n• معاينة النتائج\n• إدراج الصور في موقعك`
+            ? `🧠 **الصور الجاهزة تمت إزالتها.**\n\nيمكنك الآن:\n• اختيار الصور المولّدة المحفوظة\n• استخدام صورك المرفوعة\n• إنشاء صور جديدة بالذكاء الاصطناعي`
             : `⬆️ **جاهز لرفع الصور!**\n\nيمكنك:\n• رفع الصور من جهازك\n• عرض الصور المرفوعة\n• إدارة الصور المرفوعة`
           : isGalleryQuery
             ? `🖼️ **Here are all images on your site!**\n\nYou can:\n• View all images\n• Download images\n• Copy image URLs`
             : isStockSearch
-            ? `🔍 **Searching free stock photos...**\n\nYou can:\n• Search Freepik photos\n• Preview results\n• Insert into your site`
+            ? `🧠 **Stock photos are removed.**\n\nYou can now:\n• Pick from saved generated images\n• Use your uploaded photos\n• Generate new images with AI`
             : `⬆️ **Ready to upload!**\n\nYou can:\n• Upload from your device\n• View uploaded images\n• Manage your uploads`;
         
         setChatMessages(prev => [...prev, {
@@ -5027,9 +5021,13 @@ ${fixInstructions}
       
       if (myPhotosRegex.test(userMessage)) {
         try {
-          const { success, count } = await FreepikService.checkUserUploads(user?.id || '');
+          const { count, error } = await supabase
+            .from('project_uploads')
+            .select('id', { count: 'exact', head: true })
+            .eq('project_id', id)
+            .eq('user_id', user?.id || '');
           
-          if (success && count > 0) {
+          if (!error && (count || 0) > 0) {
             openStockPhotoSelector('user', true, userMessage);
             return;
           } else {
@@ -8090,7 +8088,7 @@ ${fixInstructions}
                                 return;
                               } else if (prompt.includes('Change the images') || prompt.includes('غير الصور')) {
                                 setIsChangingCarouselImages(true);
-                                openStockPhotoSelector('stock', true);
+                                openStockPhotoSelector('saved', true);
                               } else {
                                 // 🎯 Auto-switch to Code mode and execute immediately
                                 setLeftPanelMode('code');
@@ -9003,7 +9001,7 @@ ${fixInstructions}
               setPendingElementImageEdit({ elementInfo: selectedElementInfo, originalPrompt: 'Replace image' });
               setPhotoSelectorMultiSelect(false);
             }
-            setPhotoSelectorInitialTab('stock');
+            setPhotoSelectorInitialTab('saved');
             setShowStockPhotoSelector(true);
             setShowElementEditPopover(false);
           }}
@@ -9196,7 +9194,7 @@ ${fixInstructions}
               setPhotoSelectorMultiSelect(false);
             }
             
-            setPhotoSelectorInitialTab('stock');
+            setPhotoSelectorInitialTab('saved');
             setShowStockPhotoSelector(true);
             setShowElementEditPopover(false);
             // Don't clear selectedElementInfo - we need it for the image replacement
@@ -9237,7 +9235,7 @@ ${fixInstructions}
             if (isMultiImageContext && wantsMultiFromPrompt) {
               setIsChangingCarouselImages(true);
               setPhotoSearchTerm(''); // Start fresh - user searches manually
-              setPhotoSelectorInitialTab('stock');
+              setPhotoSelectorInitialTab('saved');
               setPhotoSelectorMultiSelect(true);
               setShowStockPhotoSelector(true);
               setShowElementEditPopover(false);
@@ -9259,13 +9257,13 @@ ${fixInstructions}
             }
 
             if (isImageRequest && searchTerm) {
-              // Store the element info and open Freepik selector (single-image replacement)
+              // Store element info and open selector (single-image replacement)
               setPendingElementImageEdit({
                 elementInfo: selectedElementInfo,
                 originalPrompt: prompt
               });
               setPhotoSearchTerm(''); // Start fresh - user searches manually
-              setPhotoSelectorInitialTab('stock');
+              setPhotoSelectorInitialTab('saved');
               setPhotoSelectorMultiSelect(false); // Single select for element replacement
               setShowStockPhotoSelector(true);
               setShowElementEditPopover(false);

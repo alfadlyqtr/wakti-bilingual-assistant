@@ -1,13 +1,11 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Upload, FileImage, FileText, File, Download, Trash2, Eye, X, ImageIcon, FolderOpen, LayoutGrid, List, Music, Video, Image as ImageIconLucide, Search, Loader2, Sparkles } from 'lucide-react';
+import { Upload, FileImage, FileText, File, Download, Trash2, Eye, X, ImageIcon, FolderOpen, LayoutGrid, List, Music, Video, Image as ImageIconLucide, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
-import { Input } from '@/components/ui/input';
-import { FreepikService, type FreepikResource } from '@/services/FreepikService';
 import {
   Dialog,
   DialogContent,
@@ -40,24 +38,6 @@ interface SavedImage {
   created_at: string;
 }
 
-function isUsableImageUrl(value?: string | null): boolean {
-  if (!value) return false;
-  return /^https?:\/\//i.test(value) && !/freepik\.com\/(?:[^\s]+\/)?search/i.test(value);
-}
-
-function resolveStockDisplayUrl(photo: FreepikResource): string {
-  const candidates = [
-    photo.image?.source?.url,
-    photo.url,
-    (photo as any)?.thumbnail,
-    (photo as any)?.previewUrl,
-    (photo as any)?.image?.thumbnail?.url,
-    (photo as any)?.image?.url,
-  ];
-
-  return candidates.find((candidate) => isUsableImageUrl(candidate)) || '';
-}
-
 export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: BackendUploadsTabProps) {
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
@@ -68,11 +48,6 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
   const [mediaType, setMediaType] = useState<'image' | 'audio' | 'video' | 'all'>('image');
   const [savedImages, setSavedImages] = useState<SavedImage[]>([]);
   const [loadingSavedImages, setLoadingSavedImages] = useState(false);
-  const [stockQuery, setStockQuery] = useState('');
-  const [stockPhotos, setStockPhotos] = useState<FreepikResource[]>([]);
-  const [searchingStock, setSearchingStock] = useState(false);
-  const [stockPage, setStockPage] = useState(1);
-  const [stockTotalPages, setStockTotalPages] = useState(1);
 
   const filteredUploads = useMemo(() => {
     return uploads.filter(upload => {
@@ -276,38 +251,6 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
     }
   };
 
-  const handleStockSearch = useCallback(async (page: number = 1) => {
-    if (!stockQuery.trim()) return;
-
-    setSearchingStock(true);
-    try {
-      const result = await FreepikService.searchImages(
-        stockQuery,
-        { content_type: { photo: 1 } },
-        page,
-        12,
-        isRTL ? 'ar-SA' : 'en-US',
-        projectId
-      );
-
-      if (!result.success || !result.data) {
-        toast.error(result.error || (isRTL ? 'فشل في البحث عن الصور' : 'Failed to search photos'));
-        setStockPhotos([]);
-        return;
-      }
-
-      const uniquePhotos = result.data.data.filter((photo, index, self) => index === self.findIndex((item) => item.id === photo.id));
-      setStockPhotos(uniquePhotos);
-      setStockPage(page);
-      setStockTotalPages(result.data.meta?.last_page || 1);
-    } catch (err) {
-      console.error('Stock search failed:', err);
-      toast.error(isRTL ? 'فشل في البحث عن الصور' : 'Failed to search photos');
-    } finally {
-      setSearchingStock(false);
-    }
-  }, [stockQuery, isRTL, projectId]);
-
   const importImageIntoProject = useCallback(async (sourceUrl: string, filenameHint?: string) => {
     const { data, error } = await supabase.functions.invoke('import-external-image', {
       body: {
@@ -349,28 +292,6 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
     } catch (err: any) {
       console.error('Saved image import failed:', err);
       toast.error(err?.message || (isRTL ? 'فشل إضافة الصورة' : 'Failed to add image'));
-    } finally {
-      setImportingImageId(null);
-    }
-  }, [importImageIntoProject, isRTL, onRefresh]);
-
-  const handleStockImageImport = useCallback(async (photo: FreepikResource) => {
-    const sourceUrl = resolveStockDisplayUrl(photo);
-    if (!sourceUrl) {
-      toast.error(isRTL ? 'لا يوجد رابط صالح للصورة' : 'No valid image URL');
-      return;
-    }
-
-    const importId = `stock-${photo.id}`;
-    setImportingImageId(importId);
-
-    try {
-      await importImageIntoProject(sourceUrl, photo.title || 'stock-image');
-      toast.success(isRTL ? 'تم حفظ الصورة في وسائط المشروع' : 'Stock image saved to backend media');
-      onRefresh();
-    } catch (err: any) {
-      console.error('Stock image import failed:', err);
-      toast.error(err?.message || (isRTL ? 'فشل حفظ صورة المخزون' : 'Failed to save stock image'));
     } finally {
       setImportingImageId(null);
     }
@@ -514,100 +435,6 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
             )}
           </div>
 
-          <div className="rounded-xl border border-border/50 bg-card/40 p-4 space-y-3">
-            <div>
-              <h3 className="text-sm font-semibold text-foreground">{isRTL ? 'صور Freepik الجاهزة' : 'Freepik stock photos'}</h3>
-              <p className="text-xs text-muted-foreground">{isRTL ? 'ابحث عن صور جاهزة لتستخدمها أو تحفظها للمشروع' : 'Search stock photos to use or save for the project'}</p>
-            </div>
-
-            <div className="flex gap-2">
-              <Input
-                value={stockQuery}
-                onChange={(e) => setStockQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    void handleStockSearch(1);
-                  }
-                }}
-                placeholder={isRTL ? 'ابحث عن صور...' : 'Search stock photos...'}
-                className="h-10"
-              />
-              <Button onClick={() => void handleStockSearch(1)} disabled={searchingStock || !stockQuery.trim()} className="h-10 px-4">
-                {searchingStock ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              </Button>
-            </div>
-
-            {searchingStock ? (
-              <div className="flex items-center justify-center py-12 text-muted-foreground">
-                <Loader2 className="h-5 w-5 animate-spin" />
-              </div>
-            ) : stockPhotos.length > 0 ? (
-              <>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                  {stockPhotos.map((photo) => {
-                    const imageUrl = resolveStockDisplayUrl(photo);
-                    const isImporting = importingImageId === `stock-${photo.id}`;
-                    return (
-                      <div key={photo.id} className="group relative rounded-lg overflow-hidden border border-border/50 bg-muted/20">
-                        <div className="aspect-[4/3] bg-muted/20 p-2">
-                          {imageUrl ? (
-                            <img
-                              src={imageUrl}
-                              alt={photo.title}
-                              className="w-full h-full object-contain rounded-md"
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                e.currentTarget.style.display = 'none';
-                              }}
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center px-3 text-center text-sm text-muted-foreground">
-                              {photo.title}
-                            </div>
-                          )}
-                        </div>
-                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/75 to-transparent p-2 space-y-2">
-                          <p className="text-[10px] text-white/90 font-medium truncate">{photo.title}</p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="h-7 w-full text-xs"
-                            disabled={isImporting || !imageUrl}
-                            onClick={() => void handleStockImageImport(photo)}
-                          >
-                            {isImporting ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              isRTL ? 'حفظ في الوسائط' : 'Save to media'
-                            )}
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {stockTotalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 pt-1">
-                    <Button variant="outline" size="sm" disabled={stockPage <= 1} onClick={() => void handleStockSearch(stockPage - 1)}>
-                      {isRTL ? 'السابق' : 'Prev'}
-                    </Button>
-                    <span className="text-xs text-muted-foreground">{stockPage} / {stockTotalPages}</span>
-                    <Button variant="outline" size="sm" disabled={stockPage >= stockTotalPages} onClick={() => void handleStockSearch(stockPage + 1)}>
-                      {isRTL ? 'التالي' : 'Next'}
-                    </Button>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex items-center justify-center py-10 text-center text-sm text-muted-foreground">
-                {stockQuery.trim()
-                  ? (isRTL ? 'لم يتم العثور على صور لهذه العبارة' : 'No stock photos found for this search')
-                  : (isRTL ? 'ابدأ البحث لإظهار صور Freepik هنا' : 'Start searching to show Freepik photos here')}
-              </div>
-            )}
-          </div>
         </div>
       )}
 

@@ -225,8 +225,8 @@ const INTENT_PATTERNS: PatternConfig[] = [
       modalType: 'SmartMediaManager',
       modalProps: { initialTab: 'site' },
       response: {
-        en: '🖼️ Here are all the images on your site!\n\nYou can:\n• Click any image to view full size\n• Download or copy the URL\n• Replace with stock photos or upload new ones',
-        ar: '🖼️ إليك جميع الصور في موقعك!\n\nيمكنك:\n• النقر على أي صورة لعرضها بالحجم الكامل\n• تحميل أو نسخ الرابط\n• استبدالها بصور مجانية أو رفع صور جديدة'
+        en: '🖼️ Here are all the images on your site!\n\nYou can:\n• Click any image to view full size\n• Download or copy the URL\n• Replace with saved/generated images or uploads',
+        ar: '🖼️ إليك جميع الصور في موقعك!\n\nيمكنك:\n• النقر على أي صورة لعرضها بالحجم الكامل\n• تحميل أو نسخ الرابط\n• الاستبدال بصور محفوظة/مولّدة أو صورك المرفوعة'
       }
     }
   },
@@ -241,10 +241,10 @@ const INTENT_PATTERNS: PatternConfig[] = [
     priority: 1,
     payload: {
       modalType: 'SmartMediaManager',
-      modalProps: { initialTab: 'stock' },
+      modalProps: { initialTab: 'upload' },
       response: {
-        en: '🔍 Opening stock photo search! Browse millions of free images from Freepik.',
-        ar: '🔍 جاري فتح البحث عن الصور! تصفح ملايين الصور المجانية من Freepik.'
+        en: '🧠 Stock images are removed. Use your uploads or saved generated images.',
+        ar: '🧠 تم حذف الصور الجاهزة. استخدم صورك المرفوعة أو الصور المولّدة المحفوظة.'
       }
     }
   },

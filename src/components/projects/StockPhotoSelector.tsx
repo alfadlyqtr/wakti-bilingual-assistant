@@ -1,15 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTheme } from '@/providers/ThemeProvider';
-import { FreepikService, FreepikResource } from '@/services/FreepikService';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Loader2, Search, X, Image, Check, Upload, Filter, Camera, Grid2X2, Grid3X3, LayoutGrid, Sparkles } from 'lucide-react';
+import { Loader2, X, Image, Check, Upload, Camera, Grid2X2, Grid3X3, LayoutGrid, Sparkles } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
 
 interface StockPhotoSelectorProps {
   userId: string;
@@ -19,7 +16,7 @@ interface StockPhotoSelectorProps {
   multiSelect?: boolean;
   onClose: () => void;
   searchTerm?: string;
-  initialTab?: 'stock' | 'user' | 'saved';
+  initialTab?: 'user' | 'saved';
   showOnlyUserPhotos?: boolean; // Hide stock photos tab entirely
 }
 
@@ -41,37 +38,6 @@ interface SavedImage {
 
 type GridSize = 'small' | 'medium' | 'large';
 
-function isUsableImageUrl(value?: string | null): boolean {
-  if (!value) return false;
-  return /^https?:\/\//i.test(value) && !/freepik\.com\/(?:[^\s]+\/)?search/i.test(value);
-}
-
-function resolvePhotoDisplayUrl(photo: FreepikResource): string {
-  const candidates = [
-    photo.image?.source?.url,
-    photo.url,
-    (photo as any)?.thumbnail,
-    (photo as any)?.previewUrl,
-    (photo as any)?.image?.thumbnail?.url,
-    (photo as any)?.image?.url,
-  ];
-
-  return candidates.find((candidate) => isUsableImageUrl(candidate)) || '';
-}
-
-function resolvePhotoSelectionUrl(photo: FreepikResource): string {
-  const candidates = [
-    photo.url,
-    photo.image?.source?.url,
-    (photo as any)?.previewUrl,
-    (photo as any)?.thumbnail,
-    (photo as any)?.image?.url,
-    (photo as any)?.image?.thumbnail?.url,
-  ];
-
-  return candidates.find((candidate) => isUsableImageUrl(candidate)) || '';
-}
-
 export function StockPhotoSelector({ 
   userId, 
   projectId,
@@ -79,18 +45,15 @@ export function StockPhotoSelector({
   onSelectPhotos,
   multiSelect = false,
   onClose, 
-  searchTerm = '', 
-  initialTab = 'stock',
+  searchTerm = '',
+  initialTab = 'user',
   showOnlyUserPhotos = false
 }: StockPhotoSelectorProps) {
   const { language } = useTheme();
   const isRTL = language === 'ar';
   const [portalReady, setPortalReady] = useState(false);
   // If showOnlyUserPhotos, force user tab
-  const [activeTab, setActiveTab] = useState<'stock' | 'user' | 'saved'>(showOnlyUserPhotos ? 'user' : initialTab);
-  const [searchQuery, setSearchQuery] = useState(''); // Always start empty - user must type search
-  const [isSearching, setIsSearching] = useState(false);
-  const [stockPhotos, setStockPhotos] = useState<FreepikResource[]>([]);
+  const [activeTab, setActiveTab] = useState<'user' | 'saved'>(showOnlyUserPhotos ? 'user' : initialTab);
   const [backendPhotos, setBackendPhotos] = useState<BackendPhoto[]>([]);
   const [savedImages, setSavedImages] = useState<SavedImage[]>([]);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
@@ -99,13 +62,8 @@ export function StockPhotoSelector({
   const [selectedPhotos, setSelectedPhotos] = useState<{ url: string; title: string }[]>([]); // Multi-select
   // Allow user to switch between single/multi inside the modal (defaults to prop)
   const [multiSelectEnabled, setMultiSelectEnabled] = useState<boolean>(multiSelect);
-  const [orientation, setOrientation] = useState<'all' | 'landscape' | 'portrait' | 'square'>('all');
-  const [contentType, setContentType] = useState<'all' | 'photo' | 'vector'>('photo');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [noPhotosFound, setNoPhotosFound] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [stockError, setStockError] = useState('');
   // Load gridSize from localStorage for persistence
   const [gridSize, setGridSize] = useState<GridSize>(() => {
     const stored = localStorage.getItem('stockPhotoSelectorGridSize');
@@ -142,11 +100,6 @@ export function StockPhotoSelector({
     setPortalReady(true);
     return () => setPortalReady(false);
   }, []);
-
-  useEffect(() => {
-    if (!searchTerm?.trim()) return;
-    setSearchQuery(searchTerm.trim());
-  }, [searchTerm]);
 
   // Removed: auto-search on mount - user must manually search
 
@@ -252,61 +205,7 @@ export function StockPhotoSelector({
   };
 
   // Fixed: Accept explicit page parameter to avoid stale state issues
-  const handleSearch = async (pageToLoad: number = 1) => {
-    if (!searchQuery.trim()) return;
-    
-    setIsSearching(true);
-    setStockPhotos([]);
-    setStockError('');
-    
-    try {
-      const filters: any = {};
-      
-      if (orientation !== 'all') {
-        filters.orientation = {};
-        filters.orientation[orientation] = 1;
-      }
-      
-      if (contentType !== 'all') {
-        filters.content_type = {};
-        filters.content_type[contentType] = 1;
-      }
-      
-      const result = await FreepikService.searchImages(
-        searchQuery,
-        filters,
-        pageToLoad, // Use the passed parameter, not stale state
-        12,
-        language === 'ar' ? 'ar-SA' : 'en-US',
-        projectId
-      );
-      
-      if (result.success && result.data) {
-        // Dedupe results by photo ID to prevent duplicates
-        const uniquePhotos = result.data.data?.filter((photo, index, self) => 
-          index === self.findIndex(p => p.id === photo.id)
-        ) || [];
-        setStockPhotos(uniquePhotos);
-        setTotalPages(result.data.meta.last_page || 1);
-      } else {
-        console.error('Failed to search photos:', result.error);
-        setStockError(result.error || 'Failed to search photos');
-        toast.error(isRTL ? 'فشل في البحث عن الصور' : 'Failed to search photos');
-      }
-    } catch (err) {
-      console.error('Error searching photos:', err);
-      setStockError(err instanceof Error ? err.message : 'Failed to search photos');
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  // Fixed: Update state and pass new page directly to handleSearch
-  const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages) return;
-    setPage(newPage);
-    handleSearch(newPage); // Pass explicit page to avoid stale state
-  };
+  void searchTerm;
 
   const handleSelectPhoto = (photo: { url: string; title: string }) => {
     if (multiSelectEnabled) {
@@ -355,7 +254,7 @@ export function StockPhotoSelector({
   };
 
   const handleTabChange = (value: string) => {
-    setActiveTab(value as 'stock' | 'user' | 'saved');
+    setActiveTab(value as 'user' | 'saved');
     if (value === 'user' && backendPhotos.length === 0 && !isLoadingPhotos && projectId) {
       loadBackendPhotos();
     } else if (value === 'saved' && savedImages.length === 0 && !isLoadingSaved) {
@@ -505,13 +404,9 @@ export function StockPhotoSelector({
           </Button>
         </div>
         
-        <Tabs defaultValue={showOnlyUserPhotos ? 'user' : 'stock'} value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <Tabs defaultValue={showOnlyUserPhotos ? 'user' : 'user'} value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="px-3 sm:px-4 pt-2 shrink-0">
             <TabsList className={cn("w-full h-10 sm:h-11", showOnlyUserPhotos && "hidden")}>
-              <TabsTrigger value="stock" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
-                <Image className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                {isRTL ? 'صور مخزنة' : 'Stock Photos'}
-              </TabsTrigger>
               <TabsTrigger value="user" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
                 <Upload className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 {isRTL ? 'صوري' : 'My Photos'}
@@ -527,234 +422,6 @@ export function StockPhotoSelector({
               </div>
             )}
           </div>
-          
-          {/* Stock Photos Tab */}
-          <TabsContent value="stock" className="flex-1 flex flex-col min-h-0 mt-0 overflow-hidden">
-            {/* Search & Filters - Mobile optimized */}
-            <div className="p-3 sm:p-4 border-b shrink-0 space-y-2 sm:space-y-3">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <Input
-                    placeholder={isRTL ? 'البحث عن الصور...' : 'Search photos...'}
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { setPage(1); handleSearch(1); } }}
-                    className="h-10 sm:h-11 text-sm"
-                  />
-                </div>
-                <Button onClick={() => { setPage(1); handleSearch(1); }} disabled={isSearching} className="h-10 w-10 sm:h-11 sm:w-11 p-0">
-                  {isSearching ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Search className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-              
-              {/* Filters and View Toggle */}
-              <div className="flex items-center justify-between gap-2 pb-1">
-                {/* Filters - Horizontal scroll on mobile */}
-                <div className="flex items-center gap-2 sm:gap-4 overflow-x-auto scrollbar-none">
-                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                    <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                    <select
-                      className="text-xs sm:text-sm bg-background border rounded-md px-2 py-1.5"
-                      value={orientation}
-                      onChange={(e) => setOrientation(e.target.value as any)}
-                    >
-                      <option value="all">{isRTL ? 'الكل' : 'All'}</option>
-                      <option value="landscape">{isRTL ? 'أفقي' : 'Landscape'}</option>
-                      <option value="portrait">{isRTL ? 'عمودي' : 'Portrait'}</option>
-                      <option value="square">{isRTL ? 'مربع' : 'Square'}</option>
-                    </select>
-                  </div>
-                  
-                  <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-                    <select
-                      className="text-xs sm:text-sm bg-background border rounded-md px-2 py-1.5"
-                      value={contentType}
-                      onChange={(e) => setContentType(e.target.value as any)}
-                    >
-                      <option value="all">{isRTL ? 'الكل' : 'All'}</option>
-                      <option value="photo">{isRTL ? 'صورة' : 'Photo'}</option>
-                      <option value="vector">{isRTL ? 'فيكتور' : 'Vector'}</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* View Size Toggle */}
-                <div className="flex items-center gap-1 shrink-0 border rounded-lg p-0.5 bg-muted/30">
-                  <button
-                    onClick={() => setGridSize('small')}
-                    className={cn(
-                      "p-1.5 rounded-md transition-colors",
-                      gridSize === 'small' ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                    )}
-                    title={isRTL ? 'صغير' : 'Small'}
-                  >
-                    <Grid3X3 className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setGridSize('medium')}
-                    className={cn(
-                      "p-1.5 rounded-md transition-colors",
-                      gridSize === 'medium' ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                    )}
-                    title={isRTL ? 'متوسط' : 'Medium'}
-                  >
-                    <Grid2X2 className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => setGridSize('large')}
-                    className={cn(
-                      "p-1.5 rounded-md transition-colors",
-                      gridSize === 'large' ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                    )}
-                    title={isRTL ? 'كبير' : 'Large'}
-                  >
-                    <LayoutGrid className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Selection Counter */}
-              {multiSelectEnabled && selectionCount > 0 && (
-                <div className="flex items-center justify-center py-1">
-                  <span className="text-xs sm:text-sm font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
-                    {isRTL 
-                      ? `${selectionCount} ${selectionCount === 1 ? 'صورة مختارة' : 'صور مختارة'}`
-                      : `${selectionCount} ${selectionCount === 1 ? 'photo' : 'photos'} selected`}
-                  </span>
-                </div>
-              )}
-            </div>
-            
-            {/* Photos Grid - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
-              {isSearching ? (
-                <div className="flex items-center justify-center h-48 sm:h-64">
-                  <Loader2 className="h-6 w-6 sm:h-8 sm:w-8 animate-spin text-primary" />
-                </div>
-              ) : stockPhotos.length > 0 ? (
-                <div className={cn("grid", gridClasses[gridSize])}>
-                  {stockPhotos.map((photo) => {
-                    const displayUrl = resolvePhotoDisplayUrl(photo);
-                    const selectionUrl = resolvePhotoSelectionUrl(photo);
-                    const selected = isPhotoSelected(selectionUrl);
-
-                    return (
-                      <div 
-                        key={photo.id}
-                        className={cn(
-                          "relative overflow-hidden cursor-pointer transition-all active:scale-[0.98] bg-muted/20",
-                          gridSize === 'large' ? "aspect-video rounded-xl" : "aspect-[4/3] rounded-lg",
-                          selected
-                            ? "ring-2 ring-primary ring-offset-1 ring-offset-background" 
-                            : "border border-border/50"
-                        )}
-                        onClick={() => {
-                          if (!selectionUrl) return;
-                          handleSelectPhoto({
-                            url: selectionUrl,
-                            title: photo.title
-                          });
-                        }}
-                      >
-                        {displayUrl ? (
-                          <div className="w-full h-full p-2 bg-muted/20">
-                            <img 
-                              src={displayUrl} 
-                              alt={photo.title}
-                              className="w-full h-full object-contain rounded-md"
-                              loading="lazy"
-                              referrerPolicy="no-referrer"
-                              onError={(e) => {
-                                const target = e.currentTarget;
-                                if (selectionUrl && target.src !== selectionUrl) {
-                                  target.src = selectionUrl;
-                                  return;
-                                }
-                                target.style.display = 'none';
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center px-4 text-center text-sm text-muted-foreground">
-                            {photo.title}
-                          </div>
-                        )}
-                        {/* Selection overlay */}
-                        {selected && (
-                          <div className="absolute inset-0 bg-primary/20" />
-                        )}
-                        {/* Checkmark badge */}
-                        {selected && (
-                          <div className={cn(
-                            "absolute bg-primary text-primary-foreground rounded-full shadow-lg",
-                            gridSize === 'small' ? "top-1 right-1 p-0.5" : "top-2 right-2 p-1.5"
-                          )}>
-                            <Check className={gridSize === 'small' ? "h-3 w-3" : "h-4 w-4"} strokeWidth={3} />
-                          </div>
-                        )}
-                        {/* Title on large view */}
-                        {gridSize === 'large' && (
-                          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                            <p className="text-white text-sm font-medium truncate">{photo.title}</p>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : searchQuery ? (
-                <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
-                  <Image className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
-                  <p className="text-sm sm:text-base text-muted-foreground">
-                    {stockError
-                      ? (isRTL ? 'البحث في Freepik غير متاح الآن' : 'Freepik search is unavailable right now')
-                      : (isRTL ? 'لم يتم العثور على صور. جرب كلمات بحث مختلفة.' : 'No photos found. Try different search terms.')}
-                  </p>
-                  {stockError && (
-                    <p className="text-xs text-muted-foreground/70 mt-2 max-w-xl">{stockError}</p>
-                  )}
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
-                  <Search className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
-                  <p className="text-sm sm:text-base text-muted-foreground">
-                    {isRTL ? 'ابحث عن صور من مكتبة Freepik' : 'Search for photos from the Freepik library'}
-                  </p>
-                </div>
-              )}
-            </div>
-            
-            {/* Pagination */}
-            {stockPhotos.length > 0 && (
-              <div className="p-3 sm:p-4 border-t flex items-center justify-between shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(page - 1)}
-                  disabled={page === 1}
-                  className="text-xs sm:text-sm h-8 sm:h-9"
-                >
-                  {isRTL ? 'السابق' : 'Previous'}
-                </Button>
-                <span className="text-xs sm:text-sm">
-                  {isRTL ? `${page} / ${totalPages}` : `${page} / ${totalPages}`}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handlePageChange(page + 1)}
-                  disabled={page === totalPages}
-                  className="text-xs sm:text-sm h-8 sm:h-9"
-                >
-                  {isRTL ? 'التالي' : 'Next'}
-                </Button>
-              </div>
-            )}
-          </TabsContent>
           
           {/* My Photos Tab */}
           <TabsContent value="user" className="flex-1 flex flex-col min-h-0 mt-0 overflow-hidden">

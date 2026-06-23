@@ -1064,7 +1064,7 @@ async function runDesignCritic(
 
   const heuristicIssues: string[] = [];
   const heuristicActions: string[] = [];
-  const focalVisualEvidence = /<img|backgroundimage|image_url|\.png|\.jpg|\.jpeg|\.webp|mockup|preview|hero-image|heroimage|freepik|object-cover/.test(combinedCode);
+  const focalVisualEvidence = /<img|backgroundimage|image_url|\.png|\.jpg|\.jpeg|\.webp|mockup|preview|hero-image|heroimage|object-cover/.test(combinedCode);
   const ctaEvidence = /<button|<a\s|href=|onclick|shop now|explore|get started|learn more|book now|contact us/.test(combinedCode);
   const headingEvidence = /<h1|text-5xl|text-6xl|text-7xl|text-\[clamp\(|font-serif/.test(combinedCode);
   const contrastEvidence = /overlay|bg-black\/|from-black|via-black|to-black|text-white|backdrop-blur|bg-gradient|shadow-\[|linear-gradient/.test(combinedCode);
@@ -2525,8 +2525,15 @@ async function enforceEditToolPolicy(params: {
   return { targetPath };
 }
 
-// Pre-fetch images from Freepik and store them in project storage
-const FREEPIK_API_KEY = Deno.env.get('FREEPIK_API_KEY');
+// Pre-generate images with Nano Banana 2 and store them in project storage
+const KIE_API_BASE_URL = 'https://api.kie.ai/api/v1';
+const KIE_API_KEY = (
+  Deno.env.get('KIE_AI_API_KEY') ||
+  Deno.env.get('KIE_API_KEY') ||
+  Deno.env.get('NANO_BANANA_API_KEY') ||
+  Deno.env.get('KIE_BEARER_TOKEN') ||
+  ''
+).trim();
 
 interface PreFetchedImage {
   query: string;
@@ -2534,6 +2541,139 @@ interface PreFetchedImage {
   storedUrl: string;
   filename: string;
   uploadId?: string; // ID from project_uploads table for linking to products
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function selectNanoBananaAspectRatio(query: string): string {
+  const q = query.toLowerCase();
+
+  if (/story|portrait|poster|person|model|vertical|phone/i.test(q)) return '9:16';
+  if (/logo|icon|product shot|square|thumbnail|card/i.test(q)) return '1:1';
+  if (/hero|banner|cover|landscape|wide|interior|exterior/i.test(q)) return '16:9';
+
+  return 'auto';
+}
+
+function extractImageUrlsFromUnknown(value: unknown): string[] {
+  if (!value) return [];
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (/^https?:\/\//i.test(trimmed)) return [trimmed];
+
+    try {
+      return extractImageUrlsFromUnknown(JSON.parse(trimmed));
+    } catch {
+      return [];
+    }
+  }
+
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.flatMap((entry) => extractImageUrlsFromUnknown(entry))));
+  }
+
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const prioritizedKeys = ['resultUrls', 'images', 'image_urls', 'imageUrls', 'urls', 'output', 'data'];
+    const collected: string[] = [];
+
+    for (const key of prioritizedKeys) {
+      if (record[key] !== undefined) {
+        collected.push(...extractImageUrlsFromUnknown(record[key]));
+      }
+    }
+
+    if (collected.length > 0) {
+      return Array.from(new Set(collected));
+    }
+
+    for (const nested of Object.values(record)) {
+      collected.push(...extractImageUrlsFromUnknown(nested));
+    }
+
+    return Array.from(new Set(collected));
+  }
+
+  return [];
+}
+
+async function createNanoBananaTask(prompt: string, aspectRatio: string): Promise<string | null> {
+  if (!KIE_API_KEY) return null;
+
+  const response = await fetch(`${KIE_API_BASE_URL}/jobs/createTask`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${KIE_API_KEY}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'nano-banana-2',
+      input: {
+        prompt,
+        image_input: [],
+        aspect_ratio: aspectRatio,
+        resolution: '1K',
+        output_format: 'jpg',
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const raw = await response.text();
+    console.warn(`[NanoBanana] createTask failed (${response.status}) for "${prompt}": ${raw}`);
+    return null;
+  }
+
+  const payload = await response.json();
+  const taskId = payload?.data?.taskId as string | undefined;
+
+  return taskId || null;
+}
+
+async function waitForNanoBananaImage(taskId: string): Promise<string | null> {
+  if (!KIE_API_KEY) return null;
+
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const response = await fetch(`${KIE_API_BASE_URL}/jobs/recordInfo?taskId=${encodeURIComponent(taskId)}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${KIE_API_KEY}`,
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const raw = await response.text();
+      console.warn(`[NanoBanana] recordInfo failed (${response.status}) for ${taskId}: ${raw}`);
+      await sleep(1500);
+      continue;
+    }
+
+    const payload = await response.json();
+    const state = String(payload?.data?.state || '').toLowerCase();
+
+    if (state === 'success') {
+      const data = payload?.data || {};
+      const urls = extractImageUrlsFromUnknown(data.resultJson ?? data.result ?? data.output ?? data);
+      const firstUrl = urls.find((entry) => /^https?:\/\//i.test(entry)) || null;
+      return firstUrl;
+    }
+
+    if (state === 'fail') {
+      const failMsg = payload?.data?.failMsg || payload?.msg || 'Nano Banana task failed';
+      console.warn(`[NanoBanana] task failed (${taskId}): ${failMsg}`);
+      return null;
+    }
+
+    await sleep(Math.min(5000, 1500 + attempt * 250));
+  }
+
+  console.warn(`[NanoBanana] task timeout: ${taskId}`);
+  return null;
 }
 
 async function preFetchAndStoreImages(
@@ -2544,106 +2684,84 @@ async function preFetchAndStoreImages(
 ): Promise<PreFetchedImage[]> {
   const storedImages: PreFetchedImage[] = [];
 
-  if (!FREEPIK_API_KEY) {
-    console.warn('[Freepik] FREEPIK_API_KEY missing, skipping image prefetch');
+  if (!KIE_API_KEY) {
+    console.warn('[NanoBanana] KIE API key missing, skipping image generation prefetch');
     return storedImages;
   }
   
   for (const query of queries) {
     try {
-      // 1. Search Freepik for images
-      const params = new URLSearchParams({
-        locale: 'en-US',
-        page: '1',
-        limit: '2', // Get 2 images per query
-        term: query,
-        'filters[content_type][photo]': '1',
-      });
-      
-      const searchRes = await fetch(`https://api.freepik.com/v1/resources?${params}`, {
-        headers: {
-          'x-freepik-api-key': FREEPIK_API_KEY,
-          'Accept': 'application/json',
-        }
-      });
-      
-      if (!searchRes.ok) {
-        console.warn(`[PreFetch] Freepik search failed for "${query}": ${searchRes.status}`);
+      const aspectRatio = selectNanoBananaAspectRatio(query);
+      const taskId = await createNanoBananaTask(query, aspectRatio);
+      if (!taskId) {
         continue;
       }
-      
-      const searchData = await searchRes.json();
-      const images = searchData.data || [];
-      
-      for (const img of images.slice(0, 2)) {
-        const imageUrl = img.image?.source?.url;
-        if (!imageUrl) continue;
-        
-        try {
-          // 2. Download the image
-          const imgRes = await fetch(imageUrl);
-          if (!imgRes.ok) continue;
-          
-          const imgBlob = await imgRes.blob();
-          const ext = imageUrl.split('.').pop()?.split('?')[0] || 'jpg';
-          const filename = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${ext}`;
-          const storagePath = `${projectId}/${filename}`;
-          
-          // 3. Upload to Supabase Storage
-          const { error: uploadError } = await supabase.storage
-            .from('project-uploads')
-            .upload(storagePath, imgBlob, {
-              contentType: imgBlob.type || 'image/jpeg',
-              upsert: true
-            });
-          
-          if (uploadError) {
-            console.warn(`[PreFetch] Upload failed for "${query}": ${uploadError.message}`);
-            continue;
-          }
-          
-          // 4. Get public URL
-          const { data: urlData } = supabase.storage
-            .from('project-uploads')
-            .getPublicUrl(storagePath);
-          
-          const storedUrl = urlData?.publicUrl || '';
-          
-          if (storedUrl) {
-            // 5. Save to project_uploads table and get the ID for linking
-            const { data: uploadData, error: insertError } = await supabase
-              .from('project_uploads')
-              .insert({
-                project_id: projectId,
-                user_id: _userId,
-                filename: filename,
-                storage_path: storagePath,
-                file_type: imgBlob.type || 'image/jpeg',
-                size_bytes: imgBlob.size,
-                bucket_id: 'project-uploads',
-              })
-              .select('id')
-              .single();
-            
-            if (insertError) {
-              console.warn(`[PreFetch] Failed to insert upload record: ${insertError.message}`);
-            }
-            
-            storedImages.push({
-              query,
-              url: imageUrl,
-              storedUrl,
-              filename,
-              uploadId: uploadData?.id
-            });
-            
-          }
-        } catch (imgErr) {
-          console.warn(`[PreFetch] Error processing image for "${query}":`, imgErr);
+
+      const imageUrl = await waitForNanoBananaImage(taskId);
+      if (!imageUrl) {
+        continue;
+      }
+
+      try {
+        const imgRes = await fetch(imageUrl);
+        if (!imgRes.ok) continue;
+
+        const imgBlob = await imgRes.blob();
+        const extMatch = imageUrl.match(/\.(png|jpg|jpeg|webp)(?:\?|$)/i);
+        const ext = (extMatch?.[1] || 'jpg').toLowerCase();
+        const filename = `prefetch-${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+        const storagePath = `${_userId}/${projectId}/${filename}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('project-uploads')
+          .upload(storagePath, imgBlob, {
+            contentType: imgBlob.type || 'image/jpeg',
+            upsert: true,
+          });
+
+        if (uploadError) {
+          console.warn(`[PreFetch] Upload failed for "${query}": ${uploadError.message}`);
+          continue;
         }
+
+        const { data: urlData } = supabase.storage
+          .from('project-uploads')
+          .getPublicUrl(storagePath);
+
+        const storedUrl = urlData?.publicUrl || '';
+
+        if (storedUrl) {
+          const { data: uploadData, error: insertError } = await supabase
+            .from('project_uploads')
+            .insert({
+              project_id: projectId,
+              user_id: _userId,
+              filename,
+              storage_path: storagePath,
+              file_type: imgBlob.type || 'image/jpeg',
+              size_bytes: imgBlob.size,
+              bucket_id: 'project-uploads',
+            })
+            .select('id')
+            .single();
+
+          if (insertError) {
+            console.warn(`[PreFetch] Failed to insert upload record: ${insertError.message}`);
+          }
+
+          storedImages.push({
+            query,
+            url: imageUrl,
+            storedUrl,
+            filename,
+            uploadId: uploadData?.id,
+          });
+        }
+      } catch (imgErr) {
+        console.warn(`[PreFetch] Error processing generated image for "${query}":`, imgErr);
       }
     } catch (err) {
-      console.warn(`[PreFetch] Error fetching images for "${query}":`, err);
+      console.warn(`[PreFetch] Error generating images for "${query}":`, err);
     }
   }
   
@@ -2793,13 +2911,8 @@ async function bootstrapBackendData(
       }
     }
 
-    // 3. STORE FREEPIK IMAGES: Extract image URLs from generated code and store them
-    const freepikUrls = extractFreepikUrls(allContent);
-    if (freepikUrls.length > 0) {
-      // Note: Images are fetched at runtime via fetchStockImages, no need to pre-store
-      // But we track them for analytics
-      results.imagesStored = freepikUrls.length;
-    }
+    // 3. Images are already counted through pre-generated assets
+    results.imagesStored = preFetchedImages.length;
 
   } catch (err) {
     console.error(`[Bootstrap] Error during bootstrapping:`, err);
@@ -2988,17 +3101,6 @@ function generateSampleServices(prompt: string, lang?: string): Array<Record<str
     { name: 'Express Service', price: 75, currency, duration: 15, description: 'Quick appointment' },
     { name: 'VIP Package', price: 350, currency, duration: 90, description: 'Full premium experience' }
   ];
-}
-
-// Extract Freepik image URLs from generated code
-function extractFreepikUrls(content: string): string[] {
-  const urls: string[] = [];
-  const freepikPattern = /https:\/\/[^"'\s]*freepik[^"'\s]*/gi;
-  const matches = content.match(freepikPattern);
-  if (matches) {
-    urls.push(...matches);
-  }
-  return urls;
 }
 
 // Extract image search queries from user prompt
@@ -6744,7 +6846,7 @@ Call task_complete when finished.`;
 
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {
-        // Pre-fetch and store images from Freepik based on user's prompt
+        // Pre-generate and store images from Nano Banana 2 based on user's prompt
         const imageQueries = extractImageQueries(prompt);
         let preFetchedImages: PreFetchedImage[] = [];
         
@@ -6752,7 +6854,7 @@ Call task_complete when finished.`;
           try {
             preFetchedImages = await preFetchAndStoreImages(supabase, projectId, userId, imageQueries);
           } catch (prefetchErr) {
-            console.warn(`[Create Mode] Image pre-fetch failed:`, prefetchErr);
+            console.warn(`[Create Mode] Image pre-generation failed:`, prefetchErr);
             // Continue without pre-fetched images
           }
         }
@@ -6767,7 +6869,7 @@ Call task_complete when finished.`;
           const imagesList = preFetchedImages.map((img, i) => 
             `${i + 1}. "${img.query}" → ${img.storedUrl}`
           ).join('\n');
-          textPrompt += `\n\n🖼️ PRE-LOADED IMAGES (USE THESE DIRECTLY - DO NOT USE fetchStockImages):\nThese images have been pre-loaded and stored for this project. Use them directly in your code:\n${imagesList}\n\nIMPORTANT: Use these URLs directly in <img src="..."> tags. Do NOT create /utils/stockImages.js or call fetchStockImages() - the images are already available at these URLs.`;
+          textPrompt += `\n\n🖼️ PRE-GENERATED IMAGES (NANO-BANANA-2, 1K):\nThese images were already generated and stored for this project. Use them directly in your code:\n${imagesList}\n\nIMPORTANT: Use these URLs directly in <img src="..."> tags. Do NOT add any stock-image provider code.`;
         }
         
         // Add extracted document content (CV/Resume text, etc.) - CRITICAL FOR PORTFOLIOS

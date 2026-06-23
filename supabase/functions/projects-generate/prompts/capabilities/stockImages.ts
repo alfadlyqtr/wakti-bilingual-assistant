@@ -1,90 +1,40 @@
-// Capability doc: FREEPIK STOCK IMAGES
+// Capability doc: AI GENERATED IMAGES (NANO-BANANA-2)
 // Loaded when the project needs any image (most projects).
-//
-// Phase A — Item A6 (token diet): verbose React helper code trimmed; only
-// the API contract and rules remain. Modern models synthesize the React
-// boilerplate from the schema.
 
 export const STOCK_IMAGES_CAPABILITY = `
-## 🖼️ STOCK IMAGES (FREEPIK API — MANDATORY)
+## 🖼️ AI IMAGES (NANO-BANANA-2 — MANDATORY)
 
 ### BANNED IMAGE SOURCES
 - ❌ picsum.photos, unsplash.com, via.placeholder.com, placeholder.com, placehold.it
-- ❌ Any hardcoded image URL, empty src=""
-- ❌ Generic bland placeholders as the main hero visual for a premium website draft
+- ❌ Freepik and other stock provider runtime calls
+- ❌ Empty src="" or fake broken image paths
 
-### MANDATORY FILE: /utils/stockImages.js
-Create this file FIRST in every project. It must export three helpers:
-
-| Export | Signature | Behavior |
-|---|---|---|
-| \`fetchStockImages\` | \`(query: string, limit=5) => Promise<string[]>\` | POST to BACKEND_URL with \`action: 'freepik/images'\`, return \`data.images[].url\`. NEVER throw. On non-200, parse failure, timeout, or empty result, return placeholder array from \`getStaticPlaceholder\`. |
-| \`useStockImage\` | \`(query: string) => { image: string; loading: boolean }\` | React hook: calls \`fetchStockImages(query, 1)\` on mount, returns first image with fallback. |
-| \`getStaticPlaceholder\` | \`(query, w=400, h=300) => string\` | Returns \`https://placehold.co/{w}x{h}/1a1a2e/eaeaea?text={first-3-words}\`. |
-
-### BACKEND CONTRACT
-\`\`\`
-POST https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
-Body: { projectId: "{{PROJECT_ID}}", action: "freepik/images", data: { query, limit } }
-Response: { images: [{ url: string }, ...] }
-\`\`\`
-
-### USAGE PATTERNS
-- Single image: \`const { image, loading } = useStockImage('barber shop interior');\`
-- Multiple: \`useEffect(() => { fetchStockImages('services', 6).then(setImages); }, []);\`
-- Static (no API call): \`<img src={getStaticPlaceholder('haircut', 400, 300)} />\`
-
-### QUERY RULES (CRITICAL FOR RELEVANCE)
-Extract KEY ENTITIES from the user's prompt (product category, location, business type) and use them in every Freepik query.
-
-### HERO IMAGE QUALITY BAR (MANDATORY)
-- The hero image is part of the first impression. It must feel premium, clear, and strongly matched to the business.
-- Prefer hero visuals with clear subject focus, strong composition, and believable brand value.
-- For product businesses, prefer product-led or lifestyle product imagery over generic people.
-- For service businesses, prefer polished environment, team, or service-in-action imagery.
-- For luxury/elegant brands, prefer refined editorial, close-up detail, texture, premium interior, or styled product photography.
-- If a generic image would weaken the design, use a more specific query instead of settling.
-
-### SECTION-BY-SECTION IMAGE THINKING
-- Hero → strongest brand image, wide composition, premium first impression
-- About → founder, team, studio, workspace, boutique, or brand environment
-- Services → service-specific visuals, tools, materials, or process
-- Products / collections → real product close-ups, styled displays, fabric/details, shelves, packaging, or category-specific scenes
-- Testimonials / social proof → tasteful people or environment shots only if relevant
-- Contact / visit us → storefront, interior, location, map-related atmosphere
-
-✅ "Abayas & Fashion" → hero: "elegant abaya fashion model", products: "luxury abaya collection", about: "modest fashion designer"
-✅ "barber shop" → hero: "barber shop interior modern", services: "haircut barber chair", team: "professional barber"
-✅ "perfumes & oud" → hero: "luxury perfume bottle oud", products: "arabic oud perfume collection"
-✅ "jewelry" → hero: "luxury gold jewelry display", products: "gold ring necklace bracelet"
-✅ "restaurant" → hero: "restaurant interior elegant", menu: "food dish presentation gourmet"
-✅ "fitness" → hero: "gym workout fitness", services: "personal trainer exercise"
-
-❌ Generic "store", "products", "business", "people", "laptop", "technology" — NEVER use these for physical product stores
-❌ NEVER use laptop/computer/phone images for fashion, food, or physical product sites
-❌ NEVER use unrelated office/team laptop imagery as the hero for a product, restaurant, salon, fashion, perfume, jewelry, or boutique brand
-❌ NEVER let the same weak image style repeat across hero, about, and product sections
-
-### MODEST FASHION / ABAYA RULES (MANDATORY)
-- If the prompt mentions abaya, modest fashion, hijab fashion, jalabiya, or similar, the query MUST include the exact clothing category term (for example: "abaya").
-- Prefer queries like "black abaya fashion model", "modest fashion boutique interior", "luxury abaya fabric detail", "elegant abaya collection rack".
-- For hero sections, prefer people actually wearing the garment or boutique scenes that clearly show modest-fashion clothing.
-- For product/category sections, prefer clothing racks, folded garments, fabric texture, tailoring, and product displays relevant to abayas/modest wear.
-- NEVER drift into generic luxury gift boxes, handbags, perfume bottles, jewelry-only shots, laptops, phones, or abstract office imagery when the business is specifically abayas/modest fashion.
-
-### CRITICAL: Match image to product type
-- Fashion/clothing stores → models wearing the product, fabric textures, boutique interior
-- Food/restaurant → actual food dishes, restaurant atmosphere, ingredients
-- Beauty/salon → salon interior, beauty treatments, cosmetic products
-- Fitness → gym equipment, workout sessions, healthy lifestyle
-- Jewelry → close-up product shots, display cases, luxury styling
+### IMAGE SOURCE POLICY
+- The system pre-generates image assets using **model: nano-banana-2** with **resolution: 1K**.
+- When pre-generated URLs are provided in the prompt, use those URLs directly.
+- Use different image URLs per section (hero/about/services/gallery).
+- If no generated URL is available for a section, use a minimal neutral fallback and keep structure ready for future image replacement.
 
 ### STRICT RULES
-1. ALWAYS create /utils/stockImages.js FIRST before any image-using component.
-2. ALWAYS import fetchStockImages / useStockImage / getStaticPlaceholder — do not inline fetch calls.
-3. Include specific prompt terms in the query; use different queries per section (hero, about, services, gallery).
-4. Placeholder fallback is emergency-only. Never design the main visual identity around placeholders if any better business-matched image path exists.
-5. If the business is premium, elegant, luxury, editorial, boutique, or high-end, the imagery must reflect that tone.
-6. \`fetchStockImages\` must be wrapped in try/catch and must NEVER throw; always resolve to a string[] so UI never crashes.
-7. If backend returns an \`error\` field, treat it as recoverable and return placeholders instead of throwing.
+1. NEVER generate Freepik/stock helper files (no \`/utils/stockImages.js\`).
+2. NEVER add API calls to Freepik in generated frontend code.
+3. Prefer pre-generated image URLs provided in the creation prompt.
+4. Match image composition to section purpose (hero wide, cards balanced, galleries diverse).
+5. Keep imagery aligned with business domain and tone (luxury, medical, restaurant, etc.).
+
+### HERO IMAGE QUALITY BAR
+- Hero image must look premium and clearly connected to the business.
+- Avoid generic office/laptop imagery unless the business is explicitly tech/SaaS.
+- For product-led brands, use product-led visuals, not random people-first shots.
+
+### SECTION-BY-SECTION THINKING
+- Hero → strongest brand-defining visual, high impact.
+- About → team/founder/brand environment.
+- Services → process/tools/service action.
+- Products → close-up product visuals and realistic usage.
+- Contact → location/storefront/brand context image.
+
+### FALLBACK
+- If you must use fallback imagery, keep it temporary and clearly replaceable.
+- Never let placeholder style define the final visual identity.
 `;

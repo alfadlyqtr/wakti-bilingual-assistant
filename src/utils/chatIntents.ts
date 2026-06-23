@@ -5,7 +5,7 @@
 
 export type ChatIntent = 
   | 'view_images'     // "Show me images"
-  | 'search_images'   // "Find stock photos"
+  | 'search_images'   // "Find images"
   | 'upload_images'   // "Upload my photos"
   | 'view_products'   // "Show me products"
   | 'view_orders'     // "Show my orders"
@@ -39,8 +39,8 @@ const CHAT_PATTERNS: Record<Exclude<ChatIntent, 'none'>, {
         props: { initialTab: 'site' }
       },
       response: {
-        en: '🖼️ Here are all the images on your site!\n\nYou can:\n• Click any image to view full size\n• Download or copy the URL\n• Replace with stock photos or upload new ones',
-        ar: '🖼️ إليك جميع الصور في موقعك!\n\nيمكنك:\n• النقر على أي صورة لعرضها بالحجم الكامل\n• تحميل أو نسخ الرابط\n• استبدالها بصور مجانية أو رفع صور جديدة'
+        en: '🖼️ Here are all the images on your site!\n\nYou can:\n• Click any image to view full size\n• Download or copy the URL\n• Replace with saved/generated images or uploads',
+        ar: '🖼️ إليك جميع الصور في موقعك!\n\nيمكنك:\n• النقر على أي صورة لعرضها بالحجم الكامل\n• تحميل أو نسخ الرابط\n• الاستبدال بصور محفوظة/مولّدة أو صورك المرفوعة'
       }
     }
   },
@@ -53,11 +53,11 @@ const CHAT_PATTERNS: Record<Exclude<ChatIntent, 'none'>, {
       type: 'open_modal',
       payload: {
         component: 'SmartMediaManager',
-        props: { initialTab: 'stock' }
+        props: { initialTab: 'upload' }
       },
       response: {
-        en: '🔍 Let\'s find some great stock photos! You can:\n• Search by keyword\n• Browse categories\n• Preview and insert',
-        ar: '🔍 دعنا نبحث عن صور رائعة! يمكنك:\n• البحث بالكلمات\n• تصفح الفئات\n• معاينة وإدراج'
+        en: '🧠 Stock images are removed. Use your uploads or saved generated images.',
+        ar: '🧠 تم حذف الصور الجاهزة. استخدم صورك المرفوعة أو الصور المولّدة المحفوظة.'
       }
     }
   },

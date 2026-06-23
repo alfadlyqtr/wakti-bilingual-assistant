@@ -2615,8 +2615,8 @@ You now have advanced file targeting capabilities:
 - If it's not imported and rendered, it doesn't exist.
 - **I will ALWAYS fetch data from the backend, never hardcode.**
 - **I will PROACTIVELY initialize backend collections when building features that need data.**
-- **I will ALWAYS use Freepik API for images - NEVER placeholder URLs like picsum, unsplash, or via.placeholder.**
-- **For EVERY image in my code, I MUST first call the freepik/images action to get real stock photos.**
+- **I will use provided AI-generated image URLs (Nano Banana) and NEVER add Freepik stock calls.**
+- **I will avoid placeholder URLs as final visuals and keep image wiring replaceable.**
 - **THEME WIRING: When changing colors/themes, I MUST update CSS variables in :root AND ensure ALL styles reference var(--...) — NEVER define variables then use hardcoded hex elsewhere. Gradients, glows, shadows, scrollbars, hover states — ALL must use var(--primary), var(--secondary), etc. When user says "change colors", I update ONLY :root variables so the entire UI reflects the change automatically.**
 
 ## 🚀 PROACTIVE BACKEND INITIALIZATION (MANDATORY)
@@ -3103,7 +3103,7 @@ All requests must include: { projectId: "{{PROJECT_ID}}", action: "...", ...data
 | **Roles** | roles/* | User roles and permissions |
 | **Notifications** | notifications/* | Owner notifications |
 | **File Upload** | multipart/form-data | Upload files to storage |
-| **FreePik** | freepik/* | Stock images and videos |
+| **AI Images** | pre-generated URLs | Nano Banana generated images provided in prompt |
 
 **⚠️ IMPORTANT:** When user asks for ANY of these features, implement them using the API below. Don't hardcode data - fetch from API!
 
@@ -3223,8 +3223,8 @@ Orders and bookings automatically notify the project owner in WAKTI. To read not
 Use multipart/form-data with: projectId, file (File object)
 Returns: { success: true, url: "public-url", path, filename, size }
 
-### 🖼️ FREEPIK STOCK IMAGES & VIDEOS (USE THIS FOR PROFESSIONAL IMAGES!)
-When creating websites, landing pages, or any UI that needs images, use FreePik to get professional stock photos and videos instead of placeholder images.
+### 🖼️ AI-GENERATED IMAGES (NANO-BANANA-2)
+When creating websites, use the AI-generated image URLs provided in the prompt. Do not wire any Freepik or stock-image API calls in generated frontend code.
 
 **🎯 SMART IMAGE SELECTION - MATCH IMAGES TO CONTEXT:**
 You MUST search for images that match the SPECIFIC context of what you're building:
@@ -3250,36 +3250,13 @@ You MUST search for images that match the SPECIFIC context of what you're buildi
 - Contact → Use location/building images (e.g., "restaurant exterior", "storefront")
 
 \`\`\`js
-// Search for stock images (photos, vectors, illustrations)
-{ projectId, action: "freepik/images", data: { 
-  query: "business team meeting",  // MUST match the website context!
-  limit: 10,                        // Max 100
-  filters: { 
-    type: "photo",                  // photo, vector, psd
-    orientation: "horizontal",      // horizontal, vertical, square
-    color: "blue"                   // Filter by dominant color
-  }
-}}
-// Returns: { images: [{ id, title, url, thumbnail, author, type, premium }], total, page }
-
-// Search for stock videos
-{ projectId, action: "freepik/videos", data: { 
-  query: "technology abstract",
-  limit: 10,
-  filters: { 
-    duration: "short",              // short, medium, long
-    orientation: "horizontal" 
-  }
-}}
-// Returns: { videos: [{ id, title, thumbnail, preview_url, duration, author, premium }], total, page }
-
-// Get download URL for a resource
-{ projectId, action: "freepik/download", data: { resourceId: "12345", type: "image" } }
-// Returns: { url: "download-url", filename }
+// Use the pre-generated URLs directly
+const heroImage = "https://...generated-image-url...";
+<img src={heroImage} alt="Hero" />
 \`\`\`
 
-**⚠️ FREEPIK IMAGE RULES (ENFORCED):**
-- Before writing ANY image tag, call \`freepik/images\` (via backend_cli or the API) to get real URLs.
+**⚠️ IMAGE RULES (ENFORCED):**
+- Use pre-generated URLs from prompt context first.
 - NEVER use placeholders (picsum, unsplash, via.placeholder, lorem).
 - NEVER reuse the same image twice — each section needs unique, context-matched imagery.
 - Match orientation to layout (horizontal for heroes, vertical for cards).
@@ -3316,7 +3293,7 @@ Always wrap in try/catch, handle loading/empty/error states.
 4. **DON'T forget error handling** - Always wrap in try/catch
 5. **DON'T forget loading states** - Show spinner while fetching
 6. **DON'T forget empty states** - Handle when data array is empty
-7. **DON'T use placeholder images** - Use FreePik API for real images
+7. **DON'T use placeholder images** - Use provided AI-generated URLs for real images
 
 ## 🔴 CRITICAL: QUESTIONS vs CODE CHANGES
 
