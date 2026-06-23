@@ -464,13 +464,15 @@ export default function ContactGallery() {
             </div>
           </div>
 
+          {/* Scrollable content */}
+          <div className="flex-1 overflow-y-auto min-h-0">
           {/* Image — full size, never cropped */}
-          <div className="shrink-0 flex items-center justify-center">
+          <div className="flex items-center justify-center w-full">
             <img
               src={lightbox.image_url}
               alt={lightbox.prompt || 'Image'}
-              className="w-full object-contain"
-              style={{ maxHeight: '65vh' }}
+              className="w-full max-w-[470px] sm:max-w-[520px] lg:max-w-[580px] object-contain"
+              style={{ maxHeight: '75vh' }}
             />
           </div>
 
@@ -497,8 +499,8 @@ export default function ContactGallery() {
             <div className="mx-4 border-t border-white/10 my-2" />
           </div>
 
-          {/* Comments — scrollable only */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 space-y-3 pb-4">
+          {/* Comments */}
+          <div className="px-4 space-y-3 pb-4">
               {hasMoreComments && (
                 <button
                   onClick={handleLoadMoreComments}
@@ -547,8 +549,9 @@ export default function ContactGallery() {
               )}
           </div>
 
-          {/* Comment input — always pinned at bottom */}
-          <div className="relative shrink-0 border-t border-white/10 px-4 py-2.5 flex items-center gap-3 bg-black">
+          </div>
+          {/* Comment input */}
+          <div className="relative shrink-0 border-t border-white/10 px-4 py-2.5 mb-2 flex items-center gap-3 bg-black">
             {replyTarget && (
               <div className="absolute left-4 right-16 -top-7 text-[10px] text-blue-300/90 truncate">
                 {language === 'ar' ? `رد على @${replyTarget}` : `Replying to @${replyTarget}`}

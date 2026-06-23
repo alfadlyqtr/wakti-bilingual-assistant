@@ -872,7 +872,7 @@ export default function ChatPage() {
                   <img 
                     src={cleanMediaUrl(message.media_url)} 
                     alt="Image message" 
-                    className="max-w-full max-w-[420px] h-auto rounded-lg cursor-pointer"
+                    className="max-w-full max-w-[260px] h-auto rounded-lg cursor-pointer"
                     loading={isLastTwoImages ? undefined : "lazy"}
                     crossOrigin="anonymous"
                     referrerPolicy="no-referrer"
