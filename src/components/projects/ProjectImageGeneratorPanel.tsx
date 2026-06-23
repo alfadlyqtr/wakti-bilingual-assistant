@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2, Sparkles, Upload, Wand2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
@@ -131,6 +131,8 @@ export function ProjectImageGeneratorPanel({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isAmpingPrompt, setIsAmpingPrompt] = useState(false);
   const [isUsingImage, setIsUsingImage] = useState(false);
+  const [generationStartedAt, setGenerationStartedAt] = useState<number | null>(null);
+  const [generationElapsedSeconds, setGenerationElapsedSeconds] = useState(0);
 
   const canGenerate = useMemo(() => {
     const hasPrompt = Boolean(prompt.trim());
@@ -138,6 +140,21 @@ export function ProjectImageGeneratorPanel({
     if (submode === 'image2image' && !referenceDataUrl) return false;
     return true;
   }, [prompt, referenceDataUrl, submode]);
+
+  useEffect(() => {
+    if (!isGenerating || !generationStartedAt) {
+      setGenerationElapsedSeconds(0);
+      return;
+    }
+
+    const updateElapsed = () => {
+      setGenerationElapsedSeconds(Math.max(0, Math.floor((Date.now() - generationStartedAt) / 1000)));
+    };
+
+    updateElapsed();
+    const intervalId = window.setInterval(updateElapsed, 1000);
+    return () => window.clearInterval(intervalId);
+  }, [generationStartedAt, isGenerating]);
 
   const handleReferencePick = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -265,6 +282,8 @@ export function ProjectImageGeneratorPanel({
   const handleGenerate = async () => {
     if (!canGenerate || isGenerating) return;
 
+    setGenerationStartedAt(Date.now());
+    setGenerationElapsedSeconds(0);
     setIsGenerating(true);
     try {
       const { data: authData } = await supabase.auth.getUser();
@@ -323,6 +342,7 @@ export function ProjectImageGeneratorPanel({
       toast.error(message);
     } finally {
       setIsGenerating(false);
+      setGenerationStartedAt(null);
     }
   };
 
@@ -446,15 +466,23 @@ export function ProjectImageGeneratorPanel({
           : (isRTL ? 'إنشاء وحفظ' : 'Generate & Save')}
       </Button>
 
+      {isGenerating && (
+        <p className={cn('text-[11px] text-muted-foreground', isRTL && 'text-right')}>
+          {isRTL
+            ? `الإنشاء قد يستغرق وقتًا أطول أحيانًا... ${generationElapsedSeconds}ث`
+            : `Generation can take longer sometimes... ${generationElapsedSeconds}s`}
+        </p>
+      )}
+
       {resultImage && (
         <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
-          <div className="aspect-[4/3] overflow-hidden rounded-md bg-muted/30">
+          <div className="h-56 overflow-hidden rounded-md bg-muted/30">
             <img src={resultImage.imageUrl} alt={resultImage.prompt || 'Generated image'} className="h-full w-full object-contain" />
           </div>
           <div className={cn('flex items-center justify-between gap-2', isRTL && 'flex-row-reverse')}>
-            <p className="truncate text-xs text-muted-foreground">{resultImage.prompt}</p>
+            <p className="truncate text-xs text-muted-foreground max-w-[70%]">{resultImage.prompt}</p>
             {onUseImage && (
-              <Button type="button" size="sm" onClick={handleUseImage} disabled={isUsingImage}>
+              <Button type="button" size="sm" onClick={handleUseImage} disabled={isUsingImage} className="shrink-0">
                 {isUsingImage
                   ? (isRTL ? 'جاري الإضافة...' : 'Adding...')
                   : (isRTL ? 'استخدم الصورة' : 'Use Image')}

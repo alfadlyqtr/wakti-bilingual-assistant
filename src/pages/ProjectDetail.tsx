@@ -9006,6 +9006,11 @@ ${fixInstructions}
             setShowElementEditPopover(false);
           }}
           onGenerateImage={() => {
+            setIsChangingCarouselImages(false);
+            setPendingElementImageEdit({
+              elementInfo: selectedElementInfo,
+              originalPrompt: 'Replace image'
+            });
             setPhotoSelectorShowOnlyUserPhotos(false);
             setPhotoSelectorInitialTab('generate');
             setPhotoSelectorMultiSelect(false);
@@ -9207,6 +9212,11 @@ ${fixInstructions}
             // Don't clear selectedElementInfo - we need it for the image replacement
           }}
           onGenerateImage={() => {
+            setIsChangingCarouselImages(false);
+            setPendingElementImageEdit({
+              elementInfo: selectedElementInfo,
+              originalPrompt: 'Replace image'
+            });
             setPhotoSelectorShowOnlyUserPhotos(false);
             setPhotoSelectorInitialTab('generate');
             setPhotoSelectorMultiSelect(false);

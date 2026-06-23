@@ -637,6 +637,11 @@ export function StockPhotoSelector({
                 initialPrompt={searchTerm}
                 onSaved={async (image) => {
                   const fallbackPrompt = image.prompt || (isRTL ? 'صورة مولّدة' : 'Generated image');
+                  const generatedPhoto = {
+                    url: image.imageUrl,
+                    title: fallbackPrompt,
+                  };
+
                   setSavedImages((prev) => [
                     {
                       id: image.id || `generated-${Date.now()}`,
@@ -647,6 +652,17 @@ export function StockPhotoSelector({
                     },
                     ...prev.filter((item) => item.image_url !== image.imageUrl),
                   ]);
+
+                  if (multiSelectEnabled || multiSelect) {
+                    setSelectedPhotos((prev) => (
+                      prev.some((item) => item.url === generatedPhoto.url)
+                        ? prev
+                        : [...prev, generatedPhoto]
+                    ));
+                  } else {
+                    setSelectedPhoto(generatedPhoto);
+                  }
+
                   void loadSavedImages();
                 }}
                 onUseImage={async (image) => {
