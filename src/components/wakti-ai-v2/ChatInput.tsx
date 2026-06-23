@@ -124,7 +124,6 @@ export function ChatInput({
   const [chatSubmodeMenuPos, setChatSubmodeMenuPos] = useState<{ top: number; left: number } | null>(null);
   // Talk mode state
   const [isTalkOpen, setIsTalkOpen] = useState(false);
-  const memoryToastSeenRef = useRef<Set<string>>(new Set());
 
   // Compute a safe, clamped viewport position for the QuickModes portal
   const getQuickModesPortalPos = () => {
@@ -524,28 +523,6 @@ export function ChatInput({
     window.addEventListener('wakti-auto-submit', handleAutoSubmit);
     return () => window.removeEventListener('wakti-auto-submit', handleAutoSubmit);
   }, [message, isLoading]);
-
-  useEffect(() => {
-    const latestAssistantWithMemoryAction = [...(sessionMessages || [])]
-      .reverse()
-      .find((m: any) => m?.role === 'assistant' && m?.metadata?.memoryAction && m?.id);
-
-    if (!latestAssistantWithMemoryAction) return;
-
-    const messageId = String(latestAssistantWithMemoryAction.id);
-    if (memoryToastSeenRef.current.has(messageId)) return;
-    memoryToastSeenRef.current.add(messageId);
-
-    const metadata = latestAssistantWithMemoryAction.metadata as any;
-    if (metadata?.memoryAction) {
-      const { toast } = require('sonner');
-      if (metadata.memoryAction.operation === 'remember') {
-        toast.success(language === 'ar' ? 'تم حفظ الذاكرة المفيدة!' : 'Helpful memory saved!');
-      } else {
-        toast.success(language === 'ar' ? 'تم تحديث الذاكرة!' : 'Memory updated!');
-      }
-    }
-  }, [sessionMessages, language]);
 
   const getGuestBlockedMessage = (type: 'attachment' | 'study' | 'search' | 'feature' = 'feature') => {
     if (type === 'attachment') {

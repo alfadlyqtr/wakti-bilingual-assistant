@@ -42,11 +42,8 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const loadInFlightRef = useRef(false);
   const hasLoadedOnceRef = useRef(false);
-  const prevCountsRef = useRef<{ total: number; candidate: number }>({ total: 0, candidate: 0 });
   const showErrorRef = useRef(showError);
-  const showSuccessRef = useRef(showSuccess);
   useEffect(() => { showErrorRef.current = showError; }, [showError]);
-  useEffect(() => { showSuccessRef.current = showSuccess; }, [showSuccess]);
   const isDark = theme === 'dark';
 
   const labels = useMemo(() => ({
@@ -143,21 +140,6 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
       setHelpfulMemoryEnabled(settings.helpfulMemoryEnabled);
       setCapturePaused(settings.capturePaused);
       setItems(memories);
-      // Capture chip: announce new auto-captures or candidates between silent refreshes.
-      if (silent && hasLoadedOnceRef.current) {
-        const prev = prevCountsRef.current;
-        const nextCandidate = memories.filter((m) => m.layer === 'candidate').length;
-        const nextTotal = memories.length;
-        if (nextCandidate > prev.candidate) {
-          showSuccessRef.current(language === 'ar' ? 'اقتراح ذاكرة جديد للمراجعة' : 'New memory suggestion to review');
-        } else if (nextTotal > prev.total) {
-          showSuccessRef.current(language === 'ar' ? 'تم حفظ الذاكرة' : 'Memory saved');
-        }
-      }
-      prevCountsRef.current = {
-        total: memories.length,
-        candidate: memories.filter((m) => m.layer === 'candidate').length,
-      };
       hasLoadedOnceRef.current = true;
     } catch (error) {
       console.error('Helpful memory load failed', error);
@@ -217,9 +199,6 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
     setCapturePaused(paused);
     try {
       await HelpfulMemoryService.updateSettings({ capturePaused: paused });
-      showSuccess(paused
-        ? (language === 'ar' ? 'تم إيقاف التقاط الذاكرة الجديدة' : 'Paused capturing new memories')
-        : (language === 'ar' ? 'تم استئناف التقاط الذاكرة' : 'Resumed capturing memories'));
     } catch (error) {
       console.error('Capture pause toggle failed', error);
       setCapturePaused(!paused);
@@ -502,16 +481,23 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
             <Pause className={`h-3.5 w-3.5 ${mutedText}`} />
             <div>
               <div className={`text-xs font-medium ${headingText}`}>
-                {language === 'ar' ? 'إيقاف التقاط الجديد' : 'Pause capturing new memories'}
+                {language === 'ar' ? 'التقاط الذكريات الجديدة' : 'Capture new memories'}
               </div>
               <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-[hsl(243_15%_42%)]'}`}>
-                {language === 'ar'
-                  ? 'وقتي يستخدم الذاكرة الموجودة فقط. لا يلتقط شيئاً جديداً.'
-                  : 'Wakti uses existing memory only. Nothing new is captured.'}
+                {capturePaused
+                  ? (language === 'ar' ? 'الإضافة التلقائية متوقفة مؤقتاً.' : 'Auto-capture is paused for now.')
+                  : (language === 'ar' ? 'سيحفظ وقتي الذكريات المفيدة تلقائياً.' : 'Wakti will auto-save helpful memories.')}
               </div>
             </div>
           </div>
-          <Switch checked={capturePaused} onCheckedChange={handleCapturePauseToggle} />
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-medium ${capturePaused ? (isDark ? 'text-amber-200' : 'text-[hsl(25_95%_28%)]') : (isDark ? 'text-emerald-200' : 'text-[hsl(160_80%_28%)]')}`}>
+              {capturePaused
+                ? (language === 'ar' ? 'متوقف' : 'Paused')
+                : (language === 'ar' ? 'نشط' : 'Active')}
+            </span>
+            <Switch checked={!capturePaused} onCheckedChange={(enabled) => { void handleCapturePauseToggle(!enabled); }} />
+          </div>
         </div>
       )}
 

@@ -98,18 +98,24 @@ export const INSPECTOR_SCRIPT = `
     const directAsset = readAssetFromNode(target);
     if (directAsset) return directAsset;
 
-    if (target && typeof target.querySelector === 'function') {
-      const descendant = target.querySelector('img[src], img[data-src], video[poster], video[src], source[src]');
-      if (descendant) {
-        const descendantAsset = readAssetFromNode(descendant);
-        if (descendantAsset) return descendantAsset;
-      }
-    }
+    const resolveDescendantAsset = (node) => {
+      if (!node || typeof node.querySelector !== 'function') return null;
+      const descendant = node.querySelector('img[src], img[data-src], video[poster], video[src], source[src], [style*="background-image"]');
+      if (!descendant) return null;
+      return readAssetFromNode(descendant);
+    };
+
+    const descendantAsset = resolveDescendantAsset(target);
+    if (descendantAsset) return descendantAsset;
 
     let current = target?.parentElement || null;
     while (current && current !== document.body && current !== document.documentElement) {
       const ancestorAsset = readAssetFromNode(current);
       if (ancestorAsset) return ancestorAsset;
+
+      const ancestorDescendantAsset = resolveDescendantAsset(current);
+      if (ancestorDescendantAsset) return ancestorDescendantAsset;
+
       current = current.parentElement;
     }
 
