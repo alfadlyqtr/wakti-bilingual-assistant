@@ -98,6 +98,35 @@ const getExifOrientation = (file: File): Promise<number> => {
 const normalizeImageOrientation = (file: File): Promise<string> => {
   return new Promise(async (resolve, reject) => {
     try {
+      const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+      const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
+
+      // Prefer browser-native orientation handling first (safer on iOS/Safari)
+      if (typeof createImageBitmap === 'function') {
+        try {
+          const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions);
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+
+          if (ctx) {
+            canvas.width = bitmap.width;
+            canvas.height = bitmap.height;
+            ctx.drawImage(bitmap, 0, 0);
+            if (typeof bitmap.close === 'function') {
+              bitmap.close();
+            }
+            resolve(canvas.toDataURL(mimeType, quality));
+            return;
+          }
+
+          if (typeof bitmap.close === 'function') {
+            bitmap.close();
+          }
+        } catch {
+          // Fall back to explicit EXIF parsing below
+        }
+      }
+
       const orientation = await getExifOrientation(file);
       
       // If orientation is 1 (normal) or unsupported format, just return raw base64
@@ -150,9 +179,6 @@ const normalizeImageOrientation = (file: File): Promise<string> => {
 
         ctx.drawImage(img, 0, 0);
         
-        // Export as same type if possible, fallback to JPEG
-        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-        const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
         const dataUrl = canvas.toDataURL(mimeType, quality);
         
         console.log(`📐 EXIF: Normalized orientation ${orientation} → upright`);

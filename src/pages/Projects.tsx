@@ -1435,12 +1435,12 @@ Apply these styles consistently throughout the entire design.`;
         ? `\n\nمهم جداً:
 - تصميم متجاوب بالكامل (موبايل أولاً) - يجب أن يعمل بشكل مثالي على جميع الأجهزة
 - أضف زر واتساب عائم للتواصل السريع
-- استخدم صور من Freepik للمنتجات/الخدمات (لا تستخدم Unsplash أو picsum أو placeholder.com)
+- استخدم فقط صور مولّدة بالذكاء الاصطناعي عبر Nano Banana (KIE) للمنتجات/الخدمات، بدون أي مزود صور جاهزة
 - تأكد من دعم اللغة العربية (RTL) بشكل كامل`
         : `\n\nIMPORTANT:
 - Fully responsive design (mobile-first) - must work perfectly on all devices
 - Add floating WhatsApp button for quick contact
-- Use Freepik images for products/services (DO NOT use Unsplash, picsum, or placeholder.com)
+- Use only AI-generated images via Nano Banana (KIE) for products/services, with no stock provider integration
 - Ensure smooth animations and transitions throughout`;
       
       finalPrompt += additionalInstructions;

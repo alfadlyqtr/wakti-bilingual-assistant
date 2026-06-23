@@ -52,6 +52,7 @@ interface ElementEditPopoverProps {
   onDirectEdit: (changes: Record<string, string | undefined>) => void;
   onAIEdit: (prompt: string) => void;
   onImageChange?: () => void;
+  onGenerateImage?: () => void;
   onSavedImageChange?: () => void;
   onSelectParent?: () => void;
   onResize?: (dimensions: ResizeDimensions) => void;
@@ -332,6 +333,7 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
   onDirectEdit,
   onAIEdit,
   onImageChange,
+  onGenerateImage,
   onSavedImageChange,
   onSelectParent,
   onResize,
@@ -1035,6 +1037,15 @@ export const ElementEditPopover: React.FC<ElementEditPopoverProps> = ({
                 >
                   <ImageIcon className="h-4 w-4 mr-2" />
                   {isRTL ? 'اختر من المكتبة' : 'Choose from Library'}
+                </Button>
+
+                <Button
+                  onClick={() => onGenerateImage?.()}
+                  variant="outline"
+                  className="w-full border-zinc-700 bg-zinc-800/40 hover:bg-zinc-800 text-white"
+                >
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  {isRTL ? 'إنشاء بالذكاء الاصطناعي' : 'Generate with AI'}
                 </Button>
 
                 <Button

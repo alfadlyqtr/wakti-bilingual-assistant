@@ -225,8 +225,8 @@ const INTENT_PATTERNS: PatternConfig[] = [
       modalType: 'SmartMediaManager',
       modalProps: { initialTab: 'site' },
       response: {
-        en: '🖼️ Here are all the images on your site!\n\nYou can:\n• Click any image to view full size\n• Download or copy the URL\n• Replace with saved/generated images or uploads',
-        ar: '🖼️ إليك جميع الصور في موقعك!\n\nيمكنك:\n• النقر على أي صورة لعرضها بالحجم الكامل\n• تحميل أو نسخ الرابط\n• الاستبدال بصور محفوظة/مولّدة أو صورك المرفوعة'
+        en: '🖼️ Here are all the images on your site!\n\nYou can:\n• Click any image to view full size\n• Download or copy the URL\n• Replace with saved/generated images, uploads, or project generator output',
+        ar: '🖼️ إليك جميع الصور في موقعك!\n\nيمكنك:\n• النقر على أي صورة لعرضها بالحجم الكامل\n• تحميل أو نسخ الرابط\n• الاستبدال بصور محفوظة/مولّدة أو صورك المرفوعة أو صور مولّد المشروع'
       }
     }
   },
@@ -243,8 +243,8 @@ const INTENT_PATTERNS: PatternConfig[] = [
       modalType: 'SmartMediaManager',
       modalProps: { initialTab: 'upload' },
       response: {
-        en: '🧠 Stock images are removed. Use your uploads or saved generated images.',
-        ar: '🧠 تم حذف الصور الجاهزة. استخدم صورك المرفوعة أو الصور المولّدة المحفوظة.'
+        en: '🧠 Stock images are removed. Use uploads, saved generated images, or generate inside the project generator.',
+        ar: '🧠 تم حذف الصور الجاهزة. استخدم صورك المرفوعة أو الصور المولّدة المحفوظة أو أنشئ من مولّد المشروع.'
       }
     }
   },

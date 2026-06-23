@@ -1,11 +1,12 @@
 import { supabase } from '@/integrations/supabase/client';
 
-// Define types for Freepik API responses
-const BACKEND_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api';
-const PROJECT_ID_PATTERN = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+const GENERATED_IMAGE_URL = 'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-text2image';
+const ALLOWED_RATIOS = new Set([
+  '1:1', '1:4', '1:8', '2:3', '3:2', '3:4', '4:1', '4:3', '4:5', '5:4', '8:1', '9:16', '16:9', '21:9', 'auto'
+]);
 
-export interface FreepikResource {
-  id: number | string;
+export interface GeneratedImageResource {
+  id: string;
   title: string;
   url: string;
   image: {
@@ -20,27 +21,12 @@ export interface FreepikResource {
   };
 }
 
-export interface FreepikSearchFilters {
-  orientation?: {
-    landscape?: number;
-    portrait?: number;
-    square?: number;
-    panoramic?: number;
-  };
-  content_type?: {
-    photo?: number;
-    vector?: number;
-    psd?: number;
-  };
-  people?: {
-    include?: number;
-    exclude?: number;
-  };
-  color?: string;
+export interface GeneratedImageSearchFilters {
+  aspect_ratio?: string;
 }
 
-export interface FreepikSearchResponse {
-  data: FreepikResource[];
+export interface GeneratedImageSearchResponse {
+  data: GeneratedImageResource[];
   meta: {
     current_page: number;
     last_page: number;
@@ -49,176 +35,89 @@ export interface FreepikSearchResponse {
   };
 }
 
-interface BackendFreepikImage {
-  id?: number | string;
-  title?: string;
-  url?: string;
-  thumbnail?: string;
-  orientation?: string;
-  type?: string;
-  author?: string;
-  freepikUrl?: string;
-}
-
-function mapBackendImageToResource(image: BackendFreepikImage, index: number): FreepikResource {
-  const imageUrl = image.url || image.thumbnail || '';
-  const previewUrl = image.thumbnail || image.url || '';
-
-  return {
-    id: image.id ?? `freepik-${index}`,
-    title: image.title || 'Freepik image',
-    url: imageUrl || image.freepikUrl || previewUrl,
-    image: {
-      source: {
-        url: previewUrl || imageUrl,
-      },
-      type: image.type || 'photo',
-      orientation: image.orientation || 'landscape',
-    },
-    author: {
-      name: image.author || 'Freepik',
-    },
-  };
-}
-
-function normalizeFilters(filters: FreepikSearchFilters): Record<string, string> {
-  const orientation = Object.entries(filters.orientation || {}).find(([, value]) => Boolean(value))?.[0];
-  const contentType = Object.entries(filters.content_type || {}).find(([, value]) => Boolean(value))?.[0];
-
-  return {
-    ...(orientation ? { orientation } : {}),
-    ...(contentType ? { type: contentType } : {}),
-    ...(filters.color ? { color: filters.color } : {}),
-  };
-}
-
-function resolveProjectId(projectId?: string): string | null {
-  if (projectId?.trim()) {
-    return projectId.trim();
+function normalizeAspectRatio(value?: string): string {
+  if (value && ALLOWED_RATIOS.has(value)) {
+    return value;
   }
-
-  if (typeof window === 'undefined') {
-    return null;
-  }
-
-  const match = window.location.pathname.match(PROJECT_ID_PATTERN);
-  return match?.[0] || null;
+  return '16:9';
 }
 
-class FreepikServiceClass {
-  /**
-   * Search for images on Freepik
-   * @param term Search term
-   * @param filters Optional filters
-   * @param page Page number (starts at 1)
-   * @param limit Results per page
-   * @param language Language code (e.g., 'en-US')
-   * @param projectId Project ID
-   */
+class GeneratedImageServiceClass {
   async searchImages(
     term: string,
-    filters: FreepikSearchFilters = {},
+    filters: GeneratedImageSearchFilters = {},
     page: number = 1,
-    limit: number = 10,
-    language: string = 'en-US',
-    projectId?: string
-  ): Promise<{ success: boolean; data?: FreepikSearchResponse; error?: string }> {
+    limit: number = 4,
+  ): Promise<{ success: boolean; data?: GeneratedImageSearchResponse; error?: string }> {
     try {
-      const resolvedProjectId = resolveProjectId(projectId);
-      if (!resolvedProjectId) {
-        return { success: false, error: 'Project ID not available' };
+      const prompt = (term || '').trim();
+      if (!prompt) {
+        return { success: false, error: 'Prompt is required' };
       }
 
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      const accessToken = session?.access_token;
+      const safeLimit = Math.max(1, Math.min(Math.floor(Number(limit) || 4), 8));
+      const aspectRatio = normalizeAspectRatio(filters.aspect_ratio);
 
-      if (!accessToken) {
-        return {
-          success: false,
-          error: 'Please sign in again to search stock photos',
-        };
-      }
+      const results = await Promise.all(
+        Array.from({ length: safeLimit }, async (_, index) => {
+          const variantPrompt = index === 0 ? prompt : `${prompt} variation ${index + 1}`;
+          const response = await fetch(GENERATED_IMAGE_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: variantPrompt,
+              quality: 'best_fast',
+              aspect_ratio: aspectRatio,
+              model: 'nano-banana-2',
+            }),
+          });
 
-      const response = await fetch(BACKEND_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({
-          projectId: resolvedProjectId,
-          action: 'freepik/images',
-          data: {
-            query: term,
-            page,
-            limit,
-            language,
-            filters: normalizeFilters(filters),
-          },
-        }),
-      });
-
-      if (!response.ok) {
-        let errorMessage = `Freepik search failed (${response.status})`;
-        const rawError = await response.text();
-
-        try {
-          const errorData = rawError ? JSON.parse(rawError) : null;
-          errorMessage = errorData?.error || errorData?.message || errorMessage;
-        } catch {
-          if (rawError?.trim()) {
-            errorMessage = rawError.trim();
+          const payload = await response.json().catch(() => ({} as any));
+          const url = typeof payload?.url === 'string' ? payload.url : '';
+          if (!response.ok || !url) {
+            return null;
           }
-        }
 
-        if (response.status === 401) {
-          errorMessage = 'Session expired. Please sign in again';
-        }
+          return {
+            id: `${Date.now()}-${index}`,
+            title: variantPrompt,
+            url,
+            image: {
+              source: { url },
+              type: 'generated',
+              orientation: aspectRatio,
+            },
+            author: {
+              name: 'Nano Banana',
+            },
+          } as GeneratedImageResource;
+        })
+      );
 
-        return { success: false, error: errorMessage };
+      const images = results.filter((item): item is GeneratedImageResource => Boolean(item));
+      if (images.length === 0) {
+        return { success: false, error: 'No generated images returned' };
       }
-
-      const data = await response.json();
-      if (data?.fallback) {
-        return {
-          success: false,
-          error: data?.error || 'Freepik search is currently unavailable',
-        };
-      }
-
-      const mappedImages = Array.isArray(data?.images)
-        ? data.images
-            .map((image: BackendFreepikImage, index: number) => mapBackendImageToResource(image, index))
-            .filter((image: FreepikResource) => Boolean(image.image?.source?.url))
-        : [];
 
       return {
         success: true,
         data: {
-          data: mappedImages,
+          data: images,
           meta: {
-            current_page: Number(data?.page) || page,
-            last_page: Number(data?.lastPage) || 1,
-            per_page: limit,
-            total: Number(data?.total) || mappedImages.length,
+            current_page: page,
+            last_page: 1,
+            per_page: safeLimit,
+            total: images.length,
           },
         },
       };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Failed to search Freepik' };
+      return { success: false, error: err.message || 'Failed to generate images' };
     }
   }
 
-  /**
-   * Check if user has uploaded photos
-   * @param userId User ID
-   * @returns Object with success flag and count of uploaded photos
-   */
   async checkUserUploads(userId: string): Promise<{ success: boolean; count: number; error?: string }> {
     try {
-      // Check for user uploads in the 'uploads' storage bucket under user's folder
       const { data, error } = await supabase.storage
         .from('uploads')
         .list(userId, {
@@ -227,11 +126,9 @@ class FreepikServiceClass {
         });
 
       if (error) {
-        console.error('Error checking user uploads:', error);
         return { success: false, count: 0, error: error.message };
       }
 
-      // Filter for image files only
       const imageFiles = (data || []).filter(file => {
         const ext = file.name.toLowerCase().split('.').pop();
         return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext || '');
@@ -239,23 +136,12 @@ class FreepikServiceClass {
 
       return { success: true, count: imageFiles.length };
     } catch (err: any) {
-      console.error('Error in checkUserUploads:', err);
       return { success: false, count: 0, error: err.message || 'Failed to check user uploads' };
     }
   }
 
-  /**
-   * Get user uploaded photos
-   * @param userId User ID
-   * @returns Object with success flag and array of user photos
-   */
-  async getUserPhotos(userId: string): Promise<{ 
-    success: boolean; 
-    photos?: Array<{ filename: string; url: string; }>; 
-    error?: string 
-  }> {
+  async getUserPhotos(userId: string): Promise<{ success: boolean; photos?: Array<{ filename: string; url: string; }>; error?: string }> {
     try {
-      // Get user uploads from the 'uploads' storage bucket
       const { data, error } = await supabase.storage
         .from('uploads')
         .list(userId, {
@@ -264,16 +150,10 @@ class FreepikServiceClass {
         });
 
       if (error) {
-        console.error('Error getting user photos:', error);
         return { success: false, error: error.message };
       }
 
-      if (!data || data.length === 0) {
-        return { success: true, photos: [] };
-      }
-
-      // Filter for image files and convert to public URLs
-      const imageFiles = data.filter(file => {
+      const imageFiles = (data || []).filter(file => {
         const ext = file.name.toLowerCase().split('.').pop();
         return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext || '');
       });
@@ -282,19 +162,18 @@ class FreepikServiceClass {
         const { data: urlData } = supabase.storage
           .from('uploads')
           .getPublicUrl(`${userId}/${file.name}`);
-        
+
         return {
           filename: file.name,
-          url: urlData.publicUrl
+          url: urlData.publicUrl,
         };
       });
 
       return { success: true, photos };
     } catch (err: any) {
-      console.error('Error in getUserPhotos:', err);
       return { success: false, error: err.message || 'Failed to get user photos' };
     }
   }
 }
 
-export const FreepikService = new FreepikServiceClass();
+export const GeneratedImageService = new GeneratedImageServiceClass();

@@ -12,9 +12,43 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const KIE_API_KEY = Deno.env.get("KIE_API_KEY")!;
+const KIE_API_KEY = (
+  Deno.env.get("KIE_AI_API_KEY")
+  || Deno.env.get("KIE_API_KEY")
+  || Deno.env.get("NANO_BANANA_API_KEY")
+  || Deno.env.get("KIE_BEARER_TOKEN")
+  || ""
+).trim();
+const MODEL = "nano-banana-2";
+const KIE_CREATE_TASK_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
+const KIE_RECORD_INFO_ENDPOINT = "https://api.kie.ai/api/v1/jobs/recordInfo";
+const NANO_BANANA_SUPPORTED_RATIOS = new Set([
+  "1:1",
+  "1:4",
+  "1:8",
+  "2:3",
+  "3:2",
+  "3:4",
+  "4:1",
+  "4:3",
+  "4:5",
+  "5:4",
+  "8:1",
+  "9:16",
+  "16:9",
+  "21:9",
+  "auto",
+]);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+function normalizeAspectRatio(rawValue: unknown): string {
+  const value = String(rawValue || "auto").trim();
+  if (NANO_BANANA_SUPPORTED_RATIOS.has(value)) {
+    return value;
+  }
+  return "auto";
+}
 
 // Extract image URLs from KIE response
 // KIE returns: data.state = "success", data.resultJson = JSON string with { resultUrls: ["..."] }
@@ -57,7 +91,10 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const prompt: string = (body?.prompt || "").toString().trim();
     const userId: string = body?.user_id || "";
-    const aspectRatio: string = body?.aspect_ratio || "9:16";
+    const aspectRatio = normalizeAspectRatio(body?.aspect_ratio);
+    const callbackUrlFromBody = typeof body?.callBackUrl === "string" ? body.callBackUrl.trim() : "";
+    const callbackUrlFromEnv = (Deno.env.get("KIE_NANO_BANANA_CALLBACK_URL") || "").trim();
+    const callBackUrl = callbackUrlFromBody || callbackUrlFromEnv || undefined;
     // If taskId is provided, this is a poll request — check status and return images if ready
     const taskId: string = body?.taskId || "";
 
@@ -69,7 +106,7 @@ Deno.serve(async (req) => {
 
     // ── POLL MODE: frontend sends taskId to check status ──
     if (taskId) {
-      const resp = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
+      const resp = await fetch(`${KIE_RECORD_INFO_ENDPOINT}?taskId=${taskId}`, {
         headers: { Authorization: `Bearer ${KIE_API_KEY}` },
       });
       const rawText = await resp.text();
@@ -113,8 +150,8 @@ Deno.serve(async (req) => {
         // Return KIE URLs directly — frontend saves the selected image when user picks one
         await logAIFromRequest(req, {
           functionName: "wakti-grok-text2image",
-          provider: "kie-grok",
-          model: "grok-imagine/text-to-image",
+          provider: "kie-nano-banana-2",
+          model: MODEL,
           status: "success",
           durationMs: Date.now() - startTime,
         });
@@ -157,12 +194,18 @@ Deno.serve(async (req) => {
     const finalPrompt = promptSafety.normalizedPrompt;
     console.log(`[grok-t2i] submit prompt="${finalPrompt.slice(0, 100)}" aspect=${aspectRatio}`);
 
-    const submitResp = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
+    const submitResp = await fetch(KIE_CREATE_TASK_ENDPOINT, {
       method: "POST",
       headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "grok-imagine/text-to-image",
-        input: { prompt: finalPrompt, aspect_ratio: aspectRatio },
+        model: MODEL,
+        ...(callBackUrl ? { callBackUrl } : {}),
+        input: {
+          prompt: finalPrompt,
+          aspect_ratio: aspectRatio,
+          resolution: "1K",
+          output_format: "jpg",
+        },
       }),
     });
     const submitText = await submitResp.text();
@@ -184,8 +227,8 @@ Deno.serve(async (req) => {
     console.error(`[grok-t2i] error:`, msg);
     await logAIFromRequest(req, {
       functionName: "wakti-grok-text2image",
-      provider: "kie-grok",
-      model: "grok-imagine/text-to-image",
+      provider: "kie-nano-banana-2",
+      model: MODEL,
       status: "error",
       errorMessage: msg,
       durationMs: Date.now() - startTime,

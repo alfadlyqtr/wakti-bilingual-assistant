@@ -25,9 +25,6 @@ serve(async (req) => {
     let apiKey = null;
     
     switch (service.toLowerCase()) {
-      case 'freepik':
-        apiKey = Deno.env.get('FREEPIK_API_KEY');
-        break;
       case 'elevenlabs':
         apiKey = Deno.env.get('ELEVENLABS_API_KEY');
         break;

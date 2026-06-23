@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import ProjectImageGeneratorPanel from '@/components/projects/ProjectImageGeneratorPanel';
 
 interface StockPhotoSelectorProps {
   userId: string;
@@ -16,7 +17,7 @@ interface StockPhotoSelectorProps {
   multiSelect?: boolean;
   onClose: () => void;
   searchTerm?: string;
-  initialTab?: 'user' | 'saved';
+  initialTab?: 'user' | 'saved' | 'generate';
   showOnlyUserPhotos?: boolean; // Hide stock photos tab entirely
 }
 
@@ -53,7 +54,7 @@ export function StockPhotoSelector({
   const isRTL = language === 'ar';
   const [portalReady, setPortalReady] = useState(false);
   // If showOnlyUserPhotos, force user tab
-  const [activeTab, setActiveTab] = useState<'user' | 'saved'>(showOnlyUserPhotos ? 'user' : initialTab);
+  const [activeTab, setActiveTab] = useState<'user' | 'saved' | 'generate'>(showOnlyUserPhotos ? 'user' : initialTab);
   const [backendPhotos, setBackendPhotos] = useState<BackendPhoto[]>([]);
   const [savedImages, setSavedImages] = useState<SavedImage[]>([]);
   const [isLoadingPhotos, setIsLoadingPhotos] = useState(false);
@@ -134,6 +135,17 @@ export function StockPhotoSelector({
       setIsLoadingSaved(false);
     }
   };
+
+  useEffect(() => {
+    const handleFocusRefresh = () => {
+      if (activeTab === 'saved') {
+        void loadSavedImages();
+      }
+    };
+
+    window.addEventListener('focus', handleFocusRefresh);
+    return () => window.removeEventListener('focus', handleFocusRefresh);
+  }, [activeTab]);
 
   const loadBackendPhotos = async () => {
     if (!projectId) {
@@ -254,7 +266,7 @@ export function StockPhotoSelector({
   };
 
   const handleTabChange = (value: string) => {
-    setActiveTab(value as 'user' | 'saved');
+    setActiveTab(value as 'user' | 'saved' | 'generate');
     if (value === 'user' && backendPhotos.length === 0 && !isLoadingPhotos && projectId) {
       loadBackendPhotos();
     } else if (value === 'saved' && savedImages.length === 0 && !isLoadingSaved) {
@@ -399,9 +411,15 @@ export function StockPhotoSelector({
               {isRTL ? (multiSelectEnabled ? 'متعدد' : 'فردي') : (multiSelectEnabled ? 'Multi' : 'Single')}
             </button>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 rounded-full">
-            <X className="h-5 w-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setActiveTab('generate')} className="gap-1.5">
+              <Sparkles className="h-4 w-4" />
+              {isRTL ? 'إنشاء' : 'Generate'}
+            </Button>
+            <Button variant="ghost" size="icon" onClick={onClose} className="h-10 w-10 rounded-full">
+              <X className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
         
         <Tabs defaultValue={showOnlyUserPhotos ? 'user' : 'user'} value={activeTab} onValueChange={handleTabChange} className="flex-1 flex flex-col min-h-0 overflow-hidden">
@@ -414,6 +432,10 @@ export function StockPhotoSelector({
               <TabsTrigger value="saved" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
                 <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 {isRTL ? 'الصور المولّدة' : 'Saved Photos'}
+              </TabsTrigger>
+              <TabsTrigger value="generate" className="flex-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
+                <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                {isRTL ? 'إنشاء' : 'Generate'}
               </TabsTrigger>
             </TabsList>
             {showOnlyUserPhotos && (
@@ -597,10 +619,57 @@ export function StockPhotoSelector({
                 <div className="flex flex-col items-center justify-center h-48 sm:h-64 text-center px-4">
                   <Sparkles className="h-10 w-10 sm:h-12 sm:w-12 text-muted-foreground mb-3 sm:mb-4" />
                   <p className="text-sm sm:text-base text-muted-foreground">
-                    {isRTL ? 'لا توجد صور مولّدة ومحفوظة. أنشئ صوراً في استوديو الذكاء الاصطناعي أولاً.' : 'No AI generated photos found. Create images in the AI Studio first.'}
+                    {isRTL ? 'لا توجد صور مولّدة محفوظة بعد. أنشئ صورة هنا الآن.' : 'No saved generated photos yet. Generate one here now.'}
                   </p>
+                  <Button onClick={() => setActiveTab('generate')} className="mt-4 gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    {isRTL ? 'افتح مولد الصور' : 'Open Generator'}
+                  </Button>
                 </div>
               )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="generate" className="flex-1 flex flex-col min-h-0 mt-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 min-h-0">
+              <ProjectImageGeneratorPanel
+                isRTL={isRTL}
+                initialPrompt={searchTerm}
+                onSaved={async (image) => {
+                  const fallbackPrompt = image.prompt || (isRTL ? 'صورة مولّدة' : 'Generated image');
+                  setSavedImages((prev) => [
+                    {
+                      id: image.id || `generated-${Date.now()}`,
+                      image_url: image.imageUrl,
+                      prompt: fallbackPrompt,
+                      submode: image.submode,
+                      created_at: new Date().toISOString(),
+                    },
+                    ...prev.filter((item) => item.image_url !== image.imageUrl),
+                  ]);
+                  void loadSavedImages();
+                }}
+                onUseImage={async (image) => {
+                  const generatedPhoto = {
+                    url: image.imageUrl,
+                    title: image.prompt || (isRTL ? 'صورة مولّدة' : 'Generated image'),
+                  };
+
+                  if (multiSelectEnabled || multiSelect) {
+                    setSelectedPhotos((prev) => (
+                      prev.some((item) => item.url === generatedPhoto.url)
+                        ? prev
+                        : [...prev, generatedPhoto]
+                    ));
+                    setActiveTab('saved');
+                    toast.success(isRTL ? 'تمت إضافة الصورة إلى التحديد' : 'Image added to selection');
+                    return;
+                  }
+
+                  onSelectPhoto(generatedPhoto);
+                  onClose();
+                }}
+              />
             </div>
           </TabsContent>
         </Tabs>

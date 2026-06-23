@@ -333,7 +333,7 @@ export default function ProjectDetail() {
   // Stock photo selector state
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
-  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'user' | 'saved'>('saved');
+  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'user' | 'saved' | 'generate'>('saved');
   const [photoSelectorMultiSelect, setPhotoSelectorMultiSelect] = useState(false);
   const [isChangingCarouselImages, setIsChangingCarouselImages] = useState(false);
   const [savedPromptForPhotos, setSavedPromptForPhotos] = useState('');
@@ -3912,7 +3912,7 @@ ${fixInstructions}
   };
   
   // Open photo selector (saved generated images + user uploads)
-  const openStockPhotoSelector = (initialTab: 'user' | 'saved' = 'saved', multiSelect: boolean = true, promptToSave?: string, options?: { showOnlyUserPhotos?: boolean }) => {
+  const openStockPhotoSelector = (initialTab: 'user' | 'saved' | 'generate' = 'saved', multiSelect: boolean = true, promptToSave?: string, options?: { showOnlyUserPhotos?: boolean }) => {
     // Save the prompt if provided (from handleChatSubmit when photo request detected)
     if (promptToSave) {
       setSavedPromptForPhotos(promptToSave);
@@ -9005,6 +9005,13 @@ ${fixInstructions}
             setShowStockPhotoSelector(true);
             setShowElementEditPopover(false);
           }}
+          onGenerateImage={() => {
+            setPhotoSelectorShowOnlyUserPhotos(false);
+            setPhotoSelectorInitialTab('generate');
+            setPhotoSelectorMultiSelect(false);
+            setShowStockPhotoSelector(true);
+            setShowElementEditPopover(false);
+          }}
           onAIEdit={(prompt) => {
             const contextPrompt = `For the ${selectedElementInfo.tagName} element ${selectedElementInfo.className ? `with class "${selectedElementInfo.className.split(' ')[0]}"` : ''} containing "${selectedElementInfo.innerText.substring(0, 50)}...": ${prompt}`;
             setLeftPanelMode('code');
@@ -9198,6 +9205,13 @@ ${fixInstructions}
             setShowStockPhotoSelector(true);
             setShowElementEditPopover(false);
             // Don't clear selectedElementInfo - we need it for the image replacement
+          }}
+          onGenerateImage={() => {
+            setPhotoSelectorShowOnlyUserPhotos(false);
+            setPhotoSelectorInitialTab('generate');
+            setPhotoSelectorMultiSelect(false);
+            setShowStockPhotoSelector(true);
+            setShowElementEditPopover(false);
           }}
           onSavedImageChange={() => {
             const isMultiImageContext = shouldTreatSelectionAsMultiImageContext(selectedElementInfo);
