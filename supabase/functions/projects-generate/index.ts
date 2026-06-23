@@ -2534,6 +2534,7 @@ const KIE_API_KEY = (
   Deno.env.get('KIE_BEARER_TOKEN') ||
   ''
 ).trim();
+const KIE_NANO_BANANA_CALLBACK_URL = (Deno.env.get('KIE_NANO_BANANA_CALLBACK_URL') || '').trim();
 
 interface PreFetchedImage {
   query: string;
@@ -2542,6 +2543,8 @@ interface PreFetchedImage {
   filename: string;
   uploadId?: string; // ID from project_uploads table for linking to products
 }
+
+type ProjectImageSurface = 'website' | 'web_app' | 'website_or_web_app';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -2555,6 +2558,40 @@ function selectNanoBananaAspectRatio(query: string): string {
   if (/hero|banner|cover|landscape|wide|interior|exterior/i.test(q)) return '16:9';
 
   return 'auto';
+}
+
+function detectProjectImageSurface(prompt: string): ProjectImageSurface {
+  const text = (prompt || '').toLowerCase();
+
+  if (/\b(web\s*app|webapp|dashboard|admin\s*panel|admin|portal|platform|saas|application|app)\b/i.test(text) || /تطبيق|ويب\s*آب|لوحة\s*تحكم|منصة|بوابة/i.test(prompt)) {
+    return 'web_app';
+  }
+
+  if (/\b(website|site|landing\s*page|homepage|marketing\s*site|portfolio\s*site|company\s*site)\b/i.test(text) || /موقع|صفحة\s*هبوط|صفحة\s*رئيسية/i.test(prompt)) {
+    return 'website';
+  }
+
+  return 'website_or_web_app';
+}
+
+function buildProjectImageContextHint(surface: ProjectImageSurface): string {
+  if (surface === 'web_app') {
+    return 'Important context: this image is for a user web app interface. Keep it product-ready, digital-first, and suitable for modern UI usage.';
+  }
+
+  if (surface === 'website') {
+    return 'Important context: this image is for a user website. Keep it web-ready, brand-safe, and suitable for real production pages.';
+  }
+
+  return 'Important context: this image is for a user website or web app. Keep it web-ready, product-safe, and suitable for real production UI/UX.';
+}
+
+function composeProjectImagePrompt(query: string, surface: ProjectImageSurface): string {
+  const coreQuery = query.trim();
+  if (!coreQuery) return coreQuery;
+
+  const contextHint = buildProjectImageContextHint(surface);
+  return `${coreQuery}\n\n${contextHint}`;
 }
 
 function extractImageUrlsFromUnknown(value: unknown): string[] {
@@ -2600,38 +2637,21 @@ function extractImageUrlsFromUnknown(value: unknown): string[] {
   return [];
 }
 
-async function createNanoBananaTask(prompt: string, aspectRatio: string): Promise<string | null> {
-  if (!KIE_API_KEY) return null;
-
-  const response = await fetch(`${KIE_API_BASE_URL}/jobs/createTask`, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${KIE_API_KEY}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'nano-banana-2',
-      input: {
-        prompt,
-        image_input: [],
-        aspect_ratio: aspectRatio,
-        resolution: '1K',
-        output_format: 'jpg',
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const raw = await response.text();
-    console.warn(`[NanoBanana] createTask failed (${response.status}) for "${prompt}": ${raw}`);
-    return null;
+function buildNanoBananaCallbackUrl(projectId: string, query: string, index: number): string | undefined {
+  if (!KIE_NANO_BANANA_CALLBACK_URL) {
+    return undefined;
   }
 
-  const payload = await response.json();
-  const taskId = payload?.data?.taskId as string | undefined;
-
-  return taskId || null;
+  try {
+    const url = new URL(KIE_NANO_BANANA_CALLBACK_URL);
+    url.searchParams.set('source', 'projects-generate');
+    url.searchParams.set('project_id', projectId);
+    url.searchParams.set('query_index', String(index));
+    url.searchParams.set('query', query.slice(0, 120));
+    return url.toString();
+  } catch {
+    return KIE_NANO_BANANA_CALLBACK_URL;
+  }
 }
 
 async function waitForNanoBananaImage(taskId: string): Promise<string | null> {
@@ -2680,7 +2700,8 @@ async function preFetchAndStoreImages(
   supabase: SupabaseAdminClient,
   projectId: string,
   _userId: string,
-  queries: string[]
+  queries: string[],
+  projectSurface: ProjectImageSurface
 ): Promise<PreFetchedImage[]> {
   const storedImages: PreFetchedImage[] = [];
 
@@ -2689,22 +2710,74 @@ async function preFetchAndStoreImages(
     return storedImages;
   }
   
-  for (const query of queries) {
-    try {
-      const aspectRatio = selectNanoBananaAspectRatio(query);
-      const taskId = await createNanoBananaTask(query, aspectRatio);
-      if (!taskId) {
-        continue;
-      }
+  const uniqueQueries = Array.from(new Set(
+    queries
+      .map((query) => query.trim())
+      .filter((query) => query.length > 0)
+  )).slice(0, 8);
 
-      const imageUrl = await waitForNanoBananaImage(taskId);
-      if (!imageUrl) {
-        continue;
-      }
-
+  const taskSubmissions = await Promise.all(
+    uniqueQueries.map(async (query, index) => {
       try {
+        const aspectRatio = selectNanoBananaAspectRatio(query);
+        const callbackUrl = buildNanoBananaCallbackUrl(projectId, query, index);
+        const generationPrompt = composeProjectImagePrompt(query, projectSurface);
+
+        const response = await fetch(`${KIE_API_BASE_URL}/jobs/createTask`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${KIE_API_KEY}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'nano-banana-2',
+            ...(callbackUrl ? { callBackUrl: callbackUrl } : {}),
+            input: {
+              prompt: generationPrompt,
+              image_input: [],
+              aspect_ratio: aspectRatio,
+              resolution: '1K',
+              output_format: 'jpg',
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const raw = await response.text();
+          console.warn(`[PreFetch] createTask failed (${response.status}) for "${query}": ${raw}`);
+          return null;
+        }
+
+        const payload = await response.json();
+        const taskId = payload?.data?.taskId as string | undefined;
+        if (!taskId) {
+          console.warn(`[PreFetch] Missing taskId for "${query}"`);
+          return null;
+        }
+
+        return { query, taskId };
+      } catch (err) {
+        console.warn(`[PreFetch] Error submitting task for "${query}":`, err);
+        return null;
+      }
+    })
+  );
+
+  const readyTasks = taskSubmissions.filter((entry): entry is { query: string; taskId: string } => Boolean(entry));
+
+  const resolvedImages = await Promise.all(
+    readyTasks.map(async ({ query, taskId }) => {
+      try {
+        const imageUrl = await waitForNanoBananaImage(taskId);
+        if (!imageUrl) {
+          return null;
+        }
+
         const imgRes = await fetch(imageUrl);
-        if (!imgRes.ok) continue;
+        if (!imgRes.ok) {
+          return null;
+        }
 
         const imgBlob = await imgRes.blob();
         const extMatch = imageUrl.match(/\.(png|jpg|jpeg|webp)(?:\?|$)/i);
@@ -2721,7 +2794,7 @@ async function preFetchAndStoreImages(
 
         if (uploadError) {
           console.warn(`[PreFetch] Upload failed for "${query}": ${uploadError.message}`);
-          continue;
+          return null;
         }
 
         const { data: urlData } = supabase.storage
@@ -2729,41 +2802,43 @@ async function preFetchAndStoreImages(
           .getPublicUrl(storagePath);
 
         const storedUrl = urlData?.publicUrl || '';
-
-        if (storedUrl) {
-          const { data: uploadData, error: insertError } = await supabase
-            .from('project_uploads')
-            .insert({
-              project_id: projectId,
-              user_id: _userId,
-              filename,
-              storage_path: storagePath,
-              file_type: imgBlob.type || 'image/jpeg',
-              size_bytes: imgBlob.size,
-              bucket_id: 'project-uploads',
-            })
-            .select('id')
-            .single();
-
-          if (insertError) {
-            console.warn(`[PreFetch] Failed to insert upload record: ${insertError.message}`);
-          }
-
-          storedImages.push({
-            query,
-            url: imageUrl,
-            storedUrl,
-            filename,
-            uploadId: uploadData?.id,
-          });
+        if (!storedUrl) {
+          return null;
         }
-      } catch (imgErr) {
-        console.warn(`[PreFetch] Error processing generated image for "${query}":`, imgErr);
+
+        const { data: uploadData, error: insertError } = await supabase
+          .from('project_uploads')
+          .insert({
+            project_id: projectId,
+            user_id: _userId,
+            filename,
+            storage_path: storagePath,
+            file_type: imgBlob.type || 'image/jpeg',
+            size_bytes: imgBlob.size,
+            bucket_id: 'project-uploads',
+          })
+          .select('id')
+          .single();
+
+        if (insertError) {
+          console.warn(`[PreFetch] Failed to insert upload record: ${insertError.message}`);
+        }
+
+        return {
+          query,
+          url: imageUrl,
+          storedUrl,
+          filename,
+          uploadId: uploadData?.id,
+        } as PreFetchedImage;
+      } catch (err) {
+        console.warn(`[PreFetch] Error resolving task for "${query}":`, err);
+        return null;
       }
-    } catch (err) {
-      console.warn(`[PreFetch] Error generating images for "${query}":`, err);
-    }
-  }
+    })
+  );
+
+  storedImages.push(...resolvedImages.filter((entry): entry is PreFetchedImage => Boolean(entry)));
   
   return storedImages;
 }
@@ -6848,11 +6923,12 @@ Call task_complete when finished.`;
       if (safeMode === 'create') {
         // Pre-generate and store images from Nano Banana 2 based on user's prompt
         const imageQueries = extractImageQueries(prompt);
+        const projectImageSurface = detectProjectImageSurface(prompt);
         let preFetchedImages: PreFetchedImage[] = [];
         
         if (imageQueries.length > 0) {
           try {
-            preFetchedImages = await preFetchAndStoreImages(supabase, projectId, userId, imageQueries);
+            preFetchedImages = await preFetchAndStoreImages(supabase, projectId, userId, imageQueries, projectImageSurface);
           } catch (prefetchErr) {
             console.warn(`[Create Mode] Image pre-generation failed:`, prefetchErr);
             // Continue without pre-fetched images

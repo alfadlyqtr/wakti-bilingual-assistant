@@ -124,7 +124,6 @@ export function ChatInput({
   const [chatSubmodeMenuPos, setChatSubmodeMenuPos] = useState<{ top: number; left: number } | null>(null);
   // Talk mode state
   const [isTalkOpen, setIsTalkOpen] = useState(false);
-  const memoryToastSeenRef = useRef<Set<string>>(new Set());
 
   // Compute a safe, clamped viewport position for the QuickModes portal
   const getQuickModesPortalPos = () => {
@@ -525,28 +524,6 @@ export function ChatInput({
     return () => window.removeEventListener('wakti-auto-submit', handleAutoSubmit);
   }, [message, isLoading]);
 
-  useEffect(() => {
-    const latestAssistantWithMemoryAction = [...(sessionMessages || [])]
-      .reverse()
-      .find((m: any) => m?.role === 'assistant' && m?.metadata?.memoryAction && m?.id);
-
-    if (!latestAssistantWithMemoryAction) return;
-
-    const messageId = String(latestAssistantWithMemoryAction.id);
-    if (memoryToastSeenRef.current.has(messageId)) return;
-    memoryToastSeenRef.current.add(messageId);
-
-    const metadata = latestAssistantWithMemoryAction.metadata as any;
-    if (metadata?.memoryAction) {
-      const { toast } = require('sonner');
-      if (metadata.memoryAction.operation === 'remember') {
-        toast.success(language === 'ar' ? 'تم حفظ الذاكرة المفيدة!' : 'Helpful memory saved!');
-      } else {
-        toast.success(language === 'ar' ? 'تم تحديث الذاكرة!' : 'Memory updated!');
-      }
-    }
-  }, [sessionMessages, language]);
-
   const getGuestBlockedMessage = (type: 'attachment' | 'study' | 'search' | 'feature' = 'feature') => {
     if (type === 'attachment') {
       return language === 'ar'
@@ -801,6 +778,35 @@ export function ChatInput({
   const normalizeImageOrientation = (file: File): Promise<string> => {
     return new Promise(async (resolve, reject) => {
       try {
+        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
+
+        // Prefer browser-native orientation handling first (safer on iOS/Safari)
+        if (typeof createImageBitmap === 'function') {
+          try {
+            const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            if (ctx) {
+              canvas.width = bitmap.width;
+              canvas.height = bitmap.height;
+              ctx.drawImage(bitmap, 0, 0);
+              if (typeof bitmap.close === 'function') {
+                bitmap.close();
+              }
+              resolve(canvas.toDataURL(mimeType, quality));
+              return;
+            }
+
+            if (typeof bitmap.close === 'function') {
+              bitmap.close();
+            }
+          } catch {
+            // Fall back to explicit EXIF parsing below
+          }
+        }
+
         // Get EXIF orientation
         const orientation = await new Promise<number>((res) => {
           // PNG/non-JPEG don't have EXIF
@@ -895,8 +901,6 @@ export function ChatInput({
           }
 
           ctx.drawImage(img, 0, 0);
-          const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-          const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
           const dataUrl = canvas.toDataURL(mimeType, quality);
           console.log(`📐 EXIF: Normalized orientation ${orientation} → upright`);
           resolve(dataUrl);

@@ -12,6 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import ProjectImageGeneratorPanel from '@/components/projects/ProjectImageGeneratorPanel';
 
 interface UploadedFile {
   id: string;
@@ -41,6 +42,7 @@ interface SavedImage {
 export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: BackendUploadsTabProps) {
   const [uploading, setUploading] = useState(false);
   const [previewFile, setPreviewFile] = useState<UploadedFile | null>(null);
+  const [generatorOpen, setGeneratorOpen] = useState(false);
   const [savedPickerOpen, setSavedPickerOpen] = useState(false);
   const [importingImageId, setImportingImageId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -111,42 +113,52 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
     }
   }, [uploads]);
 
+  const loadSavedImages = useCallback(async () => {
+    setLoadingSavedImages(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      if (!user) {
+        setSavedImages([]);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('user_generated_images' as any)
+        .select('id, image_url, prompt, submode, meta, created_at')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(50) as any;
+
+      if (error) throw error;
+      const filtered = ((data || []) as SavedImage[]).filter((image) => {
+        if (!image.image_url) return false;
+        const submode = image.submode || '';
+        return ['text2image', 'image2image', 'draw', 'visual-ads'].includes(submode);
+      });
+      setSavedImages(filtered);
+    } catch (err) {
+      console.error('Error loading saved generated images:', err);
+    } finally {
+      setLoadingSavedImages(false);
+    }
+  }, []);
+
   React.useEffect(() => {
     if (mediaType !== 'image') return;
+    void loadSavedImages();
+  }, [mediaType, loadSavedImages]);
 
-    const loadSavedImages = async () => {
-      setLoadingSavedImages(true);
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const user = session?.user;
-        if (!user) {
-          setSavedImages([]);
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from('user_generated_images' as any)
-          .select('id, image_url, prompt, submode, meta, created_at')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-          .limit(50) as any;
-
-        if (error) throw error;
-        const filtered = ((data || []) as SavedImage[]).filter((image) => {
-          if (!image.image_url) return false;
-          const submode = image.submode || '';
-          return ['text2image', 'image2image', 'draw', 'visual-ads'].includes(submode);
-        });
-        setSavedImages(filtered);
-      } catch (err) {
-        console.error('Error loading saved generated images:', err);
-      } finally {
-        setLoadingSavedImages(false);
+  React.useEffect(() => {
+    const handleFocusRefresh = () => {
+      if (mediaType === 'image') {
+        void loadSavedImages();
       }
     };
 
-    loadSavedImages();
-  }, [mediaType]);
+    window.addEventListener('focus', handleFocusRefresh);
+    return () => window.removeEventListener('focus', handleFocusRefresh);
+  }, [mediaType, loadSavedImages]);
 
   const getFileUrl = (upload: UploadedFile) => {
     // Use signed URL if available, otherwise try public URL
@@ -421,16 +433,30 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
                     ? (isRTL ? 'افتح نافذة المحفوظات لاختيار الصور بسرعة' : 'Open the saved popup to pick your generated images quickly')
                     : (isRTL ? 'لا توجد صور مولدة محفوظة بعد' : 'No saved generated images yet')}
                 </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSavedPickerOpen(true)}
-                  disabled={savedImages.length === 0}
-                  className="gap-2"
-                >
-                  <Sparkles className="h-4 w-4" />
-                  {isRTL ? 'اختر من المحفوظات' : 'Pick from Saved'}
-                </Button>
+                <div className={cn("flex items-center gap-2", isRTL && "flex-row-reverse")}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setGeneratorOpen(true)}
+                    className="gap-2"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {isRTL ? 'إنشاء صورة' : 'Generate Image'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      await loadSavedImages();
+                      setSavedPickerOpen(true);
+                    }}
+                    disabled={savedImages.length === 0}
+                    className="gap-2"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    {isRTL ? 'اختر من المحفوظات' : 'Pick from Saved'}
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -650,6 +676,32 @@ export function BackendUploadsTab({ uploads, projectId, isRTL, onRefresh }: Back
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={generatorOpen} onOpenChange={setGeneratorOpen}>
+        <DialogContent className="max-w-2xl p-0 overflow-hidden" title={isRTL ? 'مولد الصور للمشروع' : 'Project Image Generator'}>
+          <DialogHeader className="p-4 pb-2 border-b border-border/40">
+            <DialogTitle className="truncate">{isRTL ? 'إنشاء صورة للمشروع' : 'Generate project image'}</DialogTitle>
+          </DialogHeader>
+          <div className="p-4">
+            <ProjectImageGeneratorPanel
+              isRTL={isRTL}
+              onSaved={async () => {
+                await loadSavedImages();
+              }}
+              onUseImage={async (image) => {
+                await handleSavedImageImport({
+                  id: image.id || `generated-${Date.now()}`,
+                  image_url: image.imageUrl,
+                  prompt: image.prompt || null,
+                  submode: image.submode,
+                  created_at: new Date().toISOString(),
+                });
+                setGeneratorOpen(false);
+              }}
+            />
+          </div>
         </DialogContent>
       </Dialog>
 

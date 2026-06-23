@@ -283,7 +283,7 @@ const generateActionsFromResponse = (content: string): QuickAction[] => {
   if (imageIssue) {
     actions.push(
       { id: 'fix-images', label: 'Fix broken images', labelAr: 'أصلح الصور المكسورة', icon: <Zap className="w-3.5 h-3.5" />, prompt: 'Fix all the broken images on the site', category: 'features' },
-      { id: 'add-stock-images', label: 'Add stock photos', labelAr: 'أضف صور من المكتبة', icon: <Plus className="w-3.5 h-3.5" />, prompt: 'Replace broken images with stock photos from Freepik', category: 'design' }
+      { id: 'add-generated-images', label: 'Generate replacement images', labelAr: 'أنشئ صور بديلة', icon: <Plus className="w-3.5 h-3.5" />, prompt: 'Replace broken images with AI-generated Nano Banana images', category: 'design' }
     );
   }
 

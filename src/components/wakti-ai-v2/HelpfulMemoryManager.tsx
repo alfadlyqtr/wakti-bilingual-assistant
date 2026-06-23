@@ -42,11 +42,8 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const loadInFlightRef = useRef(false);
   const hasLoadedOnceRef = useRef(false);
-  const prevCountsRef = useRef<{ total: number; candidate: number }>({ total: 0, candidate: 0 });
   const showErrorRef = useRef(showError);
-  const showSuccessRef = useRef(showSuccess);
   useEffect(() => { showErrorRef.current = showError; }, [showError]);
-  useEffect(() => { showSuccessRef.current = showSuccess; }, [showSuccess]);
   const isDark = theme === 'dark';
 
   const labels = useMemo(() => ({
@@ -143,21 +140,6 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
       setHelpfulMemoryEnabled(settings.helpfulMemoryEnabled);
       setCapturePaused(settings.capturePaused);
       setItems(memories);
-      // Capture chip: announce new auto-captures or candidates between silent refreshes.
-      if (silent && hasLoadedOnceRef.current) {
-        const prev = prevCountsRef.current;
-        const nextCandidate = memories.filter((m) => m.layer === 'candidate').length;
-        const nextTotal = memories.length;
-        if (nextCandidate > prev.candidate) {
-          showSuccessRef.current(language === 'ar' ? 'اقتراح ذاكرة جديد للمراجعة' : 'New memory suggestion to review');
-        } else if (nextTotal > prev.total) {
-          showSuccessRef.current(language === 'ar' ? 'تم حفظ الذاكرة' : 'Memory saved');
-        }
-      }
-      prevCountsRef.current = {
-        total: memories.length,
-        candidate: memories.filter((m) => m.layer === 'candidate').length,
-      };
       hasLoadedOnceRef.current = true;
     } catch (error) {
       console.error('Helpful memory load failed', error);
@@ -217,9 +199,6 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
     setCapturePaused(paused);
     try {
       await HelpfulMemoryService.updateSettings({ capturePaused: paused });
-      showSuccess(paused
-        ? (language === 'ar' ? 'تم إيقاف التقاط الذاكرة الجديدة' : 'Paused capturing new memories')
-        : (language === 'ar' ? 'تم استئناف التقاط الذاكرة' : 'Resumed capturing memories'));
     } catch (error) {
       console.error('Capture pause toggle failed', error);
       setCapturePaused(!paused);
@@ -371,11 +350,10 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
       : 'border-red-200 bg-white text-red-700 hover:bg-red-50';
     const previewClamp = !isExpanded ? 'overflow-hidden whitespace-nowrap text-ellipsis' : '';
     const cardPadding = isExpanded ? 'p-3' : 'px-3 py-2.5';
-    const collapsedTextWidth = !isCandidate ? 'max-w-[calc(100%-104px)]' : '';
     return (
       <div key={item.id} className={`rounded-2xl border transition-colors ${cardPadding} ${cardShell}`}>
         <div className={`flex justify-between gap-3 ${isExpanded ? 'items-start' : 'items-center'}`}>
-          <div className={`min-w-0 flex-1 ${collapsedTextWidth}`}>
+          <div className="min-w-0 flex-1">
             <div className={`${isExpanded ? 'text-sm leading-7' : 'text-[15px] leading-6'} ${previewClamp} ${isDark ? 'text-slate-100' : 'text-[hsl(243_84%_14%)]'}`}>
               {item.memoryText}
             </div>
@@ -384,7 +362,7 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
             <button
               type="button"
               onClick={() => toggleExpanded(item.id)}
-              className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${toggleClass}`}
+              className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${toggleClass}`}
             >
               <span>{isExpanded ? labels.lessDetails : labels.viewDetails}</span>
               {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -503,16 +481,23 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
             <Pause className={`h-3.5 w-3.5 ${mutedText}`} />
             <div>
               <div className={`text-xs font-medium ${headingText}`}>
-                {language === 'ar' ? 'إيقاف التقاط الجديد' : 'Pause capturing new memories'}
+                {language === 'ar' ? 'التقاط الذكريات الجديدة' : 'Capture new memories'}
               </div>
               <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-[hsl(243_15%_42%)]'}`}>
-                {language === 'ar'
-                  ? 'وقتي يستخدم الذاكرة الموجودة فقط. لا يلتقط شيئاً جديداً.'
-                  : 'Wakti uses existing memory only. Nothing new is captured.'}
+                {capturePaused
+                  ? (language === 'ar' ? 'الإضافة التلقائية متوقفة مؤقتاً.' : 'Auto-capture is paused for now.')
+                  : (language === 'ar' ? 'سيحفظ وقتي الذكريات المفيدة تلقائياً.' : 'Wakti will auto-save helpful memories.')}
               </div>
             </div>
           </div>
-          <Switch checked={capturePaused} onCheckedChange={handleCapturePauseToggle} />
+          <div className="flex items-center gap-2">
+            <span className={`text-[11px] font-medium ${capturePaused ? (isDark ? 'text-amber-200' : 'text-[hsl(25_95%_28%)]') : (isDark ? 'text-emerald-200' : 'text-[hsl(160_80%_28%)]')}`}>
+              {capturePaused
+                ? (language === 'ar' ? 'متوقف' : 'Paused')
+                : (language === 'ar' ? 'نشط' : 'Active')}
+            </span>
+            <Switch checked={!capturePaused} onCheckedChange={(enabled) => { void handleCapturePauseToggle(!enabled); }} />
+          </div>
         </div>
       )}
 
@@ -533,15 +518,15 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
             </div>
             <Sparkles className={`mt-0.5 h-4 w-4 shrink-0 ${isDark ? 'text-blue-300' : 'text-[hsl(243_84%_14%)]'}`} />
           </div>
-          <div className="mt-3 grid w-full grid-cols-2 gap-2">
+          <div className="mt-3 grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
             <Button
               type="button"
               size="sm"
               onClick={() => setProfileFormOpen((v) => !v)}
               className={`h-8 w-full min-w-0 justify-center rounded-xl px-3 text-xs text-white ${isDark ? 'bg-[linear-gradient(135deg,hsl(210,100%,65%)_0%,hsl(260,80%,65%)_50%,hsl(280,70%,65%)_100%)] shadow-[0_4px_16px_hsla(260,80%,65%,0.45)] hover:brightness-110' : primaryActionClass}`}
             >
-              <UserCog className="mr-1 h-3.5 w-3.5" />
-              {labels.quickSetupAction}
+              <UserCog className="mr-1 h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{labels.quickSetupAction}</span>
             </Button>
             <Button
               type="button"
@@ -550,14 +535,15 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
               onClick={handleStartAdd}
               className={`h-8 w-full min-w-0 justify-center rounded-xl px-3 text-xs ${secondaryActionClass}`}
             >
-              <Plus className="mr-1 h-3.5 w-3.5" />
-              {labels.addButton}
+              <Plus className="mr-1 h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{labels.addButton}</span>
             </Button>
           </div>
         </div>
       )}
 
-      <div className={`mt-3 flex flex-wrap gap-1 rounded-xl border p-1 ${tabShell}`}>
+      <div className="mt-3 -mx-1 overflow-x-auto px-1 pb-1">
+        <div className={`inline-flex min-w-max gap-1 rounded-xl border p-1 ${tabShell}`}>
         {tabs.map((tab) => {
           const count = grouped[tab].length;
           const isActive = activeTab === tab;
@@ -566,7 +552,7 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 min-w-[22%] rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors ${
+              className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                 isActive
                   ? isDark
                     ? 'bg-blue-500 text-white'
@@ -595,6 +581,7 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
             </button>
           );
         })}
+        </div>
       </div>
 
       {profileFormOpen && (

@@ -243,46 +243,39 @@ function createNoopTelemetryResponse(): Promise<Response> {
 
 const SAFE_STOCK_IMAGES_HELPER = `import { useEffect, useState } from "react";
 
-const BACKEND_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api";
+const GENERATE_URL = "https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/wakti-text2image";
+const ALLOWED_RATIOS = new Set(["1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9", "auto"]);
 
 function toLabel(query) {
-  if (typeof query !== "string" || !query.trim()) return "stock image";
-  return query.trim().split(/\\s+/).slice(0, 4).join(" ");
+  if (typeof query !== "string" || !query.trim()) return "generated image";
+  return query.trim().split(/\\s+/).slice(0, 6).join(" ");
 }
 
 function toLimit(limit) {
   const n = Number(limit);
-  if (!Number.isFinite(n)) return 5;
-  return Math.max(1, Math.min(Math.floor(n), 20));
+  if (!Number.isFinite(n)) return 4;
+  return Math.max(1, Math.min(Math.floor(n), 8));
 }
 
-export function getStaticPlaceholder(query, width = 400, height = 300) {
-  const w = Math.max(64, Number(width) || 400);
-  const h = Math.max(64, Number(height) || 300);
-  const text = encodeURIComponent(toLabel(query));
-  return "https://placehold.co/" + w + "x" + h + "/1a1a2e/eaeaea?text=" + text;
+function normalizeAspectRatio(value) {
+  const aspect = typeof value === "string" ? value.trim() : "16:9";
+  if (ALLOWED_RATIOS.has(aspect)) return aspect;
+  return "16:9";
+}
+
+function buildInlineFallback(query, width = 1200, height = 800) {
+  const safeWidth = Math.max(320, Number(width) || 1200);
+  const safeHeight = Math.max(200, Number(height) || 800);
+  const text = toLabel(query).replace(/</g, "").replace(/>/g, "");
+  const svg = "<svg xmlns='http://www.w3.org/2000/svg' width='" + safeWidth + "' height='" + safeHeight + "' viewBox='0 0 " + safeWidth + " " + safeHeight + "'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='1'><stop offset='0%' stop-color='#0c0f14'/><stop offset='100%' stop-color='#060541'/></linearGradient></defs><rect width='100%' height='100%' fill='url(#g)'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='Segoe UI, Arial, sans-serif' font-size='32' fill='#f2f2f2' opacity='0.9'>" + text + "</text></svg>";
+  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
 }
 
 function buildFallbackImages(query, limit) {
   const safeLimit = toLimit(limit);
   return Array.from({ length: safeLimit }, (_, index) =>
-    getStaticPlaceholder(toLabel(query) + " " + (index + 1), 1200, 800)
+    buildInlineFallback(toLabel(query) + " " + (index + 1), 1200, 800)
   );
-}
-
-function extractUrls(payload) {
-  if (!payload || typeof payload !== "object") return [];
-  const maybeImages = payload.images;
-  if (!Array.isArray(maybeImages)) return [];
-  return maybeImages
-    .map((item) => {
-      if (typeof item === "string") return item;
-      if (item && typeof item === "object") {
-        return item.url || item.thumbnail || "";
-      }
-      return "";
-    })
-    .filter((value) => typeof value === "string" && value.trim().length > 0);
 }
 
 async function safeJson(response) {
@@ -293,7 +286,7 @@ async function safeJson(response) {
   }
 }
 
-async function postWithTimeout(url, init, timeoutMs = 8000) {
+async function postWithTimeout(url, init, timeoutMs = 45000) {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -303,51 +296,55 @@ async function postWithTimeout(url, init, timeoutMs = 8000) {
   }
 }
 
+async function generateOne(prompt, aspectRatio) {
+  const response = await postWithTimeout(
+    GENERATE_URL,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        prompt,
+        quality: "best_fast",
+        aspect_ratio: aspectRatio,
+        provider: "kie",
+        model: "nano-banana-2",
+      }),
+    },
+    60000
+  );
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = await safeJson(response);
+  const url = typeof payload?.url === "string" ? payload.url.trim() : "";
+  return url || null;
+}
+
 export async function fetchStockImages(query, limit = 5, options = {}) {
   const normalizedQuery = typeof query === "string" ? query.trim() : "";
   const safeLimit = toLimit(limit);
-  const fallback = buildFallbackImages(normalizedQuery || "stock image", safeLimit);
+  const fallback = buildFallbackImages(normalizedQuery || "generated image", safeLimit);
 
   if (!normalizedQuery) {
     return fallback;
   }
 
-  const projectId = typeof options.projectId === "string" && options.projectId.trim()
-    ? options.projectId.trim()
-    : "preview";
+  const aspectRatio = normalizeAspectRatio(options?.aspectRatio);
+  const urls = await Promise.all(
+    Array.from({ length: safeLimit }, (_, index) => {
+      const prompt = index === 0 ? normalizedQuery : normalizedQuery + " variation " + (index + 1);
+      return generateOne(prompt, aspectRatio);
+    })
+  );
 
-  if (projectId === "preview") {
-    return fallback;
-  }
-
-  try {
-    const response = await postWithTimeout(BACKEND_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId,
-        action: "freepik/images",
-        data: { query: normalizedQuery, limit: safeLimit },
-      }),
-    });
-
-    if (!response.ok) {
-      const details = await response.text().catch(() => "");
-      console.warn("[stockImages] backend error", response.status, details.slice(0, 180));
-      return fallback;
-    }
-
-    const payload = await safeJson(response);
-    const urls = extractUrls(payload).slice(0, safeLimit);
-    return urls.length > 0 ? urls : fallback;
-  } catch (error) {
-    console.warn("[stockImages] falling back to placeholder images", error);
-    return fallback;
-  }
+  const filtered = urls.filter((value) => typeof value === "string" && value.length > 0);
+  return filtered.length > 0 ? filtered : fallback;
 }
 
 export function useStockImage(query, options = {}) {
-  const [image, setImage] = useState(() => getStaticPlaceholder(query, 1200, 800));
+  const [image, setImage] = useState(() => buildInlineFallback(query, 1200, 800));
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -357,11 +354,11 @@ export function useStockImage(query, options = {}) {
     fetchStockImages(query, 1, options)
       .then((urls) => {
         if (cancelled) return;
-        setImage(urls[0] || getStaticPlaceholder(query, 1200, 800));
+        setImage(urls[0] || buildInlineFallback(query, 1200, 800));
       })
       .catch(() => {
         if (cancelled) return;
-        setImage(getStaticPlaceholder(query, 1200, 800));
+        setImage(buildInlineFallback(query, 1200, 800));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -370,7 +367,7 @@ export function useStockImage(query, options = {}) {
     return () => {
       cancelled = true;
     };
-  }, [query, options.projectId]);
+  }, [query, options?.projectId, options?.aspectRatio]);
 
   return { image, loading };
 }

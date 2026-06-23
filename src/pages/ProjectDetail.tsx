@@ -333,7 +333,7 @@ export default function ProjectDetail() {
   // Stock photo selector state
   const [showStockPhotoSelector, setShowStockPhotoSelector] = useState(false);
   const [photoSearchTerm, setPhotoSearchTerm] = useState('');
-  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'user' | 'saved'>('saved');
+  const [photoSelectorInitialTab, setPhotoSelectorInitialTab] = useState<'user' | 'saved' | 'generate'>('saved');
   const [photoSelectorMultiSelect, setPhotoSelectorMultiSelect] = useState(false);
   const [isChangingCarouselImages, setIsChangingCarouselImages] = useState(false);
   const [savedPromptForPhotos, setSavedPromptForPhotos] = useState('');
@@ -3665,6 +3665,54 @@ ${fixInstructions}
     newUrl: string
   ): { success: boolean; updatedFiles: Record<string, string>; targetFile: string | null } => {
     if (!elementInfo) return { success: false, updatedFiles: files, targetFile: null };
+
+    const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const collectUrlCandidates = (value: string): string[] => {
+      const result = new Set<string>();
+      const cleaned = (value || '').trim();
+      if (!cleaned) return [];
+
+      const add = (candidate?: string) => {
+        const normalized = (candidate || '').trim();
+        if (normalized) result.add(normalized);
+      };
+
+      add(cleaned);
+      add(cleaned.split('#')[0]);
+      add(cleaned.split('#')[0].split('?')[0]);
+
+      try {
+        add(decodeURIComponent(cleaned));
+      } catch {
+      }
+
+      try {
+        const parsed = new URL(cleaned);
+        add(parsed.href);
+        add(`${parsed.pathname}${parsed.search}`);
+        add(parsed.pathname);
+        add(parsed.pathname.split('/').filter(Boolean).pop());
+      } catch {
+      }
+
+      add(cleaned.split('/').filter(Boolean).pop());
+      return Array.from(result).sort((a, b) => b.length - a.length);
+    };
+
+    const replaceAssetAttributeWithinTag = (tagMarkup: string, attrName: string, replacementUrl: string): string => {
+      const quotedPattern = new RegExp(`(${attrName}=)(["'])[^"']*\\2`, 'i');
+      if (quotedPattern.test(tagMarkup)) {
+        return tagMarkup.replace(quotedPattern, `$1"${replacementUrl}"`);
+      }
+
+      const expressionPattern = new RegExp(`(${attrName}=)\\{[^}]*\\}`, 'i');
+      if (expressionPattern.test(tagMarkup)) {
+        return tagMarkup.replace(expressionPattern, `$1"${replacementUrl}"`);
+      }
+
+      return tagMarkup;
+    };
     
     const resolvedClassName = ('imageTargetClassName' in elementInfo ? (elementInfo as any).imageTargetClassName : '') || elementInfo.className || '';
     const resolvedTag = ('imageTargetTagName' in elementInfo ? (elementInfo as any).imageTargetTagName : '') || elementInfo.tagName || '';
@@ -3675,10 +3723,19 @@ ${fixInstructions}
     const attributeName = imageTargetMode === 'poster' ? 'poster' : 'src';
     
     let oldSrc = ('imageUrl' in elementInfo ? (elementInfo as any).imageUrl : '') || '';
-    if (!oldSrc && resolvedOpeningTag) {
-      const srcMatch = resolvedOpeningTag.match(/(?:src|poster)=["']([^"']+)["']/);
-      if (srcMatch) oldSrc = srcMatch[1];
+    const openingTagSourceMatch = resolvedOpeningTag.match(/(?:src|poster)=["']([^"']+)["']/i);
+    const openingTagExpressionMatch = resolvedOpeningTag.match(new RegExp(`${attributeName}=\\{([^}]+)\\}`, 'i'));
+    const openingTagSource = openingTagSourceMatch?.[1]?.trim() || '';
+    const openingTagExpression = openingTagExpressionMatch?.[1]?.trim() || '';
+
+    if (!oldSrc && openingTagSource) {
+      oldSrc = openingTagSource;
     }
+
+    const sourceCandidates = Array.from(new Set([
+      ...collectUrlCandidates(oldSrc),
+      ...collectUrlCandidates(openingTagSource),
+    ])).sort((a, b) => b.length - a.length);
     
     const fileKeys = Object.keys(files).sort((a, b) => {
       const priorityPatterns = [/carousel/i, /slider/i, /image/i, /gallery/i, /hero/i, /banner/i];
@@ -3687,20 +3744,21 @@ ${fixInstructions}
       return aScore - bScore;
     });
     
-    if (oldSrc) {
-      for (const filePath of fileKeys) {
-        const content = files[filePath];
-        if (!content || typeof content !== 'string') continue;
-        
-        if (content.includes(oldSrc)) {
-          const escapedSrc = oldSrc.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const srcPattern = new RegExp(`(["'])${escapedSrc}\\1`, 'g');
-          const newContent = content.replace(srcPattern, `$1${newUrl}$1`);
-          
+    if (sourceCandidates.length > 0) {
+      for (const candidate of sourceCandidates) {
+        const escapedCandidate = escapeRegExp(candidate);
+        const quotedSourcePattern = new RegExp(`(["'])${escapedCandidate}\\1`, 'g');
+
+        for (const filePath of fileKeys) {
+          const content = files[filePath];
+          if (!content || typeof content !== 'string') continue;
+          if (!content.includes(candidate)) continue;
+
+          const newContent = content.replace(quotedSourcePattern, `$1${newUrl}$1`);
           if (newContent !== content) {
-            console.log(`Image replaced in ${filePath} using oldSrc match`);
-            return { 
-              success: true, 
+            console.log(`Image replaced in ${filePath} using source candidate match`);
+            return {
+              success: true,
               updatedFiles: { ...files, [filePath]: newContent },
               targetFile: filePath
             };
@@ -3708,10 +3766,98 @@ ${fixInstructions}
         }
       }
     }
+
+    if (imageTargetMode === 'background' && sourceCandidates.length > 0) {
+      for (const candidate of sourceCandidates) {
+        const escapedCandidate = escapeRegExp(candidate);
+        const backgroundPattern = new RegExp(`url\\((["'])?${escapedCandidate}\\1\\)`, 'g');
+
+        for (const filePath of fileKeys) {
+          const content = files[filePath];
+          if (!content || typeof content !== 'string') continue;
+
+          const newContent = content.replace(backgroundPattern, `url("${newUrl}")`);
+          if (newContent !== content) {
+            console.log(`Image replaced in ${filePath} using background-image URL match`);
+            return {
+              success: true,
+              updatedFiles: { ...files, [filePath]: newContent },
+              targetFile: filePath
+            };
+          }
+        }
+      }
+    }
+
+    if (openingTagExpression) {
+      const escapedExpression = escapeRegExp(openingTagExpression);
+      const assetTagPattern = tag || '[a-zA-Z0-9_.-]+';
+      const expressionPattern = new RegExp(`(<${assetTagPattern}[^>]*?${attributeName}=)\\{\\s*${escapedExpression}\\s*\\}([^>]*>)`);
+
+      for (const filePath of fileKeys) {
+        const content = files[filePath];
+        if (!content || typeof content !== 'string') continue;
+
+        const newContent = content.replace(expressionPattern, `$1"${newUrl}"$2`);
+        if (newContent !== content) {
+          console.log(`Image replaced in ${filePath} using expression match`);
+          return {
+            success: true,
+            updatedFiles: { ...files, [filePath]: newContent },
+            targetFile: filePath
+          };
+        }
+      }
+    }
+
+    const openingTagAltMatch = resolvedOpeningTag.match(/\balt=["']([^"']+)["']/i);
+    const openingTagClassMatch = resolvedOpeningTag.match(/\b(?:className|class)=["']([^"']+)["']/i);
+    const signatureAlt = openingTagAltMatch?.[1]?.trim() || '';
+    const signatureClassTokens = (openingTagClassMatch?.[1] || '').split(/\s+/).filter(Boolean);
+    const signatureClassToken =
+      signatureClassTokens.find((token) => token.length > 3 && !/^(relative|absolute|w-full|h-full|flex|grid|block|inline|object-cover|object-contain)$/i.test(token))
+      || signatureClassTokens[0]
+      || '';
+
+    if (signatureAlt || signatureClassToken) {
+      const assetTagPattern = tag || '[a-zA-Z0-9_.-]+';
+      const openingTagPattern = new RegExp(`<${assetTagPattern}[^>]*>`, 'g');
+      const altPattern = signatureAlt ? new RegExp(`\\balt=(["'])${escapeRegExp(signatureAlt)}\\1`, 'i') : null;
+      const classPattern = signatureClassToken
+        ? new RegExp(`\\b(?:className|class)=(["'])[^"']*\\b${escapeRegExp(signatureClassToken)}\\b[^"']*\\1`, 'i')
+        : null;
+
+      for (const filePath of fileKeys) {
+        const content = files[filePath];
+        if (!content || typeof content !== 'string') continue;
+
+        openingTagPattern.lastIndex = 0;
+        let match: RegExpExecArray | null = null;
+
+        while ((match = openingTagPattern.exec(content)) !== null) {
+          const matchedTag = match[0];
+          if (altPattern && !altPattern.test(matchedTag)) continue;
+          if (classPattern && !classPattern.test(matchedTag)) continue;
+
+          const replacedTag = replaceAssetAttributeWithinTag(matchedTag, attributeName, newUrl);
+          if (replacedTag === matchedTag) continue;
+
+          const start = match.index;
+          const end = start + matchedTag.length;
+          const newContent = `${content.slice(0, start)}${replacedTag}${content.slice(end)}`;
+          console.log(`Image replaced in ${filePath} using opening-tag signature match`);
+          return {
+            success: true,
+            updatedFiles: { ...files, [filePath]: newContent },
+            targetFile: filePath
+          };
+        }
+      }
+    }
     
     // Strategy 2: Match by className across all files
     if (className) {
-      const escapedClass = className.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedClass = escapeRegExp(className);
       const assetTagPattern = tag || '[a-zA-Z0-9_.-]+';
       const patterns = [
         new RegExp(`(<${assetTagPattern}[^>]*?${attributeName}=)(["'])([^"']+)(\\2)([^>]*?(?:className|class)=["'][^"']*${escapedClass}[^"']*["'][^>]*>)`, 'g'),
@@ -3912,7 +4058,7 @@ ${fixInstructions}
   };
   
   // Open photo selector (saved generated images + user uploads)
-  const openStockPhotoSelector = (initialTab: 'user' | 'saved' = 'saved', multiSelect: boolean = true, promptToSave?: string, options?: { showOnlyUserPhotos?: boolean }) => {
+  const openStockPhotoSelector = (initialTab: 'user' | 'saved' | 'generate' = 'saved', multiSelect: boolean = true, promptToSave?: string, options?: { showOnlyUserPhotos?: boolean }) => {
     // Save the prompt if provided (from handleChatSubmit when photo request detected)
     if (promptToSave) {
       setSavedPromptForPhotos(promptToSave);
@@ -9005,6 +9151,18 @@ ${fixInstructions}
             setShowStockPhotoSelector(true);
             setShowElementEditPopover(false);
           }}
+          onGenerateImage={() => {
+            setIsChangingCarouselImages(false);
+            setPendingElementImageEdit({
+              elementInfo: selectedElementInfo,
+              originalPrompt: 'Replace image'
+            });
+            setPhotoSelectorShowOnlyUserPhotos(false);
+            setPhotoSelectorInitialTab('generate');
+            setPhotoSelectorMultiSelect(false);
+            setShowStockPhotoSelector(true);
+            setShowElementEditPopover(false);
+          }}
           onAIEdit={(prompt) => {
             const contextPrompt = `For the ${selectedElementInfo.tagName} element ${selectedElementInfo.className ? `with class "${selectedElementInfo.className.split(' ')[0]}"` : ''} containing "${selectedElementInfo.innerText.substring(0, 50)}...": ${prompt}`;
             setLeftPanelMode('code');
@@ -9198,6 +9356,18 @@ ${fixInstructions}
             setShowStockPhotoSelector(true);
             setShowElementEditPopover(false);
             // Don't clear selectedElementInfo - we need it for the image replacement
+          }}
+          onGenerateImage={() => {
+            setIsChangingCarouselImages(false);
+            setPendingElementImageEdit({
+              elementInfo: selectedElementInfo,
+              originalPrompt: 'Replace image'
+            });
+            setPhotoSelectorShowOnlyUserPhotos(false);
+            setPhotoSelectorInitialTab('generate');
+            setPhotoSelectorMultiSelect(false);
+            setShowStockPhotoSelector(true);
+            setShowElementEditPopover(false);
           }}
           onSavedImageChange={() => {
             const isMultiImageContext = shouldTreatSelectionAsMultiImageContext(selectedElementInfo);

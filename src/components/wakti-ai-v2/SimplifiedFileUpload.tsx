@@ -59,6 +59,35 @@ export function SimplifiedFileUpload({
   const fileToBase64 = (file: File): Promise<string> => {
     return new Promise(async (resolve, reject) => {
       try {
+        const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+        const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
+
+        // Prefer browser-native orientation handling first (safer on iOS/Safari)
+        if (typeof createImageBitmap === 'function') {
+          try {
+            const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' } as ImageBitmapOptions);
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            if (ctx) {
+              canvas.width = bitmap.width;
+              canvas.height = bitmap.height;
+              ctx.drawImage(bitmap, 0, 0);
+              if (typeof bitmap.close === 'function') {
+                bitmap.close();
+              }
+              resolve(canvas.toDataURL(mimeType, quality));
+              return;
+            }
+
+            if (typeof bitmap.close === 'function') {
+              bitmap.close();
+            }
+          } catch {
+            // Fall back to explicit EXIF parsing below
+          }
+        }
+
         const orientation = await new Promise<number>((res) => {
           if (!file.type.includes('jpeg') && !file.type.includes('jpg') && !file.name.toLowerCase().match(/\.(jpe?g|heic|heif)$/)) {
             res(1);
@@ -170,8 +199,6 @@ export function SimplifiedFileUpload({
           }
 
           ctx.drawImage(img, 0, 0);
-          const mimeType = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
-          const quality = mimeType === 'image/jpeg' ? 0.92 : undefined;
           resolve(canvas.toDataURL(mimeType, quality));
         };
 

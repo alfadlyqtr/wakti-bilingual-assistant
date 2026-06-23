@@ -14,6 +14,9 @@ interface TalkBubbleProps {
 }
 
 const MAX_RECORD_SECONDS = 10; // 10 second limit
+const NOISE_STRIKE_WINDOW_MS = 12000;
+const NOISE_STRIKES_TO_GUARD = 3;
+const NOISE_GUARD_MAX_MS = 45000;
 
 type TalkLocation = {
   city?: string;
@@ -119,10 +122,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const [aiTranscript, setAiTranscript] = useState<string>('');
   const [conversationHistory, setConversationHistory] = useState<TalkTurn[]>([]);
   const [talkSummary, setTalkSummary] = useState<string>('');
-  const [sessionModelLabel, setSessionModelLabel] = useState<string>('');
   const [debugHint, setDebugHint] = useState<string>('');
   const [searchMode, setSearchMode] = useState(false); // One-turn search mode (auto-resets after use)
   const [isSearching, setIsSearching] = useState(false); // Currently fetching search results
+  const [isNoiseGuardActive, setIsNoiseGuardActive] = useState(false);
   const [personalTouch, setPersonalTouch] = useState<any>(null);
   const [userLocation, setUserLocation] = useState<TalkLocation | null>(null);
 
@@ -145,6 +148,13 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const turnCounterRef = useRef(0);
   const pendingAutoStartAfterConnectRef = useRef(false);
   const startRecordingRef = useRef<(() => void) | null>(null);
+  const transcriptionModelRef = useRef<'gpt-4o-transcribe' | 'gpt-realtime-whisper'>('gpt-4o-transcribe');
+  const lastUserTranscriptRef = useRef('');
+  const lastUserTranscriptAtRef = useRef(0);
+  const noiseGuardActiveRef = useRef(false);
+  const noiseStrikeCountRef = useRef(0);
+  const noiseStrikeWindowStartRef = useRef(0);
+  const noiseGuardActivatedAtRef = useRef(0);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -195,7 +205,73 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
   const isAssistantPlaybackLocked = useCallback(() => Date.now() < assistantPlaybackLockUntilRef.current, []);
 
-  const rearmListening = useCallback((delayMs = 0) => {
+  const resetNoiseStrikes = useCallback(() => {
+    noiseStrikeCountRef.current = 0;
+    noiseStrikeWindowStartRef.current = 0;
+  }, []);
+
+  const disableNoiseGuard = useCallback((clearHint = false) => {
+    noiseGuardActiveRef.current = false;
+    noiseGuardActivatedAtRef.current = 0;
+    setIsNoiseGuardActive(false);
+    resetNoiseStrikes();
+    if (clearHint) {
+      setDebugHint('');
+    }
+  }, [resetNoiseStrikes]);
+
+  const enableNoiseGuard = useCallback(() => {
+    if (noiseGuardActiveRef.current) {
+      return;
+    }
+
+    noiseGuardActiveRef.current = true;
+    noiseGuardActivatedAtRef.current = Date.now();
+    setIsNoiseGuardActive(true);
+    setMicTracksEnabled(false);
+
+    if (dcRef.current && dcRef.current.readyState === 'open') {
+      try {
+        dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+      } catch {
+        // Ignore transient channel send errors
+      }
+    }
+
+    setStatus('ready');
+    setDebugHint(t(
+      'Noisy place detected. Tap once, speak, then I continue normally.',
+      'تم رصد ضوضاء عالية. اضغط مرة وتكلم، ثم أكمل بشكل طبيعي.'
+    ));
+  }, [setMicTracksEnabled, t]);
+
+  const maybeReleaseNoiseGuard = useCallback(() => {
+    if (!noiseGuardActiveRef.current) {
+      return;
+    }
+
+    if (Date.now() - noiseGuardActivatedAtRef.current > NOISE_GUARD_MAX_MS) {
+      disableNoiseGuard(true);
+    }
+  }, [disableNoiseGuard]);
+
+  const registerNoiseStrike = useCallback((reason: string) => {
+    const now = Date.now();
+    if (now - noiseStrikeWindowStartRef.current > NOISE_STRIKE_WINDOW_MS) {
+      noiseStrikeWindowStartRef.current = now;
+      noiseStrikeCountRef.current = 1;
+    } else {
+      noiseStrikeCountRef.current += 1;
+    }
+
+    console.log('[Talk] Noise strike:', reason, `${noiseStrikeCountRef.current}/${NOISE_STRIKES_TO_GUARD}`);
+
+    if (noiseStrikeCountRef.current >= NOISE_STRIKES_TO_GUARD) {
+      enableNoiseGuard();
+    }
+  }, [enableNoiseGuard]);
+
+  const rearmListening = useCallback((delayMs = 0, options?: { forceArm?: boolean }) => {
     if (rearmTimeoutRef.current) {
       clearTimeout(rearmTimeoutRef.current);
       rearmTimeoutRef.current = null;
@@ -214,9 +290,21 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       if (!isConversationActiveRef.current || !isConnectionReady || !dcRef.current || dcRef.current.readyState !== 'open') {
         return;
       }
+
+      maybeReleaseNoiseGuard();
+      if (noiseGuardActiveRef.current && !options?.forceArm) {
+        setMicTracksEnabled(false);
+        setStatus('ready');
+        setDebugHint(t('Noisy place mode: tap once, then speak.', 'وضع الضوضاء: اضغط مرة ثم تكلم.'));
+        return;
+      }
+
       setMicTracksEnabled(true);
       dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
       setError(null);
+      if (options?.forceArm) {
+        setDebugHint('');
+      }
       setStatus('listening');
     };
 
@@ -229,7 +317,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     }
 
     arm();
-  }, [isAssistantPlaybackLocked, isConnectionReady, setMicTracksEnabled]);
+  }, [isAssistantPlaybackLocked, isConnectionReady, maybeReleaseNoiseGuard, setMicTracksEnabled, t]);
 
   const normalizeAssistantTranscript = useCallback((text: string) => text.replace(/\s+/g, ' ').trim(), []);
 
@@ -771,12 +859,19 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     conversationHistoryRef.current = [];
     setTalkSummary('');
     talkSummaryRef.current = '';
-    setSessionModelLabel('');
     setDebugHint('');
     setSearchMode(false);
     searchModeRef.current = false;
     setIsSearching(false);
+    setIsNoiseGuardActive(false);
     pendingTranscriptRef.current = '';
+    transcriptionModelRef.current = 'gpt-4o-transcribe';
+    lastUserTranscriptRef.current = '';
+    lastUserTranscriptAtRef.current = 0;
+    noiseGuardActiveRef.current = false;
+    noiseStrikeCountRef.current = 0;
+    noiseStrikeWindowStartRef.current = 0;
+    noiseGuardActivatedAtRef.current = 0;
     syncedTurnIdsRef.current.clear();
     turnCounterRef.current = 0;
     assistantTranscriptBufferRef.current = '';
@@ -863,6 +958,23 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     if (hasCJK) return 'unknown';
     return 'unknown';
   }, []);
+
+  const isDuplicateUserTranscript = useCallback((text: string) => {
+    const normalized = normalizeAssistantTranscript(text);
+    if (!normalized) {
+      return false;
+    }
+
+    const now = Date.now();
+    const duplicate =
+      lastUserTranscriptRef.current === normalized &&
+      now - lastUserTranscriptAtRef.current < 1400;
+
+    lastUserTranscriptRef.current = normalized;
+    lastUserTranscriptAtRef.current = now;
+
+    return duplicate;
+  }, [normalizeAssistantTranscript]);
 
   // Continuous mic level animation
   const startMicLevelAnimation = useCallback(() => {
@@ -1071,9 +1183,12 @@ ${memoryContext ? memoryContext : ''}`
             instructions,
             audio: {
               input: {
+                transcription: {
+                  model: transcriptionModelRef.current,
+                },
                 turn_detection: {
                   type: 'server_vad',
-                  threshold: 0.5,
+                  threshold: 0.62,
                   prefix_padding_ms: 500,
                   silence_duration_ms: 1100,
                   create_response: false,
@@ -1167,9 +1282,12 @@ ${memoryContext ? memoryContext : ''}`
 
       const activeModel = typeof response.data?.model === 'string' ? response.data.model : '';
       const activeTranscriptionModel = typeof response.data?.transcription_model === 'string' ? response.data.transcription_model : '';
+      transcriptionModelRef.current = activeTranscriptionModel === 'gpt-realtime-whisper'
+        ? 'gpt-realtime-whisper'
+        : 'gpt-4o-transcribe';
       const engineLabel = [activeModel, activeTranscriptionModel].filter(Boolean).join(' / ');
-      setSessionModelLabel(engineLabel);
       console.log('[Talk] Active engine:', engineLabel || 'unknown');
+      console.log('[Talk] Active transcription model:', transcriptionModelRef.current);
 
       console.log('[Talk] Got SDP answer, setting remote description...');
       await pc.setRemoteDescription({
@@ -1187,16 +1305,18 @@ ${memoryContext ? memoryContext : ''}`
     }
   }, [buildMemoryContext, buildPersonalTouchSection, language, startMicLevelAnimation, t]);
 
-  // Initialize connection when Talk bubble opens or engine changes
+  // Initialize connection when Talk bubble opens
   useEffect(() => {
     if (isOpen) {
-      setStatus('ready');
+      setStatus('connecting');
       setError(null);
       setIsConnectionReady(false);
+      pendingAutoStartAfterConnectRef.current = true;
       // Kick off helpful-memory fetch in parallel — it's read-only in Talk and
       // non-blocking: if it resolves before session.update, great; if not, the
       // block is simply empty for the first turn and refreshed on later turns.
-      loadHelpfulMemoryForTalk().catch(() => { /* silent — best-effort */ });
+      void loadHelpfulMemoryForTalk().catch(() => { /* silent — best-effort */ });
+      void initializeConnection();
     } else {
       pendingAutoStartAfterConnectRef.current = false;
       flushConversationToChat(true);
@@ -1246,12 +1366,18 @@ ${memoryContext ? memoryContext : ''}`
         }, 30000);
         break;
       case 'conversation.item.input_audio_transcription.completed':
+      case 'input_audio_transcription.completed': {
         // User's speech transcribed
-        const transcript = normalizeAssistantTranscript(msg.transcript || '');
+        const transcript = normalizeAssistantTranscript(msg.transcript || msg.delta || '');
         setLiveTranscript(transcript);
         
         // Only proceed if user actually said something (not empty/silence)
         if (transcript.length > 0) {
+          if (isDuplicateUserTranscript(transcript)) {
+            console.log('[Talk] Ignoring duplicate transcription event:', msg.type, transcript);
+            return;
+          }
+
           if (isLikelyAssistantEcho(transcript)) {
             console.warn('[Talk] Ignoring likely speaker echo transcript:', transcript);
             setDebugHint(tLang(language === 'ar' ? 'ar' : 'en', 'I heard playback echo. Listening again…', 'سمعت صدى من الصوت. أستمع مرة أخرى...'));
@@ -1269,6 +1395,9 @@ ${memoryContext ? memoryContext : ''}`
           const detectedLangResult = detectTranscriptLanguage(transcript);
           const fallbackLang: 'ar' | 'en' = detectedLanguageRef.current || (language === 'ar' ? 'ar' : 'en');
           const detectedLang = detectedLangResult === 'unknown' ? fallbackLang : detectedLangResult;
+
+          disableNoiseGuard(true);
+          resetNoiseStrikes();
 
           if (detectedLangResult === 'unknown') {
             console.warn('[Talk] Transcript language unknown; using fallback language:', detectedLang, transcript);
@@ -1307,6 +1436,7 @@ ${memoryContext ? memoryContext : ''}`
         } else {
           // User didn't say anything - go back to ready without responding
           console.log('[Talk] Empty transcript - user did not speak, skipping response');
+          registerNoiseStrike('empty-transcript');
           if (responseTimeoutRef.current) {
             clearTimeout(responseTimeoutRef.current);
             responseTimeoutRef.current = null;
@@ -1318,6 +1448,7 @@ ${memoryContext ? memoryContext : ''}`
           }
         }
         break;
+      }
       case 'response.created':
         console.log('[Talk] Assistant response created');
         assistantResponseActiveRef.current = true;
@@ -1361,6 +1492,7 @@ ${memoryContext ? memoryContext : ''}`
           scheduleAssistantTurnRecovery(2200);
         } else if (msg.error?.message?.includes('buffer too small')) {
           // Not enough audio detected - just go back to ready
+          registerNoiseStrike('buffer-too-small');
           clearAssistantTurnRecovery();
           assistantResponseActiveRef.current = false;
           console.log('[Talk] Buffer too small - waiting for more speech');
@@ -1383,7 +1515,7 @@ ${memoryContext ? memoryContext : ''}`
       default:
         break;
     }
-  }, [addConversationTurn, bumpAssistantPlaybackLock, clearAssistantTurnRecovery, detectTranscriptLanguage, finishAssistantTurn, isAssistantPlaybackLocked, isLikelyAssistantEcho, language, normalizeAssistantTranscript, rearmListening, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
+  }, [addConversationTurn, bumpAssistantPlaybackLock, clearAssistantTurnRecovery, detectTranscriptLanguage, disableNoiseGuard, finishAssistantTurn, isAssistantPlaybackLocked, isDuplicateUserTranscript, isLikelyAssistantEcho, language, normalizeAssistantTranscript, rearmListening, registerNoiseStrike, resetNoiseStrikes, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
 
   // Perform web search using live-talk-search Edge Function
   const performWebSearch = useCallback(async (query: string, lang: 'ar' | 'en'): Promise<string> => {
@@ -1507,6 +1639,7 @@ ${memoryContext ? memoryContext : ''}`
   const stopRecording = useCallback(() => {
     setIsConversationActive(false);
     isConversationActiveRef.current = false;
+    disableNoiseGuard(true);
     setIsHolding(false);
     isHoldingRef.current = false;
     if (countdownIntervalRef.current) {
@@ -1537,7 +1670,7 @@ ${memoryContext ? memoryContext : ''}`
       dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
     }
     setStatus('ready');
-  }, [setMicTracksEnabled]);
+  }, [disableNoiseGuard, setMicTracksEnabled]);
 
   // Start recording when user holds
   const startRecording = useCallback(() => {
@@ -1547,6 +1680,7 @@ ${memoryContext ? memoryContext : ''}`
       return;
     }
 
+    disableNoiseGuard(true);
     setIsConversationActive(true);
     isConversationActiveRef.current = true;
     setError(null);
@@ -1561,7 +1695,7 @@ ${memoryContext ? memoryContext : ''}`
     setDebugHint('');
     setAiTranscript(''); // Clear previous AI response
     rearmListening();
-  }, [isConnectionReady, language, rearmListening]);
+  }, [disableNoiseGuard, isConnectionReady, language, rearmListening]);
 
   useEffect(() => {
     startRecordingRef.current = startRecording;
@@ -1587,17 +1721,26 @@ ${memoryContext ? memoryContext : ''}`
       return;
     }
 
+    if (isConversationActive && isNoiseGuardActive) {
+      rearmListening(0, { forceArm: true });
+      return;
+    }
+
     if (!isConversationActive) {
       startRecording();
     }
-  }, [initializeConnection, isConnectionReady, isConversationActive, startRecording, status]);
+  }, [initializeConnection, isConnectionReady, isConversationActive, isNoiseGuardActive, rearmListening, startRecording, status]);
 
   if (!isOpen) return null;
 
   const statusText: Record<typeof status, string> = {
     connecting: language === 'ar' ? 'جارٍ الاتصال...' : 'Connecting...',
     ready: isConnectionReady
-      ? (language === 'ar' ? 'اضغط لبدء المحادثة' : 'Tap to start conversation')
+      ? (
+        isConversationActive && isNoiseGuardActive
+          ? (language === 'ar' ? 'ضوضاء عالية: اضغط وتكلم' : 'Noisy place: tap and speak')
+          : (language === 'ar' ? 'اضغط لبدء المحادثة' : 'Tap to start conversation')
+      )
       : (language === 'ar' ? 'اضغط للاتصال' : 'Tap to connect'),
     listening: language === 'ar' ? 'أسمعك...' : 'Listening...',
     processing: language === 'ar' ? 'جارٍ التفكير...' : 'Thinking...',
@@ -1985,7 +2128,11 @@ ${memoryContext ? memoryContext : ''}`
         {/* Instruction text */}
         <p className={`text-sm text-center max-w-[240px] select-none ${theme === 'dark' ? 'text-white/60' : 'text-[#060541]/60'}`}>
           {isConversationActive
-            ? t('Speak naturally. I will wait for you, then answer, then listen again.', 'تحدث بشكل طبيعي. سأنتظر حتى تنتهي، ثم أرد، ثم أعود للاستماع.')
+            ? (
+              isNoiseGuardActive
+                ? t('Noisy place mode is on. Tap the orb, speak, then I return to normal loop.', 'وضع الضوضاء مفعل. اضغط الدائرة وتكلم، ثم أرجع للوضع الطبيعي.')
+                : t('Speak naturally. I will wait for you, then answer, then listen again.', 'تحدث بشكل طبيعي. سأنتظر حتى تنتهي، ثم أرد، ثم أعود للاستماع.')
+            )
             : isConnectionReady
               ? t('Tap once to start a natural conversation', 'اضغط مرة واحدة لبدء محادثة طبيعية')
               : t('Tap once to connect and start', 'اضغط مرة واحدة للاتصال والبدء')}
@@ -2026,10 +2173,9 @@ ${memoryContext ? memoryContext : ''}`
         )}
 
         {/* Lightweight diagnostics */}
-        {(debugHint || sessionModelLabel) && (
+        {debugHint && (
           <div className={`max-w-sm text-center text-xs leading-relaxed select-none ${theme === 'dark' ? 'text-white/45' : 'text-[#060541]/45'}`}>
-            {debugHint && <div>{debugHint}</div>}
-            {sessionModelLabel && <div>{t('Engine', 'المحرك')}: {sessionModelLabel}</div>}
+            <div>{debugHint}</div>
           </div>
         )}
 
