@@ -869,10 +869,10 @@ export default function ChatPage() {
               )}
               {!message.is_deleted && message.message_type === 'image' ? (
                 <div className="relative group">
-                  <img 
-                    src={cleanMediaUrl(message.media_url)} 
-                    alt="Image message" 
-                    className="max-w-full max-w-[260px] h-auto rounded-lg cursor-pointer"
+                  <img
+                    src={cleanMediaUrl(message.media_url)}
+                    alt="Image message"
+                    className="max-w-full h-auto rounded-lg cursor-pointer sm:max-w-[260px] sm:max-h-[320px]"
                     loading={isLastTwoImages ? undefined : "lazy"}
                     crossOrigin="anonymous"
                     referrerPolicy="no-referrer"

@@ -1073,7 +1073,7 @@ export default function GroupChatPage() {
               src={imageUrl}
               alt="sent image"
               className={cn(
-                "block h-auto max-w-full cursor-pointer rounded-lg object-contain",
+                "block h-auto w-full max-w-full cursor-pointer rounded-lg object-contain",
                 compact ? "max-h-[260px]" : "max-h-[320px]"
               )}
               loading={isLastTwoImages ? undefined : "lazy"}
