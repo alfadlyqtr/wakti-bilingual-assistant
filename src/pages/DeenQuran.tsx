@@ -91,6 +91,12 @@ interface Mp3QuranReciter {
   }>;
 }
 
+interface LocalHafsScriptRow {
+  sora?: number;
+  aya_no?: number;
+  aya_text?: string;
+}
+
 async function fetchFromProxy(path: string, edition?: string) {
   const url = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deen-quran-proxy`);
   url.searchParams.set("path", path);
@@ -217,6 +223,7 @@ export default function DeenQuran() {
   const [reciterSearch, setReciterSearch] = useState("");
   const [activeSurah, setActiveSurah] = useState<SurahFull | null>(null);
   const [activeTrans, setActiveTrans] = useState<Ayah[]>([]);
+  const [localHafsByAyah, setLocalHafsByAyah] = useState<Record<string, string>>({});
   const [loadingReader, setLoadingReader] = useState(false);
   const [listenSurahMeta, setListenSurahMeta] = useState<Surah | null>(null);
   const [selectedAyah, setSelectedAyah] = useState<Ayah | null>(null);
@@ -286,6 +293,43 @@ export default function DeenQuran() {
       localStorage.setItem(READER_RECITER_STORAGE_KEY, readerAudioReciter);
     } catch {}
   }, [readerAudioReciter]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadLocalHafsScript = async () => {
+      try {
+        const res = await fetch("/quran/data/hafsData_v18.json");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rows = (await res.json()) as LocalHafsScriptRow[];
+
+        const byAyah: Record<string, string> = {};
+        for (const row of rows) {
+          const surah = Number(row?.sora);
+          const ayah = Number(row?.aya_no);
+          const rawText = typeof row?.aya_text === "string" ? row.aya_text : "";
+          const cleanedText = rawText
+            .replace(/\u00A0/g, " ")
+            .replace(/\s*[٠-٩]+$/u, "")
+            .trim();
+          if (surah > 0 && ayah > 0 && cleanedText) {
+            byAyah[`${surah}:${ayah}`] = cleanedText;
+          }
+        }
+
+        if (!cancelled && Object.keys(byAyah).length > 0) {
+          setLocalHafsByAyah(byAyah);
+        }
+      } catch {
+      }
+    };
+
+    loadLocalHafsScript();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (screen !== "reader" || currentPlaybackAyahIndex < 0) return;
@@ -1066,16 +1110,23 @@ export default function DeenQuran() {
   const isBismillahAyah = (ayah: Ayah) =>
     ayah.numberInSurah === 1 && ayah.text.includes("بِسْم") && ayah.text.includes("رَّح");
 
+  const getArabicDisplayText = (ayah: Ayah, surahNum?: number): string => {
+    const num = surahNum ?? activeSurah?.number;
+    if (!num) return ayah.text;
+    return localHafsByAyah[`${num}:${ayah.numberInSurah}`] ?? ayah.text;
+  };
+
   const stripBismillahPrefix = (ayah: Ayah, surahNum?: number): string => {
     // For surahs other than Al-Fatiha (1) and At-Tawbah (9), the quran-uthmani API
     // always prepends the Bismillah (4 words) to the text of ayah 1.
     // Strip unconditionally based on surah number and ayah position.
     const num = surahNum ?? activeSurah?.number;
+    const sourceText = getArabicDisplayText(ayah, num);
     if (num && num !== 1 && num !== 9 && ayah.numberInSurah === 1) {
-      const words = ayah.text.split(/\s+/);
+      const words = sourceText.split(/\s+/);
       if (words.length > 4) return words.slice(4).join(" ");
     }
-    return ayah.text;
+    return sourceText;
   };
 
   const cleanExplanation = (value: string) => {
@@ -1858,7 +1909,7 @@ export default function DeenQuran() {
                   aria-hidden="true"
                   style={{
                     color: markerTxt,
-                    fontFamily: "'Noto Sans Arabic', serif",
+                    fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', serif",
                     fontSize: 35,
                     lineHeight: 1,
                   }}
@@ -1869,7 +1920,7 @@ export default function DeenQuran() {
                   className="absolute inset-0 flex items-center justify-center"
                   style={{
                     color: markerTxt,
-                    fontFamily: "'Noto Sans Arabic', serif",
+                    fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', serif",
                     fontSize: 14,
                     fontWeight: 700,
                     lineHeight: 1,
@@ -2043,7 +2094,7 @@ export default function DeenQuran() {
                         className="text-[22px] font-bold"
                         dir={isAr ? "rtl" : "ltr"}
                         style={{
-                          fontFamily: isAr ? "'Noto Sans Arabic', serif" : "inherit",
+                          fontFamily: isAr ? "'Uthmanic Hafs', 'Noto Sans Arabic', serif" : "inherit",
                           color: gold,
                           lineHeight: 1.5,
                           textAlign: "center",
@@ -2067,7 +2118,7 @@ export default function DeenQuran() {
                   {/* ── Bismillah ── */}
                   {activeSurah.number !== 9 && activeSurah.number !== 1 && readerPage === 0 && (
                     <p className="text-center mb-5" dir={isAr ? "rtl" : "ltr"} style={{
-                      fontFamily: isAr ? "'Noto Sans Arabic', serif" : "inherit",
+                      fontFamily: isAr ? "'Uthmanic Hafs', 'Noto Sans Arabic', serif" : "inherit",
                       fontSize: "19px", lineHeight: "2",
                       color: gold,
                       textShadow: isDark ? `0 0 18px ${goldFaint}` : "none",
@@ -2088,19 +2139,25 @@ export default function DeenQuran() {
                           <div
                             key={ayah.numberInSurah}
                             ref={(el) => { ayahItemRefs.current[globalIdx] = el; }}
-                            className="w-full flex items-start gap-3 py-3 rounded-xl transition-all"
+                            className="w-full flex flex-col gap-3 py-3 rounded-xl transition-all"
                             style={{ borderBottom: `1px solid ${goldFaint}`, background: isPlaying ? (isDark ? "hsla(45,65%,50%,0.10)" : "hsla(38,85%,85%,0.55)") : "transparent", boxShadow: isPlaying ? (isDark ? `0 0 18px hsla(45,65%,50%,0.22)` : `0 0 14px hsla(38,75%,60%,0.22)`) : "none" }}
                           >
-                            <div className="w-12 flex flex-col items-center gap-1 pt-1 shrink-0">
-                              <div
-                                className="flex items-center justify-center"
-                                style={{
-                                  width: 40,
-                                  height: 40,
-                                }}
-                              >
+                            <button
+                              onClick={() => openAyahSheet(ayah, trans)}
+                              className="flex-1 text-right active:scale-[0.99] transition-all duration-150"
+                            >
+                              <p dir="rtl" style={{
+                                fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif",
+                                fontSize: "21px", lineHeight: "2.2",
+                                color: isPlaying ? gold : pageTxt,
+                                textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
+                                textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
+                              }}>
+                                {stripBismillahPrefix(ayah)}
                                 {renderAyahMarker(displayAyahNumber(ayah))}
-                              </div>
+                              </p>
+                            </button>
+                            <div className="flex items-center justify-center gap-3">
                               <button
                                 onClick={() => openAyahExplanationPopup(ayah, trans)}
                                 className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
@@ -2141,20 +2198,6 @@ export default function DeenQuran() {
                                 {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                               </button>
                             </div>
-                            <button
-                              onClick={() => openAyahSheet(ayah, trans)}
-                              className="flex-1 text-right active:scale-[0.99] transition-all duration-150"
-                            >
-                              <p style={{
-                                fontFamily: "'Noto Sans Arabic', 'Amiri', serif",
-                                fontSize: "21px", lineHeight: "2.2",
-                                color: isPlaying ? gold : pageTxt,
-                                textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
-                                textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
-                              }}>
-                                {stripBismillahPrefix(ayah)}
-                              </p>
-                            </button>
                           </div>
                         );
                       })}
@@ -2164,27 +2207,44 @@ export default function DeenQuran() {
                     <div className="flex flex-col" dir="ltr">
                       {activeSurah.ayahs.slice(pageBreaks[readerPage], pageBreaks[readerPage + 1]).map((ayah, idx) => {
                         const globalIdx = pageBreaks[readerPage] + idx;
-                        const trans = activeTrans[globalIdx];
-                        if (!trans) return null;
+                        const trans = activeTrans[globalIdx] ?? null;
                         const isPlaying = playing && currentPlaybackAyahIndex === globalIdx;
                         const isBookmarked = bookmarkedAyahs.has(ayah.numberInSurah);
                         return (
                           <div
                             key={ayah.numberInSurah}
                             ref={(el) => { ayahItemRefs.current[globalIdx] = el; }}
-                            className="w-full flex items-start gap-3 py-3 rounded-xl transition-all"
+                            className="w-full flex flex-col gap-3 py-3 rounded-xl transition-all"
                             style={{ borderBottom: `1px solid ${goldFaint}`, background: isPlaying ? (isDark ? "hsla(45,65%,50%,0.10)" : "hsla(38,85%,85%,0.55)") : "transparent", boxShadow: isPlaying ? (isDark ? `0 0 18px hsla(45,65%,50%,0.22)` : `0 0 14px hsla(38,75%,60%,0.22)`) : "none" }}
                           >
-                            <div className="w-12 flex flex-col items-center gap-1 pt-1 shrink-0">
-                              <div
-                                className="flex items-center justify-center"
-                                style={{
-                                  width: 40,
-                                  height: 40,
-                                }}
-                              >
+                            <button
+                              onClick={() => openAyahSheet(ayah, trans ?? null)}
+                              className="flex-1 text-left active:scale-[0.99] transition-all duration-150"
+                            >
+                              <p dir="rtl" style={{
+                                fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif",
+                                fontSize: "21px", lineHeight: "2.2",
+                                color: isPlaying ? gold : pageTxt,
+                                textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
+                                textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
+                                textAlign: "right",
+                                marginBottom: "8px",
+                              }}>
+                                {stripBismillahPrefix(ayah)}
                                 {renderAyahMarker(displayAyahNumber(ayah))}
-                              </div>
+                              </p>
+                              {trans && (
+                                <p style={{
+                                  fontSize: "17px", lineHeight: "1.85",
+                                  color: isPlaying ? gold : pageTxt,
+                                  textShadow: isPlaying && isDark ? `0 0 10px ${goldFaint}` : "none",
+                                  textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
+                                }}>
+                                  {trans.text}
+                                </p>
+                              )}
+                            </button>
+                            <div className="flex items-center justify-center gap-3">
                               <button
                                 onClick={() => openAyahExplanationPopup(ayah, trans ?? null)}
                                 className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
@@ -2225,19 +2285,6 @@ export default function DeenQuran() {
                                 {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                               </button>
                             </div>
-                            <button
-                              onClick={() => openAyahSheet(ayah, trans ?? null)}
-                              className="flex-1 text-left active:scale-[0.99] transition-all duration-150"
-                            >
-                              <p style={{
-                                fontSize: "17px", lineHeight: "1.85",
-                                color: isPlaying ? gold : pageTxt,
-                                textShadow: isPlaying && isDark ? `0 0 10px ${goldFaint}` : "none",
-                                textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
-                              }}>
-                                {trans.text}
-                              </p>
-                            </button>
                           </div>
                         );
                       })}
@@ -2371,14 +2418,21 @@ export default function DeenQuran() {
 
                 <div className="mb-4">
                   {isAr ? (
-                    <p className="text-[18px] leading-[1.95] text-right" dir="rtl" style={{ fontFamily: "'Noto Sans Arabic', 'Amiri', serif", color: popupText }}>
+                    <p className="text-[18px] leading-[1.95] text-right" dir="rtl" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: popupText }}>
                       {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
                     </p>
-                  ) : popupTrans ? (
-                    <p className="text-[16px] leading-[1.75]" style={{ color: popupText }}>
-                      {popupTrans.text}
-                    </p>
-                  ) : null}
+                  ) : (
+                    <>
+                      <p className="text-[18px] leading-[1.95] text-right mb-2" dir="rtl" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: popupText }}>
+                        {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
+                      </p>
+                      {popupTrans && (
+                        <p className="text-[16px] leading-[1.75]" style={{ color: popupText }}>
+                          {popupTrans.text}
+                        </p>
+                      )}
+                    </>
+                  )}
                 </div>
 
                 <div className="rounded-2xl px-4 py-4" style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.72)", border: `1px solid ${popupBorder}` }}>
@@ -2463,24 +2517,35 @@ export default function DeenQuran() {
                     <p
                       className="text-[20px] leading-[2] text-right"
                       dir="rtl"
-                      style={{ fontFamily: "'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
+                      style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
                     >
                       {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
                     </p>
-                  ) : selectedTrans ? (
-                    <p
-                      className="text-[19px] leading-[1.75] font-medium"
-                      style={{ color: sheetTxt }}
-                    >
-                      {selectedTrans.text}
-                    </p>
                   ) : (
-                    <p
-                      className="text-[17px] leading-[1.75]"
-                      style={{ color: sheetSub }}
-                    >
-                      {activeSurah?.englishName} · Verse {selectedAyah.numberInSurah}
-                    </p>
+                    <>
+                      <p
+                        className="text-[20px] leading-[2] text-right mb-2"
+                        dir="rtl"
+                        style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
+                      >
+                        {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
+                      </p>
+                      {selectedTrans ? (
+                        <p
+                          className="text-[19px] leading-[1.75] font-medium"
+                          style={{ color: sheetTxt }}
+                        >
+                          {selectedTrans.text}
+                        </p>
+                      ) : (
+                        <p
+                          className="text-[17px] leading-[1.75]"
+                          style={{ color: sheetSub }}
+                        >
+                          {activeSurah?.englishName} · Verse {selectedAyah.numberInSurah}
+                        </p>
+                      )}
+                    </>
                   )}
                 </div>
 
