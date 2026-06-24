@@ -1127,8 +1127,9 @@ export default function DeenQuran() {
 
   const getArabicDisplayText = (ayah: Ayah, surahNum?: number): string => {
     const num = surahNum ?? activeSurah?.number;
-    if (!num) return ayah.text;
-    return localHafsByAyah[`${num}:${ayah.numberInSurah}`] ?? ayah.text;
+    if (!num) return ayah.text.replace(/\u06DD+[\s\d٠-٩]*/g, "").trim();
+    const text = localHafsByAyah[`${num}:${ayah.numberInSurah}`] ?? ayah.text;
+    return text.replace(/\u06DD+[\s\d٠-٩]*/g, "").trim();
   };
 
   const stripBismillahPrefix = (ayah: Ayah, surahNum?: number): string => {
@@ -1509,7 +1510,7 @@ export default function DeenQuran() {
                 <p className="text-xs font-bold text-sky-400">
                   {isAr ? "متابعة القراءة" : "Continue Reading"}
                 </p>
-                <p className="text-[11px] text-[#858384]">
+                <p className="text-[11px] text-[#858384]" style={{ overflow: "hidden", overflowWrap: "break-word" }}>
                   {isAr ? lastSurah.name : lastSurah.englishName} —{" "}
                   {isAr ? "آية" : "Ayah"} {lastProgress!.ayah_number}
                 </p>
@@ -1567,7 +1568,7 @@ export default function DeenQuran() {
                     {s.number}
                   </div>
                   <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
-                    <p className="text-sm font-semibold" style={{ color: textPrimary }}>
+                    <p className="text-sm font-semibold" style={{ color: textPrimary, overflow: "hidden", overflowWrap: "break-word" }}>
                       {isAr ? s.name : s.englishName}
                     </p>
                     <p className="text-[10px]" style={{ color: textMuted }}>
@@ -1750,7 +1751,7 @@ export default function DeenQuran() {
                     boxShadow: isDark ? "0 6px 24px rgba(0,0,0,0.28)" : "0 8px 22px rgba(6,5,65,0.08)",
                   }}
                 >
-                  <p className="text-lg font-bold" style={{ color: textPrimary, textAlign: isAr ? "right" : "left" }}>
+                  <p className="text-lg font-bold" style={{ color: textPrimary, textAlign: isAr ? "right" : "left", overflow: "hidden", overflowWrap: "break-word" }}>
                     {isAr ? activeSurah.name : activeSurah.englishName}
                   </p>
                   <p className="text-sm mt-1" style={{ color: textSecondary, textAlign: isAr ? "right" : "left" }}>
@@ -1903,7 +1904,7 @@ export default function DeenQuran() {
 
       {/* Reader View — Mushaf style */}
       {screen === "reader" && (
-        <div className="pt-2 pb-12 px-3" ref={readerTopRef}>
+        <div className="pt-2 pb-12 px-3" ref={readerTopRef} style={{ overflowAnchor: "none" }}>
           {loadingReader ? (
             <div className="flex items-center justify-center py-20">
               <div className="w-6 h-6 border-2 border-amber-500/40 border-t-amber-500 rounded-full animate-spin" />
@@ -1918,34 +1919,53 @@ export default function DeenQuran() {
 
             // Helper: Arabic-Indic digits
             const toAI = (n: number) => String(n).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[+d]);
-            const renderAyahMarker = (n: number) => (
-              <span className="relative inline-flex items-center justify-center" style={{ width: 46, height: 46 }}>
-                <span
-                  aria-hidden="true"
-                  style={{
-                    color: markerTxt,
-                    fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', serif",
-                    fontSize: 35,
-                    lineHeight: 1,
-                  }}
-                >
-                  {"\u06DD"}
+            const renderAyahMarker = (n: number) => {
+              if (isAr) {
+                return (
+                  <span
+                    className="inline-block"
+                    style={{
+                      color: gold,
+                      fontSize: 24,
+                      fontWeight: 700,
+                      fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', serif",
+                      lineHeight: 1,
+                      marginRight: 6,
+                    }}
+                  >
+                    {toAI(n)}
+                  </span>
+                );
+              }
+              return (
+                <span className="relative inline-flex items-center justify-center" style={{ width: 46, height: 46 }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      color: markerTxt,
+                      fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', serif",
+                      fontSize: 35,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {"\u06DD"}
+                  </span>
+                  <span
+                    className="absolute inset-0 flex items-center justify-center"
+                    style={{
+                      color: markerTxt,
+                      fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', serif",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      lineHeight: 1,
+                      paddingTop: 1,
+                    }}
+                  >
+                    {n}
+                  </span>
                 </span>
-                <span
-                  className="absolute inset-0 flex items-center justify-center"
-                  style={{
-                    color: markerTxt,
-                    fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', serif",
-                    fontSize: 14,
-                    fontWeight: 700,
-                    lineHeight: 1,
-                    paddingTop: 1,
-                  }}
-                >
-                  {isAr ? toAI(n) : n}
-                </span>
-              </span>
-            );
+              );
+            };
             const displayAyahNumber = (ayah: Ayah) => ayah.numberInSurah;
 
             return (
@@ -2149,6 +2169,8 @@ export default function DeenQuran() {
                           color: gold,
                           lineHeight: 1.5,
                           textAlign: "center",
+                          overflow: "hidden",
+                          overflowWrap: "break-word",
                         }}
                       >
                         {isAr ? activeSurah.name : activeSurah.englishName}
@@ -2173,6 +2195,8 @@ export default function DeenQuran() {
                       fontSize: "19px", lineHeight: "2",
                       color: gold,
                       textShadow: isDark ? `0 0 18px ${goldFaint}` : "none",
+                      overflow: "hidden",
+                      overflowWrap: "break-word",
                     }}>
                       {isAr ? "بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ" : "In the name of Allah, the Most Compassionate, the Most Merciful."}
                     </p>
@@ -2203,6 +2227,8 @@ export default function DeenQuran() {
                                 color: isPlaying ? gold : pageTxt,
                                 textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
                                 textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
+                                overflow: "hidden",
+                                overflowWrap: "break-word",
                               }}>
                                 {stripBismillahPrefix(ayah)}
                                 {renderAyahMarker(displayAyahNumber(ayah))}
@@ -2281,6 +2307,8 @@ export default function DeenQuran() {
                                   textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
                                   textAlign: "right",
                                   marginBottom: "8px",
+                                  overflow: "hidden",
+                                  overflowWrap: "break-word",
                                 }}>
                                   {stripBismillahPrefix(ayah)}
                                   {renderAyahMarker(displayAyahNumber(ayah))}
@@ -2367,28 +2395,13 @@ export default function DeenQuran() {
                     const to = pageBreaks[readerPage + 1] ?? activeSurah.ayahs.length;
                     const isLastPage = readerPage >= totalPages - 1;
                     const nextSurahMeta = activeSurah && surahs.find((s) => s.number === activeSurah.number + 1);
-                    const goToPage = (p: number) => { setReaderPage(p); setPagePickerOpen(false); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); };
+                    const goToPage = (p: number, scroll = true) => {
+                      setReaderPage(p);
+                      setPagePickerOpen(false);
+                      if (scroll) setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                    };
                     return (
                       <div className="mt-6 mb-2 space-y-2">
-                        {/* Page picker row — shown when counter is tapped */}
-                        {pagePickerOpen && (
-                          <div className="flex flex-wrap gap-1.5 justify-center py-2 px-1 rounded-2xl" style={{ background: goldFaint, border: `1px solid ${goldGlow}` }}>
-                            {Array.from({ length: totalPages }, (_, i) => (
-                              <button
-                                key={i}
-                                onClick={() => goToPage(i)}
-                                className="w-8 h-8 rounded-xl text-[11px] font-bold active:scale-95 transition-all"
-                                style={{
-                                  background: i === readerPage ? gold : "transparent",
-                                  color: i === readerPage ? (isDark ? "#0c0f14" : "#fff") : gold,
-                                  border: `1px solid ${i === readerPage ? gold : goldGlow}`,
-                                }}
-                              >
-                                {i + 1}
-                              </button>
-                            ))}
-                          </div>
-                        )}
                         {/* Prev / counter / Next row */}
                         <div className="flex items-center justify-between gap-3">
                           <button
@@ -2399,11 +2412,10 @@ export default function DeenQuran() {
                           >
                             {isAr ? "→ السابق" : "← Prev"}
                           </button>
-                          {/* Tappable page counter → opens page picker */}
+                          {/* Page counter */}
                           <button
-                            onClick={() => setPagePickerOpen(v => !v)}
-                            className="text-center px-3 active:scale-95 transition-all rounded-xl py-1"
-                            style={{ background: pagePickerOpen ? goldFaint : "transparent", border: `1px solid ${pagePickerOpen ? gold : "transparent"}` }}
+                            className="text-center px-3 rounded-xl py-1"
+                            style={{ background: "transparent" }}
                           >
                             <p className="text-xs font-semibold" style={{ color: gold }}>{from}–{to}</p>
                             <p className="text-[10px]" style={{ color: isDark ? "hsla(45,35%,50%,0.5)" : "hsla(35,30%,35%,0.45)" }}>
@@ -2418,6 +2430,34 @@ export default function DeenQuran() {
                           >
                             {isAr ? "التالي ←" : "Next →"}
                           </button>
+                        </div>
+                        {/* Scrollable circular page number chips */}
+                        <div
+                          className="flex items-center gap-2 overflow-x-auto px-1 py-1 no-scrollbar"
+                          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+                        >
+                          <style>{".no-scrollbar::-webkit-scrollbar { display: none; }"}</style>
+                          {Array.from({ length: totalPages }, (_, i) => (
+                            <button
+                              key={i}
+                              onClick={() => goToPage(i, false)}
+                              className="flex-shrink-0 active:scale-90 transition-all"
+                              style={{
+                                width: 32,
+                                height: 32,
+                                borderRadius: "50%",
+                                background: i === readerPage ? gold : "transparent",
+                                color: i === readerPage ? (isDark ? "#0c0f14" : "#fff") : gold,
+                                border: `1.5px solid ${i === readerPage ? gold : goldGlow}`,
+                                fontSize: 13,
+                                fontWeight: 700,
+                                lineHeight: 1,
+                              }}
+                              aria-label={`${isAr ? "صفحة" : "Page"} ${i + 1}`}
+                            >
+                              {isAr ? toAI(i + 1) : i + 1}
+                            </button>
+                          ))}
                         </div>
                         {/* Next Surah button — only on last page */}
                         {isLastPage && nextSurahMeta && (
@@ -2487,13 +2527,13 @@ export default function DeenQuran() {
 
                 <div className="mb-4">
                   {isAr ? (
-                    <p className="text-[18px] leading-[1.95] text-right" dir="rtl" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: popupText }}>
+                    <p className="text-[18px] leading-[1.95] text-right" dir="rtl" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: popupText, overflow: "hidden", overflowWrap: "break-word" }}>
                       {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
                     </p>
                   ) : (
                     <>
                       {showArabicText && (
-                        <p className="text-[18px] leading-[1.95] text-right mb-2" dir="rtl" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: popupText }}>
+                        <p className="text-[18px] leading-[1.95] text-right mb-2" dir="rtl" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: popupText, overflow: "hidden", overflowWrap: "break-word" }}>
                           {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
                         </p>
                       )}
@@ -2604,7 +2644,7 @@ export default function DeenQuran() {
                     <p
                       className="text-[20px] leading-[2] text-right"
                       dir="rtl"
-                      style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
+                      style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt, overflow: "hidden", overflowWrap: "break-word" }}
                     >
                       {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
                     </p>
@@ -2614,7 +2654,7 @@ export default function DeenQuran() {
                         <p
                           className="text-[20px] leading-[2] text-right mb-2"
                           dir="rtl"
-                          style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
+                          style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt, overflow: "hidden", overflowWrap: "break-word" }}
                         >
                           {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
                         </p>
