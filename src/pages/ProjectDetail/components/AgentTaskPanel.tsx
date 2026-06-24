@@ -31,6 +31,7 @@ interface AgentTaskPanelProps {
   currentGoal?: string;
   isRTL?: boolean;
   onCancel?: () => void;
+  cancelLabel?: string;
   className?: string;
 }
 
@@ -79,6 +80,7 @@ export function AgentTaskPanel({
   currentGoal,
   isRTL = false,
   onCancel,
+  cancelLabel,
   className,
 }: AgentTaskPanelProps) {
   const [isExpanded, setIsExpanded] = React.useState(true);
@@ -227,7 +229,7 @@ export function AgentTaskPanel({
                   onClick={onCancel}
                   className="w-full py-1.5 text-xs text-zinc-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
                 >
-                  {isRTL ? 'إلغاء' : 'Cancel'}
+                  {cancelLabel || (isRTL ? 'إلغاء' : 'Cancel')}
                 </button>
               </div>
             )}

@@ -17,6 +17,8 @@ interface ErrorExplanationCardProps {
   suggestedAction?: string;
   suggestedActionAr?: string;
   onRetry?: () => void;
+  retryLabel?: string;
+  retryLabelAr?: string;
   onDismiss?: () => void;
   className?: string;
 }
@@ -52,6 +54,8 @@ export function ErrorExplanationCard({
   suggestedAction,
   suggestedActionAr,
   onRetry,
+  retryLabel,
+  retryLabelAr,
   onDismiss,
   className = ''
 }: ErrorExplanationCardProps) {
@@ -153,7 +157,9 @@ export function ErrorExplanationCard({
             className="h-7 text-xs"
           >
             <RefreshCw className="w-3 h-3 mr-1" />
-            {language === 'ar' ? 'إعادة المحاولة' : 'Try again'}
+            {language === 'ar'
+              ? (retryLabelAr || 'إعادة المحاولة')
+              : (retryLabel || 'Try again')}
           </Button>
         )}
         

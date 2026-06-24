@@ -110,6 +110,18 @@ export function selectOptimalModel(
   }
 
   const promptLower = prompt.toLowerCase();
+  const trimmedPrompt = promptLower.trim();
+
+  const isShortFollowupFix =
+    mode === 'agent'
+    && trimmedPrompt.length > 0
+    && trimmedPrompt.length <= 200
+    && /\b(fix|change|update|adjust|tweak|make|now|still|again|issue|bug|broken|error|paused|not working|can't|cannot)\b/i.test(trimmedPrompt)
+    && !/\b(create|build|from scratch|new page|new feature|full app|full website|entire|redesign|rebuild|architecture)\b/i.test(trimmedPrompt);
+
+  if (isShortFollowupFix) {
+    return { model: GEMINI_MODEL_SIMPLE, reason: 'Short follow-up fix uses fast lane (3.5 Flash)', tier: 'flash' };
+  }
 
   // Agent/edit mode always uses Pro for superior tool-use reasoning
   if (mode === 'agent') {
