@@ -35,13 +35,15 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
 // ============================================================================
 // GEMINI MODEL SELECTION (3.x defaults, 2.5 stable fallback already coded)
 // ============================================================================
-// Use best available models. Fallback map below auto-downgrades to 2.5 stable
-// if 3.x returns 429/503. Override via env vars at any time.
-export const GEMINI_MODEL_CREATE = Deno.env.get('GEMINI_MODEL_CREATE') || 'gemini-3.1-pro-preview';
-export const GEMINI_MODEL_AGENT  = Deno.env.get('GEMINI_MODEL_AGENT')  || 'gemini-3.1-pro-preview';
-export const GEMINI_MODEL_PLAN   = Deno.env.get('GEMINI_MODEL_PLAN')   || 'gemini-3.5-flash';
-export const GEMINI_MODEL_SIMPLE = Deno.env.get('GEMINI_MODEL_SIMPLE') || 'gemini-3.5-flash';
-export const GEMINI_MODEL_VISION = Deno.env.get('GEMINI_MODEL_VISION') || 'gemini-3.5-flash';
+// gemini-2.5-pro  = Google's latest stable Pro  (real, works, best available)
+// gemini-2.5-flash = Google's latest stable Flash (real, works, best available)
+// gemini-3.x models do NOT exist in Google's public API yet — they return HTTP 400.
+// Override via env vars when Google releases them.
+export const GEMINI_MODEL_CREATE = Deno.env.get('GEMINI_MODEL_CREATE') || 'gemini-2.5-pro';
+export const GEMINI_MODEL_AGENT  = Deno.env.get('GEMINI_MODEL_AGENT')  || 'gemini-2.5-pro';
+export const GEMINI_MODEL_PLAN   = Deno.env.get('GEMINI_MODEL_PLAN')   || 'gemini-2.5-flash';
+export const GEMINI_MODEL_SIMPLE = Deno.env.get('GEMINI_MODEL_SIMPLE') || 'gemini-2.5-flash';
+export const GEMINI_MODEL_VISION = Deno.env.get('GEMINI_MODEL_VISION') || 'gemini-2.5-flash';
 
 /** Fallback map: if a 3.x model fails, retry with its 2.5 equivalent. */
 export const MODEL_FALLBACK: Record<string, string> = {
@@ -95,17 +97,17 @@ export function selectOptimalModel(
 ): ModelSelection {
   // PRO tier: Creation always uses the best Pro model
   if (mode === 'create') {
-    return { model: GEMINI_MODEL_CREATE, reason: 'Project creation uses the best Pro model (3.1-pro-preview)', tier: 'pro' };
+    return { model: GEMINI_MODEL_CREATE, reason: 'Project creation uses gemini-2.5-pro (latest stable)', tier: 'pro' };
   }
 
   const designHeavy = isPremiumDesignRequest(prompt);
 
   if (designHeavy && (mode === 'agent' || mode === 'execute' || mode === 'plan')) {
-    return { model: GEMINI_MODEL_AGENT, reason: 'Premium design request uses the best Pro model (3.1-pro-preview)', tier: 'pro' };
+    return { model: GEMINI_MODEL_AGENT, reason: 'Premium design request uses gemini-2.5-pro (latest stable)', tier: 'pro' };
   }
 
   if (hasImages) {
-    return { model: GEMINI_MODEL_VISION, reason: 'Vision and screenshot analysis uses best Flash (3.5-flash)', tier: 'flash' };
+    return { model: GEMINI_MODEL_VISION, reason: 'Vision analysis uses gemini-2.5-flash (latest stable)', tier: 'flash' };
   }
 
   const promptLower = prompt.toLowerCase();
@@ -119,33 +121,33 @@ export function selectOptimalModel(
     && !/\b(create|build|from scratch|new page|new feature|full app|full website|entire|redesign|rebuild|architecture)\b/i.test(trimmedPrompt);
 
   if (isShortFollowupFix) {
-    return { model: GEMINI_MODEL_SIMPLE, reason: 'Short follow-up fix uses best Flash (3.5-flash)', tier: 'flash' };
+    return { model: GEMINI_MODEL_SIMPLE, reason: 'Short follow-up fix uses gemini-2.5-flash (latest stable)', tier: 'flash' };
   }
 
   // Agent/edit mode always uses Pro for superior tool-use reasoning
   if (mode === 'agent') {
     for (const pattern of SIMPLE_PATTERNS) {
       if (pattern.test(promptLower)) {
-        return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple agent edit uses best Flash (3.5-flash)', tier: 'flash' };
+        return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple agent edit uses gemini-2.5-flash (latest stable)', tier: 'flash' };
       }
     }
     // Everything else in agent mode → Pro
-    return { model: GEMINI_MODEL_AGENT, reason: 'Agent/edit mode uses best Pro (3.1-pro-preview)', tier: 'pro' };
+    return { model: GEMINI_MODEL_AGENT, reason: 'Agent/edit mode uses gemini-2.5-pro (latest stable)', tier: 'pro' };
   }
 
   // plan / execute / chat modes
   for (const pattern of SIMPLE_PATTERNS) {
     if (pattern.test(promptLower)) {
-      return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple edit uses best Flash (3.5-flash)', tier: 'flash' };
+      return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple edit uses gemini-2.5-flash (latest stable)', tier: 'flash' };
     }
   }
 
   for (const pattern of COMPLEX_PATTERNS) {
     if (pattern.test(promptLower)) {
-      return { model: GEMINI_MODEL_AGENT, reason: 'Complex operation uses best Pro (3.1-pro-preview)', tier: 'pro' };
+      return { model: GEMINI_MODEL_AGENT, reason: 'Complex operation uses gemini-2.5-pro (latest stable)', tier: 'pro' };
     }
   }
 
   // Default: Flash for planning/aux (fast + smart)
-  return { model: GEMINI_MODEL_PLAN, reason: 'Standard planning uses best Flash (3.5-flash)', tier: 'flash' };
+  return { model: GEMINI_MODEL_PLAN, reason: 'Standard planning uses gemini-2.5-flash (latest stable)', tier: 'flash' };
 }

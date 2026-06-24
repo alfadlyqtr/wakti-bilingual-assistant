@@ -1109,7 +1109,11 @@ async function callGeminiWithModel(
       if (!response.ok) {
         const errorText = await response.text();
         console.error(`[Gemini ${activeModel}] HTTP ${response.status}: ${errorText}`);
-        if ((response.status === 404 || response.status === 503) && MODEL_FALLBACK[activeModel]) {
+        // Fallback on: 404 (model not found), 503 (overloaded), 400 for preview/non-existent models
+        const isModelNotFound = response.status === 404
+          || response.status === 503
+          || (response.status === 400 && MODEL_FALLBACK[activeModel] !== undefined);
+        if (isModelNotFound && MODEL_FALLBACK[activeModel]) {
           const fallbackModel = MODEL_FALLBACK[activeModel];
           console.warn(`[Gemini] ${activeModel} unavailable (${response.status}), falling back to ${fallbackModel}`);
           activeModel = fallbackModel;
@@ -2762,6 +2766,11 @@ async function enforceEditToolPolicy(params: {
 
 // Pre-generate images with Nano Banana 2 and store them in project storage
 const KIE_API_BASE_URL = 'https://api.kie.ai/api/v1';
+const _kieKeySource = Deno.env.get('KIE_AI_API_KEY') ? 'KIE_AI_API_KEY'
+  : Deno.env.get('KIE_API_KEY') ? 'KIE_API_KEY'
+  : Deno.env.get('NANO_BANANA_API_KEY') ? 'NANO_BANANA_API_KEY'
+  : Deno.env.get('KIE_BEARER_TOKEN') ? 'KIE_BEARER_TOKEN'
+  : 'NOT_FOUND';
 const KIE_API_KEY = (
   Deno.env.get('KIE_AI_API_KEY') ||
   Deno.env.get('KIE_API_KEY') ||
@@ -2769,6 +2778,7 @@ const KIE_API_KEY = (
   Deno.env.get('KIE_BEARER_TOKEN') ||
   ''
 ).trim();
+console.log(`[NanoBanana] Key source: ${_kieKeySource}, key length: ${KIE_API_KEY.length}`);
 const KIE_NANO_BANANA_CALLBACK_URL = (Deno.env.get('KIE_NANO_BANANA_CALLBACK_URL') || '').trim();
 
 interface PreFetchedImage {
@@ -2944,12 +2954,16 @@ async function preFetchAndStoreImages(
     console.warn('[NanoBanana] KIE API key missing, skipping image generation prefetch');
     return storedImages;
   }
+
+  console.log(`[NanoBanana] KIE key found (length=${KIE_API_KEY.length}), starting image generation`);
   
   const uniqueQueries = Array.from(new Set(
     queries
       .map((query) => query.trim())
       .filter((query) => query.length > 0)
   )).slice(0, 8);
+
+  console.log(`[NanoBanana] Submitting ${uniqueQueries.length} image queries: ${uniqueQueries.join(' | ')}`);
 
   const taskSubmissions = await Promise.all(
     uniqueQueries.map(async (query, index) => {
