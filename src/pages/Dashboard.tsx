@@ -119,9 +119,9 @@ export default function Dashboard() {
       const primaryScroller = mainScroller || mobileShell;
       const atTop = (primaryScroller?.scrollTop || 0) <= 0;
       const isPullToRefreshGesture = atTop && deltaY > 10 && Math.abs(deltaY) > Math.abs(deltaX);
-      const isLeftEdgeBackGesture = startedNearLeftEdge && deltaX > 12 && Math.abs(deltaX) > Math.abs(deltaY);
+      const isLeftEdgeGesture = startedNearLeftEdge;
 
-      if (isPullToRefreshGesture || isLeftEdgeBackGesture) {
+      if (isPullToRefreshGesture || isLeftEdgeGesture) {
         event.preventDefault();
       }
     };
