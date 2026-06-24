@@ -33,16 +33,16 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
 };
 
 // ============================================================================
-// GEMINI 3.x MODEL SELECTION (env-driven, auto-fallback to 2.5)
+// GEMINI MODEL SELECTION (stable 2.5 defaults, env-driven preview opt-in)
 // ============================================================================
 // Default to stable 2.5 models. Preview 3.x models are too slow/rate-limited for the
 // agent loop (150s edge-function budget) and cause GEMINI_AGENT_TIMEOUT failures.
 // Opt-in to preview models via env vars when Google stabilises them.
-export const GEMINI_MODEL_CREATE = Deno.env.get('GEMINI_MODEL_CREATE') || 'gemini-3.1-pro-preview';
-export const GEMINI_MODEL_AGENT  = Deno.env.get('GEMINI_MODEL_AGENT')  || 'gemini-3.1-pro-preview';
-export const GEMINI_MODEL_PLAN   = Deno.env.get('GEMINI_MODEL_PLAN')   || 'gemini-3.5-flash';
-export const GEMINI_MODEL_SIMPLE = Deno.env.get('GEMINI_MODEL_SIMPLE') || 'gemini-3.5-flash';
-export const GEMINI_MODEL_VISION = Deno.env.get('GEMINI_MODEL_VISION') || 'gemini-3.5-flash';
+export const GEMINI_MODEL_CREATE = Deno.env.get('GEMINI_MODEL_CREATE') || 'gemini-2.5-pro';
+export const GEMINI_MODEL_AGENT  = Deno.env.get('GEMINI_MODEL_AGENT')  || 'gemini-2.5-pro';
+export const GEMINI_MODEL_PLAN   = Deno.env.get('GEMINI_MODEL_PLAN')   || 'gemini-2.5-flash';
+export const GEMINI_MODEL_SIMPLE = Deno.env.get('GEMINI_MODEL_SIMPLE') || 'gemini-2.5-flash';
+export const GEMINI_MODEL_VISION = Deno.env.get('GEMINI_MODEL_VISION') || 'gemini-2.5-flash';
 
 /** Fallback map: if a 3.x model fails, retry with its 2.5 equivalent. */
 export const MODEL_FALLBACK: Record<string, string> = {
@@ -96,17 +96,17 @@ export function selectOptimalModel(
 ): ModelSelection {
   // PRO tier: Creation always uses the best Pro model
   if (mode === 'create') {
-    return { model: GEMINI_MODEL_CREATE, reason: 'Project creation requires Pro (3.1)', tier: 'pro' };
+    return { model: GEMINI_MODEL_CREATE, reason: 'Project creation uses the stable Pro lane', tier: 'pro' };
   }
 
   const designHeavy = isPremiumDesignRequest(prompt);
 
   if (designHeavy && (mode === 'agent' || mode === 'execute' || mode === 'plan')) {
-    return { model: GEMINI_MODEL_AGENT, reason: 'Premium design request requires Pro (3.1)', tier: 'pro' };
+    return { model: GEMINI_MODEL_AGENT, reason: 'Premium design request uses the stable Pro lane', tier: 'pro' };
   }
 
   if (hasImages) {
-    return { model: GEMINI_MODEL_VISION, reason: 'Vision/screenshot analysis (3 Flash)', tier: 'flash' };
+    return { model: GEMINI_MODEL_VISION, reason: 'Vision and screenshot analysis uses stable Flash', tier: 'flash' };
   }
 
   const promptLower = prompt.toLowerCase();
@@ -120,33 +120,33 @@ export function selectOptimalModel(
     && !/\b(create|build|from scratch|new page|new feature|full app|full website|entire|redesign|rebuild|architecture)\b/i.test(trimmedPrompt);
 
   if (isShortFollowupFix) {
-    return { model: GEMINI_MODEL_SIMPLE, reason: 'Short follow-up fix uses fast lane (3.5 Flash)', tier: 'flash' };
+    return { model: GEMINI_MODEL_SIMPLE, reason: 'Short follow-up fix uses the stable fast lane', tier: 'flash' };
   }
 
   // Agent/edit mode always uses Pro for superior tool-use reasoning
   if (mode === 'agent') {
     for (const pattern of SIMPLE_PATTERNS) {
       if (pattern.test(promptLower)) {
-        return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple agent edit (3 Flash)', tier: 'flash' };
+        return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple agent edit uses stable Flash', tier: 'flash' };
       }
     }
     // Everything else in agent mode → Pro
-    return { model: GEMINI_MODEL_AGENT, reason: 'Agent/edit mode requires Pro (3.1)', tier: 'pro' };
+    return { model: GEMINI_MODEL_AGENT, reason: 'Agent/edit mode uses stable Pro', tier: 'pro' };
   }
 
   // plan / execute / chat modes
   for (const pattern of SIMPLE_PATTERNS) {
     if (pattern.test(promptLower)) {
-      return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple edit (3 Flash)', tier: 'flash' };
+      return { model: GEMINI_MODEL_SIMPLE, reason: 'Simple edit uses stable Flash', tier: 'flash' };
     }
   }
 
   for (const pattern of COMPLEX_PATTERNS) {
     if (pattern.test(promptLower)) {
-      return { model: GEMINI_MODEL_AGENT, reason: 'Complex operation (3.1 Pro)', tier: 'pro' };
+      return { model: GEMINI_MODEL_AGENT, reason: 'Complex operation uses stable Pro', tier: 'pro' };
     }
   }
 
   // Default: Flash for planning/aux (fast + smart)
-  return { model: GEMINI_MODEL_PLAN, reason: 'Standard planning (3 Flash)', tier: 'flash' };
+  return { model: GEMINI_MODEL_PLAN, reason: 'Standard planning uses stable Flash', tier: 'flash' };
 }

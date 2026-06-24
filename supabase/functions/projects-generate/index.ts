@@ -721,6 +721,150 @@ function shouldProcessUploadedAssets(params: {
   return ASSET_NEEDLE_REGEX.test(prompt || '');
 }
 
+function joinPromptSections(...sections: Array<string | undefined | null>): string {
+  return sections
+    .map((section) => typeof section === 'string' ? section.trim() : '')
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function detectProjectStructure(currentFiles: Record<string, string>): {
+  entryFile: string;
+  appFile: string;
+  headerFile: string | null;
+  dataFile: string | null;
+  contextFiles: string[];
+} {
+  const allPaths = Object.keys(currentFiles || {});
+  const findFile = (candidates: string[]): string | null => {
+    for (const candidate of candidates) {
+      const directHit = allPaths.find((path) => path.toLowerCase() === candidate.toLowerCase());
+      if (directHit) return directHit;
+    }
+    for (const candidate of candidates) {
+      const base = candidate.split('/').pop()?.toLowerCase();
+      if (!base) continue;
+      const fuzzyHit = allPaths.find((path) => path.toLowerCase().endsWith('/' + base) || path.toLowerCase() === '/' + base);
+      if (fuzzyHit) return fuzzyHit;
+    }
+    return null;
+  };
+
+  return {
+    entryFile: findFile(['/index.js', '/src/index.js', '/index.jsx', '/src/index.jsx', '/index.tsx', '/src/index.tsx', '/src/main.jsx', '/src/main.tsx', '/main.jsx']) || '/index.js',
+    appFile: findFile(['/App.js', '/App.jsx', '/App.tsx', '/src/App.js', '/src/App.jsx', '/src/App.tsx']) || '/App.js',
+    headerFile: findFile(['/components/Header.jsx', '/components/Header.js', '/components/Navbar.jsx', '/components/Navigation.jsx', '/src/components/Header.jsx', '/src/components/Navbar.jsx']),
+    dataFile: findFile(['/utils/mockData.js', '/utils/data.js', '/data/mockData.js', '/src/utils/mockData.js', '/src/data/mockData.js']),
+    contextFiles: allPaths.filter((path) => /\/context(s)?\//i.test(path)),
+  };
+}
+
+function buildProjectStructureAwareness(currentFiles: Record<string, string>): string {
+  const allPaths = Object.keys(currentFiles || {});
+  if (allPaths.length === 0) return '';
+
+  const structure = detectProjectStructure(currentFiles);
+  return `📌 PROJECT STRUCTURE (start from what already exists):
+- Entry file: ${structure.entryFile}
+- Root App: ${structure.appFile}
+${structure.headerFile ? `- Header/Nav: ${structure.headerFile}` : '- Header/Nav: not detected yet'}
+${structure.contextFiles.length > 0 ? `- Context files: ${structure.contextFiles.join(', ')}` : '- Context files: none detected yet'}
+${structure.dataFile ? `- Data file: ${structure.dataFile}` : '- Data file: none detected yet'}
+- Total known files: ${allPaths.length}`;
+}
+
+function buildUploadedAssetsAwareness(params: {
+  uploadedAssets?: UploadedAsset[];
+  documentContentBlocks?: string[];
+  visionInspiration?: string;
+  assetIntentPrompt?: string;
+  includeAssetPickerRules?: boolean;
+}): string {
+  const uploadedAssets = Array.isArray(params.uploadedAssets) ? params.uploadedAssets : [];
+  const documentBlocks = (params.documentContentBlocks || []).map((block) => (block || '').trim()).filter(Boolean);
+  const sections: string[] = [];
+
+  if (uploadedAssets.length > 0) {
+    let assetsSection = `📁 USER UPLOADED ASSETS (real project files you can use directly):\n${uploadedAssets.map((asset) => `- ${asset.filename} (${asset.file_type || 'file'}): ${asset.url}`).join('\n')}\nUse these exact URLs when the user refers to their photo, image, logo, PDF, or uploaded file.`;
+    if (params.includeAssetPickerRules && uploadedAssets.length > 1) {
+      assetsSection += `\nIf the user says \"my photo\" or \"my image\" without naming a file and multiple assets exist, ask them to choose the exact file before using one.`;
+    } else if (uploadedAssets.length === 1) {
+      assetsSection += `\nIf the user says \"my photo\" or \"my image\", use ${uploadedAssets[0].filename}.`;
+    }
+    sections.push(assetsSection);
+  }
+
+  if (documentBlocks.length > 0) {
+    sections.push(`📄 REAL DOCUMENT DATA (use this exactly, do not invent replacements):\n${documentBlocks.join('\n\n')}`);
+  }
+
+  if (params.visionInspiration && params.visionInspiration.trim()) {
+    sections.push(`🎨 DESIGN INSPIRATION FROM USER ASSETS:\n${params.visionInspiration.trim()}\nApply this feel, not generic filler.`);
+  }
+
+  if (params.assetIntentPrompt && params.assetIntentPrompt.trim()) {
+    sections.push(`🧭 ATTACHMENT INTENT:\n${params.assetIntentPrompt.trim()}`);
+  }
+
+  return joinPromptSections(...sections);
+}
+
+function buildBackendAwareness(projectId: string | undefined, backendContext?: BackendContext): string {
+  const effectiveProjectId = projectId || '{{PROJECT_ID}}';
+  const collectionSummary = backendContext?.collections && backendContext.collections.length > 0
+    ? backendContext.collections.map((collection) => `${collection.name}(${collection.itemCount})`).join(', ')
+    : 'None yet';
+
+  const sections: string[] = [
+    `🗄️ PROJECT BACKEND AWARENESS:\n- Project ID for backend calls: ${effectiveProjectId}\n- API endpoint: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api\n- Foundation bricks always available: ${getFoundationBricks().join(', ')}\n- Use this backend for real project data instead of hardcoding mock content.`,
+  ];
+
+  if (backendContext?.enabled) {
+    sections.push(`CURRENT BACKEND STATE:\n- Collections: ${collectionSummary}\n- Forms: ${backendContext.formSubmissionsCount}\n- Uploads: ${backendContext.uploadsCount}\n- Site users: ${backendContext.siteUsersCount}${backendContext.hasShopSetup ? `\n- Shop: active with ${backendContext.productsCount || 0} products and ${backendContext.ordersCount || 0} orders` : ''}${backendContext.hasBookingsSetup ? `\n- Bookings: active with ${backendContext.servicesCount || 0} services and ${backendContext.bookingsCount || 0} bookings` : ''}${(backendContext.chatRoomsCount || 0) > 0 || (backendContext.commentsCount || 0) > 0 ? `\n- Social: ${backendContext.chatRoomsCount || 0} chat rooms, ${backendContext.commentsCount || 0} comments` : ''}`);
+  } else {
+    sections.push('CURRENT BACKEND STATE:\n- Backend data is not active yet, but the project backend API is still available and should be used for real persisted features.');
+  }
+
+  sections.push(`EXACT BACKEND CONTRACT REMINDERS:\n- Submit form: { projectId: "${effectiveProjectId}", action: "submit", formName: "contact", data: {...} }\n- Get collection: { projectId: "${effectiveProjectId}", action: "collection/products" }\n- Auth signup: { projectId: "${effectiveProjectId}", action: "auth/signup", data: { email, password, name } }\n- Booking create: { projectId: "${effectiveProjectId}", action: "booking/create", data: { serviceName, date, startTime, customerInfo: { name, email, phone } } }\nGOLDEN RULES:\n- Always use this exact projectId\n- Always show loading and empty states\n- Never invent backend formats when the project backend already defines them`);
+
+  return joinPromptSections(...sections);
+}
+
+function buildUnifiedProjectAwarenessContext(params: {
+  projectId?: string;
+  currentFiles?: Record<string, string>;
+  uploadedAssets?: UploadedAsset[];
+  backendContext?: BackendContext;
+  documentContentBlocks?: string[];
+  visionInspiration?: string;
+  assetIntentPrompt?: string;
+  includeProjectStructure?: boolean;
+  includeAssetPickerRules?: boolean;
+}): string {
+  const sections: string[] = [
+    '🧠 WAKTI PROJECT AWARENESS:\nTreat this like a real project with real files, real backend state, and real uploaded assets. Start from what already exists. Build with confidence, not guesses.',
+    '✨ FIRST-RUN ORCHESTRATION:\nOpen with a calm premium-builder mindset. Identify the most likely visible surface first, anchor your decisions in the real project facts below, and choose one coherent upgrade path instead of sounding like an internal system or a hesitant debugger.',
+  ];
+
+  if (params.includeProjectStructure && params.currentFiles) {
+    const structureSection = buildProjectStructureAwareness(params.currentFiles);
+    if (structureSection) sections.push(structureSection);
+  }
+
+  const uploadedAssetsSection = buildUploadedAssetsAwareness({
+    uploadedAssets: params.uploadedAssets,
+    documentContentBlocks: params.documentContentBlocks,
+    visionInspiration: params.visionInspiration,
+    assetIntentPrompt: params.assetIntentPrompt,
+    includeAssetPickerRules: params.includeAssetPickerRules,
+  });
+  if (uploadedAssetsSection) sections.push(uploadedAssetsSection);
+
+  sections.push(buildBackendAwareness(params.projectId, params.backendContext));
+
+  return joinPromptSections(...sections);
+}
+
 type JobStatus = 'queued' | 'running' | 'paused' | 'succeeded' | 'failed';
 
 type Database = {
@@ -1777,149 +1921,21 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
   if (assetIntentPrompt) {
     imageContext += `\n\n🧭 ${assetIntentPrompt}`;
   }
-  
-  // Build uploaded assets context with extracted content
-  let uploadedAssetsContext = uploadedAssets && uploadedAssets.length > 0 
-    ? `\n\n📁 USER UPLOADED ASSETS (Use these URLs directly in the code):
-${uploadedAssets.map(a => `- **${a.filename}** (${a.file_type || 'file'}): ${a.url}`).join('\n')}
-When user says "my photo", "my image", "uploaded image", "profile picture", use the appropriate URL from above.\n`
-    : '';
-  
-  // Add extracted document content (CV/Resume text, etc.)
-  if (extractedDocumentContent && extractedDocumentContent.trim()) {
-    uploadedAssetsContext += `
 
-📄 **EXTRACTED DOCUMENT CONTENT** (USE THIS DATA TO BUILD THE WEBSITE):
-${extractedDocumentContent}
-
-🚨 **CRITICAL**: The above content was extracted from the user's uploaded document (CV/Resume/etc).
-USE THIS REAL DATA to populate the website - names, experience, skills, education, contact info, etc.
-DO NOT make up fake information. Use EXACTLY what is in the extracted content above.
-`;
-  }
-  
-  // Add vision inspirations from uploaded images
-  if (extractedVisionInspirations && extractedVisionInspirations.trim()) {
-    uploadedAssetsContext += `
-
-🎨 **DESIGN INSPIRATION FROM UPLOADED IMAGES**:
-${extractedVisionInspirations}
-
-Apply the visual style, colors, layout patterns, and design elements described above.
-`;
-  }
-
-  // Build backend context section - "BRICK FOUNDATION + LEGO FREEDOM" philosophy
-  const backendContextStr = backendContext?.enabled ? `
-
-🗄️ PROJECT BACKEND (PRE-CONFIGURED & READY TO USE):
-API: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
-
-=== 🧱 THE LEGO PHILOSOPHY ===
-Think of this like building with Lego:
-- **BRICKS (Foundation):** Pre-configured building blocks that ALWAYS work. No setup needed.
-- **FREEDOM:** You can build ANY kind of "house" using these bricks + custom pieces.
-- **RELIABILITY:** The backend is already connected. Just use it. No API keys, no config.
-
-=== 📦 YOUR BUILDING BLOCKS (Always Available) ===
-These collections are pre-installed and ready: ${getFoundationBricks().join(', ')}
-- Use them directly: { projectId, action: 'collection/[name]' }
-- Need something custom? Create it: { projectId, action: 'collection/my_custom_thing', data: {...} }
-
-=== 📊 CURRENT DATA ===
-- Collections: ${backendContext.collections.length > 0 
-  ? backendContext.collections.map(c => c.name + '(' + c.itemCount + ')').join(', ') 
-  : 'None yet - they auto-create on first use!'}
-- Forms: ${backendContext.formSubmissionsCount} submissions
-- Uploads: ${backendContext.uploadsCount} files
-- Users: ${backendContext.siteUsersCount} registered
-
-${backendContext.hasShopSetup ? `=== 🛒 E-COMMERCE (ACTIVE) ===
-Products: ${backendContext.productsCount || 0} items${backendContext.products && backendContext.products.length > 0 ? `
-Sample: ${backendContext.products.slice(0, 5).map(p => p.name + ' ($' + p.price + ')').join(', ')}` : ''}
-Orders: ${backendContext.ordersCount || 0}
-
-**EXACT API CONTRACTS (copy-paste ready):**
-GET products:  { projectId: "{{PROJECT_ID}}", action: "collection/products" }
-Add to cart:   { projectId: "{{PROJECT_ID}}", action: "cart/add", data: { sessionId: "guest-xxx", item: { id, name, price, quantity } } }
-View cart:     { projectId: "{{PROJECT_ID}}", action: "cart/get", data: { sessionId: "guest-xxx" } }
-Create order:  { projectId: "{{PROJECT_ID}}", action: "order/create", data: { items: [...], buyerInfo: { name, email, phone }, totalAmount: 99.99 } }
-` : `=== 🛒 E-COMMERCE (Ready to Activate) ===
-No products yet. When user wants a shop:
-1. Generate beautiful product grid with loading/empty states
-2. Fetch from: { projectId, action: "collection/products" }
-3. Show CTA: "Add products in Backend → Shop → Inventory"
-`}
-
-${backendContext.hasBookingsSetup ? `=== 📅 BOOKINGS (ACTIVE) ===
-Services: ${backendContext.servicesCount || 0}${backendContext.services && backendContext.services.length > 0 ? `
-Available: ${backendContext.services.slice(0, 5).map(s => s.name + ' (' + s.duration + 'min, $' + s.price + ')').join(', ')}` : ''}
-Bookings: ${backendContext.bookingsCount || 0}
-
-**EXACT API CONTRACTS (copy-paste ready):**
-GET services:      { projectId: "{{PROJECT_ID}}", action: "collection/services" }
-Check availability: { projectId: "{{PROJECT_ID}}", action: "booking/check", data: { date: "2025-01-15", startTime: "10:00" } }
-Create booking:    { projectId: "{{PROJECT_ID}}", action: "booking/create", data: { serviceName: "Haircut", date: "2025-01-15", startTime: "10:00", customerInfo: { name, email, phone } } }
-` : `=== 📅 BOOKINGS (Ready to Activate) ===
-No services yet. When user wants appointments:
-1. Generate booking form with date/time picker
-2. Fetch services from: { projectId, action: "collection/services" }
-3. Show CTA: "Add services in Backend → Bookings → Services"
-`}
-
-=== 🔐 USER AUTH (Built-in) ===
-**EXACT API CONTRACTS:**
-Signup: { projectId: "{{PROJECT_ID}}", action: "auth/signup", data: { email, password, name } }
-Login:  { projectId: "{{PROJECT_ID}}", action: "auth/login", data: { email, password } }
-Me:     { projectId: "{{PROJECT_ID}}", action: "auth/me", data: { token: "..." } }
-
-=== 💬 CUSTOMER ENGAGEMENT ===
-**EXACT API CONTRACTS:**
-Submit form:   { projectId: "{{PROJECT_ID}}", action: "submit", formName: "contact", data: { name, email, message } }
-Add review:    { projectId: "{{PROJECT_ID}}", action: "collection/reviews", data: { rating: 5, text: "Great!", authorName: "John" } }
-Save customer: { projectId: "{{PROJECT_ID}}", action: "collection/customer_data", data: { customerName, email, notes } }
-
-${(backendContext.chatRoomsCount || 0) > 0 || (backendContext.commentsCount || 0) > 0 ? `=== 💬 SOCIAL (Active) ===
-Chat Rooms: ${backendContext.chatRoomsCount || 0} | Comments: ${backendContext.commentsCount || 0}
-` : ''}
-
-=== 🎨 UI FREEDOM (Build Any "House") ===
-The foundation is set. Now build whatever the user wants:
-- **Bento Grids:** Use Tailwind grid-cols-2/3/4 with varying spans
-- **Glassmorphism:** backdrop-blur-xl bg-white/5 border-white/10
-- **Gradients:** bg-gradient-to-r from-purple-500 to-pink-500
-- **Animations:** framer-motion for everything
-- **Custom Layouts:** Split screens, asymmetric grids, magazine layouts
-
-=== ⚡ GOLDEN RULES ===
-1. **ALWAYS fetch from API** - Never hardcode products/services/data
-2. **ALWAYS show loading states** - Skeleton loaders while fetching
-3. **ALWAYS handle empty states** - Beautiful CTAs when no data
-4. **ALWAYS use {{PROJECT_ID}}** - It's auto-injected, just use it
-5. **NEVER guess API formats** - Use the EXACT contracts above
-
-🗄️ PROJECT BACKEND (READY TO USE):
-API: https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
-
-The backend is available for EVERY project. Use it by default for any real data.
-
-**EXACT API CONTRACTS (copy-paste ready):**
-Submit form:   { projectId: "{{PROJECT_ID}}", action: "submit", formName: "contact", data: { name, email, message } }
-GET products:  { projectId: "{{PROJECT_ID}}", action: "collection/products" }
-GET services:  { projectId: "{{PROJECT_ID}}", action: "collection/services" }
-Create booking:{ projectId: "{{PROJECT_ID}}", action: "booking/create", data: { serviceName, date, startTime, customerInfo: { name, email, phone } } }
-Signup:        { projectId: "{{PROJECT_ID}}", action: "auth/signup", data: { email, password, name } }
-Login:         { projectId: "{{PROJECT_ID}}", action: "auth/login", data: { email, password } }
-
-**GOLDEN RULES:**
-1) ALWAYS fetch from API (no hardcoded products/services)
-2) ALWAYS use projectId via {{PROJECT_ID}} (it is auto-injected)
-3) Always show loading + empty states
-` : '';
+  const sharedProjectAwarenessContext = buildUnifiedProjectAwarenessContext({
+    projectId,
+    currentFiles,
+    uploadedAssets,
+    backendContext,
+    documentContentBlocks: [extractedDocumentContent, pdfTextContent],
+    visionInspiration: extractedVisionInspirations,
+    assetIntentPrompt,
+    includeProjectStructure: true,
+  });
 
   const userMessage = `CURRENT CODEBASE:
 ${fileContext}
-${imageContext}${uploadedAssetsContext}${backendContextStr}${screenshotAnchorsContext}
+${imageContext}${sharedProjectAwarenessContext}${screenshotAnchorsContext}
 USER REQUEST:
 ${userPrompt}
 
@@ -4333,114 +4349,6 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
     } else {
       console.log('[Assets] Skipped heavy asset pipeline for text-only request');
     }
-    
-    // Build uploaded assets section for prompts (kept for reference but now using documentContentStr/visionInspirationStr directly)
-    const _uploadedAssetsStr = uploadedAssets.length > 0 
-      ? `\n\n### 📁 USER UPLOADED ASSETS (Available for use in the project)
-These files have been uploaded by the user to their backend storage. You can use them directly in the code:
-${uploadedAssets.map((a: UploadedAsset, i: number) => `${i + 1}. **${a.filename}** (${a.file_type || 'file'}): \`${a.url}\``).join('\n')}
-${documentContentStr ? `
-
-### 📄 EXTRACTED DOCUMENT CONTENT
-The user uploaded document(s) containing the following content. USE THIS INFORMATION to build their website:
-${documentContentStr}
-
-**IMPORTANT**: Use the extracted content above to populate the website. For CV/resume uploads, use the person's name, experience, skills, education, etc. to create a personalized portfolio.` : ''}
-${visionInspirationStr ? `
-
-### 🎨 DESIGN INSPIRATION FROM UPLOADED IMAGES
-The user uploaded image(s) as design references. FOLLOW THESE DESIGN GUIDELINES:
-${visionInspirationStr}
-
-**IMPORTANT**: Apply the visual style, colors, layout patterns, and design elements described above to create a website that matches the user's inspiration.` : ''}
-
-${uploadedAssets.length > 1 
-  ? `⚠️ IMPORTANT: If the user says "my photo", "my image", "uploaded image" without specifying which one, you MUST ask them to choose by returning this JSON:
-{
-  "type": "asset_picker",
-  "message": "Which image would you like me to use?",
-  "originalRequest": "[the user's original request]",
-  "assets": [${uploadedAssets.map((a: UploadedAsset) => `{ "filename": "${a.filename}", "url": "${a.url}", "file_type": "${a.file_type || 'file'}" }`).join(', ')}]
-}
-
-Only return the asset_picker JSON if:
-1. User mentions "my photo/image" generically AND
-2. There are multiple uploaded assets AND
-3. User didn't specify which file by name
-
-If user says "use image-196.png" or specifies a filename, use that specific file directly.` 
-  : `When the user refers to "my photo", "my image", "uploaded image", "profile picture", etc., use this URL: ${uploadedAssets[0]?.url}`}
-
-Example usage: <img src="${uploadedAssets[0]?.url || 'URL_HERE'}" alt="User uploaded image" />`
-      : '';
-
-    // Build backend context section for prompts
-    const backendContextStr = backendContext?.enabled ? `
-
-### 🗄️ PROJECT BACKEND STATUS (Your project has a backend!)
-The backend is **ENABLED** for this project. Here's what's available:
-
-**Current Data:**
-- 📊 **Collections:** ${backendContext.collections.length > 0 
-  ? backendContext.collections.map(c => `${c.name} (${c.itemCount} items)`).join(', ') 
-  : 'None created yet'}
-- 📝 **Form Submissions:** ${backendContext.formSubmissionsCount} received
-- 📤 **Uploaded Files:** ${backendContext.uploadsCount} files
-- 👥 **Site Users:** ${backendContext.siteUsersCount} registered
-
-**FOUNDATION BRICKS (ALWAYS AVAILABLE):**
-- Collections you can use anytime: ${getFoundationBricks().join(', ')}
-- You may create new collections if the user asks for something else
-
-${backendContext.hasShopSetup ? `**=== E-COMMERCE (ACTIVE) ===**
-- Products: ${backendContext.productsCount || 0} items${backendContext.products && backendContext.products.length > 0 ? `
-- Sample products: ${backendContext.products.slice(0, 5).map(p => `${p.name} ($${p.price})`).join(', ')}` : ''}
-- Orders: ${backendContext.ordersCount || 0}` : ''}
-
-${backendContext.hasBookingsSetup ? `**=== BOOKINGS (ACTIVE) ===**
-- Services: ${backendContext.servicesCount || 0}${backendContext.services && backendContext.services.length > 0 ? `
-- Available services: ${backendContext.services.slice(0, 5).map(s => `${s.name} (${s.duration}min, $${s.price})`).join(', ')}` : ''}
-- Bookings: ${backendContext.bookingsCount || 0}` : ''}
-
-**API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
-
-**⚠️ CRITICAL - PROJECT ID (USE THIS EXACT VALUE):**
-The projectId for ALL API calls is: **${projectId}**
-DO NOT extract project IDs from image URLs or storage paths! Always use exactly: "${projectId}"
-
-**Available Actions:**
-1. **Form Submission:** POST { projectId: '${projectId}', action: 'submit', formName: 'contact', data: {...} }
-2. **Get Collection:** GET ?projectId=${projectId}&action=collection/{name}
-3. **Create Item:** POST { projectId: '${projectId}', action: 'collection/{name}', data: {...} }
-4. **File Upload:** User can upload files via Backend Dashboard → Uploads tab
-
-**CRITICAL SAFETY RULES (MUST FOLLOW):**
-- ✅ Use ONLY this projectId: "${projectId}" (never hardcode any other ID)
-- ✅ If you add product creation, show a success CTA: "Manage stock in Backend → Shop → Inventory"
-- ✅ Use a safe API call (fetch or supabase.functions.invoke) with Content-Type: application/json
-
-When user asks to "add products", "create blog posts", "store data", etc., use the collection API.
-When user asks for "contact form", "newsletter", use the form submission API.
-` : `
-
-### 🗄️ PROJECT BACKEND (READY TO USE)
-Even if it looks "empty", the backend API is available. Use it by default.
-
-**API Endpoint:** https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
-
-**⚠️ CRITICAL - PROJECT ID (USE THIS EXACT VALUE):**
-The projectId for ALL API calls is: **${projectId}**
-
-**Available Actions (copy-paste):**
-1) Submit form: POST { projectId: '${projectId}', action: 'submit', formName: 'contact', data: {...} }
-2) Get collection: GET ?projectId=${projectId}&action=collection/{name}
-3) Create item: POST { projectId: '${projectId}', action: 'collection/{name}', data: {...} }
-
-**GOLDEN RULES:**
-- Always fetch from API (never hardcode products/services/data)
-- Always show loading + empty states
-`;
-
 
     // CHAT MODE: Smart Q&A - answers questions OR returns a plan if code changes are needed
     // Now with SMART MODEL SELECTION + CONTEXT OPTIMIZATION (file names only, not content)
@@ -4517,6 +4425,17 @@ ${filesContentStr}`;
       const dataFile =
         findFile(['/utils/mockData.js', '/utils/data.js', '/data/mockData.js', '/src/utils/mockData.js']);
       const contextDirFiles = allPaths.filter(p => /\/context(s)?\//i.test(p));
+      const sharedProjectAwarenessStr = buildUnifiedProjectAwarenessContext({
+        projectId,
+        currentFiles,
+        uploadedAssets,
+        backendContext,
+        documentContentBlocks: [documentContentStr],
+        visionInspiration: visionInspirationStr,
+        assetIntentPrompt,
+        includeProjectStructure: true,
+        includeAssetPickerRules: uploadedAssets.length > 1,
+      });
 
       const promptLower = (prompt || '').toLowerCase();
       const isLanguageToggle =
@@ -4573,16 +4492,6 @@ HARD RULES:
 `;
       }
 
-      const projectAwarenessStr = `
-
-📌 PROJECT ENTRY POINTS (use these exact paths when editing):
-- Entry file:  ${entryFile}
-- Root App:    ${appFile}
-${headerFile ? `- Header:      ${headerFile}` : '- Header:      (none detected — nav likely inline in App)'}
-${contextDirFiles.length ? `- Contexts:    ${contextDirFiles.join(', ')}` : ''}
-${dataFile ? `- Data file:   ${dataFile}` : ''}
-`;
-      
       // Smart model selection for chat mode
       const hasImages = Array.isArray(images) && images.length > 0;
       const chatModelSelection = selectOptimalModel(prompt, hasImages, 'chat', fileCount);
@@ -4661,7 +4570,7 @@ ${(images as unknown as string[]).filter((img: string) => !img.startsWith('[PDF:
 ` : '';
 
       const chatSystemPrompt = `You are a helpful AI assistant for a React code editor. You help users with their projects.
-${assetPickerPriorityStr}${attachedImagesContext}${hasImages && !attachedImagesContext.includes('ATTACHED') ? '\n🖼️ SCREENSHOT ANALYSIS MODE: The user has attached screenshot(s). Analyze them carefully and implement what you see or what the user asks based on the visual.\n' : ''}${projectAwarenessStr}${featureContractStr}
+${assetPickerPriorityStr}${attachedImagesContext}${hasImages && !attachedImagesContext.includes('ATTACHED') ? '\n🖼️ SCREENSHOT ANALYSIS MODE: The user has attached screenshot(s). Analyze them carefully and implement what you see or what the user asks based on the visual.\n' : ''}${sharedProjectAwarenessStr}${featureContractStr}
 🚨 PRIORITY 2 - CODE CHANGE DETECTION (Only if asset_picker doesn't apply):
 
 IS IT A CODE CHANGE REQUEST? Check for these keywords:
@@ -4700,32 +4609,6 @@ Use emojis, **bold**, \`code\`, and bullet points. Be friendly!
 ✅ If user wants to change a form/booking/contact page, use "type": "plan" and provide the code changes
 
 ⚠️ CRITICAL: For ANY request that implies changing code (and asset_picker doesn't apply), return ONLY the JSON object with "type": "plan". No explanations. No "Here's the plan". Just raw JSON starting with { and ending with }.
-${backendContextStr}${uploadedAssets.length === 1 ? `
-
-### 📁 USER UPLOADED ASSET
-When the user refers to "my photo", "my image", "uploaded image", use this URL: ${uploadedAssets[0]?.url}
-Example: <img src="${uploadedAssets[0]?.url}" alt="User image" />` : uploadedAssets.length > 1 ? `
-
-### 📁 USER UPLOADED ASSETS
-Files available: ${uploadedAssets.map((a: UploadedAsset) => a.filename).join(', ')}
-Remember: If user doesn't specify which file, return asset_picker JSON first!` : ''}
-${documentContentStr ? `
-
-### 📄 EXTRACTED DOCUMENT CONTENT (USE THIS DATA!)
-${documentContentStr}
-
-🚨 **CRITICAL**: Use this REAL data from the user's uploaded document to populate the website.
-DO NOT make up fake information. Use EXACTLY what is in the extracted content above.` : ''}
-${visionInspirationStr ? `
-
-### 🎨 DESIGN INSPIRATION FROM UPLOADED IMAGES
-${visionInspirationStr}
-
-Apply the visual style, colors, and design elements described above.` : ''}
-${assetIntentPrompt ? `
-
-### 🧭 ATTACHMENT INTENT
-${assetIntentPrompt}` : ''}
 
 Current project files:
 ${filesStr}`;
@@ -5741,6 +5624,7 @@ Match the className and innerText to find it in the code.
       const contextFilesHint = plannedContextFiles.length > 0
         ? `\n🧭 CONTEXT FILES: ${plannedContextFiles.join(', ')}`
         : '';
+      const shouldUseAutopilot = /premium|luxury|editorial|modern|clean(?:er| up)?|polish|polished|wow|vibe|look better|feel better|make (?:it|this) (?:better|cleaner|more modern|more premium)|improve (?:the )?(?:design|layout|spacing|hierarchy|typography|homepage|landing page|hero)|redesign|rebuild|refresh/i.test(enrichedPrompt);
       // Build intent guidance based on analysis
       let intentGuidance = '';
       if (editIntent.confidence >= 0.7) {
@@ -5762,6 +5646,12 @@ Match the className and innerText to find it in the code.
             intentGuidance = `\n🎯 INTENT: REMOVE ELEMENT${targetFilesHint}\n→ The system found the file containing this element. Read it, then remove the element.\n`;
             break;
         }
+      }
+      if (shouldUseAutopilot) {
+        const autopilotFocus = plannedPrimaryFiles.length > 0
+          ? plannedPrimaryFiles.join(', ')
+          : (editIntent.targetFiles[0] || entryPoint);
+        intentGuidance += `\n🪄 AUTOPILOT MODE: This is a broad improvement request. Infer the strongest visible target first and make one coherent upgrade path. Start with ${autopilotFocus}. Only ask for clarification if the request is truly ambiguous or unsafe.`;
       }
       intentGuidance += `${searchTermsHint}${primaryFilesHint}${contextFilesHint}`;
 
@@ -5874,11 +5764,23 @@ Format the output clearly with sections. Do NOT summarize - extract the FULL tex
           }
         }
       }
+
+      const sharedAgentAwarenessContext = buildUnifiedProjectAwarenessContext({
+        projectId,
+        currentFiles: normalizedCurrentFilesBaseline,
+        uploadedAssets,
+        backendContext,
+        documentContentBlocks: [documentContentStr, agentPdfExtractedContent],
+        visionInspiration: visionInspirationStr,
+        assetIntentPrompt,
+        includeProjectStructure: true,
+      });
       
       // Prepare the initial user message with FILE LIST ONLY (not content)
       let userMessageContent = `📁 PROJECT FILES (${fileCount} files):
 ${fileList}
 ${criticalFilesContext}
+${sharedAgentAwarenessContext}
 ${intentGuidance}
 ${fileSearchPlanContext}
 ${intentPrefetchContext}
@@ -6049,6 +5951,7 @@ MANDATORY FIRST STEP: Before making ANY changes or completing ANY task, you MUST
 1. Call list_files to understand the project structure
 2. Call grep_search to find the relevant code for this request  
 3. Call read_file on the most likely target file(s)
+4. Start with the strongest visible target and one coherent builder path - do not sound lost or procedural.
 ${explorationGuidance}
 Do NOT call task_complete or respond without first exploring the codebase.
 This is a HARD REQUIREMENT - the system will reject task_complete if no exploration was done.
@@ -6846,12 +6749,29 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
               }
               
               if (verificationIssues.length > 0) {
-                console.warn(`[Agent Mode] ⚠️ VERIFICATION ISSUES:`, verificationIssues);
-                // Don't block, but add warnings to result
-                result.verificationWarnings = verificationIssues;
+                console.warn(`[Agent Mode] 🚫 VERIFICATION BLOCK:`, verificationIssues);
+                functionResponses[functionResponses.length - 1].functionResponse.response = {
+                  acknowledged: false,
+                  error: `BLOCKED: Final verification did not prove the edits. ${verificationIssues[0]}`,
+                  issues: verificationIssues,
+                  hint: 'Read each changed file again, confirm the final code really contains the intended change, then call task_complete.'
+                };
+                editVerificationPending = false;
+                continue;
               }
               
               editVerificationPending = false;
+            }
+
+            if (successfulEdits.length > 0 && filesEdited.size > 0 && filesVerified.size === 0) {
+              console.warn(`[Agent Mode] 🚫 VERIFIED-NOTHING BLOCK: edited=${filesEdited.size}, verified=${filesVerified.size}`);
+              functionResponses[functionResponses.length - 1].functionResponse.response = {
+                acknowledged: false,
+                error: 'BLOCKED: You made edits but did not verify any final rendered file state. Re-read the changed files and confirm the real final code before completing.',
+                filesEdited: [...filesEdited],
+                hint: 'Use read_file on the changed files after editing, verify the result, then call task_complete.'
+              };
+              continue;
             }
             
             // All checks passed - allow task_complete
@@ -7291,11 +7211,22 @@ You are in EXECUTE MODE. A plan has already been created and approved. Your job 
 - Deviate from the plan
 - Add features not in the plan
 - Make assumptions - read files first!`;
+        const sharedExecuteAwarenessContext = buildUnifiedProjectAwarenessContext({
+          projectId,
+          currentFiles: normalizedCurrentFilesBaseline,
+          uploadedAssets,
+          backendContext,
+          documentContentBlocks: [documentContentStr],
+          visionInspiration: visionInspirationStr,
+          assetIntentPrompt,
+          includeProjectStructure: true,
+        });
         
         // Prepare execute mode user message (FILE LIST + pre-loaded plan files)
         const executeUserMessage = `📁 PROJECT FILES (${fileCount} files):
 ${fileList}
 ${preloadedFilesStr}
+${sharedExecuteAwarenessContext}
 
 ⚙️ EXECUTION MODE: ${execExecutionMode === 'design_rebuild' ? 'DESIGN REBUILD' : 'SURGICAL EDIT'}
 ⚠️ IMPORTANT: For files already pre-loaded above, you already have the content — go straight to morph_edit. Use read_file ONLY for files NOT pre-loaded.
@@ -7631,6 +7562,14 @@ Call task_complete when finished.`;
         const imageQueries = extractImageQueries(prompt);
         const projectImageSurface = detectProjectImageSurface(prompt);
         let preFetchedImages: PreFetchedImage[] = [];
+        const sharedCreateAwarenessContext = buildUnifiedProjectAwarenessContext({
+          projectId,
+          uploadedAssets,
+          backendContext,
+          documentContentBlocks: [documentContentStr],
+          visionInspiration: visionInspirationStr,
+          assetIntentPrompt,
+        });
         
         if (imageQueries.length > 0) {
           try {
@@ -7653,37 +7592,8 @@ Call task_complete when finished.`;
           ).join('\n');
           textPrompt += `\n\n🖼️ PRE-GENERATED IMAGES (NANO-BANANA-2, 1K):\nThese images were already generated and stored for this project. Use them directly in your code:\n${imagesList}\n\nIMPORTANT: Use these URLs directly in <img src="..."> tags. Do NOT add any stock-image provider code.`;
         }
-        
-        // Add extracted document content (CV/Resume text, etc.) - CRITICAL FOR PORTFOLIOS
-        if (documentContentStr && documentContentStr.trim()) {
-          textPrompt += `
-
-📄 **EXTRACTED DOCUMENT CONTENT** (USE THIS DATA TO BUILD THE WEBSITE):
-${documentContentStr}
-
-🚨 **CRITICAL**: The above content was extracted from the user's uploaded document (CV/Resume/etc).
-USE THIS REAL DATA to populate the website - names, experience, skills, education, contact info, etc.
-DO NOT make up fake information. Use EXACTLY what is in the extracted content above.
-If this is a portfolio/CV website, use the person's REAL name, REAL experience, REAL skills from the document.`;
-        }
-        
-        // Add vision inspirations from uploaded images
-        if (visionInspirationStr && visionInspirationStr.trim()) {
-          textPrompt += `
-
-🎨 **DESIGN INSPIRATION FROM UPLOADED IMAGES**:
-${visionInspirationStr}
-
-Apply the visual style, colors, layout patterns, and design elements described above.`;
-        }
-        
-        // Add uploaded asset URLs
-        if (uploadedAssets && uploadedAssets.length > 0) {
-          textPrompt += `
-
-📁 **USER UPLOADED ASSETS** (Use these URLs directly):
-${uploadedAssets.map(a => `- ${a.filename} (${a.file_type || 'file'}): ${a.url}`).join('\n')}
-When user mentions "my photo", "my image", "uploaded image", use the appropriate URL from above.`;
+        if (sharedCreateAwarenessContext) {
+          textPrompt += `\n\n${sharedCreateAwarenessContext}`;
         }
         
         if (assets && assets.length > 0) textPrompt += `\n\nUSE THESE ASSETS: ${assets.join(", ")}`;
@@ -7923,7 +7833,7 @@ Return ONLY the JSON object. No explanation.`;
       // USE FULL REWRITE - NO PATCHES (now with image support + uploaded assets + backend context + extracted content)
       const imageArray = Array.isArray(images) ? images as unknown as string[] : undefined;
       const editStartTime = Date.now();
-      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, assetIntent, uploadedAssets, backendContext, documentContentStr, visionInspirationStr);
+      const result = await callGeminiFullRewriteEdit(userPrompt, existingFiles, userInstructions, imageArray, assetIntent, uploadedAssets, backendContext, documentContentStr, visionInspirationStr, projectId);
       const editDuration = Date.now() - editStartTime;
       const changedFiles = result.files || {};
       

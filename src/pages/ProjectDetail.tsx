@@ -466,6 +466,32 @@ CRITICAL RETRY CONTRACT:
 ${priorSection}`;
   }, []);
 
+  const buildMagicProgressSteps = useCallback((mode: 'create' | 'code' | 'chat') => {
+    if (mode === 'create') {
+      return [
+        { label: isRTL ? 'فهم ما تريد بناءه...' : 'Understanding what you want to build...', status: 'loading' as const },
+        { label: isRTL ? 'تخطيط أفضل طريقة...' : 'Planning the best approach...', status: 'pending' as const },
+        { label: isRTL ? 'بناء التجربة...' : 'Building your experience...', status: 'pending' as const },
+        { label: isRTL ? 'مراجعة النتيجة النهائية...' : 'Checking the final result...', status: 'pending' as const },
+      ];
+    }
+
+    if (mode === 'code') {
+      return [
+        { label: isRTL ? 'فهم طلبك...' : 'Understanding your request...', status: 'loading' as const },
+        { label: isRTL ? 'تخطيط أفضل تعديل...' : 'Planning the best change...', status: 'pending' as const },
+        { label: isRTL ? 'تطبيق التعديلات...' : 'Building your changes...', status: 'pending' as const },
+        { label: isRTL ? 'التحقق من النتيجة...' : 'Checking everything...', status: 'pending' as const },
+      ];
+    }
+
+    return [
+      { label: isRTL ? 'قراءة المشروع...' : 'Reading your project...', status: 'loading' as const },
+      { label: isRTL ? 'فهم طلبك...' : 'Understanding your request...', status: 'pending' as const },
+      { label: isRTL ? 'صياغة الرد...' : 'Preparing the response...', status: 'pending' as const },
+    ];
+  }, [isRTL]);
+
   const getVerifiedChangedFiles = useCallback((
     beforeFiles: Record<string, string>,
     afterFiles: Record<string, string>,
@@ -534,11 +560,11 @@ ${priorSection}`;
       return {
         reasonCode: 'timeout',
         userMessage: isRTL
-          ? 'تم إيقاف المهمة مؤقتًا بسبب مهلة التنفيذ لحماية الاستقرار.'
-          : 'The job was paused due to runtime timeout to keep the system stable.',
+          ? 'تم إيقاف المهمة مؤقتًا بشكل آمن قبل انتهاء المهلة حتى لا نفقد التقدم.'
+          : 'The run was paused safely before the time limit so your progress stays protected.',
         suggestedAction: isRTL
-          ? 'اضغط استئناف للمتابعة من آخر خطوة، أو أعد المحاولة بطلب أدق.'
-          : 'Press Resume to continue from the latest step, or retry with a more specific prompt.',
+          ? 'اضغط استئناف للمتابعة من آخر خطوة محفوظة، أو أعد الطلب بصياغة أدق.'
+          : 'Press Resume to continue from the last safe step, or retry with a slightly more specific prompt.',
       };
     }
 
@@ -546,8 +572,8 @@ ${priorSection}`;
       return {
         reasonCode: 'rate_limit',
         userMessage: isRTL
-          ? 'تم الوصول لحد الطلبات المؤقت.'
-          : 'A temporary rate limit was hit.',
+          ? 'تم الوصول إلى حد مؤقت للطلبات.'
+          : 'The builder hit a temporary request limit.',
         suggestedAction: isRTL
           ? 'انتظر لحظات ثم أعد المحاولة.'
           : 'Wait a moment and try again.',
@@ -558,8 +584,8 @@ ${priorSection}`;
       return {
         reasonCode: 'model_error',
         userMessage: isRTL
-          ? 'نموذج الذكاء لم يُكمل الطلب بشكل صحيح.'
-          : 'The model did not complete the request correctly.',
+          ? 'المساعد يحتاج محاولة أخرى ليكمل هذا الطلب بشكل نظيف.'
+          : 'The builder needs another pass to finish this cleanly.',
         suggestedAction: isRTL
           ? 'أعد المحاولة أو بسّط الطلب.'
           : 'Retry, or simplify the request.',
@@ -570,8 +596,8 @@ ${priorSection}`;
       return {
         reasonCode: 'concurrency',
         userMessage: isRTL
-          ? 'هناك مهمة وكيل أخرى تعمل الآن لنفس المشروع.'
-          : 'Another agent job is currently running for this project.',
+          ? 'هناك عملية بناء أخرى تعمل الآن لهذا المشروع.'
+          : 'Another builder run is already active for this project.',
         suggestedAction: isRTL
           ? 'أوقف المهمة الحالية أو انتظر اكتمالها.'
           : 'Pause the active job or wait for it to finish.',
@@ -581,8 +607,8 @@ ${priorSection}`;
     return {
       reasonCode: 'unknown',
       userMessage: isRTL
-        ? 'تعذر إكمال الطلب بسبب خطأ غير متوقع.'
-        : 'The request failed due to an unexpected issue.',
+        ? 'توقفت هذه المحاولة بسبب مشكلة غير متوقعة قبل الاكتمال.'
+        : 'This run hit an unexpected problem before it could finish cleanly.',
       suggestedAction: isRTL
         ? 'أعد المحاولة، وإن استمرت المشكلة عدّل صياغة الطلب.'
         : 'Retry, and if it persists, rephrase the request.',
@@ -644,7 +670,7 @@ ${priorSection}`;
 
   const resolveAgentExecutionMode = useCallback((requestText: string): AgentExecutionMode => {
     const normalized = (requestText || '').toLowerCase();
-    return /(premium|luxury|editorial|hero|homepage|landing page|first impression|redesign|rebuild|layout improvement|hierarchy|typography|wow|make this look better)/i.test(normalized)
+    return /(premium|luxury|editorial|hero|homepage|landing page|first impression|redesign|rebuild|layout improvement|hierarchy|typography|wow|make this look better|make it better|make this better|modern|clean(?:er| up)?|polish|polished|vibe|spacing|refresh)/i.test(normalized)
       ? 'design_rebuild'
       : 'surgical_edit';
   }, []);
@@ -1764,13 +1790,7 @@ ${priorSection}`;
     setLeftPanelMode('code'); // Start in Code mode so user sees the preview building
     
     // Reset steps
-    const steps: { label: string, status: 'pending' | 'loading' | 'completed' | 'error' }[] = [
-      { label: isRTL ? 'تحليل الطلب...' : 'Analyzing prompt...', status: 'loading' },
-      { label: isRTL ? 'تخطيط هيكل المشروع...' : 'Planning project structure...', status: 'pending' },
-      { label: isRTL ? 'إنشاء المكونات والأنماط...' : 'Generating components & styles...', status: 'pending' },
-      { label: isRTL ? 'تجميع الملفات النهائية...' : 'Assembling final files...', status: 'pending' },
-    ];
-    setGenerationSteps(steps);
+    setGenerationSteps(buildMagicProgressSteps('create'));
 
     // Save user message to DB
     const { data: newMsg, error: msgError } = await supabase
@@ -5427,18 +5447,10 @@ ${fixInstructions}
     setAiError(null); // Clear any previous errors
     // Set initial progress steps based on mode
     if (leftPanelMode === 'code') {
-      setGenerationSteps([
-        { label: isRTL ? 'تحليل الطلب...' : 'Analyzing request...', status: 'loading' },
-        { label: isRTL ? 'تخطيط التغييرات...' : 'Planning changes...', status: 'pending' },
-        { label: isRTL ? 'تطبيق التعديلات...' : 'Applying edits...', status: 'pending' },
-      ]);
+      setGenerationSteps(buildMagicProgressSteps('code'));
     } else {
       // Chat mode - different steps for Q&A
-      setGenerationSteps([
-        { label: isRTL ? 'قراءة المشروع...' : 'Reading project...', status: 'loading' },
-        { label: isRTL ? 'التفكير...' : 'Thinking...', status: 'pending' },
-        { label: isRTL ? 'صياغة الإجابة...' : 'Formulating answer...', status: 'pending' },
-      ]);
+      setGenerationSteps(buildMagicProgressSteps('chat'));
     }
 
     // Save user message to DB
@@ -5836,7 +5848,8 @@ ${fixInstructions}
           setGenerationSteps(prev => prev.map((s, i) =>
             i === 0 ? { ...s, status: 'completed' } :
             i === 1 ? { ...s, status: 'completed' } :
-            i === 2 ? { ...s, status: 'loading' } : s
+            i === 2 ? { ...s, status: 'completed' } :
+            i === 3 ? { ...s, status: 'loading' } : s
           ));
           await delay(CODE_MODE_TRANSITION_STEP_DELAY_MS);
 
@@ -5892,15 +5905,15 @@ ${fixInstructions}
           const finalSummary = hasVerifiedChanges
             ? finalSummaryText
             : executionStatus === 'blocked'
-              ? (blockedReason || (isRTL ? 'تعذر تنفيذ الطلب بدقة على الكود الحالي.' : 'The request could not be safely executed on the current code.'))
+              ? (blockedReason || (isRTL ? 'أوقفت التنفيذ لأن الطلب يحتاج مسارًا أكثر أمانًا على الكود الحالي.' : 'I held off because this request needs a safer path on the current code.'))
               : (isRTL
-                ? 'لم يتم رصد أي تغييرات فعلية في الملفات. لم يتم وضع الحالة كـ تم التطبيق.'
-                : 'No verified file changes were detected, so this was not marked as Applied.');
+                ? 'تحققت من الملفات لكن لم تصل أي تغييرات آمنة ومؤكدة بعد.'
+                : 'I checked the files, but no safe verified change landed yet.');
 
           if (hasVerifiedChanges) {
             setDynamicSuggestions(generateCodeModeSuggestions(verifiedChangedFiles, userMessage));
           } else if (isLikelyCodeEditRequest(userMessage)) {
-            toast.warning(isRTL ? 'لم يتم تطبيق تعديل فعلي. يمكنك إعادة الطلب بصياغة أدق.' : 'No real edit was applied. Try a more specific follow-up.');
+            toast.warning(isRTL ? 'لم تصل أي تغييرات آمنة بعد. جرّب متابعة أوضح قليلًا.' : 'No safe verified change landed yet. Try a slightly clearer follow-up.');
           }
 
           const toolCallCount = finalAgentResult?.result?.toolCalls?.length
@@ -5914,8 +5927,8 @@ ${fixInstructions}
             title: hasVerifiedChanges
               ? (isRTL ? 'تم التطبيق' : 'Applied')
               : executionStatus === 'blocked'
-                ? (isRTL ? 'تعذر التطبيق' : 'Blocked')
-                : (isRTL ? 'لم يتم التغيير' : 'Not applied'),
+                ? (isRTL ? 'يحتاج مسارًا أكثر أمانًا' : 'Needs a safer pass')
+                : (isRTL ? 'لا توجد نتيجة مؤكدة بعد' : 'No verified change yet'),
             response: hasVerifiedChanges
               ? generateFriendlyResponse(finalSummary, verifiedChangedFiles, userMessage)
               : undefined,
@@ -6161,10 +6174,10 @@ ${fixInstructions}
         const pausedSummary = (pausedMatch[2] || '').trim();
         setLastAgentPausedJobId(pausedJobId || lastAgentPausedJobId);
         setAiError({
-          title: 'Agent Paused',
-          titleAr: 'تم إيقاف الوكيل مؤقتًا',
+          title: 'Paused Safely',
+          titleAr: 'تم الإيقاف المؤقت بأمان',
           message: classifiedFailure.userMessage,
-          messageAr: 'تم إيقاف المهمة مؤقتًا بسبب المهلة ويمكنك استئنافها.',
+          messageAr: 'تم إيقاف المهمة مؤقتًا بشكل آمن ويمكنك استئنافها من آخر خطوة محفوظة.',
           severity: 'info',
           technicalDetails: pausedSummary || errorMessage,
           suggestedAction: classifiedFailure.suggestedAction,
@@ -6174,7 +6187,7 @@ ${fixInstructions}
         setChatMessages(prev => [...prev, {
           id: `paused-${Date.now()}`,
           role: 'assistant',
-          content: isRTL ? 'تم إيقاف المهمة مؤقتًا. يمكنك الضغط على استئناف.' : 'The job was paused. You can press Resume.'
+          content: isRTL ? 'تم الإيقاف المؤقت بأمان. يمكنك الضغط على استئناف للمتابعة.' : 'I paused this safely. You can press Resume to continue.'
         }]);
         toast.info(pausedSummary || classifiedFailure.userMessage);
         return;
@@ -6182,17 +6195,17 @@ ${fixInstructions}
       
       // Set error explanation card
       setAiError({
-        title: 'AI Request Failed',
-        titleAr: 'فشل طلب الذكاء الاصطناعي',
+        title: 'Need Another Pass',
+        titleAr: 'نحتاج محاولة أخرى',
         message: classifiedFailure.userMessage,
-        messageAr: 'تعذر على الذكاء الاصطناعي إكمال طلبك. قد يكون ذلك بسبب مشكلة مؤقتة أو تعارض في التنفيذ.',
+        messageAr: 'توقفت هذه المحاولة قبل الاكتمال. غالبًا هذه مشكلة مؤقتة ويمكن المحاولة مرة أخرى.',
         severity: 'error',
         technicalDetails: errorMessage,
         suggestedAction: classifiedFailure.suggestedAction,
         suggestedActionAr: 'حاول مرة أخرى أو عدّل صياغة الطلب إذا استمرت المشكلة.',
       });
       
-      const errorMsg = isRTL ? 'عذرًا، حدث خطأ. حاول مرة أخرى.' : 'Sorry, an error occurred. Please try again.';
+      const errorMsg = isRTL ? 'توقفت هذه المحاولة قبل الاكتمال. حاول مرة أخرى.' : 'This run stopped before it could finish. Please try again.';
       setChatMessages(prev => [...prev, { 
         id: `error-${Date.now()}`,
         role: 'assistant', 
@@ -8398,7 +8411,7 @@ ${fixInstructions}
                             isActive={aiEditing || isGenerating || sharedAgentRunning || isResumingAgent}
                             currentGoal={sharedAgentPlan?.goal || chatInput || undefined}
                             isRTL={isRTL}
-                            cancelLabel={isRTL ? 'إيقاف مؤقت' : 'Pause'}
+                            cancelLabel={isRTL ? 'إيقاف آمن' : 'Pause safely'}
                             onCancel={async () => {
                               try {
                                 await pauseActiveJob();
@@ -8408,16 +8421,16 @@ ${fixInstructions}
                                 setGenerationSteps([]);
                                 setLastAgentPausedJobId(sharedAgentPlan?.id || null);
                                 setAiError({
-                                  title: 'Agent Paused',
-                                  titleAr: 'تم إيقاف الوكيل مؤقتًا',
-                                  message: 'The AI job was paused. You can resume it from the latest saved step.',
-                                  messageAr: 'تم إيقاف مهمة الذكاء مؤقتًا. يمكنك استئنافها من آخر خطوة محفوظة.',
+                                  title: 'Paused Safely',
+                                  titleAr: 'تم الإيقاف المؤقت بأمان',
+                                  message: 'The builder was paused safely. You can resume from the latest saved step.',
+                                  messageAr: 'تم إيقاف عملية البناء مؤقتًا بشكل آمن. يمكنك استئنافها من آخر خطوة محفوظة.',
                                   severity: 'info',
                                   technicalDetails: sharedAgentPlan?.id || undefined,
                                   suggestedAction: 'Use Resume to continue without starting over.',
                                   suggestedActionAr: 'استخدم استئناف للمتابعة دون البدء من جديد.',
                                 });
-                                toast.info(isRTL ? 'تم إيقاف المهمة مؤقتًا' : 'Agent job paused');
+                                toast.info(isRTL ? 'تم الإيقاف المؤقت بأمان' : 'Paused safely');
                               } catch (pauseErr: any) {
                                 toast.error(pauseErr?.message || (isRTL ? 'تعذر إيقاف المهمة مؤقتًا' : 'Failed to pause job'));
                               }
@@ -8448,7 +8461,7 @@ ${fixInstructions}
                               leftPanelMode === 'chat' ? "border-emerald-500" : "border-blue-500"
                             )} />
                             <span className="text-sm text-foreground">
-                              {isRTL ? 'معالجة...' : 'Processing...'}
+                              {isRTL ? 'يبني طلبك...' : 'Building your request...'}
                             </span>
                           </div>
                         )}

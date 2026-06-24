@@ -5448,6 +5448,69 @@ export function buildComponentTree(files: Array<{ path: string; content: string 
   return tree;
 }
 
+function uniquePaths(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function isDesignHeavyImprovementPrompt(prompt: string): boolean {
+  return /(premium|luxury|editorial|modern|clean(?:er| up)?|polish|polished|wow|vibe|look better|feel better|make (?:it|this) (?:better|cleaner|more modern|more premium)|improve (?:the )?(?:design|layout|spacing|hierarchy|typography|homepage|landing page|hero)|redesign|rebuild|refresh)/i.test(prompt);
+}
+
+function getVisiblePriorityFiles(
+  files: Array<{ path: string; content: string }>,
+  entryPoint: string,
+): string[] {
+  const fileMap: Record<string, string> = {};
+  for (const file of files) {
+    fileMap[file.path] = file.content;
+  }
+
+  const activeFiles = traceRenderPath(fileMap);
+  const scored = files.map((file) => {
+    const path = file.path;
+    let score = activeFiles.has(path) ? 80 : 0;
+
+    if (path === entryPoint) score += 35;
+    if (/\/App\.(jsx?|tsx?)$/i.test(path)) score += 30;
+    if (/\/(Home|Landing|Index|Main)\.(jsx?|tsx?)$/i.test(path)) score += 26;
+    if (/hero|header|navbar|layout|page|screen|section/i.test(path)) score += 16;
+    if (/components\/ui/i.test(path)) score -= 12;
+
+    return { path, score };
+  });
+
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.path)
+    .filter((path, index, arr) => arr.indexOf(path) === index)
+    .slice(0, 6);
+}
+
+function buildAutopilotSearchTerms(prompt: string, baseTerms: string[]): string[] {
+  const terms = new Set(baseTerms);
+  const promptLower = prompt.toLowerCase();
+
+  if (isDesignHeavyImprovementPrompt(prompt)) {
+    ['hero', 'homepage', 'layout', 'section', 'spacing', 'headline', 'cta'].forEach((term) => terms.add(term));
+  }
+
+  if (/homepage|landing page/i.test(prompt)) {
+    terms.add('home');
+    terms.add('landing');
+  }
+
+  if (/hero/i.test(promptLower)) {
+    terms.add('hero');
+  }
+
+  if (/header|navbar|nav/i.test(promptLower)) {
+    terms.add('header');
+    terms.add('navbar');
+  }
+
+  return [...terms].filter((term) => term.length >= 3).slice(0, 14);
+}
+
 /**
  * Analyze user prompt to determine edit intent and target files
  * From open-lovable's edit-intent-analyzer.ts
@@ -5458,8 +5521,17 @@ export function analyzeEditIntent(
   entryPoint: string
 ): EditIntent {
   const lowerPrompt = prompt.toLowerCase();
-  const searchTerms = extractSearchTerms(prompt);
+  const searchTerms = buildAutopilotSearchTerms(prompt, extractSearchTerms(prompt));
   const scopedFiles = selectIntentFiles(files, searchTerms, entryPoint);
+  const visiblePriorityFiles = getVisiblePriorityFiles(files, entryPoint);
+  const preferredTargetFiles = uniquePaths([
+    ...visiblePriorityFiles.slice(0, 2),
+    ...scopedFiles.targetFiles,
+  ]).slice(0, 3);
+  const preferredContextFiles = uniquePaths([
+    ...scopedFiles.contextFiles,
+    ...visiblePriorityFiles.slice(1, 6),
+  ]).filter((path) => !preferredTargetFiles.includes(path)).slice(0, 6);
   
   // Pattern 1: Remove/Delete/Hide elements
   if (lowerPrompt.match(/(?:remove|delete|hide)\s+.*\s+(?:button|link|text|element|section)/i)) {
@@ -5472,6 +5544,20 @@ export function analyzeEditIntent(
       searchTerms,
       confidence: targets.length > 0 ? 0.9 : 0.6,
       description: `Remove element from ${targetFiles[0] || entryPoint}`,
+      targetHint: targetFiles[0] || entryPoint,
+    };
+  }
+
+  if (isDesignHeavyImprovementPrompt(prompt)) {
+    const targetFiles = preferredTargetFiles.length > 0 ? preferredTargetFiles : scopedFiles.targetFiles;
+    const contextFiles = preferredContextFiles.length > 0 ? preferredContextFiles : scopedFiles.contextFiles;
+    return {
+      type: /theme|color|palette|styling|css/.test(lowerPrompt) ? 'UPDATE_STYLE' : 'UPDATE_COMPONENT',
+      targetFiles,
+      contextFiles,
+      searchTerms,
+      confidence: targetFiles[0] !== entryPoint ? 0.86 : 0.78,
+      description: `Autopilot improvement focused on ${targetFiles[0] || entryPoint}`,
       targetHint: targetFiles[0] || entryPoint,
     };
   }
@@ -5565,11 +5651,11 @@ export function analyzeEditIntent(
   // Default: general update
   return {
     type: 'UPDATE_COMPONENT',
-    targetFiles: scopedFiles.targetFiles,
-    contextFiles: scopedFiles.contextFiles,
+    targetFiles: preferredTargetFiles.length > 0 ? preferredTargetFiles : scopedFiles.targetFiles,
+    contextFiles: preferredContextFiles.length > 0 ? preferredContextFiles : scopedFiles.contextFiles,
     searchTerms,
-    confidence: 0.5,
+    confidence: preferredTargetFiles.length > 0 ? 0.62 : 0.5,
     description: 'General update',
-    targetHint: scopedFiles.targetFiles[0] || entryPoint,
+    targetHint: preferredTargetFiles[0] || scopedFiles.targetFiles[0] || entryPoint,
   };
 }

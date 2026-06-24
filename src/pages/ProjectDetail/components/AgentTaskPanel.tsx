@@ -6,6 +6,7 @@ import {
   Circle, 
   Loader2, 
   XCircle,
+  PauseCircle,
   ChevronDown,
   ChevronUp,
   Sparkles,
@@ -19,7 +20,7 @@ export interface AgentStep {
   id: string;
   title: string;
   description?: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'paused';
   tool?: string;
   result?: string;
   duration?: number;
@@ -50,6 +51,7 @@ const STATUS_COLORS = {
   in_progress: 'text-indigo-500',
   completed: 'text-emerald-500',
   failed: 'text-red-500',
+  paused: 'text-amber-500',
 };
 
 const STATUS_BG = {
@@ -57,6 +59,7 @@ const STATUS_BG = {
   in_progress: 'bg-indigo-50 dark:bg-indigo-950/50 border-indigo-200 dark:border-indigo-800',
   completed: 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800',
   failed: 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-800',
+  paused: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800',
 };
 
 function StepIcon({ status, tool }: { status: AgentStep['status']; tool?: string }) {
@@ -68,6 +71,12 @@ function StepIcon({ status, tool }: { status: AgentStep['status']; tool?: string
   }
   if (status === 'failed') {
     return <XCircle className="h-4 w-4 text-red-500" />;
+  }
+  if (status === 'paused') {
+    return <PauseCircle className="h-4 w-4 text-amber-500" />;
+  }
+  if (status === 'pending') {
+    return <Circle className="h-4 w-4 text-zinc-400" />;
   }
   
   const Icon = STEP_ICONS[tool || 'default'] || STEP_ICONS.default;
@@ -115,7 +124,7 @@ export function AgentTaskPanel({
           </div>
           <div>
             <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">
-              {isRTL ? 'وضع الوكيل' : 'Agent Mode'}
+              {isRTL ? 'منشئ الذكاء' : 'AI Builder'}
             </h3>
             {currentGoal && (
               <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate max-w-[200px]">
@@ -187,7 +196,8 @@ export function AgentTaskPanel({
                       step.status === 'completed' && "text-emerald-700 dark:text-emerald-400",
                       step.status === 'in_progress' && "text-indigo-700 dark:text-indigo-400",
                       step.status === 'pending' && "text-zinc-600 dark:text-zinc-400",
-                      step.status === 'failed' && "text-red-700 dark:text-red-400"
+                      step.status === 'failed' && "text-red-700 dark:text-red-400",
+                      step.status === 'paused' && "text-amber-700 dark:text-amber-400"
                     )}>
                       {step.title}
                     </p>
@@ -198,13 +208,17 @@ export function AgentTaskPanel({
                       </p>
                     )}
                     
-                    {step.result && step.status === 'completed' && (
-                      <p className="text-xs text-emerald-600 dark:text-emerald-400 mt-1 font-mono">
+                    {step.result && (step.status === 'completed' || step.status === 'paused') && (
+                      <p className={cn(
+                        "text-xs mt-1",
+                        step.status === 'completed' && "text-emerald-600 dark:text-emerald-400",
+                        step.status === 'paused' && "text-amber-600 dark:text-amber-400"
+                      )}>
                         ✓ {step.result}
                       </p>
                     )}
                     
-                    {step.duration && step.status === 'completed' && (
+                    {step.duration && (step.status === 'completed' || step.status === 'paused') && (
                       <p className="text-[10px] text-zinc-400 mt-0.5">
                         {step.duration}ms
                       </p>
@@ -217,7 +231,7 @@ export function AgentTaskPanel({
               {isActive && steps.every(s => s.status !== 'in_progress') && (
                 <div className="flex items-center gap-2 p-2 text-xs text-zinc-500">
                   <Loader2 className="h-3 w-3 animate-spin" />
-                  {isRTL ? 'جاري التفكير...' : 'Thinking...'}
+                  {isRTL ? 'يعمل بعناية...' : 'Working carefully...'}
                 </div>
               )}
             </div>

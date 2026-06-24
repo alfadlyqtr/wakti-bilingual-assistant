@@ -23,7 +23,7 @@ export interface AgentTask {
   id: string;
   title: string;
   description: string;
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'paused';
   tool?: string;
   result?: string;
   error?: string;
@@ -119,11 +119,11 @@ export interface UseAgentModeReturn {
 
 interface EdgeJobMetadata {
   currentStep?: string;
-  currentStepStatus?: 'pending' | 'in_progress' | 'completed' | 'failed';
+  currentStepStatus?: 'pending' | 'in_progress' | 'completed' | 'failed' | 'paused';
   timeline?: Array<{
     at?: string;
     step?: string;
-    status?: 'pending' | 'in_progress' | 'completed' | 'failed';
+    status?: 'pending' | 'in_progress' | 'completed' | 'failed' | 'paused';
     note?: string;
   }>;
   workerResult?: EdgeAgentResultPayload;
@@ -197,6 +197,47 @@ type AgentRunError = Error & {
   agentAlreadyRecorded?: boolean;
 };
 
+function formatBuilderTitle(label: string): string {
+  const normalized = (label || '').trim().toLowerCase();
+
+  if (!normalized) return 'Preparing your request';
+
+  if (/read_file|grep_search|warp_grep|list_files|search|inspect|analyz|triage|detective/.test(normalized)) {
+    return 'Understanding your project';
+  }
+
+  if (/plan|strateg|intent|prepare|context|search plan/.test(normalized)) {
+    return 'Planning the best approach';
+  }
+
+  if (/morph_edit|search_replace|write_file|insert_code|delete_file|apply|edit|build|create|update|rewrite/.test(normalized)) {
+    return 'Building your changes';
+  }
+
+  if (/verify|smoke|check|task_complete|complete|finish|final/.test(normalized)) {
+    return 'Checking everything';
+  }
+
+  if (/pause|budget|timeout/.test(normalized)) {
+    return 'Paused safely';
+  }
+
+  return label
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function formatBuilderDescription(description?: string): string {
+  const value = (description || '').trim();
+  if (!value) return '';
+
+  if (value.startsWith('/')) {
+    return `Working in ${value}`;
+  }
+
+  return value;
+}
+
 /**
  * Real client for the AI Coder agent. Wraps the `projects-generate` edge
  * function (mode: 'agent') and exposes live progress.
@@ -239,8 +280,8 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
 
         return {
           id: `tool-${index}`,
-          title: call.tool.replace(/_/g, ' '),
-          description: resultPath || '',
+          title: formatBuilderTitle(call.tool),
+          description: formatBuilderDescription(resultPath),
           status: result?.success === false ? 'failed' : 'completed',
           tool: call.tool,
           result: typeof result?.summary === 'string' ? result.summary : resultPath,
@@ -251,7 +292,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
   const mapSummaryToolCallsToTasks = (raw?: Array<{ tool: string; success: boolean }> | null): AgentTask[] =>
     (raw || []).map((call, index) => ({
       id: `summary-tool-${index}`,
-      title: call.tool.replace(/_/g, ' '),
+      title: formatBuilderTitle(call.tool),
       description: '',
       status: call.success ? 'completed' : 'failed',
       tool: call.tool,
@@ -262,9 +303,11 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
 
     return timeline.map((item, index) => ({
       id: `timeline-${index}-${item.step || 'step'}`,
-      title: String(item.step || 'Agent step').replace(/_/g, ' '),
-      description: item.note || '',
-      status: item.status || 'in_progress',
+      title: formatBuilderTitle(String(item.step || 'Agent step')),
+      description: formatBuilderDescription(item.note || ''),
+      status: item.status === 'failed' && String(item.step || '').toLowerCase().includes('pause')
+        ? 'paused'
+        : (item.status === 'paused' ? 'paused' : (item.status || 'in_progress')),
       result: item.note,
     }));
   };
@@ -285,15 +328,15 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
     return [
       {
         id: job.id || 'agent-job',
-        title: 'Agent job',
-        description: job.result_summary || '',
+        title: job.status === 'paused' ? 'Paused safely' : 'Building your request',
+        description: formatBuilderDescription(job.result_summary || ''),
         status:
           job.status === 'succeeded'
             ? 'completed'
             : job.status === 'failed'
             ? 'failed'
             : job.status === 'paused'
-            ? 'failed'
+            ? 'paused'
             : 'in_progress',
         result: job.result_summary || undefined,
         error: job.error || undefined,
@@ -557,7 +600,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
             tasks: [
               {
                 id: 'agent-message',
-                title: 'Agent response',
+                title: 'Ready',
                 description: '',
                 status: 'completed',
                 result: startData.message,
@@ -586,7 +629,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
           tasks: [
             {
               id: jobId,
-              title: 'Agent job',
+              title: 'Preparing your request',
               description: '',
               status: 'in_progress',
             },
@@ -644,7 +687,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
                     jobId,
                     result: workerResult,
                     error: msg,
-                  }));
+                  }, true));
                   return;
                 }
 
@@ -679,7 +722,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
                   jobId,
                   result: workerResult,
                   error: workerResult?.error || job.error || 'AGENT_PAUSED',
-                }));
+                }, true));
                 return;
               }
 
@@ -699,7 +742,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
                   jobId,
                   result: workerResult,
                   error: msg,
-                }));
+                }, true));
                 return;
               }
 
@@ -801,8 +844,8 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
       tasks: [
         {
           id: nextJobId,
-          title: 'Agent job',
-          description: 'Resumed from paused state',
+          title: 'Picking up where we left off',
+          description: 'Continuing from the last safe step',
           status: 'in_progress',
         },
       ],
@@ -858,7 +901,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
                 jobId: nextJobId,
                 result: workerResult,
                 error: msg,
-              }));
+              }, true));
               return;
             }
 
@@ -891,7 +934,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
               jobId: nextJobId,
               result: workerResult,
               error: workerResult?.error || job.error || 'AGENT_PAUSED',
-            }));
+            }, true));
             return;
           }
 
@@ -910,7 +953,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
               jobId: nextJobId,
               result: workerResult,
               error: msg,
-            }));
+            }, true));
             return;
           }
 
