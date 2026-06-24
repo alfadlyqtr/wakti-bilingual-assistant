@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw, Eye, EyeOff } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -287,10 +287,14 @@ export default function DeenQuran() {
   const surahAudioCacheRef = useRef<Record<string, string[]>>({});
   const playbackSessionRef = useRef(0);
   const readerTopRef = useRef<HTMLDivElement | null>(null);
+  const chipRowRef = useRef<HTMLDivElement | null>(null);
   const ayahItemRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const readerPlayAllEnabledRef = useRef(false);
   const isSurahPlayingRef = useRef(false);
   const currentPlaybackAyahIndexRef = useRef(-1);
+  const preserveScrollYRef = useRef<number | null>(null);
+  const suppressPlaybackScrollOnceRef = useRef(false);
+  const chipRowTopBeforeRef = useRef<number | null>(null);
   useEffect(() => {
     try {
       localStorage.setItem(RECITER_STORAGE_KEY, selectedReciter);
@@ -348,6 +352,10 @@ export default function DeenQuran() {
 
   useEffect(() => {
     if (screen !== "reader" || currentPlaybackAyahIndex < 0) return;
+    if (suppressPlaybackScrollOnceRef.current) {
+      suppressPlaybackScrollOnceRef.current = false;
+      return;
+    }
     const activeAyahEl = ayahItemRefs.current[currentPlaybackAyahIndex];
     if (!activeAyahEl) return;
     const timer = window.setTimeout(() => {
@@ -355,6 +363,46 @@ export default function DeenQuran() {
     }, 80);
     return () => window.clearTimeout(timer);
   }, [screen, currentPlaybackAyahIndex, readerPage]);
+
+  // Restore position after a chip-triggered page change (no storage, one-shot)
+  useLayoutEffect(() => {
+    // Prefer relative correction using the chip row's visual offset (handles Safari/WebKit reflows)
+    const beforeTop = chipRowTopBeforeRef.current;
+    const container = chipRowRef.current;
+    if (beforeTop != null && container) {
+      // Run after layout has settled
+      requestAnimationFrame(() => {
+        const afterTop = container.getBoundingClientRect().top;
+        const delta = afterTop - beforeTop;
+        if (delta !== 0) window.scrollBy(0, delta);
+        chipRowTopBeforeRef.current = null;
+        preserveScrollYRef.current = null; // cancel absolute fallback
+      });
+      return;
+    }
+
+    // Fallback: absolute pixel restore
+    const y = preserveScrollYRef.current;
+    if (y != null) {
+      window.scrollTo(0, y);
+      requestAnimationFrame(() => {
+        window.scrollTo(0, y);
+        preserveScrollYRef.current = null;
+      });
+    }
+  }, [readerPage]);
+
+  // Horizontally center the active page chip within its scroll container only (no page scroll)
+  useEffect(() => {
+    const container = chipRowRef.current;
+    const chip = container?.children[readerPage] as HTMLElement | undefined;
+    if (!container || !chip) return;
+    const chipLeft = chip.offsetLeft;
+    const chipWidth = chip.offsetWidth;
+    const containerWidth = container.clientWidth;
+    const targetLeft = Math.max(0, chipLeft - containerWidth / 2 + chipWidth / 2);
+    container.scrollTo({ left: targetLeft, behavior: "smooth" });
+  }, [readerPage]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -2433,14 +2481,24 @@ export default function DeenQuran() {
                         </div>
                         {/* Scrollable circular page number chips */}
                         <div
+                          ref={chipRowRef}
                           className="flex items-center gap-2 overflow-x-auto px-1 py-1 no-scrollbar"
                           style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                         >
                           <style>{".no-scrollbar::-webkit-scrollbar { display: none; }"}</style>
                           {Array.from({ length: totalPages }, (_, i) => (
                             <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onFocus={(e) => (e.target as HTMLButtonElement).blur()}
                               key={i}
-                              onClick={() => goToPage(i, false)}
+                              onClick={() => {
+                                const container = chipRowRef.current;
+                                chipRowTopBeforeRef.current = container ? container.getBoundingClientRect().top : null;
+                                preserveScrollYRef.current = window.scrollY;
+                                suppressPlaybackScrollOnceRef.current = true;
+                                goToPage(i, false);
+                              }}
                               className="flex-shrink-0 active:scale-90 transition-all"
                               style={{
                                 width: 32,
