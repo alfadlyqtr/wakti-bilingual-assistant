@@ -1353,6 +1353,24 @@ export interface EditIntent {
   confidence: number;
   targetHint?: string;
   description: string;
+  targetFiles: string[];
+  contextFiles: string[];
+  searchTerms: string[];
+}
+
+export interface FileSearchHit {
+  path: string;
+  line: number;
+  term: string;
+  confidence: number;
+  preview: string;
+  matchType: 'filename' | 'content' | 'exact_text' | 'import_graph';
+}
+
+export interface FileSearchPlan {
+  searchTerms: string[];
+  primaryHits: FileSearchHit[];
+  contextHits: FileSearchHit[];
 }
 
 // ============================================================================
@@ -2755,6 +2773,27 @@ Before creating a new component/page:
 
 **⭐ ALWAYS try morph_edit FIRST - it handles fuzzy matching!**
 
+## 🧾 FALLBACK RESPONSE FORMAT (MANDATORY IF YOU DO NOT CALL TOOLS)
+
+If you ever respond with plain text instead of tool calls for an edit, your response MUST be only one or more parseable XML edit blocks in this exact format:
+
+<edit target_file="/src/App.jsx">
+<instructions>Explain the exact change briefly</instructions>
+<update>
+// ... existing code ...
+the changed code here
+// ... existing code ...
+</update>
+</edit>
+
+Rules:
+- No markdown fences
+- No prose before or after the XML
+- One <edit> block per file
+- Use exact project file paths
+- In <update>, include only the changed section with // ... existing code ... markers
+- If no edit is needed, do NOT output XML - answer normally and do not pretend you edited code
+
 ## 🔒 MORPH-ONLY ENFORCEMENT (SURGICAL EDITS)
 
 **For files under 500 lines, write_file is FORBIDDEN for edits.**
@@ -3005,6 +3044,53 @@ When making edits, you can ALSO output \`<edit>\` blocks for complex changes. Th
 3. \`<update>\` contains code with \`// ... existing code ...\` markers for unchanged parts
 4. You can output multiple \`<edit>\` blocks for multiple files
 5. The system will use Morph AI to intelligently merge your changes
+
+## 9 EDIT EXAMPLES - COPY THESE BEHAVIORS
+
+### Example 1: Change one class only
+- User: "Make the hero title blue"
+- Wrong: Rewrite the whole hero section
+- Right: grep_search the exact title, read_file the component, morph_edit only the title class
+
+### Example 2: Remove exact text
+- User: "Remove the 'Contact Us' button"
+- Wrong: Delete every button in the section
+- Right: grep_search for "Contact Us", read the file, remove only that exact button
+
+### Example 3: Fix an undefined variable
+- User: "Fix the header crash"
+- Wrong: Guess the missing import from memory
+- Right: read the error file, find the exact missing symbol, add only the needed import or fallback
+
+### Example 4: Add one import safely
+- User: "Use useMemo here"
+- Wrong: Rewrite the file header and reorder unrelated imports
+- Right: read the file, add only the missing import line, keep existing imports stable
+
+### Example 5: Add a new page correctly
+- User: "Create a pricing page"
+- Wrong: Create Pricing.tsx and stop
+- Right: create the page, import it, add the route, add the nav link, verify it is reachable
+
+### Example 6: Add a new component without orphaning it
+- User: "Add a testimonial slider"
+- Wrong: Create a new component file but never render it
+- Right: either edit inline existing code or create the component and connect it where it is used
+
+### Example 7: Respect backend-first data rules
+- User: "Add products to this page"
+- Wrong: Hardcode a fake products array
+- Right: use the project backend collections and fetch the real data with loading and empty states
+
+### Example 8: Respect the selected element
+- User: "Change this card" with Inspect Mode or screenshot context
+- Wrong: Edit a similar card somewhere else
+- Right: match the selected text, class, or anchor strings first, then edit that exact rendered target
+
+### Example 9: Finish the full edit cycle
+- User: any real code change request
+- Wrong: make an edit and stop without checking it
+- Right: search, read, edit, read again to verify, then call task_complete with a clear summary
 
 ## YOUR TOOLS (PRIORITIZED BY EFFICIENCY)
 
@@ -4986,6 +5072,264 @@ function extractComponentNames(prompt: string): string[] {
   return words;
 }
 
+function extractSearchTerms(prompt: string): string[] {
+  const terms = new Set<string>();
+  const quotedStrings = prompt.match(/['"]([^'"]+)['"]/g) || [];
+
+  for (const value of quotedStrings) {
+    const cleaned = value.replace(/['"]/g, '').trim().toLowerCase();
+    if (cleaned.length >= 3) terms.add(cleaned);
+  }
+
+  const fileMatches = prompt.match(/[\w./-]+\.(?:tsx?|jsx?|css|scss|json)/gi) || [];
+  for (const fileMatch of fileMatches) {
+    terms.add(fileMatch.toLowerCase());
+  }
+
+  const actionTargets = prompt.match(/(?:fix|update|change|edit|modify|remove|delete|hide|add|create|implement|build)\s+(?:the\s+)?([\w-]+)/gi) || [];
+  for (const target of actionTargets) {
+    const cleaned = target
+      .replace(/(?:fix|update|change|edit|modify|remove|delete|hide|add|create|implement|build)\s+(?:the\s+)?/i, '')
+      .trim()
+      .toLowerCase();
+    if (cleaned.length >= 3) terms.add(cleaned);
+  }
+
+  for (const word of extractComponentNames(prompt)) {
+    if (word.length >= 3) terms.add(word.toLowerCase());
+  }
+
+  return [...terms].slice(0, 12);
+}
+
+function scoreFileAgainstTerms(file: { path: string; content: string }, searchTerms: string[]): number {
+  if (searchTerms.length === 0) return 0;
+
+  const lowerPath = file.path.toLowerCase();
+  const lowerContent = file.content.toLowerCase();
+  let score = 0;
+
+  for (const term of searchTerms) {
+    if (!term) continue;
+    if (lowerPath.includes(term)) score += 6;
+    if (lowerContent.includes(term)) score += 3;
+    if (term.includes('.') && lowerPath.endsWith(term)) score += 10;
+  }
+
+  if (/\.(tsx?|jsx?)$/i.test(file.path)) score += 2;
+  if (/app\.(tsx?|jsx?)$/i.test(file.path)) score += 2;
+
+  return score;
+}
+
+function selectIntentFiles(
+  files: Array<{ path: string; content: string }>,
+  searchTerms: string[],
+  entryPoint: string,
+): { targetFiles: string[]; contextFiles: string[] } {
+  const ranked = files
+    .map((file) => ({ file, score: scoreFileAgainstTerms(file, searchTerms) }))
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  const targetFiles = ranked.slice(0, 4).map((item) => item.file.path);
+  if (targetFiles.length === 0) {
+    targetFiles.push(entryPoint);
+  }
+
+  const contextFileSet = new Set<string>();
+  for (const targetPath of targetFiles) {
+    const directory = targetPath.includes('/') ? targetPath.slice(0, targetPath.lastIndexOf('/')) : '';
+    for (const file of files) {
+      if (file.path === targetPath) continue;
+      if (directory && file.path.startsWith(directory + '/')) {
+        contextFileSet.add(file.path);
+      }
+      if (file.path === entryPoint) {
+        contextFileSet.add(file.path);
+      }
+      if (contextFileSet.size >= 6) break;
+    }
+    if (contextFileSet.size >= 6) break;
+  }
+
+  return {
+    targetFiles,
+    contextFiles: [...contextFileSet].filter((path) => !targetFiles.includes(path)).slice(0, 6),
+  };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function getLineNumberFromIndex(content: string, index: number): number {
+  return content.slice(0, index).split('\n').length;
+}
+
+function buildPreview(content: string, lineNumber: number): string {
+  const lines = content.split('\n');
+  const safeLineNumber = Math.max(1, lineNumber);
+  const start = Math.max(0, safeLineNumber - 2);
+  const end = Math.min(lines.length, safeLineNumber + 1);
+  return lines
+    .slice(start, end)
+    .map((line, index) => `${start + index + 1}: ${line}`)
+    .join('\n')
+    .slice(0, 500);
+}
+
+function createImportGraphHit(file: { path: string; content: string }, term: string): FileSearchHit {
+  return {
+    path: file.path,
+    line: 1,
+    term,
+    confidence: 0.55,
+    preview: buildPreview(file.content, 1),
+    matchType: 'import_graph',
+  };
+}
+
+function createFilenameHit(file: { path: string; content: string }, term: string): FileSearchHit | null {
+  if (!file.path.toLowerCase().includes(term.toLowerCase())) return null;
+  return {
+    path: file.path,
+    line: 1,
+    term,
+    confidence: term.includes('.') ? 0.95 : 0.82,
+    preview: buildPreview(file.content, 1),
+    matchType: 'filename',
+  };
+}
+
+function createContentHit(
+  file: { path: string; content: string },
+  term: string,
+  matchType: 'content' | 'exact_text',
+): FileSearchHit | null {
+  const normalizedTerm = term.trim().toLowerCase();
+  if (!normalizedTerm) return null;
+
+  const lowerContent = file.content.toLowerCase();
+  let index = lowerContent.indexOf(normalizedTerm);
+
+  if (index < 0 && !normalizedTerm.includes(' ')) {
+    const regex = new RegExp(`\\b${escapeRegExp(normalizedTerm)}\\b`, 'i');
+    const regexMatch = regex.exec(file.content);
+    index = typeof regexMatch?.index === 'number' ? regexMatch.index : -1;
+  }
+
+  if (index < 0) return null;
+  const line = getLineNumberFromIndex(file.content, index);
+  return {
+    path: file.path,
+    line,
+    term,
+    confidence: matchType === 'exact_text' ? 0.93 : 0.78,
+    preview: buildPreview(file.content, line),
+    matchType,
+  };
+}
+
+export function executeFileSearchPlan(
+  prompt: string,
+  files: Array<{ path: string; content: string }>,
+  editIntent: EditIntent,
+  entryPoint: string,
+): FileSearchPlan {
+  const searchTerms = editIntent.searchTerms.length > 0 ? editIntent.searchTerms : extractSearchTerms(prompt);
+  const quotedTerms = (prompt.match(/['"]([^'"]+)['"]/g) || [])
+    .map((value) => value.replace(/['"]/g, '').trim())
+    .filter((value) => value.length >= 3);
+  const fileMap = new Map(files.map((file) => [file.path, file]));
+  const dependencyTree = buildComponentTree(files);
+  const rankedHits: FileSearchHit[] = [];
+  const seenHitKeys = new Set<string>();
+
+  const pushHit = (hit: FileSearchHit | null) => {
+    if (!hit) return;
+    const key = `${hit.path}:${hit.line}:${hit.term}:${hit.matchType}`;
+    if (seenHitKeys.has(key)) return;
+    seenHitKeys.add(key);
+    rankedHits.push(hit);
+  };
+
+  for (const file of files) {
+    for (const term of searchTerms) {
+      pushHit(createFilenameHit(file, term));
+      pushHit(createContentHit(file, term, 'content'));
+    }
+    for (const term of quotedTerms) {
+      pushHit(createContentHit(file, term, 'exact_text'));
+    }
+  }
+
+  rankedHits.sort((a, b) => b.confidence - a.confidence || a.path.localeCompare(b.path) || a.line - b.line);
+
+  const primaryPathSet = new Set<string>(editIntent.targetFiles.filter(Boolean).slice(0, 4));
+  for (const hit of rankedHits) {
+    if (primaryPathSet.size >= 4) break;
+    primaryPathSet.add(hit.path);
+  }
+  if (primaryPathSet.size === 0) {
+    primaryPathSet.add(entryPoint);
+  }
+
+  const primaryHits: FileSearchHit[] = [];
+  const usedPrimaryPaths = new Set<string>();
+  for (const hit of rankedHits) {
+    if (!primaryPathSet.has(hit.path) || usedPrimaryPaths.has(hit.path)) continue;
+    primaryHits.push(hit);
+    usedPrimaryPaths.add(hit.path);
+    if (primaryHits.length >= 6) break;
+  }
+  for (const primaryPath of primaryPathSet) {
+    if (usedPrimaryPaths.has(primaryPath)) continue;
+    const file = fileMap.get(primaryPath);
+    if (!file) continue;
+    primaryHits.push(createImportGraphHit(file, 'primary file'));
+    usedPrimaryPaths.add(primaryPath);
+    if (primaryHits.length >= 6) break;
+  }
+
+  const contextPathSet = new Set<string>(editIntent.contextFiles.filter(Boolean).slice(0, 6));
+  contextPathSet.add(entryPoint);
+  for (const primaryPath of primaryPathSet) {
+    const node = dependencyTree[primaryPath];
+    if (!node) continue;
+    for (const relatedPath of [...node.imports, ...node.importedBy]) {
+      if (!primaryPathSet.has(relatedPath)) {
+        contextPathSet.add(relatedPath);
+      }
+      if (contextPathSet.size >= 6) break;
+    }
+    if (contextPathSet.size >= 6) break;
+  }
+
+  const contextHits: FileSearchHit[] = [];
+  const usedContextPaths = new Set<string>();
+  for (const hit of rankedHits) {
+    if (!contextPathSet.has(hit.path) || primaryPathSet.has(hit.path) || usedContextPaths.has(hit.path)) continue;
+    contextHits.push(hit);
+    usedContextPaths.add(hit.path);
+    if (contextHits.length >= 6) break;
+  }
+  for (const contextPath of contextPathSet) {
+    if (primaryPathSet.has(contextPath) || usedContextPaths.has(contextPath)) continue;
+    const file = fileMap.get(contextPath);
+    if (!file) continue;
+    contextHits.push(createImportGraphHit(file, 'dependency context'));
+    usedContextPaths.add(contextPath);
+    if (contextHits.length >= 6) break;
+  }
+
+  return {
+    searchTerms,
+    primaryHits,
+    contextHits,
+  };
+}
+
 /**
  * Find component by searching for content mentioned in the prompt
  * From open-lovable's edit-intent-analyzer.ts
@@ -5112,22 +5456,23 @@ export function analyzeEditIntent(
   prompt: string,
   files: Array<{ path: string; content: string }>,
   entryPoint: string
-): {
-  type: 'UPDATE_COMPONENT' | 'ADD_FEATURE' | 'FIX_ISSUE' | 'UPDATE_STYLE' | 'REMOVE_ELEMENT';
-  targetFiles: string[];
-  confidence: number;
-  description: string;
-} {
+): EditIntent {
   const lowerPrompt = prompt.toLowerCase();
+  const searchTerms = extractSearchTerms(prompt);
+  const scopedFiles = selectIntentFiles(files, searchTerms, entryPoint);
   
   // Pattern 1: Remove/Delete/Hide elements
   if (lowerPrompt.match(/(?:remove|delete|hide)\s+.*\s+(?:button|link|text|element|section)/i)) {
     const targets = findComponentByContent(prompt, files);
+    const targetFiles = targets.length > 0 ? targets : scopedFiles.targetFiles;
     return {
       type: 'REMOVE_ELEMENT',
-      targetFiles: targets.length > 0 ? targets : [entryPoint],
-      confidence: targets.length > 0 ? 0.9 : 0.5,
-      description: `Remove element from ${targets[0] || entryPoint}`
+      targetFiles,
+      contextFiles: scopedFiles.contextFiles,
+      searchTerms,
+      confidence: targets.length > 0 ? 0.9 : 0.6,
+      description: `Remove element from ${targetFiles[0] || entryPoint}`,
+      targetHint: targetFiles[0] || entryPoint,
     };
   }
   
@@ -5146,11 +5491,15 @@ export function analyzeEditIntent(
       }
     }
     
+    const targetFiles = targets.length > 0 ? [targets[0]] : scopedFiles.targetFiles;
     return {
       type: 'UPDATE_COMPONENT',
-      targetFiles: targets.length > 0 ? [targets[0]] : [entryPoint],
-      confidence: targets.length > 0 ? 0.8 : 0.5,
-      description: `Update component: ${targets[0] || entryPoint}`
+      targetFiles,
+      contextFiles: scopedFiles.contextFiles,
+      searchTerms,
+      confidence: targetFiles[0] !== entryPoint ? 0.85 : 0.65,
+      description: `Update component: ${targetFiles[0] || entryPoint}`,
+      targetHint: targetFiles[0] || entryPoint,
     };
   }
   
@@ -5166,8 +5515,11 @@ export function analyzeEditIntent(
           return {
             type: 'ADD_FEATURE',
             targetFiles: [file.path],
+            contextFiles: scopedFiles.contextFiles,
+            searchTerms,
             confidence: 0.8,
-            description: `Add feature to ${file.path}`
+            description: `Add feature to ${file.path}`,
+            targetHint: file.path,
           };
         }
       }
@@ -5175,9 +5527,12 @@ export function analyzeEditIntent(
     
     return {
       type: 'ADD_FEATURE',
-      targetFiles: [entryPoint],
+      targetFiles: scopedFiles.targetFiles,
+      contextFiles: scopedFiles.contextFiles,
+      searchTerms,
       confidence: 0.6,
-      description: 'Add new feature'
+      description: 'Add new feature',
+      targetHint: scopedFiles.targetFiles[0] || entryPoint,
     };
   }
   
@@ -5185,9 +5540,12 @@ export function analyzeEditIntent(
   if (lowerPrompt.match(/(?:fix|resolve|debug|repair)\s+(?:the\s+)?(\w+)/i)) {
     return {
       type: 'FIX_ISSUE',
-      targetFiles: [entryPoint],
-      confidence: 0.7,
-      description: 'Fix issue'
+      targetFiles: scopedFiles.targetFiles,
+      contextFiles: scopedFiles.contextFiles,
+      searchTerms,
+      confidence: 0.75,
+      description: 'Fix issue',
+      targetHint: scopedFiles.targetFiles[0] || entryPoint,
     };
   }
   
@@ -5195,17 +5553,23 @@ export function analyzeEditIntent(
   if (lowerPrompt.match(/(?:change|update)\s+(?:the\s+)?(?:color|theme|style|styling|css)/i)) {
     return {
       type: 'UPDATE_STYLE',
-      targetFiles: [entryPoint],
+      targetFiles: scopedFiles.targetFiles,
+      contextFiles: scopedFiles.contextFiles,
+      searchTerms,
       confidence: 0.8,
-      description: 'Update styling'
+      description: 'Update styling',
+      targetHint: scopedFiles.targetFiles[0] || entryPoint,
     };
   }
   
   // Default: general update
   return {
     type: 'UPDATE_COMPONENT',
-    targetFiles: [entryPoint],
+    targetFiles: scopedFiles.targetFiles,
+    contextFiles: scopedFiles.contextFiles,
+    searchTerms,
     confidence: 0.5,
-    description: 'General update'
+    description: 'General update',
+    targetHint: scopedFiles.targetFiles[0] || entryPoint,
   };
 }

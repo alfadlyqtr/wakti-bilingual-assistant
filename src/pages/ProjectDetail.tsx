@@ -411,6 +411,9 @@ export default function ProjectDetail() {
   // Visual Edit Mode undo/redo history
   const visualEditHistory = useEditHistory({ maxHistory: 30 });
   const latestAgentFilesRef = useRef<Record<string, string> | null>(null);
+  const recentAgentHotFilesRef = useRef<string[]>([]);
+  const [lastAgentPausedJobId, setLastAgentPausedJobId] = useState<string | null>(null);
+  const [isResumingAgent, setIsResumingAgent] = useState(false);
 
   const areFileMapsEqual = useCallback((a: Record<string, string>, b: Record<string, string>) => {
     if (a === b) return true;
@@ -502,12 +505,142 @@ ${priorSection}`;
 
   const {
     currentPlan: sharedAgentPlan,
+    isRunning: sharedAgentRunning,
     runAgent: runSharedAgent,
     cancel: cancelSharedAgent,
+    pauseActiveJob,
+    resumeJob: resumeSharedAgentJob,
   } = useAgentMode({
     projectId: id || '',
     onFilesChanged: syncAgentFilesToEditor,
   });
+
+  const updateAgentHotFiles = useCallback((paths: string[]) => {
+    if (!Array.isArray(paths) || paths.length === 0) return;
+    const normalized = paths
+      .map((path) => normalizeFilePathForDiff(path))
+      .filter(Boolean);
+    if (normalized.length === 0) return;
+
+    const merged = [...normalized, ...recentAgentHotFilesRef.current];
+    recentAgentHotFilesRef.current = [...new Set(merged)].slice(0, 30);
+  }, [normalizeFilePathForDiff]);
+
+  const classifyAgentFailure = useCallback((rawMessage: string) => {
+    const message = (rawMessage || '').trim();
+    const normalized = message.toLowerCase();
+
+    if (/agent_paused|time_budget_exceeded|timeout|504|gateway|deadline/.test(normalized)) {
+      return {
+        reasonCode: 'timeout',
+        userMessage: isRTL
+          ? 'تم إيقاف المهمة مؤقتًا بسبب مهلة التنفيذ لحماية الاستقرار.'
+          : 'The job was paused due to runtime timeout to keep the system stable.',
+        suggestedAction: isRTL
+          ? 'اضغط استئناف للمتابعة من آخر خطوة، أو أعد المحاولة بطلب أدق.'
+          : 'Press Resume to continue from the latest step, or retry with a more specific prompt.',
+      };
+    }
+
+    if (/429|rate|quota/.test(normalized)) {
+      return {
+        reasonCode: 'rate_limit',
+        userMessage: isRTL
+          ? 'تم الوصول لحد الطلبات المؤقت.'
+          : 'A temporary rate limit was hit.',
+        suggestedAction: isRTL
+          ? 'انتظر لحظات ثم أعد المحاولة.'
+          : 'Wait a moment and try again.',
+      };
+    }
+
+    if (/model|gemini|api error|500|503/.test(normalized)) {
+      return {
+        reasonCode: 'model_error',
+        userMessage: isRTL
+          ? 'نموذج الذكاء لم يُكمل الطلب بشكل صحيح.'
+          : 'The model did not complete the request correctly.',
+        suggestedAction: isRTL
+          ? 'أعد المحاولة أو بسّط الطلب.'
+          : 'Retry, or simplify the request.',
+      };
+    }
+
+    if (/concurrency_guard|another agent job is still running/.test(normalized)) {
+      return {
+        reasonCode: 'concurrency',
+        userMessage: isRTL
+          ? 'هناك مهمة وكيل أخرى تعمل الآن لنفس المشروع.'
+          : 'Another agent job is currently running for this project.',
+        suggestedAction: isRTL
+          ? 'أوقف المهمة الحالية أو انتظر اكتمالها.'
+          : 'Pause the active job or wait for it to finish.',
+      };
+    }
+
+    return {
+      reasonCode: 'unknown',
+      userMessage: isRTL
+        ? 'تعذر إكمال الطلب بسبب خطأ غير متوقع.'
+        : 'The request failed due to an unexpected issue.',
+      suggestedAction: isRTL
+        ? 'أعد المحاولة، وإن استمرت المشكلة عدّل صياغة الطلب.'
+        : 'Retry, and if it persists, rephrase the request.',
+    };
+  }, [isRTL]);
+
+  const buildOptimizedAgentFiles = useCallback((allFiles: Record<string, string>, userPrompt: string) => {
+    const fileEntries = Object.entries(allFiles || {});
+    if (fileEntries.length === 0) return allFiles;
+
+    const corePaths = ['/App.js', '/App.jsx', '/App.tsx', '/src/App.js', '/src/App.jsx', '/src/App.tsx', '/index.js', '/src/index.js', '/src/main.jsx'];
+    const promptTokens = (userPrompt || '')
+      .toLowerCase()
+      .split(/[^a-z0-9_/-]+/)
+      .filter((token) => token.length >= 4)
+      .slice(0, 12);
+
+    const selectedPaths = new Set<string>();
+    for (const corePath of corePaths) {
+      if (allFiles[corePath]) selectedPaths.add(corePath);
+    }
+
+    for (const hotPath of recentAgentHotFilesRef.current) {
+      if (allFiles[hotPath]) selectedPaths.add(hotPath);
+    }
+
+    for (const [path] of fileEntries) {
+      const pathLower = path.toLowerCase();
+      if (promptTokens.some((token) => pathLower.includes(token))) {
+        selectedPaths.add(path);
+      }
+      if (selectedPaths.size >= 35) break;
+    }
+
+    if (selectedPaths.size === 0) {
+      for (const [path] of fileEntries.slice(0, 25)) {
+        selectedPaths.add(path);
+      }
+    }
+
+    const maxTotalChars = 260000;
+    let totalChars = 0;
+    const optimized: Record<string, string> = {};
+
+    for (const path of selectedPaths) {
+      const content = allFiles[path];
+      if (typeof content !== 'string') continue;
+      if (totalChars + content.length > maxTotalChars) continue;
+      optimized[path] = content;
+      totalChars += content.length;
+    }
+
+    if (Object.keys(optimized).length === 0) {
+      return allFiles;
+    }
+
+    return optimized;
+  }, []);
 
   const resolveAgentExecutionMode = useCallback((requestText: string): AgentExecutionMode => {
     const normalized = (requestText || '').toLowerCase();
@@ -3395,6 +3528,7 @@ ${convertToGlobalComponent(content, componentName)}
 
         try {
           fixerResponse = (await runSharedAgent(`Fix this error: ${error}`, latestFilesForFixer, {
+            hotFiles: recentAgentHotFilesRef.current,
             executionMode: 'surgical_edit',
             debugContext: debugContext?.getDebugContextForAgent?.(null, 'surgical_edit'),
             fixerMode: true,
@@ -5568,7 +5702,7 @@ ${fixInstructions}
           if (codeContent) {
             latestFiles['/App.js'] = codeContent;
           }
-          return latestFiles;
+          return buildOptimizedAgentFiles(latestFiles, userMessage);
         };
 
         let handledByDirectMessage = false;
@@ -5590,9 +5724,11 @@ ${fixInstructions}
           let agentResult: any = null;
 
           try {
-            agentPlan = await runSharedAgent(currentPromptForAttempt, buildLatestFilesForAgent(), {
+            const latestFilesForAgent = buildLatestFilesForAgent();
+            agentPlan = await runSharedAgent(currentPromptForAttempt, latestFilesForAgent, {
               userInstructions,
               images: codeImages,
+              hotFiles: recentAgentHotFilesRef.current,
               assetIntent: codeImages ? attachmentIntent : undefined,
               executionMode: resolveAgentExecutionMode(userMessage),
               uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
@@ -5604,9 +5740,38 @@ ${fixInstructions}
             const failedResponse = agentErr?.agentResponse || null;
             const failedResult = failedResponse?.result || null;
             const failedReason = String(failedResult?.error || '').trim();
+            const isPausedForBudget =
+              failedReason === 'TIME_BUDGET_EXCEEDED'
+              || failedResult?.type === 'paused_for_budget'
+              || /agent_paused|timeout|gateway|deadline/i.test(String(agentErr?.message || ''));
             const isNoVerifiedChanges =
               failedReason === 'NO_VERIFIED_CHANGES'
               || failedResult?.type === 'no_verified_changes';
+            const isRiskyOutputBlocked =
+              failedReason === 'RISKY_OUTPUT_BLOCKED'
+              || failedResult?.type === 'risky_output_blocked';
+
+            if (isPausedForBudget) {
+              setLastAgentPausedJobId(failedResponse?.jobId || null);
+              const pausedSummary = String(
+                failedResult?.summary
+                || failedResult?.message
+                || agentErr?.message
+                || 'Agent paused before completion'
+              );
+              throw new Error(`AGENT_PAUSED:${failedResponse?.jobId || ''}:${pausedSummary}`);
+            }
+
+            if (isRiskyOutputBlocked) {
+              const canRetryRisky = attemptCount < MAX_CODE_MODE_AGENT_ATTEMPTS && isLikelyCodeEditRequest(userMessage);
+              if (canRetryRisky) {
+                currentPromptForAttempt = buildCodeExecutionRetryPrompt(
+                  userMessage,
+                  String(failedResult?.summary || failedResult?.message || 'Risky output was blocked and needs a safer retry.')
+                );
+                continue;
+              }
+            }
 
             if (!isNoVerifiedChanges) {
               throw agentErr;
@@ -5686,10 +5851,14 @@ ${fixInstructions}
           ) || (isRTL ? 'تم التحقق من النتيجة.' : 'Result was verified.');
 
           const reportedChangedFiles = [...(agentPlan.filesChanged || [])];
+          if (reportedChangedFiles.length > 0) {
+            updateAgentHotFiles(reportedChangedFiles);
+          }
           const verifiedAttemptFiles = getVerifiedChangedFiles(beforeSnapshot, newFiles, reportedChangedFiles);
 
           if (verifiedAttemptFiles.length > 0) {
             verifiedChangedFiles = verifiedAttemptFiles;
+            updateAgentHotFiles(verifiedAttemptFiles);
             executionStatus = 'applied';
             break;
           }
@@ -5984,17 +6153,43 @@ ${fixInstructions}
     } catch (err: any) {
       console.error('AI error:', err);
       const errorMessage = err.message || (isRTL ? 'حدث خطأ' : 'An error occurred');
+      const pausedMatch = /^AGENT_PAUSED:([^:]*):(.*)$/i.exec(errorMessage);
+      const classifiedFailure = classifyAgentFailure(errorMessage);
+
+      if (pausedMatch) {
+        const pausedJobId = (pausedMatch[1] || '').trim();
+        const pausedSummary = (pausedMatch[2] || '').trim();
+        setLastAgentPausedJobId(pausedJobId || lastAgentPausedJobId);
+        setAiError({
+          title: 'Agent Paused',
+          titleAr: 'تم إيقاف الوكيل مؤقتًا',
+          message: classifiedFailure.userMessage,
+          messageAr: 'تم إيقاف المهمة مؤقتًا بسبب المهلة ويمكنك استئنافها.',
+          severity: 'info',
+          technicalDetails: pausedSummary || errorMessage,
+          suggestedAction: classifiedFailure.suggestedAction,
+          suggestedActionAr: 'اضغط استئناف للمتابعة من آخر خطوة محفوظة.',
+        });
+
+        setChatMessages(prev => [...prev, {
+          id: `paused-${Date.now()}`,
+          role: 'assistant',
+          content: isRTL ? 'تم إيقاف المهمة مؤقتًا. يمكنك الضغط على استئناف.' : 'The job was paused. You can press Resume.'
+        }]);
+        toast.info(pausedSummary || classifiedFailure.userMessage);
+        return;
+      }
       
       // Set error explanation card
       setAiError({
         title: 'AI Request Failed',
         titleAr: 'فشل طلب الذكاء الاصطناعي',
-        message: 'The AI couldn\'t complete your request. This may be due to a temporary service issue or a complex request.',
-        messageAr: 'تعذر على الذكاء الاصطناعي إكمال طلبك. قد يكون ذلك بسبب مشكلة مؤقتة في الخدمة أو طلب معقد.',
+        message: classifiedFailure.userMessage,
+        messageAr: 'تعذر على الذكاء الاصطناعي إكمال طلبك. قد يكون ذلك بسبب مشكلة مؤقتة أو تعارض في التنفيذ.',
         severity: 'error',
         technicalDetails: errorMessage,
-        suggestedAction: 'Try rephrasing your request or wait a moment and try again.',
-        suggestedActionAr: 'حاول إعادة صياغة طلبك أو انتظر لحظة وحاول مرة أخرى.',
+        suggestedAction: classifiedFailure.suggestedAction,
+        suggestedActionAr: 'حاول مرة أخرى أو عدّل صياغة الطلب إذا استمرت المشكلة.',
       });
       
       const errorMsg = isRTL ? 'عذرًا، حدث خطأ. حاول مرة أخرى.' : 'Sorry, an error occurred. Please try again.';
@@ -6603,6 +6798,7 @@ ${fixInstructions}
                                       latestAgentFilesRef.current = null;
                                       const agentPlan = await runSharedAgent(selectionMsg, latestFilesForAgent, {
                                         lang: isRTL ? 'ar' : 'en',
+                                        hotFiles: recentAgentHotFilesRef.current,
                                         executionMode: resolveAgentExecutionMode(selectionMsg),
                                         uploadedAssets,
                                         backendContext,
@@ -8178,7 +8374,7 @@ ${fixInstructions}
                         )}
                         
                         {/* Tasks Panel - Lovable Dark Card Style */}
-                        {(isGenerating || aiEditing) && (generationSteps.length > 0 || ((sharedAgentPlan?.tasks?.length || 0) > 0)) && (
+                        {(isGenerating || aiEditing || sharedAgentRunning || isResumingAgent) && (generationSteps.length > 0 || ((sharedAgentPlan?.tasks?.length || 0) > 0)) && (
                           <AgentTaskPanel
                             steps={sharedAgentPlan?.tasks && sharedAgentPlan.tasks.length > 0
                               ? sharedAgentPlan.tasks.map((step) => ({
@@ -8199,15 +8395,32 @@ ${fixInstructions}
                                         idx === 1 ? 'search_replace' : 
                                         idx === 2 ? 'write_file' : undefined
                                 }))}
-                            isActive={aiEditing || isGenerating}
+                            isActive={aiEditing || isGenerating || sharedAgentRunning || isResumingAgent}
                             currentGoal={sharedAgentPlan?.goal || chatInput || undefined}
                             isRTL={isRTL}
-                            onCancel={() => {
-                              cancelSharedAgent();
-                              setAiEditing(false);
-                              setIsGenerating(false);
-                              setGenerationSteps([]);
-                              toast.info(isRTL ? 'تم إلغاء العملية' : 'Operation cancelled');
+                            cancelLabel={isRTL ? 'إيقاف مؤقت' : 'Pause'}
+                            onCancel={async () => {
+                              try {
+                                await pauseActiveJob();
+                                cancelSharedAgent();
+                                setAiEditing(false);
+                                setIsGenerating(false);
+                                setGenerationSteps([]);
+                                setLastAgentPausedJobId(sharedAgentPlan?.id || null);
+                                setAiError({
+                                  title: 'Agent Paused',
+                                  titleAr: 'تم إيقاف الوكيل مؤقتًا',
+                                  message: 'The AI job was paused. You can resume it from the latest saved step.',
+                                  messageAr: 'تم إيقاف مهمة الذكاء مؤقتًا. يمكنك استئنافها من آخر خطوة محفوظة.',
+                                  severity: 'info',
+                                  technicalDetails: sharedAgentPlan?.id || undefined,
+                                  suggestedAction: 'Use Resume to continue without starting over.',
+                                  suggestedActionAr: 'استخدم استئناف للمتابعة دون البدء من جديد.',
+                                });
+                                toast.info(isRTL ? 'تم إيقاف المهمة مؤقتًا' : 'Agent job paused');
+                              } catch (pauseErr: any) {
+                                toast.error(pauseErr?.message || (isRTL ? 'تعذر إيقاف المهمة مؤقتًا' : 'Failed to pause job'));
+                              }
                             }}
                           />
                         )}
@@ -8317,7 +8530,39 @@ ${fixInstructions}
                       technicalDetails={aiError.technicalDetails}
                       suggestedAction={aiError.suggestedAction}
                       suggestedActionAr={aiError.suggestedActionAr}
-                      onRetry={() => {
+                      retryLabel={lastAgentPausedJobId ? 'Resume' : undefined}
+                      retryLabelAr={lastAgentPausedJobId ? 'استئناف' : undefined}
+                      onRetry={async () => {
+                        if (lastAgentPausedJobId) {
+                          try {
+                            setAiError(null);
+                            setIsResumingAgent(true);
+                            setAiEditing(true);
+                            setThinkingStartTime(Date.now());
+                            const lastUserMsg = [...chatMessages].reverse().find(m => m.role === 'user');
+                            const resumePrompt = lastUserMsg?.content || chatInput || sharedAgentPlan?.goal || '';
+                            await resumeSharedAgentJob(lastAgentPausedJobId, resumePrompt);
+                            setLastAgentPausedJobId(null);
+                          } catch (resumeErr: any) {
+                            const resumeMessage = resumeErr?.message || (isRTL ? 'تعذر استئناف المهمة' : 'Failed to resume job');
+                            setAiError({
+                              title: 'Resume Failed',
+                              titleAr: 'فشل الاستئناف',
+                              message: 'The paused AI job could not be resumed.',
+                              messageAr: 'تعذر استئناف مهمة الذكاء المتوقفة.',
+                              severity: 'error',
+                              technicalDetails: resumeMessage,
+                              suggestedAction: 'Try again or start a fresh request.',
+                              suggestedActionAr: 'حاول مرة أخرى أو ابدأ طلبًا جديدًا.',
+                            });
+                          } finally {
+                            setIsResumingAgent(false);
+                            setAiEditing(false);
+                            setThinkingStartTime(null);
+                          }
+                          return;
+                        }
+
                         setAiError(null);
                         // Re-send last user message
                         const lastUserMsg = [...chatMessages].reverse().find(m => m.role === 'user');

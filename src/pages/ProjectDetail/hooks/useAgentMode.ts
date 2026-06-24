@@ -35,7 +35,7 @@ export interface AgentPlan {
   id: string; // jobId returned by the edge function
   goal: string;
   tasks: AgentTask[];
-  status: 'planning' | 'executing' | 'completed' | 'failed' | 'cancelled';
+  status: 'planning' | 'executing' | 'paused' | 'completed' | 'failed' | 'cancelled';
   createdAt: number;
   completedAt?: number;
   toolCalls?: Array<{ tool: string; success: boolean }>;
@@ -80,6 +80,7 @@ export interface AgentRunExtras {
   userInstructions?: string;
   lang?: 'en' | 'ar';
   images?: string[];
+  hotFiles?: string[];
   assetIntent?: 'layout' | 'style' | 'content';
   executionMode?: AgentExecutionMode;
   uploadedAssets?: UploadedAsset[];
@@ -107,18 +108,38 @@ export interface UseAgentModeReturn {
   ) => Promise<AgentPlan>;
   /** Cancel the currently-running agent, if any. */
   cancel: () => void;
+  /** Request pause for the currently active job in backend. */
+  pauseActiveJob: () => Promise<void>;
+  /** Resume a paused/failed agent job by id and continue polling. */
+  resumeJob: (jobId: string, promptOverride?: string) => Promise<AgentPlan>;
   /** Plans that have already completed in this session. */
   planHistory: AgentPlan[];
   clearHistory: () => void;
 }
 
+interface EdgeJobMetadata {
+  currentStep?: string;
+  currentStepStatus?: 'pending' | 'in_progress' | 'completed' | 'failed';
+  timeline?: Array<{
+    at?: string;
+    step?: string;
+    status?: 'pending' | 'in_progress' | 'completed' | 'failed';
+    note?: string;
+  }>;
+  workerResult?: EdgeAgentResultPayload;
+  errorCode?: string | null;
+  activeJobId?: string;
+  [key: string]: unknown;
+}
+
 interface EdgeJobStatus {
   id?: string;
-  status?: 'queued' | 'running' | 'succeeded' | 'failed' | string;
+  status?: 'queued' | 'running' | 'paused' | 'succeeded' | 'failed' | string;
   error?: string;
   result_summary?: string;
   created_at?: string;
   prompt?: string;
+  metadata?: EdgeJobMetadata | null;
 }
 
 interface EdgeStatusResponse {
@@ -236,8 +257,30 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
       tool: call.tool,
     }));
 
+  const mapTimelineToTasks = (timeline?: EdgeJobMetadata['timeline']): AgentTask[] => {
+    if (!Array.isArray(timeline) || timeline.length === 0) return [];
+
+    return timeline.map((item, index) => ({
+      id: `timeline-${index}-${item.step || 'step'}`,
+      title: String(item.step || 'Agent step').replace(/_/g, ' '),
+      description: item.note || '',
+      status: item.status || 'in_progress',
+      result: item.note,
+    }));
+  };
+
   const buildPollingTasks = (job: EdgeJobStatus | null | undefined): AgentTask[] => {
     if (!job) return [];
+
+    const timelineTasks = mapTimelineToTasks(job.metadata?.timeline);
+    if (timelineTasks.length > 0) {
+      return timelineTasks;
+    }
+
+    const workerTasks = mapToolCallsToTasks(job.metadata?.workerResult?.toolCalls || []);
+    if (workerTasks.length > 0) {
+      return workerTasks;
+    }
 
     return [
       {
@@ -248,6 +291,8 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
           job.status === 'succeeded'
             ? 'completed'
             : job.status === 'failed'
+            ? 'failed'
+            : job.status === 'paused'
             ? 'failed'
             : 'in_progress',
         result: job.result_summary || undefined,
@@ -311,7 +356,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
       .from('project_generation_jobs' as any)
       .select('id, status, error, result_summary, created_at, prompt')
       .eq('project_id', projectId)
-      .eq('mode', 'edit')
+      .eq('mode', 'agent')
       .gte('created_at', thresholdIso)
       .order('created_at', { ascending: false })
       .limit(5) as any);
@@ -384,6 +429,7 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
               projectId,
               prompt,
               currentFiles,
+              hotFiles: extras?.hotFiles,
               userInstructions: extras?.userInstructions,
               lang: extras?.lang || 'en',
               images: extras?.images,
@@ -574,7 +620,34 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
                 summary: job.result_summary || undefined,
               };
 
+              const workerResult = job.metadata?.workerResult;
+              if (workerResult) {
+                next.filesChanged = workerResult.filesChanged || next.filesChanged;
+                if (workerResult.summary) {
+                  next.summary = workerResult.summary;
+                }
+              }
+
               if (job.status === 'succeeded' || job.status === 'completed') {
+                if (workerResult?.success === false) {
+                  next.status = 'failed';
+                  next.completedAt = Date.now();
+                  setCurrentPlan(next);
+                  setPlanHistory((prev) => [...prev, next]);
+                  const msg = workerResult.error || workerResult.summary || 'Agent failed';
+                  setIsRunning(false);
+                  activeJobIdRef.current = null;
+                  clearPollTimer();
+                  reject(createAgentError(msg, {
+                    ok: false,
+                    mode: 'agent',
+                    jobId,
+                    result: workerResult,
+                    error: msg,
+                  }));
+                  return;
+                }
+
                 next.status = 'completed';
                 next.completedAt = Date.now();
                 setCurrentPlan(next);
@@ -590,17 +663,43 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
                 return;
               }
 
+              if (job.status === 'paused') {
+                next.status = 'paused';
+                next.completedAt = Date.now();
+                setCurrentPlan(next);
+                setPlanHistory((prev) => [...prev, next]);
+                const msg = workerResult?.summary || job.result_summary || job.error || 'Agent paused';
+                onError?.(msg);
+                setIsRunning(false);
+                activeJobIdRef.current = null;
+                clearPollTimer();
+                reject(createAgentError(msg, {
+                  ok: false,
+                  mode: 'agent',
+                  jobId,
+                  result: workerResult,
+                  error: workerResult?.error || job.error || 'AGENT_PAUSED',
+                }));
+                return;
+              }
+
               if (job.status === 'failed') {
                 next.status = 'failed';
                 next.completedAt = Date.now();
                 setCurrentPlan(next);
                 setPlanHistory((prev) => [...prev, next]);
-                const msg = job.error || 'Agent failed';
+                const msg = workerResult?.error || workerResult?.summary || job.error || 'Agent failed';
                 onError?.(msg);
                 setIsRunning(false);
                 activeJobIdRef.current = null;
                 clearPollTimer();
-                reject(new Error(msg));
+                reject(createAgentError(msg, {
+                  ok: false,
+                  mode: 'agent',
+                  jobId,
+                  result: workerResult,
+                  error: msg,
+                }));
                 return;
               }
 
@@ -662,6 +761,179 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
     setIsRunning(false);
   }, []);
 
+  const pauseActiveJob = useCallback(async () => {
+    const activeJobId = activeJobIdRef.current;
+    if (!activeJobId) return;
+
+    const pauseRes = await supabase.functions.invoke('projects-generate', {
+      body: { action: 'pause', jobId: activeJobId },
+    });
+
+    if (pauseRes.error) {
+      throw new Error(pauseRes.error.message || 'Failed to pause agent job');
+    }
+  }, []);
+
+  const resumeJob = useCallback(async (jobId: string, promptOverride?: string): Promise<AgentPlan> => {
+    const resumeRes = await supabase.functions.invoke('projects-generate', {
+      body: {
+        action: 'resume',
+        jobId,
+        mode: 'agent',
+        projectId,
+        prompt: promptOverride,
+      },
+    });
+
+    if (resumeRes.error) {
+      throw new Error(resumeRes.error.message || 'Failed to resume agent job');
+    }
+
+    const resumeData = (resumeRes.data || {}) as EdgeAgentStartResponse;
+    const nextJobId = resumeData.jobId;
+    if (!nextJobId) {
+      throw new Error(resumeData.error || 'Resume did not return a new job id');
+    }
+
+    const resumedPlan: AgentPlan = {
+      id: nextJobId,
+      goal: promptOverride || currentPlanRef.current?.goal || '',
+      tasks: [
+        {
+          id: nextJobId,
+          title: 'Agent job',
+          description: 'Resumed from paused state',
+          status: 'in_progress',
+        },
+      ],
+      status: 'executing',
+      createdAt: Date.now(),
+      resultType: 'polled_job',
+      rawResult: resumeData,
+    };
+
+    setCurrentPlan(resumedPlan);
+    setIsRunning(true);
+    activeJobIdRef.current = nextJobId;
+
+    return await new Promise<AgentPlan>((resolve, reject) => {
+      let consecutiveFailures = 0;
+
+      const poll = async () => {
+        try {
+          const statusRes = await supabase.functions.invoke('projects-generate', {
+            body: { action: 'status', jobId: nextJobId },
+          });
+
+          if (statusRes.error) throw new Error(statusRes.error.message || 'Status check failed');
+          const data = (statusRes.data || {}) as EdgeStatusResponse;
+          const job = data.job;
+          if (!job) throw new Error(data.error || 'Agent job not found');
+
+          consecutiveFailures = 0;
+
+          const next: AgentPlan = {
+            ...resumedPlan,
+            tasks: buildPollingTasks(job),
+            summary: job.result_summary || undefined,
+          };
+
+          const workerResult = job.metadata?.workerResult;
+          if (workerResult) {
+            next.filesChanged = workerResult.filesChanged || next.filesChanged;
+            if (workerResult.summary) next.summary = workerResult.summary;
+          }
+
+          if (job.status === 'succeeded' || job.status === 'completed') {
+            if (workerResult?.success === false) {
+              const msg = workerResult.error || workerResult.summary || 'Agent failed';
+              setCurrentPlan({ ...next, status: 'failed', completedAt: Date.now() });
+              setPlanHistory((prev) => [...prev, { ...next, status: 'failed', completedAt: Date.now() }]);
+              setIsRunning(false);
+              activeJobIdRef.current = null;
+              clearPollTimer();
+              reject(createAgentError(msg, {
+                ok: false,
+                mode: 'agent',
+                jobId: nextJobId,
+                result: workerResult,
+                error: msg,
+              }));
+              return;
+            }
+
+            const donePlan = { ...next, status: 'completed' as const, completedAt: Date.now() };
+            setCurrentPlan(donePlan);
+            setPlanHistory((prev) => [...prev, donePlan]);
+            if (onFilesChanged) {
+              const files = await loadProjectFiles();
+              onFilesChanged(files);
+            }
+            setIsRunning(false);
+            activeJobIdRef.current = null;
+            clearPollTimer();
+            resolve(donePlan);
+            return;
+          }
+
+          if (job.status === 'paused') {
+            const pausedPlan = { ...next, status: 'paused' as const, completedAt: Date.now() };
+            const msg = workerResult?.summary || job.result_summary || job.error || 'Agent paused';
+            setCurrentPlan(pausedPlan);
+            setPlanHistory((prev) => [...prev, pausedPlan]);
+            onError?.(msg);
+            setIsRunning(false);
+            activeJobIdRef.current = null;
+            clearPollTimer();
+            reject(createAgentError(msg, {
+              ok: false,
+              mode: 'agent',
+              jobId: nextJobId,
+              result: workerResult,
+              error: workerResult?.error || job.error || 'AGENT_PAUSED',
+            }));
+            return;
+          }
+
+          if (job.status === 'failed') {
+            const msg = workerResult?.error || workerResult?.summary || job.error || 'Agent failed';
+            const failedPlan = { ...next, status: 'failed' as const, completedAt: Date.now() };
+            setCurrentPlan(failedPlan);
+            setPlanHistory((prev) => [...prev, failedPlan]);
+            onError?.(msg);
+            setIsRunning(false);
+            activeJobIdRef.current = null;
+            clearPollTimer();
+            reject(createAgentError(msg, {
+              ok: false,
+              mode: 'agent',
+              jobId: nextJobId,
+              result: workerResult,
+              error: msg,
+            }));
+            return;
+          }
+
+          setCurrentPlan(next);
+          pollTimerRef.current = setTimeout(poll, pollIntervalMs);
+        } catch (err) {
+          consecutiveFailures += 1;
+          if (consecutiveFailures < 3) {
+            pollTimerRef.current = setTimeout(poll, pollIntervalMs);
+            return;
+          }
+
+          setIsRunning(false);
+          activeJobIdRef.current = null;
+          clearPollTimer();
+          reject(err);
+        }
+      };
+
+      poll();
+    });
+  }, [createAgentError, loadProjectFiles, onError, onFilesChanged, pollIntervalMs, projectId]);
+
   const clearHistory = useCallback(() => {
     setPlanHistory([]);
   }, []);
@@ -679,6 +951,8 @@ export function useAgentMode(opts: UseAgentModeOptions): UseAgentModeReturn {
     isRunning,
     runAgent,
     cancel,
+    pauseActiveJob,
+    resumeJob,
     planHistory,
     clearHistory,
   };

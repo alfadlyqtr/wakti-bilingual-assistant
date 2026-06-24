@@ -96,27 +96,37 @@ export default function Dashboard() {
 
     const mainScroller = document.querySelector('.app-main-scroll') as HTMLElement | null;
     const mobileShell = document.querySelector('.app-layout-mobile') as HTMLElement | null;
-    if (!mainScroller && !mobileShell) return;
+    const primaryScroller = mainScroller || mobileShell;
 
     let startX = 0;
     let startY = 0;
     let startedNearLeftEdge = false;
+    let activeTouchId: number | null = null;
+
+    const getTrackedTouch = (event: TouchEvent) => {
+      if (event.touches.length === 0) return null;
+      if (activeTouchId === null) return event.touches[0];
+      for (const touch of Array.from(event.touches)) {
+        if (touch.identifier === activeTouchId) return touch;
+      }
+      return event.touches[0];
+    };
 
     const handleTouchStart = (event: TouchEvent) => {
       const touch = event.touches[0];
       if (!touch) return;
+      activeTouchId = touch.identifier;
       startX = touch.clientX;
       startY = touch.clientY;
-      startedNearLeftEdge = touch.clientX <= 24;
+      startedNearLeftEdge = touch.clientX <= 32;
     };
 
     const handleTouchMove = (event: TouchEvent) => {
-      const touch = event.touches[0];
+      const touch = getTrackedTouch(event);
       if (!touch) return;
 
       const deltaX = touch.clientX - startX;
       const deltaY = touch.clientY - startY;
-      const primaryScroller = mainScroller || mobileShell;
       const atTop = (primaryScroller?.scrollTop || 0) <= 0;
       const isPullToRefreshGesture = atTop && deltaY > 10 && Math.abs(deltaY) > Math.abs(deltaX);
       const isLeftEdgeGesture = startedNearLeftEdge;
@@ -126,17 +136,22 @@ export default function Dashboard() {
       }
     };
 
-    const touchOptions: AddEventListenerOptions = { passive: false };
-    mainScroller?.addEventListener('touchstart', handleTouchStart, touchOptions);
-    mainScroller?.addEventListener('touchmove', handleTouchMove, touchOptions);
-    mobileShell?.addEventListener('touchstart', handleTouchStart, touchOptions);
-    mobileShell?.addEventListener('touchmove', handleTouchMove, touchOptions);
+    const resetTouchTracking = () => {
+      activeTouchId = null;
+      startedNearLeftEdge = false;
+    };
+
+    const touchOptions: AddEventListenerOptions = { passive: false, capture: true };
+    window.addEventListener('touchstart', handleTouchStart, touchOptions);
+    window.addEventListener('touchmove', handleTouchMove, touchOptions);
+    window.addEventListener('touchend', resetTouchTracking, true);
+    window.addEventListener('touchcancel', resetTouchTracking, true);
 
     return () => {
-      mainScroller?.removeEventListener('touchstart', handleTouchStart);
-      mainScroller?.removeEventListener('touchmove', handleTouchMove);
-      mobileShell?.removeEventListener('touchstart', handleTouchStart);
-      mobileShell?.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchstart', handleTouchStart, true);
+      window.removeEventListener('touchmove', handleTouchMove, true);
+      window.removeEventListener('touchend', resetTouchTracking, true);
+      window.removeEventListener('touchcancel', resetTouchTracking, true);
     };
   }, [dashboardLook]);
 

@@ -65,6 +65,7 @@ import {
   type StyleChangeValidation,
   // 🔍 Edit Intent Analyzer (from Open Lovable)
   analyzeEditIntent,
+  executeFileSearchPlan,
   type EditIntent,
   type EditIntentType,
   // 🔧 Error Classification (from Open Lovable's build-validator.ts)
@@ -642,16 +643,18 @@ interface DebugContext {
 }
 
 interface RequestBody {
-  action?: 'start' | 'status' | 'get_files';
+  action?: 'start' | 'status' | 'get_files' | 'pause' | 'resume' | 'agent_run';
   jobId?: string;
+  resumeFromJobId?: string;
   projectId?: string;
   mode?: 'create' | 'edit' | 'plan' | 'execute' | 'chat' | 'agent';
   prompt?: string;
   currentFiles?: Record<string, string>;
+  hotFiles?: string[];
   assets?: string[];
   theme?: string;
   userInstructions?: string;
-  images?: ImageAttachment[];
+  images?: Array<ImageAttachment | string>;
   assetIntent?: 'layout' | 'style' | 'content';
   planToExecute?: string;
   uploadedAssets?: UploadedAsset[];
@@ -692,7 +695,33 @@ const buildAssetIntentPrompt = (assetIntent?: 'layout' | 'style' | 'content'): s
   return '';
 };
 
-type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+const ASSET_NEEDLE_REGEX = /\b(image|images|photo|picture|logo|screenshot|visual|design reference|style reference|pdf|doc|docx|resume|cv|portfolio data|uploaded|attachment|file|files|my photo|my image|use this image|extract content|look at|analyze)\b/i;
+
+function shouldProcessUploadedAssets(params: {
+  mode: string;
+  prompt: string;
+  images: unknown;
+  uploadedAssets: UploadedAsset[];
+  assets: string[];
+  assetIntent?: 'layout' | 'style' | 'content';
+}): boolean {
+  const { mode, prompt, images, uploadedAssets, assets, assetIntent } = params;
+
+  if (mode === 'create') return true;
+
+  const hasInlineImages = Array.isArray(images) && images.length > 0;
+  if (hasInlineImages) return true;
+
+  const hasUploadedAssets = Array.isArray(uploadedAssets) && uploadedAssets.length > 0;
+  const hasAssetUrls = Array.isArray(assets) && assets.length > 0;
+  if (!hasUploadedAssets && !hasAssetUrls) return false;
+
+  if (assetIntent === 'layout' || assetIntent === 'style' || assetIntent === 'content') return true;
+
+  return ASSET_NEEDLE_REGEX.test(prompt || '');
+}
+
+type JobStatus = 'queued' | 'running' | 'paused' | 'succeeded' | 'failed';
 
 type Database = {
   public: {
@@ -715,10 +744,11 @@ type Database = {
           project_id: string;
           user_id: string;
           status: JobStatus;
-          mode: 'create' | 'edit';
+          mode: 'create' | 'edit' | 'agent';
           prompt: string | null;
           result_summary: string | null;
           error: string | null;
+          metadata: Record<string, unknown> | null;
           created_at: string;
           updated_at: string;
         };
@@ -727,15 +757,17 @@ type Database = {
           project_id: string;
           user_id: string;
           status: JobStatus;
-          mode: 'create' | 'edit';
+          mode: 'create' | 'edit' | 'agent';
           prompt?: string | null;
           result_summary?: string | null;
           error?: string | null;
+          metadata?: Record<string, unknown> | null;
         };
         Update: {
           status?: JobStatus;
           result_summary?: string | null;
           error?: string | null;
+          metadata?: Record<string, unknown> | null;
           updated_at?: string;
         };
         Relationships: [];
@@ -2143,17 +2175,20 @@ async function assertProjectOwnership(supabase: SupabaseAdminClient, projectId: 
 async function createJob(supabase: SupabaseAdminClient, params: {
   projectId: string;
   userId: string;
-  mode: 'create' | 'edit';
+  mode: 'create' | 'edit' | 'agent';
   prompt: string;
+  initialStatus?: JobStatus;
+  metadata?: Record<string, unknown>;
 }): Promise<{ id: string; status: JobStatus }> {
   const { data, error } = await supabase
     .from("project_generation_jobs")
     .insert({
       project_id: params.projectId,
       user_id: params.userId,
-      status: "running",
+      status: params.initialStatus || "running",
       mode: params.mode,
       prompt: params.prompt,
+      metadata: params.metadata || {},
     })
     .select("id, status")
     .single();
@@ -2162,7 +2197,7 @@ async function createJob(supabase: SupabaseAdminClient, params: {
   return { id: data.id, status: data.status };
 }
 
-async function updateJob(supabase: SupabaseAdminClient, jobId: string, patch: Partial<{ status: JobStatus; error: string | null; result_summary: string | null }>) {
+async function updateJob(supabase: SupabaseAdminClient, jobId: string, patch: Partial<{ status: JobStatus; error: string | null; result_summary: string | null; metadata: Record<string, unknown> | null }>) {
   const { error } = await supabase
     .from("project_generation_jobs")
     .update({
@@ -2172,6 +2207,71 @@ async function updateJob(supabase: SupabaseAdminClient, jobId: string, patch: Pa
     .eq("id", jobId);
 
   if (error) throw new Error(`DB_JOB_UPDATE_FAILED: ${error.message}`);
+}
+
+type AgentJobTimelineEvent = {
+  at: string;
+  step: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  note?: string;
+};
+
+function classifyAgentErrorCode(rawMessage: string): 'timeout' | 'rate_limit' | 'model_error' | 'network' | 'validation' | 'unknown' {
+  const msg = (rawMessage || '').toLowerCase();
+  if (!msg) return 'unknown';
+  if (msg.includes('timeout') || msg.includes('504') || msg.includes('deadline') || msg.includes('budget')) return 'timeout';
+  if (msg.includes('429') || msg.includes('rate') || msg.includes('quota')) return 'rate_limit';
+  if (msg.includes('network') || msg.includes('fetch') || msg.includes('gateway') || msg.includes('cors')) return 'network';
+  if (msg.includes('400') || msg.includes('invalid') || msg.includes('missing') || msg.includes('forbidden')) return 'validation';
+  if (msg.includes('gemini') || msg.includes('model') || msg.includes('api error') || msg.includes('500') || msg.includes('503')) return 'model_error';
+  return 'unknown';
+}
+
+function appendAgentTimeline(
+  metadata: Record<string, unknown> | null | undefined,
+  event: AgentJobTimelineEvent,
+): Record<string, unknown> {
+  const base = metadata && typeof metadata === 'object' ? { ...metadata } : {};
+  const previous = Array.isArray(base.timeline) ? (base.timeline as AgentJobTimelineEvent[]) : [];
+  const nextTimeline = [...previous, event].slice(-40);
+  return {
+    ...base,
+    timeline: nextTimeline,
+    currentStep: event.step,
+    currentStepStatus: event.status,
+    lastUpdateAt: event.at,
+  };
+}
+
+async function patchJobMetadata(
+  supabase: SupabaseAdminClient,
+  jobId: string,
+  patch: Record<string, unknown>,
+  timelineEvent?: AgentJobTimelineEvent,
+): Promise<Record<string, unknown>> {
+  const { data: existing, error: readErr } = await supabase
+    .from('project_generation_jobs')
+    .select('metadata')
+    .eq('id', jobId)
+    .maybeSingle();
+
+  if (readErr) throw new Error(`DB_JOB_METADATA_READ_FAILED: ${readErr.message}`);
+
+  const currentMetadata = (existing?.metadata && typeof existing.metadata === 'object')
+    ? { ...(existing.metadata as Record<string, unknown>) }
+    : {};
+
+  const merged = {
+    ...currentMetadata,
+    ...patch,
+  };
+
+  const finalMetadata = timelineEvent
+    ? appendAgentTimeline(merged, timelineEvent)
+    : merged;
+
+  await updateJob(supabase, jobId, { metadata: finalMetadata });
+  return finalMetadata;
 }
 
 async function replaceProjectFiles(supabase: SupabaseAdminClient, projectId: string, files: Record<string, string>) {
@@ -2245,7 +2345,7 @@ type ToolCallLogEntry = { tool: string; args: ToolCallPayload; result: ToolCallR
 type AgentExecutionMode = 'surgical_edit' | 'design_rebuild';
 
 const PRIMARY_EXISTING_FILE_EDIT_TOOL = 'morph_edit';
-const EDIT_TOOL_NAMES = new Set(['morph_edit', 'search_replace', 'write_file', 'insert_code']);
+const EDIT_TOOL_NAMES = new Set(['morph_edit', 'morph_edit_auto', 'search_replace', 'write_file', 'insert_code']);
 
 function isAgentExecutionMode(value: unknown): value is AgentExecutionMode {
   return value === 'surgical_edit' || value === 'design_rebuild';
@@ -2351,8 +2451,9 @@ function getSuccessfulEditToolCalls(toolCallsLog: ToolCallLogEntry[]): ToolCallL
 function collectFilesChangedFromToolCalls(toolCallsLog: ToolCallLogEntry[]): string[] {
   const filesChanged: string[] = [];
   for (const entry of toolCallsLog) {
-    if (entry.tool === 'delete_file' && entry.result?.success && entry.result?.deletedPath) {
-      filesChanged.push(`(deleted) ${normalizeFilePath(entry.result.deletedPath)}`);
+    const deletedPath = typeof entry.result?.deletedPath === 'string' ? entry.result.deletedPath : null;
+    if (entry.tool === 'delete_file' && entry.result?.success && deletedPath) {
+      filesChanged.push(`(deleted) ${normalizeFilePath(deletedPath)}`);
       continue;
     }
 
@@ -2432,6 +2533,9 @@ async function verifyPersistedFileChanges(params: {
 
 function getExpectedVerificationContent(entry: ToolCallLogEntry): string {
   if (entry.tool === 'morph_edit') {
+    return extractVerificationSnippet(entry.args?.code_edit);
+  }
+  if (entry.tool === 'morph_edit_auto') {
     return extractVerificationSnippet(entry.args?.code_edit);
   }
   if (entry.tool === 'search_replace') {
@@ -3938,6 +4042,7 @@ serve(async (req: Request) => {
     const action = body.action || 'start';
     const jobId = (body.jobId || '').toString().trim();
     const projectId = (body.projectId || '').toString().trim();
+    const mode = body.mode || 'create';
 
     const userAuthHeader = req.headers.get("Authorization") || req.headers.get("authorization");
     const supabase = getAdminClient(userAuthHeader);
@@ -3977,7 +4082,7 @@ serve(async (req: Request) => {
       if (!jobId) return createResponse({ ok: false, error: 'Missing jobId' }, 400);
       const { data, error } = await supabase
         .from('project_generation_jobs')
-        .select('id, project_id, status, mode, error, result_summary, created_at, updated_at')
+        .select('id, project_id, status, mode, prompt, error, result_summary, metadata, created_at, updated_at')
         .eq('id', jobId)
         .maybeSingle();
       if (error) throw new Error(`DB_JOB_STATUS_FAILED: ${error.message}`);
@@ -4006,6 +4111,71 @@ serve(async (req: Request) => {
       return createResponse({ ok: true, job: data });
     }
 
+    if (action === 'pause') {
+      if (!jobId) return createResponse({ ok: false, error: 'Missing jobId' }, 400);
+
+      const { data: jobRow, error: jobErr } = await supabase
+        .from('project_generation_jobs')
+        .select('id, project_id, user_id, status, metadata')
+        .eq('id', jobId)
+        .maybeSingle();
+      if (jobErr) throw new Error(`DB_JOB_PAUSE_LOOKUP_FAILED: ${jobErr.message}`);
+      if (!jobRow) return createResponse({ ok: false, error: 'Job not found' }, 404);
+      if (jobRow.user_id !== userId) return createResponse({ ok: false, error: 'Forbidden' }, 403);
+
+      if (jobRow.status !== 'running' && jobRow.status !== 'queued') {
+        return createResponse({ ok: false, error: 'Only running or queued jobs can be paused' }, 409);
+      }
+
+      const nowIso = new Date().toISOString();
+      await updateJob(supabase, jobId, { status: 'paused', result_summary: 'Paused by user request', error: null });
+      await patchJobMetadata(
+        supabase,
+        jobId,
+        {
+          pauseRequested: true,
+          pausedByUser: true,
+          pausedAt: nowIso,
+        },
+        {
+          at: nowIso,
+          step: 'paused',
+          status: 'completed',
+          note: 'Paused by user request',
+        },
+      );
+
+      return createResponse({ ok: true, job: { ...jobRow, status: 'paused' } });
+    }
+
+    if (action === 'resume') {
+      if (!jobId) return createResponse({ ok: false, error: 'Missing jobId' }, 400);
+
+      const { data: pausedJob, error: pausedErr } = await supabase
+        .from('project_generation_jobs')
+        .select('id, project_id, user_id, status, mode, prompt, metadata')
+        .eq('id', jobId)
+        .maybeSingle();
+      if (pausedErr) throw new Error(`DB_JOB_RESUME_LOOKUP_FAILED: ${pausedErr.message}`);
+      if (!pausedJob) return createResponse({ ok: false, error: 'Job not found' }, 404);
+      if (pausedJob.user_id !== userId) return createResponse({ ok: false, error: 'Forbidden' }, 403);
+
+      if (pausedJob.mode !== 'agent') {
+        return createResponse({ ok: false, error: 'Only agent jobs can be resumed' }, 409);
+      }
+
+      if (pausedJob.status !== 'paused' && pausedJob.status !== 'failed') {
+        return createResponse({ ok: false, error: 'Job is not paused or failed' }, 409);
+      }
+
+      body.resumeFromJobId = pausedJob.id;
+      body.projectId = pausedJob.project_id;
+      body.prompt = (body.prompt || pausedJob.prompt || '').toString();
+      if (!body.prompt) {
+        return createResponse({ ok: false, error: 'Missing prompt for resume' }, 400);
+      }
+    }
+
     if (action === 'get_files') {
       if (!projectId) return createResponse({ ok: false, error: 'Missing projectId' }, 400);
       await assertProjectOwnership(supabase, projectId, userId);
@@ -4024,7 +4194,6 @@ serve(async (req: Request) => {
     // ========================================================================
     // MODE HANDLING: create | edit | plan | execute | chat
     // ========================================================================
-    const mode = body.mode || 'create';
     // 🛡️ Sanitize untrusted user input at the boundary (Phase A — Item A4).
     // Strips role-marker smuggling, jailbreak directives, control chars, and
     // caps length. Arabic / RTL text is preserved.
@@ -4068,89 +4237,101 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
     // ========================================================================
     let documentContentStr = '';
     let visionInspirationStr = '';
+    const shouldRunAssetPipeline = shouldProcessUploadedAssets({
+      mode,
+      prompt,
+      images,
+      uploadedAssets,
+      assets,
+      assetIntent,
+    });
     
-    // BULLETPROOF SERVER-SIDE FETCH: ALWAYS fetch from DB using service-role client.
-    // Client-provided URLs may be broken (public URLs that 400). Service-role signed URLs always work.
-    if (projectId) {
-      try {
-        const { data: dbUploads, error: dbErr } = await supabase
-          .from('project_uploads')
-          .select('filename, storage_path, file_type, bucket_id')
-          .eq('project_id', projectId);
-        
-        if (dbErr) {
-          console.error(`[Assets] DB fetch error:`, dbErr);
-        } else if (dbUploads && dbUploads.length > 0) {
-          // Clear client-provided assets — replace with server-side signed URLs
-          uploadedAssets.length = 0;
-          for (const upload of dbUploads as ProjectUploadRow[]) {
-            const bucket = upload.bucket_id || 'project-assets';
-            const storagePath = upload.storage_path;
-            // Use signed URL (works even for private buckets, 1 hour expiry)
-            const { data: signedData, error: signErr } = await supabase.storage
-              .from(bucket)
-              .createSignedUrl(storagePath, 3600);
-            
-            if (signErr || !signedData?.signedUrl) {
-              // Fallback to public URL
-              const { data: pubData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-              console.warn(`[Assets] Signed URL failed for ${upload.filename}, using public: ${signErr?.message}`);
-              uploadedAssets.push({
-                filename: upload.filename,
-                url: pubData.publicUrl,
-                file_type: upload.file_type
-              });
-            } else {
-              uploadedAssets.push({
-                filename: upload.filename,
-                url: signedData.signedUrl,
-                file_type: upload.file_type
-              });
+    if (shouldRunAssetPipeline) {
+      // BULLETPROOF SERVER-SIDE FETCH: ALWAYS fetch from DB using service-role client.
+      // Client-provided URLs may be broken (public URLs that 400). Service-role signed URLs always work.
+      if (projectId) {
+        try {
+          const { data: dbUploads, error: dbErr } = await supabase
+            .from('project_uploads')
+            .select('filename, storage_path, file_type, bucket_id')
+            .eq('project_id', projectId);
+          
+          if (dbErr) {
+            console.error(`[Assets] DB fetch error:`, dbErr);
+          } else if (dbUploads && dbUploads.length > 0) {
+            // Clear client-provided assets — replace with server-side signed URLs
+            uploadedAssets.length = 0;
+            for (const upload of dbUploads as ProjectUploadRow[]) {
+              const bucket = upload.bucket_id || 'project-assets';
+              const storagePath = upload.storage_path;
+              // Use signed URL (works even for private buckets, 1 hour expiry)
+              const { data: signedData, error: signErr } = await supabase.storage
+                .from(bucket)
+                .createSignedUrl(storagePath, 3600);
+              
+              if (signErr || !signedData?.signedUrl) {
+                // Fallback to public URL
+                const { data: pubData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+                console.warn(`[Assets] Signed URL failed for ${upload.filename}, using public: ${signErr?.message}`);
+                uploadedAssets.push({
+                  filename: upload.filename,
+                  url: pubData.publicUrl,
+                  file_type: upload.file_type
+                });
+              } else {
+                uploadedAssets.push({
+                  filename: upload.filename,
+                  url: signedData.signedUrl,
+                  file_type: upload.file_type
+                });
+              }
             }
           }
-        }
-      } catch (fetchErr) {
-        console.error(`[Assets] Exception fetching from DB:`, fetchErr);
-      }
-    }
-    
-    // FALLBACK #2: If still empty, check assets[] URLs for PDF/doc extensions
-    if (uploadedAssets.length === 0 && assets.length > 0) {
-      const docExtensions = ['.pdf', '.docx', '.doc', '.txt', '.rtf'];
-      const imgExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
-      for (const url of assets) {
-        if (typeof url !== 'string') continue;
-        const lowerUrl = url.toLowerCase().split('?')[0];
-        const filename = lowerUrl.split('/').pop() || 'file';
-        let file_type: string | null = null;
-        if (docExtensions.some(ext => lowerUrl.endsWith(ext))) {
-          if (lowerUrl.endsWith('.pdf')) file_type = 'application/pdf';
-          else if (lowerUrl.endsWith('.docx')) file_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-          else if (lowerUrl.endsWith('.doc')) file_type = 'application/msword';
-          else if (lowerUrl.endsWith('.txt')) file_type = 'text/plain';
-          else if (lowerUrl.endsWith('.rtf')) file_type = 'application/rtf';
-          uploadedAssets.push({ filename, url, file_type });
-        } else if (imgExtensions.some(ext => lowerUrl.endsWith(ext))) {
-          file_type = 'image/' + (lowerUrl.endsWith('.jpg') ? 'jpeg' : lowerUrl.split('.').pop());
-          uploadedAssets.push({ filename, url, file_type });
+        } catch (fetchErr) {
+          console.error(`[Assets] Exception fetching from DB:`, fetchErr);
         }
       }
-    }
-    
-    const geminiApiKeyForAssets = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
-    if (uploadedAssets.length > 0 && geminiApiKeyForAssets) {
-      try {
-        const { documentContent, visionInspirations } = await processUploadedAssets(
-          uploadedAssets as Array<{ filename: string; url: string; file_type: string | null }>,
-          geminiApiKeyForAssets
-        );
-        documentContentStr = documentContent;
-        visionInspirationStr = visionInspirations;
-      } catch (err) {
-        console.error('[Assets] Error processing assets:', err);
+      
+      // FALLBACK #2: If still empty, check assets[] URLs for PDF/doc extensions
+      if (uploadedAssets.length === 0 && assets.length > 0) {
+        const docExtensions = ['.pdf', '.docx', '.doc', '.txt', '.rtf'];
+        const imgExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
+        for (const url of assets) {
+          if (typeof url !== 'string') continue;
+          const lowerUrl = url.toLowerCase().split('?')[0];
+          const filename = lowerUrl.split('/').pop() || 'file';
+          let file_type: string | null = null;
+          if (docExtensions.some(ext => lowerUrl.endsWith(ext))) {
+            if (lowerUrl.endsWith('.pdf')) file_type = 'application/pdf';
+            else if (lowerUrl.endsWith('.docx')) file_type = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+            else if (lowerUrl.endsWith('.doc')) file_type = 'application/msword';
+            else if (lowerUrl.endsWith('.txt')) file_type = 'text/plain';
+            else if (lowerUrl.endsWith('.rtf')) file_type = 'application/rtf';
+            uploadedAssets.push({ filename, url, file_type });
+          } else if (imgExtensions.some(ext => lowerUrl.endsWith(ext))) {
+            file_type = 'image/' + (lowerUrl.endsWith('.jpg') ? 'jpeg' : lowerUrl.split('.').pop());
+            uploadedAssets.push({ filename, url, file_type });
+          }
+        }
+      }
+      
+      const geminiApiKeyForAssets = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
+      if (uploadedAssets.length > 0 && geminiApiKeyForAssets) {
+        try {
+          const { documentContent, visionInspirations } = await processUploadedAssets(
+            uploadedAssets as Array<{ filename: string; url: string; file_type: string | null }>,
+            geminiApiKeyForAssets
+          );
+          documentContentStr = documentContent;
+          visionInspirationStr = visionInspirations;
+        } catch (err) {
+          console.error('[Assets] Error processing assets:', err);
+        }
+      } else {
+        console.warn(`[Assets] SKIPPED extraction: uploadedAssets=${uploadedAssets.length}, hasGeminiKey=${!!geminiApiKeyForAssets}`);
       }
     } else {
-      console.warn(`[Assets] SKIPPED extraction: uploadedAssets=${uploadedAssets.length}, hasGeminiKey=${!!geminiApiKeyForAssets}`);
+      console.log('[Assets] Skipped heavy asset pipeline for text-only request');
     }
     
     // Build uploaded assets section for prompts (kept for reference but now using documentContentStr/visionInspirationStr directly)
@@ -4890,6 +5071,288 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       }
       
       await assertProjectOwnership(supabase, projectId, userId);
+
+      const isInternalAgentRun = action === 'agent_run';
+      const shouldQueueAgentJob = (action === 'start' || action === 'resume') && !isInternalAgentRun;
+
+      const launchAgentWorker = async (params: {
+        agentJobId: string;
+        runPrompt: string;
+        resumeFromJobId?: string | null;
+      }) => {
+        const { agentJobId, runPrompt, resumeFromJobId } = params;
+        const startedAt = new Date().toISOString();
+
+        try {
+          await updateJob(supabase, agentJobId, {
+            status: 'running',
+            error: null,
+            result_summary: 'Preparing agent context',
+          });
+
+          await patchJobMetadata(
+            supabase,
+            agentJobId,
+            {
+              startedAt,
+              resumeFromJobId: resumeFromJobId || null,
+              pauseRequested: false,
+              errorCode: null,
+            },
+            {
+              at: startedAt,
+              step: 'preparing',
+              status: 'in_progress',
+              note: 'Preparing agent context',
+            },
+          );
+
+          const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+          if (!SUPABASE_URL) {
+            throw new Error('SUPABASE_URL missing for agent worker invocation');
+          }
+
+          const workerBody: RequestBody = {
+            ...body,
+            action: 'agent_run',
+            mode: 'agent',
+            projectId,
+            prompt: runPrompt,
+            jobId: agentJobId,
+            resumeFromJobId: resumeFromJobId || undefined,
+          };
+
+          const workerResponse = await withTimeout(
+            fetch(`${SUPABASE_URL}/functions/v1/projects-generate`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(userAuthHeader ? { Authorization: userAuthHeader } : {}),
+              },
+              body: JSON.stringify(workerBody),
+            }),
+            145000,
+            'AGENT_WORKER_HTTP',
+          );
+
+          if (!workerResponse.ok) {
+            const workerErrorText = await workerResponse.text();
+            const workerMessage = `Agent worker failed with HTTP ${workerResponse.status}: ${workerErrorText.slice(0, 500)}`;
+            const errorCode = classifyAgentErrorCode(workerMessage);
+            const shouldPause = errorCode === 'timeout';
+            const failedAt = new Date().toISOString();
+
+            await updateJob(supabase, agentJobId, {
+              status: shouldPause ? 'paused' : 'failed',
+              error: workerMessage,
+              result_summary: shouldPause
+                ? 'Paused due to timeout budget. Resume to continue.'
+                : null,
+            });
+            await patchJobMetadata(
+              supabase,
+              agentJobId,
+              {
+                errorCode,
+                workerHttpStatus: workerResponse.status,
+                workerErrorText: workerErrorText.slice(0, 1000),
+              },
+              {
+                at: failedAt,
+                step: shouldPause ? 'paused' : 'failed',
+                status: 'failed',
+                note: workerMessage,
+              },
+            );
+            return;
+          }
+
+          const workerData = await workerResponse.json() as {
+            ok?: boolean;
+            error?: string;
+            message?: string;
+            result?: AgentResult & { type?: string; suggestion?: string };
+          };
+
+          if (!workerData?.ok) {
+            const failedMessage = workerData?.error || 'Agent worker returned a non-ok payload';
+            const failedAt = new Date().toISOString();
+            await updateJob(supabase, agentJobId, {
+              status: 'failed',
+              error: failedMessage,
+              result_summary: null,
+            });
+            await patchJobMetadata(
+              supabase,
+              agentJobId,
+              { errorCode: classifyAgentErrorCode(failedMessage) },
+              {
+                at: failedAt,
+                step: 'failed',
+                status: 'failed',
+                note: failedMessage,
+              },
+            );
+            return;
+          }
+
+          const workerResult = workerData.result || null;
+          const failedReason = String(workerResult?.error || '').trim();
+          const pausedForBudget =
+            workerResult?.type === 'paused_for_budget'
+            || failedReason === 'TIME_BUDGET_EXCEEDED'
+            || failedReason.includes('AGENT_WORKER_HTTP_TIMEOUT');
+
+          if (workerResult?.success === false) {
+            const failAt = new Date().toISOString();
+            await updateJob(supabase, agentJobId, {
+              status: pausedForBudget ? 'paused' : 'failed',
+              error: failedReason || 'Agent worker reported an unsuccessful result',
+              result_summary: workerResult.summary || null,
+            });
+            await patchJobMetadata(
+              supabase,
+              agentJobId,
+              {
+                errorCode: classifyAgentErrorCode(failedReason),
+                workerResult,
+                pausedForBudget,
+              },
+              {
+                at: failAt,
+                step: pausedForBudget ? 'paused' : 'failed',
+                status: pausedForBudget ? 'in_progress' : 'failed',
+                note: workerResult.summary || failedReason || 'Agent run did not complete successfully',
+              },
+            );
+            return;
+          }
+
+          const completedAt = new Date().toISOString();
+          await updateJob(supabase, agentJobId, {
+            status: 'succeeded',
+            error: null,
+            result_summary: workerResult?.summary || workerData.message || 'Agent job completed',
+          });
+          await patchJobMetadata(
+            supabase,
+            agentJobId,
+            {
+              errorCode: null,
+              workerResult,
+              filesChanged: workerResult?.filesChanged || [],
+              completedAt,
+            },
+            {
+              at: completedAt,
+              step: 'done',
+              status: 'completed',
+              note: workerResult?.summary || 'Agent job completed',
+            },
+          );
+        } catch (workerErr) {
+          const workerMessage = workerErr instanceof Error ? workerErr.message : String(workerErr);
+          const errorCode = classifyAgentErrorCode(workerMessage);
+          const shouldPause = errorCode === 'timeout';
+          const failedAt = new Date().toISOString();
+
+          await updateJob(supabase, agentJobId, {
+            status: shouldPause ? 'paused' : 'failed',
+            error: workerMessage,
+            result_summary: shouldPause
+              ? 'Paused due to timeout budget. Resume to continue.'
+              : null,
+          });
+          await patchJobMetadata(
+            supabase,
+            agentJobId,
+            {
+              errorCode,
+              workerException: workerMessage,
+            },
+            {
+              at: failedAt,
+              step: shouldPause ? 'paused' : 'failed',
+              status: 'failed',
+              note: workerMessage,
+            },
+          );
+        }
+      };
+
+      if (shouldQueueAgentJob) {
+        const { data: activeAgentJobs, error: activeJobsErr } = await supabase
+          .from('project_generation_jobs')
+          .select('id, status')
+          .eq('project_id', projectId)
+          .eq('user_id', userId)
+          .eq('mode', 'agent')
+          .in('status', ['queued', 'running'])
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (activeJobsErr) {
+          throw new Error(`DB_ACTIVE_AGENT_JOB_LOOKUP_FAILED: ${activeJobsErr.message}`);
+        }
+
+        if (activeAgentJobs && activeAgentJobs.length > 0) {
+          const existingJob = activeAgentJobs[0];
+          return createResponse({
+            ok: false,
+            error: 'AGENT_CONCURRENCY_GUARD',
+            message: 'Another agent job is still running for this project. Please wait or pause it first.',
+            messageAr: 'هناك مهمة وكيل تعمل الآن لهذا المشروع. انتظر حتى تنتهي أو قم بإيقافها أولاً.',
+            activeJobId: existingJob.id,
+            activeStatus: existingJob.status,
+          }, 429);
+        }
+
+        const nowIso = new Date().toISOString();
+        const agentJob = await createJob(supabase, {
+          projectId,
+          userId,
+          mode: 'agent',
+          prompt,
+          initialStatus: 'queued',
+          metadata: {
+            timeline: [
+              {
+                at: nowIso,
+                step: action === 'resume' ? 'resume_requested' : 'queued',
+                status: 'pending',
+                note: action === 'resume' ? 'Resume requested by user' : 'Queued for agent execution',
+              },
+            ],
+            currentStep: action === 'resume' ? 'resume_requested' : 'queued',
+            currentStepStatus: 'pending',
+            pauseRequested: false,
+            resumedFromJobId: body.resumeFromJobId || null,
+            hotFiles: Array.isArray(body.hotFiles) ? body.hotFiles.slice(0, 20) : [],
+          },
+        });
+
+        const launchPromise = launchAgentWorker({
+          agentJobId: agentJob.id,
+          runPrompt: prompt,
+          resumeFromJobId: body.resumeFromJobId || null,
+        });
+
+        if (typeof EdgeRuntime !== 'undefined' && typeof EdgeRuntime?.waitUntil === 'function') {
+          EdgeRuntime.waitUntil(launchPromise);
+        } else {
+          void launchPromise;
+        }
+
+        return createResponse({
+          ok: true,
+          mode: 'agent',
+          jobId: agentJob.id,
+          status: 'queued',
+          message: action === 'resume'
+            ? 'Agent resume job queued. Poll status for progress.'
+            : 'Agent job queued. Poll status for progress.',
+        });
+      }
       
       // ========================================================================
       // THE FIXER MODE: final auto-fix attempt (attempt #4)
@@ -5120,7 +5583,7 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         && !/\b(create|build|from scratch|full app|full website|entire|complete app|complete website|redesign|rebuild)\b/i.test(prompt || '');
       const agentMaxIterations = isLikelyFastFollowup ? 8 : 12;
       const agentMaxOutputTokens = isLikelyFastFollowup ? 3072 : 4096;
-      const agentBudgetMs = isLikelyFastFollowup ? 95000 : 130000;
+      const agentBudgetMs = isLikelyFastFollowup ? 60000 : 95000;
       
       // SAFETY NET: If currentFiles is empty, fetch file list from DB
       if (fileCount === 0) {
@@ -5130,7 +5593,7 @@ The user attached a screenshot. I analyzed it and found these text anchors:
           .eq('project_id', projectId);
         
         if (dbFiles && dbFiles.length > 0) {
-          fileList = dbFiles.map(f => normalizeFilePath(f.path)).join('\n');
+          fileList = dbFiles.map((f: { path: string }) => normalizeFilePath(f.path)).join('\n');
           fileCount = dbFiles.length;
           for (const row of dbFiles) {
             if (typeof row.path === 'string' && typeof row.content === 'string') {
@@ -5262,14 +5725,26 @@ Match the className and innerText to find it in the code.
         .select('path, content')
         .eq('project_id', projectId);
       
-      const filesForIntent = (allProjectFiles || []).map(f => ({ path: f.path, content: f.content }));
-      const entryPoint = filesForIntent.find(f => f.path.includes('App.jsx') || f.path.includes('App.tsx'))?.path || '/App.jsx';
+      const filesForIntent = ((allProjectFiles || []) as Array<{ path: string; content: string }>).map((f: { path: string; content: string }) => ({ path: f.path, content: f.content }));
+      const entryPoint = filesForIntent.find((f: { path: string; content: string }) => f.path.includes('App.jsx') || f.path.includes('App.tsx'))?.path || '/App.jsx';
       
       const editIntent = analyzeEditIntent(enrichedPrompt, filesForIntent, entryPoint);
+      const fileSearchPlan = executeFileSearchPlan(enrichedPrompt, filesForIntent, editIntent, entryPoint);
+      const plannedPrimaryFiles = [...new Set(fileSearchPlan.primaryHits.map((hit) => hit.path).filter(Boolean))];
+      const plannedContextFiles = [...new Set(fileSearchPlan.contextHits.map((hit) => hit.path).filter(Boolean))];
+      const searchTermsHint = fileSearchPlan.searchTerms.length > 0
+        ? `\n🔎 SEARCH TERMS: ${fileSearchPlan.searchTerms.join(', ')}`
+        : '';
+      const primaryFilesHint = plannedPrimaryFiles.length > 0
+        ? `\n📌 PRIMARY FILES: ${plannedPrimaryFiles.join(', ')}`
+        : '';
+      const contextFilesHint = plannedContextFiles.length > 0
+        ? `\n🧭 CONTEXT FILES: ${plannedContextFiles.join(', ')}`
+        : '';
       // Build intent guidance based on analysis
       let intentGuidance = '';
       if (editIntent.confidence >= 0.7) {
-        const targetFilesHint = editIntent.targetFiles.length > 0 ? ` → Focus on: ${editIntent.targetFiles.join(', ')}` : '';
+        const targetFilesHint = plannedPrimaryFiles.length > 0 ? ` → Focus on: ${plannedPrimaryFiles.join(', ')}` : '';
         switch (editIntent.type) {
           case 'ADD_FEATURE':
             intentGuidance = `\n🎯 INTENT: ADD NEW FEATURE${targetFilesHint}\n→ You'll likely need to CREATE new files or ADD code to existing files.\n`;
@@ -5288,21 +5763,61 @@ Match the className and innerText to find it in the code.
             break;
         }
       }
+      intentGuidance += `${searchTermsHint}${primaryFilesHint}${contextFilesHint}`;
+
+      let fileSearchPlanContext = '';
+      const primarySearchLines = fileSearchPlan.primaryHits
+        .slice(0, 4)
+        .map((hit) => `- ${hit.path}:${hit.line} [${Math.round(hit.confidence * 100)}% ${hit.matchType}]\n${hit.preview}`);
+      const contextSearchLines = fileSearchPlan.contextHits
+        .slice(0, 4)
+        .map((hit) => `- ${hit.path}:${hit.line} [${Math.round(hit.confidence * 100)}% ${hit.matchType}]\n${hit.preview}`);
+      if (primarySearchLines.length > 0 || contextSearchLines.length > 0) {
+        fileSearchPlanContext = `\n🗺️ FILE SEARCH PLAN:`
+          + `${primarySearchLines.length > 0 ? `\nPRIMARY HITS:\n${primarySearchLines.join('\n\n')}` : ''}`
+          + `${contextSearchLines.length > 0 ? `\n\nCONTEXT HITS:\n${contextSearchLines.join('\n\n')}` : ''}`;
+      }
+
+      const prioritizedIntentPaths = [...new Set([
+        ...plannedPrimaryFiles,
+        ...plannedContextFiles,
+      ])].filter(Boolean).slice(0, 6);
+
+      let intentPrefetchContext = '';
+      if (prioritizedIntentPaths.length > 0) {
+        const intentPrefetchSections: string[] = [];
+        let prefetchedChars = 0;
+        for (const filePath of prioritizedIntentPaths) {
+          const matchedFile = filesForIntent.find((file) => file.path === filePath);
+          if (!matchedFile) continue;
+          const remaining = 8000 - prefetchedChars;
+          if (remaining <= 0) break;
+          const snippet = matchedFile.content.slice(0, Math.min(remaining, 1800));
+          if (!snippet.trim()) continue;
+          intentPrefetchSections.push(`\n--- ${matchedFile.path} ---\n${snippet}`);
+          prefetchedChars += snippet.length;
+        }
+
+        if (intentPrefetchSections.length > 0) {
+          intentPrefetchContext = `\n📚 PRIORITY FILE SNAPSHOTS:${intentPrefetchSections.join('\n')}`;
+        }
+      }
       
       // 🔧 FIX: Extract PDF content from images array in AGENT mode
       let agentPdfExtractedContent = '';
       if (images && images.length > 0) {
         const GEMINI_API_KEY_AGENT = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
         
-        for (const imgData of images) {
-          if (typeof imgData !== 'string') continue;
+        for (const imgData of images as Array<ImageAttachment | string>) {
+          const imagePayload = typeof imgData === 'string' ? imgData : imgData?.data;
+          if (typeof imagePayload !== 'string') continue;
           
           // Check if it's a PDF (marked with [PDF:filename] prefix)
-          if (imgData.startsWith('[PDF:')) {
-            const endBracket = imgData.indexOf(']');
+          if (imagePayload.startsWith('[PDF:')) {
+            const endBracket = imagePayload.indexOf(']');
             if (endBracket > 0) {
-              const pdfName = imgData.substring(5, endBracket);
-              const pdfBase64Data = imgData.substring(endBracket + 1);
+              const pdfName = imagePayload.substring(5, endBracket);
+              const pdfBase64Data = imagePayload.substring(endBracket + 1);
               
               try {
                 const pdfMatches = pdfBase64Data.match(/^data:([^;]+);base64,(.+)$/);
@@ -5365,6 +5880,8 @@ Format the output clearly with sections. Do NOT summarize - extract the FULL tex
 ${fileList}
 ${criticalFilesContext}
 ${intentGuidance}
+${fileSearchPlanContext}
+${intentPrefetchContext}
 ⚙️ EXECUTION MODE: ${agentExecutionMode === 'design_rebuild' ? 'DESIGN REBUILD' : 'SURGICAL EDIT'}
 ⚠️ IMPORTANT: Use the read_file tool to view file contents before editing.
 Use list_files to see directory structure.
@@ -5551,13 +6068,25 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       let totalOutputText = '';
       
       // Hard wall-clock budget guard — keep fast path tighter for short follow-up edit requests.
-      const AGENT_BUDGET_MS = agentBudgetMs;
+      const AGENT_BUDGET_MS = Math.max(30000, Math.min(agentBudgetMs, 110000));
+      let budgetExceeded = false;
+      const initialAgentModel = isLikelyFastFollowup ? GEMINI_MODEL_SIMPLE : agentModelSelection.model;
+      const modelAttemptChain = [
+        initialAgentModel,
+        MODEL_FALLBACK[initialAgentModel],
+        agentModelSelection.model,
+        MODEL_FALLBACK[agentModelSelection.model],
+        'gemini-2.5-flash',
+      ].filter((modelName): modelName is string => typeof modelName === 'string' && modelName.length > 0)
+        .filter((modelName, idx, arr) => arr.indexOf(modelName) === idx)
+        .slice(0, 3);
       
       for (let iteration = 0; iteration < maxIterations; iteration++) {
         // Budget check: bail out cleanly before the edge function gets killed
         const elapsedMs = Date.now() - agentStartTime;
         if (elapsedMs > AGENT_BUDGET_MS) {
           console.warn(`[Agent Mode] Budget exceeded at iteration ${iteration} (${elapsedMs}ms). Returning partial progress.`);
+          budgetExceeded = true;
           break;
         }
         
@@ -5566,15 +6095,20 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         // so we never stack two failures on the same flaky preview model.
         let geminiResponse: Response | null = null;
         let iterLastError: Error | null = null;
-        const iterMaxRetries = 2;
+        const iterMaxRetries = Math.max(1, modelAttemptChain.length);
         for (let iterAttempt = 1; iterAttempt <= iterMaxRetries; iterAttempt++) {
-          const modelForAttempt = iterAttempt === 1
-            ? agentModelSelection.model
-            : (MODEL_FALLBACK[agentModelSelection.model] || agentModelSelection.model);
-          if (iterAttempt > 1 && modelForAttempt !== agentModelSelection.model) {
+          const modelForAttempt = modelAttemptChain[Math.min(iterAttempt - 1, modelAttemptChain.length - 1)] || agentModelSelection.model;
+          if (iterAttempt > 1) {
             console.warn(`[Agent Mode] Falling back to ${modelForAttempt} for retry`);
           }
           try {
+            const remainingBudgetMs = AGENT_BUDGET_MS - (Date.now() - agentStartTime);
+            if (remainingBudgetMs <= 10000) {
+              iterLastError = new Error('TIME_BUDGET_EXCEEDED');
+              break;
+            }
+
+            const perCallTimeoutMs = Math.max(12000, Math.min(35000, remainingBudgetMs - 8000));
             geminiResponse = await withTimeout(
               fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/${modelForAttempt}:generateContent`,
@@ -5595,7 +6129,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                   }),
                 }
               ),
-              75000,
+              perCallTimeoutMs,
               'GEMINI_AGENT'
             );
             // Retry on transient HTTP errors
@@ -5620,6 +6154,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         }
         
         if (!geminiResponse) {
+          if (iterLastError?.message === 'TIME_BUDGET_EXCEEDED') {
+            budgetExceeded = true;
+            break;
+          }
           throw iterLastError || new Error('Agent Gemini call failed after retries');
         }
         
@@ -5656,6 +6194,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           if (textPart) {
             // 🚀 MORPH FAST APPLY: Check for <edit> blocks in the response
             const morphEdits = parseMorphEdits(textPart.text);
+            let autoMorphApplied = false;
             if (morphEdits.length > 0) {
               for (const edit of morphEdits) {
                 try {
@@ -5696,18 +6235,23 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                     
                     toolCallsLog.push({
                       tool: 'morph_edit_auto',
-                      args: { path: edit.targetFile, instructions: edit.instructions },
+                      args: { path: edit.targetFile, instructions: edit.instructions, code_edit: edit.update },
                       result: { success: true, method: 'morph', changes: morphResult.changes }
                     });
                     
                     // Update file cache
                     fileContentCache.set(normalizedPath, morphResult.mergedCode);
+                    allFilesCache[normalizedPath] = morphResult.mergedCode;
                     filesRead.add(normalizedPath);
+                    filesEdited.add(normalizedPath);
+                    lastEditPath = normalizedPath;
+                    editVerificationPending = true;
+                    autoMorphApplied = true;
                   } else {
                     console.error(`[Morph] Failed to apply edit to ${edit.targetFile}: ${morphResult.error}`);
                     toolCallsLog.push({
                       tool: 'morph_edit_auto',
-                      args: { path: edit.targetFile },
+                      args: { path: edit.targetFile, instructions: edit.instructions, code_edit: edit.update },
                       result: { success: false, error: morphResult.error }
                     });
                   }
@@ -5715,6 +6259,25 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                   console.error(`[Morph] Exception applying edit to ${edit.targetFile}:`, err);
                 }
               }
+
+              if (autoMorphApplied) {
+                const changedFiles = [...filesEdited].slice(-6);
+                messages.push({
+                  role: "user",
+                  parts: [{
+                    text: `Your <edit> blocks were applied successfully. Now do the required finish pass: 1) read_file each changed file to verify the final code, 2) fix anything still wrong, 3) call task_complete with a clear summary and the changed files: ${changedFiles.join(', ')}.`
+                  }]
+                });
+                continue;
+              }
+
+              messages.push({
+                role: "user",
+                parts: [{
+                  text: `Your <edit> blocks were detected but did not apply successfully. Read the target file, then either use morph_edit directly or output corrected <edit> blocks with exact target_file and better update context.`
+                }]
+              });
+              continue;
             }
           }
           
@@ -5771,11 +6334,13 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                 if (sortedFiles.length > 0) {
                   bestMatchFile = sortedFiles[0][0];
                   // Read the best match file
-                  const matchedFile = allProjectFiles.find(f => f.path === bestMatchFile);
+                  const matchedFile = (allProjectFiles || []).find((f: { path: string; content: string }) => f.path === bestMatchFile);
                   if (matchedFile) {
                     bestMatchContent = matchedFile.content;
                     filesRead.add(bestMatchFile);
-                    fileContentCache.set(bestMatchFile, bestMatchContent);
+                    if (typeof bestMatchContent === 'string') {
+                      fileContentCache.set(bestMatchFile, bestMatchContent);
+                    }
                   }
                 }
               }
@@ -5873,9 +6438,10 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                   .eq('project_id', projectId)
                   .eq('path', targetPath)
                   .maybeSingle();
-                if (fileData?.content) {
-                  targetContent = fileData.content;
-                  fileContentCache.set(targetPath, targetContent);
+                const fetchedContent = typeof fileData?.content === 'string' ? fileData.content : null;
+                if (fetchedContent && targetPath) {
+                  targetContent = fetchedContent;
+                  fileContentCache.set(targetPath, fetchedContent);
                 }
               }
               
@@ -6010,7 +6576,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                           // Add to existing import
                           fixedIndexContent = fixedIndexContent.replace(
                             /import\s*\{([^}]+)\}\s*from\s*['"]react-router-dom['"]/,
-                            (_match, imports) => `import { BrowserRouter, ${imports.trim()} } from 'react-router-dom'`
+                            (_match: string, imports: string) => `import { BrowserRouter, ${imports.trim()} } from 'react-router-dom'`
                           );
                         } else {
                           // Add new import after React import
@@ -6340,6 +6906,21 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           break;
         }
       }
+
+      if (budgetExceeded) {
+        return createResponse({
+          ok: true,
+          mode: 'agent',
+          result: {
+            success: false,
+            type: 'paused_for_budget',
+            summary: 'Agent paused to stay within safe runtime budget. Resume to continue from the latest saved state.',
+            filesChanged: collectFilesChangedFromToolCalls(toolCallsLog),
+            error: 'TIME_BUDGET_EXCEEDED',
+            warnings: ['Runtime budget reached before final verification.'],
+          },
+        });
+      }
       
       // 🔒 HARDENED: Final safety check - ensure at least 1 meaningful tool call was made
       const meaningfulToolCalls = toolCallsLog.filter(tc => 
@@ -6653,7 +7234,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           .eq('project_id', projectId);
         if (existingErr) throw new Error(`DB_FILES_SELECT_FAILED: ${existingErr.message}`);
         
-        const fileList = (existingRows || []).map(r => normalizeFilePath(r.path)).join('\n');
+        const fileList = ((existingRows || []) as Array<{ path: string }>).map((r: { path: string }) => normalizeFilePath(r.path)).join('\n');
         const fileCount = existingRows?.length || 0;
 
         // 🚀 ITEM 3 — PRE-LOAD PLAN FILES (skip redundant read_file tool calls)
