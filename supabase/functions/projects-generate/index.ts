@@ -1086,7 +1086,10 @@ async function callGeminiWithModel(
               generationConfig: {
                 temperature: 0.1,
                 maxOutputTokens: 65536,
-                ...(jsonMode ? { responseMimeType: "application/json" } : {}),
+                // Google Search grounding counts as a "tool" in the Gemini API.
+                // Gemini explicitly forbids responseMimeType: application/json when any tool is present.
+                // When Google Search is on, use text mode — extractJsonObject handles JSON extraction from text.
+                ...((jsonMode && !options.enableGoogleSearch) ? { responseMimeType: "application/json" } : {}),
               },
             }),
           }
