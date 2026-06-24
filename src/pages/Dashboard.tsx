@@ -91,6 +91,55 @@ export default function Dashboard() {
     };
   }, [dashboardLook]);
 
+  useEffect(() => {
+    if (dashboardLook !== 'homescreen' && dashboardLook !== 'modern') return;
+
+    const mainScroller = document.querySelector('.app-main-scroll') as HTMLElement | null;
+    const mobileShell = document.querySelector('.app-layout-mobile') as HTMLElement | null;
+    if (!mainScroller && !mobileShell) return;
+
+    let startX = 0;
+    let startY = 0;
+    let startedNearLeftEdge = false;
+
+    const handleTouchStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+      startX = touch.clientX;
+      startY = touch.clientY;
+      startedNearLeftEdge = touch.clientX <= 24;
+    };
+
+    const handleTouchMove = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (!touch) return;
+
+      const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+      const primaryScroller = mainScroller || mobileShell;
+      const atTop = (primaryScroller?.scrollTop || 0) <= 0;
+      const isPullToRefreshGesture = atTop && deltaY > 10 && Math.abs(deltaY) > Math.abs(deltaX);
+      const isLeftEdgeBackGesture = startedNearLeftEdge && deltaX > 12 && Math.abs(deltaX) > Math.abs(deltaY);
+
+      if (isPullToRefreshGesture || isLeftEdgeBackGesture) {
+        event.preventDefault();
+      }
+    };
+
+    const touchOptions: AddEventListenerOptions = { passive: false };
+    mainScroller?.addEventListener('touchstart', handleTouchStart, touchOptions);
+    mainScroller?.addEventListener('touchmove', handleTouchMove, touchOptions);
+    mobileShell?.addEventListener('touchstart', handleTouchStart, touchOptions);
+    mobileShell?.addEventListener('touchmove', handleTouchMove, touchOptions);
+
+    return () => {
+      mainScroller?.removeEventListener('touchstart', handleTouchStart);
+      mainScroller?.removeEventListener('touchmove', handleTouchMove);
+      mobileShell?.removeEventListener('touchstart', handleTouchStart);
+      mobileShell?.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, [dashboardLook]);
+
   // Extract display name from LIVE profile data (never from stale user_metadata)
   // Safe fallback chain: display_name → username → email prefix → empty (loading)
   const displayName = profileLoading

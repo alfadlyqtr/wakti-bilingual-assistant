@@ -200,6 +200,14 @@ const hasSnapshotFiles = (snapshot: unknown) => {
   return !!normalized && Object.keys(normalized).length > 0;
 };
 
+type ExecutionResultStatus = 'applied' | 'not_applied' | 'blocked' | 'partial';
+
+const CODE_MODE_INITIAL_STEP_DELAY_MS = 140;
+const CODE_MODE_TRANSITION_STEP_DELAY_MS = 90;
+const CHAT_MODE_INITIAL_STEP_DELAY_MS = 450;
+const CHAT_MODE_TRANSITION_STEP_DELAY_MS = 180;
+const MAX_CODE_MODE_AGENT_ATTEMPTS = 2;
+
 type DeviceView = 'desktop' | 'tablet' | 'mobile';
 type LeftPanelMode = 'chat' | 'code';
 type MainTab = 'builder' | 'server';
@@ -402,6 +410,7 @@ export default function ProjectDetail() {
 
   // Visual Edit Mode undo/redo history
   const visualEditHistory = useEditHistory({ maxHistory: 30 });
+  const latestAgentFilesRef = useRef<Record<string, string> | null>(null);
 
   const areFileMapsEqual = useCallback((a: Record<string, string>, b: Record<string, string>) => {
     if (a === b) return true;
@@ -415,10 +424,81 @@ export default function ProjectDetail() {
   }, []);
 
   const syncAgentFilesToEditor = useCallback((filesMap: Record<string, string>) => {
+    latestAgentFilesRef.current = filesMap;
     setGeneratedFiles(prev => (areFileMapsEqual(prev, filesMap) ? prev : filesMap));
     const nextCode = filesMap['/App.js'] || Object.values(filesMap)[0] || '';
     setCodeContent(prev => (prev === nextCode ? prev : nextCode));
   }, [areFileMapsEqual]);
+
+  const normalizeFilePathForDiff = useCallback((path: string) => {
+    if (!path) return '';
+    return path.startsWith('/') ? path : `/${path}`;
+  }, []);
+
+  const sanitizeExecutionSummary = useCallback((rawSummary: string) => {
+    const summary = (rawSummary || '').trim();
+    if (!summary) return '';
+    if (/^\{[\s\S]*"type"\s*:\s*"plan"[\s\S]*\}$/i.test(summary)) {
+      return isRTL
+        ? 'تم استلام ملخص غير صالح من الوكيل. تم التحقق من التغييرات الفعلية فقط.'
+        : 'Agent returned a non-final summary payload. Only verified file changes were accepted.';
+    }
+    return summary;
+  }, [isRTL]);
+
+  const isLikelyCodeEditRequest = useCallback((text: string) => {
+    return /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename|create|implement|build|write|code|improve|adjust|refactor|connect|wire|move|resize|scroll|overflow|padding|margin|font|text|button|header|page|section|image|layout|mobile|responsive|اصلح|عدل|غيّر|أضف|احذف|ابن|طوّر|حسّن)\b/i.test(text || '');
+  }, []);
+
+  const buildCodeExecutionRetryPrompt = useCallback((originalPrompt: string, previousSummary?: string) => {
+    const prior = (previousSummary || '').trim();
+    const priorSection = prior ? `\n\nPrevious failed summary:\n${prior}` : '';
+    return `${originalPrompt}
+
+CRITICAL RETRY CONTRACT:
+- You must apply REAL code edits, not just explanations.
+- Edit files that are in the active render path so the preview actually changes.
+- Re-read edited files and verify changes before task_complete.
+- If you cannot apply changes, return a clear blocked reason.
+${priorSection}`;
+  }, []);
+
+  const getVerifiedChangedFiles = useCallback((
+    beforeFiles: Record<string, string>,
+    afterFiles: Record<string, string>,
+    reportedPaths: string[] = []
+  ) => {
+    const allPaths = new Set<string>([
+      ...Object.keys(beforeFiles || {}),
+      ...Object.keys(afterFiles || {}),
+    ]);
+
+    const actualDiffPaths: string[] = [];
+    for (const path of allPaths) {
+      const before = beforeFiles?.[path] ?? null;
+      const after = afterFiles?.[path] ?? null;
+      if (before !== after) {
+        actualDiffPaths.push(path);
+      }
+    }
+
+    if (!reportedPaths.length) {
+      return actualDiffPaths;
+    }
+
+    const normalizedReported = reportedPaths
+      .map((path) => normalizeFilePathForDiff(path))
+      .filter(Boolean);
+
+    const verifiedReported = normalizedReported.filter((path) => {
+      const before = beforeFiles?.[path] ?? null;
+      const after = afterFiles?.[path] ?? null;
+      return before !== after;
+    });
+
+    const additionalActualDiffs = actualDiffPaths.filter((path) => !verifiedReported.includes(path));
+    return [...verifiedReported, ...additionalActualDiffs];
+  }, [normalizeFilePathForDiff]);
 
   const {
     currentPlan: sharedAgentPlan,
@@ -5302,7 +5382,10 @@ ${fixInstructions}
     
     try {
       // Small delay to show first step
-      await delay(800);
+      const initialStepDelay = leftPanelMode === 'code'
+        ? CODE_MODE_INITIAL_STEP_DELAY_MS
+        : CHAT_MODE_INITIAL_STEP_DELAY_MS;
+      await delay(initialStepDelay);
       // Step 1 complete, Step 2 loading
       setGenerationSteps(prev => prev.map((s, i) => 
         i === 0 ? { ...s, status: 'completed' } : 
@@ -5312,8 +5395,13 @@ ${fixInstructions}
       let assistantMsg: string;
       let snapshotToSave: any = null;
 
-      // IMPORTANT: Save snapshot of CURRENT state BEFORE applying changes (for revert)
-      const beforeSnapshot: Record<string, string> = Object.keys(generatedFiles).length > 0 ? { ...generatedFiles } : {};
+      // IMPORTANT: Save snapshot of CURRENT state BEFORE applying changes (for revert + truthful diff checks)
+      const beforeSnapshot: Record<string, string> = Object.keys(generatedFiles).length > 0
+        ? {
+            ...generatedFiles,
+            ...(codeContent ? { '/App.js': codeContent } : {}),
+          }
+        : (codeContent ? { '/App.js': codeContent } : {});
 
       if (leftPanelMode === 'chat') {
         // Chat mode: Smart AI that answers questions OR returns plans for code changes
@@ -5351,7 +5439,7 @@ ${fixInstructions}
           i === 1 ? { ...s, status: 'completed' } : 
           i === 2 ? { ...s, status: 'loading' } : s
         ));
-        await delay(250);
+        await delay(CHAT_MODE_TRANSITION_STEP_DELAY_MS);
 
         // Smart response: either a plan (JSON), asset_picker, or regular message
         if (response.data.mode === 'asset_picker' && response.data.assetPicker) {
@@ -5376,7 +5464,7 @@ ${fixInstructions}
           assistantMsg = response.data.message || (isRTL ? 'لم أتمكن من الإجابة.' : 'Could not generate a response.');
         }
         setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-        await delay(250);
+        await delay(CHAT_MODE_TRANSITION_STEP_DELAY_MS);
       } else {
         // Code mode: Option A job flow (start -> poll -> get_files)
         if (!id) throw new Error('Missing projectId');
@@ -5404,7 +5492,7 @@ ${fixInstructions}
           });
           
           setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-          await delay(250);
+          await delay(CODE_MODE_TRANSITION_STEP_DELAY_MS);
           
           // Save assistant message to DB
           const { data: assistantMsgData, error: assistError } = await supabase
@@ -5430,148 +5518,247 @@ ${fixInstructions}
         }
 
         // Using AGENT mode for targeted, intelligent edits (not full file rewrites)
-        const latestFilesForAgent = { ...generatedFiles };
-        if (codeContent) {
-          latestFilesForAgent['/App.js'] = codeContent;
-        }
+        const generateFriendlyResponse = (summary: string, files: string[], userMsg: string) => {
+          const msgLower = userMsg.toLowerCase();
+          if (files.length === 0) return isRTL ? 'لم أجد ما يمكن تغييره.' : "I couldn't find anything to change.";
 
-        const agentPlan = await runSharedAgent(userMessage, latestFilesForAgent, {
-          userInstructions,
-          images: codeImages,
-          assetIntent: codeImages ? attachmentIntent : undefined,
-          executionMode: resolveAgentExecutionMode(userMessage),
-          uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
-          backendContext: backendContext || undefined,
-          debugContext: debugContext?.getDebugContextForAgent?.(selectedElementInfo, resolveAgentExecutionMode(userMessage)),
-        });
+          if (msgLower.includes('remove') || msgLower.includes('delete') || msgLower.includes('احذف') || msgLower.includes('أزل')) {
+            return isRTL ? `تم! أزلت ما طلبته من ${files.join(', ')}.` : `Done! I removed what you asked from ${files.join(', ')}.`;
+          }
+          if (msgLower.includes('add') || msgLower.includes('أضف')) {
+            return isRTL ? `تم! أضفت التغييرات إلى ${files.join(', ')}.` : `Done! I added the changes to ${files.join(', ')}.`;
+          }
+          if (msgLower.includes('change') || msgLower.includes('update') || msgLower.includes('غيّر') || msgLower.includes('عدّل')) {
+            return isRTL ? `تم! عدّلت ${files.join(', ')}.` : `Done! I updated ${files.join(', ')}.`;
+          }
+          if (msgLower.includes('fix') || msgLower.includes('أصلح')) {
+            return isRTL ? `تم الإصلاح في ${files.join(', ')}.` : `Fixed! Changes made to ${files.join(', ')}.`;
+          }
+          return isRTL ? `تم تطبيق التغييرات على ${files.join(', ')}.` : `Changes applied to ${files.join(', ')}.`;
+        };
 
-        const agentResult = agentPlan.rawResult;
+        const generateCodeModeSuggestions = (files: string[], userMsg: string) => {
+          const msgLower = userMsg.toLowerCase();
+          const suggestions: string[] = [];
 
-        console.log('[AI Coder] Agent result received:', JSON.stringify({
-          resultType: agentPlan.resultType,
-          status: agentPlan.status,
-          filesChanged: agentPlan.filesChanged?.length || 0,
-          hasResult: !!agentResult?.result,
-          hasMessage: !!agentPlan.responseMessage,
-          hasJobId: !!agentResult?.jobId,
-        }));
+          if (msgLower.includes('header') || msgLower.includes('nav') || msgLower.includes('رأس')) {
+            suggestions.push(isRTL ? 'غيّر لون الهيدر' : 'Change header color');
+            suggestions.push(isRTL ? 'أضف رابط جديد' : 'Add a new link');
+          } else if (msgLower.includes('button') || msgLower.includes('زر')) {
+            suggestions.push(isRTL ? 'غيّر لون الزر' : 'Change button color');
+            suggestions.push(isRTL ? 'أضف تأثير hover' : 'Add hover effect');
+          } else if (msgLower.includes('image') || msgLower.includes('صورة')) {
+            suggestions.push(isRTL ? 'غيّر حجم الصورة' : 'Resize the image');
+            suggestions.push(isRTL ? 'أضف صورة أخرى' : 'Add another image');
+          } else if (msgLower.includes('color') || msgLower.includes('لون')) {
+            suggestions.push(isRTL ? 'غيّر لون آخر' : 'Change another color');
+            suggestions.push(isRTL ? 'أضف تدرج' : 'Add a gradient');
+          } else if (msgLower.includes('remove') || msgLower.includes('delete') || msgLower.includes('احذف')) {
+            suggestions.push(isRTL ? 'أزل شيء آخر' : 'Remove something else');
+            suggestions.push(isRTL ? 'تراجع عن التغيير' : 'Undo this change');
+          } else {
+            suggestions.push(isRTL ? 'أضف ميزة جديدة' : 'Add a new feature');
+            suggestions.push(isRTL ? 'حسّن التصميم' : 'Improve the design');
+          }
+          return suggestions;
+        };
 
-        if (agentResult?.result?.smokeTestResult && !agentResult.result.smokeTestResult.passed) {
-          const criticalErrors = agentResult.result.smokeTestResult.criticalErrors || [];
-          const smokeError = criticalErrors.length > 0
-            ? `Smoke test failed: ${criticalErrors.join(' | ')}`
-            : 'Smoke test failed: Fix required before showing output.';
-          toast.error(isRTL ? 'تم اكتشاف خطأ تلقائيًا - جاري الإصلاح' : 'Auto-detected issue - fixing now');
-          setCrashReport(smokeError);
-          triggerAutoFix(smokeError);
-          return;
-        }
+        const buildLatestFilesForAgent = () => {
+          const latestFiles = { ...generatedFiles };
+          if (codeContent) {
+            latestFiles['/App.js'] = codeContent;
+          }
+          return latestFiles;
+        };
 
-        if (agentPlan.resultType === 'direct_message' && agentPlan.responseMessage) {
-          assistantMsg = agentPlan.responseMessage;
-          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-          await delay(250);
-        } else if (agentResult?.result?.type === 'clarification_needed') {
-          assistantMsg = JSON.stringify(agentResult.result);
-          setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-          await delay(250);
-        } else {
-          setGenerationSteps(prev => prev.map((s, i) => 
-            i === 0 ? { ...s, status: 'completed' } : 
-            i === 1 ? { ...s, status: 'completed' } : 
-            i === 2 ? { ...s, status: 'loading' } : s
-          ));
-          await delay(250);
+        let handledByDirectMessage = false;
+        let executionStatus: ExecutionResultStatus = 'not_applied';
+        let attemptCount = 0;
+        let currentPromptForAttempt = userMessage;
+        let finalSummaryText = '';
+        let blockedReason = '';
+        let verifiedChangedFiles: string[] = [];
+        let finalFiles = buildLatestFilesForAgent();
+        let finalAgentPlan: any = null;
+        let finalAgentResult: any = null;
 
-          const newFiles = await loadFilesFromDb(id);
-          const newCode = newFiles["/App.js"] || Object.values(newFiles)[0] || "";
+        while (attemptCount < MAX_CODE_MODE_AGENT_ATTEMPTS) {
+          attemptCount += 1;
+          latestAgentFilesRef.current = null;
 
-          snapshotToSave = beforeSnapshot;
-          setGeneratedFiles(newFiles);
-          setCodeContent(newCode);
+          let agentPlan: any = null;
+          let agentResult: any = null;
 
-          const changedFilesList: string[] = [...(agentPlan.filesChanged || [])];
-          if (changedFilesList.length === 0) {
-            for (const [path, content] of Object.entries(newFiles)) {
-              const oldContent = beforeSnapshot[path];
-              if (!oldContent || oldContent !== content) {
-                changedFilesList.push(path);
-              }
+          try {
+            agentPlan = await runSharedAgent(currentPromptForAttempt, buildLatestFilesForAgent(), {
+              userInstructions,
+              images: codeImages,
+              assetIntent: codeImages ? attachmentIntent : undefined,
+              executionMode: resolveAgentExecutionMode(userMessage),
+              uploadedAssets: uploadedAssets.length > 0 ? uploadedAssets : undefined,
+              backendContext: backendContext || undefined,
+              debugContext: debugContext?.getDebugContextForAgent?.(selectedElementInfo, resolveAgentExecutionMode(userMessage)),
+            });
+            agentResult = agentPlan.rawResult;
+          } catch (agentErr: any) {
+            const failedResponse = agentErr?.agentResponse || null;
+            const failedResult = failedResponse?.result || null;
+            const failedReason = String(failedResult?.error || '').trim();
+            const isNoVerifiedChanges =
+              failedReason === 'NO_VERIFIED_CHANGES'
+              || failedResult?.type === 'no_verified_changes';
+
+            if (!isNoVerifiedChanges) {
+              throw agentErr;
             }
+
+            finalAgentPlan = null;
+            finalAgentResult = failedResponse;
+            finalSummaryText = sanitizeExecutionSummary(
+              String(failedResult?.summary || failedResult?.message || '')
+            ) || (isRTL ? 'لم يتم تطبيق تغييرات فعلية.' : 'No verified code changes were applied.');
+
+            const canRetry = attemptCount < MAX_CODE_MODE_AGENT_ATTEMPTS && isLikelyCodeEditRequest(userMessage);
+            if (canRetry) {
+              currentPromptForAttempt = buildCodeExecutionRetryPrompt(userMessage, finalSummaryText);
+              continue;
+            }
+
+            executionStatus = 'not_applied';
+            break;
           }
 
-          setEditedFilesTracking(changedFilesList.map((filePath, idx) => ({
+          finalAgentPlan = agentPlan;
+          finalAgentResult = agentResult;
+
+          console.log('[AI Coder] Agent result received:', JSON.stringify({
+            attempt: attemptCount,
+            resultType: agentPlan.resultType,
+            status: agentPlan.status,
+            filesChanged: agentPlan.filesChanged?.length || 0,
+            hasResult: !!agentResult?.result,
+            hasMessage: !!agentPlan.responseMessage,
+            hasJobId: !!agentResult?.jobId,
+          }));
+
+          if (agentResult?.result?.smokeTestResult && !agentResult.result.smokeTestResult.passed) {
+            const criticalErrors = agentResult.result.smokeTestResult.criticalErrors || [];
+            const smokeError = criticalErrors.length > 0
+              ? `Smoke test failed: ${criticalErrors.join(' | ')}`
+              : 'Smoke test failed: Fix required before showing output.';
+            toast.error(isRTL ? 'تم اكتشاف خطأ تلقائيًا - جاري الإصلاح' : 'Auto-detected issue - fixing now');
+            setCrashReport(smokeError);
+            triggerAutoFix(smokeError);
+            return;
+          }
+
+          if (agentPlan.resultType === 'direct_message' && agentPlan.responseMessage) {
+            assistantMsg = agentPlan.responseMessage;
+            handledByDirectMessage = true;
+            setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+            await delay(CODE_MODE_TRANSITION_STEP_DELAY_MS);
+            break;
+          }
+
+          if (agentResult?.result?.type === 'clarification_needed') {
+            assistantMsg = JSON.stringify(agentResult.result);
+            handledByDirectMessage = true;
+            setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
+            await delay(CODE_MODE_TRANSITION_STEP_DELAY_MS);
+            break;
+          }
+
+          setGenerationSteps(prev => prev.map((s, i) =>
+            i === 0 ? { ...s, status: 'completed' } :
+            i === 1 ? { ...s, status: 'completed' } :
+            i === 2 ? { ...s, status: 'loading' } : s
+          ));
+          await delay(CODE_MODE_TRANSITION_STEP_DELAY_MS);
+
+          const syncedFiles = latestAgentFilesRef.current;
+          const newFiles = syncedFiles && Object.keys(syncedFiles).length > 0
+            ? syncedFiles
+            : await loadFilesFromDb(id);
+          finalFiles = newFiles;
+
+          finalSummaryText = sanitizeExecutionSummary(
+            String(agentPlan.summary || agentResult?.result?.summary || '')
+          ) || (isRTL ? 'تم التحقق من النتيجة.' : 'Result was verified.');
+
+          const reportedChangedFiles = [...(agentPlan.filesChanged || [])];
+          const verifiedAttemptFiles = getVerifiedChangedFiles(beforeSnapshot, newFiles, reportedChangedFiles);
+
+          if (verifiedAttemptFiles.length > 0) {
+            verifiedChangedFiles = verifiedAttemptFiles;
+            executionStatus = 'applied';
+            break;
+          }
+
+          blockedReason = String(agentResult?.result?.error || '').trim();
+          const canRetry = attemptCount < MAX_CODE_MODE_AGENT_ATTEMPTS && isLikelyCodeEditRequest(userMessage);
+
+          if (canRetry) {
+            currentPromptForAttempt = buildCodeExecutionRetryPrompt(userMessage, finalSummaryText);
+            continue;
+          }
+
+          executionStatus = blockedReason ? 'blocked' : 'not_applied';
+          break;
+        }
+
+        if (!handledByDirectMessage) {
+          snapshotToSave = beforeSnapshot;
+
+          const newCode = finalFiles['/App.js'] || Object.values(finalFiles)[0] || '';
+          setGeneratedFiles(finalFiles);
+          setCodeContent(newCode);
+
+          setEditedFilesTracking(verifiedChangedFiles.map((filePath, idx) => ({
             id: `file-${idx}-${Date.now()}`,
             fileName: filePath.replace(/^\//, ''),
             status: 'edited' as const
           })));
 
-          const summaryText = agentPlan.summary || (isRTL ? 'تم تطبيق التعديلات!' : 'Changes applied!');
-          const actualChangedFiles = changedFilesList.length > 0 ? changedFilesList : [];
-          const hasActualChanges = actualChangedFiles.length > 0;
+          const hasVerifiedChanges = executionStatus === 'applied' && verifiedChangedFiles.length > 0;
+          const finalSummary = hasVerifiedChanges
+            ? finalSummaryText
+            : executionStatus === 'blocked'
+              ? (blockedReason || (isRTL ? 'تعذر تنفيذ الطلب بدقة على الكود الحالي.' : 'The request could not be safely executed on the current code.'))
+              : (isRTL
+                ? 'لم يتم رصد أي تغييرات فعلية في الملفات. لم يتم وضع الحالة كـ تم التطبيق.'
+                : 'No verified file changes were detected, so this was not marked as Applied.');
 
-          const generateFriendlyResponse = (summary: string, files: string[], userMsg: string) => {
-            const msgLower = userMsg.toLowerCase();
-            if (files.length === 0) return isRTL ? 'لم أجد ما يمكن تغييره.' : "I couldn't find anything to change.";
+          if (hasVerifiedChanges) {
+            setDynamicSuggestions(generateCodeModeSuggestions(verifiedChangedFiles, userMessage));
+          } else if (isLikelyCodeEditRequest(userMessage)) {
+            toast.warning(isRTL ? 'لم يتم تطبيق تعديل فعلي. يمكنك إعادة الطلب بصياغة أدق.' : 'No real edit was applied. Try a more specific follow-up.');
+          }
 
-            if (msgLower.includes('remove') || msgLower.includes('delete') || msgLower.includes('احذف') || msgLower.includes('أزل')) {
-              return isRTL ? `تم! أزلت ما طلبته من ${files.join(', ')}.` : `Done! I removed what you asked from ${files.join(', ')}.`;
-            }
-            if (msgLower.includes('add') || msgLower.includes('أضف')) {
-              return isRTL ? `تم! أضفت التغييرات إلى ${files.join(', ')}.` : `Done! I added the changes to ${files.join(', ')}.`;
-            }
-            if (msgLower.includes('change') || msgLower.includes('update') || msgLower.includes('غيّر') || msgLower.includes('عدّل')) {
-              return isRTL ? `تم! عدّلت ${files.join(', ')}.` : `Done! I updated ${files.join(', ')}.`;
-            }
-            if (msgLower.includes('fix') || msgLower.includes('أصلح')) {
-              return isRTL ? `تم الإصلاح في ${files.join(', ')}.` : `Fixed! Changes made to ${files.join(', ')}.`;
-            }
-            return isRTL ? `تم تطبيق التغييرات على ${files.join(', ')}.` : `Changes applied to ${files.join(', ')}.`;
-          };
+          const toolCallCount = finalAgentResult?.result?.toolCalls?.length
+            || finalAgentPlan?.filesChanged?.length
+            || (hasVerifiedChanges ? verifiedChangedFiles.length : 1);
+          setToolsUsedCount(prev => prev + toolCallCount);
 
           assistantMsg = JSON.stringify({
             type: 'execution_result',
-            title: hasActualChanges ? (isRTL ? 'تم التطبيق' : 'Applied') : (isRTL ? 'لم يتم التغيير' : 'No changes made'),
-            response: hasActualChanges ? generateFriendlyResponse(summaryText, actualChangedFiles, userMessage) : undefined,
-            summary: hasActualChanges ? summaryText : (isRTL ? 'لم يتم إجراء تغييرات على الملفات' : 'No file changes were made. The AI may have misunderstood the request.'),
-            files: actualChangedFiles,
-            noChanges: !hasActualChanges
+            status: executionStatus,
+            title: hasVerifiedChanges
+              ? (isRTL ? 'تم التطبيق' : 'Applied')
+              : executionStatus === 'blocked'
+                ? (isRTL ? 'تعذر التطبيق' : 'Blocked')
+                : (isRTL ? 'لم يتم التغيير' : 'Not applied'),
+            response: hasVerifiedChanges
+              ? generateFriendlyResponse(finalSummary, verifiedChangedFiles, userMessage)
+              : undefined,
+            summary: finalSummary,
+            files: verifiedChangedFiles,
+            noChanges: !hasVerifiedChanges,
+            attempts: attemptCount,
+            retryUsed: attemptCount > 1,
           });
 
-          const generateCodeModeSuggestions = (files: string[], userMsg: string) => {
-            const msgLower = userMsg.toLowerCase();
-            const suggestions: string[] = [];
-
-            if (msgLower.includes('header') || msgLower.includes('nav') || msgLower.includes('رأس')) {
-              suggestions.push(isRTL ? 'غيّر لون الهيدر' : 'Change header color');
-              suggestions.push(isRTL ? 'أضف رابط جديد' : 'Add a new link');
-            } else if (msgLower.includes('button') || msgLower.includes('زر')) {
-              suggestions.push(isRTL ? 'غيّر لون الزر' : 'Change button color');
-              suggestions.push(isRTL ? 'أضف تأثير hover' : 'Add hover effect');
-            } else if (msgLower.includes('image') || msgLower.includes('صورة')) {
-              suggestions.push(isRTL ? 'غيّر حجم الصورة' : 'Resize the image');
-              suggestions.push(isRTL ? 'أضف صورة أخرى' : 'Add another image');
-            } else if (msgLower.includes('color') || msgLower.includes('لون')) {
-              suggestions.push(isRTL ? 'غيّر لون آخر' : 'Change another color');
-              suggestions.push(isRTL ? 'أضف تدرج' : 'Add a gradient');
-            } else if (msgLower.includes('remove') || msgLower.includes('delete') || msgLower.includes('احذف')) {
-              suggestions.push(isRTL ? 'أزل شيء آخر' : 'Remove something else');
-              suggestions.push(isRTL ? 'تراجع عن التغيير' : 'Undo this change');
-            } else {
-              suggestions.push(isRTL ? 'أضف ميزة جديدة' : 'Add a new feature');
-              suggestions.push(isRTL ? 'حسّن التصميم' : 'Improve the design');
-            }
-            return suggestions;
-          };
-
-          if (hasActualChanges) {
-            setDynamicSuggestions(generateCodeModeSuggestions(actualChangedFiles, userMessage));
-          }
-
-          setToolsUsedCount(prev => prev + ((agentResult?.result?.toolCalls?.length || changedFilesList.length) || 1));
-
           setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
-          await delay(250);
+          await delay(CODE_MODE_TRANSITION_STEP_DELAY_MS);
         }
       }
 
@@ -6413,6 +6600,7 @@ ${fixInstructions}
                                         latestFilesForAgent['/App.js'] = codeContent;
                                       }
 
+                                      latestAgentFilesRef.current = null;
                                       const agentPlan = await runSharedAgent(selectionMsg, latestFilesForAgent, {
                                         lang: isRTL ? 'ar' : 'en',
                                         executionMode: resolveAgentExecutionMode(selectionMsg),
@@ -6437,19 +6625,18 @@ ${fixInstructions}
                                           idx === 2 ? { ...step, status: 'loading' } : step
                                         ));
 
-                                        const newFiles = await loadFilesFromDb(id!);
+                                        const syncedFiles = latestAgentFilesRef.current;
+                                        const newFiles = syncedFiles && Object.keys(syncedFiles).length > 0
+                                          ? syncedFiles
+                                          : await loadFilesFromDb(id!);
                                         setGeneratedFiles(newFiles);
                                         setCodeContent(newFiles['/App.js'] || Object.values(newFiles)[0] || '');
 
-                                        const changedFilesList: string[] = [...(agentPlan.filesChanged || [])];
-                                        if (changedFilesList.length === 0) {
-                                          for (const [path, content] of Object.entries(newFiles)) {
-                                            const oldContent = beforeAssetSelectionSnapshot[path];
-                                            if (!oldContent || oldContent !== content) {
-                                              changedFilesList.push(path);
-                                            }
-                                          }
-                                        }
+                                        const changedFilesList = getVerifiedChangedFiles(
+                                          beforeAssetSelectionSnapshot,
+                                          newFiles,
+                                          agentPlan.filesChanged || []
+                                        );
 
                                         setEditedFilesTracking(changedFilesList.map((filePath, idx) => ({
                                           id: `asset-file-${idx}-${Date.now()}`,
@@ -6458,12 +6645,29 @@ ${fixInstructions}
                                         })));
                                         setToolsUsedCount((agentResult?.result?.toolCalls?.length || changedFilesList.length) || 1);
 
-                                        assistantContent = isRTL
-                                          ? `✓ تم استخدام ${asset.filename} بنجاح!`
-                                          : `✓ Successfully used ${asset.filename}!`;
+                                        const hasVerifiedChanges = changedFilesList.length > 0;
+                                        assistantContent = JSON.stringify({
+                                          type: 'execution_result',
+                                          status: hasVerifiedChanges ? 'applied' : 'not_applied',
+                                          title: hasVerifiedChanges
+                                            ? (isRTL ? 'تم التطبيق' : 'Applied')
+                                            : (isRTL ? 'لم يتم التغيير' : 'Not applied'),
+                                          response: hasVerifiedChanges
+                                            ? (isRTL ? `تم استخدام ${asset.filename} بنجاح.` : `Successfully used ${asset.filename}.`)
+                                            : undefined,
+                                          summary: hasVerifiedChanges
+                                            ? (isRTL ? `تم توظيف الصورة ${asset.filename} داخل الكود.` : `The image ${asset.filename} was wired into the code.`)
+                                            : (isRTL ? `تعذر التحقق من تعديل فعلي بعد اختيار ${asset.filename}.` : `No verified file change was detected after selecting ${asset.filename}.`),
+                                          files: changedFilesList,
+                                          noChanges: !hasVerifiedChanges,
+                                        });
 
                                         setGenerationSteps(prev => prev.map(step => ({ ...step, status: 'completed' })));
-                                        toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
+                                        if (hasVerifiedChanges) {
+                                          toast.success(isRTL ? 'تم تطبيق الصورة!' : 'Image applied!');
+                                        } else {
+                                          toast.warning(isRTL ? 'لم يتم تطبيق الصورة على الكود بشكل فعلي.' : 'No verified code edit was detected while applying this image.');
+                                        }
                                       }
 
                                       const { data: aiMsgData } = await supabase
@@ -6482,7 +6686,42 @@ ${fixInstructions}
                                       }
                                     } catch (err: any) {
                                       console.error('Asset selection error:', err);
-                                      toast.error(isRTL ? 'فشل في تطبيق الصورة' : 'Failed to apply image');
+                                      const failedResponse = err?.agentResponse || null;
+                                      const failedResult = failedResponse?.result || null;
+                                      const failedReason = String(failedResult?.error || '').trim();
+                                      const isNoVerifiedChanges = failedReason === 'NO_VERIFIED_CHANGES' || failedResult?.type === 'no_verified_changes';
+
+                                      if (isNoVerifiedChanges) {
+                                        const notAppliedContent = JSON.stringify({
+                                          type: 'execution_result',
+                                          status: 'not_applied',
+                                          title: isRTL ? 'لم يتم التغيير' : 'Not applied',
+                                          summary: sanitizeExecutionSummary(String(failedResult?.summary || '')) || (isRTL
+                                            ? 'لم يتم التحقق من تعديل فعلي بعد اختيار الصورة.'
+                                            : 'No verified file change was detected after selecting this image.'),
+                                          files: [],
+                                          noChanges: true,
+                                        });
+
+                                        const { data: aiMsgData } = await supabase
+                                          .from('project_chat_messages' as any)
+                                          .insert({
+                                            project_id: id,
+                                            role: 'assistant',
+                                            content: notAppliedContent,
+                                            snapshot: Object.keys(beforeAssetSelectionSnapshot).length > 0 ? beforeAssetSelectionSnapshot : null
+                                          } as any)
+                                          .select()
+                                          .single();
+
+                                        if (aiMsgData) {
+                                          setChatMessages(prev => [...prev, aiMsgData as any]);
+                                        }
+
+                                        toast.warning(isRTL ? 'لم يتم تطبيق الصورة على الكود بشكل فعلي.' : 'No verified code edit was detected while applying this image.');
+                                      } else {
+                                        toast.error(isRTL ? 'فشل في تطبيق الصورة' : 'Failed to apply image');
+                                      }
                                     } finally {
                                       const start = thinkingStartTimeRef.current;
                                       if (start) {
@@ -7305,11 +7544,20 @@ ${fixInstructions}
                                   const uniqueChangedFiles = agentResult.filesChanged && agentResult.filesChanged.length > 0 
                                     ? agentResult.filesChanged 
                                     : ([...new Set(parsedPlan.codeChanges?.map((c: any) => c.file).filter(Boolean) || [parsedPlan.file].filter(Boolean))] as string[]);
-                                  
-                                  const stepsSummary = agentResult.summary || parsedPlan.steps?.map((s: any) => s.title).join('. ') || '';
+
+                                  const verifiedChangedFiles = getVerifiedChangedFiles(
+                                    beforePlanExecutionSnapshot,
+                                    newFiles,
+                                    uniqueChangedFiles
+                                  );
+                                  const hasVerifiedChanges = verifiedChangedFiles.length > 0;
+                                  const executionStatus: ExecutionResultStatus = hasVerifiedChanges ? 'applied' : 'not_applied';
+
+                                  const rawStepsSummary = agentResult.summary || parsedPlan.steps?.map((s: any) => s.title).join('. ') || '';
+                                  const stepsSummary = sanitizeExecutionSummary(rawStepsSummary);
 
                                   // Update edited files tracking + tool usage for the indicator
-                                  const filesForTracking = uniqueChangedFiles.length > 0 ? uniqueChangedFiles : ['/App.js'];
+                                  const filesForTracking = hasVerifiedChanges ? verifiedChangedFiles : [];
                                   setEditedFilesTracking(filesForTracking.map((filePath: string, idx: number) => ({
                                     id: `file-${idx}-${Date.now()}`,
                                     fileName: filePath.replace(/^\//, ''),
@@ -7325,10 +7573,18 @@ ${fixInstructions}
                                   
                                   const successMsg = JSON.stringify({
                                     type: 'execution_result',
-                                    title: planTitle,
-                                    response: friendlyResponse,
-                                    summary: stepsSummary || (isRTL ? 'تم تطبيق التغييرات بنجاح' : 'Successfully applied the requested changes'),
-                                    files: uniqueChangedFiles
+                                    status: executionStatus,
+                                    title: hasVerifiedChanges
+                                      ? planTitle
+                                      : (isRTL ? 'لم يتم التغيير' : 'Not applied'),
+                                    response: hasVerifiedChanges ? friendlyResponse : undefined,
+                                    summary: hasVerifiedChanges
+                                      ? (stepsSummary || (isRTL ? 'تم تطبيق التغييرات بنجاح' : 'Successfully applied the requested changes'))
+                                      : (isRTL
+                                        ? 'تم تنفيذ الخطة بدون تغييرات فعلية في الملفات، لذلك لم يتم وضع النتيجة كـ تم التطبيق.'
+                                        : 'Plan execution returned no verified file changes, so it was not marked as Applied.'),
+                                    files: verifiedChangedFiles,
+                                    noChanges: !hasVerifiedChanges
                                   });
                                   
                                   const { data: msgData } = await supabase
@@ -7343,7 +7599,11 @@ ${fixInstructions}
                                     .single();
                                   
                                   if (msgData) setChatMessages(prev => [...prev, msgData as any]);
-                                  toast.success(isRTL ? 'تم تنفيذ الخطة بنجاح!' : 'Plan executed successfully!');
+                                  if (hasVerifiedChanges) {
+                                    toast.success(isRTL ? 'تم تنفيذ الخطة بنجاح!' : 'Plan executed successfully!');
+                                  } else {
+                                    toast.warning(isRTL ? 'لم يتم رصد تغييرات فعلية بعد تنفيذ الخطة.' : 'No verified code changes were detected after executing the plan.');
+                                  }
                                   
                                   setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
                                 } catch (err: any) {
@@ -7399,9 +7659,19 @@ ${fixInstructions}
                     if (displayContent.length < 5) displayContent = isRTL ? 'إليك خطة العمل المقترحة:' : 'Here is the proposed plan:';
                   }
 
-                  // EXECUTION RESPONSE FORMAT: Clean Lovable-style format
-                  // Detect structured execution_result OR clarification_needed OR feature_summary OR verbose execution response
-                  let executionResult: { type: string; title: string; response?: string; summary: string; files: string[] } | null = null;
+                  // EXECUTION RESPONSE FORMAT: status-aware and contract-driven
+                  // Detect structured execution_result OR clarification_needed OR feature_summary
+                  let executionResult: {
+                    type: string;
+                    title: string;
+                    response?: string;
+                    summary: string;
+                    files: string[];
+                    status?: ExecutionResultStatus;
+                    noChanges?: boolean;
+                    attempts?: number;
+                    retryUsed?: boolean;
+                  } | null = null;
                   let clarificationResult: { type: string; title: string; message: string; candidates: Array<{ file: string; preview: string; line?: number }>; suggestion: string } | null = null;
                   let featureSummaryForDisplay: { type: string; analysis: any; summary: string } | null = null;
                   try {
@@ -7482,9 +7752,8 @@ ${fixInstructions}
                     );
                   }
                   
-                  const isExecutionResponse = executionResult || (isAssistant && msg.content && msg.content.length > 150 && 
-                    (msg.content.includes('implement') || msg.content.includes('add') || msg.content.includes('update') || 
-                     msg.content.includes('تم') || msg.content.includes('أضفت') || msg.content.includes('عدلت')));
+                  const hasSnapshotForApplied = hasSnapshotFiles(msg.snapshot);
+                  const isExecutionResponse = Boolean(executionResult) || (isAssistant && !isPlanCard && hasSnapshotForApplied);
                   
                   if (isExecutionResponse && !isPlanCard) {
                     // Use structured data if available, otherwise extract from verbose text
@@ -7503,18 +7772,47 @@ ${fixInstructions}
                       uniqueFiles = [...new Set(fileMatches)].slice(0, 3) as string[];
                     }
                     
-                    const hasSnapshotForApplied = hasSnapshotFiles(msg.snapshot);
+                    const executionCardStatus: ExecutionResultStatus = executionResult?.status
+                      || (executionResult?.noChanges ? 'not_applied' : 'applied');
+                    const executionCardTitle = executionResult?.title || (
+                      executionCardStatus === 'applied'
+                        ? (isRTL ? 'تم التطبيق' : 'Applied')
+                        : executionCardStatus === 'blocked'
+                          ? (isRTL ? 'تعذر التطبيق' : 'Blocked')
+                          : (isRTL ? 'لم يتم التغيير' : 'Not applied')
+                    );
+                    const statusHeaderClass = executionCardStatus === 'applied'
+                      ? 'text-emerald-500'
+                      : executionCardStatus === 'blocked'
+                        ? 'text-amber-500'
+                        : 'text-zinc-500';
+                    const statusWrapperClass = executionCardStatus === 'applied'
+                      ? 'bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-indigo-500/30'
+                      : executionCardStatus === 'blocked'
+                        ? 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/30'
+                        : 'bg-gradient-to-r from-zinc-500/10 to-slate-500/10 border-zinc-500/30';
+                    const statusDividerClass = executionCardStatus === 'applied'
+                      ? 'border-indigo-500/20'
+                      : executionCardStatus === 'blocked'
+                        ? 'border-amber-500/20'
+                        : 'border-zinc-500/20';
                     
                     return (
                       <div key={i} className={cn(
                         "flex flex-col group animate-in fade-in slide-in-from-bottom-1 duration-300",
                         "items-start w-full"
                       )}>
-                        <div className="w-full bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/30 rounded-lg overflow-hidden backdrop-blur-sm">
+                        <div className={cn('w-full border rounded-lg overflow-hidden backdrop-blur-sm', statusWrapperClass)}>
                           {/* Header with checkmark */}
-                          <div className="px-4 py-3 border-b border-indigo-500/20 flex items-center gap-2">
-                            <Check className="h-4 w-4 text-emerald-500" />
-                            <span className="text-[13px] text-emerald-500 font-semibold flex-1">{isRTL ? 'تم التطبيق' : 'Applied'}</span>
+                          <div className={cn('px-4 py-3 border-b flex items-center gap-2', statusDividerClass)}>
+                            {executionCardStatus === 'applied' ? (
+                              <Check className="h-4 w-4 text-emerald-500" />
+                            ) : executionCardStatus === 'blocked' ? (
+                              <AlertTriangle className="h-4 w-4 text-amber-500" />
+                            ) : (
+                              <Circle className="h-4 w-4 text-zinc-500" />
+                            )}
+                            <span className={cn('text-[13px] font-semibold flex-1', statusHeaderClass)}>{executionCardTitle}</span>
                             <button
                               onClick={() => {
                                 const text = `${summary}${uniqueFiles.length ? `\n\nFiles:\n- ${uniqueFiles.join('\n- ')}` : ''}`;

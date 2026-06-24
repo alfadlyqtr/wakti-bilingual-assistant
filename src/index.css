@@ -2845,6 +2845,9 @@ body.homescreen-active .app-layout-mobile main {
   display: flex !important;
   flex-direction: column !important;
   padding-bottom: 0 !important;
+  overscroll-behavior: none !important;
+  overscroll-behavior-y: none !important;
+  touch-action: none !important;
 }
 body.homescreen-active .app-main-scroll > .dashboard-container {
   flex: 1 1 0% !important;
@@ -2865,6 +2868,15 @@ body.homescreen-active .app-main-scroll > .dashboard-container {
 body.modern-dashboard-active .app-main-scroll,
 body.modern-dashboard-active .app-layout-mobile main {
   padding-bottom: 0 !important;
+  overscroll-behavior: none !important;
+  overscroll-behavior-y: none !important;
+  touch-action: none !important;
+}
+
+body.homescreen-active .app-layout-mobile,
+body.modern-dashboard-active .app-layout-mobile {
+  overscroll-behavior: none !important;
+  overscroll-behavior-y: none !important;
 }
 
 /* Dock bottom: flush to edge + iPhone safe area */

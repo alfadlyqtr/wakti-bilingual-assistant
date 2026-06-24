@@ -2363,6 +2363,73 @@ function collectFilesChangedFromToolCalls(toolCallsLog: ToolCallLogEntry[]): str
   return filesChanged;
 }
 
+async function verifyPersistedFileChanges(params: {
+  supabase: SupabaseAdminClient;
+  projectId: string;
+  baselineFiles: Record<string, string>;
+  candidatePaths: string[];
+}): Promise<string[]> {
+  const { supabase, projectId, baselineFiles, candidatePaths } = params;
+
+  const normalizedBaseline: Record<string, string> = {};
+  for (const [rawPath, content] of Object.entries(baselineFiles || {})) {
+    if (typeof content !== 'string') continue;
+    const normalizedPath = normalizeFilePath(rawPath);
+    normalizedBaseline[normalizedPath] = content;
+  }
+
+  const normalizedCandidates = [...new Set(
+    (candidatePaths || [])
+      .map((path) => (path || '').replace(/^\(deleted\)\s*/i, '').trim())
+      .map((path) => normalizeFilePath(path))
+      .filter((path) => Boolean(path))
+  )];
+
+  if (normalizedCandidates.length === 0) {
+    return [];
+  }
+
+  const { data: rows, error } = await supabase
+    .from('project_files')
+    .select('path, content')
+    .eq('project_id', projectId)
+    .in('path', normalizedCandidates);
+
+  if (error) {
+    console.warn('[Agent Mode] verifyPersistedFileChanges query failed:', error.message);
+    return [];
+  }
+
+  const persistedMap: Record<string, string> = {};
+  for (const row of rows || []) {
+    if (typeof row.path === 'string' && typeof row.content === 'string') {
+      persistedMap[normalizeFilePath(row.path)] = row.content;
+    }
+  }
+
+  const verifiedChanged: string[] = [];
+  for (const path of normalizedCandidates) {
+    const beforeExists = Object.prototype.hasOwnProperty.call(normalizedBaseline, path);
+    const afterExists = Object.prototype.hasOwnProperty.call(persistedMap, path);
+
+    if (!beforeExists && afterExists) {
+      verifiedChanged.push(path);
+      continue;
+    }
+
+    if (beforeExists && !afterExists) {
+      verifiedChanged.push(path);
+      continue;
+    }
+
+    if (beforeExists && afterExists && normalizedBaseline[path] !== persistedMap[path]) {
+      verifiedChanged.push(path);
+    }
+  }
+
+  return verifiedChanged;
+}
+
 function getExpectedVerificationContent(entry: ToolCallLogEntry): string {
   if (entry.tool === 'morph_edit') {
     return extractVerificationSnippet(entry.args?.code_edit);
@@ -5039,19 +5106,37 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       // Agent uses read_file tool to fetch what it needs (80% token reduction!)
       // ========================================================================
       const currentFiles = body.currentFiles || {};
+      const normalizedCurrentFilesBaseline: Record<string, string> = {};
+      for (const [path, content] of Object.entries(currentFiles as Record<string, unknown>)) {
+        if (typeof content !== 'string') continue;
+        normalizedCurrentFilesBaseline[normalizeFilePath(path)] = content;
+      }
       let fileList = Object.keys(currentFiles).join('\n');
       let fileCount = Object.keys(currentFiles).length;
+
+      const isLikelyFastFollowup =
+        String(prompt || '').trim().length > 0
+        && String(prompt || '').trim().length <= 220
+        && !/\b(create|build|from scratch|full app|full website|entire|complete app|complete website|redesign|rebuild)\b/i.test(prompt || '');
+      const agentMaxIterations = isLikelyFastFollowup ? 8 : 12;
+      const agentMaxOutputTokens = isLikelyFastFollowup ? 3072 : 4096;
+      const agentBudgetMs = isLikelyFastFollowup ? 95000 : 130000;
       
       // SAFETY NET: If currentFiles is empty, fetch file list from DB
       if (fileCount === 0) {
         const { data: dbFiles } = await supabase
           .from('project_files')
-          .select('path')
+          .select('path, content')
           .eq('project_id', projectId);
         
         if (dbFiles && dbFiles.length > 0) {
           fileList = dbFiles.map(f => normalizeFilePath(f.path)).join('\n');
           fileCount = dbFiles.length;
+          for (const row of dbFiles) {
+            if (typeof row.path === 'string' && typeof row.content === 'string') {
+              normalizedCurrentFilesBaseline[normalizeFilePath(row.path)] = row.content;
+            }
+          }
         }
       }
       
@@ -5421,8 +5506,8 @@ Update the relevant content/data files with this REAL information.`;
       // 🔒 NEW: Accumulated warnings for result
       const resultWarnings: string[] = [];
       
-      // Increased iterations to allow for proper read-edit-verify workflow
-      const maxIterations = 12; // Increased to give stamina for site-wide features
+      // Adaptive iteration budget: faster for short follow-up edits, fuller stamina for larger edits
+      const maxIterations = agentMaxIterations;
       const toolCallsLog: ToolCallLogEntry[] = [];
       let taskCompleteResult: { summary: string; filesChanged: string[] } | null = null;
       let designCriticResult: DesignCriticResult | null = null;
@@ -5465,8 +5550,8 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       const totalInputText = systemPromptWithProjectId + userMessageContent;
       let totalOutputText = '';
       
-      // Hard wall-clock budget guard — edge functions die ~150s. Leave headroom to return gracefully.
-      const AGENT_BUDGET_MS = 130000;
+      // Hard wall-clock budget guard — keep fast path tighter for short follow-up edit requests.
+      const AGENT_BUDGET_MS = agentBudgetMs;
       
       for (let iteration = 0; iteration < maxIterations; iteration++) {
         // Budget check: bail out cleanly before the edge function gets killed
@@ -5505,7 +5590,7 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
                     tools: [getGeminiToolsConfig()],
                     generationConfig: {
                       temperature: 0.2,
-                      maxOutputTokens: 4096,
+                      maxOutputTokens: agentMaxOutputTokens,
                     },
                   }),
                 }
@@ -6322,6 +6407,39 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       
       // Collect all files that were written
       const filesChanged = collectFilesChangedFromToolCalls(toolCallsLog);
+
+      const candidateFilesForVerification = [
+        ...(taskCompleteResult?.filesChanged || []),
+        ...filesChanged,
+      ];
+
+      const verifiedPersistedFilesChanged = await verifyPersistedFileChanges({
+        supabase,
+        projectId,
+        baselineFiles: normalizedCurrentFilesBaseline,
+        candidatePaths: candidateFilesForVerification,
+      });
+
+      const isLikelyEditIntent =
+        /\b(change|update|fix|add|remove|set|make|edit|modify|delete|replace|rename|create|implement|build|write|code|connect|wire|style|design|layout|header|button|page|section|scroll|responsive|mobile|اصلح|عدل|غيّر|أضف|احذف|ابن|طوّر|حسّن)\b/i.test(prompt || '')
+        || (/\b(in the|to the|on the|into|onto)\b/i.test(prompt || '') && !/\b(what|how|why|explain|tell me|show me|describe)\b/i.test(prompt || ''));
+
+      if (isLikelyEditIntent && verifiedPersistedFilesChanged.length === 0 && !grepAmbiguityDetected) {
+        return createResponse({
+          ok: true,
+          mode: 'agent',
+          result: {
+            success: false,
+            type: 'no_verified_changes',
+            summary: 'Agent run finished without verified persisted file changes. This request is marked not_applied.',
+            filesChanged: [],
+            error: 'NO_VERIFIED_CHANGES',
+            warnings: [
+              'Task completion was rejected for trust contract: no real code diff detected.',
+            ],
+          },
+        });
+      }
       
       // ========================================================================
       // SAFETY NET: Check for missing referenced files and auto-generate them
@@ -6423,7 +6541,9 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
       const result: AgentResult = {
         success: true,
         summary: taskCompleteResult?.summary || `Agent completed after ${toolCallsLog.length} tool calls`,
-        filesChanged: taskCompleteResult?.filesChanged || [...new Set(filesChanged)],
+        filesChanged: verifiedPersistedFilesChanged.length > 0
+          ? verifiedPersistedFilesChanged
+          : (taskCompleteResult?.filesChanged || [...new Set(filesChanged)]),
         iterations: Math.ceil(toolCallsLog.length / 2),
         toolCalls: toolCallsLog,
         // Phase 5: Enhanced debugging info
@@ -6446,7 +6566,12 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
           blocked: styleChangeBlocked,
           blockedReason: styleBlockReason || colorValidation.message || undefined
         },
-        warnings: resultWarnings,
+        warnings: [
+          ...resultWarnings,
+          ...(verifiedPersistedFilesChanged.length === 0
+            ? ['Trust check: no persisted file diff verified in backend pass.']
+            : []),
+        ],
         designCritic: designCriticResult ? {
           pass: designCriticResult.pass,
           score: designCriticResult.score,

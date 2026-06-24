@@ -31,6 +31,8 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSettingsSaving, setIsSettingsSaving] = useState(false);
+  const [isCaptureSaving, setIsCaptureSaving] = useState(false);
   const [helpfulMemoryEnabled, setHelpfulMemoryEnabled] = useState(true);
   const [capturePaused, setCapturePaused] = useState(false);
   const [items, setItems] = useState<HelpfulMemoryRecord[]>([]);
@@ -42,6 +44,8 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
   const loadInFlightRef = useRef(false);
   const hasLoadedOnceRef = useRef(false);
+  const settingsSaveSeqRef = useRef(0);
+  const captureSaveSeqRef = useRef(0);
   const showErrorRef = useRef(showError);
   useEffect(() => { showErrorRef.current = showError; }, [showError]);
   const isDark = theme === 'dark';
@@ -184,25 +188,47 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
   }, []);
 
   const handleToggle = async (next: boolean) => {
+    if (isSettingsSaving || isCaptureSaving) return;
+    const previousEnabled = helpfulMemoryEnabled;
     setHelpfulMemoryEnabled(next);
+    const seq = settingsSaveSeqRef.current + 1;
+    settingsSaveSeqRef.current = seq;
+    setIsSettingsSaving(true);
     try {
-      await HelpfulMemoryService.updateSettings({ helpfulMemoryEnabled: next });
-      showSuccess(next ? labels.saveOn : labels.saveOff);
+      const saved = await HelpfulMemoryService.updateSettings({ helpfulMemoryEnabled: next });
+      if (seq !== settingsSaveSeqRef.current) return;
+      setHelpfulMemoryEnabled(saved.helpfulMemoryEnabled);
+      setCapturePaused(saved.capturePaused);
+      showSuccess(saved.helpfulMemoryEnabled ? labels.saveOn : labels.saveOff);
     } catch (error) {
       console.error('Helpful memory settings save failed', error);
-      setHelpfulMemoryEnabled(!next);
+      if (seq !== settingsSaveSeqRef.current) return;
+      setHelpfulMemoryEnabled(previousEnabled);
       showError(labels.settingFailed);
+    } finally {
+      if (seq === settingsSaveSeqRef.current) setIsSettingsSaving(false);
     }
   };
 
   const handleCapturePauseToggle = async (paused: boolean) => {
+    if (isCaptureSaving || isSettingsSaving) return;
+    const previousPaused = capturePaused;
     setCapturePaused(paused);
+    const seq = captureSaveSeqRef.current + 1;
+    captureSaveSeqRef.current = seq;
+    setIsCaptureSaving(true);
     try {
-      await HelpfulMemoryService.updateSettings({ capturePaused: paused });
+      const saved = await HelpfulMemoryService.updateSettings({ capturePaused: paused });
+      if (seq !== captureSaveSeqRef.current) return;
+      setHelpfulMemoryEnabled(saved.helpfulMemoryEnabled);
+      setCapturePaused(saved.capturePaused);
     } catch (error) {
       console.error('Capture pause toggle failed', error);
-      setCapturePaused(!paused);
+      if (seq !== captureSaveSeqRef.current) return;
+      setCapturePaused(previousPaused);
       showError(labels.settingFailed);
+    } finally {
+      if (seq === captureSaveSeqRef.current) setIsCaptureSaving(false);
     }
   };
 
@@ -465,7 +491,11 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
         </div>
         <div className={`flex items-center gap-2 rounded-xl border px-2 py-1.5 ${subtleShell}`}>
           <span className={`text-xs ${mutedText}`}>{helpfulMemoryEnabled ? labels.on : labels.off}</span>
-          <Switch checked={helpfulMemoryEnabled} onCheckedChange={handleToggle} />
+          <Switch
+            checked={helpfulMemoryEnabled}
+            onCheckedChange={handleToggle}
+            disabled={isSettingsSaving || isCaptureSaving}
+          />
         </div>
       </div>
 
@@ -492,11 +522,17 @@ export function HelpfulMemoryManager({ currentConversationId: _currentConversati
           </div>
           <div className="flex items-center gap-2">
             <span className={`text-[11px] font-medium ${capturePaused ? (isDark ? 'text-amber-200' : 'text-[hsl(25_95%_28%)]') : (isDark ? 'text-emerald-200' : 'text-[hsl(160_80%_28%)]')}`}>
-              {capturePaused
+              {isCaptureSaving
+                ? labels.syncing
+                : capturePaused
                 ? (language === 'ar' ? 'متوقف' : 'Paused')
                 : (language === 'ar' ? 'نشط' : 'Active')}
             </span>
-            <Switch checked={!capturePaused} onCheckedChange={(enabled) => { void handleCapturePauseToggle(!enabled); }} />
+            <Switch
+              checked={!capturePaused}
+              onCheckedChange={(enabled) => { void handleCapturePauseToggle(!enabled); }}
+              disabled={isCaptureSaving || isSettingsSaving}
+            />
           </div>
         </div>
       )}

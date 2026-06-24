@@ -138,18 +138,24 @@ export const HelpfulMemoryService = {
           helpfulMemoryEnabled: patch.helpfulMemoryEnabled ?? current.helpfulMemoryEnabled,
           capturePaused: patch.capturePaused ?? current.capturePaused,
         };
-    const { error } = await db
+    const { data, error } = await db
       .from('user_helpful_memory_settings')
       .upsert({
         user_id: userId,
         helpful_memory_enabled: next.helpfulMemoryEnabled,
         capture_paused: next.capturePaused,
         updated_at: now
-      });
+      }, { onConflict: 'user_id' })
+      .select('helpful_memory_enabled, capture_paused')
+      .single();
 
     if (error) throw error;
-    console.info('[helpful-memory] settings updated', next);
-    return next;
+    const saved: HelpfulMemorySettings = {
+      helpfulMemoryEnabled: data?.helpful_memory_enabled !== false,
+      capturePaused: data?.capture_paused === true,
+    };
+    console.info('[helpful-memory] settings updated', saved);
+    return saved;
   },
 
   async listMemories(scope?: HelpfulMemoryScope, conversationId?: string | null): Promise<HelpfulMemoryRecord[]> {
