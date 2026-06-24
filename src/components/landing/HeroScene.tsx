@@ -339,7 +339,7 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
           transition={{ delay: 0.7, duration: 0.8 }}
           className="flex flex-col items-center mt-4 md:mt-10 lg:mt-14"
         >
-          {/* START button with animated green border light */}
+          {/* TRY WAKTI FOR FREE button with animated green border light */}
           <div className="relative mb-2 rounded-full p-[1.5px] overflow-hidden inline-flex">
             <div
               className="absolute -inset-full rounded-full animate-[spin_3s_linear_infinite]"
@@ -354,7 +354,7 @@ export function HeroScene({ language = "en" }: HeroSceneProps) {
               className="relative rounded-full px-10 py-2 text-[13px] font-semibold tracking-wide transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] bg-[#0c0f14]/70 text-white border border-emerald-300/40 backdrop-blur-xl shadow-[0_0_18px_hsla(160,80%,55%,0.32)] hover:bg-emerald-500/15 hover:border-emerald-300/60 hover:shadow-[0_0_26px_hsla(160,80%,55%,0.55)]"
             >
               <span className="inline-flex items-center gap-2">
-                <span>{isGuestSigningIn ? (isArabic ? "جارٍ الدخول كضيف..." : "STARTING GUEST MODE...") : (isArabic ? "ابدأ" : "START")}</span>
+                <span>{isGuestSigningIn ? (isArabic ? "جارٍ الدخول كضيف..." : "STARTING GUEST MODE...") : (isArabic ? "جرب وقتي مجاناً" : "TRY WAKTI FOR FREE")}</span>
                 <ArrowRight className={isArabic ? "h-4 w-4 rotate-180" : "h-4 w-4"} />
               </span>
             </button>

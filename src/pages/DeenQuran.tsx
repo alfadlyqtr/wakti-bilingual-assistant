@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw, Eye, EyeOff } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -12,6 +12,7 @@ const EDITIONS = { arabic: "quran-uthmani", english: "en.sahih", tafsirEn: "en.i
 const APP_DEFAULT_RECITER_ID = "maher_al_mueaqly";
 const RECITER_STORAGE_KEY = "deen_selected_reciter_mp3q";
 const READER_RECITER_STORAGE_KEY = "deen_selected_reader_reciter";
+const ARABIC_TEXT_TOGGLE_KEY = "deen_show_arabic_text";
 const READER_AUDIO_RECITERS = [
   { id: "ar.abdurrahmaansudais", label: "Sudais", labelAr: "السديس" },
   { id: "ar.ahmedajamy", label: "Ahmed Ajamy", labelAr: "أحمد العجمي" },
@@ -251,6 +252,14 @@ export default function DeenQuran() {
       return DEFAULT_READER_AUDIO_RECITER;
     }
   });
+  const [showArabicText, setShowArabicText] = useState<boolean>(() => {
+    try {
+      const stored = localStorage.getItem(ARABIC_TEXT_TOGGLE_KEY);
+      return stored === null ? true : stored === "1";
+    } catch {
+      return true;
+    }
+  });
 
   const setIsSurahPlayingSync = (v: boolean) => { isSurahPlayingRef.current = v; setIsSurahPlaying(v); };
   const setCurrentPlaybackAyahIndexSync = (v: number) => { currentPlaybackAyahIndexRef.current = v; setCurrentPlaybackAyahIndex(v); };
@@ -293,6 +302,12 @@ export default function DeenQuran() {
       localStorage.setItem(READER_RECITER_STORAGE_KEY, readerAudioReciter);
     } catch {}
   }, [readerAudioReciter]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ARABIC_TEXT_TOGGLE_KEY, showArabicText ? "1" : "0");
+    } catch {}
+  }, [showArabicText]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2010,6 +2025,42 @@ export default function DeenQuran() {
                       {isAr ? (currentSurahJumpTargetAyah ? "اذهب إلى موضعك المحفوظ" : "لا يوجد موضع محفوظ") : (currentSurahJumpTargetAyah ? "Go to saved place" : "No saved place")}
                     </span>
                   </button>
+                  {!isAr && (
+                    <button
+                      onClick={() => setShowArabicText((v) => !v)}
+                      className="flex items-center gap-2 px-3 py-2 active:scale-95 transition-all flex-shrink-0"
+                      style={{ background: "transparent", border: "none" }}
+                      title={showArabicText ? "Hide Arabic text" : "Show Arabic text"}
+                    >
+                      <span className="text-[11px] font-medium" style={{ color: isDark ? "#858384" : "#606062" }}>
+                        Arabic text
+                      </span>
+                      <span
+                        className="relative inline-flex items-center rounded-full"
+                        style={{
+                          width: 40,
+                          height: 22,
+                          background: showArabicText
+                            ? (isDark ? "hsla(45,65%,55%,0.45)" : "hsla(35,65%,42%,0.35)")
+                            : (isDark ? "rgba(255,255,255,0.12)" : "rgba(6,5,65,0.15)"),
+                          transition: "background 0.25s ease",
+                        }}
+                      >
+                        <span
+                          className="absolute rounded-full"
+                          style={{
+                            width: 16,
+                            height: 16,
+                            top: 3,
+                            left: showArabicText ? 20 : 4,
+                            background: showArabicText ? gold : (isDark ? "#858384" : "#a0a0a0"),
+                            boxShadow: showArabicText ? `0 0 8px ${goldGlow}` : "0 1px 3px rgba(0,0,0,0.25)",
+                            transition: "left 0.25s ease, background 0.25s ease, box-shadow 0.25s ease",
+                          }}
+                        />
+                      </span>
+                    </button>
+                  )}
                 </div>
 
                 {/* ── Arabic reader reciter dropdown list ── */}
@@ -2221,18 +2272,20 @@ export default function DeenQuran() {
                               onClick={() => openAyahSheet(ayah, trans ?? null)}
                               className="flex-1 text-left active:scale-[0.99] transition-all duration-150"
                             >
-                              <p dir="rtl" style={{
-                                fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif",
-                                fontSize: "21px", lineHeight: "2.2",
-                                color: isPlaying ? gold : pageTxt,
-                                textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
-                                textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
-                                textAlign: "right",
-                                marginBottom: "8px",
-                              }}>
-                                {stripBismillahPrefix(ayah)}
-                                {renderAyahMarker(displayAyahNumber(ayah))}
-                              </p>
+                              {showArabicText && (
+                                <p dir="rtl" style={{
+                                  fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif",
+                                  fontSize: "21px", lineHeight: "2.2",
+                                  color: isPlaying ? gold : pageTxt,
+                                  textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
+                                  textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
+                                  textAlign: "right",
+                                  marginBottom: "8px",
+                                }}>
+                                  {stripBismillahPrefix(ayah)}
+                                  {renderAyahMarker(displayAyahNumber(ayah))}
+                                </p>
+                              )}
                               {trans && (
                                 <p style={{
                                   fontSize: "17px", lineHeight: "1.85",
@@ -2240,6 +2293,22 @@ export default function DeenQuran() {
                                   textShadow: isPlaying && isDark ? `0 0 10px ${goldFaint}` : "none",
                                   textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
                                 }}>
+                                  <span
+                                    className="inline-flex items-center justify-center rounded-md mr-2 align-middle"
+                                    style={{
+                                      minWidth: 24,
+                                      height: 20,
+                                      fontSize: "10px",
+                                      fontWeight: 700,
+                                      lineHeight: 1,
+                                      color: gold,
+                                      background: goldFaint,
+                                      border: `1px solid ${goldGlow}`,
+                                      padding: "0 6px",
+                                    }}
+                                  >
+                                    {ayah.numberInSurah}
+                                  </span>
                                   {trans.text}
                                 </p>
                               )}
@@ -2423,11 +2492,29 @@ export default function DeenQuran() {
                     </p>
                   ) : (
                     <>
-                      <p className="text-[18px] leading-[1.95] text-right mb-2" dir="rtl" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: popupText }}>
-                        {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
-                      </p>
+                      {showArabicText && (
+                        <p className="text-[18px] leading-[1.95] text-right mb-2" dir="rtl" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: popupText }}>
+                          {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
+                        </p>
+                      )}
                       {popupTrans && (
                         <p className="text-[16px] leading-[1.75]" style={{ color: popupText }}>
+                          <span
+                            className="inline-flex items-center justify-center rounded-md mr-2 align-middle"
+                            style={{
+                              minWidth: 24,
+                              height: 20,
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              lineHeight: 1,
+                              color: sheetGold,
+                              background: sheetGoldFaint,
+                              border: `1px solid ${sheetGoldGlow}`,
+                              padding: "0 6px",
+                            }}
+                          >
+                            {selectedAyah.numberInSurah}
+                          </span>
                           {popupTrans.text}
                         </p>
                       )}
@@ -2523,18 +2610,36 @@ export default function DeenQuran() {
                     </p>
                   ) : (
                     <>
-                      <p
-                        className="text-[20px] leading-[2] text-right mb-2"
-                        dir="rtl"
-                        style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
-                      >
-                        {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
-                      </p>
+                      {showArabicText && (
+                        <p
+                          className="text-[20px] leading-[2] text-right mb-2"
+                          dir="rtl"
+                          style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: sheetTxt }}
+                        >
+                          {stripBismillahPrefix(selectedAyah, activeSurah?.number)}
+                        </p>
+                      )}
                       {selectedTrans ? (
                         <p
                           className="text-[19px] leading-[1.75] font-medium"
                           style={{ color: sheetTxt }}
                         >
+                          <span
+                            className="inline-flex items-center justify-center rounded-md mr-2 align-middle"
+                            style={{
+                              minWidth: 24,
+                              height: 20,
+                              fontSize: "10px",
+                              fontWeight: 700,
+                              lineHeight: 1,
+                              color: sheetGold,
+                              background: sheetGoldFaint,
+                              border: `1px solid ${sheetGoldGlow}`,
+                              padding: "0 6px",
+                            }}
+                          >
+                            {selectedAyah.numberInSurah}
+                          </span>
                           {selectedTrans.text}
                         </p>
                       ) : (
