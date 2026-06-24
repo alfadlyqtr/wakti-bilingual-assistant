@@ -148,7 +148,7 @@ import { applyDirectEdits, validateJSX } from '@/utils/directStyleEditor';
 // Note: Project, ProjectFile, GeneratedFiles, BackendContext, UploadedAsset 
 // are now imported from './ProjectDetail/types' above
 
-type GenerationJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+type GenerationJobStatus = 'queued' | 'running' | 'paused' | 'succeeded' | 'failed';
 
 type GenerationJob = {
   id: string;
@@ -157,6 +157,7 @@ type GenerationJob = {
   mode: 'create' | 'edit';
   error: string | null;
   result_summary: string | null;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 };
@@ -491,6 +492,69 @@ ${priorSection}`;
       { label: isRTL ? 'صياغة الرد...' : 'Preparing the response...', status: 'pending' as const },
     ];
   }, [isRTL]);
+
+  const getCreateJobMetadata = (job?: GenerationJob | null): Record<string, unknown> => {
+    return job?.metadata && typeof job.metadata === 'object'
+      ? job.metadata as Record<string, unknown>
+      : {};
+  };
+
+  const getCreateStageLabel = (job?: GenerationJob | null): string | null => {
+    const metadata = getCreateJobMetadata(job);
+    switch (metadata.createStage) {
+      case 'drafting':
+        return isRTL ? 'جاري بناء المسودة الأولى العاملة...' : 'Building your working first draft...';
+      case 'saving_draft':
+        return isRTL ? 'جاري حفظ المسودة الأولى...' : 'Saving your working first draft...';
+      case 'polishing':
+        return isRTL ? 'جاري إضافة اللمسة الاحترافية...' : 'Adding premium polish...';
+      case 'done':
+        return metadata.polishApplied === true
+          ? (isRTL ? 'اكتملت النسخة النهائية.' : 'Premium version ready.')
+          : (isRTL ? 'تم الاحتفاظ بالمسودة الآمنة.' : 'Keeping your safe saved draft.');
+      default:
+        return null;
+    }
+  };
+
+  const buildCreateFailureMessage = (rawMessage: string, job?: GenerationJob | null): string => {
+    const metadata = getCreateJobMetadata(job);
+    const failureSummary = typeof metadata.failureSummary === 'string' ? metadata.failureSummary : '';
+    const detail = typeof metadata.errorDetail === 'string' ? metadata.errorDetail : rawMessage;
+    const normalized = `${rawMessage} ${failureSummary} ${detail}`.toLowerCase();
+
+    if (normalized.includes('missing_app_js')) {
+      return isRTL
+        ? 'عذرًا، لم يتمكن الذكاء الاصطناعي من إنشاء كود صالح للتشغيل. حاول بطلب أبسط.'
+        : 'Sorry, the AI could not produce runnable code. Try a slightly simpler request.';
+    }
+
+    if (normalized.includes('429') || normalized.includes('rate')) {
+      return isRTL
+        ? 'مزود الذكاء الاصطناعي كان مزدحمًا جدًا وأوقف هذا الطلب. حاول مرة أخرى بعد قليل.'
+        : 'The AI provider was too busy and rate-limited this build. Please try again in a moment.';
+    }
+
+    if (normalized.includes('400') || normalized.includes('rejected the build request') || normalized.includes('validation')) {
+      return isRTL
+        ? 'مزود الذكاء الاصطناعي رفض طلب البناء قبل إنشاء الكود. غالبًا الطلب كبير جدًا أو يحتوي على مدخلات كثيرة.'
+        : 'The AI provider rejected this build request before code was generated. The request is likely too large or too heavy.';
+    }
+
+    if (normalized.includes('json') || normalized.includes('incomplete code payload')) {
+      return isRTL
+        ? 'الذكاء الاصطناعي أعاد ناتجًا غير مكتمل، لذلك لم نستطع حفظ مشروع آمن.'
+        : 'The AI returned an incomplete code payload, so no safe project could be saved.';
+    }
+
+    if (normalized.includes('timeout') || normalized.includes('deadline') || normalized.includes('budget')) {
+      return isRTL
+        ? 'نفد الوقت الآمن قبل اكتمال البناء. إذا تم حفظ مسودة أولى آمنة فستبقى في المعاينة.'
+        : 'The builder ran out of safe time before finishing. If a safe first draft was saved, it will stay in the preview.';
+    }
+
+    return failureSummary || (isRTL ? 'عذرًا، فشل البناء قبل أن نحفظ نتيجة آمنة.' : 'Sorry, the build failed before we could save a safe result.');
+  };
 
   const getVerifiedChangedFiles = useCallback((
     beforeFiles: Record<string, string>,
@@ -1544,7 +1608,7 @@ ${priorSection}`;
         .from('project_collections')
         .select('data')
         .eq('project_id', id)
-        .eq('collection_name', 'booking_services')
+        .in('collection_name', ['services', 'booking_services'])
         .limit(10);
       
       const services = (servicesData || []).map((s: any) => ({
@@ -1960,7 +2024,8 @@ ${priorSection}`;
         }
       }
 
-      await pollJobUntilDone(jobId);
+      const completedJob = await pollJobUntilDone(jobId);
+      const completedJobMetadata = getCreateJobMetadata(completedJob);
 
       // Step 4: Finalizing
       setGenerationSteps(prev => prev.map((s, i) => i === 2 ? { ...s, status: 'completed' } : i === 3 ? { ...s, status: 'loading' } : s));
@@ -1999,9 +2064,13 @@ ${priorSection}`;
       const backendCta = backendCtaLines.length > 0 ? `\n\n${backendCtaLines.join('\n')}` : '';
 
       // Save assistant message to DB with snapshot
-      const assistantMsg = isRTL 
-        ? `لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. ✨ يمكنك الآن تعديله أو نشره.${backendCta}` 
-        : `I've finished building your project! Take a look at the preview. ✨ You can now edit or publish it.${backendCta}`;
+      const assistantMsg = completedJobMetadata.draftSaved === true && completedJobMetadata.polishApplied !== true
+        ? (isRTL
+          ? `لقد حفظت لك مسودة أولى عاملة وآمنة. ألقِ نظرة على المعاينة أولًا، ويمكننا تحسينها أكثر بعد ذلك.${backendCta}`
+          : `I saved a safe working first draft for your project. Take a look at the preview first, and we can polish it further from there.${backendCta}`)
+        : (isRTL 
+          ? `لقد انتهيت من بناء مشروعك! ألقِ نظرة على المعاينة. ✨ يمكنك الآن تعديله أو نشره.${backendCta}` 
+          : `I've finished building your project! Take a look at the preview. ✨ You can now edit or publish it.${backendCta}`);
 
       const isShopProject = /shop|store|e-?commerce|product|catalog|abaya|fashion|boutique|متجر|منتج|عباية|أزياء/i.test(prompt);
       const isBookingProject = /booking|appointment|service|schedule|salon|spa|clinic|حجز|موعد|خدمة|صالون|سبا|عيادة/i.test(prompt);
@@ -2139,20 +2208,8 @@ ${priorSection}`;
       ));
       
       // Build a more helpful error message based on the error type
-      let errorMsg: string;
       const errorCode = err.message || '';
-      
-      if (errorCode.includes('MISSING_APP_JS')) {
-        errorMsg = isRTL 
-          ? 'عذرًا، لم يتمكن الذكاء الاصطناعي من إنشاء الكود بشكل صحيح. حاول مرة أخرى بطلب أبسط.'
-          : 'Sorry, the AI couldn\'t generate valid code. Try again with a simpler request.';
-      } else if (errorCode.includes('timed out')) {
-        errorMsg = isRTL
-          ? 'انتهت المهلة. المشروع معقد جدًا - حاول بطلب أبسط.'
-          : 'Generation timed out. The project may be too complex - try a simpler request.';
-      } else {
-        errorMsg = isRTL ? 'عذرًا، حدث خطأ. حاول مرة أخرى.' : 'Sorry, an error occurred. Please try again.';
-      }
+      const errorMsg = buildCreateFailureMessage(errorCode);
       
       const { data: errorMsgData } = await supabase
         .from('project_chat_messages' as any)
@@ -2402,11 +2459,32 @@ ${priorSection}`;
           continue;
         }
 
+        const stageLabel = getCreateStageLabel(job);
+        if (stageLabel) {
+          setGenerationSteps(prev => prev.map((s, i) => 
+            i === 2 ? { ...s, label: stageLabel } : s
+          ));
+        } else if (pollCount % 5 === 0) {
+          const msgIndex = Math.min(Math.floor(pollCount / 10), progressMessages.length - 1);
+          setGenerationSteps(prev => prev.map((s, i) => 
+            i === 2 ? { ...s, label: progressMessages[msgIndex] } : s
+          ));
+        }
+
         if (job.status === 'succeeded') {
           console.log(`[Poll ${pollCount}] Job succeeded!`);
           return job;
         }
-        if (job.status === 'failed') throw new Error(job.error || 'Generation failed');
+        if (job.status === 'paused') {
+          throw new Error(job.result_summary || job.error || (isRTL ? 'تم إيقاف البناء مؤقتًا.' : 'The build was paused.'));
+        }
+        if (job.status === 'failed') {
+          const metadata = getCreateJobMetadata(job);
+          if (metadata.draftSaved === true) {
+            return job;
+          }
+          throw new Error(buildCreateFailureMessage(job.error || job.result_summary || 'Generation failed', job));
+        }
 
         // Job still running - this is normal, keep polling
         // Use slower polling to avoid rate limiting (429 errors)

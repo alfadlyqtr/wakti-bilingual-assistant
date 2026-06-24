@@ -1112,7 +1112,7 @@ async function callGeminiWithModel(
           activeModel = fallbackModel;
           continue;
         }
-        throw new Error(`Gemini API error: ${response.status}`);
+        throw new Error(summarizeGeminiError(response.status, errorText));
       }
 
       const data = await response.json();
@@ -1536,7 +1536,7 @@ async function callGeminiVisionWithFiles(
   if (!response.ok) {
     const errorText = await response.text();
     console.error(`[Gemini Vision] HTTP ${response.status}: ${errorText}`);
-    throw new Error(`Gemini API error: ${response.status}`);
+    throw new Error(summarizeGeminiError(response.status, errorText));
   }
 
   const data = await response.json();
@@ -1790,7 +1790,8 @@ async function callGeminiFullRewriteEdit(
   uploadedAssets?: UploadedAsset[], // User uploaded assets from backend
   backendContext?: BackendContext, // Backend context for AI awareness
   extractedDocumentContent?: string, // Extracted text from PDFs/DOCX
-  extractedVisionInspirations?: string // Design inspiration from images
+  extractedVisionInspirations?: string, // Design inspiration from images
+  projectId?: string
 ): Promise<{ files: Record<string, string>; summary: string }> {
   const fileContext = Object.entries(currentFiles || {})
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
@@ -2241,6 +2242,50 @@ function classifyAgentErrorCode(rawMessage: string): 'timeout' | 'rate_limit' | 
   if (msg.includes('400') || msg.includes('invalid') || msg.includes('missing') || msg.includes('forbidden')) return 'validation';
   if (msg.includes('gemini') || msg.includes('model') || msg.includes('api error') || msg.includes('500') || msg.includes('503')) return 'model_error';
   return 'unknown';
+}
+
+function summarizeGeminiError(status: number, errorText: string): string {
+  let detail = '';
+  try {
+    const parsed = JSON.parse(errorText);
+    if (parsed?.error?.message) detail = String(parsed.error.message);
+    else if (parsed?.message) detail = String(parsed.message);
+  } catch {
+    detail = errorText;
+  }
+  const compact = (detail || errorText || '').replace(/\s+/g, ' ').trim();
+  return compact ? `Gemini API error: ${status} - ${compact.slice(0, 500)}` : `Gemini API error: ${status}`;
+}
+
+function classifyCreateErrorCode(rawMessage: string): 'timeout' | 'rate_limit' | 'validation' | 'model_error' | 'network' | 'json' | 'unknown' {
+  const msg = (rawMessage || '').toLowerCase();
+  if (!msg) return 'unknown';
+  if (msg.includes('timeout') || msg.includes('deadline') || msg.includes('gateway') || msg.includes('budget')) return 'timeout';
+  if (msg.includes('429') || msg.includes('rate') || msg.includes('quota')) return 'rate_limit';
+  if (msg.includes('400') || msg.includes('invalid') || msg.includes('unsupported') || msg.includes('too many') || msg.includes('responsemimetype')) return 'validation';
+  if (msg.includes('json') || msg.includes('unexpected token') || msg.includes('unterminated')) return 'json';
+  if (msg.includes('network') || msg.includes('fetch') || msg.includes('cors')) return 'network';
+  if (msg.includes('gemini') || msg.includes('model') || msg.includes('500') || msg.includes('503')) return 'model_error';
+  return 'unknown';
+}
+
+function buildCreateFailureSummary(rawMessage: string): string {
+  switch (classifyCreateErrorCode(rawMessage)) {
+    case 'validation':
+      return 'The AI provider rejected the build request before code was created.';
+    case 'rate_limit':
+      return 'The AI provider was busy and rate-limited this build.';
+    case 'timeout':
+      return 'The build ran out of safe time before finishing.';
+    case 'json':
+      return 'The AI returned an incomplete code payload.';
+    case 'network':
+      return 'The build lost connection while generating code.';
+    case 'model_error':
+      return 'The AI model failed while generating the project.';
+    default:
+      return 'The build failed before a working project could be saved.';
+  }
 }
 
 function appendAgentTimeline(
@@ -4111,12 +4156,45 @@ serve(async (req: Request) => {
         const staleThresholdMs = 8 * 60 * 1000; // 8 minutes
         if (now - updatedAt > staleThresholdMs) {
           console.warn(`[Status] Job ${jobId} is stale (no update for ${Math.round((now - updatedAt) / 1000)}s), marking failed`);
+          const metadata = (data.metadata && typeof data.metadata === 'object')
+            ? (data.metadata as Record<string, unknown>)
+            : {};
+          const draftSaved = metadata.draftSaved === true;
+          const recoveredSummary = typeof data.result_summary === 'string' && data.result_summary.trim().length > 0
+            ? data.result_summary
+            : 'Working draft saved. Premium polish stopped early, so the saved draft was kept.';
+          if (draftSaved) {
+            await updateJob(supabase, jobId, {
+              status: 'succeeded',
+              error: null,
+              result_summary: recoveredSummary,
+            });
+            const recoveredMetadata = await patchJobMetadata(
+              supabase,
+              jobId,
+              {
+                createStage: 'done',
+                stalledAfterDraft: true,
+                recoveredFromStaleRun: true,
+                polishApplied: metadata.polishApplied === true,
+              },
+              {
+                at: new Date().toISOString(),
+                step: 'done',
+                status: 'completed',
+                note: recoveredSummary,
+              },
+            );
+            return createResponse({
+              ok: true,
+              job: { ...data, status: 'succeeded', error: null, result_summary: recoveredSummary, metadata: recoveredMetadata },
+            });
+          }
           await updateJob(supabase, jobId, { 
             status: 'failed', 
             error: 'Job stalled - worker may have crashed. Please try again.',
             result_summary: null 
           });
-          // Return the updated status
           return createResponse({ 
             ok: true, 
             job: { ...data, status: 'failed', error: 'Job stalled - worker may have crashed. Please try again.' } 
@@ -7486,7 +7564,15 @@ Call task_complete when finished.`;
     await assertProjectOwnership(supabase, projectId, userId);
 
     const safeMode: 'create' | 'edit' = mode === 'edit' ? 'edit' : 'create';
-    const job = await createJob(supabase, { projectId, userId, mode: safeMode, prompt });
+    const job = await createJob(supabase, {
+      projectId,
+      userId,
+      mode: safeMode,
+      prompt,
+      metadata: safeMode === 'create'
+        ? { createStage: 'drafting', draftSaved: false, polishAttempted: false, polishApplied: false }
+        : {},
+    });
 
     // ========================================================================
     // ASYNC BACKGROUND WORKER: Run generation in background, return immediately
@@ -7518,6 +7604,8 @@ Call task_complete when finished.`;
     const runGenerationWorker = async () => {
       // Start heartbeat immediately
       startHeartbeat(job.id);
+      let createDraftSaved = false;
+      let createRecoveredSummary: string | null = null;
       
     try {
       // Handle theme selection - prioritize detailed userInstructions from frontend theme picker
@@ -7584,6 +7672,7 @@ Call task_complete when finished.`;
         if (assetIntentPrompt) {
           textPrompt += `\n\n🧭 ${assetIntentPrompt}`;
         }
+        textPrompt += `\n\n🛟 DELIVERY RULE:\nBuild the strongest working first draft first. Keep it complete, connected, and runnable. Do not spend the whole response on polish before the core structure, routing, runtime entry, and main sections are safely in place.`;
         
         // Add pre-fetched images to the prompt so AI uses them directly
         if (preFetchedImages.length > 0) {
@@ -7701,9 +7790,55 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
         if (shouldEnableGoogleSearch) {
           console.log(`[CreateMode] Google Search grounding enabled for freshness-sensitive sports prompt.`);
         }
-        let aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true, {
-          enableGoogleSearch: shouldEnableGoogleSearch,
-        });
+        await patchJobMetadata(
+          supabase,
+          job.id,
+          {
+            createStage: 'drafting',
+            draftSaved: false,
+            polishAttempted: false,
+            polishApplied: false,
+          },
+          {
+            at: new Date().toISOString(),
+            step: 'drafting',
+            status: 'in_progress',
+            note: 'Building the working first draft',
+          },
+        );
+        let aiText: string;
+        let draftFallbackUsed = false;
+        try {
+          aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true, {
+            enableGoogleSearch: shouldEnableGoogleSearch,
+          });
+        } catch (draftErr) {
+          const draftErrMsg = draftErr instanceof Error ? draftErr.message : String(draftErr);
+          const draftErrCode = classifyCreateErrorCode(draftErrMsg);
+          if (draftErrCode !== 'validation' && draftErrCode !== 'timeout' && draftErrCode !== 'json') {
+            throw draftErr;
+          }
+          draftFallbackUsed = true;
+          const slimPrompt = `CREATE NEW PROJECT.\n\nREQUEST SUMMARY:\n${prompt}\n\n${userInstructions || ""}\n\nDRAFT-FIRST FALLBACK MODE:\nReturn a smaller but complete first draft. Prioritize one strong homepage/app shell, valid routing, mounted runtime entry, key sections, backend-safe structure, and clear CTA flow. Keep the project polished enough to ship as a first draft, but avoid extra complexity that could break the run.`;
+          await patchJobMetadata(
+            supabase,
+            job.id,
+            {
+              createStage: 'drafting',
+              draftFallbackUsed: true,
+              initialDraftError: draftErrMsg.slice(0, 1000),
+            },
+            {
+              at: new Date().toISOString(),
+              step: 'drafting',
+              status: 'in_progress',
+              note: 'Retrying with a slimmer first-draft prompt',
+            },
+          );
+          aiText = await callGemini25Pro(finalSystemPrompt, slimPrompt, true, {
+            enableGoogleSearch: shouldEnableGoogleSearch,
+          });
+        }
         const createDuration = Date.now() - createStartTime;
         // Log AI usage for project creation
         await logAIFromRequest(req, {
@@ -7714,7 +7849,7 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
           outputText: aiText.substring(0, 500),
           durationMs: createDuration,
           status: "success",
-          metadata: { mode: "create", project_id: projectId, theme: theme }
+          metadata: { mode: "create", project_id: projectId, theme: theme, draft_fallback_used: draftFallbackUsed }
         });
 
         let content = extractJsonObject(aiText);
@@ -7807,13 +7942,136 @@ Return ONLY the JSON object. No explanation.`;
           features: { forms: true }
         }, { onConflict: 'project_id' });
 
-        // 🚀 POST-GENERATION BOOTSTRAPPING: Auto-seed backend data based on generated code
-        // Pass pre-fetched images so they can be linked to products
-        await bootstrapBackendData(supabase, projectId, userId, files, prompt, preFetchedImages);
-
+        await patchJobMetadata(
+          supabase,
+          job.id,
+          {
+            createStage: 'saving_draft',
+            draftFallbackUsed,
+          },
+          {
+            at: new Date().toISOString(),
+            step: 'saving_draft',
+            status: 'in_progress',
+            note: 'Saving the working first draft',
+          },
+        );
         await replaceProjectFiles(supabase, projectId, files);
+        createDraftSaved = true;
+        createRecoveredSummary = summary || 'Working first draft saved.';
+        const bootstrappedNotes: string[] = [];
+        try {
+          const bootstrapResults = await bootstrapBackendData(supabase, projectId, userId, files, prompt, preFetchedImages);
+          if (bootstrapResults.servicesSeeded > 0) bootstrappedNotes.push(`Seeded ${bootstrapResults.servicesSeeded} services`);
+          if (bootstrapResults.productsSeeded > 0) bootstrappedNotes.push(`Seeded ${bootstrapResults.productsSeeded} products`);
+        } catch (bootstrapErr) {
+          const bootstrapMsg = bootstrapErr instanceof Error ? bootstrapErr.message : String(bootstrapErr);
+          bootstrappedNotes.push(`Backend bootstrap skipped: ${bootstrapMsg}`);
+          await patchJobMetadata(supabase, job.id, {
+            bootstrapWarning: bootstrapMsg.slice(0, 1000),
+          });
+        }
+        await patchJobMetadata(
+          supabase,
+          job.id,
+          {
+            createStage: 'polishing',
+            draftSaved: true,
+            draftSummary: createRecoveredSummary,
+            polishAttempted: true,
+            polishApplied: false,
+          },
+          {
+            at: new Date().toISOString(),
+            step: 'polishing',
+            status: 'in_progress',
+            note: 'Working draft saved. Adding premium polish.',
+          },
+        );
+
+        let finalSummary = summary || 'Created.';
+        if (bootstrappedNotes.length > 0) {
+          finalSummary = `${finalSummary} | ${bootstrappedNotes.join(' | ')}`;
+        }
+
+        try {
+          const polishPrompt = `${prompt}\n\nThe working first draft is already saved. Upgrade it into a premium final version without breaking the runtime entry, routing, backend wiring, or any working section. Improve hierarchy, composition, visual rhythm, CTA clarity, spacing, premium feel, and first impression. Keep all existing working functionality intact.`;
+          const polishResult = await callGeminiFullRewriteEdit(
+            polishPrompt,
+            files,
+            userInstructions,
+            Array.isArray(images) ? images as string[] : undefined,
+            assetIntent,
+            uploadedAssets,
+            backendContext,
+            documentContentStr,
+            visionInspirationStr,
+            projectId,
+          );
+          let finalPolishFiles: Record<string, string> = polishResult.files || {};
+          const missing = findMissingReferencedFiles({ changedFiles: finalPolishFiles, existingFiles: files });
+          if (missing.length > 0) {
+            const generatedMissing = await callGeminiMissingFiles(missing, finalPolishFiles, files, polishPrompt);
+            finalPolishFiles = { ...finalPolishFiles, ...generatedMissing };
+          }
+          for (const [path, content] of Object.entries(finalPolishFiles)) {
+            finalPolishFiles[path] = content.replace(/\{\{PROJECT_ID\}\}|PROJECT_ID_HERE/g, projectId);
+          }
+          finalPolishFiles = replaceBannedImageHostsInFiles(
+            finalPolishFiles,
+            preFetchedImages.map((img) => img.storedUrl).filter((url) => typeof url === 'string' && url.trim().length > 0)
+          );
+          if (Object.keys(finalPolishFiles).length > 0) {
+            await upsertProjectFiles(supabase, projectId, finalPolishFiles);
+            files = { ...files, ...finalPolishFiles };
+          }
+          if (polishResult.summary) {
+            finalSummary = `${finalSummary} | ${polishResult.summary}`;
+          }
+          createRecoveredSummary = finalSummary;
+          await patchJobMetadata(
+            supabase,
+            job.id,
+            {
+              createStage: 'done',
+              draftSaved: true,
+              polishAttempted: true,
+              polishApplied: true,
+            },
+            {
+              at: new Date().toISOString(),
+              step: 'done',
+              status: 'completed',
+              note: 'Premium polish applied successfully',
+            },
+          );
+        } catch (polishErr) {
+          const polishMsg = polishErr instanceof Error ? polishErr.message : String(polishErr);
+          finalSummary = `${finalSummary} | Working draft saved. Premium polish was skipped: ${buildCreateFailureSummary(polishMsg)}`;
+          createRecoveredSummary = finalSummary;
+          await patchJobMetadata(
+            supabase,
+            job.id,
+            {
+              createStage: 'done',
+              draftSaved: true,
+              polishAttempted: true,
+              polishApplied: false,
+              polishError: polishMsg.slice(0, 1000),
+              errorCode: classifyCreateErrorCode(polishMsg),
+              errorDetail: polishMsg.slice(0, 1000),
+            },
+            {
+              at: new Date().toISOString(),
+              step: 'done',
+              status: 'completed',
+              note: 'Working draft kept because premium polish failed',
+            },
+          );
+        }
+
         stopHeartbeat();
-        await updateJob(supabase, job.id, { status: 'succeeded', result_summary: summary || 'Created.', error: null });
+        await updateJob(supabase, job.id, { status: 'succeeded', result_summary: createRecoveredSummary || finalSummary, error: null });
         return; // Worker done - job status updated in DB
       }
 
@@ -7933,7 +8191,51 @@ Return ONLY the JSON object. No explanation.`;
       const innerMsg = innerErr instanceof Error ? innerErr.message : String(innerErr);
       stopHeartbeat();
       try {
-        await updateJob(supabase, job.id, { status: 'failed', error: innerMsg, result_summary: null });
+        if (safeMode === 'create' && createDraftSaved) {
+          const recoveredSummary = createRecoveredSummary || 'Working draft saved. Premium polish stopped early, so the saved draft was kept.';
+          await updateJob(supabase, job.id, { status: 'succeeded', error: null, result_summary: recoveredSummary });
+          await patchJobMetadata(
+            supabase,
+            job.id,
+            {
+              createStage: 'done',
+              draftSaved: true,
+              polishAttempted: true,
+              polishApplied: false,
+              polishError: innerMsg.slice(0, 1000),
+              recoveredAfterError: true,
+              errorCode: classifyCreateErrorCode(innerMsg),
+              errorDetail: innerMsg.slice(0, 1000),
+            },
+            {
+              at: new Date().toISOString(),
+              step: 'done',
+              status: 'completed',
+              note: recoveredSummary,
+            },
+          );
+        } else {
+          await updateJob(supabase, job.id, { status: 'failed', error: innerMsg, result_summary: null });
+          if (safeMode === 'create') {
+            await patchJobMetadata(
+              supabase,
+              job.id,
+              {
+                createStage: 'failed',
+                draftSaved: false,
+                errorCode: classifyCreateErrorCode(innerMsg),
+                errorDetail: innerMsg.slice(0, 1000),
+                failureSummary: buildCreateFailureSummary(innerMsg),
+              },
+              {
+                at: new Date().toISOString(),
+                step: 'failed',
+                status: 'failed',
+                note: buildCreateFailureSummary(innerMsg),
+              },
+            );
+          }
+        }
       } catch (e) {
         console.error('[projects-generate] Failed to mark job failed:', e);
       }

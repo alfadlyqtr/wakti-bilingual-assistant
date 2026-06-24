@@ -106,7 +106,7 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
       .from('project_collections')
       .select('*')
       .eq('project_id', projectId)
-      .eq('collection_name', 'booking_services');
+      .in('collection_name', ['services', 'booking_services']);
     setServices((data || []).map(d => ({ id: d.id, ...(typeof d.data === 'object' && d.data !== null ? d.data as Record<string, unknown> : {}) })) as Service[]);
   };
 
@@ -170,7 +170,7 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
           .insert([{
             project_id: projectId,
             user_id: _bs?.user?.id || '',
-            collection_name: 'booking_services',
+            collection_name: 'services',
             data: JSON.parse(JSON.stringify(serviceData))
           }]);
         if (error) throw error;

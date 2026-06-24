@@ -234,7 +234,7 @@ export function useProjectData({ projectId, userId }: UseProjectDataOptions): Us
         supabase.from('project_site_users').select('*', { count: 'exact', head: true }).eq('project_id', projectId),
         supabase.from('project_collections').select('data').eq('project_id', projectId).eq('collection_name', 'products').limit(10),
         supabase.from('project_orders').select('*', { count: 'exact', head: true }).eq('project_id', projectId),
-        supabase.from('project_collections').select('data').eq('project_id', projectId).eq('collection_name', 'booking_services').limit(10),
+        supabase.from('project_collections').select('data').eq('project_id', projectId).in('collection_name', ['services', 'booking_services']).limit(10),
         supabase.from('project_bookings').select('*', { count: 'exact', head: true }).eq('project_id', projectId),
         supabase.from('project_chat_rooms').select('*', { count: 'exact', head: true }).eq('project_id', projectId),
         supabase.from('project_comments').select('*', { count: 'exact', head: true }).eq('project_id', projectId),

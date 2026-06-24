@@ -24,7 +24,7 @@ export interface ProjectFile {
 
 export type GeneratedFiles = Record<string, string>;
 
-export type GenerationJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
+export type GenerationJobStatus = 'queued' | 'running' | 'paused' | 'succeeded' | 'failed';
 
 export interface GenerationJob {
   id: string;
@@ -33,6 +33,7 @@ export interface GenerationJob {
   mode: 'create' | 'edit';
   error: string | null;
   result_summary: string | null;
+  metadata?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
