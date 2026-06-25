@@ -51,6 +51,7 @@ export interface GroupChatMessage {
   created_at: string;
   is_deleted?: boolean;
   deleted_at?: string | null;
+  edited_at?: string | null;
   reply_to_id?: string | null;
   reply_to?: {
     id: string;
@@ -280,7 +281,7 @@ export async function getGroupConversationMessages(conversationId: string): Prom
 
   const { data: rows, error } = await (supabase as any)
     .from("conversation_messages")
-    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at, is_deleted, deleted_at, reply_to_id, reply_to:reply_to_id(id, content, sender_id, message_type, is_deleted)")
+    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at, is_deleted, deleted_at, edited_at, reply_to_id, reply_to:reply_to_id(id, content, sender_id, message_type, is_deleted)")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -332,6 +333,7 @@ export async function getGroupConversationMessages(conversationId: string): Prom
     created_at: row.created_at,
     is_deleted: row.is_deleted ?? false,
     deleted_at: row.deleted_at ?? null,
+    edited_at: row.edited_at ?? null,
     reply_to_id: row.reply_to_id ?? null,
     reply_to: row.reply_to || null,
     reactions: reactionsMap.get(row.id) || [],
@@ -439,6 +441,34 @@ export async function removeGroupReaction(messageId: string, emoji: string): Pro
   if (error) {
     throw error;
   }
+}
+
+export async function editGroupMessage(messageId: string, newContent: string): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { data: msg } = await (supabase as any)
+    .from("conversation_messages")
+    .select("created_at")
+    .eq("id", messageId)
+    .single();
+
+  if (!msg) throw new Error("Message not found");
+
+  const createdAt = new Date(msg.created_at).getTime();
+  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+  if (createdAt < tenMinutesAgo) {
+    throw new Error("Message can only be edited within 10 minutes");
+  }
+
+  const { error } = await (supabase as any)
+    .from("conversation_messages")
+    .update({ content: newContent, edited_at: new Date().toISOString() })
+    .eq("id", messageId)
+    .eq("sender_id", userId);
+
+  if (error) throw error;
 }
 
 export async function deleteGroupMessage(messageId: string): Promise<void> {

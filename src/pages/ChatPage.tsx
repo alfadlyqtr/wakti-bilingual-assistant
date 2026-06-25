@@ -14,10 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ChevronDown, ChevronLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, CheckCheck, Clock, X, Reply, Trash2, Mic } from "lucide-react";
+import { ChevronDown, ChevronLeft, Send, Image, FileText, Download, Play, Pause, Expand, Save, CheckCheck, Clock, X, Reply, Trash2, Mic, Copy, Pencil, Loader2 } from "lucide-react";
 import type { DirectMessage } from "@/services/messageService";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getMessages, sendMessage, markAsRead, uploadMessageAttachment, addReaction, removeReaction, deleteMessage } from "@/services/messageService";
+import { getMessages, sendMessage, markAsRead, uploadMessageAttachment, addReaction, removeReaction, deleteMessage, editMessage } from "@/services/messageService";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { VoiceRecorder } from "@/components/contacts/VoiceRecorder";
@@ -54,6 +54,8 @@ export default function ChatPage() {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [operatorDraftApplied, setOperatorDraftApplied] = useState(false);
   const [replyingTo, setReplyingTo] = useState<DirectMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<DirectMessage | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [selectedActionMessage, setSelectedActionMessage] = useState<DirectMessage | null>(null);
   const [selectedActionIsSentByMe, setSelectedActionIsSentByMe] = useState(false);
@@ -362,6 +364,20 @@ export default function ChatPage() {
   };
 
   const cancelReply = () => setReplyingTo(null);
+  const handleEditMessage = (message: DirectMessage) => {
+    setEditingMessage(message);
+    setMessageText(message.content || '');
+    closeMessageActions();
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+  const cancelEdit = () => {
+    setEditingMessage(null);
+    setMessageText('');
+  };
+  const isWithinEditWindow = (message: DirectMessage) => {
+    const createdAt = new Date(message.created_at).getTime();
+    return Date.now() - createdAt < 10 * 60 * 1000;
+  };
   const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
   const closeMessageActions = useCallback(() => {
@@ -402,6 +418,20 @@ export default function ChatPage() {
     } catch (error) {
       console.error("Error deleting message:", error);
       toast.error(language === 'ar' ? 'تعذر حذف الرسالة' : 'Could not delete message');
+    }
+  };
+
+  const handleCopyMessage = async (message: DirectMessage) => {
+    if (!message.content) {
+      toast.error(language === 'ar' ? 'لا يوجد نص لنسخه' : 'No text to copy');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast.success(language === 'ar' ? 'تم النسخ' : 'Copied');
+      closeMessageActions();
+    } catch {
+      toast.error(language === 'ar' ? 'تعذر النسخ' : 'Could not copy');
     }
   };
 
@@ -514,6 +544,19 @@ export default function ChatPage() {
     },
   });
 
+  const editMessageMutation = useMutation({
+    mutationFn: ({ messageId, newContent }: { messageId: string; newContent: string }) => editMessage(messageId, newContent),
+    onSuccess: () => {
+      toast.success(language === 'ar' ? 'تم التعديل' : 'Edited');
+      setEditingMessage(null);
+      setMessageText('');
+      queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || (language === 'ar' ? 'تعذر تعديل الرسالة' : 'Could not edit message'));
+    },
+  });
+
   // Handle file uploads
   const handleImageSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -613,9 +656,9 @@ export default function ChatPage() {
     }
   };
 
-  // Send text message
+  // Send text message or save edit
   const sendTextMessage = () => {
-    if (!canSend) {
+    if (!canSend && !editingMessage) {
       if (sendBlockedReason) {
         toast.error(sendBlockedReason);
       }
@@ -623,13 +666,20 @@ export default function ChatPage() {
     }
 
     if (messageText.trim() && !isOverLimit) {
-      sendMessageMutation.mutate({
-        message_type: "text",
-        content: messageText.trim(),
-        reply_to_id: replyingTo?.id || null,
-      });
-      setMessageText("");
-      setReplyingTo(null);
+      if (editingMessage) {
+        editMessageMutation.mutate({
+          messageId: editingMessage.id,
+          newContent: messageText.trim(),
+        });
+      } else {
+        sendMessageMutation.mutate({
+          message_type: "text",
+          content: messageText.trim(),
+          reply_to_id: replyingTo?.id || null,
+        });
+        setMessageText("");
+        setReplyingTo(null);
+      }
     }
   };
 
@@ -975,6 +1025,9 @@ export default function ChatPage() {
               isSentByMe ? 'self-end mr-1' : 'self-start ml-1'
             } ${isDark ? 'text-gray-300' : 'text-gray-600'} flex items-center gap-1`}>
               <span>{formatMessageTime(message.created_at)}</span>
+              {message.edited_at && (
+                <span className="opacity-70">{language === 'ar' ? '(تم التعديل)' : '(edited)'}</span>
+              )}
               {isSentByMe && (
                 <span title={pendingMessageIds.has(message.id) ? 'Sending...' : message.is_read ? 'Read' : 'Sent'} className="inline-flex items-center">
                   {pendingMessageIds.has(message.id) ? (
@@ -1268,6 +1321,21 @@ export default function ChatPage() {
         }}
       >
         <div className="space-y-1">
+          {/* Edit preview */}
+          {editingMessage && (
+            <div className={`flex items-center gap-2 px-2 py-1 rounded-lg text-xs ${
+              isDark ? 'bg-blue-900/30 text-blue-200' : 'bg-blue-50 text-blue-700'
+            }`}>
+              <Pencil className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate flex-1">
+                {language === 'ar' ? 'تعديل الرسالة' : 'Editing message'}
+              </span>
+              <button onClick={cancelEdit} className="flex-shrink-0 hover:opacity-70">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
           {/* Reply preview */}
           {replyingTo && (
             <div className={`flex items-center gap-2 px-2 py-1 rounded-lg text-xs ${
@@ -1323,6 +1391,7 @@ export default function ChatPage() {
           <div className="flex items-center gap-2">
             <div className="flex-1 flex items-start">
               <Textarea
+                ref={textareaRef}
                 value={messageText}
                 onChange={(e) => {
                   e.currentTarget.style.height = 'auto';
@@ -1330,11 +1399,11 @@ export default function ChatPage() {
                   e.currentTarget.style.height = `${nextH}px`;
                   handleInputChange(e);
                 }}
-                placeholder={t('typeMessage', language)}
+                placeholder={editingMessage ? (language === 'ar' ? 'عدّل رسالتك...' : 'Edit your message...') : t('typeMessage', language)}
                 maxLength={MAX_CHARS}
                 rows={1}
                 className={`min-h-[36px] max-h-[100px] h-[36px] px-3 py-[6px] text-sm rounded-xl border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
-                disabled={!canSend || sendMessageMutation.isPending || isUploading}
+                disabled={(!canSend && !editingMessage) || sendMessageMutation.isPending || editMessageMutation.isPending || isUploading}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
@@ -1356,10 +1425,14 @@ export default function ChatPage() {
               type="button"
               size="icon"
               onClick={sendTextMessage}
-              disabled={!canSend || !messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
-              className={`rounded-xl h-10 w-10 ${messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'} transition-colors`}
+              disabled={(!canSend && !editingMessage) || !messageText.trim() || isOverLimit || sendMessageMutation.isPending || editMessageMutation.isPending || isUploading}
+              className={`rounded-xl h-10 w-10 ${messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !editMessageMutation.isPending && !isUploading ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'} transition-colors`}
             >
-              <Send className={`h-5 w-5 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />
+              {editMessageMutation.isPending ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Send className={`h-5 w-5 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />
+              )}
             </Button>
           </div>
         </div>
@@ -1436,6 +1509,24 @@ export default function ChatPage() {
                 <Reply className="h-4 w-4" />
                 <span>{language === 'ar' ? 'رد' : 'Reply'}</span>
               </button>
+              {selectedActionIsSentByMe && selectedActionMessage?.content && !selectedActionMessage.is_deleted && isWithinEditWindow(selectedActionMessage) && (
+                <button
+                  onClick={() => handleEditMessage(selectedActionMessage)}
+                  className="flex w-full items-center gap-3 border-t border-white/10 px-5 py-4 text-left text-base text-white hover:bg-white/5"
+                >
+                  <Pencil className="h-4 w-4" />
+                  <span>{language === 'ar' ? 'تعديل' : 'Edit'}</span>
+                </button>
+              )}
+              {selectedActionMessage?.content && !selectedActionMessage.is_deleted && (
+                <button
+                  onClick={() => handleCopyMessage(selectedActionMessage)}
+                  className="flex w-full items-center gap-3 border-t border-white/10 px-5 py-4 text-left text-base text-white hover:bg-white/5"
+                >
+                  <Copy className="h-4 w-4" />
+                  <span>{language === 'ar' ? 'نسخ' : 'Copy'}</span>
+                </button>
+              )}
               <button
                 onClick={() => handleDeleteSelectedMessage(selectedActionMessage)}
                 className={`flex w-full items-center gap-3 border-t border-white/10 px-5 py-4 text-left text-base ${selectedActionIsSentByMe ? 'text-red-400 hover:bg-red-500/10' : 'text-red-300/75 hover:bg-white/5'}`}

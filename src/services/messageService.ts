@@ -25,6 +25,7 @@ export interface DirectMessage {
   is_read: boolean;
   is_deleted?: boolean;
   deleted_at?: string | null;
+  edited_at?: string | null;
   reply_to_id?: string | null;
   reply_to?: {
     id: string;
@@ -68,6 +69,7 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
       is_read,
       is_deleted,
       deleted_at,
+      edited_at,
       reply_to_id,
       reply_to:reply_to_id(id, content, sender_id, message_type, is_deleted)
     `)
@@ -362,6 +364,37 @@ export async function deleteMessage(messageId: string): Promise<void> {
 
   if (!data) {
     throw new Error("Message could not be deleted");
+  }
+}
+
+export async function editMessage(messageId: string, newContent: string): Promise<void> {
+  const userId = await getCurrentUserId();
+  if (!userId) throw new Error("User not authenticated");
+  await ensurePassport();
+
+  const { data: msg } = await supabase
+    .from("messages")
+    .select("created_at")
+    .eq("id", messageId)
+    .single();
+
+  if (!msg) throw new Error("Message not found");
+
+  const createdAt = new Date(msg.created_at).getTime();
+  const tenMinutesAgo = Date.now() - 10 * 60 * 1000;
+  if (createdAt < tenMinutesAgo) {
+    throw new Error("Message can only be edited within 10 minutes");
+  }
+
+  const { error } = await supabase
+    .from("messages")
+    .update({ content: newContent, edited_at: new Date().toISOString() })
+    .eq("id", messageId)
+    .eq("sender_id", userId);
+
+  if (error) {
+    console.error("❌ Error editing message:", error);
+    throw error;
   }
 }
 

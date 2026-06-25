@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AtSign, Camera, ChevronDown, Clock, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, Pause, Pencil, Play, Reply, Send, Sparkles, Square, Trash2, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, Camera, ChevronDown, Clock, Copy, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, Pause, Pencil, Play, Reply, Send, Sparkles, Square, Trash2, UserPlus, Users, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,7 +19,7 @@ import { GroupAvatar } from "@/components/GroupAvatar";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatConversation, type GroupChatMessage } from "@/services/groupChatService";
+import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, editGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatConversation, type GroupChatMessage } from "@/services/groupChatService";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
@@ -69,6 +69,7 @@ export default function GroupChatPage() {
   const lastTypingSentRef = useRef<number>(0);
   const [pendingMessageIds, setPendingMessageIds] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<GroupChatMessage | null>(null);
+  const [editingMessage, setEditingMessage] = useState<GroupChatMessage | null>(null);
   const [selectedActionMessage, setSelectedActionMessage] = useState<GroupChatMessage | null>(null);
   const [selectedActionIsSentByMe, setSelectedActionIsSentByMe] = useState(false);
   const groupAvatarInputRef = useRef<HTMLInputElement>(null);
@@ -203,6 +204,21 @@ export default function GroupChatPage() {
       queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
       queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
+    },
+  });
+
+  const editGroupMessageMutation = useMutation({
+    mutationFn: ({ messageId, newContent }: { messageId: string; newContent: string }) => editGroupMessage(messageId, newContent),
+    onSuccess: () => {
+      toast.success(language === "ar" ? "تم التعديل" : "Edited");
+      setEditingMessage(null);
+      setMessageText("");
+      queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversation", conversationId] });
+      queryClient.invalidateQueries({ queryKey: ["groupConversations"] });
+    },
+    onError: (error: any) => {
+      toast.error(error?.message || (language === "ar" ? "تعذر تعديل الرسالة" : "Could not edit message"));
     },
   });
 
@@ -649,8 +665,18 @@ export default function GroupChatPage() {
   }, [user?.id]);
 
   const handleSendText = async () => {
-    if (sendMutation.isPending) return;
+    if (sendMutation.isPending || editGroupMessageMutation.isPending) return;
     const text = messageText.trim();
+
+    // Handle edit mode
+    if (editingMessage) {
+      if (!text) return;
+      editGroupMessageMutation.mutate({
+        messageId: editingMessage.id,
+        newContent: text,
+      });
+      return;
+    }
 
     // Must have text OR attached image
     if (!text && !attachedImage) return;
@@ -851,6 +877,20 @@ export default function GroupChatPage() {
   };
 
   const cancelReply = () => setReplyingTo(null);
+  const handleEditMessage = (message: GroupChatMessage) => {
+    setEditingMessage(message);
+    setMessageText(message.content || '');
+    closeMessageActions();
+    setTimeout(() => textareaRef.current?.focus(), 0);
+  };
+  const cancelEdit = () => {
+    setEditingMessage(null);
+    setMessageText('');
+  };
+  const isWithinEditWindow = (message: GroupChatMessage) => {
+    const createdAt = new Date(message.created_at).getTime();
+    return Date.now() - createdAt < 10 * 60 * 1000;
+  };
   const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
   const closeMessageActions = useCallback(() => {
@@ -895,6 +935,20 @@ export default function GroupChatPage() {
     } catch (error) {
       console.error("Error deleting group message:", error);
       toast.error(language === "ar" ? "تعذر حذف الرسالة" : "Could not delete message");
+    }
+  };
+
+  const handleCopyMessage = async (message: GroupChatMessage) => {
+    if (!message.content) {
+      toast.error(language === "ar" ? "لا يوجد نص لنسخه" : "No text to copy");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(message.content);
+      toast.success(language === "ar" ? "تم النسخ" : "Copied");
+      closeMessageActions();
+    } catch {
+      toast.error(language === "ar" ? "تعذر النسخ" : "Could not copy");
     }
   };
 
@@ -1366,6 +1420,9 @@ export default function GroupChatPage() {
 
                         <div className={cn("mt-1 px-1 text-[11px] text-muted-foreground flex items-center gap-1", mine ? "justify-end" : "justify-start")}>
                           <span>{formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}</span>
+                          {message.edited_at && (
+                            <span className="opacity-70">{language === "ar" ? "(تم التعديل)" : "(edited)"}</span>
+                          )}
                           {mine && pendingMessageIds.has(message.id) && (
                             <Clock className="h-3 w-3 text-muted-foreground" />
                           )}
@@ -1567,6 +1624,21 @@ export default function GroupChatPage() {
       <div className="shrink-0 border-t border-border/60 bg-background/95 backdrop-blur px-4 pt-2" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5">
 
+          {editingMessage && (
+            <div className={cn(
+              "flex items-center gap-2 px-3 py-2 rounded-xl text-xs",
+              isDark ? "bg-blue-900/30 text-blue-200 border border-blue-500/20" : "bg-blue-50 text-blue-700 border border-blue-200"
+            )}>
+              <Pencil className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate flex-1">
+                {language === "ar" ? "تعديل الرسالة" : "Editing message"}
+              </span>
+              <button onClick={cancelEdit} className="flex-shrink-0 hover:opacity-70">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
           {replyingTo && (
             <div className={cn(
               "flex items-center gap-2 px-3 py-2 rounded-xl text-xs",
@@ -1754,16 +1826,18 @@ export default function GroupChatPage() {
               }}
               onFocus={() => broadcastTyping(true)}
               onBlur={() => broadcastTyping(false)}
-              placeholder={attachedImage
-                ? (language === "ar" ? "أضف تعليق... (اختياري)" : "Add a caption... (optional)")
-                : (language === "ar" ? "اكتب رسالة للمجموعة" : "Write a message to the group")
+              placeholder={editingMessage
+                ? (language === "ar" ? "عدّل رسالتك..." : "Edit your message...")
+                : attachedImage
+                  ? (language === "ar" ? "أضف تعليق... (اختياري)" : "Add a caption... (optional)")
+                  : (language === "ar" ? "اكتب رسالة للمجموعة" : "Write a message to the group")
               }
               rows={1}
               className={cn(
                 "min-h-[36px] max-h-[100px] h-[36px] rounded-xl resize-none flex-1 text-sm px-3 py-[6px] leading-[1.35] overflow-y-auto border",
                 isDark ? "bg-transparent text-white placeholder:text-gray-400 border-gray-700" : "bg-white text-light-primary placeholder:text-gray-500 border-gray-200"
               )}
-              disabled={uploading}
+              disabled={uploading || editGroupMessageMutation.isPending}
               onKeyDown={(e) => {
                 if (showMentionPicker) {
                   if (e.key === "Enter") {
@@ -1798,7 +1872,7 @@ export default function GroupChatPage() {
                     return;
                   }
                 }
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendText(); }
+                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!editGroupMessageMutation.isPending) handleSendText(); }
               }}
             />
 
@@ -1812,9 +1886,15 @@ export default function GroupChatPage() {
                   : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
               )}
               onClick={handleSendText}
-              disabled={(!messageText.trim() && !attachedImage) || sendMutation.isPending || uploading}
+              disabled={(!messageText.trim() && !attachedImage && !editingMessage) || sendMutation.isPending || editGroupMessageMutation.isPending || uploading}
             >
-              {sendMutation.isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+              {editGroupMessageMutation.isPending ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : sendMutation.isPending ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
             </Button>
           </div>
         </div>
@@ -1891,6 +1971,24 @@ export default function GroupChatPage() {
                 <Reply className="h-4 w-4" />
                 <span>{language === "ar" ? "رد" : "Reply"}</span>
               </button>
+              {selectedActionIsSentByMe && selectedActionMessage?.content && !selectedActionMessage.is_deleted && isWithinEditWindow(selectedActionMessage) && (
+                <button
+                  onClick={() => handleEditMessage(selectedActionMessage)}
+                  className="flex w-full items-center gap-3 border-t border-white/10 px-5 py-4 text-left text-base text-white hover:bg-white/5"
+                >
+                  <Pencil className="h-4 w-4" />
+                  <span>{language === "ar" ? "تعديل" : "Edit"}</span>
+                </button>
+              )}
+              {selectedActionMessage?.content && !selectedActionMessage.is_deleted && (
+                <button
+                  onClick={() => handleCopyMessage(selectedActionMessage)}
+                  className="flex w-full items-center gap-3 border-t border-white/10 px-5 py-4 text-left text-base text-white hover:bg-white/5"
+                >
+                  <Copy className="h-4 w-4" />
+                  <span>{language === "ar" ? "نسخ" : "Copy"}</span>
+                </button>
+              )}
               {selectedActionIsSentByMe && (
                 <button
                   onClick={() => handleDeleteSelectedMessage(selectedActionMessage)}
