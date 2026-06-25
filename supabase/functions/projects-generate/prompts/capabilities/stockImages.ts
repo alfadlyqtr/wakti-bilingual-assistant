@@ -34,7 +34,9 @@ export const STOCK_IMAGES_CAPABILITY = `
 - Products → close-up product visuals and realistic usage.
 - Contact → location/storefront/brand context image.
 
-### FALLBACK
-- If you must use fallback imagery, keep it temporary and clearly replaceable.
-- Never let placeholder style define the final visual identity.
+### IMAGE PLACEMENT DISCIPLINE
+- Every section that needs an image MUST have one from the pre-generated set.
+- If a pre-generated image does not perfectly match a section's label, use it anyway — match by VIBE, not by label. A tech workspace photo works for hero, about, and team if the composition fits.
+- Never leave an image slot empty or broken. Work creatively with what you have.
+- Never render a broken src or an empty image container. Choose the closest URL and use it.
 `;

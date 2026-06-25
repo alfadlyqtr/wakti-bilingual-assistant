@@ -53,8 +53,8 @@ export default function BusinessContextForm({
   const extraFields = fields.slice(2);
   const introTitle = isRTL ? 'خلّينا نبني لك موقعًا جميلًا' : 'Let’s build your site beautifully';
   const introDescription = isRTL
-    ? 'اكتب الأساسيات فقط، وسيتولى الذكاء الاصطناعي الباقي. ويمكنك أيضًا رفع ملف إذا كان أسهل لك.'
-    : 'Just share the basics and the AI will handle the rest. You can also upload a file if that is easier.';
+    ? 'لا حاجة للملء — اضغط مباشرة وسيبني الذكاء الاصطناعي من طلبك. لكن إن أضفت تفاصيل، ستكون النتيجة أدق وأجمل.'
+    : 'No need to fill anything — just hit the button and we\'ll build straight from your prompt. Adding details helps us personalize it even more.';
   const moreFieldsLabel = isRTL ? 'أضف تفاصيل أكثر (اختياري)' : 'Add more details (optional)';
   const submitLabel = hasUpload
     ? (isRTL ? 'ابنِ موقعي من الملف' : 'Build My Site From This')
@@ -65,7 +65,7 @@ export default function BusinessContextForm({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[200] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
       style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}
     >
       <motion.div

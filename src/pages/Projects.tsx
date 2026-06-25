@@ -102,7 +102,21 @@ const buildFallbackContextForm = (
 ): { siteType: string; heading: string; fields: ContextField[] } | null => {
   const prompt = (rawPrompt || '').toLowerCase();
 
-  if (/shop|store|e-?commerce|abaya|fashion|boutique|clothing|products?|متجر|عباية|أزياء|ملابس/.test(prompt)) {
+  if (/portfolio|company portfolio|agency|startup|tech company|cto|software company|digital company|professional company|digital agency|founder|our services|about us page|company website/.test(prompt)) {
+    return {
+      siteType: isRTL ? 'شركة أو وكالة' : 'Company / Agency',
+      heading: isRTL ? 'أخبرنا عن شركتك' : 'Tell us about your company',
+      fields: [
+        { id: 'company_name', label: isRTL ? 'اسم الشركة' : 'Company Name', placeholder: isRTL ? 'نيزك' : 'Nizek', type: 'text' },
+        { id: 'tagline', label: isRTL ? 'الشعار' : 'Tagline', placeholder: isRTL ? 'نبني منتجات تدوم' : 'We build products that last', type: 'text' },
+        { id: 'contact_email', label: isRTL ? 'البريد' : 'Email', placeholder: isRTL ? 'hello@company.com' : 'hello@company.com', type: 'email' },
+        { id: 'location', label: isRTL ? 'الموقع' : 'Location', placeholder: isRTL ? 'الكويت / قطر' : 'Kuwait / Qatar', type: 'text' },
+        { id: 'company_description', label: isRTL ? 'عن الشركة' : 'About', placeholder: isRTL ? 'ما الذي تقدمه شركتك' : 'What your company does', type: 'textarea' },
+      ],
+    };
+  }
+
+  if (/shop|store|e-?commerce|abaya|fashion|boutique|clothing|متجر|عباية|أزياء|ملابس/.test(prompt)) {
     return {
       siteType: isRTL ? 'متجر إلكتروني' : 'Online Store',
       heading: isRTL ? 'أخبرنا عن متجرك' : 'Tell us about your store',
@@ -111,6 +125,7 @@ const buildFallbackContextForm = (
         { id: 'brand_tagline', label: isRTL ? 'الشعار' : 'Tagline', placeholder: isRTL ? 'أناقة محتشمة عصرية' : 'Modern modest elegance', type: 'text' },
         { id: 'whatsapp_number', label: isRTL ? 'واتساب' : 'WhatsApp', placeholder: isRTL ? '+974 5555 5555' : '+974 5555 5555', type: 'tel' },
         { id: 'store_description', label: isRTL ? 'وصف المتجر' : 'Store Description', placeholder: isRTL ? 'متجر عبايات راقٍ للنساء في قطر والخليج' : 'A premium abaya boutique for women in Qatar and the Gulf', type: 'textarea' },
+
         { id: 'featured_collection', label: isRTL ? 'مجموعة مميزة' : 'Featured Collection', placeholder: isRTL ? 'مجموعة العيد' : 'Eid Collection', type: 'text' },
       ],
     };

@@ -76,6 +76,7 @@ ALWAYS start with these files based on project complexity:
      - **Premium SaaS Hero**: sharp hierarchy, clean trust-focused layout, strong product framing, clear CTA cluster, polished cards or dashboard preview, crisp spacing.
      - **Editorial Landing Page**: bold composition, art-directed typography, image-led storytelling, asymmetrical rhythm, refined whitespace.
      - **Modern Service Brand Homepage**: confident headline, high-trust structure, premium surfaces, clear service blocks, visible CTA path, polished credibility sections.
+     - **Agency / Founder Portfolio**: scroll-driven narrative with a large-type founder statement hero. Case study showcase with a clickable interactive project switcher (left: project list, right: live stats and outcome). Proof section with real exit numbers, metrics, client logos. "How we work" broken into interactive animated steps. An engagement mechanism — quiz, challenge, or assessment — that makes the visitor stop and think. Team section with personality and real images. Contact framed as a conversation, not a form. Every section earns its place through storytelling, not just presence.
      Pick ONE as the starting system and build from that. The first draft must inherit its strengths instead of improvising random sections.
   10. **Hard Visual Fail Rules (MANDATORY)**: A hero or homepage is considered FAILED and must be rebuilt if ANY of these are true:
      - Text readability is poor or the main copy blends into the background.

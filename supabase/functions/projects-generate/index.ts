@@ -1084,7 +1084,7 @@ async function callGeminiWithModel(
               systemInstruction: { parts: [{ text: systemPrompt }] },
               ...(options.enableGoogleSearch ? { tools: [{ google_search: {} }] } : {}),
               generationConfig: {
-                temperature: 0.1,
+                temperature: 0.7,
                 maxOutputTokens: 65536,
                 // Google Search grounding counts as a "tool" in the Gemini API.
                 // Gemini explicitly forbids responseMimeType: application/json when any tool is present.
@@ -3427,24 +3427,56 @@ function generateSampleServices(prompt: string, lang?: string): Array<Record<str
   ];
 }
 
-// AI-powered image query extraction — reads full prompt context, never blind keyword matches
-async function extractImageQueriesAI(prompt: string): Promise<string[]> {
-  const systemPrompt = `You are a web design image curator. Given a website brief, return a JSON object: {"queries": ["...", "...", "...", "...", "...", "..."]} with exactly 6 specific image search queries perfect for this site.
+// Section-tagged image query — each image is mapped to the section it belongs in
+interface ImageSectionQuery {
+  section: string;
+  query: string;
+}
 
-CRITICAL RULES — read every word carefully:
-- Identify the ACTUAL business type from the FULL brief — do not match individual keywords in isolation
-- GCC country names (Qatar, Kuwait, UAE, Saudi Arabia) = geographic location ONLY — NEVER trigger football/sports images unless the site is explicitly about a sports team, sports event, or athletic organization
-- Tech company / software agency / startup / CTO / founder portfolio: modern office interior, professional executive workspace, digital product UI screens, GCC business district skyline, tech team collaboration, software development environment
-- Company portfolio / about page: professional business meeting, modern corporate office, industry awards/recognition, team at work
-- Restaurant / food: signature dish close-up plating, elegant dining room interior, chef in kitchen
-- Gym / fitness center: gym floor equipment, personal training session, athlete lifestyle — ONLY if the site IS a gym or fitness studio
-- Fashion / abaya / modest wear store: elegant model editorial, clothing display, boutique interior
-- Real estate: luxury property exterior, premium living room, modern architecture
-- Medical / clinic: clean modern clinic interior, doctor consultation, medical professional
-- Beauty / spa: spa treatment room, beauty editorial, wellness lifestyle
-- Cafe: specialty coffee, cozy cafe interior, latte art
-- Each query must be specific, descriptive, and match the brand context perfectly
-- Return ONLY the JSON object, nothing else`;
+// AI-powered image query extraction — returns section-tagged queries, never blind keyword matches
+async function extractImageQueriesAI(prompt: string): Promise<ImageSectionQuery[]> {
+  const systemPrompt = `You are a web design image curator. Given a website brief, return a JSON object with EXACTLY this structure:
+{"sections": [
+  {"section": "hero", "query": "..."},
+  {"section": "proof_case_study", "query": "..."},
+  {"section": "team", "query": "..."},
+  {"section": "portfolio_work", "query": "..."},
+  {"section": "location_atmosphere", "query": "..."},
+  {"section": "services_context", "query": "..."}
+]}
+
+SECTION ROLES — write each query for its section's specific purpose:
+- hero: The defining first-impression visual. Must perfectly match this brand's identity and tone.
+- proof_case_study: Specific to what they actually built or sold. Children's toy company → warm playful family setting. NOT a generic shopping app.
+- team: Founder or team in their real environment — executive workspace, collaboration, professional setting.
+- portfolio_work: The KIND of work they do, shown through real context and environment. NEVER a design artifact.
+- location_atmosphere: The city or region they operate in — skyline, business district, architectural mood at night.
+- services_context: Their service in action — a strategy session, a build meeting, a product launch moment.
+
+CRITICAL RULES:
+- Read the ENTIRE brief before writing any query. Understand what business this actually is.
+- GCC country names (Qatar, Kuwait, UAE, Saudi Arabia) = geographic location ONLY — NEVER trigger football or sports images unless the brief is explicitly about a sports team or event.
+- Tech company / software agency / startup / CTO / founder portfolio:
+  → hero: founder name or executive workspace description (e.g. "Kuwaiti tech founder at MacBook in modern glass office at night")
+  → proof_case_study: what the actual product served (e.g. children playing with toys, not a shopping app screen)
+  → team: software engineers or executives in a dark creative office environment
+  → portfolio_work: people in a product strategy meeting or code review session
+  → location_atmosphere: Kuwait City or Doha skyline at night from above
+  → services_context: tech team collaborating around monitors in a premium dark office
+
+BANNED QUERY TERMS — these cause KIE to embed text watermarks directly into the image. NEVER use them:
+❌ "UI mockup", "app mockup", "web app UI", "interface mockup", "dashboard mockup"
+❌ "wireframe", "prototype", "figma", "design system", "mobile app UI", "app screenshot", "app design"
+❌ Any term that describes a DESIGN ARTIFACT instead of a real scene
+
+Instead — always describe a REAL SCENE or REAL ENVIRONMENT:
+✅ "software engineers reviewing product on large monitor in modern dark office"
+✅ "tech founder at MacBook in Kuwait penthouse workspace overlooking city lights"
+✅ "startup team in strategy session around large table with multiple screens"
+✅ "Kuwait City skyline at night with financial district towers lit up"
+
+Every query must be specific enough to generate a contextually correct and contextually relevant image.
+Return ONLY the JSON object, nothing else.`;
 
   const userPrompt = `Website brief (read fully to understand the business):\n${prompt.slice(0, 2500)}`;
 
@@ -3452,18 +3484,19 @@ CRITICAL RULES — read every word carefully:
     const raw = await callGeminiWithModel(GEMINI_MODEL_SIMPLE, systemPrompt, userPrompt, true, 2);
     const jsonStr = extractJsonObject(raw);
     const obj = jsonStr ? JSON.parse(jsonStr) as Record<string, unknown> : null;
-    if (obj && Array.isArray(obj.queries) && (obj.queries as unknown[]).length > 0) {
-      return (obj.queries as string[])
-        .filter((q) => typeof q === 'string' && q.trim().length > 0)
+    if (obj && Array.isArray((obj as Record<string, unknown>).sections)) {
+      const sections = ((obj as Record<string, unknown>).sections as { section: string; query: string }[])
+        .filter((s) => typeof s.section === 'string' && typeof s.query === 'string' && s.query.trim().length > 0)
         .slice(0, 6);
+      if (sections.length > 0) return sections;
     }
   } catch (err) {
     console.warn('[ImageQuery] AI extraction failed, using fallback:', err);
   }
   return [
-    'professional modern business office interior',
-    'technology digital workspace team collaboration',
-    'premium executive professional business',
+    { section: 'hero', query: 'professional modern business executive workspace interior dark premium' },
+    { section: 'team', query: 'technology startup team collaborating on screens in modern office' },
+    { section: 'location_atmosphere', query: 'modern Gulf city skyline at night financial district towers' },
   ];
 }
 
@@ -7623,7 +7656,8 @@ Call task_complete when finished.`;
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {
         // Pre-generate and store images from Nano Banana 2 based on user's prompt
-        const imageQueries = await extractImageQueriesAI(prompt);
+        const imageSectionQueries = await extractImageQueriesAI(prompt);
+        const imageQueryStrings = imageSectionQueries.map((q) => q.query);
         const projectImageSurface = detectProjectImageSurface(prompt);
         let preFetchedImages: PreFetchedImage[] = [];
         const sharedCreateAwarenessContext = buildUnifiedProjectAwarenessContext({
@@ -7635,9 +7669,9 @@ Call task_complete when finished.`;
           assetIntentPrompt,
         });
         
-        if (imageQueries.length > 0) {
+        if (imageQueryStrings.length > 0) {
           try {
-            preFetchedImages = await preFetchAndStoreImages(supabase, projectId, userId, imageQueries, projectImageSurface);
+            preFetchedImages = await preFetchAndStoreImages(supabase, projectId, userId, imageQueryStrings, projectImageSurface);
           } catch (prefetchErr) {
             console.warn(`[Create Mode] Image pre-generation failed:`, prefetchErr);
             // Continue without pre-fetched images
@@ -7648,14 +7682,22 @@ Call task_complete when finished.`;
         if (assetIntentPrompt) {
           textPrompt += `\n\n🧭 ${assetIntentPrompt}`;
         }
-        textPrompt += `\n\n🛟 DELIVERY RULE:\nBuild the strongest working first draft first. Keep it complete, connected, and runnable. Do not spend the whole response on polish before the core structure, routing, runtime entry, and main sections are safely in place.`;
+        textPrompt += `\n\n🏆 MASTER BUILDER STANDARD:\nYou are the master builder behind the screen. You have one shot to stop the user in their tracks, make them feel the weight of what you've built, and impress them and wow them and ensure they never forget the experience.\n\nThe user's prompt is your brief — it is the floor, never the ceiling. You own the structure, the priority, and the final outcome. Your job is to listen to what they asked for, obey it, identify what they actually need to be blown away, and deliver that.\n\nBuild the most powerful, visceral, and uncompromising version of this reality. You are to deliver the best of the best only.`;
         
-        // Add pre-fetched images to the prompt so AI uses them directly
+        // Add pre-fetched images as a SECTION MAP so AI places each image in the right section
         if (preFetchedImages.length > 0) {
-          const imagesList = preFetchedImages.map((img, i) => 
-            `${i + 1}. "${img.query}" → ${img.storedUrl}`
-          ).join('\n');
-          textPrompt += `\n\n🖼️ PRE-GENERATED IMAGES (NANO-BANANA-2, 1K):\nThese images were already generated and stored for this project. Use them directly in your code:\n${imagesList}\n\nIMPORTANT: Use these URLs directly in <img src="..."> tags. Do NOT add any stock-image provider code.`;
+          // Build section → URL map by matching stored image queries back to their section
+          const sectionMap: Record<string, string> = {};
+          for (const img of preFetchedImages) {
+            const match = imageSectionQueries.find((q) => q.query === img.query);
+            if (match && !sectionMap[match.section]) {
+              sectionMap[match.section] = img.storedUrl;
+            }
+          }
+          const sectionLines = Object.entries(sectionMap)
+            .map(([section, url]) => `  ${section.toUpperCase().replace(/_/g, ' ')} → ${url}`)
+            .join('\n');
+          textPrompt += `\n\n🖼️ PRE-GENERATED IMAGES — SECTION MAP (NANO-BANANA-2, 1K):\nEach image was generated specifically for its designated section. Place each URL only in its matching section:\n${sectionLines}\n\nRULES:\n- Use each URL in its designated section only\n- Use these URLs directly as <img src="..."> — do NOT call any stock image API\n- If a section has no mapped image, use another URL creatively by vibe — never leave an image slot empty`;
         }
         if (sharedCreateAwarenessContext) {
           textPrompt += `\n\n${sharedCreateAwarenessContext}`;
