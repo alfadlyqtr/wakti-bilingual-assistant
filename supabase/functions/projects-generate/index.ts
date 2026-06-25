@@ -3427,85 +3427,44 @@ function generateSampleServices(prompt: string, lang?: string): Array<Record<str
   ];
 }
 
-// Extract image search queries from user prompt
-function extractImageQueries(prompt: string): string[] {
-  const queries: string[] = [];
-  
-  // Extract key entities from prompt
-  const lowerPrompt = prompt.toLowerCase();
-  
-  // Sports teams
-  if (/qatar|qatari|القطري|قطر|العنابي/i.test(prompt)) {
-    queries.push('Qatar national football team', 'Qatar football players maroon jersey');
-  }
-  if (/saudi|السعودية|الأخضر/i.test(prompt)) {
-    queries.push('Saudi Arabia football team', 'Saudi football players green jersey');
-  }
-  
-  // Business types
-  if (/barber|حلاق/i.test(prompt)) {
-    queries.push('barber shop interior', 'haircut styles men');
-  }
-  if (/restaurant|مطعم/i.test(prompt)) {
-    queries.push('restaurant interior elegant', 'food dish presentation gourmet', 'restaurant chef plating');
-  }
-  if (/gym|fitness|صالة/i.test(prompt)) {
-    queries.push('gym fitness equipment', 'personal training', 'premium fitness lifestyle');
-  }
-  if (/salon|صالون/i.test(prompt)) {
-    queries.push('beauty salon interior', 'hair styling', 'premium salon treatment');
-  }
-  if (/abaya|عباية|modest fashion|jalabiya|hijab fashion/i.test(prompt)) {
-    queries.push('elegant abaya fashion model', 'luxury abaya collection', 'modest fashion boutique interior');
-  }
-  if (/perfume|perfumes|oud|عطر|عطور/i.test(prompt)) {
-    queries.push('luxury perfume bottle oud', 'arabic oud perfume collection', 'premium fragrance editorial');
-  }
-  if (/jewelry|jewellery|مجوهرات|ذهب|diamond|ring|necklace/i.test(prompt)) {
-    queries.push('luxury gold jewelry display', 'diamond ring necklace close up', 'premium jewelry editorial');
-  }
-  if (/fashion|boutique|clothing|apparel|ملابس|بوتيك/i.test(prompt)) {
-    queries.push('fashion boutique interior luxury', 'premium clothing rack editorial', 'designer fashion campaign');
-  }
-  if (/cafe|coffee|مقهى|كوفي/i.test(prompt)) {
-    queries.push('cafe interior modern', 'specialty coffee presentation', 'coffee shop lifestyle');
-  }
-  if (/hotel|resort|فندق|منتجع/i.test(prompt)) {
-    queries.push('luxury hotel lobby', 'resort suite interior', 'premium hospitality lifestyle');
-  }
-  if (/real estate|property|properties|عقار|عقارات|apartment/i.test(prompt)) {
-    queries.push('luxury modern villa exterior', 'premium apartment interior', 'real estate living room staging');
-  }
-  if (/clinic|medical|doctor|dentist|عيادة|طبيب|أسنان/i.test(prompt)) {
-    queries.push('modern medical clinic interior', 'doctor patient consultation', 'premium dental clinic');
-  }
-  if (/spa|wellness|massage|سبا|عناية/i.test(prompt)) {
-    queries.push('luxury spa interior', 'wellness treatment room', 'premium self care editorial');
-  }
-  if (/agency|studio|creative|branding|marketing|وكالة|استوديو/i.test(prompt)) {
-    queries.push('creative studio workspace premium', 'branding presentation mockup', 'agency team collaboration modern');
-  }
-  if (/saas|software|app|dashboard|startup|تقنية|tech/i.test(prompt)) {
-    queries.push('software dashboard interface', 'technology abstract premium', 'startup team workspace modern');
-  }
-  
-  if (queries.length === 0) {
-    const cleanedWords = lowerPrompt
-      .replace(/[^a-z0-9\s\u0600-\u06FF-]/g, ' ')
-      .split(/\s+/)
-      .filter((word) => word.length > 3)
-      .filter((word) => !['make', 'build', 'create', 'website', 'landing', 'page', 'site', 'brand', 'business', 'modern', 'premium', 'beautiful'].includes(word));
+// AI-powered image query extraction — reads full prompt context, never blind keyword matches
+async function extractImageQueriesAI(prompt: string): Promise<string[]> {
+  const systemPrompt = `You are a web design image curator. Given a website brief, return a JSON object: {"queries": ["...", "...", "...", "...", "...", "..."]} with exactly 6 specific image search queries perfect for this site.
 
-    const subject = cleanedWords.slice(0, 3).join(' ').trim();
- 
-    if (subject) {
-      queries.push(`${subject} editorial hero`, `${subject} premium product`, `${subject} interior lifestyle`);
-    } else {
-      queries.push('premium brand editorial', 'luxury product presentation');
+CRITICAL RULES — read every word carefully:
+- Identify the ACTUAL business type from the FULL brief — do not match individual keywords in isolation
+- GCC country names (Qatar, Kuwait, UAE, Saudi Arabia) = geographic location ONLY — NEVER trigger football/sports images unless the site is explicitly about a sports team, sports event, or athletic organization
+- Tech company / software agency / startup / CTO / founder portfolio: modern office interior, professional executive workspace, digital product UI screens, GCC business district skyline, tech team collaboration, software development environment
+- Company portfolio / about page: professional business meeting, modern corporate office, industry awards/recognition, team at work
+- Restaurant / food: signature dish close-up plating, elegant dining room interior, chef in kitchen
+- Gym / fitness center: gym floor equipment, personal training session, athlete lifestyle — ONLY if the site IS a gym or fitness studio
+- Fashion / abaya / modest wear store: elegant model editorial, clothing display, boutique interior
+- Real estate: luxury property exterior, premium living room, modern architecture
+- Medical / clinic: clean modern clinic interior, doctor consultation, medical professional
+- Beauty / spa: spa treatment room, beauty editorial, wellness lifestyle
+- Cafe: specialty coffee, cozy cafe interior, latte art
+- Each query must be specific, descriptive, and match the brand context perfectly
+- Return ONLY the JSON object, nothing else`;
+
+  const userPrompt = `Website brief (read fully to understand the business):\n${prompt.slice(0, 2500)}`;
+
+  try {
+    const raw = await callGeminiWithModel(GEMINI_MODEL_SIMPLE, systemPrompt, userPrompt, true, 2);
+    const jsonStr = extractJsonObject(raw);
+    const obj = jsonStr ? JSON.parse(jsonStr) as Record<string, unknown> : null;
+    if (obj && Array.isArray(obj.queries) && (obj.queries as unknown[]).length > 0) {
+      return (obj.queries as string[])
+        .filter((q) => typeof q === 'string' && q.trim().length > 0)
+        .slice(0, 6);
     }
+  } catch (err) {
+    console.warn('[ImageQuery] AI extraction failed, using fallback:', err);
   }
- 
-  return Array.from(new Set(queries)).slice(0, 6);
+  return [
+    'professional modern business office interior',
+    'technology digital workspace team collaboration',
+    'premium executive professional business',
+  ];
 }
 
 // Entity facts database for grounding
@@ -7664,7 +7623,7 @@ Call task_complete when finished.`;
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {
         // Pre-generate and store images from Nano Banana 2 based on user's prompt
-        const imageQueries = extractImageQueries(prompt);
+        const imageQueries = await extractImageQueriesAI(prompt);
         const projectImageSurface = detectProjectImageSurface(prompt);
         let preFetchedImages: PreFetchedImage[] = [];
         const sharedCreateAwarenessContext = buildUnifiedProjectAwarenessContext({
