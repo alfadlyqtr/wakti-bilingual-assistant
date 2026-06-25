@@ -5596,9 +5596,9 @@ The user attached a screenshot. I analyzed it and found these text anchors:
         String(prompt || '').trim().length > 0
         && String(prompt || '').trim().length <= 220
         && !/\b(create|build|from scratch|full app|full website|entire|complete app|complete website|redesign|rebuild)\b/i.test(prompt || '');
-      const agentMaxIterations = isLikelyFastFollowup ? 8 : 12;
+      const agentMaxIterations = isLikelyFastFollowup ? 10 : 18;
       const agentMaxOutputTokens = isLikelyFastFollowup ? 3072 : 4096;
-      const agentBudgetMs = isLikelyFastFollowup ? 60000 : 95000;
+      const agentBudgetMs = isLikelyFastFollowup ? 60000 : 120000;
       
       // SAFETY NET: If currentFiles is empty, fetch file list from DB
       if (fileCount === 0) {

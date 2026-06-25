@@ -415,6 +415,7 @@ export default function ProjectDetail() {
   const recentAgentHotFilesRef = useRef<string[]>([]);
   const [lastAgentPausedJobId, setLastAgentPausedJobId] = useState<string | null>(null);
   const [isResumingAgent, setIsResumingAgent] = useState(false);
+  const autoResumeCountRef = useRef<number>(0); // Tracks auto-resumes per user request
 
   const areFileMapsEqual = useCallback((a: Record<string, string>, b: Record<string, string>) => {
     if (a === b) return true;
@@ -5516,6 +5517,7 @@ ${fixInstructions}
     } // End of: if (!hasAttachedImages) - skip photo patterns when images already attached
     
     setAiEditing(true);
+    autoResumeCountRef.current = 0; // Reset per-request auto-resume counter
     const thinkingStart = Date.now();
     setThinkingStartTime(thinkingStart);
     thinkingStartTimeRef.current = thinkingStart;
@@ -6251,6 +6253,31 @@ ${fixInstructions}
         const pausedJobId = (pausedMatch[1] || '').trim();
         const pausedSummary = (pausedMatch[2] || '').trim();
         setLastAgentPausedJobId(pausedJobId || lastAgentPausedJobId);
+
+        // Auto-resume up to 2 times so the user never has to click Resume manually.
+        // On the 3rd pause we surface the card so they know it's a very large task.
+        const MAX_AUTO_RESUMES = 2;
+        if (pausedJobId && autoResumeCountRef.current < MAX_AUTO_RESUMES) {
+          autoResumeCountRef.current += 1;
+          toast.info(
+            isRTL
+              ? `جارٍ المتابعة تلقائياً... (${autoResumeCountRef.current}/${MAX_AUTO_RESUMES})`
+              : `Continuing automatically... (${autoResumeCountRef.current}/${MAX_AUTO_RESUMES})`,
+            { duration: 4000 }
+          );
+          // Wait for finally block to finish (aiEditing → false) then auto-resume
+          setTimeout(async () => {
+            try {
+              await resumeSharedAgentJob(pausedJobId, userMessage);
+            } catch (resumeAutoErr: any) {
+              console.error('[AutoResume] Failed:', resumeAutoErr?.message);
+            }
+          }, 1800);
+          return;
+        }
+
+        // Exceeded auto-resume limit — show the card so user can decide
+        autoResumeCountRef.current = 0;
         setAiError({
           title: 'Paused Safely',
           titleAr: 'تم الإيقاف المؤقت بأمان',
