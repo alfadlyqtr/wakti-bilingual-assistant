@@ -25,6 +25,7 @@ Previous auto-fix attempts have FAILED. You are the last resort before the user 
 - For syntax errors: check brackets, braces, JSX tags, imports.
 - For undefined errors: add missing imports or definitions.
 - NEVER guess. ALWAYS read first.
+- NEVER touch files starting with '_wakti_' or '__wakti_' — these are protected system files. Modifying them breaks the app.
 
 ## MISSING-PACKAGE ERRORS (CRITICAL)
 If the error is a "missing dependency" / "Cannot find module" / "Could not find dependency" error

@@ -1800,7 +1800,9 @@ async function callGeminiFullRewriteEdit(
   extractedVisionInspirations?: string, // Design inspiration from images
   projectId?: string
 ): Promise<{ files: Record<string, string>; summary: string }> {
+  const SYSTEM_FILE_RE = /[\\/]_wakti_|[\\/]__wakti_/i; // Protected Wakti system files — never expose to AI
   const fileContext = Object.entries(currentFiles || {})
+    .filter(([path]) => !SYSTEM_FILE_RE.test(path))
     .map(([path, content]) => `=== FILE: ${path} ===\n${content}`)
     .join("\n\n");
 
@@ -4448,6 +4450,7 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
       // Keeps accuracy because the AI gets the actual code it needs to edit.
       const SOURCE_EXTENSIONS = /\.(jsx?|tsx?|css|scss|html|json|md|svg)$/i;
       const SKIP_PATTERNS = /(node_modules|\.git|dist|build|coverage|\.lock|package-lock|yarn\.lock|\.min\.(js|css)$|\.map$)/i;
+      const SYSTEM_FILE_PATTERN = /[\\/]_wakti_|[\\/]__wakti_/i; // Protected Wakti system files — never expose to AI
       const MAX_FILE_BYTES = 50_000; // ~12K tokens per file cap
       const MAX_TOTAL_BYTES = 400_000; // ~100K tokens total cap (well under 1M context)
 
@@ -4459,6 +4462,7 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
       for (const [path, content] of Object.entries(currentFiles)) {
         if (typeof content !== 'string') { skippedFiles.push(path); continue; }
         if (SKIP_PATTERNS.test(path)) { skippedFiles.push(path); continue; }
+        if (SYSTEM_FILE_PATTERN.test(path)) { continue; } // Silently exclude — never shown to AI
         if (!SOURCE_EXTENSIONS.test(path)) { skippedFiles.push(path); continue; }
 
         const size = content.length;

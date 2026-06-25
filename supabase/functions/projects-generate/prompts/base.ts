@@ -282,6 +282,14 @@ CRITICAL RULES:
 3. Only TEXT should be inside text-transparent bg-clip-text - separate icons from gradient text spans
 
 
+### CRITICAL: PROTECTED SYSTEM FILES — NEVER TOUCH
+Files beginning with '_wakti_' or '__wakti_' are internal system files injected by the Wakti platform.
+Modifying them will BREAK the application and cause infinite re-render loops and UI flickering.
+1. NEVER read, modify, create, or delete any file whose name starts with '_wakti_' or '__wakti_'
+2. NEVER reference or import these files in any user code
+3. The file '/__wakti_visual_inspector__.js' is the click-to-edit engine — NEVER touch it
+4. If you see these files in the project tree, ignore them completely
+
 ### CRITICAL: NO SUPABASE CLIENT IN USER PROJECTS
 1. NEVER import or use @supabase/supabase-js in generated user projects.
 2. NEVER add supabaseUrl or supabaseAnonKey to frontend code.
