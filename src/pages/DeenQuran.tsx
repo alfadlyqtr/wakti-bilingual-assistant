@@ -23,6 +23,10 @@ const READER_AUDIO_RECITERS = [
 const DEFAULT_READER_AUDIO_RECITER = "ar.mahermuaiqly";
 const QURAN_PROGRESS_STORAGE_KEY = "deen_quran_last_progress";
 const QURAN_BOOKMARKS_STORAGE_KEY = "deen_quran_bookmarks";
+const QURAN_BOOKMARKS_ORDER_KEY = "deen_quran_bookmarks_order";
+const MAX_BOOKMARKS = 7;
+const QURAN_BOOKMARKS_LAST_SYNC_KEY = "deen_quran_bookmarks_last_sync";
+const BOOKMARKS_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MP3QURAN_API_EN = "https://www.mp3quran.net/api/v3/reciters?language=eng";
 const MP3QURAN_API_AR = "https://www.mp3quran.net/api/v3/reciters?language=ar";
 const FALLBACK_RECITERS: ReciterOption[] = [
@@ -132,9 +136,13 @@ function writeStoredProgress(progress: LastProgress) {
   } catch {}
 }
 
-function readStoredBookmarks(): StoredQuranBookmarks {
+function getUserScopedKey(base: string, uid?: string | null) {
+  return uid ? `${base}:${uid}` : `${base}:guest`;
+}
+
+function readStoredBookmarks(uid?: string | null): StoredQuranBookmarks {
   try {
-    const raw = localStorage.getItem(QURAN_BOOKMARKS_STORAGE_KEY);
+    const raw = localStorage.getItem(getUserScopedKey(QURAN_BOOKMARKS_STORAGE_KEY, uid));
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     return parsed && typeof parsed === "object" ? parsed : {};
@@ -143,10 +151,79 @@ function readStoredBookmarks(): StoredQuranBookmarks {
   }
 }
 
-function writeStoredBookmarks(bookmarks: StoredQuranBookmarks) {
+function writeStoredBookmarks(bookmarks: StoredQuranBookmarks, uid?: string | null) {
   try {
-    localStorage.setItem(QURAN_BOOKMARKS_STORAGE_KEY, JSON.stringify(bookmarks));
+    localStorage.setItem(getUserScopedKey(QURAN_BOOKMARKS_STORAGE_KEY, uid), JSON.stringify(bookmarks));
   } catch {}
+}
+
+function readBookmarksOrder(uid?: string | null): string[] {
+  try {
+    const raw = localStorage.getItem(getUserScopedKey(QURAN_BOOKMARKS_ORDER_KEY, uid));
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeBookmarksOrder(order: string[], uid?: string | null) {
+  try {
+    localStorage.setItem(getUserScopedKey(QURAN_BOOKMARKS_ORDER_KEY, uid), JSON.stringify(order.slice(0, MAX_BOOKMARKS)));
+  } catch {}
+}
+
+function readLastSyncAt(uid?: string | null): number {
+  try {
+    const raw = localStorage.getItem(getUserScopedKey(QURAN_BOOKMARKS_LAST_SYNC_KEY, uid));
+    const n = raw ? parseInt(raw, 10) : 0;
+    return Number.isFinite(n) ? n : 0;
+  } catch { return 0; }
+}
+
+function writeLastSyncAt(ms: number, uid?: string | null) {
+  try { localStorage.setItem(getUserScopedKey(QURAN_BOOKMARKS_LAST_SYNC_KEY, uid), String(ms)); } catch {}
+}
+
+function getAllBookmarks(surahs: Surah[], uid?: string | null): { surah: Surah; ayah: number }[] {
+  const stored = readStoredBookmarks(uid);
+  const order = readBookmarksOrder(uid);
+  const byKey = new Set(order);
+  // Build from order first for stable, cross-device sequence; fall back to enumerating stored
+  const result: { surah: Surah; ayah: number }[] = [];
+  const pushKey = (key: string) => {
+    const [sStr, aStr] = key.split(":");
+    const sNum = parseInt(sStr, 10);
+    const aNum = parseInt(aStr, 10);
+    const surah = surahs.find((s) => s.number === sNum);
+    if (surah && Number.isFinite(aNum)) result.push({ surah, ayah: aNum });
+  };
+  for (const key of order) pushKey(key);
+  for (const [surahKey, ayahs] of Object.entries(stored)) {
+    const sNum = parseInt(surahKey, 10);
+    if (!Array.isArray(ayahs)) continue;
+    for (const aNum of ayahs) {
+      const key = `${sNum}:${aNum}`;
+      if (!byKey.has(key)) pushKey(key);
+    }
+  }
+  return result.slice(0, MAX_BOOKMARKS);
+}
+
+const BOOKMARK_PALETTE = [
+  { bg: "hsla(210,100%,65%,0.14)", text: "hsl(210,100%,65%)" },   // blue
+  { bg: "hsla(142,76%,55%,0.14)", text: "hsl(142,76%,55%)" },    // green
+  { bg: "hsla(25,95%,60%,0.14)",  text: "hsl(25,95%,60%)" },     // orange
+  { bg: "hsla(280,70%,65%,0.14)", text: "hsl(280,70%,65%)" },    // purple
+  { bg: "hsla(320,75%,70%,0.14)", text: "hsl(320,75%,70%)" },    // pink
+  { bg: "hsla(180,85%,60%,0.14)", text: "hsl(180,85%,60%)" },    // cyan
+  { bg: "hsla(160,80%,55%,0.14)", text: "hsl(160,80%,55%)" },    // emerald
+  { bg: "hsla(45,100%,60%,0.14)", text: "hsl(45,100%,60%)" },    // amber
+];
+
+function getBookmarkColor(surahNumber: number) {
+  return BOOKMARK_PALETTE[(surahNumber - 1) % BOOKMARK_PALETTE.length];
 }
 
 function formatAudioTime(seconds: number) {
@@ -245,6 +322,10 @@ export default function DeenQuran() {
   const [readerPlayAllEnabled, setReaderPlayAllEnabled] = useState(false);
   const [readerReciterOpen, setReaderReciterOpen] = useState(false);
   const [pagePickerOpen, setPagePickerOpen] = useState(false);
+  const [bookmarksDropdownOpen, setBookmarksDropdownOpen] = useState(false);
+  const bookmarksDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [bookmarksRefreshing, setBookmarksRefreshing] = useState(false);
   const [readerAudioReciter, setReaderAudioReciter] = useState<string>(() => {
     try {
       return localStorage.getItem(READER_RECITER_STORAGE_KEY) || DEFAULT_READER_AUDIO_RECITER;
@@ -295,6 +376,59 @@ export default function DeenQuran() {
   const preserveScrollYRef = useRef<number | null>(null);
   const suppressPlaybackScrollOnceRef = useRef(false);
   const chipRowTopBeforeRef = useRef<number | null>(null);
+
+  // Close bookmarks dropdown on outside click
+  useEffect(() => {
+    if (!bookmarksDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (bookmarksDropdownRef.current && !bookmarksDropdownRef.current.contains(e.target as Node)) {
+        setBookmarksDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [bookmarksDropdownOpen]);
+
+  // On-demand sync: when the dropdown opens, fetch server bookmarks if TTL expired
+  useEffect(() => {
+    if (!bookmarksDropdownOpen) return;
+    let cancelled = false;
+    (async () => {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const uid = sessionData.session?.user?.id || null;
+      if (!uid) return; // guests stay local-only
+      const last = readLastSyncAt(uid);
+      const now = Date.now();
+      const isStale = now - last > BOOKMARKS_TTL_MS || last === 0; // force fetch on first open
+      if (!isStale) return;
+      try {
+        setBookmarksRefreshing(true);
+        const { data, error } = await (supabase as any)
+          .from("deen_quran_bookmarks")
+          .select("surah_number, ayah_number")
+          .eq("user_id", uid);
+        if (error || !Array.isArray(data) || cancelled) return;
+        const map: StoredQuranBookmarks = {};
+        const order: string[] = [];
+        for (const row of data) {
+          const s = Number(row?.surah_number);
+          const a = Number(row?.ayah_number);
+          if (!Number.isFinite(s) || !Number.isFinite(a)) continue;
+          map[String(s)] = Array.from(new Set([...(map[String(s)] || []), a])).sort((x, y) => x - y);
+          const k = `${s}:${a}`;
+          if (!order.includes(k)) order.unshift(k);
+        }
+        writeStoredBookmarks(map, uid);
+        writeBookmarksOrder(order.slice(0, MAX_BOOKMARKS), uid);
+        writeLastSyncAt(now, uid);
+      } catch {}
+      finally {
+        if (!cancelled) setBookmarksRefreshing(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [bookmarksDropdownOpen]);
+
   useEffect(() => {
     try {
       localStorage.setItem(RECITER_STORAGE_KEY, selectedReciter);
@@ -529,6 +663,7 @@ export default function DeenQuran() {
     supabase.auth.getSession().then(({ data: sessionData }) => {
       const uid = sessionData.session?.user?.id;
       if (!uid) return;
+      setCurrentUserId(uid);
       (supabase as any)
         .from("deen_reading_progress")
         .select("surah_number, ayah_number")
@@ -542,12 +677,35 @@ export default function DeenQuran() {
             writeStoredProgress(progress);
           }
         });
+
+      // Sync bookmarks from server into user-scoped cache and order (cap 7 for display)
+      (supabase as any)
+        .from("deen_quran_bookmarks")
+        .select("surah_number, ayah_number")
+        .eq("user_id", uid)
+        .then(({ data }: any) => {
+          if (!Array.isArray(data)) return;
+          const map: StoredQuranBookmarks = {};
+          const order: string[] = [];
+          for (const row of data) {
+            const s = Number(row?.surah_number);
+            const a = Number(row?.ayah_number);
+            if (!Number.isFinite(s) || !Number.isFinite(a)) continue;
+            map[String(s)] = Array.from(new Set([...(map[String(s)] || []), a])).sort((x, y) => x - y);
+            const k = `${s}:${a}`;
+            if (!order.includes(k)) order.unshift(k);
+          }
+          writeStoredBookmarks(map, uid);
+          writeBookmarksOrder(order.slice(0, MAX_BOOKMARKS), uid);
+        });
     });
   }, []);
 
   // Load existing bookmarks when entering a surah
   const loadBookmarks = useCallback(async (surahNumber: number) => {
-    const storedBookmarks = readStoredBookmarks();
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id || null;
+    const storedBookmarks = readStoredBookmarks(uid);
     const localAyahs = Array.isArray(storedBookmarks[String(surahNumber)]) ? storedBookmarks[String(surahNumber)] : [];
     if (localAyahs.length > 0) {
       setBookmarkedAyahs(new Set(localAyahs));
@@ -570,7 +728,7 @@ export default function DeenQuran() {
         writeStoredBookmarks({
           ...storedBookmarks,
           [String(surahNumber)]: merged,
-        });
+        }, uid);
       }
     } catch {}
   }, []);
@@ -615,6 +773,20 @@ export default function DeenQuran() {
       await loadBookmarks(surah.number);
       if (typeof resumeAyah === "number" && resumeAyah > 0) {
         saveProgress(surah.number, resumeAyah);
+        if (arabicData?.ayahs) {
+          const targetIndex = arabicData.ayahs.findIndex((ayah) => ayah.numberInSurah === resumeAyah);
+          if (targetIndex >= 0) {
+            const targetPage = breaks.findIndex((start, pageIndex) => {
+              const end = breaks[pageIndex + 1] ?? arabicData.ayahs.length;
+              return targetIndex >= start && targetIndex < end;
+            });
+            if (targetPage >= 0) setReaderPage(targetPage);
+            setCurrentPlaybackAyahIndexSync(targetIndex);
+            window.setTimeout(() => {
+              ayahItemRefs.current[targetIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
+            }, 220);
+          }
+        }
       }
     } catch {
       toast.error(isAr ? "تعذر تحميل السورة" : "Failed to load surah");
@@ -1235,8 +1407,10 @@ export default function DeenQuran() {
 
   const bookmarkAyah = async (ayah: Ayah, fromSheet = false) => {
     if (!activeSurah) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id || null;
     const alreadyBookmarked = bookmarkedAyahs.has(ayah.numberInSurah);
-    const storedBookmarks = readStoredBookmarks();
+    const storedBookmarks = readStoredBookmarks(uid);
     const surahKey = String(activeSurah.number);
     const currentStored = Array.isArray(storedBookmarks[surahKey]) ? storedBookmarks[surahKey] : [];
 
@@ -1245,7 +1419,12 @@ export default function DeenQuran() {
       writeStoredBookmarks({
         ...storedBookmarks,
         [surahKey]: currentStored.filter((n) => n !== ayah.numberInSurah),
-      });
+      }, uid);
+
+      // Also remove from the per-user FIFO order
+      const k = `${activeSurah.number}:${ayah.numberInSurah}`;
+      const pruned = readBookmarksOrder(uid).filter((x) => x !== k);
+      writeBookmarksOrder(pruned, uid);
 
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -1261,11 +1440,41 @@ export default function DeenQuran() {
 
       toast.success(isAr ? "تم إزالة الحفظ" : "Bookmark removed");
     } else {
+      // Maintain user-scoped FIFO order (max 7). Newest at front; prune oldest beyond cap.
+      let order = readBookmarksOrder(uid);
+      const k = `${activeSurah.number}:${ayah.numberInSurah}`;
+      order = [k, ...order.filter((x) => x !== k)];
+      if (order.length > MAX_BOOKMARKS) {
+        const removed = order.slice(MAX_BOOKMARKS);
+        order = order.slice(0, MAX_BOOKMARKS);
+        for (const rem of removed) {
+          const [sStr, aStr] = rem.split(":");
+          const sNum = parseInt(sStr, 10);
+          const aNum = parseInt(aStr, 10);
+          if (Number.isFinite(sNum) && Number.isFinite(aNum)) {
+            const map = readStoredBookmarks(uid);
+            map[String(sNum)] = (map[String(sNum)] || []).filter((n) => n !== aNum);
+            if ((map[String(sNum)] || []).length === 0) delete map[String(sNum)];
+            writeStoredBookmarks(map, uid);
+            if (uid) {
+              try {
+                await (supabase as any)
+                  .from("deen_quran_bookmarks")
+                  .delete()
+                  .eq("user_id", uid)
+                  .eq("surah_number", sNum)
+                  .eq("ayah_number", aNum);
+              } catch {}
+            }
+          }
+        }
+      }
+      writeBookmarksOrder(order, uid);
       setBookmarkedAyahs((prev) => new Set(prev).add(ayah.numberInSurah));
       writeStoredBookmarks({
         ...storedBookmarks,
         [surahKey]: Array.from(new Set([...currentStored, ayah.numberInSurah])).sort((a, b) => a - b),
-      });
+      }, uid);
 
       try {
         const { data: sessionData } = await supabase.auth.getSession();
@@ -1285,25 +1494,57 @@ export default function DeenQuran() {
 
   const setPrimaryBookmarkAyah = async (ayah: Ayah) => {
     if (!activeSurah) return;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const uid = sessionData.session?.user?.id || null;
     const surahKey = String(activeSurah.number);
-    const storedBookmarks = readStoredBookmarks();
+    const storedBookmarks = readStoredBookmarks(uid);
     setBookmarkedAyahs(new Set([ayah.numberInSurah]));
     writeStoredBookmarks({
       ...storedBookmarks,
       [surahKey]: [ayah.numberInSurah],
-    });
+    }, uid);
+
+    // Update FIFO order: make this the newest, remove any previous occurrence for the same surah/ayah
+    const k = `${activeSurah.number}:${ayah.numberInSurah}`;
+    let order = [k, ...readBookmarksOrder(uid).filter((x) => x !== k)];
+    if (order.length > MAX_BOOKMARKS) {
+      const removed = order.slice(MAX_BOOKMARKS);
+      order = order.slice(0, MAX_BOOKMARKS);
+      for (const rem of removed) {
+        const [sStr, aStr] = rem.split(":");
+        const sNum = parseInt(sStr, 10);
+        const aNum = parseInt(aStr, 10);
+        if (Number.isFinite(sNum) && Number.isFinite(aNum)) {
+          const map = readStoredBookmarks(uid);
+          map[String(sNum)] = (map[String(sNum)] || []).filter((n) => n !== aNum);
+          if ((map[String(sNum)] || []).length === 0) delete map[String(sNum)];
+          writeStoredBookmarks(map, uid);
+          if (uid) {
+            try {
+              await (supabase as any)
+                .from("deen_quran_bookmarks")
+                .delete()
+                .eq("user_id", uid)
+                .eq("surah_number", sNum)
+                .eq("ayah_number", aNum);
+            } catch {}
+          }
+        }
+      }
+    }
+    writeBookmarksOrder(order, uid);
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
-      const uid = sessionData.session?.user?.id;
-      if (!uid) throw new Error("no-user");
+      const uidDb = sessionData.session?.user?.id;
+      if (!uidDb) throw new Error("no-user");
       await (supabase as any)
         .from("deen_quran_bookmarks")
         .delete()
-        .eq("user_id", uid)
+        .eq("user_id", uidDb)
         .eq("surah_number", activeSurah.number);
       await (supabase as any).from("deen_quran_bookmarks").upsert({
-        user_id: uid,
+        user_id: uidDb,
         surah_number: activeSurah.number,
         ayah_number: ayah.numberInSurah,
       });
@@ -1566,6 +1807,92 @@ export default function DeenQuran() {
               <ChevronRight className="w-4 h-4 text-sky-400/60 flex-shrink-0" style={{ transform: isAr ? "rotate(180deg)" : undefined }} />
             </button>
           )}
+
+          {/* Bookmarks Dropdown */}
+          {screen === "read-list" && (() => {
+            const allBookmarks = getAllBookmarks(surahs, currentUserId);
+            if (allBookmarks.length === 0) return null;
+            return (
+              <div className="mb-4 relative" ref={bookmarksDropdownRef}>
+                <button
+                  onClick={() => setBookmarksDropdownOpen((o) => !o)}
+                  className="w-full flex items-center justify-between rounded-xl px-3 py-2.5 active:scale-95 transition-all"
+                  style={{ background: cardBg, border: `1px solid ${cardBorder}`, boxShadow: cardShadow }}
+                >
+                  <div className="flex items-center gap-2">
+                    <Bookmark className="w-4 h-4" style={{ color: isDark ? "#f97316" : "#c2410c" }} />
+                    <span className="text-sm font-semibold" style={{ color: textPrimary }}>
+                      {isAr ? "العلامات المرجعية" : "Bookmarks"}
+                    </span>
+                    <span
+                      className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      style={{
+                        background: isDark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.12)",
+                        color: isDark ? "#f97316" : "#c2410c",
+                      }}
+                    >
+                      {allBookmarks.length}/{MAX_BOOKMARKS}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {bookmarksRefreshing && (
+                      <div className="w-3 h-3 border-2 border-sky-500/40 border-t-sky-500 rounded-full animate-spin" />
+                    )}
+                    {bookmarksDropdownOpen ? (
+                      <ChevronDown className="w-4 h-4" style={{ color: textMuted }} />
+                    ) : (
+                      <ChevronRight className="w-4 h-4" style={{ color: textMuted, transform: isAr ? "rotate(180deg)" : undefined }} />
+                    )}
+                  </div>
+                </button>
+
+                {bookmarksDropdownOpen && (
+                  <div
+                    className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl overflow-hidden"
+                    style={{ background: cardBg, border: `1px solid ${cardBorder}`, boxShadow: cardShadow }}
+                  >
+                    {bookmarksRefreshing && (
+                      <div className="px-3 py-2 text-[11px]" style={{ color: textMuted }}>
+                        {isAr ? "يتم التحديث…" : "Refreshing…"}
+                      </div>
+                    )}
+                    {allBookmarks.map((b, idx) => (
+                      <button
+                        key={`${b.surah.number}-${b.ayah}`}
+                        onClick={() => { setBookmarksDropdownOpen(false); openSurah(b.surah, b.ayah); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 active:scale-[0.99] transition-all"
+                        style={{
+                          borderBottom: idx < allBookmarks.length - 1 ? `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.06)"}` : "none",
+                        }}
+                      >
+                        <div
+                          className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                          style={{
+                            background: getBookmarkColor(b.surah.number).bg,
+                            color: getBookmarkColor(b.surah.number).text,
+                          }}
+                        >
+                          {b.surah.number}
+                        </div>
+                        <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
+                          <p className="text-sm font-medium" style={{ color: textPrimary }}>
+                            {isAr ? b.surah.name : b.surah.englishName}
+                          </p>
+                          <p className="text-[10px]" style={{ color: textMuted }}>
+                            {isAr ? "آية" : "Ayah"} {b.ayah}
+                          </p>
+                        </div>
+                        <ChevronRight
+                          className="w-3.5 h-3.5 flex-shrink-0"
+                          style={{ color: textMuted, transform: isAr ? "rotate(180deg)" : undefined }}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* Search */}
           <div
@@ -2839,6 +3166,7 @@ export default function DeenQuran() {
         </AlertDialog>
         </div>
       )}
+
     </div>
   );
 }

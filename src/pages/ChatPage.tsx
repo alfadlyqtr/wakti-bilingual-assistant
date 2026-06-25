@@ -4,7 +4,7 @@
  * Displays chat with a contact in full-screen with back navigation
  */
 
-import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
@@ -273,15 +273,13 @@ export default function ChatPage() {
   }, [contactId, currentUserId, allMessages, queryClient]);
 
   // Auto scroll on first load and new messages
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!allMessages?.length || !messageEndRef.current) return;
     if (!initialScrollDoneRef.current) {
-      setTimeout(() => {
-        if (!hasScrolledToUnreadRef.current) {
-          messageEndRef.current?.scrollIntoView({ behavior: "auto" });
-        }
-        initialScrollDoneRef.current = true;
-      }, 0);
+      if (!hasScrolledToUnreadRef.current) {
+        messageEndRef.current?.scrollIntoView({ behavior: "auto" });
+      }
+      initialScrollDoneRef.current = true;
     } else if (isNearBottomRef.current) {
       messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
@@ -1058,9 +1056,14 @@ export default function ChatPage() {
   const actionMenuLeft = selectedMessageRect
     ? clamp(selectedActionIsSentByMe ? selectedMessageRect.right - actionMenuWidth : selectedMessageRect.left, 16, Math.max(16, viewportWidth - actionMenuWidth - 16))
     : 16;
+  const actionMenuButtonCount = 1 // Reply
+    + (selectedActionIsSentByMe && selectedActionMessage?.content && !selectedActionMessage.is_deleted && isWithinEditWindow(selectedActionMessage) ? 1 : 0) // Edit
+    + (selectedActionMessage?.content && !selectedActionMessage.is_deleted ? 1 : 0) // Copy
+    + (selectedActionIsSentByMe ? 1 : 0); // Delete
+  const actionMenuHeight = actionMenuButtonCount * 54;
   const messagePreviewTop = selectedMessageRect ? clamp(selectedMessageRect.top, 96, Math.max(96, viewportHeight - selectedMessageRect.height - 210)) : 96;
   const reactionBarTop = selectedMessageRect ? Math.max(20, messagePreviewTop - 58) : 20;
-  const actionMenuTop = selectedMessageRect ? Math.min(viewportHeight - (selectedActionIsSentByMe ? 136 : 84), messagePreviewTop + selectedMessageRect.height + 10) : 150;
+  const actionMenuTop = selectedMessageRect ? Math.min(viewportHeight - actionMenuHeight - 16, messagePreviewTop + selectedMessageRect.height + 10) : 150;
 
   const renderPopupMessagePreview = (message: DirectMessage, isSentByMe: boolean) => (
     <div

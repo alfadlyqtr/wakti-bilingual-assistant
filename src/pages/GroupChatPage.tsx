@@ -1227,9 +1227,14 @@ export default function GroupChatPage() {
   const actionMenuLeft = selectedMessageRect
     ? clamp(selectedActionIsSentByMe ? selectedMessageRect.right - actionMenuWidth : selectedMessageRect.left, 16, Math.max(16, viewportWidth - actionMenuWidth - 16))
     : 16;
+  const actionMenuButtonCount = 1 // Reply
+    + (selectedActionIsSentByMe && selectedActionMessage?.content && !selectedActionMessage.is_deleted && isWithinEditWindow(selectedActionMessage) ? 1 : 0) // Edit
+    + (selectedActionMessage?.content && !selectedActionMessage.is_deleted ? 1 : 0) // Copy
+    + (selectedActionIsSentByMe ? 1 : 0); // Delete
+  const actionMenuHeight = actionMenuButtonCount * 54;
   const messagePreviewTop = selectedMessageRect ? clamp(selectedMessageRect.top, 96, Math.max(96, viewportHeight - selectedMessageRect.height - 210)) : 96;
   const reactionBarTop = selectedMessageRect ? Math.max(20, messagePreviewTop - 58) : 20;
-  const actionMenuTop = selectedMessageRect ? Math.min(viewportHeight - (selectedActionIsSentByMe ? 136 : 84), messagePreviewTop + selectedMessageRect.height + 10) : 150;
+  const actionMenuTop = selectedMessageRect ? Math.min(viewportHeight - actionMenuHeight - 16, messagePreviewTop + selectedMessageRect.height + 10) : 150;
 
   const renderPopupMessagePreview = (message: GroupChatMessage, isSentByMe: boolean) => (
     <div
