@@ -4561,7 +4561,15 @@ HARD RULES:
 - Do NOT return a plan that only creates the context file. That is a FAILED implementation.
 - The toggle button MUST be rendered somewhere visible (header/nav).
 - document.documentElement.dir MUST flip between 'ltr' and 'rtl' on toggle.
-- TRANSLATE EVERYTHING: You now have the full file contents. You MUST find EVERY hardcoded English string across ALL components and pages in the project and add them to the translation dictionary, then swap them out in the components. Include EVERY translated component in your "codeChanges" array.
+- PHASE 1 ONLY — DO NOT try to translate every component at once. This is the first of two passes.
+- Your codeChanges array MUST contain EXACTLY these files and nothing more:
+  1. LanguageContext.jsx (create)
+  2. ${entryFile} (wrap with LanguageProvider)
+  3. ${appFile} (add toggle button + translate its own hardcoded strings)
+  ${headerFile ? `4. ${headerFile} (add useLanguage + translate its own hardcoded strings)` : ''}
+- STOP after these 3-4 files. Do NOT add any other components.
+- The translation dictionary on LanguageContext should cover all strings from the files above ONLY.
+- A second automatic pass will handle the remaining components. Do not worry about them now.
 - No i18next / react-i18next / any external package — this is a lightweight Context-based implementation.
 - All files above MUST appear in the "codeChanges" array of your JSON plan.
 `;
@@ -4847,7 +4855,8 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                   systemInstruction: { parts: [{ text: chatSystemPrompt }] },
                   generationConfig: {
                     temperature: 0.7,
-                    maxOutputTokens: 4096,
+                    // Language toggle / dark-mode toggle plans touch many files — need more output budget
+                    maxOutputTokens: (isLanguageToggle || isDarkModeToggle) ? 16384 : 4096,
                     responseMimeType: "application/json", // Add JSON MIME type for consistent format handling
                   },
                 }),
@@ -5020,7 +5029,39 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
               });
             }
 
-            return createResponse({ ok: true, plan: extractedJson, mode: 'plan', creditUsage: chatCreditUsage });
+            // For language toggle: build a queued phase-2 followup that translates remaining components.
+            // Phase 1 only touched LanguageContext + index.js + App.js + Header.
+            // Phase 2 will translate every other component file.
+            let queuedFollowup: string | undefined;
+            if (isLanguageToggle) {
+              const phase1Files = new Set([
+                entryFile.toLowerCase(),
+                appFile.toLowerCase(),
+                ...(headerFile ? [headerFile.toLowerCase()] : []),
+                'languagecontext',
+              ]);
+              const remainingComponents = allPaths
+                .filter(p => {
+                  if (SYSTEM_FILE_PATTERN.test(p)) return false;
+                  if (!SOURCE_EXTENSIONS.test(p)) return false;
+                  if (SKIP_PATTERNS.test(p)) return false;
+                  const pl = p.toLowerCase();
+                  if (phase1Files.has(pl)) return false;
+                  if (phase1Files.has(pl.split('/').pop() || '')) return false;
+                  // Only component/page files — skip data, utils, config
+                  return /\.(jsx?|tsx?)$/.test(p) && /\/(components|pages|sections|views)\//i.test(p);
+                })
+                .slice(0, 12); // Cap at 12 to prevent runaway passes
+              if (remainingComponents.length > 0) {
+                queuedFollowup = `Phase 2 — translate all remaining components: ${remainingComponents.join(', ')}. For each file: import useLanguage, replace every hardcoded English string with a t() call, add the Arabic translations to the LanguageContext dictionary, and flip any positional classes (left/right, pl-/pr-) using the dir value. Keep logic and structure untouched.`;
+              }
+            }
+
+            // Embed queuedFollowup inside the plan JSON so it survives being saved as a chat message
+            const planJsonToReturn = queuedFollowup
+              ? JSON.stringify({ ...parsed, queuedFollowup })
+              : extractedJson;
+            return createResponse({ ok: true, plan: planJsonToReturn, mode: 'plan', creditUsage: chatCreditUsage });
           }
         } catch {
           // Invalid JSON, return as regular message

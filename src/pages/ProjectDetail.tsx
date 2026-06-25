@@ -7892,6 +7892,23 @@ ${fixInstructions}
                                     toast.warning(isRTL ? 'لم يتم رصد تغييرات فعلية بعد تنفيذ الخطة.' : 'No verified code changes were detected after executing the plan.');
                                   }
                                   
+                                  // Auto-run queued follow-up (e.g. language toggle Phase 2)
+                                  if (hasVerifiedChanges && parsedPlan?.queuedFollowup) {
+                                    toast.info(
+                                      isRTL
+                                        ? 'المرحلة الأولى اكتملت! سيبدأ المساعد بترجمة باقي المكونات تلقائياً...'
+                                        : 'Phase 1 done! Starting Phase 2 automatically — translating remaining components...',
+                                      { duration: 5000 }
+                                    );
+                                    wizardPromptRef.current = parsedPlan.queuedFollowup;
+                                    setTimeout(() => {
+                                      const form = document.querySelector('form[class*="flex items-end gap-2"]');
+                                      if (form) {
+                                        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                                      }
+                                    }, 2000);
+                                  }
+                                  
                                   setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
                                 } catch (err: any) {
                                   console.error('Execute plan error:', err);

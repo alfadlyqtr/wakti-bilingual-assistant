@@ -1039,16 +1039,19 @@ export default function SandpackStudio({
   }, []);
   
   // Remove Sandpack resize handle - it causes issues in preview-only mode
+  // NOTE: MutationObserver intentionally removed — it caused an infinite loop:
+  // every inline style change it made was itself a DOM mutation, retriggering it
+  // thousands of times per second when navigating in the code editor, freezing the app.
+  // The CSS rules in the style block below already hide these elements for any
+  // dynamically added matches, making the observer completely redundant.
   useEffect(() => {
     const removeResizeHandles = () => {
-      // Target all possible resize handle elements
       const selectors = [
         '.sp-resize-handler',
         '[class*="sp-resize"]',
         '[class*="ResizeHandler"]',
         '[data-resize-handle]',
       ];
-      
       selectors.forEach(selector => {
         document.querySelectorAll(selector).forEach(el => {
           (el as HTMLElement).style.display = 'none';
@@ -1058,29 +1061,21 @@ export default function SandpackStudio({
           (el as HTMLElement).style.pointerEvents = 'none';
         });
       });
-      
-      // Also target by title attribute (Arabic: "اسحب لتغيير العرض")
       document.querySelectorAll('[title*="اسحب"], [title*="Drag"], [title*="resize"]').forEach(el => {
         (el as HTMLElement).style.display = 'none';
         (el as HTMLElement).style.visibility = 'hidden';
       });
     };
-    
-    // Run immediately and after a delay (for dynamic elements)
+
     removeResizeHandles();
     const timer1 = setTimeout(removeResizeHandles, 100);
     const timer2 = setTimeout(removeResizeHandles, 500);
     const timer3 = setTimeout(removeResizeHandles, 1000);
-    
-    // Also use MutationObserver to catch dynamically added elements
-    const observer = new MutationObserver(removeResizeHandles);
-    observer.observe(document.body, { childList: true, subtree: true });
-    
+
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
       clearTimeout(timer3);
-      observer.disconnect();
     };
   }, [viewMode]);
 
