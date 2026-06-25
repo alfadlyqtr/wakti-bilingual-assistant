@@ -1594,7 +1594,7 @@ export default function DeenQuran() {
 
       {/* Header */}
       {screen !== "listen-player" && screen !== "reader" && (
-        <div className="sticky top-0 z-[60] px-4 pt-4 pb-3" style={{ background: headerBg, backdropFilter: "blur(16px)", borderBottom: `1px solid ${cardBorder}`, willChange: "transform" }}>
+        <div className="sticky top-0 z-20 px-4 pt-4 pb-3" style={{ background: headerBg, backdropFilter: "blur(16px)", borderBottom: `1px solid ${cardBorder}` }}>
           <div className="flex items-center gap-3" style={{ direction: "ltr" }}>
             <button
                 onClick={handleBackNavigation}
@@ -2433,7 +2433,7 @@ export default function DeenQuran() {
                       title={showArabicText ? "Hide Arabic text" : "Show Arabic text"}
                     >
                       <span className="text-[11px] font-medium" style={{ color: isDark ? "#858384" : "#606062" }}>
-                        Arabic text
+                        Arabic Transcript
                       </span>
                       <span
                         className="relative inline-flex items-center rounded-full"
