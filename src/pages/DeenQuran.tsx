@@ -1594,7 +1594,7 @@ export default function DeenQuran() {
 
       {/* Header */}
       {screen !== "listen-player" && screen !== "reader" && (
-        <div className="sticky top-0 z-20 px-4 pt-4 pb-3" style={{ background: headerBg, backdropFilter: "blur(16px)", borderBottom: `1px solid ${cardBorder}` }}>
+        <div className="sticky top-0 z-[60] px-4 pt-4 pb-3" style={{ background: headerBg, backdropFilter: "blur(16px)", borderBottom: `1px solid ${cardBorder}`, willChange: "transform" }}>
           <div className="flex items-center gap-3" style={{ direction: "ltr" }}>
             <button
                 onClick={handleBackNavigation}
