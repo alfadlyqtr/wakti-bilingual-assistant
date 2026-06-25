@@ -3689,6 +3689,12 @@ export async function executeToolCall(
     case "write_file": {
       const path = normalizeFilePath(args.path || "");
       const content = args.content || "";
+
+      // 🛡️ HARD BLOCK — never allow writes to Wakti system files
+      if (/[\\\/_]_wakti_|[\\\/_]__wakti_/i.test(path)) {
+        console.error(`[Agent] write_file BLOCKED — system file: ${path}`);
+        return { error: `BLOCKED: '${path}' is a protected Wakti system file and cannot be modified.` };
+      }
       
       console.log(`[Agent] write_file called: path=${path}, contentLength=${content.length}`);
       
@@ -3800,6 +3806,12 @@ export async function executeToolCall(
       const path = normalizeFilePath(args.path || "");
       const search = args.search || "";
       const replace = args.replace || "";
+
+      // 🛡️ HARD BLOCK — never allow edits to Wakti system files
+      if (/[\\\/_]_wakti_|[\\\/_]__wakti_/i.test(path)) {
+        console.error(`[Agent] search_replace BLOCKED — system file: ${path}`);
+        return { error: `BLOCKED: '${path}' is a protected Wakti system file and cannot be modified.` };
+      }
       
       console.log(`[Agent] search_replace called: path=${path}, searchLen=${search.length}, replaceLen=${replace.length}`);
       
@@ -3837,6 +3849,12 @@ export async function executeToolCall(
       const path = normalizeFilePath(args.path || "");
       const instructions = args.instructions || "";
       const codeEdit = args.code_edit || "";
+
+      // 🛡️ HARD BLOCK — never allow edits to Wakti system files
+      if (/[\\\/_]_wakti_|[\\\/_]__wakti_/i.test(path)) {
+        console.error(`[Agent] morph_edit BLOCKED — system file: ${path}`);
+        return { error: `BLOCKED: '${path}' is a protected Wakti system file and cannot be modified.` };
+      }
       
       if (!codeEdit) {
         return { error: "morph_edit: 'code_edit' parameter is required" };
