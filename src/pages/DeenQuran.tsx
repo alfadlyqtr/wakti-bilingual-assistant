@@ -1353,12 +1353,11 @@ export default function DeenQuran() {
   };
 
   const stripBismillahPrefix = (ayah: Ayah, surahNum?: number): string => {
-    // For surahs other than Al-Fatiha (1) and At-Tawbah (9), the quran-uthmani API
-    // always prepends the Bismillah (4 words) to the text of ayah 1.
-    // Strip unconditionally based on surah number and ayah position.
     const num = surahNum ?? activeSurah?.number;
     const sourceText = getArabicDisplayText(ayah, num);
     if (num && num !== 1 && num !== 9 && ayah.numberInSurah === 1) {
+      // Only strip if the text actually contains a Bismillah prefix
+      if (!sourceText.includes("بِسْم")) return sourceText;
       const words = sourceText.split(/\s+/);
       if (words.length > 4) return words.slice(4).join(" ");
     }
@@ -1848,8 +1847,14 @@ export default function DeenQuran() {
 
                 {bookmarksDropdownOpen && (
                   <div
-                    className="absolute left-0 right-0 top-full mt-1 z-20 rounded-xl overflow-hidden"
-                    style={{ background: cardBg, border: `1px solid ${cardBorder}`, boxShadow: cardShadow }}
+                    className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl overflow-hidden"
+                    style={{
+                      background: isDark
+                        ? "linear-gradient(135deg, hsl(25 15% 12%) 0%, hsl(260 15% 11%) 100%)"
+                        : "linear-gradient(135deg, #ffffff 0%, hsl(45 100% 97%) 100%)",
+                      border: `1px solid ${isDark ? "hsla(25,95%,60%,0.22)" : "hsla(25,95%,45%,0.25)"}`,
+                      boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.4)" : cardShadow,
+                    }}
                   >
                     {bookmarksRefreshing && (
                       <div className="px-3 py-2 text-[11px]" style={{ color: textMuted }}>
