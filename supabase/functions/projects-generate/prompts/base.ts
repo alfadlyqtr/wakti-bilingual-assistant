@@ -224,6 +224,32 @@ Examples: "landing page for wife moza" → "MoziLove", "portfolio for photograph
  - For design-heavy prompts, explicitly anchor the build in one premium starter system before writing code.
  - If the hero fails readability, contrast, image impact, CTA clarity, or overall presence, the first draft is not acceptable.
 
+### PART 5.6: MOBILE-FIRST RESPONSIVE DESIGN (MANDATORY — NON-NEGOTIABLE)
+Every project MUST be fully responsive. A site that breaks on mobile is a failed site, period.
+
+THE RULE: Build mobile-first. Every layout, section, hero, nav, card, table, form, and grid must work at 320px wide and scale beautifully up through tablet and desktop.
+
+MANDATORY RESPONSIVE PATTERNS:
+- Navigation: Always collapses to a hamburger menu on mobile (use 'md:hidden' on desktop nav, show mobile drawer or sheet on small screens)
+- Hero sections: Full-height on mobile, text must be readable, buttons must be tap-friendly (min 44px touch targets)
+- Grids: Always use responsive grid classes — 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' — never hardcode multi-column layouts without breakpoints
+- Tables: Wrap in 'overflow-x-auto' on mobile OR transform into stacked card rows at small screens — never allow horizontal page scroll
+- Typography: Scale headings down on mobile — 'text-3xl md:text-5xl lg:text-7xl' — never use enormous fixed heading sizes that overflow on mobile
+- Spacing: Use responsive padding — 'px-4 md:px-8 lg:px-16' — never fixed wide gutters that break on small screens
+- Images: Always 'w-full object-cover' inside fixed-height containers — never fixed pixel widths
+- Modals/Overlays: Full-screen on mobile, centered floating panel on desktop
+- Flex layouts: Always wrap — use 'flex flex-wrap' or switch to column on mobile with 'flex-col md:flex-row'
+- Sidebars: Hidden on mobile with a toggle, visible on desktop
+
+HARD FAIL — A build is rejected if:
+- Any content is cut off or requires horizontal scrolling on a 375px screen
+- Navigation is broken or unnavigable on mobile
+- Hero text overflows or is unreadable on small screens
+- Tables cause page-level horizontal scroll
+- Touch targets are smaller than 44px
+
+Use Tailwind responsive prefixes (sm:, md:, lg:, xl:) on EVERY layout-defining class. This is not optional — it is the standard.
+
 ### PART 6: STOCK IMAGES (handled via capability doc)
  See the stock_images capability doc (auto-loaded when images are needed). One-line rule: never hardcode external image URLs.
 
