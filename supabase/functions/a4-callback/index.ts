@@ -12,7 +12,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
-import { findTheme } from "../_shared/a4-themes.ts";
+import { findTheme, getThemeDocumentLane } from "../_shared/a4-themes.ts";
 import {
   compileMasterPrompt,
   type A4CreativeSettings,
@@ -147,6 +147,22 @@ function buildCallbackUrl(
   url.searchParams.set("page", String(pageNumber));
   url.searchParams.set("token", callbackToken);
   return url.toString();
+}
+
+function shouldUseKieImageToImage(opts: {
+  themeId: string;
+  purposeId: string | null;
+  referenceImageRole: A4ReferenceImageRole;
+  hasPrevPageReference: boolean;
+  imageInputCount: number;
+}): boolean {
+  if (opts.imageInputCount === 0) return false;
+  const lane = getThemeDocumentLane(opts.themeId, opts.purposeId);
+  if (lane === "formal") return false;
+  if (opts.hasPrevPageReference) return true;
+  return opts.referenceImageRole === "portrait" ||
+    opts.referenceImageRole === "product" ||
+    opts.referenceImageRole === "sample";
 }
 
 async function fetchKieTaskDetail(
@@ -284,6 +300,18 @@ async function dispatchNextPage(
       ? (formStateForPrompt.__decor_unwanted__ as string[])
       : [];
 
+    const imageInputs: string[] = [];
+    if (logoUrl) imageInputs.push(logoUrl);
+    imageInputs.push(page1ImageUrl);
+
+    const useImageModel = shouldUseKieImageToImage({
+      themeId: row.theme_id,
+      purposeId: row.purpose_id ?? null,
+      referenceImageRole,
+      hasPrevPageReference: true,
+      imageInputCount: imageInputs.length,
+    });
+
     const prompt = compileMasterPrompt({
       theme,
       purposeId: row.purpose_id ?? null,
@@ -293,8 +321,8 @@ async function dispatchNextPage(
       totalPages: row.total_pages,
       languageMode,
       brandColors: null,
-      hasLogoReference: !!logoUrl,
-      hasPrevPageReference: true,
+      hasLogoReference: useImageModel && !!logoUrl,
+      hasPrevPageReference: useImageModel,
       designSettings,
       creativeSettings,
       userWishes: stashedUserWishes,
@@ -303,24 +331,19 @@ async function dispatchNextPage(
       decorationsUnwanted: decorUnwanted,
     });
 
-    const imageInputs: string[] = [];
-    if (logoUrl) imageInputs.push(logoUrl);
-    imageInputs.push(page1ImageUrl);
-
     if (!callbackToken) {
       console.error(`[a4-callback] missing callback token for batch=${row.batch_id}`);
       return;
     }
 
     const callbackUrl = buildCallbackUrl(supabaseUrl, row.batch_id, row.page_number, callbackToken);
-    const hasImageInputs = imageInputs.length > 0;
 
     const payload = {
-      model: hasImageInputs ? KIE_IMAGE_MODEL : KIE_TEXT_MODEL,
+      model: useImageModel ? KIE_IMAGE_MODEL : KIE_TEXT_MODEL,
       callBackUrl: callbackUrl,
       input: {
         prompt,
-        ...(hasImageInputs ? { input_urls: imageInputs } : {}),
+        ...(useImageModel ? { input_urls: imageInputs } : {}),
         aspect_ratio: mapKieAspectRatio(row.aspect_ratio || theme.aspect_ratio),
         resolution: row.resolution === "2K" ? "2K" : "1K",
       },

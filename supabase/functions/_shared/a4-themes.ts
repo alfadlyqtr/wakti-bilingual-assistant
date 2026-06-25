@@ -1015,7 +1015,7 @@ export function getThemeFormSchema(theme: A4Theme, purposeId: string | null | un
 }
 
 export function themeRequiresPurpose(theme: A4Theme): boolean {
-  return theme.id === "clean_minimal" || theme.id === "invoice_receipt" || theme.id === "thank_you_invitation_card";
+  return !!theme.purpose_chips && !!theme.form_schema_by_purpose && !theme.form_schema;
 }
 
 export function getThemeDocumentLane(themeId: string, purposeId?: string | null): A4DocumentLane {

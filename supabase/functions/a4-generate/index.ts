@@ -22,7 +22,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { generateGemini, buildVisionContent } from "../_shared/gemini.ts";
-import { findTheme, maxPagesForTheme, themeRequiresPurpose } from "../_shared/a4-themes.ts";
+import { findTheme, getThemeDocumentLane, maxPagesForTheme, themeRequiresPurpose } from "../_shared/a4-themes.ts";
 import {
   buildNormalizedA4Content,
   chooseA4Resolution,
@@ -252,25 +252,41 @@ function buildCallbackUrl(
   return url.toString();
 }
 
+function shouldUseKieImageToImage(opts: {
+  themeId: string;
+  purposeId: string | null;
+  referenceImageRole: A4ReferenceImageRole;
+  hasPrevPageReference: boolean;
+  imageInputCount: number;
+}): boolean {
+  if (opts.imageInputCount === 0) return false;
+  const lane = getThemeDocumentLane(opts.themeId, opts.purposeId);
+  if (lane === "formal") return false;
+  if (opts.hasPrevPageReference) return true;
+  return opts.referenceImageRole === "portrait" ||
+    opts.referenceImageRole === "product" ||
+    opts.referenceImageRole === "sample";
+}
+
 // -----------------------------------------------------------------------------
 // Kie createTask dispatch
 // -----------------------------------------------------------------------------
 async function dispatchKieTask(opts: {
   prompt: string;
   imageInputs: string[];
+  useImageModel: boolean;
   aspectRatio: string;
   callbackUrl: string;
   apiKey: string;
   resolution: A4Resolution;
 }): Promise<{ taskId: string } | { error: string }> {
   try {
-    const hasImageInputs = opts.imageInputs.length > 0;
     const payload = {
-      model: hasImageInputs ? KIE_IMAGE_MODEL : KIE_TEXT_MODEL,
+      model: opts.useImageModel ? KIE_IMAGE_MODEL : KIE_TEXT_MODEL,
       callBackUrl: opts.callbackUrl,
       input: {
         prompt: opts.prompt,
-        ...(hasImageInputs ? { input_urls: opts.imageInputs } : {}),
+        ...(opts.useImageModel && opts.imageInputs.length > 0 ? { input_urls: opts.imageInputs } : {}),
         aspect_ratio: mapKieAspectRatio(opts.aspectRatio),
         resolution: opts.resolution,
       },
@@ -481,6 +497,18 @@ serve(async (req) => {
     const page1ImageUrl: string | null =
       targetRow.page_number > 1 ? ((page1Row?.image_url as string | null) ?? null) : null;
 
+    const retryInputs: string[] = [];
+    if (logoForRetry) retryInputs.push(logoForRetry);
+    if (page1ImageUrl) retryInputs.push(page1ImageUrl);
+
+    const retryUseImageModel = shouldUseKieImageToImage({
+      themeId: theme.id,
+      purposeId: targetRow.purpose_id ?? null,
+      referenceImageRole: roleForRetry,
+      hasPrevPageReference: !!page1ImageUrl,
+      imageInputCount: retryInputs.length,
+    });
+
     const compiled = compileMasterPrompt({
       theme,
       purposeId: targetRow.purpose_id ?? null,
@@ -490,8 +518,8 @@ serve(async (req) => {
       totalPages: targetRow.total_pages,
       languageMode: langForRetry,
       brandColors: null,
-      hasLogoReference: !!logoForRetry,
-      hasPrevPageReference: !!page1ImageUrl,
+      hasLogoReference: retryUseImageModel && !!logoForRetry,
+      hasPrevPageReference: retryUseImageModel && !!page1ImageUrl,
       designSettings: stashedDesign,
       creativeSettings: stashedCreative,
       userWishes: stashedWishes,
@@ -500,14 +528,11 @@ serve(async (req) => {
       decorationsUnwanted: decorUnwantedRetry,
     });
 
-    const retryInputs: string[] = [];
-    if (logoForRetry) retryInputs.push(logoForRetry);
-    if (page1ImageUrl) retryInputs.push(page1ImageUrl);
-
     const retryCallbackUrl = buildCallbackUrl(SUPABASE_URL, targetRow.batch_id, targetRow.page_number, callbackTokenRetry);
     const retryDispatch = await dispatchKieTask({
       prompt: compiled,
-      imageInputs: retryInputs,
+      imageInputs: retryUseImageModel ? retryInputs : [],
+      useImageModel: retryUseImageModel,
       aspectRatio: targetRow.aspect_ratio || theme.aspect_ratio,
       callbackUrl: retryCallbackUrl,
       apiKey: KIE_API_KEY,
@@ -746,14 +771,18 @@ serve(async (req) => {
   const page1Row = insertedRows.find((r) => r.page_number === 1);
   if (!page1Row) return json(500, { success: false, error: "Page 1 row missing" });
 
-  // --- Compile master prompt for page 1 (DETERMINISTIC — OBEDIENT) ----------
-  // The Gemini "Prompt Engineer" was removed from the generation path because
-  // it was dropping user content and paraphrasing facts. The deterministic
-  // compiler is guaranteed to embed the raw content verbatim plus every
-  // structured input the user provided (theme, design, creative, decorations,
-  // user wishes, reference image role). What the user picks IS what the
-  // image model sees.
-  const compiledPrompt = compileMasterPrompt({
+  const promptSource = "deterministic" as const;
+
+  const page1ImageInputs = logoSignedUrl ? [logoSignedUrl] : [];
+  const page1UseImageModel = shouldUseKieImageToImage({
+    themeId: theme.id,
+    purposeId: body.purpose_id ?? null,
+    referenceImageRole,
+    hasPrevPageReference: false,
+    imageInputCount: page1ImageInputs.length,
+  });
+
+  const page1Prompt = compileMasterPrompt({
     theme,
     purposeId: body.purpose_id ?? null,
     formState,
@@ -762,23 +791,21 @@ serve(async (req) => {
     totalPages,
     languageMode: detectedLanguage,
     brandColors: brandColors ?? null,
-    hasLogoReference: !!logoSignedUrl,
+    hasLogoReference: page1UseImageModel && page1ImageInputs.length > 0,
     hasPrevPageReference: false,
     designSettings: designSettings,
     creativeSettings,
     userWishes,
     referenceImageRole,
-    // F1: forward user-picked decoration chips into the prompt.
     decorationsWanted: decorWanted,
     decorationsUnwanted: decorUnwanted,
   });
-  const promptSource = "deterministic" as const;
-
   // Dispatch Kie createTask for page 1
   const callbackUrl = buildCallbackUrl(SUPABASE_URL, batchId, 1, callbackToken);
   const kieResult = await dispatchKieTask({
-    prompt: compiledPrompt,
-    imageInputs: logoSignedUrl ? [logoSignedUrl] : [],
+    prompt: page1Prompt,
+    imageInputs: page1UseImageModel ? page1ImageInputs : [],
+    useImageModel: page1UseImageModel,
     aspectRatio: resolvedAspect,
     callbackUrl,
     apiKey: KIE_API_KEY,
@@ -798,7 +825,7 @@ serve(async (req) => {
     .from("user_a4_documents")
     .update({
       kie_task_id: kieResult.taskId,
-      compiled_prompt: compiledPrompt,
+      compiled_prompt: page1Prompt,
       reference_image_url: logoSignedUrl, // store logo ref for pages 2+ to reuse
     })
     .eq("id", page1Row.id);
