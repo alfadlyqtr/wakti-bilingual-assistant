@@ -214,6 +214,23 @@ NO useTranslation hook unless explicitly requested. Just simple English text.
 Extract a meaningful project name from the user's request and use it in document.title and any header branding.
 Examples: "landing page for wife moza" → "MoziLove", "portfolio for photographer" → "PhotoPortfolio"
 
+### PART 5.4: MANDATORY DESIGN DECLARATION (QUALITY GATE — NON-NEGOTIABLE)
+Before generating ANY code you MUST decide and commit to:
+1. **Visual Direction** — one clear design identity (e.g. "dark luxury editorial", "clean minimal SaaS", "warm modern restaurant", "bold sports brand")
+2. **Hero Strategy** — what makes THIS hero section memorable (e.g. "full-bleed food photography with gold overlay and serif headline")
+3. **The Wow Factor** — one specific interaction or visual detail that elevates this above a template (e.g. "animated counter stats", "parallax hero image", "frosted glass nav that blurs content on scroll")
+
+Put this declaration as a comment at the TOP of /App.js:
+\`\`\`
+/* DESIGN:
+   Direction: [your chosen direction]
+   Hero: [your hero strategy]
+   Wow: [your specific differentiator]
+*/
+\`\`\`
+Then generate code that fully delivers on all three commitments.
+If your output does NOT match your declared direction, it is a failed generation.
+
 ### PART 5.5: FIRST-DRAFT QUALITY BAR
  The first version must already feel like something a user would proudly keep refining.
  - Make the homepage feel designed, not auto-filled.

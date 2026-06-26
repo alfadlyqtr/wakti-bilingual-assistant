@@ -4546,31 +4546,32 @@ ${filesContentStr}`;
       if (isLanguageToggle) {
         featureContractStr = `
 
-🎯 FEATURE CONTRACT — LANGUAGE TOGGLE (English / Arabic, with RTL)
-The user wants a WORKING bilingual toggle. A single context file is NOT enough.
-You MUST return a plan that includes ALL of the following files in ONE response:
+🎯 FEATURE CONTRACT — LANGUAGE TOGGLE (English / Arabic + RTL) using react-i18next
+The user wants a WORKING bilingual toggle. Use react-i18next — it is ALREADY installed as a package.
 
-REQUIRED FILES (touch every one that applies to this project):
-${contextDirFiles.length === 0 ? '1. CREATE  /context/LanguageContext.jsx  — exports LanguageProvider + useLanguage; holds { language, toggleLanguage, t, dir }; sets document.documentElement.dir + lang on change' : `1. UPDATE  ${contextDirFiles[0]}  — must export LanguageProvider + useLanguage; holds { language, toggleLanguage, t, dir }; sets document.documentElement.dir + lang on change`}
-2. UPDATE  ${entryFile}  — wrap <App /> in <LanguageProvider>…</LanguageProvider>
-3. UPDATE  ${appFile}  — import useLanguage; render a VISIBLE toggle control in the top nav/header (e.g. button showing "EN" ↔ "AR"); replace hardcoded nav labels with t.nav.*; honor dir for layout
-${headerFile ? `4. UPDATE  ${headerFile}  — import useLanguage; replace hardcoded strings (e.g. "Download CV") with translated labels from t; use dir-aware classes where needed` : ''}
-${dataFile ? `5. UPDATE  ${dataFile}  — expose an English AND Arabic variant (e.g. portfolioDataEn / portfolioDataAr) OR a single object with .en/.ar keys; keep existing field names` : ''}
+PHASE 1 ONLY — Create foundation files (do not translate every component yet):
+
+REQUIRED FILES:
+1. CREATE  /src/i18n.js  — configure i18next:
+   import i18n from 'i18next'; import { initReactI18next } from 'react-i18next';
+   Resources must include 'en' and 'ar' namespaces with translation keys for all strings in the files below.
+   Add: i18n.on('languageChanged', lng => { document.documentElement.dir = lng === 'ar' ? 'rtl' : 'ltr'; document.documentElement.lang = lng; });
+   Call i18n.use(initReactI18next).init({ resources, fallbackLng: 'en', lng: 'en', interpolation: { escapeValue: false } });
+   export default i18n;
+
+2. UPDATE  ${entryFile}  — add: import './i18n'; (BEFORE the ReactDOM.render / createRoot call — no Provider needed, i18next is global)
+
+3. UPDATE  ${appFile}  — add: import { useTranslation } from 'react-i18next'; const { t, i18n } = useTranslation();
+   Render a VISIBLE toggle button in the top nav/header (e.g. "EN" ↔ "عر") that calls i18n.changeLanguage(i18n.language === 'en' ? 'ar' : 'en');
+   Replace hardcoded strings in THIS file with t('key') calls.
+
+${headerFile ? `4. UPDATE  ${headerFile}  — add useTranslation; replace hardcoded strings with t('key'); add the translation keys to i18n.js resources.` : ''}
 
 HARD RULES:
-- Do NOT return a plan that only creates the context file. That is a FAILED implementation.
-- The toggle button MUST be rendered somewhere visible (header/nav).
-- document.documentElement.dir MUST flip between 'ltr' and 'rtl' on toggle.
-- PHASE 1 ONLY — DO NOT try to translate every component at once. This is the first of two passes.
-- Your codeChanges array MUST contain EXACTLY these files and nothing more:
-  1. LanguageContext.jsx (create)
-  2. ${entryFile} (wrap with LanguageProvider)
-  3. ${appFile} (add toggle button + translate its own hardcoded strings)
-  ${headerFile ? `4. ${headerFile} (add useLanguage + translate its own hardcoded strings)` : ''}
-- STOP after these 3-4 files. Do NOT add any other components.
-- The translation dictionary on LanguageContext should cover all strings from the files above ONLY.
-- A second automatic pass will handle the remaining components. Do not worry about them now.
-- No i18next / react-i18next / any external package — this is a lightweight Context-based implementation.
+- Use react-i18next. Do NOT create a custom LanguageContext — react-i18next is already available.
+- The toggle button MUST be visible in the nav/header.
+- document.documentElement.dir MUST flip between 'ltr' and 'rtl' when language changes.
+- PHASE 1 ONLY: these ${headerFile ? '4' : '3'} files maximum. A second automatic pass translates remaining components.
 - All files above MUST appear in the "codeChanges" array of your JSON plan.
 `;
       } else if (isDarkModeToggle) {
@@ -5038,7 +5039,7 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                 entryFile.toLowerCase(),
                 appFile.toLowerCase(),
                 ...(headerFile ? [headerFile.toLowerCase()] : []),
-                'languagecontext',
+                'i18n.js', 'i18n', 'languagecontext',
               ]);
               const remainingComponents = allPaths
                 .filter(p => {
@@ -5048,12 +5049,14 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                   const pl = p.toLowerCase();
                   if (phase1Files.has(pl)) return false;
                   if (phase1Files.has(pl.split('/').pop() || '')) return false;
+                  // Skip i18n config and locale files — already handled in phase 1
+                  if (/i18n|locales?|translation/i.test(p)) return false;
                   // Only component/page files — skip data, utils, config
                   return /\.(jsx?|tsx?)$/.test(p) && /\/(components|pages|sections|views)\//i.test(p);
                 })
                 .slice(0, 12); // Cap at 12 to prevent runaway passes
               if (remainingComponents.length > 0) {
-                queuedFollowup = `Phase 2 — translate all remaining components: ${remainingComponents.join(', ')}. For each file: import useLanguage, replace every hardcoded English string with a t() call, add the Arabic translations to the LanguageContext dictionary, and flip any positional classes (left/right, pl-/pr-) using the dir value. Keep logic and structure untouched.`;
+                queuedFollowup = `Phase 2 — translate remaining components using react-i18next: ${remainingComponents.join(', ')}. For each file: add import { useTranslation } from 'react-i18next'; const { t } = useTranslation(); replace every hardcoded English string with a t('key') call; add the matching Arabic translations for all new keys into the 'ar' resources inside /src/i18n.js; flip any directional classes (left/right, pl-/pr-, text-left/text-right) based on i18n.dir(). Keep all logic and structure untouched.`;
               }
             }
 

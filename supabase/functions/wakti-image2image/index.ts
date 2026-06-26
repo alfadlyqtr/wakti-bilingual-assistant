@@ -68,9 +68,11 @@ const KIE_API_KEY = (
   || Deno.env.get("KIE_BEARER_TOKEN")
   || ""
 ).trim();
+const RUNWARE_API_KEY = (Deno.env.get("RUNWARE_API_KEY") || "").trim();
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "openai:gpt-image@2";
 const MODEL_BEST = "nano-banana-2";
 const NANO_BANANA_SUPPORTED_RATIOS = new Set([
   "1:1",
@@ -90,12 +92,162 @@ const NANO_BANANA_SUPPORTED_RATIOS = new Set([
   "auto",
 ]);
 
+function getDimensionsForModel(model: string, aspectRatio: "9:16" | "16:9"): { width?: number; height?: number } {
+  if (model === "openai:gpt-image@2") {
+    return aspectRatio === "16:9"
+      ? { width: 1536, height: 1024 }
+      : { width: 1024, height: 1536 };
+  }
+  return {};
+}
+
+function isRetryableRunwareErrorMessage(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('"status":502')
+    || normalized.includes('"status":503')
+    || normalized.includes('"status":504')
+    || normalized.includes("timed out")
+    || normalized.includes("abort");
+}
+
+const RETRYABLE_GENERATION_ERROR_PATTERN = /unexpected end of file|error reading a body from connection|connection (?:reset|closed|aborted)|socket hang up|econnreset|etimedout|network\s*error|failed to fetch|generation timed out|timed out|timeout|bad gateway|service unavailable|gateway timeout|http\s*5\d\d|abort/i;
+const SAFETY_BLOCK_PATTERN = /content\s*safety|safety\s*restriction|safety\s*policy|unsafe_prompt_blocked|prompt\s*blocked|moderation|can't help with that request|cannot assist with|policy\s*filter|content\s*policy|\b431\b/i;
+const NON_RETRYABLE_PATTERN = /missing prompt|missing image|missing params|bad_request|method not allowed|unsupported|authentication required|please log in first|invalid image/i;
+const USER_ACTIONABLE_PATTERN = /missing prompt|missing image|missing params|authentication required|please log in first|method not allowed/i;
+const PROVIDER_LEAK_PATTERN = /runware|openai|gpt-image|kie|api\.kie\.ai|grok-imagine|nano-banana|provider/i;
+
+type UiLanguage = "ar" | "en";
+
+interface StageErrorData {
+  stage: string;
+  message: string;
+  taskId?: string;
+}
+
+interface ParsedStageError extends StageErrorData {
+  rawMessage: string;
+}
+
+interface PublicErrorPayload {
+  message: string;
+  code: string;
+  retryable: boolean;
+}
+
 function normalizeAspectRatio(rawValue: unknown): string {
   const value = String(rawValue || "auto").trim();
   if (NANO_BANANA_SUPPORTED_RATIOS.has(value)) {
     return value;
   }
   return "auto";
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error ?? "Unknown error");
+}
+
+function hashPromptText(value: string): string {
+  let hash = 5381;
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash << 5) + hash) + value.charCodeAt(i);
+    hash |= 0;
+  }
+  const normalized = hash >>> 0;
+  return normalized.toString(16).padStart(8, "0");
+}
+
+function buildStageError(stage: string, message: string, taskId?: string): Error {
+  return new Error(JSON.stringify({ stage, message, taskId }));
+}
+
+function parseStageError(error: unknown): ParsedStageError {
+  const rawMessage = toErrorMessage(error);
+  try {
+    const parsed = JSON.parse(rawMessage) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const source = parsed as Record<string, unknown>;
+      const stage = typeof source.stage === "string" ? source.stage : "unhandled";
+      const message = typeof source.message === "string" ? source.message : rawMessage;
+      const taskId = typeof source.taskId === "string" ? source.taskId : undefined;
+      return { stage, message, taskId, rawMessage };
+    }
+  } catch {
+    // non-json payload
+  }
+  return { stage: "unhandled", message: rawMessage, rawMessage };
+}
+
+function isRetryableGenerationError(error: unknown): boolean {
+  const parsed = parseStageError(error);
+  const text = `${parsed.message} ${parsed.rawMessage}`;
+  return RETRYABLE_GENERATION_ERROR_PATTERN.test(text)
+    && !SAFETY_BLOCK_PATTERN.test(text)
+    && !NON_RETRYABLE_PATTERN.test(text);
+}
+
+function mapToPublicError(rawMessage: string, language: UiLanguage): PublicErrorPayload {
+  const lower = rawMessage.toLowerCase();
+  const hasProviderLeak = PROVIDER_LEAK_PATTERN.test(rawMessage);
+
+  if (SAFETY_BLOCK_PATTERN.test(lower)) {
+    return {
+      message: language === "ar"
+        ? "تم حظر هذا الطلب بسبب سياسة الأمان. عدّل الوصف ثم حاول مرة أخرى."
+        : "This request was blocked by safety policy. Please adjust the prompt and try again.",
+      code: "UNSAFE_PROMPT_BLOCKED",
+      retryable: false,
+    };
+  }
+
+  if (/missing params|missing image/.test(lower)) {
+    return {
+      message: language === "ar" ? "أرفق صورة ثم حاول مرة أخرى" : "Please attach an image and try again.",
+      code: "BAD_REQUEST_MISSING_IMAGE",
+      retryable: false,
+    };
+  }
+
+  if (/missing prompt/.test(lower)) {
+    return {
+      message: language === "ar" ? "اكتب وصفاً للصورة" : "Enter an image description",
+      code: "BAD_REQUEST_MISSING_PROMPT",
+      retryable: false,
+    };
+  }
+
+  const retryable = RETRYABLE_GENERATION_ERROR_PATTERN.test(lower)
+    && !NON_RETRYABLE_PATTERN.test(lower);
+
+  if (retryable) {
+    return {
+      message: language === "ar"
+        ? "حدث خلل مؤقت في خدمة الصور. حاول مرة أخرى."
+        : "Temporary image service issue. Please try again.",
+      code: "TEMPORARY_SERVICE_ISSUE",
+      retryable: true,
+    };
+  }
+
+  if (USER_ACTIONABLE_PATTERN.test(lower) && !hasProviderLeak) {
+    return {
+      message: rawMessage,
+      code: "REQUEST_INVALID",
+      retryable: false,
+    };
+  }
+
+  return {
+    message: language === "ar"
+      ? "تعذر إنشاء الصورة الآن. حاول مرة أخرى."
+      : "Image generation failed. Please try again.",
+    code: "IMAGE_GENERATION_FAILED",
+    retryable: false,
+  };
 }
 
 function extractImageUrls(data: unknown): string[] {
@@ -134,7 +286,7 @@ function extractImageUrls(data: unknown): string[] {
 }
 
 async function pollKieTaskForImage(taskId: string): Promise<string> {
-  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+  if (!KIE_API_KEY) throw buildStageError("config", "Image provider is not configured");
   const deadline = Date.now() + 180000;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -143,26 +295,31 @@ async function pollKieTaskForImage(taskId: string): Promise<string> {
     });
     const rawText = await resp.text();
     if (!resp.ok) {
-      throw new Error(`KIE poll failed ${resp.status}: ${rawText.slice(0, 200)}`);
+      throw buildStageError("provider_poll_http", `KIE poll failed ${resp.status}: ${rawText.slice(0, 200)}`, taskId);
     }
-    const json = JSON.parse(rawText);
+    let json: any;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      throw buildStageError("provider_poll_parse", "Image status response was invalid", taskId);
+    }
     const rawStatus = (json?.data?.state || json?.data?.status || json?.data?.taskStatus || "").toString().toLowerCase();
     const imageUrls = extractImageUrls(json?.data);
     const isDone = rawStatus === "success" || rawStatus === "completed" || rawStatus === "finished"
       || rawStatus === "succeed" || rawStatus === "done" || rawStatus === "2";
     const isFailed = rawStatus === "failed" || rawStatus === "error" || rawStatus === "fail" || rawStatus === "3";
     if (isFailed) {
-      throw new Error(`KIE task failed: ${rawStatus}`);
+      throw buildStageError("provider_poll_failed", `KIE task failed: ${rawStatus}`, taskId);
     }
     if ((isDone || imageUrls.length > 0) && imageUrls[0]) {
       return imageUrls[0];
     }
   }
-  throw new Error("KIE generation timed out");
+  throw buildStageError("provider_poll_timeout", "KIE generation timed out", taskId);
 }
 
-async function generateBestWithKie(finalPrompt: string, referenceUrls: string[], aspectRatio: string, callBackUrl?: string): Promise<string> {
-  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+async function generateBestWithKie(finalPrompt: string, referenceUrls: string[], aspectRatio: string, callBackUrl?: string): Promise<{ url: string; taskId: string }> {
+  if (!KIE_API_KEY) throw buildStageError("config", "Image provider is not configured");
   const submitResp = await fetch(KIE_CREATE_TASK_ENDPOINT, {
     method: "POST",
     headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
@@ -180,12 +337,32 @@ async function generateBestWithKie(finalPrompt: string, referenceUrls: string[],
   });
   const submitText = await submitResp.text();
   if (!submitResp.ok) {
-    throw new Error(`KIE i2i submit failed ${submitResp.status}: ${submitText.slice(0, 200)}`);
+    throw buildStageError("provider_submit_http", `KIE i2i submit failed ${submitResp.status}: ${submitText.slice(0, 200)}`);
   }
-  const submitJson = JSON.parse(submitText);
+  let submitJson: any;
+  try {
+    submitJson = JSON.parse(submitText);
+  } catch {
+    throw buildStageError("provider_submit_parse", "Image submit response was invalid");
+  }
   const taskId = submitJson?.data?.taskId;
-  if (!taskId) throw new Error(`No taskId in KIE i2i response: ${submitText.slice(0, 200)}`);
-  return await pollKieTaskForImage(taskId);
+  if (!taskId) throw buildStageError("provider_submit_missing_task_id", "No task ID returned from image provider");
+  const url = await pollKieTaskForImage(taskId);
+  return { url, taskId };
+}
+
+async function runBestGenerationWithRetry(finalPrompt: string, referenceUrls: string[], aspectRatio: string, callBackUrl?: string): Promise<{ url: string; taskId: string; attempts: number }> {
+  try {
+    const firstAttempt = await generateBestWithKie(finalPrompt, referenceUrls, aspectRatio, callBackUrl);
+    return { ...firstAttempt, attempts: 1 };
+  } catch (firstError) {
+    if (!isRetryableGenerationError(firstError)) {
+      throw firstError;
+    }
+    await delay(1200);
+    const secondAttempt = await generateBestWithKie(finalPrompt, referenceUrls, aspectRatio, callBackUrl);
+    return { ...secondAttempt, attempts: 2 };
+  }
 }
 
 function genUUID(): string {
@@ -207,7 +384,7 @@ async function uploadAndSignReferenceImage(params: {
     .upload(path, bytes, { contentType: mime, upsert: true });
 
   if (up.error) {
-    throw new Error(JSON.stringify({ stage: "storage_upload", bucket: STORAGE_BUCKET, path, error: up.error }));
+    throw buildStageError("storage_upload", `Reference image upload failed: ${up.error.message}`);
   }
 
   const signed = await supabase.storage
@@ -215,21 +392,145 @@ async function uploadAndSignReferenceImage(params: {
     .createSignedUrl(path, SIGNED_URL_EXPIRES_SECONDS);
 
   if (signed.error || !signed.data?.signedUrl) {
-    throw new Error(JSON.stringify({ stage: "storage_signed_url", bucket: STORAGE_BUCKET, path, error: signed.error }));
+    throw buildStageError("storage_signed_url", `Reference image signing failed: ${signed.error?.message || "unknown"}`);
   }
 
   return signed.data.signedUrl;
 }
 
+function _findTaskUUID(obj: unknown): string | null {
+  const isUUID = (v: unknown): v is string => typeof v === "string"
+    && /[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i.test(v);
+  if (!obj || typeof obj !== "object") return null;
+  const rec = obj as Record<string, unknown>;
+  for (const key of ["taskUUID", "taskUuid", "uuid", "id"]) {
+    const val = rec[key];
+    if (isUUID(val)) return val;
+  }
+  for (const k in rec) {
+    const v = rec[k];
+    if (v && typeof v === "object") {
+      const found = _findTaskUUID(v);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function pickFirstResultNode(container: unknown): unknown | null {
+  if (!container || typeof container !== "object") return null;
+  const rec = container as Record<string, unknown>;
+  const keys = ["results", "data", "output", "outputs", "media"];
+  for (const k of keys) {
+    const maybeArr = rec[k] as unknown;
+    if (Array.isArray(maybeArr) && maybeArr.length > 0) return maybeArr[0];
+  }
+  if (Array.isArray(container as unknown[])) {
+    const arrCont = container as unknown[];
+    if (arrCont.length > 0) return pickFirstResultNode(arrCont[0]);
+  }
+  return null;
+}
+
+async function safeJson(resp: Response): Promise<unknown> {
+  const text = await resp.text();
+  if (!text || text.trim().length === 0) return null;
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return { __raw: text } as { __raw: string };
+  }
+}
+
+async function callRunwareI2I(
+  finalPrompt: string,
+  referenceImages: string[],
+  model: string,
+  aspectRatio: "9:16" | "16:9",
+): Promise<unknown> {
+  const { width, height } = getDimensionsForModel(model, aspectRatio);
+  const isOpenAIImageModel = model.startsWith("openai:gpt-image");
+  const inferenceTask: Record<string, unknown> = {
+    taskType: "imageInference",
+    taskUUID: genUUID(),
+    model,
+    positivePrompt: finalPrompt,
+    numberResults: 1,
+    outputType: ["dataURI", "URL"],
+    includeCost: true,
+    outputQuality: 85,
+  };
+
+  if (width && height) {
+    inferenceTask.width = width;
+    inferenceTask.height = height;
+  }
+
+  if (isOpenAIImageModel) {
+    inferenceTask.providerSettings = {
+      openai: {
+        quality: "low",
+      },
+    };
+    inferenceTask.inputs = {
+      referenceImages,
+    };
+  } else {
+    inferenceTask.referenceImages = referenceImages;
+  }
+
+  const payload = [
+    { taskType: "authentication", apiKey: RUNWARE_API_KEY },
+    inferenceTask,
+  ];
+
+  const r = await fetch("https://api.runware.ai/v1", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const j = await safeJson(r);
+  if (!r.ok || !j) {
+    throw buildStageError("provider_submit_http", `Runware error ${r.status}: ${JSON.stringify(j).slice(0, 300)}`);
+  }
+  return j;
+}
+
+async function callRunwareI2IWithRetry(
+  finalPrompt: string,
+  referenceImages: string[],
+  model: string,
+  aspectRatio: "9:16" | "16:9",
+): Promise<unknown> {
+  try {
+    return await callRunwareI2I(finalPrompt, referenceImages, model, aspectRatio);
+  } catch (err) {
+    const message = String((err as Error)?.message || err || "");
+    if (!isRetryableRunwareErrorMessage(message)) {
+      throw err;
+    }
+    return await callRunwareI2I(finalPrompt, referenceImages, model, aspectRatio);
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  const startTime = Date.now();
+  let language: UiLanguage = "en";
+  let promptHash = "";
+  let providerTaskId: string | undefined;
+  let failureStage = "request";
+  let userIdForLog: string | undefined;
+  let requestedQuality = "fast";
+  let inputImageCount = 0;
 
   try {
     const body = await req.json().catch(() => ({}));
-    const requestedQuality = (body?.quality || "best_fast").toString();
-    const quality = "best_fast";
-    const selectedModel = MODEL_BEST;
+    requestedQuality = (body?.quality || "fast").toString();
+    const quality = body?.quality === "best_fast" ? "best_fast" : "fast";
+    const selectedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
     const aspectRatio = normalizeAspectRatio(body?.aspect_ratio);
+    const runwareAspectRatio: "9:16" | "16:9" = body?.aspect_ratio === "16:9" ? "16:9" : "9:16";
     const callbackUrlFromBody = typeof body?.callBackUrl === "string" ? body.callBackUrl.trim() : "";
     const callbackUrlFromEnv = (Deno.env.get("KIE_NANO_BANANA_CALLBACK_URL") || "").trim();
     const callBackUrl = callbackUrlFromBody || callbackUrlFromEnv || undefined;
@@ -239,24 +540,45 @@ serve(async (req: Request) => {
 
     const user_prompt = body?.user_prompt as string | undefined;
     const user_id = body?.user_id as string | undefined;
+    language = body?.language === "ar" ? "ar" : "en";
+    promptHash = hashPromptText((user_prompt || "").toString());
+    userIdForLog = user_id;
     let trialPayload = null;
 
     const inputImages = image_base64s.length > 0
       ? image_base64s
       : [image_base64_raw, image_base64_raw_2].filter((v): v is string => typeof v === "string" && v.trim().length > 0);
+    inputImageCount = inputImages.length;
 
-    if (inputImages.length === 0 || !user_prompt || !user_id) {
+    if (quality !== "best_fast" && !RUNWARE_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "Missing params", code: "BAD_REQUEST_MISSING_PARAMS" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({
+          success: false,
+          error: "Missing RUNWARE_API_KEY",
+          code: "CONFIG_ERROR",
+          retryable: false,
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
-    const promptSafety = inspectGenerationPrompt(user_prompt, body?.language === "ar" ? "ar" : "en");
+    if (inputImages.length === 0 || !user_prompt || !user_id) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: language === "ar" ? "أرفق صورة وأضف وصفاً ثم حاول مرة أخرى" : "Please attach an image and add a prompt.",
+          code: "BAD_REQUEST_MISSING_PARAMS",
+          retryable: false,
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const promptSafety = inspectGenerationPrompt(user_prompt, language);
     if (!promptSafety.allowed) {
       return new Response(
-        JSON.stringify({ error: promptSafety.message, code: "UNSAFE_PROMPT_BLOCKED" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ success: false, error: promptSafety.message, code: "UNSAFE_PROMPT_BLOCKED", retryable: false }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
 
@@ -264,7 +586,7 @@ serve(async (req: Request) => {
     const trial = await checkTrialAccess(supabase, user_id, 'i2i', 2);
     if (!trial.allowed) {
       return new Response(
-        JSON.stringify(buildTrialErrorPayload('i2i', trial)),
+        JSON.stringify({ success: false, ...buildTrialErrorPayload('i2i', trial) }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -274,7 +596,7 @@ serve(async (req: Request) => {
     for (const rawImage of inputImages) {
       if (rawImage.startsWith("http://") || rawImage.startsWith("https://")) {
         const res = await fetch(rawImage);
-        if (!res.ok) throw new Error(`Failed to fetch saved image: ${res.status}`);
+        if (!res.ok) throw buildStageError("input_fetch", `Failed to fetch saved image: ${res.status}`);
         const buf = await res.arrayBuffer();
         const bytes = new Uint8Array(buf);
         const { mime, ext } = detectMimeAndExt(bytes);
@@ -298,15 +620,81 @@ serve(async (req: Request) => {
     }
 
     const finalPrompt = promptSafety.normalizedPrompt;
-    const stableUrl = await generateBestWithKie(finalPrompt, referenceUrls, aspectRatio, callBackUrl);
+    let stableUrl: string | null = null;
+    let attempts = 1;
+
+    if (quality === "best_fast") {
+      failureStage = "provider_generation";
+      const generationResult = await runBestGenerationWithRetry(finalPrompt, referenceUrls, aspectRatio, callBackUrl);
+      providerTaskId = generationResult.taskId;
+      stableUrl = generationResult.url;
+      attempts = generationResult.attempts;
+    } else {
+      failureStage = "provider_generation";
+      const rw = await callRunwareI2IWithRetry(finalPrompt, referenceUrls, selectedModel, runwareAspectRatio);
+      const node = (pickFirstResultNode(rw) || rw) as Record<string, unknown>;
+      const outputDataURI = (node?.imageDataURI || node?.dataURI || node?.dataUrl) as string | undefined;
+      const outputImageUrl = (node?.imageURL || node?.URL || node?.url) as string | undefined;
+
+      if (outputDataURI || outputImageUrl) {
+        try {
+          let imageBytes: Uint8Array;
+          let imageMime = "image/png";
+
+          if (outputDataURI) {
+            const { base64: outB64, mimeHint } = stripDataUrlPrefix(outputDataURI);
+            imageBytes = decodeBase64ToUint8Array(outB64);
+            if (mimeHint) imageMime = mimeHint;
+          } else {
+            const fetchResp = await fetch(outputImageUrl!);
+            if (!fetchResp.ok) throw buildStageError("output_fetch", `Failed to fetch output image: ${fetchResp.status}`);
+            const arrayBuf = await fetchResp.arrayBuffer();
+            imageBytes = new Uint8Array(arrayBuf);
+            const ct = fetchResp.headers.get("content-type");
+            if (ct && ct.startsWith("image/")) imageMime = ct.split(";")[0].trim();
+          }
+
+          const { mime, ext } = detectMimeAndExt(imageBytes, imageMime);
+          const outputPath = `i2i-output/${user_id}/${genUUID()}.${ext}`;
+          const upOut = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(outputPath, imageBytes, { contentType: mime, upsert: true });
+          if (upOut.error) throw buildStageError("output_upload", `Output upload failed: ${upOut.error.message}`);
+
+          const signedOut = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .createSignedUrl(outputPath, 60 * 60 * 24);
+          if (signedOut.error || !signedOut.data?.signedUrl) {
+            throw buildStageError("output_signed_url", "Output signed URL failed");
+          }
+          stableUrl = signedOut.data.signedUrl;
+        } catch (uploadErr: unknown) {
+          console.error("[wakti-image2image] runware output upload fallback", (uploadErr as Error)?.message);
+          stableUrl = outputImageUrl || outputDataURI || null;
+        }
+      }
+    }
+
+    if (!stableUrl) {
+      throw buildStageError("provider_output", "No image returned from image provider", providerTaskId);
+    }
 
     await logAIFromRequest(req, {
       functionName: "wakti-image2image",
-      provider: "kie-nano-banana-2",
+      provider: quality === "best_fast" ? "kie-nano-banana-2" : "runware",
       model: selectedModel,
       inputText: user_prompt,
       status: "success",
-      metadata: { quality, requestedQuality }
+      metadata: {
+        quality,
+        requestedQuality,
+        stage: "success",
+        taskId: providerTaskId,
+        promptHash,
+        inputImageCount,
+        attempts,
+        durationMs: Date.now() - startTime,
+      }
     });
 
     const consumeTrial = await checkAndConsumeTrialToken(supabase, user_id, 'i2i', 2);
@@ -317,38 +705,50 @@ serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, url: stableUrl, model: selectedModel, quality, trial: trialPayload }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ success: true, url: stableUrl, model: selectedModel, quality, trial: trialPayload, taskId: providerTaskId }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err: unknown) {
-    const message = (err as Error)?.message || String(err);
-    let parsed: Record<string, unknown> | null = null;
-    try {
-      const parsedValue = JSON.parse(message) as unknown;
-      parsed = parsedValue && typeof parsedValue === "object" ? parsedValue as Record<string, unknown> : null;
-    } catch {
-      parsed = null;
+    const parsedError = parseStageError(err);
+    failureStage = parsedError.stage || failureStage;
+    if (!providerTaskId && parsedError.taskId) {
+      providerTaskId = parsedError.taskId;
     }
+    const publicError = mapToPublicError(parsedError.message, language);
 
-    const stage = parsed?.stage as string | undefined;
-    console.error("[wakti-image2image] error", { stage, message, parsed });
+    console.error("[wakti-image2image] error", { stage: failureStage, message: parsedError.message });
     
     // Log failed AI usage
     await logAIFromRequest(req, {
       functionName: "wakti-image2image",
-      provider: "kie-nano-banana-2",
-      model: MODEL_BEST,
+      provider: requestedQuality === "best_fast" ? "kie-nano-banana-2" : "runware",
+      model: requestedQuality === "best_fast" ? MODEL_BEST : MODEL_FAST,
       status: "error",
-      errorMessage: message
+      errorMessage: parsedError.message,
+      metadata: {
+        stage: failureStage,
+        taskId: providerTaskId,
+        promptHash,
+        requestedQuality,
+        retryable: publicError.retryable,
+        code: publicError.code,
+        rawError: parsedError.rawMessage.slice(0, 500),
+        inputImageCount,
+        durationMs: Date.now() - startTime,
+        userId: userIdForLog,
+      }
     });
 
     return new Response(
       JSON.stringify({
-        error: stage || message,
-        code: stage ? `I2I_${String(stage).toUpperCase()}` : "UNHANDLED",
-        details: parsed || undefined,
+        success: false,
+        error: publicError.message,
+        code: publicError.code,
+        retryable: publicError.retryable,
+        stage: failureStage,
+        taskId: providerTaskId,
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   }
 });

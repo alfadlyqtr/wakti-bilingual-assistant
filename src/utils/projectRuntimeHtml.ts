@@ -56,6 +56,7 @@ export function buildProjectStaticPublishFiles({
   indexHtml: string;
   appJs: string;
   appCss: string;
+  vercelJson: string;
 } {
   const safeTitle = escapeHtml(projectName || 'Wakti Preview');
   const appJs = bundledJs || '';
@@ -155,10 +156,15 @@ export function buildProjectStaticPublishFiles({
 </body>
 </html>`;
 
+  const vercelJson = JSON.stringify({
+    rewrites: [{ source: '/(.*)', destination: '/index.html' }],
+  }, null, 2);
+
   return {
     indexHtml,
     appJs,
     appCss,
+    vercelJson,
   };
 }
 

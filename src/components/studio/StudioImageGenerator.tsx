@@ -81,6 +81,77 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+interface GenerationErrorMeta {
+  rawMessage: string;
+  userMessage: string;
+  retryable: boolean;
+  shouldFallbackToBest: boolean;
+}
+
+type TaggedGenerationError = Error & { __generationMeta?: GenerationErrorMeta };
+
+const RETRYABLE_GENERATION_ERROR_PATTERN = /unexpected end of file|error reading a body from connection|connection (?:reset|closed|aborted)|socket hang up|econnreset|etimedout|network\s*error|failed to fetch|generation timed out|timed out|timeout|bad gateway|service unavailable|gateway timeout|http\s*5\d\d/i;
+const SAFETY_BLOCK_PATTERN = /content\s*safety|safety\s*restriction|safety\s*policy|unsafe_prompt_blocked|prompt\s*blocked|moderation|can't help with that request|cannot assist with|policy\s*filter|content\s*policy|\b431\b/i;
+const TRIAL_LIMIT_PATTERN = /trial_limit_reached|trial\s*limit\s*reached|trial\s*quota|quota\s*reached/i;
+const USER_ACTIONABLE_PATTERN = /please attach an image|enter an image description|attach an image or enter a description|authentication required|please log in first|missing prompt|missing image|missing params|الرجاء إرفاق صورة|اكتب وصفاً للصورة|أرفق صورة أو اكتب وصفاً/i;
+const PROVIDER_LEAK_PATTERN = /runware|openai|gpt-image|kie|api\.kie\.ai|grok-imagine|nano-banana|provider/i;
+const NON_FALLBACK_PATTERN = /authentication required|please log in first|missing prompt|missing image|missing params|bad_request|method not allowed|unsupported/i;
+
+const classifyGenerationError = (error: unknown, language: string): GenerationErrorMeta => {
+  const fallback = language === 'ar' ? 'فشل إنشاء الصورة' : 'Image generation failed';
+  const rawMessage = getErrorMessage(error, fallback);
+  const lower = rawMessage.toLowerCase();
+
+  const isTrialLimit = TRIAL_LIMIT_PATTERN.test(lower);
+  const isSafetyBlocked = SAFETY_BLOCK_PATTERN.test(lower);
+  const isRetryable = !isTrialLimit && !isSafetyBlocked && RETRYABLE_GENERATION_ERROR_PATTERN.test(lower);
+  const isUserActionable = USER_ACTIONABLE_PATTERN.test(rawMessage);
+  const hasProviderLeak = PROVIDER_LEAK_PATTERN.test(rawMessage);
+  const shouldFallbackToBest = !isTrialLimit && !isSafetyBlocked && !NON_FALLBACK_PATTERN.test(lower);
+
+  let userMessage = language === 'ar'
+    ? 'تعذر إنشاء الصورة الآن. حاول مرة أخرى.'
+    : 'Image generation failed. Please try again.';
+
+  if (isUserActionable && !hasProviderLeak) {
+    userMessage = rawMessage;
+  } else if (isTrialLimit) {
+    userMessage = language === 'ar'
+      ? 'انتهى الحد المجاني لتوليد الصور.'
+      : 'Your free image limit has been reached.';
+  } else if (isSafetyBlocked) {
+    userMessage = language === 'ar'
+      ? 'تم حظر هذا الطلب بسبب سياسة الأمان. عدّل الوصف ثم حاول مرة أخرى.'
+      : 'This request was blocked by safety policy. Please adjust the prompt and try again.';
+  } else if (isRetryable) {
+    userMessage = language === 'ar'
+      ? 'حدث خلل مؤقت في خدمة الصور. حاول مرة أخرى.'
+      : 'Temporary image service issue. Please try again.';
+  }
+
+  return {
+    rawMessage,
+    userMessage,
+    retryable: isRetryable,
+    shouldFallbackToBest,
+  };
+};
+
+const createGenerationUiError = (error: unknown, language: string): Error => {
+  const meta = classifyGenerationError(error, language);
+  const tagged = new Error(meta.userMessage) as TaggedGenerationError;
+  tagged.__generationMeta = meta;
+  return tagged;
+};
+
+const getGenerationErrorMeta = (error: unknown, language: string): GenerationErrorMeta => {
+  const tagged = error as TaggedGenerationError;
+  if (tagged?.__generationMeta) {
+    return tagged.__generationMeta;
+  }
+  return classifyGenerationError(error, language);
+};
+
 interface StudioImageGeneratorProps {
   onSaveSuccess?: (saved?: { imageId: string | null; imageUrl: string | null }) => void;
 }
@@ -160,6 +231,35 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     setPromptBlockedMessage(message);
     setShowPromptBlockedDialog(true);
   }, []);
+
+  const runWithAutoHeal = useCallback(async <T,>(
+    primaryRun: () => Promise<T>,
+    bestFallbackRun?: () => Promise<T>,
+  ): Promise<T> => {
+    try {
+      return await primaryRun();
+    } catch (primaryError) {
+      const primaryMeta = getGenerationErrorMeta(primaryError, language);
+      if (!primaryMeta.retryable) {
+        throw createGenerationUiError(primaryError, language);
+      }
+
+      try {
+        return await primaryRun();
+      } catch (retryError) {
+        const retryMeta = getGenerationErrorMeta(retryError, language);
+        if (bestFallbackRun && retryMeta.shouldFallbackToBest) {
+          try {
+            return await bestFallbackRun();
+          } catch (fallbackError) {
+            throw createGenerationUiError(fallbackError, language);
+          }
+        }
+
+        throw createGenerationUiError(retryError, language);
+      }
+    }
+  }, [language]);
 
   // Draw canvas ref
   const drawCanvasRef = useRef<DrawAfterBGCanvasRef>(null);
@@ -438,14 +538,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         return pollJson.urls as string[];
       }
       if (!pollResp.ok || pollJson?.status === 'error') {
-        throw new Error(pollJson?.error || 'KIE poll failed');
+        throw createGenerationUiError(pollJson?.error || 'KIE poll failed', language);
       }
       if (pollJson?.status === 'failed') {
-        throw new Error(pollJson?.error || 'KIE task failed');
+        throw createGenerationUiError(pollJson?.error || 'KIE task failed', language);
       }
       // status === 'pending' — continue polling
     }
-    throw new Error(language === 'ar' ? 'انتهت مدة الانتظار' : 'Generation timed out — please try again');
+    throw createGenerationUiError(language === 'ar' ? 'انتهت مدة الانتظار' : 'Generation timed out — please try again', language);
   };
 
   // ─── Generate: Quick (Grok) Text2Image ───
@@ -465,10 +565,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       return [];
     }
     if (!submitResp.ok || !submitJson?.success) {
-      throw new Error(submitJson?.error || 'Quick submit failed');
+      throw createGenerationUiError(submitJson?.error || 'Quick submit failed', language);
     }
     const taskId: string = submitJson?.taskId;
-    if (!taskId) throw new Error('No taskId returned from KIE submit');
+    if (!taskId) throw createGenerationUiError('No taskId returned from KIE submit', language);
     // Step 2: poll from frontend
     return pollKieTask('wakti-grok-text2image', taskId, { user_id: user?.id }, token, 't2i');
   };
@@ -495,22 +595,22 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       return [];
     }
     if (!submitResp.ok || !submitJson?.success) {
-      throw new Error(submitJson?.error || 'Quick i2i submit failed');
+      throw createGenerationUiError(submitJson?.error || 'Quick i2i submit failed', language);
     }
     const taskId: string = submitJson?.taskId;
-    if (!taskId) throw new Error('No taskId returned from KIE i2i submit');
+    if (!taskId) throw createGenerationUiError('No taskId returned from KIE i2i submit', language);
     // Step 2: poll from frontend
     return pollKieTask('wakti-grok-image2image', taskId, { user_id: user?.id }, token, 'i2i');
   };
 
   // ─── Generate: Text2Image ───
-  const generateText2Image = async () => {
+  const generateText2Image = async (qualityOverride?: 'fast' | 'best_fast') => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('Authentication required');
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-text2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ prompt, quality, user_id: user?.id, aspect_ratio: imageAspectRatio }),
+      body: JSON.stringify({ prompt, quality: qualityOverride || quality, user_id: user?.id, aspect_ratio: imageAspectRatio }),
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
@@ -518,14 +618,14 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         emitTrialBlocked(json, 't2i');
         return null as unknown as string;
       }
-      throw new Error(json?.error || 'Text2Image failed');
+      throw createGenerationUiError(json?.error || 'Text2Image failed', language);
     }
     emitTrialFinished(json, 't2i');
     return json.url as string;
   };
 
   // ─── Generate: Image2Image ───
-  const generateImage2Image = async () => {
+  const generateImage2Image = async (qualityOverride?: 'fast' | 'best_fast') => {
     if (!uploadedFile) throw new Error(language === 'ar' ? 'الرجاء إرفاق صورة' : 'Please attach an image');
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.access_token) throw new Error('Authentication required');
@@ -536,7 +636,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     const resp = await fetch(`${SUPABASE_URL}/functions/v1/wakti-image2image`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
-      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id, quality, aspect_ratio: imageAspectRatio }),
+      body: JSON.stringify({ user_prompt: prompt, image_base64s: imageBase64s, user_id: user?.id, quality: qualityOverride || quality, aspect_ratio: imageAspectRatio }),
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok || !json?.success || !json?.url) {
@@ -544,7 +644,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         emitTrialBlocked(json, 'i2i');
         return null as unknown as string;
       }
-      throw new Error(json?.error || 'Image2Image failed');
+      throw createGenerationUiError(json?.error || 'Image2Image failed', language);
     }
     emitTrialFinished(json, 'i2i');
     return json.url as string;
@@ -965,9 +1065,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     try {
       // Quick uses Grok and returns multiple images
       if (quality === 'quick' && (submode === 'text2image' || submode === 'image2image')) {
-        const urls = submode === 'text2image'
-          ? await generateQuickText2Image()
-          : await generateQuickImage2Image();
+        const urls = await runWithAutoHeal(
+          submode === 'text2image'
+            ? generateQuickText2Image
+            : generateQuickImage2Image,
+        );
         stopProgress();
         if (urls.length > 0) {
           setResultUrls(urls);
@@ -977,12 +1079,26 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       } else {
         let url: string;
         switch (submode) {
-          case 'text2image':
-            url = await generateText2Image();
+          case 'text2image': {
+            const requestedQuality = quality === 'fast' ? 'fast' : 'best_fast';
+            url = quality === 'fast'
+              ? await runWithAutoHeal(
+                  () => generateText2Image(requestedQuality),
+                  () => generateText2Image('best_fast'),
+                )
+              : await runWithAutoHeal(() => generateText2Image(requestedQuality));
             break;
-          case 'image2image':
-            url = await generateImage2Image();
+          }
+          case 'image2image': {
+            const requestedQuality = quality === 'fast' ? 'fast' : 'best_fast';
+            url = quality === 'fast'
+              ? await runWithAutoHeal(
+                  () => generateImage2Image(requestedQuality),
+                  () => generateImage2Image('best_fast'),
+                )
+              : await runWithAutoHeal(() => generateImage2Image(requestedQuality));
             break;
+          }
           case 'background-removal':
             url = await generateBGRemoval();
             break;
@@ -1006,7 +1122,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       }
     } catch (err: any) {
       stopProgress();
-      const msg = err?.message || (language === 'ar' ? 'فشل إنشاء الصورة' : 'Image generation failed');
+      const msg = createGenerationUiError(err, language).message;
       setResultError(msg);
       if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
         emitEvent('wakti-operator-status', {
@@ -1029,7 +1145,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         triggerSaveSuccess: false,
       }).catch(() => { /* silent */ });
     }
-  }, [imageAspectRatio, isGuest, language, operatorPayload, persistGeneratedImage, prompt, quality, restoredVisualAdsState, submode, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4]);
+  }, [imageAspectRatio, isGuest, language, operatorPayload, persistGeneratedImage, prompt, quality, restoredVisualAdsState, runWithAutoHeal, submode, uploadedFile, uploadedFile2, uploadedFile3, uploadedFile4]);
 
   useEffect(() => {
     if (!operatorPayloadId || !operatorPayload?.image?.autoGenerate) return;

@@ -20,7 +20,7 @@ const KIE_API_KEY = (
   || ""
 ).trim();
 const STORAGE_BUCKET = "generated-files";
-const MODEL = "nano-banana-2";
+const MODEL = "grok-imagine/image-to-image";
 const KIE_CREATE_TASK_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_RECORD_INFO_ENDPOINT = "https://api.kie.ai/api/v1/jobs/recordInfo";
 const NANO_BANANA_SUPPORTED_RATIOS = new Set([
@@ -196,7 +196,7 @@ Deno.serve(async (req: Request) => {
         // Return KIE URLs directly — frontend saves the selected image when user picks one
         await logAIFromRequest(req, {
           functionName: "wakti-grok-image2image",
-          provider: "kie-nano-banana-2",
+          provider: "kie-grok",
           model: MODEL,
           status: "success",
           durationMs: Date.now() - startTime,
@@ -276,6 +276,9 @@ Deno.serve(async (req: Request) => {
 
     const finalPrompt = promptSafety?.normalizedPrompt ?? prompt;
     console.log(`[grok-i2i] submit prompt="${finalPrompt.slice(0, 100)}"`);
+    const promptWithRef = referencePublicUrls.length > 0
+      ? `${finalPrompt}\n\nUse @image1 as the reference image.`.trim()
+      : finalPrompt;
 
     const submitResp = await fetch(KIE_CREATE_TASK_ENDPOINT, {
       method: "POST",
@@ -284,11 +287,9 @@ Deno.serve(async (req: Request) => {
         model: MODEL,
         ...(callBackUrl ? { callBackUrl } : {}),
         input: {
-          prompt: finalPrompt,
-          image_input: referencePublicUrls,
+          prompt: promptWithRef,
+          image_urls: referencePublicUrls,
           aspect_ratio: aspectRatio,
-          resolution: "1K",
-          output_format: "jpg",
         },
       }),
     });
@@ -311,7 +312,7 @@ Deno.serve(async (req: Request) => {
     console.error(`[grok-i2i] error:`, msg);
     await logAIFromRequest(req, {
       functionName: "wakti-grok-image2image",
-      provider: "kie-nano-banana-2",
+      provider: "kie-grok",
       model: MODEL,
       status: "error",
       errorMessage: msg,

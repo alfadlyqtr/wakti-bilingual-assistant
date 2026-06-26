@@ -6,6 +6,51 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+function isStillAnonymousUser(user: any): boolean {
+  if (!user) return false;
+  if (user.is_anonymous === true) return true;
+  if (user.app_metadata?.provider === 'anonymous') return true;
+  if (user.app_metadata?.is_anonymous === true) return true;
+  if (user.user_metadata?.is_anonymous === true) return true;
+
+  const providers = Array.isArray(user.app_metadata?.providers)
+    ? user.app_metadata.providers
+    : [];
+
+  return providers.some((provider: unknown) => {
+    return typeof provider === 'string' && provider.toLowerCase() === 'anonymous';
+  });
+}
+
+function hasLinkedRealIdentity(user: any): boolean {
+  if (!user) return true;
+
+  const identities = Array.isArray(user.identities) ? user.identities : [];
+  const hasRealIdentity = identities.some((identity: any) => {
+    const provider = typeof identity?.provider === 'string'
+      ? identity.provider.toLowerCase()
+      : '';
+    return provider !== '' && provider !== 'anonymous';
+  });
+
+  if (hasRealIdentity) return true;
+
+  const providers = Array.isArray(user.app_metadata?.providers)
+    ? user.app_metadata.providers
+    : [];
+  const hasRealProvider = providers.some((provider: unknown) => {
+    return typeof provider === 'string' && provider.toLowerCase() !== 'anonymous';
+  });
+
+  if (hasRealProvider) return true;
+
+  const primaryProvider = typeof user.app_metadata?.provider === 'string'
+    ? user.app_metadata.provider.toLowerCase()
+    : '';
+
+  return primaryProvider !== '' && primaryProvider !== 'anonymous';
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -29,6 +74,9 @@ serve(async (req) => {
       },
     });
 
+    const payload = await req.json().catch(() => ({} as Record<string, unknown>));
+    const dryRun = payload?.dry_run === true;
+
     const { data: userIds, error: rpcError } = await supabaseAdmin.rpc('get_old_anonymous_user_ids');
 
     if (rpcError) {
@@ -47,12 +95,52 @@ serve(async (req) => {
       );
     }
 
+    const safeUserIds: string[] = [];
+    const skippedIds: string[] = [];
+
+    for (const row of userIds) {
+      const userId = row.id;
+      const { data: userResult, error: getUserError } = await supabaseAdmin.auth.admin.getUserById(userId);
+
+      if (getUserError || !userResult?.user) {
+        console.error(`Failed to verify user ${userId} before delete:`, getUserError?.message ?? 'User not found');
+        skippedIds.push(userId);
+        continue;
+      }
+
+      const user = userResult.user;
+      const stillAnonymous = isStillAnonymousUser(user);
+      const linkedRealIdentity = hasLinkedRealIdentity(user);
+
+      if (!stillAnonymous || linkedRealIdentity) {
+        console.warn(`Skipping unsafe delete candidate ${userId} (stillAnonymous=${stillAnonymous}, linkedRealIdentity=${linkedRealIdentity})`);
+        skippedIds.push(userId);
+        continue;
+      }
+
+      safeUserIds.push(userId);
+    }
+
+    if (dryRun) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          dry_run: true,
+          total_candidates: userIds.length,
+          safe_delete_count: safeUserIds.length,
+          skipped_unsafe_count: skippedIds.length,
+          skipped_unsafe_ids: skippedIds,
+          message: `Dry run complete. ${safeUserIds.length} user(s) are safe to delete, ${skippedIds.length} skipped as unsafe.`,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     let deletedCount = 0;
     let failedCount = 0;
     const failedIds: string[] = [];
 
-    for (const row of userIds) {
-      const userId = row.id;
+    for (const userId of safeUserIds) {
       const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
       if (deleteError) {
         console.error(`Failed to delete user ${userId}:`, deleteError.message);
@@ -68,9 +156,12 @@ serve(async (req) => {
         success: true,
         deleted_count: deletedCount,
         failed_count: failedCount,
-        total_found: userIds.length,
+        total_candidates: userIds.length,
+        safe_delete_count: safeUserIds.length,
+        skipped_unsafe_count: skippedIds.length,
+        skipped_unsafe_ids: skippedIds,
         failed_ids: failedIds,
-        message: `Deleted ${deletedCount} anonymous user(s), ${failedCount} failed`,
+        message: `Deleted ${deletedCount} anonymous user(s), ${failedCount} failed, ${skippedIds.length} skipped as unsafe.`,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

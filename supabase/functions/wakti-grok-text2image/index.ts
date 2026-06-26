@@ -19,7 +19,7 @@ const KIE_API_KEY = (
   || Deno.env.get("KIE_BEARER_TOKEN")
   || ""
 ).trim();
-const MODEL = "nano-banana-2";
+const MODEL = "grok-imagine/text-to-image";
 const KIE_CREATE_TASK_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_RECORD_INFO_ENDPOINT = "https://api.kie.ai/api/v1/jobs/recordInfo";
 const NANO_BANANA_SUPPORTED_RATIOS = new Set([
@@ -150,7 +150,7 @@ Deno.serve(async (req) => {
         // Return KIE URLs directly — frontend saves the selected image when user picks one
         await logAIFromRequest(req, {
           functionName: "wakti-grok-text2image",
-          provider: "kie-nano-banana-2",
+          provider: "kie-grok",
           model: MODEL,
           status: "success",
           durationMs: Date.now() - startTime,
@@ -203,8 +203,6 @@ Deno.serve(async (req) => {
         input: {
           prompt: finalPrompt,
           aspect_ratio: aspectRatio,
-          resolution: "1K",
-          output_format: "jpg",
         },
       }),
     });
@@ -227,7 +225,7 @@ Deno.serve(async (req) => {
     console.error(`[grok-t2i] error:`, msg);
     await logAIFromRequest(req, {
       functionName: "wakti-grok-text2image",
-      provider: "kie-nano-banana-2",
+      provider: "kie-grok",
       model: MODEL,
       status: "error",
       errorMessage: msg,

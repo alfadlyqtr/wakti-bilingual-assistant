@@ -53,7 +53,9 @@ import {
   Circle,
   FileText,
   Square,
-  HelpCircle
+  HelpCircle,
+  Clock,
+  RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -168,6 +170,7 @@ interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   snapshot?: any; // To store project files snapshot for reverting
+  created_at?: string;
 }
 
 const getSnapshotFiles = (snapshot: unknown): Record<string, string> | null => {
@@ -415,7 +418,9 @@ export default function ProjectDetail() {
   const recentAgentHotFilesRef = useRef<string[]>([]);
   const [lastAgentPausedJobId, setLastAgentPausedJobId] = useState<string | null>(null);
   const [isResumingAgent, setIsResumingAgent] = useState(false);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
   const autoResumeCountRef = useRef<number>(0); // Tracks auto-resumes per user request
+  const pendingAutoExecuteRef = useRef<boolean>(false); // Auto-execute plan without user clicking
 
   const areFileMapsEqual = useCallback((a: Record<string, string>, b: Record<string, string>) => {
     if (a === b) return true;
@@ -1354,6 +1359,7 @@ ${priorSection}`;
   const [subdomainInput, setSubdomainInput] = useState('');
   const [subdomainError, setSubdomainError] = useState<string | null>(null);
   const [checkingSubdomain, setCheckingSubdomain] = useState(false);
+  const [publishStep, setPublishStep] = useState<string>('');
   const projectHasLiveDeployment = hasLiveDeployment(project);
 
   // Track if we've already started generation to prevent double-runs
@@ -1366,6 +1372,28 @@ ${priorSection}`;
       document.body.classList.remove('project-detail-page');
     };
   }, []);
+
+  // Auto-execute plan after complex requests are rerouted through chat
+  // Fires when aiEditing transitions to false and a plan is pending
+  useEffect(() => {
+    if (!aiEditing && pendingAutoExecuteRef.current) {
+      pendingAutoExecuteRef.current = false; // Reset immediately to avoid double-fire
+      setTimeout(() => {
+        // Safety check: last chat message must be a valid plan JSON before clicking
+        const lastMsg = chatMessages[chatMessages.length - 1];
+        if (!lastMsg || lastMsg.role !== 'assistant') return;
+        try {
+          const parsed = JSON.parse(lastMsg.content || '');
+          if (!parsed?.codeChanges && !parsed?.title) return; // Not a plan — abort
+        } catch {
+          return; // Not JSON — abort
+        }
+        const btns = document.querySelectorAll('[data-plan-auto-execute="true"]');
+        const lastBtn = btns[btns.length - 1] as HTMLButtonElement | undefined;
+        if (lastBtn) lastBtn.click();
+      }, 2000); // 2s so user can see the plan before it executes
+    }
+  }, [aiEditing, chatMessages]);
 
   // Check if we need to generate on mount
   useEffect(() => {
@@ -1430,7 +1458,7 @@ ${priorSection}`;
     try {
       const { data, error } = await supabase
         .from('project_chat_messages' as any)
-        .select('id, role, content, snapshot')
+        .select('id, role, content, snapshot, created_at')
         .eq('project_id', id)
         .order('created_at', { ascending: true });
       
@@ -1441,6 +1469,7 @@ ${priorSection}`;
         const normalizedMessages = data.map((msg: any) => ({
           ...msg,
           snapshot: getSnapshotFiles(msg.snapshot),
+          created_at: msg.created_at || undefined,
         }));
         setChatMessages(normalizedMessages as any);
         const typedData = normalizedMessages as Array<{ id: string; role: string; content: string; snapshot?: Record<string, string> | null }>;
@@ -2541,7 +2570,7 @@ ${priorSection}`;
       
       if (error) {
         console.error('Error checking subdomain:', error);
-        return false;
+        return true; // Allow proceed on error — server-side check is the authoritative gate
       }
       return !data; // Available if no data returned
     } finally {
@@ -2578,6 +2607,12 @@ ${priorSection}`;
   const publishProject = async () => {
     if (!project || !session?.access_token) return;
 
+    // Guard: nothing to publish
+    if (Object.keys(generatedFiles).length === 0 && !codeContent) {
+      toast.error(isRTL ? 'لا توجد ملفات لنشرها. أنشئ مشروعك أولاً!' : 'No files to publish yet. Build your project first!');
+      return;
+    }
+
     // Validate subdomain
     const validationError = validateSubdomain(subdomainInput);
     if (validationError) {
@@ -2594,6 +2629,7 @@ ${priorSection}`;
 
     try {
       setPublishing(true);
+      setPublishStep(isRTL ? 'تجهيز الملفات...' : 'Preparing files...');
       
       // Build the files to publish from generatedFiles (multi-file project)
       let projectFiles: Record<string, string> = 
@@ -2618,6 +2654,7 @@ ${priorSection}`;
       // ============================================
       // PROPER BUNDLING: Use project-build edge function with esbuild
       // ============================================
+      setPublishStep(isRTL ? 'بناء المشروع...' : 'Building project...');
       console.log('Bundling project with esbuild via project-build...');
       console.log('Project files:', Object.keys(projectFiles));
       const entryPoint = getProjectEntryPoint(projectFiles);
@@ -2676,6 +2713,8 @@ ${priorSection}`;
         appCss: publishFiles.appCss.length,
       });
 
+      setPublishStep(isRTL ? 'رفع الملفات...' : 'Uploading to servers...');
+
       const { data: publishResult, error: publishError } = await supabase.functions.invoke('projects-publish', {
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -2696,6 +2735,10 @@ ${priorSection}`;
             {
               path: 'app.css',
               content: publishFiles.appCss,
+            },
+            {
+              path: 'vercel.json',
+              content: publishFiles.vercelJson,
             },
           ],
         }
@@ -2749,6 +2792,7 @@ ${priorSection}`;
         deployment_id: deploymentId,
       } : null);
 
+      setPublishStep(isRTL ? 'تم النشر!' : 'Published!');
       setShowPublishModal(false);
       
       // 🎉 Celebration confetti animation!
@@ -2786,6 +2830,7 @@ ${priorSection}`;
       toast.error(errorMessage);
     } finally {
       setPublishing(false);
+      setPublishStep('');
     }
   };
 
@@ -5620,6 +5665,7 @@ ${fixInstructions}
 
       let assistantMsg: string;
       let snapshotToSave: any = null;
+      let isPlanResponse = false; // Used to trigger auto-execute for rerouted complex requests
 
       // IMPORTANT: Save snapshot of CURRENT state BEFORE applying changes (for revert + truthful diff checks)
       const beforeSnapshot: Record<string, string> = Object.keys(generatedFiles).length > 0
@@ -5629,7 +5675,28 @@ ${fixInstructions}
           }
         : (codeContent ? { '/App.js': codeContent } : {});
 
-      if (leftPanelMode === 'chat') {
+      // Detect complex system-wide requests that need phased Chat execution, regardless of mode.
+      // Amateur users shouldn't need to know which mode to pick — the AI decides internally.
+      const isComplexSystemRequest =
+        // Language toggle / bilingual / RTL
+        /\b(language|lang|bilingual|i18n|rtl)\s*(toggle|switch|button|selector|support)?\b/i.test(userMessage) ||
+        /\b(english|en)\s*(\/|and|or|&)\s*(arabic|ar)\b/i.test(userMessage) ||
+        /\b(arabic|ar)\s*(\/|and|or|&)\s*(english|en)\b/i.test(userMessage) ||
+        /\b(add|enable|support)\s+(arabic|rtl|right[- ]to[- ]left)\b/i.test(userMessage) ||
+        /عربي\s*(و|\/)?\s*انجليزي|زر\s*اللغة/i.test(userMessage) ||
+        // Dark / light mode toggle
+        /\b(dark|light|night)\s*(mode|theme)\s*(toggle|switch|button|support)?\b/i.test(userMessage) ||
+        /\badd\s+(dark|light|night|theme)\s*(mode|theme)?\b/i.test(userMessage) ||
+        // Full redesign / rebuild
+        /\b(full|complete|entire|whole)\s*(redesign|rebuild|rewrite|overhaul|revamp)\b/i.test(userMessage) ||
+        /\b(redesign|rebuild|rewrite|overhaul)\s+(everything|the\s+whole|all)\b/i.test(userMessage) ||
+        // Authentication / login
+        /\b(add|implement|build|create)\s+(auth|authentication|login|signup|sign[- ]in|sign[- ]up|user\s+accounts?)\b/i.test(userMessage) ||
+        // Adding a full new page/section/feature
+        /\b(add|create|build)\s+(a\s+)?(new\s+)?(full\s+)?(page|blog|shop|store|dashboard|admin|portfolio|about\s+page|contact\s+page|pricing\s+page|landing\s+page)\b/i.test(userMessage);
+      const effectiveMode = (leftPanelMode === 'code' && isComplexSystemRequest) ? 'chat' : leftPanelMode;
+
+      if (effectiveMode === 'chat') {
         // Chat mode: Smart AI that answers questions OR returns plans for code changes
         // Use userImages captured earlier (before clearing)
         setAttachedImages([]); // Clear after capturing
@@ -5674,6 +5741,7 @@ ${fixInstructions}
         } else if (response.data.mode === 'plan' && response.data.plan) {
           // AI detected a code change request - show Plan Card
           assistantMsg = response.data.plan;
+          isPlanResponse = true;
           // 🎯 COMPLETION CONTRACT: Surface partial-completion warnings honestly
           if (response.data.partial && Array.isArray(response.data.contractWarnings) && response.data.contractWarnings.length > 0) {
             const warningText = response.data.contractWarnings.join(' ');
@@ -6037,6 +6105,10 @@ ${fixInstructions}
         .single();
 
       if (assistError) console.error('Error saving assistant message:', assistError);
+      // Auto-execute the plan when a complex request was rerouted from Code to Chat mode
+      if (isComplexSystemRequest && isPlanResponse) {
+        pendingAutoExecuteRef.current = true;
+      }
       if (assistantMsgData) setChatMessages(prev => [...prev, assistantMsgData as any]);
       else {
         setChatMessages(prev => [...prev, {
@@ -6259,13 +6331,7 @@ ${fixInstructions}
         const MAX_AUTO_RESUMES = 2;
         if (pausedJobId && autoResumeCountRef.current < MAX_AUTO_RESUMES) {
           autoResumeCountRef.current += 1;
-          toast.info(
-            isRTL
-              ? `جارٍ المتابعة تلقائياً... (${autoResumeCountRef.current}/${MAX_AUTO_RESUMES})`
-              : `Continuing automatically... (${autoResumeCountRef.current}/${MAX_AUTO_RESUMES})`,
-            { duration: 4000 }
-          );
-          // Wait for finally block to finish (aiEditing → false) then auto-resume
+          // Silent auto-resume — user just sees the AI continuing, no internal mechanics exposed
           setTimeout(async () => {
             try {
               await resumeSharedAgentJob(pausedJobId, userMessage);
@@ -6279,44 +6345,42 @@ ${fixInstructions}
         // Exceeded auto-resume limit — show the card so user can decide
         autoResumeCountRef.current = 0;
         setAiError({
-          title: 'Paused Safely',
-          titleAr: 'تم الإيقاف المؤقت بأمان',
-          message: classifiedFailure.userMessage,
-          messageAr: 'تم إيقاف المهمة مؤقتًا بشكل آمن ويمكنك استئنافها من آخر خطوة محفوظة.',
+          title: isRTL ? 'جاهز للمتابعة' : 'Ready to Continue',
+          titleAr: 'جاهز للمتابعة',
+          message: isRTL ? 'أنجزت جزءاً من المهمة. اضغط استئناف لإكمال الباقي.' : 'I finished part of the task. Press Resume to complete the rest.',
+          messageAr: 'أنجزت جزءاً من المهمة. اضغط استئناف لإكمال الباقي.',
           severity: 'info',
-          technicalDetails: pausedSummary || errorMessage,
           suggestedAction: classifiedFailure.suggestedAction,
-          suggestedActionAr: 'اضغط استئناف للمتابعة من آخر خطوة محفوظة.',
+          suggestedActionAr: 'اضغط استئناف للمتابعة.',
         });
 
         setChatMessages(prev => [...prev, {
           id: `paused-${Date.now()}`,
           role: 'assistant',
-          content: isRTL ? 'تم الإيقاف المؤقت بأمان. يمكنك الضغط على استئناف للمتابعة.' : 'I paused this safely. You can press Resume to continue.'
+          content: isRTL ? 'أنجزت جزءاً من المهمة. اضغط استئناف لإكمال الباقي.' : 'I finished part of the task. Press Resume to complete the rest.'
         }]);
-        toast.info(pausedSummary || classifiedFailure.userMessage);
         return;
       }
       
       // Set error explanation card
       setAiError({
-        title: 'Need Another Pass',
-        titleAr: 'نحتاج محاولة أخرى',
-        message: classifiedFailure.userMessage,
-        messageAr: 'توقفت هذه المحاولة قبل الاكتمال. غالبًا هذه مشكلة مؤقتة ويمكن المحاولة مرة أخرى.',
+        title: isRTL ? 'حاول مرة أخرى' : 'Try Again',
+        titleAr: 'حاول مرة أخرى',
+        message: isRTL ? 'حدث خطأ ما. حاول إرسال طلبك مرة أخرى.' : 'Something went wrong. Try sending your request again.',
+        messageAr: 'حدث خطأ ما. حاول إرسال طلبك مرة أخرى.',
         severity: 'error',
-        technicalDetails: errorMessage,
         suggestedAction: classifiedFailure.suggestedAction,
-        suggestedActionAr: 'حاول مرة أخرى أو عدّل صياغة الطلب إذا استمرت المشكلة.',
+        suggestedActionAr: 'حاول مرة أخرى.',
       });
+      console.error('[AI Coder Error]', errorMessage);
       
-      const errorMsg = isRTL ? 'توقفت هذه المحاولة قبل الاكتمال. حاول مرة أخرى.' : 'This run stopped before it could finish. Please try again.';
+      const errorMsg = isRTL ? 'حدث خطأ ما. حاول مرة أخرى.' : 'Something went wrong. Try again.';
       setChatMessages(prev => [...prev, { 
         id: `error-${Date.now()}`,
         role: 'assistant', 
         content: errorMsg 
       }]);
-      toast.error(errorMessage);
+      toast.error(isRTL ? 'حدث خطأ. حاول مرة أخرى.' : 'Something went wrong. Please try again.');
     } finally {
       // Save final thinking duration before clearing (use ref to avoid stale state)
       const start = thinkingStartTimeRef.current;
@@ -6596,6 +6660,22 @@ ${fixInstructions}
                 <Brain className="h-4 w-4 text-purple-500 group-hover:text-purple-400 transition-colors" />
               </button>
 
+              {/* Version History Button */}
+              {chatMessages.some(m => m.role === 'assistant' && hasSnapshotFiles(m.snapshot)) && (
+                <button
+                  onClick={() => setShowVersionHistory(v => !v)}
+                  className={cn(
+                    "p-1.5 rounded-lg border transition-all active:scale-95 group",
+                    showVersionHistory
+                      ? "bg-amber-500/20 border-amber-500/50 text-amber-400"
+                      : "bg-gradient-to-br from-amber-500/15 via-orange-500/15 to-yellow-500/15 border-amber-500/25 hover:border-amber-500/45 text-amber-500/70 hover:text-amber-400"
+                  )}
+                  title={isRTL ? 'سجل الإصدارات' : 'Version History'}
+                >
+                  <Clock className="h-4 w-4 transition-colors" />
+                </button>
+              )}
+
               <div className="flex bg-muted/50 dark:bg-white/5 rounded-lg p-0.5">
                 <button
                   onClick={() => { setMainTab('builder'); setLeftPanelMode('chat'); }}
@@ -6634,6 +6714,110 @@ ${fixInstructions}
               </div>
             </div>
           </div>
+
+          {/* ─── VERSION HISTORY PANEL ─── */}
+          {showVersionHistory && (() => {
+            const versionPoints = chatMessages
+              .filter(m => m.role === 'assistant' && hasSnapshotFiles(m.snapshot))
+              .reverse(); // latest first
+            return (
+              <div className="absolute inset-0 top-[56px] z-[90] bg-[#0c0f14] flex flex-col overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                {/* Panel Header */}
+                <div className="flex items-center justify-between px-4 py-3 border-b border-white/10 shrink-0">
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-amber-400" />
+                    <span className="text-[13px] font-semibold text-white">
+                      {isRTL ? 'سجل الإصدارات' : 'Version History'}
+                    </span>
+                    <span className="text-[11px] text-zinc-500 bg-white/5 px-1.5 py-0.5 rounded-full">
+                      {versionPoints.length}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => setShowVersionHistory(false)}
+                    className="p-1 rounded-md text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                {/* Version List */}
+                <div className="flex-1 overflow-y-auto py-2">
+                  {versionPoints.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2 text-zinc-600">
+                      <Clock className="h-8 w-8" />
+                      <p className="text-[13px]">{isRTL ? 'لا توجد نقاط استعادة بعد' : 'No restore points yet'}</p>
+                    </div>
+                  ) : (
+                    versionPoints.map((msg, idx) => {
+                      const snap = getSnapshotFiles(msg.snapshot);
+                      const fileCount = snap ? Object.keys(snap).length : 0;
+                      const versionNum = versionPoints.length - idx;
+                      const isLatest = idx === 0;
+                      const ts = msg.created_at
+                        ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : null;
+                      // Get a human summary from message content
+                      let summary = '';
+                      try {
+                        const parsed = JSON.parse(msg.content);
+                        summary = parsed?.summary || parsed?.title || '';
+                      } catch { summary = ''; }
+                      if (!summary) {
+                        summary = msg.content?.replace(/[#*`]/g, '').trim().slice(0, 55) || '';
+                      }
+                      return (
+                        <div
+                          key={msg.id}
+                          className={cn(
+                            "mx-3 mb-2 rounded-xl border transition-colors",
+                            isLatest
+                              ? "bg-amber-500/8 border-amber-500/25"
+                              : "bg-white/[0.03] border-white/8 hover:border-white/15"
+                          )}
+                        >
+                          <div className="px-3 py-2.5">
+                            <div className="flex items-center justify-between mb-1.5">
+                              <div className="flex items-center gap-2">
+                                <div className={cn("w-1.5 h-1.5 rounded-full shrink-0", isLatest ? "bg-amber-400" : "bg-zinc-600")} />
+                                <span className={cn("text-[12px] font-semibold", isLatest ? "text-amber-300" : "text-zinc-300")}>
+                                  {isLatest ? (isRTL ? 'الأحدث' : 'Latest') : `v${versionNum}`}
+                                </span>
+                                {ts && <span className="text-[11px] text-zinc-600">{ts}</span>}
+                              </div>
+                              <span className="text-[11px] text-zinc-600">
+                                {fileCount} {fileCount === 1 ? 'file' : 'files'}
+                              </span>
+                            </div>
+                            {summary && (
+                              <p className="text-[11px] text-zinc-500 leading-relaxed mb-2 line-clamp-2">
+                                {summary}
+                              </p>
+                            )}
+                            <button
+                              onClick={() => {
+                                handleRevert(msg.id);
+                                setShowVersionHistory(false);
+                              }}
+                              className={cn(
+                                "w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-medium transition-all active:scale-95",
+                                isLatest
+                                  ? "bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 border border-amber-500/20"
+                                  : "bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white border border-white/8"
+                              )}
+                            >
+                              <RotateCcw className="h-3 w-3" />
+                              {isRTL ? 'استعادة هذا الإصدار' : 'Restore this version'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Generated Files - Compact at top */}
           {false && Object.keys(generatedFiles).length > 0 && leftPanelMode === 'chat' && (
@@ -7701,8 +7885,13 @@ ${fixInstructions}
                       <div key={i} className="flex flex-col items-start w-full max-w-full overflow-hidden">
                         <div className="w-full bg-[#1a1a1a] border border-[#2a2a2a] rounded-lg overflow-hidden max-w-full">
                           {/* Plan Header */}
-                          <div className="px-4 py-2.5 border-b border-[#2a2a2a]">
+                          <div className="px-4 py-2.5 border-b border-[#2a2a2a] flex items-center justify-between">
                             <span className="text-[13px] text-zinc-500">Plan</span>
+                            {parsedPlan.queuedFollowup && (
+                              <span className="text-[11px] bg-blue-500/15 text-blue-400 border border-blue-500/25 px-2 py-0.5 rounded-full">
+                                {isRTL ? 'المرحلة ١ من ٢' : 'Phase 1 of 2'}
+                              </span>
+                            )}
                           </div>
                           
                           {/* Plan Content */}
@@ -7759,39 +7948,47 @@ ${fixInstructions}
                               </div>
                             )}
                             
-                            {/* Code Changes */}
+                            {/* Code Changes — clean file list, no raw code */}
                             {parsedPlan.codeChanges && parsedPlan.codeChanges.length > 0 && (
-                              <div className="space-y-2 overflow-hidden max-w-full">
-                                <h4 className="text-[13px] font-semibold text-white">Code Changes:</h4>
-                                {parsedPlan.codeChanges.map((change, changeIdx) => (
-                                  <div key={changeIdx} className="bg-[#0d0d0d] border border-[#252525] rounded-lg overflow-hidden max-w-full">
-                                    {/* File header */}
-                                    <div className="px-3 py-1.5 bg-[#151515] border-b border-[#252525] flex items-center justify-between gap-2 min-w-0">
-                                      <span className="text-[11px] text-zinc-500 font-mono truncate min-w-0 flex-1">
-                                        // {change.file}{change.line ? ` (line ${change.line})` : ''}
+                              <div className="space-y-1 overflow-hidden max-w-full">
+                                <p className="text-[12px] text-zinc-500 mb-2">
+                                  {parsedPlan.codeChanges.length} {parsedPlan.codeChanges.length === 1 ? 'file' : 'files'} {isRTL ? 'ستتغير' : 'will be changed'}
+                                </p>
+                                {parsedPlan.codeChanges.map((change, changeIdx) => {
+                                  const isNew = !change.line && (!change.code || change.code.includes('export default') || (change.file || '').includes('i18n') || (change.file || '').includes('Context'));
+                                  const label = change.description || (isNew ? (isRTL ? 'إنشاء' : 'Create') : (isRTL ? 'تحديث' : 'Update'));
+                                  return (
+                                    <div key={changeIdx} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-white/[0.03] transition-colors">
+                                      <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${isNew ? 'bg-blue-400' : 'bg-emerald-400'}`} />
+                                      <code className="text-[12px] font-mono text-zinc-300 truncate flex-1 min-w-0">
+                                        {change.file}
+                                      </code>
+                                      <span className={`text-[11px] shrink-0 ${isNew ? 'text-blue-500' : 'text-emerald-600'}`}>
+                                        {label}
                                       </span>
-                                      <button 
-                                        onClick={() => navigator.clipboard.writeText(change.code)}
-                                        className="text-zinc-600 hover:text-zinc-400 transition-colors shrink-0"
-                                        title="Copy code"
-                                        aria-label="Copy code"
-                                      >
-                                        <Copy className="h-3 w-3" />
-                                      </button>
                                     </div>
-                                    {/* Code */}
-                                    <pre className="px-3 py-2.5 text-[12px] font-mono text-emerald-400 overflow-x-auto whitespace-pre-wrap break-words max-w-full">
-                                      {change.code}
-                                    </pre>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
                           
+                          {/* Phase 2 auto-start notice */}
+                          {parsedPlan.queuedFollowup && (
+                            <div className="px-4 pb-3">
+                              <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-lg px-3 py-2">
+                                <span className="text-blue-400 text-[11px]">⚡</span>
+                                <span className="text-[12px] text-blue-300">
+                                  {isRTL ? 'المرحلة الثانية ستبدأ تلقائياً بعد اكتمال هذه المرحلة' : 'Phase 2 will start automatically after Phase 1 completes'}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
                           {/* Action Button */}
                           <div className="px-4 py-3 border-t border-[#2a2a2a]">
                             <button
+                              data-plan-auto-execute="true"
                               onClick={async () => {
                                 // Switch to Code mode immediately
                                 setLeftPanelMode('code');
@@ -9651,7 +9848,7 @@ ${fixInstructions}
                 {publishing || checkingSubdomain ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    {isRTL ? 'جاري النشر...' : 'Publishing...'}
+                    {publishStep || (isRTL ? 'جاري النشر...' : 'Publishing...')}
                   </>
                 ) : (
                   <>

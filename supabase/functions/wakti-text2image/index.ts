@@ -81,6 +81,8 @@ const KIE_API_KEY = (
   || Deno.env.get("KIE_BEARER_TOKEN")
   || ""
 ).trim();
+const RUNWARE_API_KEY = (Deno.env.get("RUNWARE_API_KEY") || "").trim();
+const MODEL_FAST = Deno.env.get("RUNWARE_FAST_MODEL") || "openai:gpt-image@2";
 const MODEL_BEST = "nano-banana-2";
 const TIMEOUT_MS = parseInt(Deno.env.get("WAKTI_T2I_TIMEOUT_MS") ?? "180000", 10);
 const NANO_BANANA_SUPPORTED_RATIOS = new Set([
@@ -101,12 +103,141 @@ const NANO_BANANA_SUPPORTED_RATIOS = new Set([
   "auto",
 ]);
 
+const RETRYABLE_GENERATION_ERROR_PATTERN = /unexpected end of file|error reading a body from connection|connection (?:reset|closed|aborted)|socket hang up|econnreset|etimedout|network\s*error|failed to fetch|generation timed out|timed out|timeout|bad gateway|service unavailable|gateway timeout|http\s*5\d\d|runware\s*error\s*5\d\d|abort/i;
+const SAFETY_BLOCK_PATTERN = /content\s*safety|safety\s*restriction|safety\s*policy|unsafe_prompt_blocked|prompt\s*blocked|moderation|can't help with that request|cannot assist with|policy\s*filter|content\s*policy|\b431\b/i;
+const NON_RETRYABLE_PATTERN = /missing prompt|missing image|missing params|bad_request|method not allowed|unsupported|authentication required|please log in first/i;
+const USER_ACTIONABLE_PATTERN = /missing prompt|authentication required|please log in first|method not allowed/i;
+const PROVIDER_LEAK_PATTERN = /runware|openai|gpt-image|kie|api\.kie\.ai|grok-imagine|nano-banana|provider/i;
+
+type UiLanguage = "ar" | "en";
+
+interface StageErrorData {
+  stage: string;
+  message: string;
+  taskId?: string;
+}
+
+interface ParsedStageError extends StageErrorData {
+  rawMessage: string;
+}
+
+interface PublicErrorPayload {
+  message: string;
+  code: string;
+  retryable: boolean;
+}
+
 function normalizeAspectRatio(rawValue: unknown): string {
   const value = String(rawValue || "auto").trim();
   if (NANO_BANANA_SUPPORTED_RATIOS.has(value)) {
     return value;
   }
   return "auto";
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error ?? "Unknown error");
+}
+
+function hashPromptText(value: string): string {
+  let hash = 5381;
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash << 5) + hash) + value.charCodeAt(i);
+    hash |= 0;
+  }
+  const normalized = hash >>> 0;
+  return normalized.toString(16).padStart(8, "0");
+}
+
+function buildStageError(stage: string, message: string, taskId?: string): Error {
+  return new Error(JSON.stringify({ stage, message, taskId }));
+}
+
+function parseStageError(error: unknown): ParsedStageError {
+  const rawMessage = toErrorMessage(error);
+  try {
+    const parsed = JSON.parse(rawMessage) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const stage = typeof (parsed as Record<string, unknown>).stage === "string"
+        ? (parsed as Record<string, unknown>).stage as string
+        : "unhandled";
+      const message = typeof (parsed as Record<string, unknown>).message === "string"
+        ? (parsed as Record<string, unknown>).message as string
+        : rawMessage;
+      const taskId = typeof (parsed as Record<string, unknown>).taskId === "string"
+        ? (parsed as Record<string, unknown>).taskId as string
+        : undefined;
+      return { stage, message, taskId, rawMessage };
+    }
+  } catch {
+    // non-json error payload
+  }
+  return { stage: "unhandled", message: rawMessage, rawMessage };
+}
+
+function isRetryableGenerationError(error: unknown): boolean {
+  const parsed = parseStageError(error);
+  const text = `${parsed.message} ${parsed.rawMessage}`;
+  return RETRYABLE_GENERATION_ERROR_PATTERN.test(text)
+    && !SAFETY_BLOCK_PATTERN.test(text)
+    && !NON_RETRYABLE_PATTERN.test(text);
+}
+
+function mapToPublicError(rawMessage: string, language: UiLanguage): PublicErrorPayload {
+  const lower = rawMessage.toLowerCase();
+  const hasProviderLeak = PROVIDER_LEAK_PATTERN.test(rawMessage);
+
+  if (SAFETY_BLOCK_PATTERN.test(lower)) {
+    return {
+      message: language === "ar"
+        ? "تم حظر هذا الطلب بسبب سياسة الأمان. عدّل الوصف ثم حاول مرة أخرى."
+        : "This request was blocked by safety policy. Please adjust the prompt and try again.",
+      code: "UNSAFE_PROMPT_BLOCKED",
+      retryable: false,
+    };
+  }
+
+  if (/missing prompt/.test(lower)) {
+    return {
+      message: language === "ar" ? "اكتب وصفاً للصورة" : "Enter an image description",
+      code: "BAD_REQUEST_MISSING_PROMPT",
+      retryable: false,
+    };
+  }
+
+  const retryable = RETRYABLE_GENERATION_ERROR_PATTERN.test(lower)
+    && !NON_RETRYABLE_PATTERN.test(lower);
+
+  if (retryable) {
+    return {
+      message: language === "ar"
+        ? "حدث خلل مؤقت في خدمة الصور. حاول مرة أخرى."
+        : "Temporary image service issue. Please try again.",
+      code: "TEMPORARY_SERVICE_ISSUE",
+      retryable: true,
+    };
+  }
+
+  if (USER_ACTIONABLE_PATTERN.test(lower) && !hasProviderLeak) {
+    return {
+      message: rawMessage,
+      code: "REQUEST_INVALID",
+      retryable: false,
+    };
+  }
+
+  return {
+    message: language === "ar"
+      ? "تعذر إنشاء الصورة الآن. حاول مرة أخرى."
+      : "Image generation failed. Please try again.",
+    code: "IMAGE_GENERATION_FAILED",
+    retryable: false,
+  };
 }
 
 function extractKieImageUrls(data: any): string[] {
@@ -145,7 +276,7 @@ function extractKieImageUrls(data: any): string[] {
 }
 
 async function pollKieTaskForImage(taskId: string): Promise<string> {
-  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+  if (!KIE_API_KEY) throw buildStageError("config", "Image provider is not configured");
   const deadline = Date.now() + TIMEOUT_MS;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -154,26 +285,31 @@ async function pollKieTaskForImage(taskId: string): Promise<string> {
     });
     const rawText = await resp.text();
     if (!resp.ok) {
-      throw new Error(`KIE poll failed ${resp.status}: ${rawText.slice(0, 200)}`);
+      throw buildStageError("provider_poll_http", `KIE poll failed ${resp.status}: ${rawText.slice(0, 200)}`, taskId);
     }
-    const json = JSON.parse(rawText);
+    let json: any;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      throw buildStageError("provider_poll_parse", "Image status response was invalid", taskId);
+    }
     const rawStatus = (json?.data?.state || json?.data?.status || json?.data?.taskStatus || "").toString().toLowerCase();
     const imageUrls = extractKieImageUrls(json?.data);
     const isDone = rawStatus === "success" || rawStatus === "completed" || rawStatus === "finished"
       || rawStatus === "succeed" || rawStatus === "done" || rawStatus === "2";
     const isFailed = rawStatus === "failed" || rawStatus === "error" || rawStatus === "fail" || rawStatus === "3";
     if (isFailed) {
-      throw new Error(`KIE task failed: ${rawStatus}`);
+      throw buildStageError("provider_poll_failed", `KIE task failed: ${rawStatus}`, taskId);
     }
     if ((isDone || imageUrls.length > 0) && imageUrls[0]) {
       return imageUrls[0];
     }
   }
-  throw new Error("KIE generation timed out");
+  throw buildStageError("provider_poll_timeout", "KIE generation timed out", taskId);
 }
 
-async function generateBestWithKie(prompt: string, aspectRatio: string, callBackUrl?: string): Promise<string> {
-  if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
+async function generateBestWithKie(prompt: string, aspectRatio: string, callBackUrl?: string): Promise<{ url: string; taskId: string }> {
+  if (!KIE_API_KEY) throw buildStageError("config", "Image provider is not configured");
   const submitResp = await fetch(KIE_CREATE_TASK_ENDPOINT, {
     method: "POST",
     headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
@@ -190,34 +326,190 @@ async function generateBestWithKie(prompt: string, aspectRatio: string, callBack
   });
   const submitText = await submitResp.text();
   if (!submitResp.ok) {
-    throw new Error(`KIE submit failed ${submitResp.status}: ${submitText.slice(0, 200)}`);
+    throw buildStageError("provider_submit_http", `KIE submit failed ${submitResp.status}: ${submitText.slice(0, 200)}`);
   }
-  const submitJson = JSON.parse(submitText);
+  let submitJson: any;
+  try {
+    submitJson = JSON.parse(submitText);
+  } catch {
+    throw buildStageError("provider_submit_parse", "Image submit response was invalid");
+  }
   const taskId = submitJson?.data?.taskId;
-  if (!taskId) throw new Error(`No taskId in KIE response: ${submitText.slice(0, 200)}`);
-  return await pollKieTaskForImage(taskId);
+  if (!taskId) throw buildStageError("provider_submit_missing_task_id", "No task ID returned from image provider");
+  const url = await pollKieTaskForImage(taskId);
+  return { url, taskId };
+}
+
+async function runBestGenerationWithRetry(prompt: string, aspectRatio: string, callBackUrl?: string): Promise<{ url: string; taskId: string; attempts: number }> {
+  try {
+    const firstAttempt = await generateBestWithKie(prompt, aspectRatio, callBackUrl);
+    return { ...firstAttempt, attempts: 1 };
+  } catch (firstError) {
+    if (!isRetryableGenerationError(firstError)) {
+      throw firstError;
+    }
+    await delay(1200);
+    const secondAttempt = await generateBestWithKie(prompt, aspectRatio, callBackUrl);
+    return { ...secondAttempt, attempts: 2 };
+  }
+}
+
+function getDimensionsForModel(model: string, aspectRatio: "9:16" | "16:9"): { width: number; height: number } {
+  const isLandscape = aspectRatio === "16:9";
+  if (model === "google:4@3") return isLandscape ? { width: 2752, height: 1536 } : { width: 1536, height: 2752 };
+  if (model === "google:4@2") return isLandscape ? { width: 1376, height: 768 } : { width: 768, height: 1376 };
+  if (model === "openai:gpt-image@2") return isLandscape ? { width: 1536, height: 1024 } : { width: 1024, height: 1536 };
+  return isLandscape ? { width: 1344, height: 768 } : { width: 768, height: 1344 };
+}
+
+const IMAGE_URL_KEYS = ["imageURL", "URL", "url", "outputUrl", "outputURL"] as const;
+const IMAGE_DATAURI_KEYS = ["imageDataURI", "dataURI", "dataUrl", "data_uri"] as const;
+
+function findFirstImage(node: unknown): { url?: string; dataURI?: string } | null {
+  const visited = new Set<object>();
+  function dfs(obj: any): { url?: string; dataURI?: string } | null {
+    if (!obj || typeof obj !== "object" || visited.has(obj)) return null;
+    visited.add(obj);
+    for (const k of IMAGE_URL_KEYS) if (typeof obj[k] === "string" && obj[k]) return { url: obj[k] };
+    for (const k of IMAGE_DATAURI_KEYS) if (typeof obj[k] === "string" && obj[k]) return { dataURI: obj[k] };
+    if (Array.isArray(obj)) {
+      for (const it of obj) {
+        const got = dfs(it);
+        if (got) return got;
+      }
+    } else {
+      for (const key in obj) {
+        const got = dfs(obj[key]);
+        if (got) return got;
+      }
+    }
+    return null;
+  }
+  return dfs(node);
+}
+
+async function runwareGenerate(
+  positivePrompt: string,
+  model: string,
+  aspectRatio: "9:16" | "16:9",
+  signal?: AbortSignal,
+): Promise<{ url: string | null }> {
+  if (!RUNWARE_API_KEY) {
+    throw buildStageError("config", "RUNWARE_API_KEY not configured");
+  }
+
+  const { width, height } = getDimensionsForModel(model, aspectRatio);
+  const isGoogleModel = model.startsWith("google:");
+  const isOpenAIImageModel = model.startsWith("openai:gpt-image");
+  const inferenceTask: Record<string, unknown> = {
+    taskType: "imageInference",
+    taskUUID: crypto.randomUUID(),
+    positivePrompt,
+    width,
+    height,
+    model,
+    numberResults: 1,
+    outputType: ["URL", "dataURI"],
+    includeCost: true,
+    outputQuality: 85,
+  };
+
+  if (isOpenAIImageModel) {
+    inferenceTask.providerSettings = { openai: { quality: "low" } };
+  }
+
+  if (!isGoogleModel && !isOpenAIImageModel) {
+    inferenceTask.outputFormat = "WEBP";
+  }
+
+  const payload = [
+    { taskType: "authentication", apiKey: RUNWARE_API_KEY },
+    inferenceTask,
+  ];
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  if (signal) signal.addEventListener("abort", () => controller.abort(), { once: true });
+
+  try {
+    const res = await fetch("https://api.runware.ai/v1", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+    const text = await res.text();
+
+    if (!res.ok) {
+      throw buildStageError("provider_submit_http", `Runware error ${res.status}: ${text?.slice(0, 200) || ""}`);
+    }
+    if (!text) {
+      throw buildStageError("provider_submit_empty", "Runware returned an empty response");
+    }
+
+    let data: any;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw buildStageError("provider_submit_parse", "Runware returned invalid JSON");
+    }
+
+    const found = findFirstImage(data);
+    return { url: found?.url || found?.dataURI || null };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function runwareGenerateWithRetry(
+  positivePrompt: string,
+  model: string,
+  aspectRatio: "9:16" | "16:9",
+  signal?: AbortSignal,
+): Promise<{ url: string | null; attempts: number }> {
+  try {
+    const firstAttempt = await runwareGenerate(positivePrompt, model, aspectRatio, signal);
+    return { ...firstAttempt, attempts: 1 };
+  } catch (firstError) {
+    if (!isRetryableGenerationError(firstError)) {
+      throw firstError;
+    }
+    await delay(1200);
+    const secondAttempt = await runwareGenerate(positivePrompt, model, aspectRatio, signal);
+    return { ...secondAttempt, attempts: 2 };
+  }
 }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: { ...cors } });
   const startTime = Date.now();
-  let usedModel = MODEL_BEST;
-  let usedProvider = "kie-nano-banana-2";
+  let usedModel = MODEL_FAST;
+  let usedProvider = "runware";
   let promptText = "";
+  let language: UiLanguage = "en";
+  let promptHash = "";
+  let providerTaskId: string | undefined;
+  let failureStage = "request";
+  let userIdForLog: string | undefined;
+  let requestedQuality = "fast";
 
   try {
     if (req.method !== "POST") return new Response(JSON.stringify({ success: false, error: "Method not allowed" }), { status: 405, headers: { ...cors, "Content-Type": "application/json" } });
 
     const body = await req.json().catch(() => ({ }));
     const prompt = (body?.prompt || "").toString();
-    const requestedQuality = (body?.quality || "best_fast").toString();
-    const quality = "best_fast";
+    requestedQuality = (body?.quality || "fast").toString();
+    const quality = requestedQuality === "best_fast" ? "best_fast" : "fast";
     const aspectRatio = normalizeAspectRatio(body?.aspect_ratio);
+    const runwareAspectRatio: "9:16" | "16:9" = body?.aspect_ratio === "16:9" ? "16:9" : "9:16";
     const callbackUrlFromBody = typeof body?.callBackUrl === "string" ? body.callBackUrl.trim() : "";
     const callbackUrlFromEnv = (Deno.env.get("KIE_NANO_BANANA_CALLBACK_URL") || "").trim();
     const callBackUrl = callbackUrlFromBody || callbackUrlFromEnv || undefined;
     const userId = body?.user_id || null;
+    userIdForLog = userId || undefined;
+    language = body?.language === "ar" ? "ar" : "en";
     promptText = prompt;
+    promptHash = hashPromptText(prompt);
     const supabaseAdmin = userId
       ? createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
@@ -225,11 +517,24 @@ Deno.serve(async (req: Request) => {
       )
       : null;
 
-    if (!prompt.trim()) return new Response(JSON.stringify({ success: false, error: "Missing prompt" }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+    if (!prompt.trim()) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: language === "ar" ? "اكتب وصفاً للصورة" : "Enter an image description",
+          code: "BAD_REQUEST_MISSING_PROMPT",
+          retryable: false,
+        }),
+        { status: 200, headers: { ...cors, "Content-Type": "application/json" } },
+      );
+    }
 
-    const promptSafety = inspectGenerationPrompt(prompt, body?.language === "ar" ? "ar" : "en");
+    const promptSafety = inspectGenerationPrompt(prompt, language);
     if (!promptSafety.allowed) {
-      return new Response(JSON.stringify({ success: false, error: promptSafety.message }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+      return new Response(
+        JSON.stringify({ success: false, error: promptSafety.message, code: "UNSAFE_PROMPT_BLOCKED", retryable: false }),
+        { status: 200, headers: { ...cors, "Content-Type": "application/json" } },
+      );
     }
 
     // ── Trial Token Check ──
@@ -245,11 +550,26 @@ Deno.serve(async (req: Request) => {
     // ── End Trial Token Check ──
 
     const finalPrompt = promptSafety.normalizedPrompt;
-    usedModel = MODEL_BEST;
-    usedProvider = "kie-nano-banana-2";
+    usedModel = quality === "best_fast" ? MODEL_BEST : MODEL_FAST;
+    usedProvider = quality === "best_fast" ? "kie-nano-banana-2" : "runware";
 
-    const url = await generateBestWithKie(finalPrompt, aspectRatio, callBackUrl);
+    let url: string | null = null;
+    let attempts = 1;
+    if (quality === "best_fast") {
+      failureStage = "provider_generation";
+      const generationResult = await runBestGenerationWithRetry(finalPrompt, aspectRatio, callBackUrl);
+      providerTaskId = generationResult.taskId;
+      url = generationResult.url;
+      attempts = generationResult.attempts;
+    } else {
+      failureStage = "provider_generation";
+      const generationResult = await runwareGenerateWithRetry(finalPrompt, usedModel, runwareAspectRatio, req.signal);
+      url = generationResult.url;
+      attempts = generationResult.attempts;
+    }
+
     if (!url) {
+      failureStage = "empty_result";
       await logAI({
         functionName: "text2image",
         userId,
@@ -258,9 +578,19 @@ Deno.serve(async (req: Request) => {
         durationMs: Date.now() - startTime,
         status: "error",
         errorMessage: "No image returned",
-        metadata: { provider: usedProvider, quality }
+        metadata: { provider: usedProvider, quality, requestedQuality, stage: failureStage, taskId: providerTaskId, promptHash }
       });
-      return new Response(JSON.stringify({ success: false, error: "No image returned" }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: language === "ar" ? "تعذر إنشاء الصورة الآن. حاول مرة أخرى." : "Image generation failed. Please try again.",
+          code: "IMAGE_GENERATION_FAILED",
+          retryable: false,
+          stage: failureStage,
+          taskId: providerTaskId,
+        }),
+        { status: 200, headers: { ...cors, "Content-Type": "application/json" } },
+      );
     }
 
     let trialPayload = null;
@@ -281,24 +611,57 @@ Deno.serve(async (req: Request) => {
       inputText: prompt,
       durationMs: Date.now() - startTime,
       status: "success",
-      metadata: { provider: usedProvider, quality, requestedQuality, translated: false }
+      metadata: {
+        provider: usedProvider,
+        quality,
+        requestedQuality,
+        translated: false,
+        stage: "success",
+        taskId: providerTaskId,
+        promptHash,
+        attempts,
+      }
     });
 
-    return new Response(JSON.stringify({ success: true, url, model: usedModel, quality, trial: trialPayload }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, url, model: usedModel, quality, trial: trialPayload, taskId: providerTaskId }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
   } catch (err) {
-    const msg = String((err as any)?.message || err);
-    const normalized = /abort/i.test(msg) ? "Generation timed out. Please try again with a shorter prompt." : msg;
+    const parsedError = parseStageError(err);
+    failureStage = parsedError.stage || failureStage;
+    if (!providerTaskId && parsedError.taskId) {
+      providerTaskId = parsedError.taskId;
+    }
+    const publicError = mapToPublicError(parsedError.message, language);
 
     await logAI({
       functionName: "text2image",
+      userId: userIdForLog,
       model: usedModel,
       inputText: promptText,
       durationMs: Date.now() - startTime,
       status: "error",
-      errorMessage: normalized,
-      metadata: { provider: usedProvider }
+      errorMessage: parsedError.message,
+      metadata: {
+        provider: usedProvider,
+        stage: failureStage,
+        taskId: providerTaskId,
+        promptHash,
+        requestedQuality,
+        retryable: publicError.retryable,
+        code: publicError.code,
+        rawError: parsedError.rawMessage.slice(0, 500),
+      }
     });
 
-    return new Response(JSON.stringify({ success: false, error: normalized }), { status: 200, headers: { ...cors, "Content-Type": "application/json" } });
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: publicError.message,
+        code: publicError.code,
+        retryable: publicError.retryable,
+        stage: failureStage,
+        taskId: providerTaskId,
+      }),
+      { status: 200, headers: { ...cors, "Content-Type": "application/json" } },
+    );
   }
 });

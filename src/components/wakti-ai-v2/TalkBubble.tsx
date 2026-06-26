@@ -155,6 +155,11 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const noiseStrikeCountRef = useRef(0);
   const noiseStrikeWindowStartRef = useRef(0);
   const noiseGuardActivatedAtRef = useRef(0);
+  const connectionInitInFlightRef = useRef(false);
+  const connectionInitIdRef = useRef(0);
+  const initialSessionConfiguredRef = useRef(false);
+  const sessionReadyFallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const assistantAwaitingOutputAudioDoneRef = useRef(false);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -434,6 +439,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
   const beginAssistantTurn = useCallback(() => {
     assistantResponseActiveRef.current = true;
+    assistantAwaitingOutputAudioDoneRef.current = true;
     assistantMessageSyncedRef.current = false;
     assistantTranscriptBufferRef.current = '';
     bumpAssistantPlaybackLock(1200);
@@ -517,7 +523,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     }
   }, []);
 
-  const scheduleAssistantTurnRecovery = useCallback((delayMs = 1800) => {
+  const scheduleAssistantTurnRecovery = useCallback((delayMs = 2600) => {
     clearAssistantTurnRecovery();
     assistantTurnRecoveryTimeoutRef.current = setTimeout(() => {
       assistantTurnRecoveryTimeoutRef.current = null;
@@ -529,9 +535,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       if (recoveredTranscript) {
         syncAssistantMessage(recoveredTranscript);
       }
+      assistantAwaitingOutputAudioDoneRef.current = false;
       assistantResponseActiveRef.current = false;
-      bumpAssistantPlaybackLock(900);
-      rearmListening(450);
+      bumpAssistantPlaybackLock(1200);
+      rearmListening(650);
     }, delayMs);
   }, [bumpAssistantPlaybackLock, clearAssistantTurnRecovery, normalizeAssistantTranscript, rearmListening, syncAssistantMessage]);
 
@@ -551,11 +558,12 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       setAiTranscript(finalTranscript);
       syncAssistantMessage(finalTranscript);
     }
-    bumpAssistantPlaybackLock(900);
+    bumpAssistantPlaybackLock(1300);
+    assistantAwaitingOutputAudioDoneRef.current = false;
     assistantResponseActiveRef.current = false;
     setError(null);
     if (isConversationActiveRef.current) {
-      rearmListening(450);
+      rearmListening(650);
     } else {
       setStatus('ready');
     }
@@ -817,6 +825,14 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   }, []);
 
   const cleanup = useCallback(() => {
+    connectionInitInFlightRef.current = false;
+    connectionInitIdRef.current += 1;
+    initialSessionConfiguredRef.current = false;
+    assistantAwaitingOutputAudioDoneRef.current = false;
+    if (sessionReadyFallbackTimeoutRef.current) {
+      clearTimeout(sessionReadyFallbackTimeoutRef.current);
+      sessionReadyFallbackTimeoutRef.current = null;
+    }
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
@@ -877,6 +893,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     assistantTranscriptBufferRef.current = '';
     assistantMessageSyncedRef.current = false;
     assistantResponseActiveRef.current = false;
+    assistantAwaitingOutputAudioDoneRef.current = false;
     lastAssistantTranscriptRef.current = '';
     lastAssistantFinishedAtRef.current = 0;
     assistantPlaybackLockUntilRef.current = 0;
@@ -991,9 +1008,25 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
   // Initialize WebRTC connection when bubble opens
   const initializeConnection = useCallback(async () => {
+    if (connectionInitInFlightRef.current) {
+      console.log('[Talk] initializeConnection already in flight, skipping duplicate call');
+      return;
+    }
+
+    connectionInitInFlightRef.current = true;
+    const initId = connectionInitIdRef.current + 1;
+    connectionInitIdRef.current = initId;
+    const isStaleInit = () => initId !== connectionInitIdRef.current;
+
     setStatus('connecting');
     setError(null);
+    setDebugHint('');
     setIsConnectionReady(false);
+    initialSessionConfiguredRef.current = false;
+    if (sessionReadyFallbackTimeoutRef.current) {
+      clearTimeout(sessionReadyFallbackTimeoutRef.current);
+      sessionReadyFallbackTimeoutRef.current = null;
+    }
 
     // Clean up old OpenAI connection
     if (dcRef.current) {
@@ -1005,12 +1038,17 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       pcRef.current = null;
     }
 
+    let connectionStage: 'microphone' | 'offer' | 'auth' | 'edge' | 'answer' = 'microphone';
+    let edgeStage = '';
+    let edgeDetails = '';
+
     try {
       // Get fresh microphone stream
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(t => t.stop());
       }
-      
+
+      connectionStage = 'microphone';
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
@@ -1022,6 +1060,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
           latency: { ideal: 0.01 },
         },
       });
+      if (isStaleInit()) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       streamRef.current = stream;
 
       // Setup analyser for mic level visualization
@@ -1064,6 +1106,11 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       dcRef.current = dc;
 
       dc.onopen = () => {
+        if (isStaleInit() || dcRef.current !== dc) {
+          console.log('[Talk] Ignoring stale data-channel open event');
+          return;
+        }
+
         console.log('[Talk] Data channel open - sending session config (manual turn detection)');
         
         // Use refs to get current values (avoid stale closures)
@@ -1138,7 +1185,9 @@ What to do instead:
 ${locationContext}
 
 VOICE STYLE (this is SPEECH, not text — every rule matters):
-- Talk like a smart friend. Natural pauses, contractions ("I'd", "you're", "it's"), and conversational connectors ("okay so...", "yeah, actually...", "right, so...").
+- Talk like a smart friend, but keep phrasing clean and clear.
+- Natural contractions are fine, but avoid filler/disfluencies like "you know", "like", "um", repeated starts, or rambling lead-ins.
+- Keep each reply tight: one clear idea per sentence, then stop when the answer is complete.
 - Match the user's energy. Casual when they're casual, focused when they're focused, playful when they're playful.
 - Reply length fits the moment — a single line for quick things, a few sentences for explanations. Never a wall of text.
 - ABSOLUTELY NO markdown, NO bullet points, NO numbered lists, NO URLs, NO code blocks. This is spoken audio. Express lists naturally: "first... then... and also..."
@@ -1155,7 +1204,9 @@ ${locationContext}
 🚨 قاعدة اللغة (إلزامية): جميع ردودك بالعربية فقط. لا تستخدم الإنجليزية إلا لأسماء العلم والمصطلحات التقنية التي لا بديل عربي لها.
 
 أسلوب الصوت (هذا كلام منطوق، لا نص — كل قاعدة مهمة):
-- تكلّم كصديق ذكي. توقّفات طبيعية، وكلمات ربط المحادثة ("طيب،"، "أيوه، في الواقع..."، "تمام، إذن...").
+- تكلّم كصديق ذكي لكن بصياغة واضحة وسلسة.
+- الأسلوب الطبيعي مطلوب، لكن بدون حشو أو تردد مثل "يعني" و"زي" و"أمم" أو بدايات مكررة للجملة.
+- اجعل الرد مختصراً وواضحاً: فكرة واحدة واضحة في كل جملة، ثم توقف عند اكتمال الجواب.
 - جاري طاقة المستخدم. كن عفوياً لما يكون عفوياً، ومركّزاً لما يكون مركّزاً.
 - طول الرد حسب الموقف — سطر واحد للأشياء السريعة، وعدة جمل للشرح. لا تصنع جدارًا من الكلام أبداً.
 - ممنوع قطعاً استخدام تنسيق ماركداون، أو نقاط، أو قوائم مرقمة، أو روابط، أو أكواد. هذا صوت منطوق. عبّر عن القوائم بشكل طبيعي: "أولاً... ثم... وأيضاً..."
@@ -1199,21 +1250,34 @@ ${memoryContext ? memoryContext : ''}`
             },
           }
         }));
-        
-        setIsConnectionReady(true);
-        setStatus('ready');
-        if (pendingAutoStartAfterConnectRef.current) {
-          pendingAutoStartAfterConnectRef.current = false;
-          setTimeout(() => {
-            startRecordingRef.current?.();
-          }, 80);
+
+        // Wait briefly for explicit session.updated ack before first auto-start.
+        if (sessionReadyFallbackTimeoutRef.current) {
+          clearTimeout(sessionReadyFallbackTimeoutRef.current);
         }
-        
-        // Start continuous mic level animation
-        startMicLevelAnimation();
+        sessionReadyFallbackTimeoutRef.current = setTimeout(() => {
+          sessionReadyFallbackTimeoutRef.current = null;
+          if (isStaleInit() || dcRef.current !== dc || initialSessionConfiguredRef.current) {
+            return;
+          }
+          console.warn('[Talk] session.updated not received in time; using connection-ready fallback');
+          initialSessionConfiguredRef.current = true;
+          setIsConnectionReady(true);
+          setStatus('ready');
+          startMicLevelAnimation();
+          if (pendingAutoStartAfterConnectRef.current) {
+            pendingAutoStartAfterConnectRef.current = false;
+            setTimeout(() => {
+              startRecordingRef.current?.();
+            }, 80);
+          }
+        }, 2500);
       };
 
       dc.onmessage = (event) => {
+        if (isStaleInit() || dcRef.current !== dc) {
+          return;
+        }
         try {
           const msg = JSON.parse(event.data);
           handleRealtimeEvent(msg);
@@ -1223,22 +1287,38 @@ ${memoryContext ? memoryContext : ''}`
       };
 
       dc.onerror = (err) => {
+        if (isStaleInit() || dcRef.current !== dc) {
+          return;
+        }
         console.error('[Talk] Data channel error:', err);
         setError(language === 'ar' ? 'خطأ في الاتصال' : 'Connection error');
+        setStatus('ready');
         setIsConnectionReady(false);
       };
 
       dc.onclose = () => {
+        if (isStaleInit() || dcRef.current !== dc) {
+          return;
+        }
         console.log('[Talk] Data channel closed');
+        initialSessionConfiguredRef.current = false;
+        if (sessionReadyFallbackTimeoutRef.current) {
+          clearTimeout(sessionReadyFallbackTimeoutRef.current);
+          sessionReadyFallbackTimeoutRef.current = null;
+        }
         setIsConnectionReady(false);
-        // Don't auto-reconnect - connection should stay open with server_vad
-        // If it closes, show error and let user close/reopen
-        setStatus('connecting');
+        // Keep reconnect available from the orb instead of deadlocking on "connecting".
+        setStatus('ready');
         setError(language === 'ar' ? 'انقطع الاتصال' : 'Connection lost');
+        setDebugHint(t('Connection lost. Tap once to reconnect.', 'انقطع الاتصال. اضغط مرة لإعادة الاتصال.'));
       };
 
       // Create offer
+      connectionStage = 'offer';
       await pc.setLocalDescription();
+      if (isStaleInit()) {
+        return;
+      }
 
       // Wait for ICE gathering to complete so the offer includes all candidates
       await new Promise<void>((resolve) => {
@@ -1258,6 +1338,9 @@ ${memoryContext ? memoryContext : ''}`
           resolve();
         }, 5000);
       });
+      if (isStaleInit()) {
+        return;
+      }
 
       const offer = pc.localDescription;
 
@@ -1266,18 +1349,68 @@ ${memoryContext ? memoryContext : ''}`
       }
 
       // Get session token from backend
-      const { data: sessionData } = await supabase.auth.getSession();
+      connectionStage = 'auth';
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      if (isStaleInit()) {
+        return;
+      }
+      if (sessionError || !sessionData?.session?.access_token) {
+        throw new Error(sessionError?.message || 'Missing access token');
+      }
       const accessToken = sessionData?.session?.access_token;
       const requestedVoice = getOpenAIVoiceForGender(voiceGenderRef.current);
 
       console.log('[Talk] Calling Edge Function for SDP exchange...');
+      connectionStage = 'edge';
       const response = await supabase.functions.invoke('openai-realtime-session', {
         body: { sdp_offer: offer.sdp, language, voice: requestedVoice },
         headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
       });
+      if (isStaleInit()) {
+        return;
+      }
 
       if (response.error || !response.data?.sdp_answer) {
-        throw new Error(response.error?.message || 'Failed to get SDP answer');
+        const invokeError = response.error as { message?: string; context?: unknown } | null;
+        const errorContext = invokeError?.context as { clone?: () => { json?: () => Promise<any>; text?: () => Promise<string> } } | undefined;
+
+        if (errorContext?.clone) {
+          try {
+            const clone = errorContext.clone();
+            if (clone?.json) {
+              const payload = await clone.json();
+              if (typeof payload?.stage === 'string') edgeStage = payload.stage;
+              if (typeof payload?.details === 'string' && payload.details.trim()) edgeDetails = payload.details.trim();
+              else if (typeof payload?.error === 'string' && payload.error.trim()) edgeDetails = payload.error.trim();
+            }
+          } catch {
+            try {
+              const clone = errorContext.clone();
+              if (clone?.text) {
+                const text = await clone.text();
+                if (text?.trim()) edgeDetails = text.trim();
+              }
+            } catch {
+              // Ignore parse fallback errors
+            }
+          }
+        }
+
+        if (!edgeStage && typeof response.data?.stage === 'string') {
+          edgeStage = response.data.stage;
+        }
+
+        if (!edgeDetails) {
+          if (typeof response.data?.details === 'string' && response.data.details.trim()) {
+            edgeDetails = response.data.details.trim();
+          } else if (typeof response.data?.error === 'string' && response.data.error.trim()) {
+            edgeDetails = response.data.error.trim();
+          } else {
+            edgeDetails = invokeError?.message || 'Failed to get SDP answer';
+          }
+        }
+
+        throw new Error(edgeDetails);
       }
 
       const activeModel = typeof response.data?.model === 'string' ? response.data.model : '';
@@ -1290,18 +1423,53 @@ ${memoryContext ? memoryContext : ''}`
       console.log('[Talk] Active transcription model:', transcriptionModelRef.current);
 
       console.log('[Talk] Got SDP answer, setting remote description...');
+      connectionStage = 'answer';
       await pc.setRemoteDescription({
         type: 'answer',
         sdp: response.data.sdp_answer,
       });
+      if (isStaleInit()) {
+        return;
+      }
 
       // Connection will be ready when dc.onopen fires
 
     } catch (err) {
-      console.error('[Talk] Failed to initialize connection:', err);
-      setError(language === 'ar' ? 'فشل الاتصال' : 'Connection failed');
+      if (isStaleInit()) {
+        return;
+      }
+      const detail = err instanceof Error ? err.message : String(err || 'Unknown error');
+      console.error('[Talk] Failed to initialize connection:', { connectionStage, edgeStage, detail, err });
+
+      let userError = language === 'ar' ? 'فشل الاتصال' : 'Connection failed';
+      if (connectionStage === 'microphone') {
+        userError = language === 'ar' ? 'فشل الوصول للمايك' : 'Microphone access failed';
+      } else if (connectionStage === 'offer') {
+        userError = language === 'ar' ? 'فشل إنشاء اتصال الصوت' : 'Audio connection setup failed';
+      } else if (connectionStage === 'auth' || edgeStage === 'auth') {
+        userError = language === 'ar' ? 'يرجى تسجيل الدخول مرة أخرى' : 'Please sign in again';
+      } else if (connectionStage === 'edge') {
+        userError = language === 'ar' ? 'فشل خادم الصوت في بدء الجلسة' : 'Voice session server failed';
+      } else if (connectionStage === 'answer') {
+        userError = language === 'ar' ? 'فشلت خطوة الاتصال الأخيرة' : 'Final connection step failed';
+      }
+
+      const stageCode = edgeStage || connectionStage;
+      const compactDetail = (edgeDetails || detail || '').replace(/\s+/g, ' ').trim();
+      const trimmedDetail = compactDetail.length > 140 ? `${compactDetail.slice(0, 140)}…` : compactDetail;
+
+      setError(userError);
+      setDebugHint(
+        language === 'ar'
+          ? `مرحلة الفشل: ${stageCode}${trimmedDetail ? ` — ${trimmedDetail}` : ''}`
+          : `Failure stage: ${stageCode}${trimmedDetail ? ` — ${trimmedDetail}` : ''}`
+      );
       setStatus('ready');
       setIsConnectionReady(false);
+    } finally {
+      if (!isStaleInit()) {
+        connectionInitInFlightRef.current = false;
+      }
     }
   }, [buildMemoryContext, buildPersonalTouchSection, language, startMicLevelAnimation, t]);
 
@@ -1334,7 +1502,25 @@ ${memoryContext ? memoryContext : ''}`
         console.log('[Talk] Session created');
         break;
       case 'session.updated':
-        console.log('[Talk] Session updated - ready for conversation');
+        if (!initialSessionConfiguredRef.current) {
+          initialSessionConfiguredRef.current = true;
+          if (sessionReadyFallbackTimeoutRef.current) {
+            clearTimeout(sessionReadyFallbackTimeoutRef.current);
+            sessionReadyFallbackTimeoutRef.current = null;
+          }
+          console.log('[Talk] Initial session updated - ready for conversation');
+          setIsConnectionReady(true);
+          setStatus('ready');
+          startMicLevelAnimation();
+          if (pendingAutoStartAfterConnectRef.current) {
+            pendingAutoStartAfterConnectRef.current = false;
+            setTimeout(() => {
+              startRecordingRef.current?.();
+            }, 80);
+          }
+        } else {
+          console.log('[Talk] Session updated');
+        }
         break;
       case 'input_audio_buffer.speech_started':
         if (isConversationActiveRef.current && !assistantResponseActiveRef.current && !isAssistantPlaybackLocked()) {
@@ -1452,13 +1638,15 @@ ${memoryContext ? memoryContext : ''}`
       case 'response.created':
         console.log('[Talk] Assistant response created');
         assistantResponseActiveRef.current = true;
-        bumpAssistantPlaybackLock(1400);
+        assistantAwaitingOutputAudioDoneRef.current = true;
+        bumpAssistantPlaybackLock(1800);
         setStatus('processing');
         break;
       case 'response.output_audio_transcript.delta':
       case 'response.audio_transcript.delta':
         // AI speaking - partial transcript (accumulate)
-        bumpAssistantPlaybackLock(1300);
+        assistantAwaitingOutputAudioDoneRef.current = true;
+        bumpAssistantPlaybackLock(1800);
         setStatus('speaking');
         setMicTracksEnabled(false);
         if (msg.delta) {
@@ -1467,33 +1655,43 @@ ${memoryContext ? memoryContext : ''}`
         break;
       case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done':
-        // AI transcript completed - keep buffering, but finalize only on response.done
-        bumpAssistantPlaybackLock(1200);
+        // AI transcript completed - keep buffering, finalize on output-audio done.
+        bumpAssistantPlaybackLock(1700);
         if (msg.transcript) {
           updateAssistantTranscript(msg.transcript, 'replace');
         }
-        scheduleAssistantTurnRecovery(1600);
+        // Safety fallback only (in case done events are delayed/missing).
+        scheduleAssistantTurnRecovery(5200);
         break;
       case 'response.output_audio.done':
+      case 'response.audio.done':
         console.log('[Talk] Output audio done - finishing assistant turn');
-        bumpAssistantPlaybackLock(1000);
+        assistantAwaitingOutputAudioDoneRef.current = false;
+        bumpAssistantPlaybackLock(1300);
         finishAssistantTurn(msg);
         break;
       case 'response.done':
-        console.log('[Talk] Response complete - ready for next turn');
-        bumpAssistantPlaybackLock(1000);
-        finishAssistantTurn(msg);
+        if (assistantAwaitingOutputAudioDoneRef.current) {
+          console.log('[Talk] Response complete - waiting for output audio to finish');
+          bumpAssistantPlaybackLock(1700);
+          scheduleAssistantTurnRecovery(4200);
+        } else {
+          console.log('[Talk] Response complete - ready for next turn');
+          bumpAssistantPlaybackLock(1300);
+          finishAssistantTurn(msg);
+        }
         break;
       case 'error':
         console.error('[Talk] Realtime error:', msg);
         // Handle specific errors gracefully
         if (msg.error?.message?.includes('active response')) {
           console.log('[Talk] Waiting for active response to complete...');
-          scheduleAssistantTurnRecovery(2200);
+          scheduleAssistantTurnRecovery(3200);
         } else if (msg.error?.message?.includes('buffer too small')) {
           // Not enough audio detected - just go back to ready
           registerNoiseStrike('buffer-too-small');
           clearAssistantTurnRecovery();
+          assistantAwaitingOutputAudioDoneRef.current = false;
           assistantResponseActiveRef.current = false;
           console.log('[Talk] Buffer too small - waiting for more speech');
           if (isConversationActiveRef.current) {
@@ -1503,6 +1701,7 @@ ${memoryContext ? memoryContext : ''}`
           }
         } else {
           clearAssistantTurnRecovery();
+          assistantAwaitingOutputAudioDoneRef.current = false;
           assistantResponseActiveRef.current = false;
           setError(msg.error?.message || 'Realtime error');
           if (isConversationActiveRef.current) {
@@ -1626,6 +1825,7 @@ ${memoryContext ? memoryContext : ''}`
 
       dcRef.current.send(JSON.stringify({ type: 'response.create' }));
     } catch (e) {
+      assistantAwaitingOutputAudioDoneRef.current = false;
       assistantResponseActiveRef.current = false;
       assistantMessageSyncedRef.current = false;
       assistantTranscriptBufferRef.current = '';
@@ -1660,6 +1860,7 @@ ${memoryContext ? memoryContext : ''}`
     }
     assistantTranscriptBufferRef.current = '';
     assistantMessageSyncedRef.current = false;
+    assistantAwaitingOutputAudioDoneRef.current = false;
     assistantResponseActiveRef.current = false;
     lastAssistantTranscriptRef.current = '';
     lastAssistantFinishedAtRef.current = 0;
@@ -1688,6 +1889,7 @@ ${memoryContext ? memoryContext : ''}`
     pendingTranscriptRef.current = ''; // Clear pending transcript
     assistantTranscriptBufferRef.current = '';
     assistantMessageSyncedRef.current = false;
+    assistantAwaitingOutputAudioDoneRef.current = false;
     assistantResponseActiveRef.current = false;
     lastAssistantTranscriptRef.current = '';
     lastAssistantFinishedAtRef.current = 0;
