@@ -528,6 +528,107 @@ serve(async (req) => {
         export function useQueryClient() {
           return window.React.useContext(QueryClientContext) || new QueryClient();
         }
+      `,
+      'react-hook-form': `
+        const { useState, useRef, useCallback, createContext, useContext } = window.React;
+        const RHFContext = createContext(null);
+
+        export function useForm(options = {}) {
+          const [values, setValues] = useState(options.defaultValues || {});
+          const [errors, setErrors] = useState({});
+          const [isSubmitting, setIsSubmitting] = useState(false);
+          const [isDirty, setIsDirty] = useState(false);
+          const touchedRef = useRef({});
+
+          const setValue = useCallback((name, value, opts) => {
+            setValues(prev => { const n = {...prev, [name]: value}; return n; });
+            if (opts?.shouldDirty) setIsDirty(true);
+          }, []);
+
+          const getValues = useCallback((name) => name ? values[name] : {...values}, [values]);
+
+          const watch = useCallback((name) => name ? values[name] : {...values}, [values]);
+
+          const register = useCallback((name, opts = {}) => ({
+            name,
+            onChange: (e) => {
+              const v = e && e.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e;
+              setValues(prev => ({...prev, [name]: v}));
+              setIsDirty(true);
+              if (errors[name]) setErrors(prev => { const n={...prev}; delete n[name]; return n; });
+            },
+            onBlur: () => { touchedRef.current[name] = true; },
+            ref: () => {},
+          }), [errors]);
+
+          const handleSubmit = useCallback((onValid, onInvalid) => async (e) => {
+            if (e && e.preventDefault) e.preventDefault();
+            if (e && e.stopPropagation) e.stopPropagation();
+            setIsSubmitting(true);
+            try { await onValid({...values}); } 
+            catch(err) { if (onInvalid) onInvalid(err); }
+            finally { setIsSubmitting(false); }
+          }, [values]);
+
+          const setError = useCallback((name, error) => setErrors(prev => ({...prev, [name]: error})), []);
+          const clearErrors = useCallback((name) => {
+            if (name) setErrors(prev => { const n={...prev}; delete n[name]; return n; });
+            else setErrors({});
+          }, []);
+          const reset = useCallback((vals) => {
+            setValues(vals || options.defaultValues || {});
+            setErrors({});
+            setIsDirty(false);
+          }, []);
+          const trigger = useCallback(async () => true, []);
+
+          const formState = { errors, isSubmitting, isDirty, isValid: Object.keys(errors).length === 0, touchedFields: touchedRef.current, dirtyFields: {} };
+          const control = { register, setValue, getValues, watch, formState, _defaultValues: options.defaultValues || {} };
+
+          return { register, handleSubmit, formState, setValue, getValues, watch, reset, setError, clearErrors, trigger, control };
+        }
+
+        export function Controller({ control, name, render, defaultValue }) {
+          const field = control.register(name);
+          const value = control.getValues(name) ?? defaultValue ?? '';
+          return render({ field: { ...field, value }, fieldState: { error: control.formState.errors[name] } });
+        }
+
+        const FormCtx = createContext(null);
+        export function FormProvider({ children, ...methods }) {
+          return window.React.createElement(FormCtx.Provider, { value: methods }, children);
+        }
+        export function useFormContext() {
+          return useContext(FormCtx) || {};
+        }
+        export function useWatch({ control, name }) {
+          return control ? control.getValues(name) : undefined;
+        }
+        export function useController({ control, name, defaultValue }) {
+          const field = control.register(name);
+          const value = control.getValues(name) ?? defaultValue ?? '';
+          return { field: { ...field, value }, fieldState: { error: control.formState.errors[name] } };
+        }
+        export function useFieldArray({ control, name }) {
+          const [fields, setFields] = useState(
+            (control.getValues(name) || []).map((v, i) => ({ ...v, id: String(i) }))
+          );
+          return {
+            fields,
+            append: (v) => setFields(f => [...f, { ...v, id: String(Date.now()) }]),
+            prepend: (v) => setFields(f => [{ ...v, id: String(Date.now()) }, ...f]),
+            remove: (i) => setFields(f => f.filter((_, idx) => idx !== i)),
+            insert: (i, v) => setFields(f => { const n=[...f]; n.splice(i,0,{...v, id:String(Date.now())}); return n; }),
+            swap: (a, b) => setFields(f => { const n=[...f]; [n[a],n[b]]=[n[b],n[a]]; return n; }),
+            move: (from, to) => setFields(f => { const n=[...f]; n.splice(to,0,n.splice(from,1)[0]); return n; }),
+            update: (i, v) => setFields(f => f.map((x,idx) => idx===i ? {...v,id:x.id} : x)),
+            replace: (v) => setFields(v.map((x,i) => ({...x, id:String(i)})))
+          };
+        }
+        export function useFormState({ control }) {
+          return control ? control.formState : {};
+        }
+        export default { useForm, Controller, FormProvider, useFormContext, useWatch, useController, useFieldArray, useFormState };
       `
     };
 
