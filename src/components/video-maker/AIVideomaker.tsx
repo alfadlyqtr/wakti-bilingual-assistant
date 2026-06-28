@@ -412,22 +412,33 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const taskProviderRef = useRef<'kie' | 'veo' | null>(null);
   const kidsModeToggleRef = useRef<HTMLButtonElement | null>(null);
   const kidsModeHighlightTimeoutRef = useRef<number | null>(null);
-  const handleKidsModeToggle = useCallback(() => {
-    if (isGenerating) return;
-    const nextValue = !isKidsContentMode;
-    setIsKidsContentMode(nextValue);
+  const disableKidsMode = useCallback(() => {
+    setIsKidsContentMode(false);
     setHighlightKidsModeToggle(false);
     if (kidsModeHighlightTimeoutRef.current) {
       window.clearTimeout(kidsModeHighlightTimeoutRef.current);
       kidsModeHighlightTimeoutRef.current = null;
     }
-    if (nextValue) {
-      setDuration('6');
-      setResolution('720p');
-    } else if (resolution === '480p') {
+    if (resolution === '480p') {
       setResolution('720p');
     }
-  }, [isGenerating, isKidsContentMode, resolution]);
+  }, [resolution]);
+  const handleKidsModeToggle = useCallback(() => {
+    if (isGenerating) return;
+    const nextValue = !isKidsContentMode;
+    if (nextValue) {
+      setIsKidsContentMode(true);
+      setHighlightKidsModeToggle(false);
+      if (kidsModeHighlightTimeoutRef.current) {
+        window.clearTimeout(kidsModeHighlightTimeoutRef.current);
+        kidsModeHighlightTimeoutRef.current = null;
+      }
+      setDuration('6');
+      setResolution('720p');
+    } else {
+      disableKidsMode();
+    }
+  }, [disableKidsMode, isGenerating, isKidsContentMode]);
   const openChildSafetyDialog = useCallback(() => {
     triggerKidsModeToggleHighlight();
     setShowChildSafetyDialog(true);
@@ -1193,6 +1204,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           await loadLatestVideo();
         } else {
           throw new Error('Video URL not found');
+        }
+        if (isKidsContentMode) {
+          disableKidsMode();
         }
         setIsGenerating(false);
         setTaskId(null);

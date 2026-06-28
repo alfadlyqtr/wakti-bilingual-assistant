@@ -55,7 +55,8 @@ import {
   Square,
   HelpCircle,
   Clock,
-  RotateCcw
+  RotateCcw,
+  Github
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -120,6 +121,7 @@ import {
   ChatIntent
 } from '@/utils/chatIntents';
 import { buildProjectStaticPublishFiles, getProjectEntryPoint } from '@/utils/projectRuntimeHtml';
+import GitHubPanel from '@/components/projects/GitHubPanel';
 import {
   analyzeIntent,
   IntentResult,
@@ -1360,6 +1362,7 @@ ${priorSection}`;
   const [subdomainError, setSubdomainError] = useState<string | null>(null);
   const [checkingSubdomain, setCheckingSubdomain] = useState(false);
   const [publishStep, setPublishStep] = useState<string>('');
+  const [showGitHubPanel, setShowGitHubPanel] = useState(false);
   const projectHasLiveDeployment = hasLiveDeployment(project);
 
   // Track if we've already started generation to prevent double-runs
@@ -9554,6 +9557,7 @@ ${fixInstructions}
                       onDownload={downloadProject}
                       onPublish={openPublishModal}
                       isPublishing={publishing}
+                      onGitHub={() => setShowGitHubPanel(true)}
                       isRTL={isRTL}
                       onElementSelect={(ref, elementInfo) => {
                         if (elementInfo) {
@@ -9729,6 +9733,21 @@ ${fixInstructions}
           </div>
         </div>
       </div>
+
+      {/* GitHub Panel */}
+      {showGitHubPanel && (
+        <GitHubPanel
+          projectId={id || ''}
+          projectName={project?.name || ''}
+          githubRepo={(project as any)?.github_repo}
+          githubBranch={(project as any)?.github_branch}
+          isRTL={isRTL}
+          onClose={() => setShowGitHubPanel(false)}
+          onPushSuccess={(repoUrl) => {
+            setProject(prev => prev ? { ...prev, github_repo: repoUrl.replace('https://github.com/', '') } as any : null);
+          }}
+        />
+      )}
 
       {/* Publish Modal */}
       {showPublishModal && (

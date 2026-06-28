@@ -143,6 +143,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const assistantResponseActiveRef = useRef(false);
   const lastAssistantTranscriptRef = useRef('');
   const lastAssistantFinishedAtRef = useRef(0);
+  const liveTranscriptRef = useRef('');
+  const aiTranscriptRef = useRef('');
   const assistantPlaybackLockUntilRef = useRef(0);
   const syncedTurnIdsRef = useRef<Set<string>>(new Set());
   const turnCounterRef = useRef(0);
@@ -160,6 +162,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   const initialSessionConfiguredRef = useRef(false);
   const sessionReadyFallbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const assistantAwaitingOutputAudioDoneRef = useRef(false);
+  const outboundEventCounterRef = useRef(0);
+  const outboundEventMetaRef = useRef<Map<string, { type: string; at: number; label: string }>>(new Map());
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
@@ -193,12 +197,58 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     isConversationActiveRef.current = isConversationActive;
   }, [isConversationActive]);
 
+  useEffect(() => {
+    liveTranscriptRef.current = liveTranscript;
+  }, [liveTranscript]);
+
+  useEffect(() => {
+    aiTranscriptRef.current = aiTranscript;
+  }, [aiTranscript]);
+
   const setMicTracksEnabled = useCallback((enabled: boolean) => {
     if (streamRef.current) {
       streamRef.current.getAudioTracks().forEach(track => {
         track.enabled = enabled;
       });
     }
+  }, []);
+
+  const sendRealtimeClientEvent = useCallback((payload: Record<string, any>, label = ''): string | null => {
+    const dc = dcRef.current;
+    if (!dc || dc.readyState !== 'open') {
+      console.warn('[Talk] Cannot send realtime event: data channel not open', {
+        type: payload?.type,
+        label,
+        readyState: dc?.readyState ?? 'none',
+      });
+      return null;
+    }
+
+    const event = { ...payload };
+    if (typeof event.event_id !== 'string' || !event.event_id.trim()) {
+      outboundEventCounterRef.current += 1;
+      event.event_id = `talk-${Date.now()}-${outboundEventCounterRef.current}`;
+    }
+
+    dc.send(JSON.stringify(event));
+
+    const eventId = event.event_id as string;
+    outboundEventMetaRef.current.set(eventId, {
+      type: typeof event.type === 'string' ? event.type : 'unknown',
+      at: Date.now(),
+      label,
+    });
+    while (outboundEventMetaRef.current.size > 120) {
+      const oldestKey = outboundEventMetaRef.current.keys().next().value as string | undefined;
+      if (!oldestKey) break;
+      outboundEventMetaRef.current.delete(oldestKey);
+    }
+
+    if (label) {
+      console.log('[Talk] Sent realtime event', { label, type: event.type, event_id: eventId });
+    }
+
+    return eventId;
   }, []);
 
   const bumpAssistantPlaybackLock = useCallback((extraMs = 900) => {
@@ -237,7 +287,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
     if (dcRef.current && dcRef.current.readyState === 'open') {
       try {
-        dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+        sendRealtimeClientEvent({ type: 'input_audio_buffer.clear' }, 'noise-guard-clear');
       } catch {
         // Ignore transient channel send errors
       }
@@ -248,7 +298,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       'Noisy place detected. Tap once, speak, then I continue normally.',
       'تم رصد ضوضاء عالية. اضغط مرة وتكلم، ثم أكمل بشكل طبيعي.'
     ));
-  }, [setMicTracksEnabled, t]);
+  }, [sendRealtimeClientEvent, setMicTracksEnabled, t]);
 
   const maybeReleaseNoiseGuard = useCallback(() => {
     if (!noiseGuardActiveRef.current) {
@@ -305,7 +355,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       }
 
       setMicTracksEnabled(true);
-      dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+      sendRealtimeClientEvent({ type: 'input_audio_buffer.clear' }, 'rearm-clear');
       setError(null);
       if (options?.forceArm) {
         setDebugHint('');
@@ -322,7 +372,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     }
 
     arm();
-  }, [isAssistantPlaybackLocked, isConnectionReady, maybeReleaseNoiseGuard, setMicTracksEnabled, t]);
+  }, [isAssistantPlaybackLocked, isConnectionReady, maybeReleaseNoiseGuard, sendRealtimeClientEvent, setMicTracksEnabled, t]);
 
   const normalizeAssistantTranscript = useCallback((text: string) => text.replace(/\s+/g, ' ').trim(), []);
 
@@ -360,7 +410,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
   const flushConversationToChat = useCallback((includeDraftTurns = false) => {
     if (includeDraftTurns) {
-      const userDraft = normalizeAssistantTranscript(liveTranscript);
+      const userDraft = normalizeAssistantTranscript(liveTranscriptRef.current);
       if (userDraft) {
         const hasUserDraft = conversationHistoryRef.current.some(
           turn => turn.role === 'user' && normalizeAssistantTranscript(turn.text) === userDraft,
@@ -370,7 +420,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         }
       }
 
-      const assistantDraft = normalizeAssistantTranscript(assistantTranscriptBufferRef.current || aiTranscript);
+      const assistantDraft = normalizeAssistantTranscript(assistantTranscriptBufferRef.current || aiTranscriptRef.current);
       if (assistantDraft && !assistantMessageSyncedRef.current) {
         const hasAssistantDraft = conversationHistoryRef.current.some(
           turn => turn.role === 'assistant' && normalizeAssistantTranscript(turn.text) === assistantDraft,
@@ -392,7 +442,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         onAssistantMessageRef.current(turn.text);
       }
     });
-  }, [addConversationTurn, aiTranscript, liveTranscript, normalizeAssistantTranscript]);
+  }, [addConversationTurn, normalizeAssistantTranscript]);
 
   const normalizeForEchoCheck = useCallback((text: string) => {
     return text
@@ -881,6 +931,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     setIsSearching(false);
     setIsNoiseGuardActive(false);
     pendingTranscriptRef.current = '';
+    liveTranscriptRef.current = '';
+    aiTranscriptRef.current = '';
     transcriptionModelRef.current = 'gpt-4o-transcribe';
     lastUserTranscriptRef.current = '';
     lastUserTranscriptAtRef.current = 0;
@@ -897,6 +949,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     lastAssistantTranscriptRef.current = '';
     lastAssistantFinishedAtRef.current = 0;
     assistantPlaybackLockUntilRef.current = 0;
+    outboundEventCounterRef.current = 0;
+    outboundEventMetaRef.current.clear();
     setIsConversationActive(false);
     isConversationActiveRef.current = false;
   }, []);
@@ -1087,6 +1141,18 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       });
       pcRef.current = pc;
 
+      pc.onconnectionstatechange = () => {
+        console.log('[Talk] Peer connection state:', {
+          connectionState: pc.connectionState,
+          iceConnectionState: pc.iceConnectionState,
+          signalingState: pc.signalingState,
+        });
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        console.log('[Talk] ICE connection state:', pc.iceConnectionState);
+      };
+
       // Add audio track
       stream.getAudioTracks().forEach(track => {
         track.enabled = false;
@@ -1227,7 +1293,7 @@ ${memoryContext ? memoryContext : ''}`
         console.log('[Talk] User name:', currentUserName, '| Voice:', openaiVoice, '(gender:', currentVoiceGender, ')');
         
         // Use manual turn detection (null) - we control when to commit with hold-to-talk
-        dc.send(JSON.stringify({
+        sendRealtimeClientEvent({
           type: 'session.update',
           session: {
             type: 'realtime',
@@ -1249,7 +1315,7 @@ ${memoryContext ? memoryContext : ''}`
               output: { voice: openaiVoice },
             },
           }
-        }));
+        }, 'initial-session-update');
 
         // Wait briefly for explicit session.updated ack before first auto-start.
         if (sessionReadyFallbackTimeoutRef.current) {
@@ -1290,7 +1356,13 @@ ${memoryContext ? memoryContext : ''}`
         if (isStaleInit() || dcRef.current !== dc) {
           return;
         }
-        console.error('[Talk] Data channel error:', err);
+        console.error('[Talk] Data channel error:', {
+          err,
+          dcReadyState: dc.readyState,
+          pcConnectionState: pc.connectionState,
+          pcIceConnectionState: pc.iceConnectionState,
+          pcSignalingState: pc.signalingState,
+        });
         setError(language === 'ar' ? 'خطأ في الاتصال' : 'Connection error');
         setStatus('ready');
         setIsConnectionReady(false);
@@ -1300,7 +1372,14 @@ ${memoryContext ? memoryContext : ''}`
         if (isStaleInit() || dcRef.current !== dc) {
           return;
         }
-        console.log('[Talk] Data channel closed');
+        console.warn('[Talk] Data channel closed', {
+          dcReadyState: dc.readyState,
+          pcConnectionState: pc.connectionState,
+          pcIceConnectionState: pc.iceConnectionState,
+          pcSignalingState: pc.signalingState,
+          isConversationActive: isConversationActiveRef.current,
+          assistantResponseActive: assistantResponseActiveRef.current,
+        });
         initialSessionConfiguredRef.current = false;
         if (sessionReadyFallbackTimeoutRef.current) {
           clearTimeout(sessionReadyFallbackTimeoutRef.current);
@@ -1471,7 +1550,7 @@ ${memoryContext ? memoryContext : ''}`
         connectionInitInFlightRef.current = false;
       }
     }
-  }, [buildMemoryContext, buildPersonalTouchSection, language, startMicLevelAnimation, t]);
+  }, [buildMemoryContext, buildPersonalTouchSection, language, sendRealtimeClientEvent, startMicLevelAnimation, t]);
 
   // Initialize connection when Talk bubble opens
   useEffect(() => {
@@ -1683,6 +1762,16 @@ ${memoryContext ? memoryContext : ''}`
         break;
       case 'error':
         console.error('[Talk] Realtime error:', msg);
+        const linkedEventId = typeof msg?.error?.event_id === 'string' ? msg.error.event_id : '';
+        if (linkedEventId) {
+          const linkedMeta = outboundEventMetaRef.current.get(linkedEventId);
+          console.error('[Talk] Realtime error linked outbound event', {
+            event_id: linkedEventId,
+            linkedType: linkedMeta?.type || 'unknown',
+            linkedLabel: linkedMeta?.label || '',
+            ageMs: linkedMeta ? Date.now() - linkedMeta.at : null,
+          });
+        }
         // Handle specific errors gracefully
         if (msg.error?.message?.includes('active response')) {
           console.log('[Talk] Waiting for active response to complete...');
@@ -1817,13 +1906,13 @@ ${memoryContext ? memoryContext : ''}`
           `(استمرار لنفس المحادثة الصوتية — جميع قواعد الأسلوب الصوتي الأصلية، ولمستك الشخصية، وإرشادات الذاكرة ما زالت سارية؛ لا تعيد تقديم نفسك.)${summaryBlock}${searchBlock}`
         );
 
-        dcRef.current.send(JSON.stringify({
+        sendRealtimeClientEvent({
           type: 'session.update',
           session: { type: 'realtime', instructions: refreshedInstructions }
-        }));
+        }, 'search-session-update');
       }
 
-      dcRef.current.send(JSON.stringify({ type: 'response.create' }));
+      sendRealtimeClientEvent({ type: 'response.create' }, 'response-create');
     } catch (e) {
       assistantAwaitingOutputAudioDoneRef.current = false;
       assistantResponseActiveRef.current = false;
@@ -1833,7 +1922,7 @@ ${memoryContext ? memoryContext : ''}`
       setError((detectedLang || language) === 'ar' ? 'فشل الاتصال' : 'Connection failed');
       setStatus('ready');
     }
-  }, [beginAssistantTurn, language, tLang]);
+  }, [beginAssistantTurn, language, sendRealtimeClientEvent, tLang]);
 
   // Stop recording and send to AI (defined first so startRecording can reference it)
   const stopRecording = useCallback(() => {
@@ -1868,10 +1957,10 @@ ${memoryContext ? memoryContext : ''}`
     setDebugHint('');
     setMicTracksEnabled(false);
     if (dcRef.current && dcRef.current.readyState === 'open') {
-      dcRef.current.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+      sendRealtimeClientEvent({ type: 'input_audio_buffer.clear' }, 'stop-recording-clear');
     }
     setStatus('ready');
-  }, [disableNoiseGuard, setMicTracksEnabled]);
+  }, [disableNoiseGuard, sendRealtimeClientEvent, setMicTracksEnabled]);
 
   // Start recording when user holds
   const startRecording = useCallback(() => {

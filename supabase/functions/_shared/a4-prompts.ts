@@ -4,7 +4,7 @@
 // what gets sent to Nano Banana 2.
 // -----------------------------------------------------------------------------
 
-import type { A4Theme } from "./a4-themes.ts";
+import { getThemeDocumentLane, type A4Theme } from "./a4-themes.ts";
 
 // =============================================================================
 // MASTER PROMPT COMPILER (Nano Banana 2)
@@ -523,20 +523,20 @@ function borderStyleLabel(border?: A4BorderStyle): string {
     case "double_line":
       return "Double-line borders around key sections and/or the page frame for a formal premium feel.";
     case "dashed":
-      return "Dashed or stitched borders used selectively around cards, notes, or process areas for a crafted feel.";
+      return "Dashed or stitched borders used selectively around cards, notes, or process areas only, not as a full-page frame.";
     case "corner_frame":
       return "Minimal frame defined mainly by elegant corner brackets or corner ornaments instead of a full border.";
     case "none":
-      return "No decorative borders. Use only whitespace and subtle rules for structure.";
+      return "No decorative borders or page frame. Use only whitespace and subtle rules for structure.";
     case "thick":
       return "Thick bold borders around key sections and around the overall page margin.";
     case "rounded":
-      return "Rounded, softly curved borders on cards, boxes, and accent panels.";
+      return "Rounded, softly curved borders on cards, boxes, and accent panels only, not around the full page.";
     case "decorative":
       return "Tasteful decorative borders (ornamental corners, elegant flourishes) that match the document tone — used sparingly so they never compete with content.";
     case "thin":
     default:
-      return "Thin clean borders around tables, callouts, and section cards.";
+      return "Thin clean borders around tables, callouts, and section cards only — never as a full-page border.";
   }
 }
 
@@ -600,6 +600,27 @@ function getDesignPreferencesBlock(
   if (parts.length === 0) return "";
 
   return `USER DESIGN PREFERENCES\n${parts.join("\n")}`;
+}
+
+function hasExplicitPageFrameRequest(input: Pick<A4CompileInput, "designSettings" | "decorationsWanted" | "userWishes">): boolean {
+  const border = input.designSettings?.border_style ?? null;
+  if (
+    border === "decorative" ||
+    border === "double_line" ||
+    border === "corner_frame" ||
+    border === "thick"
+  ) {
+    return true;
+  }
+
+  const combinedText = [input.userWishes ?? "", ...(input.decorationsWanted ?? [])].join(" ");
+  return /\b(border|frame|framed|outline|ornament(?:al)?|flourish(?:es)?|corner(?:s)?)\b/i.test(combinedText);
+}
+
+function getFormalLayoutGuardrail(input: A4CompileInput): string {
+  if (getThemeDocumentLane(input.theme.id, input.purposeId) !== "formal") return "";
+  if (hasExplicitPageFrameRequest(input)) return "";
+  return "FORMAL LAYOUT GUARDRAIL\nKeep the page clean and businesslike. Do NOT add any full-page border, page frame, ornamental corners, edge flourishes, or decorative page outline. If borders are used at all, keep them only inside tables, callouts, dividers, or section cards.";
 }
 
 function getVisualAssetsBlock(
@@ -1010,6 +1031,9 @@ export function compileMasterPrompt(input: A4CompileInput): string {
   // 6. User design preferences — only what the user actually picked.
   const designPrefs = getDesignPreferencesBlock(design);
   if (designPrefs) sections.push(designPrefs);
+
+  const formalLayoutGuardrail = getFormalLayoutGuardrail(input);
+  if (formalLayoutGuardrail) sections.push(formalLayoutGuardrail);
 
   // 7. User creative selections — each block is empty when the user didn't pick.
   const visualRecipe = getVisualRecipeBlock(creative?.visual_recipe);

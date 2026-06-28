@@ -994,6 +994,20 @@ function summarizeSelectedOptions<T extends string>(
   return `${labels.slice(0, 2).join(" · ")} +${labels.length - 2}`;
 }
 
+function getDefaultDesignSettings(documentLane: "formal" | "visual" | null): A4DesignSettings {
+  return {
+    orientation: "portrait",
+    background_color: "#FFFFFF",
+    text_color: "#0B0D12",
+    accent_color: "#2563EB",
+    font_family: "modern_sans",
+    border_style: documentLane === "visual" ? "thin" : "none",
+    include_decorative_images: documentLane === "visual",
+    density: "balanced",
+    tone: "professional",
+  };
+}
+
 const SettingsDropdownSection: React.FC<{
   titleEn: string;
   titleAr: string;
@@ -1633,17 +1647,7 @@ const A4Tab: React.FC = () => {
     content_components: [],
     layout_pattern: null,
   });
-  const [designSettings, setDesignSettings] = useState<A4DesignSettings>({
-    orientation: "portrait",
-    background_color: "#FFFFFF",
-    text_color: "#0B0D12",
-    accent_color: "#2563EB",
-    font_family: "modern_sans",
-    border_style: "thin",
-    include_decorative_images: true,
-    density: "balanced",
-    tone: "professional",
-  });
+  const [designSettings, setDesignSettings] = useState<A4DesignSettings>(getDefaultDesignSettings(null));
   const [batchId, setBatchId] = useState<string | null>(null);
   const [rows, setRows] = useState<A4DocumentRow[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -1687,6 +1691,7 @@ const A4Tab: React.FC = () => {
     return schema.filter((field) => isBasicFieldForTheme(theme.id, field.key));
   }, [theme, schema, formMode]);
   const hiddenAdvancedFieldCount = Math.max(0, schema.length - visibleSchema.length);
+  const laneAwareDesignDefaults = useMemo(() => getDefaultDesignSettings(documentLane), [documentLane]);
 
   // Pick a sensible default reference-image role per theme. The user can still
   // override in the UI. Resume/CV and invitation cards default to PORTRAIT
@@ -1759,9 +1764,11 @@ const A4Tab: React.FC = () => {
     setDesignSettings((prev) => ({
       ...prev,
       orientation: prev.orientation === "landscape" ? "landscape" : "portrait",
+      border_style: laneAwareDesignDefaults.border_style,
+      include_decorative_images: laneAwareDesignDefaults.include_decorative_images,
     }));
     setFormMode("basic");
-  }, [themeId, purposeId]);
+  }, [themeId, purposeId, laneAwareDesignDefaults, schema, theme]);
 
   useEffect(() => {
     if (operatorBridgeAppliedRef.current) return;

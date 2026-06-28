@@ -11,7 +11,7 @@ import { PREVIEW_ERROR_CAPTURE_SCRIPT, SandpackErrorListener } from "./SandpackE
 import { SandpackConsolePanel } from "./SandpackConsolePanel";
 import { CollapsibleFileTree } from "./CollapsibleFileTree";
 import { atomDark } from "@codesandbox/sandpack-themes";
-import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft, Github } from "lucide-react";
 import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
 import { useIncrementalFileUpdater } from '@/pages/ProjectDetail/hooks/useIncrementalFileUpdater';
 import { useSandpackFiles } from '@/pages/ProjectDetail/hooks/useSandpackFiles';
@@ -862,6 +862,7 @@ interface SandpackStudioProps {
   onDownload?: () => void;
   onPublish?: () => void;
   isPublishing?: boolean;
+  onGitHub?: () => void;
   isRTL?: boolean;
 }
 
@@ -881,6 +882,7 @@ export default function SandpackStudio({
   onDownload,
   onPublish,
   isPublishing = false,
+  onGitHub,
   isRTL = false
 }: SandpackStudioProps) {
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
@@ -1548,6 +1550,14 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                   <Upload className="h-4 w-4" />
                 )}
                 <span>Publish</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem 
+                onClick={onGitHub}
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <Github className="h-4 w-4" />
+                <span>Push to GitHub</span>
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
