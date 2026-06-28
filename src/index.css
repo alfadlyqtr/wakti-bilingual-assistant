@@ -2930,3 +2930,7 @@ body.modern-dashboard-active .app-layout-mobile {
     filter: saturate(1) brightness(1);
   }
 }
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

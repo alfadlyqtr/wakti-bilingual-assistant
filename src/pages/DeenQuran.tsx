@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw, Eye, EyeOff } from "lucide-react";
+import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw, Eye, EyeOff, ArrowLeftRight } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -24,7 +24,8 @@ const DEFAULT_READER_AUDIO_RECITER = "ar.mahermuaiqly";
 const QURAN_PROGRESS_STORAGE_KEY = "deen_quran_last_progress";
 const QURAN_BOOKMARKS_STORAGE_KEY = "deen_quran_bookmarks";
 const QURAN_BOOKMARKS_ORDER_KEY = "deen_quran_bookmarks_order";
-const MAX_BOOKMARKS = 7;
+const QURAN_BOOKMARKS_COLOR_KEY = "deen_quran_bookmarks_color";
+const MAX_BOOKMARKS = 5;
 const QURAN_BOOKMARKS_LAST_SYNC_KEY = "deen_quran_bookmarks_last_sync";
 const BOOKMARKS_TTL_MS = 10 * 60 * 1000; // 10 minutes
 const MP3QURAN_API_EN = "https://www.mp3quran.net/api/v3/reciters?language=eng";
@@ -174,6 +175,23 @@ function writeBookmarksOrder(order: string[], uid?: string | null) {
   } catch {}
 }
 
+function readBookmarkColors(uid?: string | null): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(getUserScopedKey(QURAN_BOOKMARKS_COLOR_KEY, uid));
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeBookmarkColors(map: Record<string, string>, uid?: string | null) {
+  try {
+    localStorage.setItem(getUserScopedKey(QURAN_BOOKMARKS_COLOR_KEY, uid), JSON.stringify(map));
+  } catch {}
+}
+
 function readLastSyncAt(uid?: string | null): number {
   try {
     const raw = localStorage.getItem(getUserScopedKey(QURAN_BOOKMARKS_LAST_SYNC_KEY, uid));
@@ -186,18 +204,19 @@ function writeLastSyncAt(ms: number, uid?: string | null) {
   try { localStorage.setItem(getUserScopedKey(QURAN_BOOKMARKS_LAST_SYNC_KEY, uid), String(ms)); } catch {}
 }
 
-function getAllBookmarks(surahs: Surah[], uid?: string | null): { surah: Surah; ayah: number }[] {
+function getAllBookmarks(surahs: Surah[], uid?: string | null): { surah: Surah; ayah: number; color: string }[] {
   const stored = readStoredBookmarks(uid);
   const order = readBookmarksOrder(uid);
+  const colors = readBookmarkColors(uid);
   const byKey = new Set(order);
   // Build from order first for stable, cross-device sequence; fall back to enumerating stored
-  const result: { surah: Surah; ayah: number }[] = [];
+  const result: { surah: Surah; ayah: number; color: string }[] = [];
   const pushKey = (key: string) => {
     const [sStr, aStr] = key.split(":");
     const sNum = parseInt(sStr, 10);
     const aNum = parseInt(aStr, 10);
     const surah = surahs.find((s) => s.number === sNum);
-    if (surah && Number.isFinite(aNum)) result.push({ surah, ayah: aNum });
+    if (surah && Number.isFinite(aNum)) result.push({ surah, ayah: aNum, color: colors[key] || BOOKMARK_COLORS[0].id });
   };
   for (const key of order) pushKey(key);
   for (const [surahKey, ayahs] of Object.entries(stored)) {
@@ -211,19 +230,18 @@ function getAllBookmarks(surahs: Surah[], uid?: string | null): { surah: Surah; 
   return result.slice(0, MAX_BOOKMARKS);
 }
 
-const BOOKMARK_PALETTE = [
-  { bg: "hsla(210,100%,65%,0.14)", text: "hsl(210,100%,65%)" },   // blue
-  { bg: "hsla(142,76%,55%,0.14)", text: "hsl(142,76%,55%)" },    // green
-  { bg: "hsla(25,95%,60%,0.14)",  text: "hsl(25,95%,60%)" },     // orange
-  { bg: "hsla(280,70%,65%,0.14)", text: "hsl(280,70%,65%)" },    // purple
-  { bg: "hsla(320,75%,70%,0.14)", text: "hsl(320,75%,70%)" },    // pink
-  { bg: "hsla(180,85%,60%,0.14)", text: "hsl(180,85%,60%)" },    // cyan
-  { bg: "hsla(160,80%,55%,0.14)", text: "hsl(160,80%,55%)" },    // emerald
-  { bg: "hsla(45,100%,60%,0.14)", text: "hsl(45,100%,60%)" },    // amber
+// Five fixed bookmark colors (WAKTI accent palette): blue / green / orange / purple / pink
+const BOOKMARK_COLORS = [
+  { id: "blue",   bg: "hsla(210,100%,65%,0.16)", text: "hsl(210,90%,55%)", dot: "hsl(210,100%,60%)" },
+  { id: "green",  bg: "hsla(142,76%,55%,0.16)",  text: "hsl(142,70%,42%)", dot: "hsl(142,76%,48%)" },
+  { id: "orange", bg: "hsla(25,95%,60%,0.16)",   text: "hsl(25,90%,50%)",  dot: "hsl(25,95%,55%)" },
+  { id: "purple", bg: "hsla(280,70%,65%,0.16)",  text: "hsl(280,60%,50%)", dot: "hsl(280,70%,60%)" },
+  { id: "pink",   bg: "hsla(320,75%,70%,0.16)",  text: "hsl(320,65%,55%)", dot: "hsl(320,75%,65%)" },
 ];
+const BOOKMARK_COLOR_IDS = BOOKMARK_COLORS.map((c) => c.id);
 
-function getBookmarkColor(surahNumber: number) {
-  return BOOKMARK_PALETTE[(surahNumber - 1) % BOOKMARK_PALETTE.length];
+function getBookmarkColor(colorId?: string | null) {
+  return BOOKMARK_COLORS.find((c) => c.id === colorId) || BOOKMARK_COLORS[0];
 }
 
 function formatAudioTime(seconds: number) {
@@ -324,8 +342,12 @@ export default function DeenQuran() {
   const [pagePickerOpen, setPagePickerOpen] = useState(false);
   const [bookmarksDropdownOpen, setBookmarksDropdownOpen] = useState(false);
   const bookmarksDropdownRef = useRef<HTMLDivElement | null>(null);
+  const readerBookmarkBtnRef = useRef<HTMLButtonElement | null>(null);
+  const [readerDropdownPos, setReaderDropdownPos] = useState<{ top: number; right?: number; left?: number } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [bookmarksRefreshing, setBookmarksRefreshing] = useState(false);
+  const [colorPickerKey, setColorPickerKey] = useState<string | null>(null);
+  const [, setColorTick] = useState(0);
   const [readerAudioReciter, setReaderAudioReciter] = useState<string>(() => {
     try {
       return localStorage.getItem(READER_RECITER_STORAGE_KEY) || DEFAULT_READER_AUDIO_RECITER;
@@ -389,6 +411,33 @@ export default function DeenQuran() {
     return () => document.removeEventListener("mousedown", handler);
   }, [bookmarksDropdownOpen]);
 
+  // Recalculate fixed dropdown position on resize/orientation change
+  useEffect(() => {
+    if (!bookmarksDropdownOpen || !readerBookmarkBtnRef.current) return;
+    const updatePos = () => {
+      const rect = readerBookmarkBtnRef.current!.getBoundingClientRect();
+      setReaderDropdownPos({
+        top: rect.bottom + window.scrollY + 4,
+        ...(isAr
+          ? { left: Math.max(8, rect.left + window.scrollX) }
+          : { right: Math.max(8, window.innerWidth - rect.right - window.scrollX) }),
+      });
+    };
+    updatePos();
+    window.addEventListener("resize", updatePos);
+    return () => window.removeEventListener("resize", updatePos);
+  }, [bookmarksDropdownOpen]);
+
+  // Auto-close dropdown on any scroll inside the app main scroll container
+  useEffect(() => {
+    if (!bookmarksDropdownOpen) return;
+    const container = document.querySelector('.app-main-scroll');
+    if (!container) return;
+    const handler = () => setBookmarksDropdownOpen(false);
+    container.addEventListener("scroll", handler, { passive: true });
+    return () => container.removeEventListener("scroll", handler);
+  }, [bookmarksDropdownOpen]);
+
   // On-demand sync: when the dropdown opens, fetch server bookmarks if TTL expired
   useEffect(() => {
     if (!bookmarksDropdownOpen) return;
@@ -405,11 +454,12 @@ export default function DeenQuran() {
         setBookmarksRefreshing(true);
         const { data, error } = await (supabase as any)
           .from("deen_quran_bookmarks")
-          .select("surah_number, ayah_number")
+          .select("surah_number, ayah_number, color")
           .eq("user_id", uid);
         if (error || !Array.isArray(data) || cancelled) return;
         const map: StoredQuranBookmarks = {};
         const order: string[] = [];
+        const colorsMap: Record<string, string> = {};
         for (const row of data) {
           const s = Number(row?.surah_number);
           const a = Number(row?.ayah_number);
@@ -417,9 +467,11 @@ export default function DeenQuran() {
           map[String(s)] = Array.from(new Set([...(map[String(s)] || []), a])).sort((x, y) => x - y);
           const k = `${s}:${a}`;
           if (!order.includes(k)) order.unshift(k);
+          if (row?.color) colorsMap[k] = row.color;
         }
         writeStoredBookmarks(map, uid);
         writeBookmarksOrder(order.slice(0, MAX_BOOKMARKS), uid);
+        writeBookmarkColors(colorsMap, uid);
         writeLastSyncAt(now, uid);
       } catch {}
       finally {
@@ -678,15 +730,16 @@ export default function DeenQuran() {
           }
         });
 
-      // Sync bookmarks from server into user-scoped cache and order (cap 7 for display)
+      // Sync bookmarks from server into user-scoped cache, order, and colors (cap for display)
       (supabase as any)
         .from("deen_quran_bookmarks")
-        .select("surah_number, ayah_number")
+        .select("surah_number, ayah_number, color")
         .eq("user_id", uid)
         .then(({ data }: any) => {
           if (!Array.isArray(data)) return;
           const map: StoredQuranBookmarks = {};
           const order: string[] = [];
+          const colorsMap: Record<string, string> = {};
           for (const row of data) {
             const s = Number(row?.surah_number);
             const a = Number(row?.ayah_number);
@@ -694,9 +747,11 @@ export default function DeenQuran() {
             map[String(s)] = Array.from(new Set([...(map[String(s)] || []), a])).sort((x, y) => x - y);
             const k = `${s}:${a}`;
             if (!order.includes(k)) order.unshift(k);
+            if (row?.color) colorsMap[k] = row.color;
           }
           writeStoredBookmarks(map, uid);
           writeBookmarksOrder(order.slice(0, MAX_BOOKMARKS), uid);
+          writeBookmarkColors(colorsMap, uid);
         });
     });
   }, []);
@@ -787,6 +842,8 @@ export default function DeenQuran() {
             }, 220);
           }
         }
+      } else {
+        saveProgress(surah.number, 1);
       }
     } catch {
       toast.error(isAr ? "تعذر تحميل السورة" : "Failed to load surah");
@@ -794,27 +851,6 @@ export default function DeenQuran() {
       setLoadingReader(false);
     }
   };
-
-  const currentSurahBookmarkedAyah = bookmarkedAyahs.size > 0
-    ? Array.from(bookmarkedAyahs).sort((a, b) => a - b)[0]
-    : null;
-  const currentSurahSavedAyah = activeSurah && lastProgress?.surah_number === activeSurah.number ? lastProgress.ayah_number : null;
-  const currentSurahJumpTargetAyah = currentSurahBookmarkedAyah ?? currentSurahSavedAyah;
-
-  const jumpToSavedAyah = useCallback(() => {
-    if (!activeSurah || !currentSurahJumpTargetAyah) return;
-    const targetIndex = activeSurah.ayahs.findIndex((ayah) => ayah.numberInSurah === currentSurahJumpTargetAyah);
-    if (targetIndex < 0) return;
-    const targetPage = pageBreaks.findIndex((start, pageIndex) => {
-      const end = pageBreaks[pageIndex + 1] ?? activeSurah.ayahs.length;
-      return targetIndex >= start && targetIndex < end;
-    });
-    if (targetPage >= 0) setReaderPage(targetPage);
-    setCurrentPlaybackAyahIndexSync(targetIndex);
-    window.setTimeout(() => {
-      ayahItemRefs.current[targetIndex]?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 220);
-  }, [activeSurah, currentSurahJumpTargetAyah, pageBreaks]);
 
   const openListeningSurah = async (surah: Surah, autoPlay = false) => {
     const bgIsOwned = backgroundPlaybackEnabled && bgAudio.audio === audioRef.current;
@@ -1404,31 +1440,135 @@ export default function DeenQuran() {
     explainAyah(ayah);
   };
 
-  const bookmarkAyah = async (ayah: Ayah, fromSheet = false) => {
+  // Each of the 5 fixed colors is always selectable. Mark which are already
+  // used by another bookmark (picking it will move that color here).
+  const getPickerColors = (ayahKey: string) => {
+    const colors = readBookmarkColors(currentUserId);
+    const usedByOthers = new Set<string>();
+    for (const [key, c] of Object.entries(colors)) {
+      if (key !== ayahKey) usedByOthers.add(c);
+    }
+    return BOOKMARK_COLORS.map((c) => ({ ...c, inUse: usedByOthers.has(c.id) }));
+  };
+
+  // Remove whichever OTHER bookmark currently holds `colorId` (color is unique).
+  // Mutates the passed-in colorsMap; caller is responsible for writing it.
+  const releaseColorFromOthers = async (colorId: string, keepKey: string, uid: string | null, colorsMap: Record<string, string>) => {
+    for (const [key, c] of Object.entries({ ...colorsMap })) {
+      if (c !== colorId || key === keepKey) continue;
+      const [sStr, aStr] = key.split(":");
+      const sNum = parseInt(sStr, 10);
+      const aNum = parseInt(aStr, 10);
+      if (!Number.isFinite(sNum) || !Number.isFinite(aNum)) continue;
+      const map = readStoredBookmarks(uid);
+      map[String(sNum)] = (map[String(sNum)] || []).filter((n) => n !== aNum);
+      if ((map[String(sNum)] || []).length === 0) delete map[String(sNum)];
+      writeStoredBookmarks(map, uid);
+      writeBookmarksOrder(readBookmarksOrder(uid).filter((x) => x !== key), uid);
+      delete colorsMap[key];
+      if (activeSurah && sNum === activeSurah.number) {
+        setBookmarkedAyahs((prev) => { const s = new Set(prev); s.delete(aNum); return s; });
+      }
+      if (uid) {
+        try {
+          await (supabase as any)
+            .from("deen_quran_bookmarks")
+            .delete()
+            .eq("user_id", uid)
+            .eq("surah_number", sNum)
+            .eq("ayah_number", aNum);
+        } catch {}
+      }
+    }
+  };
+
+  const addBookmarkWithColor = async (ayah: Ayah, colorId: string) => {
     if (!activeSurah) return;
-    const { data: sessionData } = await supabase.auth.getSession();
-    const uid = sessionData.session?.user?.id || null;
-    const alreadyBookmarked = bookmarkedAyahs.has(ayah.numberInSurah);
-    const storedBookmarks = readStoredBookmarks(uid);
+    const uid = currentUserId;
     const surahKey = String(activeSurah.number);
-    const currentStored = Array.isArray(storedBookmarks[surahKey]) ? storedBookmarks[surahKey] : [];
+    const colorsMap = readBookmarkColors(uid);
+    const k = `${activeSurah.number}:${ayah.numberInSurah}`;
 
-    if (alreadyBookmarked) {
-      setBookmarkedAyahs((prev) => { const s = new Set(prev); s.delete(ayah.numberInSurah); return s; });
-      writeStoredBookmarks({
-        ...storedBookmarks,
-        [surahKey]: currentStored.filter((n) => n !== ayah.numberInSurah),
-      }, uid);
+    // Steal the color from any other bookmark that currently holds it
+    await releaseColorFromOthers(colorId, k, uid, colorsMap);
 
-      // Also remove from the per-user FIFO order
-      const k = `${activeSurah.number}:${ayah.numberInSurah}`;
-      const pruned = readBookmarksOrder(uid).filter((x) => x !== k);
-      writeBookmarksOrder(pruned, uid);
+    // Order: make this the newest (cap is naturally enforced by 5 unique colors)
+    const order = [k, ...readBookmarksOrder(uid).filter((x) => x !== k)].slice(0, MAX_BOOKMARKS);
+    writeBookmarksOrder(order, uid);
 
+    // Assign chosen color
+    colorsMap[k] = colorId;
+    writeBookmarkColors(colorsMap, uid);
+
+    // Update stored bookmarks (recompute fresh in case a release touched this surah)
+    const freshStored = readStoredBookmarks(uid);
+    const freshCurrent = Array.isArray(freshStored[surahKey]) ? freshStored[surahKey] : [];
+    writeStoredBookmarks({
+      ...freshStored,
+      [surahKey]: Array.from(new Set([...freshCurrent, ayah.numberInSurah])).sort((a, b) => a - b),
+    }, uid);
+
+    setBookmarkedAyahs((prev) => new Set(prev).add(ayah.numberInSurah));
+    setColorTick((t) => t + 1);
+
+    if (uid) {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const uid = sessionData.session?.user?.id;
-        if (!uid) throw new Error("no-user");
+        await (supabase as any).from("deen_quran_bookmarks").upsert({
+          user_id: uid,
+          surah_number: activeSurah.number,
+          ayah_number: ayah.numberInSurah,
+          color: colorId,
+        });
+      } catch {}
+    }
+    toast.success(isAr ? "تم الحفظ ✓" : "Bookmarked ✓");
+  };
+
+  const recolorBookmark = async (ayah: Ayah, colorId: string) => {
+    if (!activeSurah) return;
+    const uid = currentUserId;
+    const k = `${activeSurah.number}:${ayah.numberInSurah}`;
+    const colorsMap = readBookmarkColors(uid);
+
+    // Steal the color from any other bookmark that currently holds it
+    await releaseColorFromOthers(colorId, k, uid, colorsMap);
+
+    colorsMap[k] = colorId;
+    writeBookmarkColors(colorsMap, uid);
+    setColorTick((t) => t + 1);
+    if (uid) {
+      try {
+        await (supabase as any)
+          .from("deen_quran_bookmarks")
+          .update({ color: colorId })
+          .eq("user_id", uid)
+          .eq("surah_number", activeSurah.number)
+          .eq("ayah_number", ayah.numberInSurah);
+      } catch {}
+    }
+  };
+
+  const removeBookmark = async (ayah: Ayah, fromSheet = false) => {
+    if (!activeSurah) return;
+    const uid = currentUserId;
+    const surahKey = String(activeSurah.number);
+    const storedBookmarks = readStoredBookmarks(uid);
+    const currentStored = Array.isArray(storedBookmarks[surahKey]) ? storedBookmarks[surahKey] : [];
+    const k = `${activeSurah.number}:${ayah.numberInSurah}`;
+
+    setBookmarkedAyahs((prev) => { const s = new Set(prev); s.delete(ayah.numberInSurah); return s; });
+    writeStoredBookmarks({
+      ...storedBookmarks,
+      [surahKey]: currentStored.filter((n) => n !== ayah.numberInSurah),
+    }, uid);
+    writeBookmarksOrder(readBookmarksOrder(uid).filter((x) => x !== k), uid);
+    const colorsMap = readBookmarkColors(uid);
+    delete colorsMap[k];
+    writeBookmarkColors(colorsMap, uid);
+    setColorTick((t) => t + 1);
+
+    if (uid) {
+      try {
         await (supabase as any)
           .from("deen_quran_bookmarks")
           .delete()
@@ -1436,58 +1576,8 @@ export default function DeenQuran() {
           .eq("surah_number", activeSurah.number)
           .eq("ayah_number", ayah.numberInSurah);
       } catch {}
-
-      toast.success(isAr ? "تم إزالة الحفظ" : "Bookmark removed");
-    } else {
-      // Maintain user-scoped FIFO order (max 7). Newest at front; prune oldest beyond cap.
-      let order = readBookmarksOrder(uid);
-      const k = `${activeSurah.number}:${ayah.numberInSurah}`;
-      order = [k, ...order.filter((x) => x !== k)];
-      if (order.length > MAX_BOOKMARKS) {
-        const removed = order.slice(MAX_BOOKMARKS);
-        order = order.slice(0, MAX_BOOKMARKS);
-        for (const rem of removed) {
-          const [sStr, aStr] = rem.split(":");
-          const sNum = parseInt(sStr, 10);
-          const aNum = parseInt(aStr, 10);
-          if (Number.isFinite(sNum) && Number.isFinite(aNum)) {
-            const map = readStoredBookmarks(uid);
-            map[String(sNum)] = (map[String(sNum)] || []).filter((n) => n !== aNum);
-            if ((map[String(sNum)] || []).length === 0) delete map[String(sNum)];
-            writeStoredBookmarks(map, uid);
-            if (uid) {
-              try {
-                await (supabase as any)
-                  .from("deen_quran_bookmarks")
-                  .delete()
-                  .eq("user_id", uid)
-                  .eq("surah_number", sNum)
-                  .eq("ayah_number", aNum);
-              } catch {}
-            }
-          }
-        }
-      }
-      writeBookmarksOrder(order, uid);
-      setBookmarkedAyahs((prev) => new Set(prev).add(ayah.numberInSurah));
-      writeStoredBookmarks({
-        ...storedBookmarks,
-        [surahKey]: Array.from(new Set([...currentStored, ayah.numberInSurah])).sort((a, b) => a - b),
-      }, uid);
-
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const uid = sessionData.session?.user?.id;
-        if (!uid) throw new Error("no-user");
-        await (supabase as any).from("deen_quran_bookmarks").upsert({
-          user_id: uid,
-          surah_number: activeSurah.number,
-          ayah_number: ayah.numberInSurah,
-        });
-      } catch {}
-
-      toast.success(isAr ? "تم الحفظ ✓" : "Bookmarked ✓");
     }
+    toast.success(isAr ? "تم إزالة الحفظ" : "Bookmark removed");
     if (fromSheet) setShowActionSheet(false);
   };
 
@@ -1497,6 +1587,7 @@ export default function DeenQuran() {
     const uid = sessionData.session?.user?.id || null;
     const surahKey = String(activeSurah.number);
     const storedBookmarks = readStoredBookmarks(uid);
+    const colorsMap = readBookmarkColors(uid);
     setBookmarkedAyahs(new Set([ayah.numberInSurah]));
     writeStoredBookmarks({
       ...storedBookmarks,
@@ -1505,6 +1596,9 @@ export default function DeenQuran() {
 
     // Update FIFO order: make this the newest, remove any previous occurrence for the same surah/ayah
     const k = `${activeSurah.number}:${ayah.numberInSurah}`;
+    // Pick the first available color not used by other bookmarks (keeps colors unique)
+    const usedByOthers = new Set(Object.entries(colorsMap).filter(([key]) => key !== k).map(([, c]) => c));
+    const chosenColor = colorsMap[k] || BOOKMARK_COLOR_IDS.find((id) => !usedByOthers.has(id)) || BOOKMARK_COLOR_IDS[0];
     let order = [k, ...readBookmarksOrder(uid).filter((x) => x !== k)];
     if (order.length > MAX_BOOKMARKS) {
       const removed = order.slice(MAX_BOOKMARKS);
@@ -1518,6 +1612,7 @@ export default function DeenQuran() {
           map[String(sNum)] = (map[String(sNum)] || []).filter((n) => n !== aNum);
           if ((map[String(sNum)] || []).length === 0) delete map[String(sNum)];
           writeStoredBookmarks(map, uid);
+          delete colorsMap[rem];
           if (uid) {
             try {
               await (supabase as any)
@@ -1532,6 +1627,9 @@ export default function DeenQuran() {
       }
     }
     writeBookmarksOrder(order, uid);
+    colorsMap[k] = chosenColor;
+    writeBookmarkColors(colorsMap, uid);
+    setColorTick((t) => t + 1);
 
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1546,6 +1644,7 @@ export default function DeenQuran() {
         user_id: uidDb,
         surah_number: activeSurah.number,
         ayah_number: ayah.numberInSurah,
+        color: chosenColor,
       });
     } catch {}
 
@@ -1594,7 +1693,7 @@ export default function DeenQuran() {
 
       {/* Header */}
       {screen !== "listen-player" && screen !== "reader" && (
-        <div className="sticky top-0 z-20 px-4 pt-4 pb-3" style={{ background: headerBg, backdropFilter: "blur(16px)", borderBottom: `1px solid ${cardBorder}` }}>
+        <div className="fixed z-20 px-4 pt-4 pb-3" style={{ background: headerBg, backdropFilter: "blur(16px)", borderBottom: `1px solid ${cardBorder}`, top: "var(--app-header-h, 64px)", left: 0, right: 0 }}>
           <div className="flex items-center gap-3" style={{ direction: "ltr" }}>
             <button
                 onClick={handleBackNavigation}
@@ -1626,6 +1725,10 @@ export default function DeenQuran() {
             )}
           </div>
         </div>
+      )}
+
+      {screen !== "listen-player" && screen !== "reader" && (
+        <div className="h-16" aria-hidden="true" />
       )}
 
       {screen === "home" && (
@@ -1782,28 +1885,43 @@ export default function DeenQuran() {
           {screen === "read-list" && lastSurah && (
             <button
               onClick={continueReading}
-              className="w-full flex items-center gap-3 rounded-2xl px-4 py-3 mb-4 active:scale-95 transition-all"
+              className="w-full flex items-center gap-4 rounded-2xl px-5 py-4 mb-4 active:scale-[0.98] transition-all"
               style={{
-                background: "linear-gradient(135deg, hsla(210,100%,65%,0.12) 0%, hsla(280,70%,65%,0.08) 100%)",
-                border: "1px solid hsla(210,100%,65%,0.2)",
+                background: isDark
+                  ? "linear-gradient(135deg, hsla(210,100%,65%,0.14) 0%, hsla(260,60%,60%,0.10) 50%, hsla(210,100%,65%,0.06) 100%)"
+                  : "linear-gradient(135deg, hsla(210,100%,65%,0.10) 0%, hsla(260,60%,60%,0.07) 50%, hsla(210,100%,65%,0.04) 100%)",
+                border: isDark ? "1px solid hsla(210,100%,65%,0.22)" : "1px solid hsla(210,100%,65%,0.18)",
+                boxShadow: isDark
+                  ? "0 4px 24px hsla(210,100%,65%,0.12), 0 2px 8px hsla(210,100%,65%,0.06), inset 0 1px 0 hsla(210,100%,65%,0.08)"
+                  : "0 4px 24px hsla(210,100%,65%,0.10), 0 2px 8px hsla(210,100%,65%,0.05), inset 0 1px 0 hsla(210,100%,65%,0.06)",
               }}
             >
               <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
-                style={{ background: "hsla(210,100%,65%,0.15)", border: "1px solid hsla(210,100%,65%,0.3)" }}
+                className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{
+                  background: isDark ? "hsla(210,100%,65%,0.18)" : "hsla(210,100%,65%,0.14)",
+                  border: isDark ? "1px solid hsla(210,100%,65%,0.35)" : "1px solid hsla(210,100%,65%,0.28)",
+                  boxShadow: isDark ? "0 0 16px hsla(210,100%,65%,0.25)" : "0 0 12px hsla(210,100%,65%,0.18)",
+                }}
               >
-                <Clock className="w-4 h-4 text-sky-400" />
+                <BookOpen className="w-5 h-5" style={{ color: isDark ? "hsl(210,100%,75%)" : "hsl(210,100%,55%)" }} />
               </div>
-              <div className="flex-1 text-left" style={{ textAlign: isAr ? "right" : "left" }}>
-                <p className="text-xs font-bold text-sky-400">
+              <div className="flex-1" style={{ textAlign: isAr ? "right" : "left" }}>
+                <p className="text-[13px] font-semibold" style={{ color: isDark ? "hsl(210,100%,75%)" : "hsl(210,100%,50%)" }}>
                   {isAr ? "متابعة القراءة" : "Continue Reading"}
                 </p>
-                <p className="text-[11px] text-[#858384]" style={{ overflow: "hidden", overflowWrap: "break-word" }}>
+                <p className="text-[12px] mt-0.5" style={{ color: isDark ? "#858384" : "#606062", overflow: "hidden", overflowWrap: "break-word" }}>
                   {isAr ? lastSurah.name : lastSurah.englishName} —{" "}
                   {isAr ? "آية" : "Ayah"} {lastProgress!.ayah_number}
                 </p>
               </div>
-              <ChevronRight className="w-4 h-4 text-sky-400/60 flex-shrink-0" style={{ transform: isAr ? "rotate(180deg)" : undefined }} />
+              <ChevronRight
+                className="w-5 h-5 flex-shrink-0"
+                style={{
+                  color: isDark ? "hsla(210,100%,75%,0.7)" : "hsla(210,100%,50%,0.6)",
+                  transform: isAr ? "rotate(180deg)" : undefined,
+                }}
+              />
             </button>
           )}
 
@@ -1815,19 +1933,38 @@ export default function DeenQuran() {
               <div className="mb-4 relative" ref={bookmarksDropdownRef}>
                 <button
                   onClick={() => setBookmarksDropdownOpen((o) => !o)}
-                  className="w-full flex items-center justify-between rounded-xl px-3 py-2.5 active:scale-95 transition-all"
-                  style={{ background: cardBg, border: `1px solid ${cardBorder}`, boxShadow: cardShadow }}
+                  className="w-full flex items-center justify-between rounded-2xl px-4 py-2 active:scale-[0.98] transition-all"
+                  style={{
+                    background: isDark
+                      ? "linear-gradient(135deg, hsla(35,65%,45%,0.14) 0%, hsla(25,95%,55%,0.10) 50%, hsla(35,65%,45%,0.06) 100%)"
+                      : "linear-gradient(135deg, hsla(35,65%,42%,0.10) 0%, hsla(25,95%,50%,0.07) 50%, hsla(35,65%,42%,0.04) 100%)",
+                    border: isDark ? "1px solid hsla(35,65%,55%,0.22)" : "1px solid hsla(35,65%,42%,0.18)",
+                    boxShadow: isDark
+                      ? "0 4px 24px hsla(25,95%,55%,0.12), 0 2px 8px hsla(25,95%,55%,0.06), inset 0 1px 0 hsla(35,65%,55%,0.08)"
+                      : "0 4px 24px hsla(25,95%,50%,0.10), 0 2px 8px hsla(25,95%,50%,0.05), inset 0 1px 0 hsla(35,65%,42%,0.06)",
+                  }}
                 >
-                  <div className="flex items-center gap-2">
-                    <Bookmark className="w-4 h-4" style={{ color: isDark ? "#f97316" : "#c2410c" }} />
-                    <span className="text-sm font-semibold" style={{ color: textPrimary }}>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                      style={{
+                        background: isDark ? "hsla(35,65%,55%,0.18)" : "hsla(35,65%,42%,0.14)",
+                        border: isDark ? "1px solid hsla(35,65%,55%,0.35)" : "1px solid hsla(35,65%,42%,0.28)",
+                        boxShadow: isDark ? "0 0 16px hsla(25,95%,55%,0.25)" : "0 0 12px hsla(25,95%,50%,0.18)",
+                      }}
+                    >
+                      <Bookmark className="w-4 h-4" style={{ color: isDark ? "hsl(35,65%,65%)" : "hsl(35,65%,42%)" }} />
+                    </div>
+                    <span className="text-[13px] font-semibold" style={{ color: textPrimary }}>
                       {isAr ? "العلامات المرجعية" : "Bookmarks"}
                     </span>
                     <span
-                      className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                      className="text-[10px] font-bold px-2 py-0.5 rounded-full"
                       style={{
-                        background: isDark ? "hsla(25,95%,60%,0.15)" : "hsla(25,85%,45%,0.12)",
-                        color: isDark ? "#f97316" : "#c2410c",
+                        background: isDark ? "hsla(25,95%,55%,0.18)" : "hsla(25,95%,50%,0.14)",
+                        color: isDark ? "hsl(25,95%,65%)" : "hsl(25,95%,42%)",
+                        border: isDark ? "1px solid hsla(25,95%,55%,0.30)" : "1px solid hsla(25,95%,50%,0.25)",
+                        boxShadow: isDark ? "0 0 8px hsla(25,95%,55%,0.20)" : "0 0 6px hsla(25,95%,50%,0.15)",
                       }}
                     >
                       {allBookmarks.length}/{MAX_BOOKMARKS}
@@ -1835,25 +1972,27 @@ export default function DeenQuran() {
                   </div>
                   <div className="flex items-center gap-2">
                     {bookmarksRefreshing && (
-                      <div className="w-3 h-3 border-2 border-sky-500/40 border-t-sky-500 rounded-full animate-spin" />
+                      <div className="w-3 h-3 border-2 border-amber-500/40 border-t-amber-500 rounded-full animate-spin" />
                     )}
                     {bookmarksDropdownOpen ? (
-                      <ChevronDown className="w-4 h-4" style={{ color: textMuted }} />
+                      <ChevronDown className="w-4 h-4" style={{ color: isDark ? "hsla(35,65%,55%,0.8)" : "hsla(35,65%,42%,0.7)" }} />
                     ) : (
-                      <ChevronRight className="w-4 h-4" style={{ color: textMuted, transform: isAr ? "rotate(180deg)" : undefined }} />
+                      <ChevronRight className="w-4 h-4" style={{ color: isDark ? "hsla(35,65%,55%,0.8)" : "hsla(35,65%,42%,0.7)", transform: isAr ? "rotate(180deg)" : undefined }} />
                     )}
                   </div>
                 </button>
 
                 {bookmarksDropdownOpen && (
                   <div
-                    className="absolute left-0 right-0 top-full mt-1 z-50 rounded-xl overflow-hidden"
+                    className="absolute left-0 right-0 top-full mt-1 z-50 rounded-2xl overflow-hidden"
                     style={{
                       background: isDark
-                        ? "linear-gradient(135deg, hsl(25 15% 12%) 0%, hsl(260 15% 11%) 100%)"
-                        : "linear-gradient(135deg, #ffffff 0%, hsl(45 100% 97%) 100%)",
-                      border: `1px solid ${isDark ? "hsla(25,95%,60%,0.22)" : "hsla(25,95%,45%,0.25)"}`,
-                      boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.4)" : cardShadow,
+                        ? "linear-gradient(135deg, hsl(25 15% 12%) 0%, hsl(30 12% 11%) 50%, hsl(25 15% 12%) 100%)"
+                        : "linear-gradient(135deg, #fffbf5 0%, hsl(45 100% 97%) 50%, #fffbf5 100%)",
+                      border: isDark ? "1px solid hsla(25,95%,55%,0.22)" : "1px solid hsla(25,95%,50%,0.20)",
+                      boxShadow: isDark
+                        ? "0 10px 32px hsla(25,95%,55%,0.15), 0 4px 12px rgba(0,0,0,0.3)"
+                        : "0 10px 32px hsla(25,95%,50%,0.12), 0 4px 12px rgba(0,0,0,0.06)",
                     }}
                   >
                     {bookmarksRefreshing && (
@@ -1873,8 +2012,8 @@ export default function DeenQuran() {
                         <div
                           className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0"
                           style={{
-                            background: getBookmarkColor(b.surah.number).bg,
-                            color: getBookmarkColor(b.surah.number).text,
+                            background: getBookmarkColor(b.color).bg,
+                            color: getBookmarkColor(b.color).text,
                           }}
                         >
                           {b.surah.number}
@@ -1901,14 +2040,13 @@ export default function DeenQuran() {
 
           {/* Search */}
           <div
-            className="flex items-center gap-2 rounded-xl px-3 py-2.5 mb-4"
+            className="flex items-center gap-3 rounded-2xl px-4 py-3 mb-4"
             style={{
-              background: cardBg,
-              border: `1px solid ${cardBorder}`,
-              boxShadow: cardShadow,
+              background: "transparent",
+              border: isDark ? "1px solid hsla(35,65%,55%,0.35)" : "1px solid hsla(35,65%,42%,0.30)",
             }}
           >
-            <Search className="w-4 h-4 flex-shrink-0" style={{ color: textSecondary }} />
+            <Search className="w-4 h-4 flex-shrink-0" style={{ color: isDark ? "hsla(35,65%,55%,0.7)" : "hsla(35,65%,42%,0.6)" }} />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -1933,7 +2071,17 @@ export default function DeenQuran() {
               {filtered.map((s) => (
                 <button
                   key={s.number}
-                  onClick={() => (screen === "read-list" ? openSurah(s) : openListeningSurah(s))}
+                  onClick={() => {
+                    if (screen === "read-list") {
+                      if (lastProgress?.surah_number === s.number) {
+                        openSurah(s, lastProgress.ayah_number);
+                      } else {
+                        openSurah(s);
+                      }
+                    } else {
+                      openListeningSurah(s);
+                    }
+                  }}
                   className="w-full flex items-center gap-3 rounded-xl px-3 py-3 active:scale-95 transition-all duration-150"
                   style={{ background: cardBg, border: `1px solid ${cardBorder}`, boxShadow: cardShadow }}
                 >
@@ -2297,6 +2445,89 @@ export default function DeenQuran() {
             const pageTxt   = isDark ? "#e8dfc8" : "#1a120a";
             const markerTxt = gold;
 
+            // Bookmark control: button + 3-color picker popover. Colors are unique;
+            // picking an in-use color (dimmed + swap icon) moves it here, removing the previous holder.
+            const renderBookmarkControl = (ayah: Ayah, isBookmarked: boolean) => {
+              if (!activeSurah) return null;
+              const key = `${activeSurah.number}:${ayah.numberInSurah}`;
+              const open = colorPickerKey === key;
+              const currentColorId = readBookmarkColors(currentUserId)[key];
+              const current = isBookmarked ? getBookmarkColor(currentColorId) : null;
+              const picker = getPickerColors(key);
+              return (
+                <div className="relative">
+                  <button
+                    onClick={() => setColorPickerKey(open ? null : key)}
+                    className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
+                    style={{
+                      border: `1px solid ${isBookmarked && current ? current.dot : goldGlow}`,
+                      background: isBookmarked && current ? current.bg : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
+                      color: isBookmarked && current ? current.dot : gold,
+                      boxShadow: isBookmarked && current ? `0 0 14px ${current.bg}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
+                    }}
+                    title={isAr ? "حفظ" : "Bookmark"}
+                  >
+                    {isBookmarked ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+                  </button>
+                  {open && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setColorPickerKey(null)} />
+                      <div
+                        className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 flex items-center gap-2 px-2.5 py-2 rounded-xl"
+                        style={{
+                          background: isDark ? "linear-gradient(135deg, hsl(25 15% 12%) 0%, hsl(260 15% 11%) 100%)" : "#ffffff",
+                          border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(6,5,65,0.12)"}`,
+                          boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.5)" : "0 8px 20px rgba(0,0,0,0.12)",
+                        }}
+                      >
+                        {picker.map((c) => {
+                          const isCurrent = currentColorId === c.id;
+                          const showSwap = c.inUse && !isCurrent;
+                          return (
+                            <button
+                              key={c.id}
+                              onClick={() => {
+                                setColorPickerKey(null);
+                                if (isBookmarked) {
+                                  if (currentColorId !== c.id) void recolorBookmark(ayah, c.id);
+                                } else {
+                                  void addBookmarkWithColor(ayah, c.id);
+                                }
+                              }}
+                              className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
+                              style={{
+                                background: c.dot,
+                                opacity: showSwap ? 0.55 : 1,
+                                border: isCurrent ? `2px solid ${isDark ? "#fff" : "#060541"}` : "2px solid transparent",
+                                cursor: "pointer",
+                              }}
+                              title={showSwap ? (isAr ? "مستخدم — سيُنقل إلى هنا" : "In use — will move here") : c.id}
+                            >
+                              {isCurrent ? (
+                                <Check className="w-3.5 h-3.5" style={{ color: "#fff" }} />
+                              ) : showSwap ? (
+                                <ArrowLeftRight className="w-3 h-3" style={{ color: "#fff" }} />
+                              ) : null}
+                            </button>
+                          );
+                        })}
+                        {isBookmarked && (
+                          <button
+                            onClick={() => { setColorPickerKey(null); void removeBookmark(ayah); }}
+                            className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
+                            style={{ background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)", color: isDark ? "#f87171" : "#dc2626" }}
+                            title={isAr ? "إزالة" : "Remove"}
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            };
+
             // Helper: Arabic-Indic digits
             const toAI = (n: number) => String(n).replace(/\d/g, d => "٠١٢٣٤٥٦٧٨٩"[+d]);
             const renderAyahMarker = (n: number) => {
@@ -2350,7 +2581,21 @@ export default function DeenQuran() {
 
             return (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-4" dir={isAr ? "rtl" : "ltr"}>
+                <div
+                  className="fixed z-40 flex flex-nowrap items-center justify-between gap-2 py-2 mb-4 px-3 overflow-x-auto no-scrollbar"
+                  dir={isAr ? "rtl" : "ltr"}
+                  style={{
+                    background: bg,
+                    top: "var(--app-header-h, 64px)",
+                    left: 0,
+                    right: 0,
+                    scrollbarWidth: "none",
+                    msOverflowStyle: "none",
+                    boxShadow: isDark
+                      ? "0 4px 20px hsla(25,95%,55%,0.18), 0 2px 8px hsla(35,65%,45%,0.12)"
+                      : "0 4px 20px hsla(35,65%,42%,0.12), 0 2px 8px hsla(35,65%,42%,0.06)",
+                  }}
+                >
                   <button
                     onClick={handleBackNavigation}
                     className="rounded-xl flex items-center gap-2 px-3 py-2 active:scale-95 transition-all flex-shrink-0"
@@ -2360,11 +2605,11 @@ export default function DeenQuran() {
                       boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.22)" : "0 8px 20px rgba(6,5,65,0.06)",
                       backdropFilter: "blur(10px)",
                     }}
-                    title={isAr ? "العودة إلى القرآن" : "Back to Quran"}
+                    title={isAr ? "القرآن" : "Quran"}
                   >
                     <ArrowLeft className="w-4 h-4" style={{ color: isDark ? "#f2f2f2" : "#060541", transform: isAr ? "rotate(180deg)" : undefined }} />
                     <span className="text-[12px] font-medium" style={{ color: isDark ? "#f2f2f2" : "#060541" }}>
-                      {isAr ? "العودة إلى القرآن" : "Back to Quran"}
+                      {isAr ? "القرآن" : "Quran"}
                     </span>
                   </button>
                   <button
@@ -2408,60 +2653,141 @@ export default function DeenQuran() {
                       </span>
                     </button>
                   )}
-                  <button
-                    onClick={jumpToSavedAyah}
-                    disabled={!currentSurahJumpTargetAyah}
-                    className="rounded-xl flex items-center gap-1.5 px-2.5 py-2 active:scale-95 transition-all flex-shrink-0 disabled:opacity-40 max-w-full"
-                    style={{
-                      background: isDark ? "hsla(45,65%,55%,0.10)" : "hsla(35,65%,42%,0.10)",
-                      border: isDark ? "1px solid hsla(45,65%,55%,0.24)" : "1px solid hsla(35,65%,42%,0.22)",
-                      boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.18)" : "0 8px 20px rgba(138,106,26,0.10)",
-                      backdropFilter: "blur(10px)",
-                    }}
-                    title={isAr ? "اذهب إلى موضعك المحفوظ" : "Go to saved place"}
-                  >
-                    <RotateCcw className="w-4 h-4" style={{ color: gold }} />
-                    <span className="text-[11px] font-medium truncate" style={{ color: gold }}>
-                      {isAr ? (currentSurahJumpTargetAyah ? "اذهب إلى موضعك المحفوظ" : "لا يوجد موضع محفوظ") : (currentSurahJumpTargetAyah ? "Go to saved place" : "No saved place")}
-                    </span>
-                  </button>
+                  {(() => {
+                    const allBookmarks = getAllBookmarks(surahs, currentUserId);
+                    return (
+                      <div className="relative" ref={bookmarksDropdownRef}>
+                        <button
+                          ref={readerBookmarkBtnRef}
+                          onClick={() => {
+                            const next = !bookmarksDropdownOpen;
+                            setBookmarksDropdownOpen(next);
+                            if (next && readerBookmarkBtnRef.current) {
+                              const rect = readerBookmarkBtnRef.current.getBoundingClientRect();
+                              setReaderDropdownPos({
+                                top: rect.bottom + window.scrollY + 4,
+                                ...(isAr
+                                  ? { left: Math.max(8, rect.left + window.scrollX) }
+                                  : { right: Math.max(8, window.innerWidth - rect.right - window.scrollX) }),
+                              });
+                            }
+                          }}
+                          className="rounded-xl flex items-center justify-center gap-0.5 min-w-[52px] h-9 active:scale-95 transition-all flex-shrink-0"
+                          style={{
+                            background: isDark ? "hsla(45,65%,55%,0.10)" : "hsla(35,65%,42%,0.10)",
+                            border: isDark ? "1px solid hsla(45,65%,55%,0.24)" : "1px solid hsla(35,65%,42%,0.22)",
+                            boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.18)" : "0 8px 20px rgba(138,106,26,0.10)",
+                            backdropFilter: "blur(10px)",
+                          }}
+                          title={isAr ? "العلامات المرجعية" : "Bookmarks"}
+                        >
+                          <Bookmark className="w-4 h-4" style={{ color: gold }} />
+                          <ChevronDown className="w-3 h-3" style={{ color: gold }} />
+                          {allBookmarks.length > 0 && (
+                            <span
+                              className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full flex items-center justify-center text-[9px] font-bold"
+                              style={{
+                                background: isDark ? "hsla(25,95%,60%,0.85)" : "hsla(25,95%,45%,0.85)",
+                                color: "#fff",
+                                border: `1px solid ${isDark ? "rgba(0,0,0,0.5)" : "rgba(255,255,255,0.8)"}`,
+                              }}
+                            >
+                              {allBookmarks.length}
+                            </span>
+                          )}
+                        </button>
+                        {bookmarksDropdownOpen && allBookmarks.length > 0 && readerDropdownPos && (
+                          <div
+                            className="fixed z-50 rounded-xl overflow-hidden"
+                            style={{
+                              top: readerDropdownPos.top,
+                              ...(readerDropdownPos.right !== undefined
+                                ? { right: readerDropdownPos.right }
+                                : { left: readerDropdownPos.left }),
+                              minWidth: 220,
+                              background: isDark
+                                ? "linear-gradient(135deg, hsl(25 15% 12%) 0%, hsl(260 15% 11%) 100%)"
+                                : "linear-gradient(135deg, #ffffff 0%, hsl(45 100% 97%) 100%)",
+                              border: `1px solid ${isDark ? "hsla(25,95%,60%,0.22)" : "hsla(25,95%,45%,0.25)"}`,
+                              boxShadow: isDark ? "0 10px 28px rgba(0,0,0,0.4)" : cardShadow,
+                            }}
+                          >
+                            {bookmarksRefreshing && (
+                              <div className="px-3 py-2 text-[11px]" style={{ color: textMuted }}>
+                                {isAr ? "يتم التحديث…" : "Refreshing…"}
+                              </div>
+                            )}
+                            {allBookmarks.map((b, idx) => (
+                              <button
+                                key={`${b.surah.number}-${b.ayah}`}
+                                onClick={() => { setBookmarksDropdownOpen(false); openSurah(b.surah, b.ayah); }}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 active:scale-[0.99] transition-all"
+                                style={{
+                                  borderBottom: idx < allBookmarks.length - 1 ? `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.06)"}` : "none",
+                                }}
+                              >
+                                <div
+                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                                  style={{
+                                    background: getBookmarkColor(b.color).bg,
+                                    color: getBookmarkColor(b.color).text,
+                                  }}
+                                >
+                                  {b.surah.number}
+                                </div>
+                                <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
+                                  <p className="text-sm font-medium" style={{ color: textPrimary }}>
+                                    {isAr ? b.surah.name : b.surah.englishName}
+                                  </p>
+                                  <p className="text-[10px]" style={{ color: textMuted }}>
+                                    {isAr ? "آية" : "Ayah"} {b.ayah}
+                                  </p>
+                                </div>
+                                <ChevronRight
+                                  className="w-3.5 h-3.5 flex-shrink-0"
+                                  style={{ color: textMuted, transform: isAr ? "rotate(180deg)" : undefined }}
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {!isAr && (
                     <button
                       onClick={() => setShowArabicText((v) => !v)}
-                      className="flex items-center gap-2 px-3 py-2 active:scale-95 transition-all flex-shrink-0"
-                      style={{ background: "transparent", border: "none" }}
+                      className="rounded-xl flex items-center gap-2 px-3 py-2 active:scale-95 transition-all flex-shrink-0"
+                      style={{
+                        background: showArabicText
+                          ? (isDark ? "hsla(45,65%,55%,0.14)" : "hsla(35,65%,42%,0.12)")
+                          : (isDark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.78)"),
+                        border: showArabicText
+                          ? (isDark ? "1px solid hsla(45,65%,55%,0.35)" : "1px solid hsla(35,65%,42%,0.30)")
+                          : (isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(6,5,65,0.10)"),
+                        boxShadow: isDark ? "0 8px 24px rgba(0,0,0,0.22)" : "0 8px 20px rgba(6,5,65,0.06)",
+                        backdropFilter: "blur(10px)",
+                      }}
                       title={showArabicText ? "Hide Arabic text" : "Show Arabic text"}
                     >
-                      <span className="text-[11px] font-medium" style={{ color: isDark ? "#858384" : "#606062" }}>
-                        Arabic Transcript
-                      </span>
-                      <span
-                        className="relative inline-flex items-center rounded-full"
-                        style={{
-                          width: 40,
-                          height: 22,
-                          background: showArabicText
-                            ? (isDark ? "hsla(45,65%,55%,0.45)" : "hsla(35,65%,42%,0.35)")
-                            : (isDark ? "rgba(255,255,255,0.12)" : "rgba(6,5,65,0.15)"),
-                          transition: "background 0.25s ease",
-                        }}
-                      >
+                      <div className="flex flex-col items-center leading-none">
                         <span
-                          className="absolute rounded-full"
-                          style={{
-                            width: 16,
-                            height: 16,
-                            top: 3,
-                            left: showArabicText ? 20 : 4,
-                            background: showArabicText ? gold : (isDark ? "#858384" : "#a0a0a0"),
-                            boxShadow: showArabicText ? `0 0 8px ${goldGlow}` : "0 1px 3px rgba(0,0,0,0.25)",
-                            transition: "left 0.25s ease, background 0.25s ease, box-shadow 0.25s ease",
-                          }}
-                        />
-                      </span>
+                          className="text-[11px] font-medium"
+                          style={{ color: showArabicText ? gold : (isDark ? "#858384" : "#606062") }}
+                        >
+                          Arabic
+                        </span>
+                        <span
+                          className="text-[9px] font-medium mt-0.5"
+                          style={{ color: showArabicText ? gold : (isDark ? "#858384" : "#606062") }}
+                        >
+                          Transcript
+                        </span>
+                      </div>
                     </button>
                   )}
                 </div>
+                <div className="h-14" aria-hidden="true" />
 
                 {/* ── Arabic reader reciter dropdown list ── */}
                 {isAr && readerReciterOpen && (
@@ -2628,19 +2954,7 @@ export default function DeenQuran() {
                               >
                                 <BookOpen className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                onClick={() => bookmarkAyah(ayah)}
-                                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
-                                style={{
-                                  border: `1px solid ${goldGlow}`,
-                                  background: isBookmarked ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
-                                  color: gold,
-                                  boxShadow: isBookmarked ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
-                                }}
-                                title={isAr ? "حفظ" : "Bookmark"}
-                              >
-                                {isBookmarked ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
-                              </button>
+                              {renderBookmarkControl(ayah, isBookmarked)}
                               <button
                                 onClick={() => void toggleReaderAyahPlayback(ayah, globalIdx)}
                                 className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
@@ -2735,19 +3049,7 @@ export default function DeenQuran() {
                               >
                                 <BookOpen className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                onClick={() => bookmarkAyah(ayah)}
-                                className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
-                                style={{
-                                  border: `1px solid ${goldGlow}`,
-                                  background: isBookmarked ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
-                                  color: gold,
-                                  boxShadow: isBookmarked ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
-                                }}
-                                title={isAr ? "حفظ" : "Bookmark"}
-                              >
-                                {isBookmarked ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
-                              </button>
+                              {renderBookmarkControl(ayah, isBookmarked)}
                               <button
                                 onClick={() => void toggleReaderAyahPlayback(ayah, globalIdx)}
                                 className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
@@ -2775,8 +3077,16 @@ export default function DeenQuran() {
                     const to = pageBreaks[readerPage + 1] ?? activeSurah.ayahs.length;
                     const isLastPage = readerPage >= totalPages - 1;
                     const nextSurahMeta = activeSurah && surahs.find((s) => s.number === activeSurah.number + 1);
+                    // Persist reading position to the first ayah of the target page
+                    const savePageProgress = (p: number) => {
+                      if (!activeSurah) return;
+                      const idx = pageBreaks[p];
+                      const firstAyah = typeof idx === "number" ? activeSurah.ayahs[idx] : undefined;
+                      if (firstAyah) saveProgress(activeSurah.number, firstAyah.numberInSurah);
+                    };
                     const goToPage = (p: number, scroll = true) => {
                       setReaderPage(p);
+                      savePageProgress(p);
                       setPagePickerOpen(false);
                       if (scroll) setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
                     };
@@ -2785,7 +3095,7 @@ export default function DeenQuran() {
                         {/* Prev / counter / Next row */}
                         <div className="flex items-center justify-between gap-3">
                           <button
-                            onClick={() => { setReaderPage(p => p - 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
+                            onClick={() => { setReaderPage(p => p - 1); savePageProgress(readerPage - 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
                             disabled={readerPage === 0}
                             className="flex-1 py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all disabled:opacity-30"
                             style={{ background: goldFaint, border: `1px solid ${goldGlow}`, color: gold }}
@@ -2803,7 +3113,7 @@ export default function DeenQuran() {
                             </p>
                           </button>
                           <button
-                            onClick={() => { setReaderPage(p => p + 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
+                            onClick={() => { setReaderPage(p => p + 1); savePageProgress(readerPage + 1); setTimeout(() => readerTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50); }}
                             disabled={isLastPage}
                             className="flex-1 py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all disabled:opacity-30"
                             style={{ background: goldFaint, border: `1px solid ${goldGlow}`, color: gold }}
@@ -2852,7 +3162,7 @@ export default function DeenQuran() {
                         {/* Next Surah button — only on last page */}
                         {isLastPage && nextSurahMeta && (
                           <button
-                            onClick={() => { setPagePickerOpen(false); void openSurah(nextSurahMeta); }}
+                            onClick={() => { setPagePickerOpen(false); saveProgress(nextSurahMeta.number, 1); void openSurah(nextSurahMeta); }}
                             className="w-full py-3 rounded-2xl text-sm font-semibold active:scale-95 transition-all flex items-center justify-center gap-2"
                             style={{
                               background: isDark ? "hsla(45,65%,50%,0.12)" : "hsla(35,55%,42%,0.10)",
