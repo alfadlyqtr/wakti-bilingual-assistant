@@ -5,6 +5,15 @@ import InstagramPublishButton from '@/components/instagram/InstagramPublishButto
 import { SavedImagesPicker } from '@/components/dashboard/SavedImagesPicker';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { PromptBlockedDialog } from '@/components/ui/prompt-blocked-dialog';
 import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { Textarea } from '@/components/ui/textarea';
@@ -374,6 +383,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [isKidsContentMode, setIsKidsContentMode] = useState(false);
   const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
   const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
+  const [showChildSafetyDialog, setShowChildSafetyDialog] = useState(false);
   const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('video', { studioTab: 'video', videoMode: 'ai' }));
   const videoDraftRestoredRef = useRef(false);
@@ -418,6 +428,24 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setResolution('720p');
     }
   }, [isGenerating, isKidsContentMode, resolution]);
+  const openChildSafetyDialog = useCallback(() => {
+    triggerKidsModeToggleHighlight();
+    setShowChildSafetyDialog(true);
+  }, [triggerKidsModeToggleHighlight]);
+  const handleChildSafetyDialogAction = useCallback(() => {
+    setShowChildSafetyDialog(false);
+    if (kidsModeHighlightTimeoutRef.current) {
+      window.clearTimeout(kidsModeHighlightTimeoutRef.current);
+      kidsModeHighlightTimeoutRef.current = null;
+    }
+    if (!isKidsContentMode) {
+      setIsKidsContentMode(true);
+      setDuration('6');
+      setResolution('720p');
+    }
+    setHighlightKidsModeToggle(false);
+    kidsModeToggleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [isKidsContentMode]);
 
   // Trial access check — Ads Creator is locked for 24-hour trial users
   const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
@@ -1178,7 +1206,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           retryable: data?.data?.retryable,
         };
         if (shouldHighlightChildSafetyToggle(statusPayload)) {
-          triggerKidsModeToggleHighlight();
+          setIsGenerating(false);
+          setTaskId(null);
+          taskProviderRef.current = null;
+          setGenerationProgress(0);
+          setGenerationStatus('');
+          openChildSafetyDialog();
+          return;
         }
         throw new Error(getVideoGenerationErrorMessage(statusPayload, language) || data?.data?.message || data?.data?.error || 'Video generation failed');
       } else {
@@ -1195,7 +1229,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setGenerationStatus('');
       const errorPayload = await parseInvokeErrorPayload(e);
       if (shouldHighlightChildSafetyToggle(errorPayload)) {
-        triggerKidsModeToggleHighlight();
+        openChildSafetyDialog();
+        return;
       }
       const friendlyMessage = getVideoGenerationErrorMessage(errorPayload, language);
       const msg = friendlyMessage || errorPayload?.error || errorPayload?.message || e?.message || '';
@@ -1206,7 +1241,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [language, loadQuota, loadLatestVideo, saveGeneratedVideoToMyVideos, triggerKidsModeToggleHighlight]);
+  }, [language, loadQuota, loadLatestVideo, openChildSafetyDialog, saveGeneratedVideoToMyVideos]);
 
   const handleGenerate = async () => {
     // Validate based on mode
@@ -1466,7 +1501,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         }
 
         if (shouldHighlightChildSafetyToggle(errorPayload)) {
-          triggerKidsModeToggleHighlight();
+          setIsGenerating(false);
+          setGenerationProgress(0);
+          setGenerationStatus('');
+          taskProviderRef.current = null;
+          openChildSafetyDialog();
+          return;
         }
         const friendlyMessage = getVideoGenerationErrorMessage(errorPayload, language);
         throw new Error(friendlyMessage || error.message || 'Failed to start video generation');
@@ -1486,7 +1526,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
       if (!data?.ok || !data?.task_id) {
         if (shouldHighlightChildSafetyToggle(data)) {
-          triggerKidsModeToggleHighlight();
+          setIsGenerating(false);
+          setGenerationProgress(0);
+          setGenerationStatus('');
+          taskProviderRef.current = null;
+          openChildSafetyDialog();
+          return;
         }
         throw new Error(getVideoGenerationErrorMessage(data, language) || data?.error || 'Failed to create video task');
       }
@@ -5465,6 +5510,38 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         message={promptBlockedMessage}
         language={language}
       />
+
+      <AlertDialog open={showChildSafetyDialog} onOpenChange={setShowChildSafetyDialog}>
+        <AlertDialogContent className="max-w-md rounded-2xl border border-[hsl(210,100%,65%)]/30 bg-[hsl(222,20%,6%)] text-[hsl(0,0%,95%)] shadow-[0_4px_32px_hsla(0,0%,0%,0.7),0_0_40px_hsla(210,100%,65%,0.18)]">
+          <AlertDialogHeader className="text-center sm:text-center">
+            <AlertDialogTitle className="text-xl font-bold text-[hsl(0,0%,95%)]">
+              {language === 'ar' ? 'تم حظر هذا الطلب' : 'This request was blocked'}
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3 text-base leading-7 text-[hsl(0,0%,95%)]/85">
+              <span className="block">
+                {language === 'ar'
+                  ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي.'
+                  : 'Wakti safety rules blocked this request.'}
+              </span>
+              <span className="block text-sm text-[hsl(210,30%,80%)]">
+                {language === 'ar'
+                  ? 'إذا كانت الصورة تحتوي على طفل، فعّل وضع أمان الأطفال ثم حاول مرة أخرى.'
+                  : 'If the image contains a child, please enable Child Safety Mode and try again.'}
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="sm:justify-center">
+            <AlertDialogAction
+              onClick={handleChildSafetyDialogAction}
+              className="min-w-40 rounded-xl bg-[hsl(210,100%,65%)] text-[hsl(222,20%,6%)] hover:bg-[hsl(210,100%,60%)] focus-visible:ring-[hsl(210,100%,65%)]"
+            >
+              {isKidsContentMode
+                ? (language === 'ar' ? 'حسنًا' : 'OK')
+                : (language === 'ar' ? 'تفعيل أمان الأطفال' : 'Enable Child Safety')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <StudioGuestLoginDialog
         open={guestDialogOpen}
