@@ -112,9 +112,73 @@ interface TaskStatusData {
   generated?: string[];
   video?: { url: string };
   error?: string;
+  code?: string;
+  message?: string;
+  retryable?: boolean;
 }
 
 type VideoStatusProvider = "kie" | "veo";
+
+type VideoClientErrorPayload = {
+  error: string;
+  code: string;
+  message: string;
+  retryable?: boolean;
+};
+
+function normalizeVideoErrorText(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function resolveRequestedVideoModel(generationType: string, modelOverride?: string): string {
+  if (generationType === "text_to_video") return KIE_TEXT2VIDEO_MODEL;
+  if (generationType === "2images_to_video") return KIE_2IMAGES_MODEL;
+  if (generationType === "visual_ads") return KIE_VISUAL_ADS_MODEL;
+  return modelOverride || KIE_IMAGE2VIDEO_MODEL;
+}
+
+function buildVideoClientError(rawMessage: string, fallbackCode = "VIDEO_GENERATION_FAILED"): VideoClientErrorPayload {
+  const normalized = normalizeVideoErrorText(rawMessage || "");
+
+  if (
+    normalized.includes("involving minors") ||
+    normalized.includes("minor upload") ||
+    normalized.includes("contains a child") ||
+    normalized.includes("contains child") ||
+    normalized.includes("minor") ||
+    normalized.includes("children") ||
+    normalized.includes("child")
+  ) {
+    return {
+      error: "VIDEO_SAFETY_MINOR_DETECTED",
+      code: "VIDEO_SAFETY_MINOR_DETECTED",
+      message: "Wakti safety rules blocked this request.",
+      retryable: false,
+    };
+  }
+
+  if (
+    normalized.includes("internal error") ||
+    normalized.includes("please try again later") ||
+    normalized.includes("service error 500") ||
+    normalized.includes("status check error 500") ||
+    normalized.includes("timeout")
+  ) {
+    return {
+      error: "VIDEO_TEMPORARY_UNAVAILABLE",
+      code: "VIDEO_TEMPORARY_UNAVAILABLE",
+      message: "Video generation is temporarily unavailable. Please try again in a moment.",
+      retryable: true,
+    };
+  }
+
+  return {
+    error: fallbackCode,
+    code: fallbackCode,
+    message: "Video generation failed. Please try a different image or prompt.",
+    retryable: false,
+  };
+}
 
 type VideoTaskCreateResult = {
   task_id: string;
@@ -727,7 +791,7 @@ async function createTextToVideoTask(
   if (!response.ok) {
     const errorText = await response.text();
     console.error("[kie-text2video] Create task failed:", response.status, errorText);
-    throw new Error(`Video generation service error ${response.status}`);
+    throw new Error(errorText || `Video generation service error ${response.status}`);
   }
 
   const result: KieCreateResponse = await response.json();
@@ -805,7 +869,7 @@ async function createVideoTask(
     if (!response.ok) {
       const errorText = await response.text();
       console.error("[kie-2images2video] Create Veo task failed:", response.status, errorText);
-      throw new Error(`Video generation service error ${response.status}`);
+      throw new Error(errorText || `Video generation service error ${response.status}`);
     }
 
     const result: VeoCreateResponse = await response.json();
@@ -870,7 +934,7 @@ async function createVideoTask(
   if (!response.ok) {
     const errorText = await response.text();
     console.error("[kie-image2video] Create task failed:", response.status, errorText);
-    throw new Error(`Video generation service error ${response.status}`);
+    throw new Error(errorText || `Video generation service error ${response.status}`);
   }
 
   const result: KieCreateResponse = await response.json();
@@ -913,7 +977,7 @@ async function getVeoTaskStatus(taskId: string): Promise<TaskStatusData> {
   if (!statusRes.ok) {
     const errorText = await statusRes.text();
     console.error("[kie-2images2video] Get Veo status failed:", statusRes.status, errorText);
-    throw new Error(`Video status check error ${statusRes.status}`);
+    throw new Error(errorText || `Video status check error ${statusRes.status}`);
   }
 
   const statusData: VeoStatusResponse = await statusRes.json();
@@ -936,10 +1000,14 @@ async function getVeoTaskStatus(taskId: string): Promise<TaskStatusData> {
   }
 
   if (statusData.data.errorCode || (statusData.data.errorMessage && statusData.data.errorMessage.trim().length > 0)) {
+    const clientError = buildVideoClientError(statusData.data.errorMessage || "Video generation failed", "VIDEO_GENERATION_FAILED");
     return {
       task_id: taskId,
       status: "FAILED",
-      error: statusData.data.errorMessage || "Video generation failed",
+      error: clientError.error,
+      code: clientError.code,
+      message: clientError.message,
+      retryable: clientError.retryable,
     };
   }
 
@@ -961,7 +1029,7 @@ async function getKieTaskStatus(taskId: string): Promise<TaskStatusData> {
   if (!statusRes.ok) {
     const errorText = await statusRes.text();
     console.error("[kie-image2video] Get status failed:", statusRes.status, errorText);
-    throw new Error(`Video status check error ${statusRes.status}`);
+    throw new Error(errorText || `Video status check error ${statusRes.status}`);
   }
 
   const statusData: KieStatusResponse = await statusRes.json();
@@ -1002,10 +1070,14 @@ async function getKieTaskStatus(taskId: string): Promise<TaskStatusData> {
   }
 
   if (mappedStatus === "FAILED") {
+    const clientError = buildVideoClientError(statusData.data.failMsg || "Video generation failed", "VIDEO_GENERATION_FAILED");
     return {
       task_id: taskId,
       status: "FAILED",
-      error: statusData.data.failMsg || "Video generation failed",
+      error: clientError.error,
+      code: clientError.code,
+      message: clientError.message,
+      retryable: clientError.retryable,
     };
   }
 
@@ -1113,7 +1185,7 @@ async function createVisualAdsTask(
   if (!response.ok) {
     const errorText = await response.text();
     console.error("[kie-visual-ads] Create task failed:", response.status, errorText);
-    throw new Error(`Visual Ads generation service error ${response.status}`);
+    throw new Error(errorText || `Visual Ads generation service error ${response.status}`);
   }
 
   const result: KieCreateResponse = await response.json();
@@ -1149,6 +1221,10 @@ serve(async (req: Request) => {
   }
 
   const startTime = Date.now();
+  let errorStage = "request_start";
+  let errorInputText = "";
+  let errorModel = "kie-video";
+  let errorMetadata: Record<string, unknown> = {};
 
   try {
     // Verify JWT
@@ -1177,15 +1253,41 @@ serve(async (req: Request) => {
     console.log("[kie-image2video] User:", user.id);
 
     // Parse request body (need it before trial check to detect generation_type)
+    errorStage = "request_parse";
     const body = await req.json();
     const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode, model: modelOverride } = body;
     const safePrompt = typeof prompt === "string"
       ? sanitizeUserInput(prompt, { maxLength: 7000, label: "video_prompt" }).trim()
       : "";
+    const generationType = generation_type || "image_to_video";
+    errorModel = resolveRequestedVideoModel(generationType, typeof modelOverride === "string" ? modelOverride : undefined);
+    errorInputText = safePrompt || (typeof image === "string" ? image : "") || (typeof image1 === "string" ? image1 : "") || (typeof image2 === "string" ? image2 : "");
+    errorMetadata = {
+      generation_type: generationType,
+      requested_model: errorModel,
+      duration: reqDuration ?? null,
+      aspect_ratio: aspect_ratio ?? null,
+      resolution: resolution ?? null,
+      mode: mode ?? null,
+      has_image: Boolean(image),
+      has_image1: Boolean(image1),
+      has_image2: Boolean(image2),
+      child_safety_mode: modelOverride === "grok-imagine-video-1-5-preview",
+    };
 
     // Mode: 'status' to check task status
     if (mode === "status") {
       const { task_id, increment_usage, task_provider } = body;
+      errorStage = "status_check";
+      errorModel = task_provider === "veo" ? KIE_2IMAGES_MODEL : errorModel;
+      errorInputText = typeof task_id === "string" ? task_id : errorInputText;
+      errorMetadata = {
+        ...errorMetadata,
+        mode: "status",
+        task_id: task_id ?? null,
+        task_provider: task_provider ?? null,
+        increment_usage: Boolean(increment_usage),
+      };
       if (!task_id) {
         return new Response(JSON.stringify({ error: "Missing task_id" }), {
           status: 400,
@@ -1215,7 +1317,7 @@ serve(async (req: Request) => {
     }
 
     // Parse generation type
-    const generationType = generation_type || "image_to_video";
+    errorStage = "request_validation";
     const promptSafety = safePrompt
       ? inspectGenerationPrompt(safePrompt, body?.language === "ar" ? "ar" : "en")
       : null;
@@ -1301,6 +1403,7 @@ serve(async (req: Request) => {
     let task: VideoTaskCreateResult;
     const finalPrompt = promptSafety?.normalizedPrompt ?? safePrompt;
 
+    errorStage = "task_create";
     if (generationType === "text_to_video") {
       // Text-to-Video: no image needed
       task = await createTextToVideoTask(finalPrompt, reqDuration, aspect_ratio, resolution, video_style_mode);
@@ -1411,6 +1514,11 @@ serve(async (req: Request) => {
       }
       task = await createVideoTask([imageUrl], finalPrompt, reqDuration, aspect_ratio, fixed_lens, generate_audio, resolution, video_style_mode, modelOverride);
     }
+    errorMetadata = {
+      ...errorMetadata,
+      task_id: task.task_id,
+      task_provider: task.status_provider ?? null,
+    };
 
     // If mode is 'async', return task_id immediately for frontend polling
     if (mode === "async") {
@@ -1426,6 +1534,7 @@ serve(async (req: Request) => {
     }
 
     // Default: poll until complete (synchronous)
+    errorStage = "task_poll";
     const result = await pollUntilComplete(task.task_id, task.status_provider);
 
     if ("error" in result) {
@@ -1460,7 +1569,16 @@ serve(async (req: Request) => {
       outputText: result.videoUrl,
       durationMs: Date.now() - startTime,
       status: "success",
-      metadata: { generation_type: generationType, task_id: task.task_id }
+      metadata: {
+        generation_type: generationType,
+        task_id: task.task_id,
+        task_provider: task.status_provider ?? null,
+        requested_model: errorModel,
+        duration: reqDuration ?? null,
+        aspect_ratio: aspect_ratio ?? null,
+        resolution: resolution ?? null,
+        child_safety_mode: modelOverride === "grok-imagine-video-1-5-preview",
+      }
     });
 
     return new Response(
@@ -1473,23 +1591,38 @@ serve(async (req: Request) => {
     );
   } catch (error) {
     console.error("[kie-image2video] Error:", error);
+    const rawMsg = error instanceof Error ? error.message : "Unknown error";
+    const fallbackCode = errorStage === "status_check"
+      ? "VIDEO_STATUS_CHECK_FAILED"
+      : errorStage === "task_create"
+        ? "VIDEO_START_FAILED"
+        : errorStage === "task_poll"
+          ? "VIDEO_POLL_FAILED"
+          : "VIDEO_GENERATION_FAILED";
+    const clientError = buildVideoClientError(rawMsg, fallbackCode);
     
     // Log AI usage for error
     await logAIFromRequest(req, {
       functionName: "freepik-image2video",
       provider: "kie.ai",
-      model: "kie-video",
-      inputText: "",
+      model: errorModel,
+      inputText: errorInputText,
       status: "error",
-      errorMessage: error instanceof Error ? error.message : "Unknown error",
+      errorMessage: rawMsg,
       durationMs: Date.now() - startTime,
+      metadata: {
+        ...errorMetadata,
+        error_stage: errorStage,
+        error_code: clientError.code,
+        retryable: clientError.retryable === true,
+        raw_error: rawMsg,
+      },
     });
     
-    const rawMsg = error instanceof Error ? error.message : "Unknown error";
     return new Response(
-      JSON.stringify({ error: sanitizeError(rawMsg) }),
+      JSON.stringify(clientError),
       {
-        status: 500,
+        status: clientError.code === "VIDEO_SAFETY_MINOR_DETECTED" ? 400 : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );

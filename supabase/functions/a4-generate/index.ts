@@ -98,6 +98,7 @@ function normalizeGenerationErrorMessage(message: string): string {
 const KIE_ENDPOINT = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_TEXT_MODEL = "gpt-image-2-text-to-image";
 const KIE_IMAGE_MODEL = "gpt-image-2-image-to-image";
+const KIE_MAX_PROMPT_CHARS = 9000;
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -205,29 +206,143 @@ async function extractBrandColors(
 // -----------------------------------------------------------------------------
 // Content splitter — deterministic, paragraph-boundary split for multi-page.
 // -----------------------------------------------------------------------------
+function hardSplitText(text: string, maxChars: number): string[] {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return [];
+  if (trimmed.length <= maxChars) return [trimmed];
+
+  const words = trimmed.split(/\s+/).filter(Boolean);
+  if (words.length <= 1) {
+    const chunks: string[] = [];
+    for (let start = 0; start < trimmed.length; start += maxChars) {
+      const chunk = trimmed.slice(start, start + maxChars).trim();
+      if (chunk) chunks.push(chunk);
+    }
+    return chunks;
+  }
+
+  const chunks: string[] = [];
+  let current = "";
+  for (const word of words) {
+    if (word.length > maxChars) {
+      if (current) {
+        chunks.push(current);
+        current = "";
+      }
+      for (let start = 0; start < word.length; start += maxChars) {
+        const piece = word.slice(start, start + maxChars).trim();
+        if (piece) chunks.push(piece);
+      }
+      continue;
+    }
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxChars && current) {
+      chunks.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+function splitLongTextBlock(text: string, maxChars: number): string[] {
+  const trimmed = (text ?? "").trim();
+  if (!trimmed) return [];
+  if (trimmed.length <= maxChars) return [trimmed];
+
+  const lines = trimmed.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length > 1) {
+    const chunks: string[] = [];
+    let current = "";
+    for (const line of lines) {
+      if (line.length > maxChars) {
+        if (current) {
+          chunks.push(current);
+          current = "";
+        }
+        chunks.push(...hardSplitText(line, maxChars));
+        continue;
+      }
+      const candidate = current ? `${current}\n${line}` : line;
+      if (candidate.length > maxChars && current) {
+        chunks.push(current);
+        current = line;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) chunks.push(current);
+    return chunks;
+  }
+
+  const sentences = trimmed.match(/[^.!?؟]+[.!?؟]*/g)?.map((sentence) => sentence.trim()).filter(Boolean) ?? [];
+  if (sentences.length > 1) {
+    const chunks: string[] = [];
+    let current = "";
+    for (const sentence of sentences) {
+      if (sentence.length > maxChars) {
+        if (current) {
+          chunks.push(current);
+          current = "";
+        }
+        chunks.push(...hardSplitText(sentence, maxChars));
+        continue;
+      }
+      const candidate = current ? `${current} ${sentence}` : sentence;
+      if (candidate.length > maxChars && current) {
+        chunks.push(current);
+        current = sentence;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) chunks.push(current);
+    return chunks;
+  }
+
+  return hardSplitText(trimmed, maxChars);
+}
+
 function splitContentIntoPages(rawContent: string, pageCount: 1 | 2 | 3, perPageBudget: number): string[] {
   const trimmed = (rawContent ?? "").trim();
   if (pageCount <= 1 || !trimmed) return [trimmed];
 
-  // Prefer splitting at blank-line paragraph boundaries; fall back to single-newline; finally hard-split on char count.
   const paragraphs = trimmed.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-  if (paragraphs.length === 0) return [trimmed];
+  const sourceBlocks = paragraphs.length > 0 ? paragraphs : [trimmed];
+  const segmentBudget = Math.max(500, Math.floor(perPageBudget * 0.9));
+  const segments = sourceBlocks.flatMap((block) => splitLongTextBlock(block, segmentBudget)).filter(Boolean);
+  if (segments.length === 0) return [trimmed];
 
-  // Accumulate paragraphs into buckets of ~perPageBudget chars until we fill pageCount buckets.
+  const totalLength = segments.reduce((sum, segment) => sum + segment.length, 0);
+  const targetLength = Math.max(segmentBudget, Math.ceil(totalLength / pageCount));
   const buckets: string[] = Array.from({ length: pageCount }, () => "");
   let idx = 0;
-  for (const para of paragraphs) {
-    const candidate = buckets[idx] ? `${buckets[idx]}\n\n${para}` : para;
-    if (candidate.length > perPageBudget && idx < pageCount - 1 && buckets[idx].length > 0) {
+  for (let i = 0; i < segments.length; i++) {
+    const segment = segments[i];
+    const remainingSegments = segments.length - i;
+    const remainingBuckets = pageCount - idx;
+    const candidate = buckets[idx] ? `${buckets[idx]}\n\n${segment}` : segment;
+    if (
+      idx < pageCount - 1 &&
+      buckets[idx].length > 0 &&
+      candidate.length > targetLength &&
+      remainingSegments >= remainingBuckets
+    ) {
       idx++;
-      buckets[idx] = para;
+      buckets[idx] = segment;
     } else {
       buckets[idx] = candidate;
     }
   }
-  // Remove empty trailing buckets
   while (buckets.length > 0 && !buckets[buckets.length - 1].trim()) buckets.pop();
   return buckets.length === 0 ? [trimmed] : buckets;
+}
+
+function buildOversizeErrorMessage(totalPages: number): string {
+  const pageLabel = totalPages === 1 ? "page" : "pages";
+  return `This document is too long or too detailed for ${totalPages} A4 ${pageLabel}. Shorten the content or split it into smaller parts, then try again.`;
 }
 
 // F7: Kie's gpt-image-2 supports 2:3 and 3:2 directly. The earlier remap
@@ -665,18 +780,11 @@ serve(async (req) => {
   }
 
   // Split content deterministically at paragraph boundaries.
-  const splitPages = splitContentIntoPages(rawContent, totalPages, theme.per_page_char_budget);
+  let splitPages = splitContentIntoPages(rawContent, totalPages, theme.per_page_char_budget);
   // If splitter produced fewer buckets than totalPages (short content), clamp.
   if (splitPages.length > 0 && splitPages.length < totalPages) {
     totalPages = splitPages.length as 1 | 2 | 3;
   }
-  const selectedResolution = chooseA4Resolution({
-    themeId: theme.id,
-    purposeId: body.purpose_id ?? null,
-    totalPages,
-    normalizedContent: rawContent,
-    formState: rawFormState,
-  });
 
   // Sanitize decoration chips (cap at max per side, trim, filter empty/dupes)
   const sanitizeChips = (arr: unknown): string[] => {
@@ -697,6 +805,57 @@ serve(async (req) => {
   const decorWanted = sanitizeChips(body.decorations_wanted);
   const decorUnwanted = sanitizeChips(body.decorations_unwanted);
   const inputMode: A4InputMode = body.input_mode === "idea" ? "idea" : "content_ready";
+  const creativeSettings = body.creative_settings ?? null;
+  const page1ImageInputs = logoSignedUrl ? [logoSignedUrl] : [];
+  const page1UseImageModel = shouldUseKieImageToImage({
+    themeId: theme.id,
+    purposeId: body.purpose_id ?? null,
+    referenceImageRole,
+    hasPrevPageReference: false,
+    imageInputCount: page1ImageInputs.length,
+  });
+  const buildPagePrompt = (pageText: string, pageNumber: number, candidateTotalPages: 1 | 2 | 3) =>
+    compileMasterPrompt({
+      theme,
+      purposeId: body.purpose_id ?? null,
+      formState,
+      rawContent: pageText,
+      pageNumber,
+      totalPages: candidateTotalPages,
+      languageMode: detectedLanguage,
+      brandColors: pageNumber === 1 ? brandColors ?? null : null,
+      hasLogoReference: pageNumber === 1 && page1UseImageModel && page1ImageInputs.length > 0,
+      hasPrevPageReference: false,
+      designSettings: designSettings,
+      creativeSettings,
+      userWishes,
+      referenceImageRole,
+      decorationsWanted: decorWanted,
+      decorationsUnwanted: decorUnwanted,
+    });
+  let candidatePrompts = splitPages.map((pageText, idx) => buildPagePrompt(pageText, idx + 1, totalPages));
+  while (
+    requestedPages === "auto" &&
+    candidatePrompts.some((prompt) => prompt.length > KIE_MAX_PROMPT_CHARS) &&
+    totalPages < maxPages
+  ) {
+    totalPages = Math.min(maxPages, totalPages + 1) as 1 | 2 | 3;
+    splitPages = splitContentIntoPages(rawContent, totalPages, theme.per_page_char_budget);
+    if (splitPages.length > 0 && splitPages.length < totalPages) {
+      totalPages = splitPages.length as 1 | 2 | 3;
+    }
+    candidatePrompts = splitPages.map((pageText, idx) => buildPagePrompt(pageText, idx + 1, totalPages));
+  }
+  if (candidatePrompts.some((prompt) => prompt.length > KIE_MAX_PROMPT_CHARS)) {
+    return json(400, { success: false, error: buildOversizeErrorMessage(totalPages) });
+  }
+  const selectedResolution = chooseA4Resolution({
+    themeId: theme.id,
+    purposeId: body.purpose_id ?? null,
+    totalPages,
+    normalizedContent: rawContent,
+    formState: rawFormState,
+  });
 
   // F13: Lightweight moderation log for free-text user wishes. Logged to
   // edge-function logs only — not stored in DB — so abuse can be reviewed
@@ -709,7 +868,6 @@ serve(async (req) => {
 
   // Stash creative_settings + split pages inside form_state internal keys so
   // a4-callback can recompile pages 2+ without a schema change.
-  const creativeSettings = body.creative_settings ?? null;
   const callbackToken = crypto.randomUUID();
   // F12: Page 1 stores the FULL internals (split pages, settings, wishes,
   // chips). Pages 2+ store only what their callback needs to validate the
@@ -773,33 +931,7 @@ serve(async (req) => {
 
   const promptSource = "deterministic" as const;
 
-  const page1ImageInputs = logoSignedUrl ? [logoSignedUrl] : [];
-  const page1UseImageModel = shouldUseKieImageToImage({
-    themeId: theme.id,
-    purposeId: body.purpose_id ?? null,
-    referenceImageRole,
-    hasPrevPageReference: false,
-    imageInputCount: page1ImageInputs.length,
-  });
-
-  const page1Prompt = compileMasterPrompt({
-    theme,
-    purposeId: body.purpose_id ?? null,
-    formState,
-    rawContent: splitPages[0] ?? rawContent,
-    pageNumber: 1,
-    totalPages,
-    languageMode: detectedLanguage,
-    brandColors: brandColors ?? null,
-    hasLogoReference: page1UseImageModel && page1ImageInputs.length > 0,
-    hasPrevPageReference: false,
-    designSettings: designSettings,
-    creativeSettings,
-    userWishes,
-    referenceImageRole,
-    decorationsWanted: decorWanted,
-    decorationsUnwanted: decorUnwanted,
-  });
+  const page1Prompt = candidatePrompts[0] ?? buildPagePrompt(splitPages[0] ?? rawContent, 1, totalPages);
   // Dispatch Kie createTask for page 1
   const callbackUrl = buildCallbackUrl(SUPABASE_URL, batchId, 1, callbackToken);
   const kieResult = await dispatchKieTask({

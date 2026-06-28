@@ -78,6 +78,8 @@ interface VideoInvokeErrorPayload {
   feature?: string;
   reason?: 'feature_locked' | 'limit_reached' | 'trial_expired';
   message?: string;
+  retryable?: boolean;
+  highlight_child_safety_toggle?: boolean;
   consumed?: number;
   limit?: number;
   remaining?: number;
@@ -250,23 +252,43 @@ const parseInvokeErrorPayload = async (error: unknown): Promise<VideoInvokeError
   }
 };
 
+const shouldHighlightChildSafetyToggle = (payload: VideoInvokeErrorPayload | null): boolean => {
+  if (!payload) return false;
+
+  if (payload.highlight_child_safety_toggle === true) return true;
+
+  const rawCode = String(payload.code || '').toLowerCase();
+  const rawError = String(payload.error || '').toLowerCase();
+  const rawMessage = String(payload.message || '').toLowerCase();
+
+  return rawCode === 'video_safety_minor_detected'
+    || rawError.includes('minor upload')
+    || rawMessage.includes('minor upload')
+    || rawError.includes('public error minor upload')
+    || rawMessage.includes('public error minor upload')
+    || rawError.includes('involving minors')
+    || rawMessage.includes('involving minors')
+    || rawError.includes('contains a child')
+    || rawMessage.includes('contains a child');
+};
+
 const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null, language: string): string | null => {
   if (!payload) return null;
 
   const rawCode = String(payload.code || '').toLowerCase();
   const rawError = String(payload.error || '').toLowerCase();
   const rawMessage = String(payload.message || '').toLowerCase();
-  const hasMinorUploadError =
-    rawCode === '400' ||
-    rawError.includes('minor upload') ||
-    rawMessage.includes('minor upload') ||
-    rawError.includes('public error minor upload') ||
-    rawMessage.includes('public error minor upload');
 
-  if (hasMinorUploadError) {
+  if (shouldHighlightChildSafetyToggle(payload)) {
     return language === 'ar'
-      ? 'تحتوي الصورة على طفل، ووفقًا لسياسات الخصوصية لدينا فهذا غير مسموح.'
-      : 'The image contains a child, and as per our privacy policy this is not allowed.';
+      ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي. فعّل زر أمان الأطفال ثم حاول مرة أخرى.'
+      : 'Wakti safety rules blocked this request. Please enable the Child Safety toggle and try again.';
+  }
+
+  if (rawCode === 'video_temporary_unavailable') {
+    return language === 'ar'
+      ? 'إنشاء الفيديو غير متاح مؤقتًا الآن. حاول مرة أخرى بعد قليل.'
+      : 'Video generation is temporarily unavailable right now. Please try again in a moment.';
   }
 
   if (payload.code === 'MONTHLY_VIDEO_LIMIT_REACHED' || payload.error === 'MONTHLY_VIDEO_LIMIT_REACHED') {
@@ -312,6 +334,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const showPromptBlockedPopup = useCallback((message: string) => {
     setPromptBlockedMessage(message);
     setShowPromptBlockedDialog(true);
+  }, []);
+  const triggerKidsModeToggleHighlight = useCallback(() => {
+    setHighlightKidsModeToggle(true);
+    kidsModeToggleRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (kidsModeHighlightTimeoutRef.current) {
+      window.clearTimeout(kidsModeHighlightTimeoutRef.current);
+    }
+    kidsModeHighlightTimeoutRef.current = window.setTimeout(() => {
+      setHighlightKidsModeToggle(false);
+    }, 6000);
   }, []);
 
   // State
@@ -363,10 +395,29 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [savedImages, setSavedImages] = useState<{id:string; image_url:string; submode:string; created_at:string}[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [pickingForSlot, setPickingForSlot] = useState<1 | 2>(1);
+  const [highlightKidsModeToggle, setHighlightKidsModeToggle] = useState(false);
   const pollInFlightRef = useRef(false);
   const usageIncrementedRef = useRef(false);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const taskProviderRef = useRef<'kie' | 'veo' | null>(null);
+  const kidsModeToggleRef = useRef<HTMLButtonElement | null>(null);
+  const kidsModeHighlightTimeoutRef = useRef<number | null>(null);
+  const handleKidsModeToggle = useCallback(() => {
+    if (isGenerating) return;
+    const nextValue = !isKidsContentMode;
+    setIsKidsContentMode(nextValue);
+    setHighlightKidsModeToggle(false);
+    if (kidsModeHighlightTimeoutRef.current) {
+      window.clearTimeout(kidsModeHighlightTimeoutRef.current);
+      kidsModeHighlightTimeoutRef.current = null;
+    }
+    if (nextValue) {
+      setDuration('6');
+      setResolution('720p');
+    } else if (resolution === '480p') {
+      setResolution('720p');
+    }
+  }, [isGenerating, isKidsContentMode, resolution]);
 
   // Trial access check — Ads Creator is locked for 24-hour trial users
   const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
@@ -532,6 +583,18 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setResolution('480p');
     }
   }, [generationMode, isKidsContentMode, duration, resolution]);
+
+  useEffect(() => {
+    if (generationMode !== 'image_to_video') {
+      setHighlightKidsModeToggle(false);
+    }
+  }, [generationMode]);
+
+  useEffect(() => {
+    if (isKidsContentMode) {
+      setHighlightKidsModeToggle(false);
+    }
+  }, [isKidsContentMode]);
 
   // Typewriter effect component for Cinema scene cards
   const TypewriterText = ({ text, delay = 0, className = '' }: { text: string; delay?: number; className?: string }) => {
@@ -994,6 +1057,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
+      if (kidsModeHighlightTimeoutRef.current) {
+        window.clearTimeout(kidsModeHighlightTimeoutRef.current);
+      }
     };
   }, []);
 
@@ -1105,7 +1171,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         taskProviderRef.current = null;
       } else if (status === 'failed' || status === 'error') {
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-        throw new Error(data?.data?.error || 'Video generation failed');
+        const statusPayload: VideoInvokeErrorPayload = {
+          error: data?.data?.error,
+          code: data?.data?.code,
+          message: data?.data?.message,
+          retryable: data?.data?.retryable,
+        };
+        if (shouldHighlightChildSafetyToggle(statusPayload)) {
+          triggerKidsModeToggleHighlight();
+        }
+        throw new Error(getVideoGenerationErrorMessage(statusPayload, language) || data?.data?.message || data?.data?.error || 'Video generation failed');
       } else {
         // Still processing - update progress
         setGenerationProgress((prev) => Math.min(prev + 5, 90));
@@ -1119,6 +1194,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setGenerationProgress(0);
       setGenerationStatus('');
       const errorPayload = await parseInvokeErrorPayload(e);
+      if (shouldHighlightChildSafetyToggle(errorPayload)) {
+        triggerKidsModeToggleHighlight();
+      }
       const friendlyMessage = getVideoGenerationErrorMessage(errorPayload, language);
       const msg = friendlyMessage || errorPayload?.error || errorPayload?.message || e?.message || '';
       const userMsg = msg.includes('generation failed')
@@ -1128,7 +1206,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [language, loadQuota, loadLatestVideo, saveGeneratedVideoToMyVideos]);
+  }, [language, loadQuota, loadLatestVideo, saveGeneratedVideoToMyVideos, triggerKidsModeToggleHighlight]);
 
   const handleGenerate = async () => {
     // Validate based on mode
@@ -1387,6 +1465,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           return;
         }
 
+        if (shouldHighlightChildSafetyToggle(errorPayload)) {
+          triggerKidsModeToggleHighlight();
+        }
         const friendlyMessage = getVideoGenerationErrorMessage(errorPayload, language);
         throw new Error(friendlyMessage || error.message || 'Failed to start video generation');
       }
@@ -1404,6 +1485,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       }
 
       if (!data?.ok || !data?.task_id) {
+        if (shouldHighlightChildSafetyToggle(data)) {
+          triggerKidsModeToggleHighlight();
+        }
         throw new Error(getVideoGenerationErrorMessage(data, language) || data?.error || 'Failed to create video task');
       }
 
@@ -2749,19 +2833,14 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (isGenerating) return;
-                        const nextValue = !isKidsContentMode;
-                        setIsKidsContentMode(nextValue);
-                        if (nextValue) {
-                          setDuration('6');
-                          setResolution('720p');
-                        } else {
-                          if (resolution === '480p') setResolution('720p');
-                        }
-                      }}
+                      ref={kidsModeToggleRef}
+                      onClick={handleKidsModeToggle}
                       disabled={isGenerating}
-                      className="rounded-xl border border-primary/20 bg-background/60 p-3 text-left transition-all hover:border-primary/40 disabled:opacity-60"
+                      className={`rounded-xl border bg-background/60 p-3 text-left transition-all disabled:opacity-60 ${
+                        highlightKidsModeToggle
+                          ? 'border-[hsl(210,100%,65%)] shadow-[0_0_24px_hsla(210,100%,65%,0.35)] ring-2 ring-[hsl(210,100%,65%)]/40'
+                          : 'border-primary/20 hover:border-primary/40'
+                      }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -2786,39 +2865,84 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           />
                         </span>
                       </div>
+                      {highlightKidsModeToggle && !isKidsContentMode && (
+                        <p className="mt-2 text-[11px] font-semibold text-[hsl(210,100%,65%)]">
+                          {language === 'ar' ? 'فعّل هذا الزر ثم أعد المحاولة.' : 'Turn this ON and try again.'}
+                        </p>
+                      )}
                     </button>
                   </div>
                 ) : (
-                  <div className="relative h-full min-h-[200px]">
-                    <div className="h-full rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-primary/30">
-                      <img
-                        src={imagePreview}
-                        alt="Selected"
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-                    {/* Always visible X button */}
-                    <Button
-                      variant="destructive"
-                      size="icon"
-                      className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
-                      onClick={clearImage}
-                      disabled={isGenerating}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                    {/* Change button at bottom */}
-                    <div className="absolute bottom-2 left-2 right-2">
+                  <div className="flex h-full min-h-[200px] flex-col gap-3">
+                    <div className="relative flex-1">
+                      <div className="h-full rounded-2xl overflow-hidden bg-black/90 shadow-2xl shadow-black/50 ring-2 ring-primary/30">
+                        <img
+                          src={imagePreview}
+                          alt="Selected"
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
                       <Button
-                        variant="secondary"
-                        size="sm"
-                        className="w-full h-8 text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
-                        onClick={() => fileInputRef.current?.click()}
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-2 right-2 h-8 w-8 rounded-full shadow-lg bg-red-500 hover:bg-red-600"
+                        onClick={clearImage}
                         disabled={isGenerating}
                       >
-                        {language === 'ar' ? 'تغيير الصورة' : 'Change Image'}
+                        <X className="h-4 w-4" />
                       </Button>
+                      <div className="absolute bottom-2 left-2 right-2">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="w-full h-8 text-xs bg-white/90 hover:bg-white text-black rounded-lg shadow-lg"
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={isGenerating}
+                        >
+                          {language === 'ar' ? 'تغيير الصورة' : 'Change Image'}
+                        </Button>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      ref={kidsModeToggleRef}
+                      onClick={handleKidsModeToggle}
+                      disabled={isGenerating}
+                      className={`rounded-xl border bg-background/60 p-3 text-left transition-all disabled:opacity-60 ${
+                        highlightKidsModeToggle
+                          ? 'border-[hsl(210,100%,65%)] shadow-[0_0_24px_hsla(210,100%,65%,0.35)] ring-2 ring-[hsl(210,100%,65%)]/40'
+                          : 'border-primary/20 hover:border-primary/40'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold text-foreground">
+                            {language === 'ar' ? 'وضع أمان الأطفال' : 'Child Safety Mode'}
+                          </p>
+                          <p className="mt-1 text-[11px] text-muted-foreground/90">
+                            {language === 'ar'
+                              ? 'فعّل هذا الخيار إذا كانت الصورة تحتوي على طفل، وفقًا لسياساتنا.'
+                              : 'Turn this ON when the image contains a child, as per our policies.'}
+                          </p>
+                        </div>
+                        <span
+                          className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors ${
+                            isKidsContentMode ? 'bg-[hsl(210,100%,65%)]' : 'bg-muted-foreground/30'
+                          }`}
+                        >
+                          <span
+                            className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                              isKidsContentMode ? 'translate-x-5' : 'translate-x-0.5'
+                            }`}
+                          />
+                        </span>
+                      </div>
+                      {highlightKidsModeToggle && !isKidsContentMode && (
+                        <p className="mt-2 text-[11px] font-semibold text-[hsl(210,100%,65%)]">
+                          {language === 'ar' ? 'فعّل هذا الزر ثم أعد المحاولة.' : 'Turn this ON and try again.'}
+                        </p>
+                      )}
+                    </button>
                   </div>
                 )}
 
