@@ -335,15 +335,17 @@ export default function GitHubPanel({
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
                 {isPrivate ? <Lock className="h-3.5 w-3.5" /> : <Unlock className="h-3.5 w-3.5" />}
-                {isRTL ? (isPrivate ? 'مستودع خاص' : 'مستودع عام') : (isPrivate ? 'Private repo' : 'Public repo')}
+                {isRTL ? 'مستودع خاص' : 'Private repo'}
               </span>
               <button
+                role="switch"
+                aria-checked={isPrivate}
                 onClick={() => setIsPrivate(p => !p)}
-                className={`relative w-11 h-6 rounded-full transition-colors ${
-                  isPrivate ? 'bg-zinc-800 dark:bg-zinc-600' : 'bg-zinc-200 dark:bg-zinc-700'
+                className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                  isPrivate ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-600'
                 }`}
               >
-                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform shadow ${
+                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-200 shadow ${
                   isPrivate ? 'translate-x-6' : 'translate-x-1'
                 }`} />
               </button>

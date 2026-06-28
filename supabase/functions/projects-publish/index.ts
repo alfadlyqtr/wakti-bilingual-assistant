@@ -760,11 +760,18 @@ serve(async (req) => {
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Check if another project already owns this subdomain (case-insensitive)
+    // Also load custom_domain so we can re-assign it after redeploy
     const { data: existing, error: checkErr } = await supabaseAdmin
       .from("projects")
-      .select("id,user_id")
+      .select("id,user_id,custom_domain")
       .ilike("subdomain", projectSlug)
       .maybeSingle();
+
+    // Load current project's custom_domain for re-assignment
+    const { data: currentProject } = projectId
+      ? await supabaseAdmin.from("projects").select("custom_domain").eq("id", projectId).single()
+      : { data: null };
+    const existingCustomDomain = (currentProject as any)?.custom_domain as string | null ?? null;
 
     if (checkErr) {
       console.error("[projects-publish] subdomain check error:", checkErr);
@@ -805,6 +812,22 @@ serve(async (req) => {
       deploymentId: result.id,
       alias: subdomainAlias,
     });
+
+    // Re-assign custom domain if the project already has one
+    if (existingCustomDomain) {
+      try {
+        await assignVercelAlias({
+          token: VERCEL_TOKEN,
+          teamId,
+          deploymentId: result.id,
+          alias: existingCustomDomain,
+        });
+        console.log("[projects-publish] Custom domain re-assigned:", existingCustomDomain);
+      } catch (domainErr) {
+        // Non-fatal — subdomain alias already succeeded, log and continue
+        console.warn("[projects-publish] Custom domain re-assign failed (non-fatal):", domainErr);
+      }
+    }
 
     const finalUrl = `https://${subdomainAlias}`;
     console.log("[projects-publish] Published successfully:", finalUrl);

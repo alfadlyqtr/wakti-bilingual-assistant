@@ -122,6 +122,7 @@ import {
 } from '@/utils/chatIntents';
 import { buildProjectStaticPublishFiles, getProjectEntryPoint } from '@/utils/projectRuntimeHtml';
 import GitHubPanel from '@/components/projects/GitHubPanel';
+import CustomDomainSection from '@/components/projects/CustomDomainSection';
 import {
   analyzeIntent,
   IntentResult,
@@ -292,8 +293,9 @@ export default function ProjectDetail() {
   const thinkingStartTimeRef = useRef<number | null>(null);
 
   // Trial user check — used to block publish and limit projects
-  const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
+  const { isSubscribed, isAdminGifted, hasTrialStarted, profile } = useUserProfile();
   const isTrialUser = !isSubscribed && !isAdminGifted && hasTrialStarted;
+  const githubConnected = !!(profile?.settings as any)?.github_token;
 
   const [project, setProject] = useState<Project | null>(null);
   const [files, setFiles] = useState<ProjectFile[]>([]);
@@ -9558,6 +9560,7 @@ ${fixInstructions}
                       onPublish={openPublishModal}
                       isPublishing={publishing}
                       onGitHub={() => setShowGitHubPanel(true)}
+                      githubConnected={githubConnected}
                       isRTL={isRTL}
                       onElementSelect={(ref, elementInfo) => {
                         if (elementInfo) {
@@ -9849,6 +9852,17 @@ ${fixInstructions}
                 </p>
               )}
             </div>
+
+            {/* Custom Domain — only shown when project is already published */}
+            {projectHasLiveDeployment && (
+              <div className="pt-1 border-t border-zinc-200 dark:border-zinc-700">
+                <CustomDomainSection
+                  projectId={id || ''}
+                  initialDomain={(project as any)?.custom_domain ?? null}
+                  isRTL={isRTL}
+                />
+              </div>
+            )}
 
             {/* Actions */}
             <div className="flex gap-3 pt-2">

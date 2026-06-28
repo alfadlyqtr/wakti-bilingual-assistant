@@ -863,6 +863,7 @@ interface SandpackStudioProps {
   onPublish?: () => void;
   isPublishing?: boolean;
   onGitHub?: () => void;
+  githubConnected?: boolean;
   isRTL?: boolean;
 }
 
@@ -883,6 +884,7 @@ export default function SandpackStudio({
   onPublish,
   isPublishing = false,
   onGitHub,
+  githubConnected = false,
   isRTL = false
 }: SandpackStudioProps) {
   const [viewMode, setViewMode] = useState<'preview' | 'code'>('preview');
@@ -1556,8 +1558,9 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                 onClick={onGitHub}
                 className="flex items-center gap-2 cursor-pointer"
               >
-                <Github className="h-4 w-4" />
+                <Github className={`h-4 w-4 ${githubConnected ? 'text-emerald-500' : ''}`} />
                 <span>Push to GitHub</span>
+                {githubConnected && <span className="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-500" />}
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />

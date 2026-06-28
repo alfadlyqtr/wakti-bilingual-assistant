@@ -639,12 +639,12 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       setAiTranscript(finalTranscript);
       syncAssistantMessage(finalTranscript);
     }
-    bumpAssistantPlaybackLock(1300);
+    bumpAssistantPlaybackLock(700);
     assistantAwaitingOutputAudioDoneRef.current = false;
     assistantResponseActiveRef.current = false;
     setError(null);
     if (isConversationActiveRef.current) {
-      rearmListening(650);
+      rearmListening(200);
     } else {
       setStatus('ready');
     }
@@ -1783,28 +1783,29 @@ ${memoryContext ? memoryContext : ''}`
       case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done':
         // AI transcript completed - keep buffering, finalize on output-audio done.
-        bumpAssistantPlaybackLock(1700);
+        bumpAssistantPlaybackLock(900);
         if (msg.transcript) {
           updateAssistantTranscript(msg.transcript, 'replace');
         }
         // Safety fallback only (in case done events are delayed/missing).
-        scheduleAssistantTurnRecovery(5200);
+        scheduleAssistantTurnRecovery(2000);
         break;
       case 'response.output_audio.done':
       case 'response.audio.done':
         console.log('[Talk] Output audio done - finishing assistant turn');
         assistantAwaitingOutputAudioDoneRef.current = false;
-        bumpAssistantPlaybackLock(1300);
+        bumpAssistantPlaybackLock(600);
         finishAssistantTurn(msg);
         break;
       case 'response.done':
         if (assistantAwaitingOutputAudioDoneRef.current) {
           console.log('[Talk] Response complete - waiting for output audio to finish');
-          bumpAssistantPlaybackLock(1700);
-          scheduleAssistantTurnRecovery(4200);
+          setStatus('ready');
+          bumpAssistantPlaybackLock(900);
+          scheduleAssistantTurnRecovery(1200);
         } else {
           console.log('[Talk] Response complete - ready for next turn');
-          bumpAssistantPlaybackLock(1300);
+          bumpAssistantPlaybackLock(700);
           finishAssistantTurn(msg);
         }
         break;
