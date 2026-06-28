@@ -127,7 +127,7 @@ export function buildProjectStaticPublishFiles({
   <script src="https://cdn.jsdelivr.net/npm/framer-motion@6.5.1/dist/framer-motion.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
   <script>
     window.FramerMotion = window.FramerMotion || window.Motion || null;
     if (typeof window.lucide !== 'undefined' && window.lucide) {
