@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Github, X, ExternalLink, AlertTriangle, CheckCircle2, Loader2, GitBranch, Lock, Unlock, Key } from 'lucide-react';
+import { Github, X, ExternalLink, CheckCircle2, Loader2, GitBranch, Lock, Unlock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,6 +29,7 @@ export default function GitHubPanel({
 
   // ── Connection state ──────────────────────────────────────────────────────
   const [pat, setPat] = useState('');
+  const [showPat, setShowPat] = useState(false);
   const [savingToken, setSavingToken] = useState(false);
   const [connected, setConnected] = useState(false);
 
@@ -199,30 +200,53 @@ export default function GitHubPanel({
         {/* ── Not connected ── */}
         {!connected && (
           <div className="space-y-4">
-            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 text-xs text-amber-700 dark:text-amber-300 space-y-1">
-              <p className="font-semibold flex items-center gap-1.5">
-                <Key className="h-3.5 w-3.5" />
-                {isRTL ? 'كيفية الحصول على الرمز:' : 'How to get your token:'}
+            {/* Step 1: one-click token generation */}
+            <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 space-y-3">
+              <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide">
+                {isRTL ? 'الخطوة ١ — احصل على رمز GitHub' : 'Step 1 — Get a GitHub Token'}
               </p>
-              <ol className={`space-y-0.5 ${isRTL ? 'pr-4' : 'pl-4'} list-decimal`}>
-                <li>{isRTL ? 'اذهب إلى github.com ← Settings ← Developer settings' : 'Go to github.com → Settings → Developer settings'}</li>
-                <li>{isRTL ? 'Personal access tokens ← Tokens (classic)' : 'Personal access tokens → Tokens (classic)'}</li>
-                <li>{isRTL ? 'أنشئ رمزاً جديداً مع صلاحية "repo"' : 'Generate new token with "repo" scope'}</li>
-              </ol>
+              <a
+                href="https://github.com/settings/tokens/new?scopes=repo&description=Wakti+AI+Coder"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between w-full px-4 py-3 rounded-xl bg-zinc-900 dark:bg-zinc-700 hover:bg-zinc-800 dark:hover:bg-zinc-600 text-white transition-colors text-sm font-semibold group"
+              >
+                <div className="flex items-center gap-2">
+                  <Github className="h-4 w-4" />
+                  {isRTL ? 'إنشاء رمز على GitHub →' : 'Generate Token on GitHub'}
+                </div>
+                <ArrowRight className="h-4 w-4 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+              </a>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                {isRTL
+                  ? 'انقر على الزر، ثم مرر للأسفل واضغط "Generate token"، ثم انسخ الرمز الناتج'
+                  : 'Click the button, scroll down and click "Generate token", then copy the result'}
+              </p>
             </div>
 
-            <div>
-              <label className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 block mb-1.5">
-                {isRTL ? 'Personal Access Token' : 'Personal Access Token'}
-              </label>
-              <input
-                type="password"
-                value={pat}
-                onChange={e => setPat(e.target.value)}
-                placeholder="ghp_..."
-                className="w-full px-3 py-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500/40 placeholder:text-zinc-400 font-mono"
-                autoFocus
-              />
+            {/* Step 2: paste token */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide">
+                {isRTL ? 'الخطوة ٢ — الصق الرمز هنا' : 'Step 2 — Paste the token here'}
+              </p>
+              <div className="relative">
+                <input
+                  type={showPat ? 'text' : 'password'}
+                  value={pat}
+                  onChange={e => setPat(e.target.value)}
+                  placeholder="ghp_..."
+                  className="w-full px-3 py-2.5 pr-10 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-zinc-500/40 placeholder:text-zinc-400 font-mono"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPat(p => !p)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                  tabIndex={-1}
+                >
+                  {showPat ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
 
             <button
@@ -233,7 +257,7 @@ export default function GitHubPanel({
               {savingToken ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />{isRTL ? 'جاري التحقق...' : 'Verifying...'}</>
               ) : (
-                <><Github className="h-4 w-4" />{isRTL ? 'ربط GitHub' : 'Connect GitHub'}</>
+                <><CheckCircle2 className="h-4 w-4" />{isRTL ? 'ربط GitHub' : 'Connect GitHub'}</>
               )}
             </button>
           </div>

@@ -3,7 +3,7 @@ import { X, Mic, Search, MessageCircle } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useUserProfile } from '@/hooks/useUserProfile';
 import { supabase } from '@/integrations/supabase/client';
-import { DEFAULT_VOICES } from './TalkBackSettings';
+import { DEFAULT_VOICES, getSelectedVoices } from './TalkBackSettings';
 import { getNativeLocation } from '@/integrations/natively/locationBridge';
 
 interface TalkBubbleProps {
@@ -100,8 +100,8 @@ function cleanSearchQuery(transcript: string): string {
   return cleaned;
 }
 
-function getOpenAIVoiceForGender(gender: 'male' | 'female'): 'echo' | 'shimmer' {
-  return gender === 'female' ? 'shimmer' : 'echo';
+function getOpenAIVoiceForGender(gender: 'male' | 'female'): 'cedar' | 'marin' {
+  return gender === 'female' ? 'marin' : 'cedar';
 }
 
 export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage }: TalkBubbleProps) {
@@ -204,6 +204,37 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   useEffect(() => {
     aiTranscriptRef.current = aiTranscript;
   }, [aiTranscript]);
+
+  const syncVoiceFromDrawer = useCallback((reason: 'language-sync' | 'drawer-change') => {
+    try {
+      const appLang: 'ar' | 'en' = language === 'ar' ? 'ar' : 'en';
+      const { ar, en } = getSelectedVoices();
+      const selectedVoice = appLang === 'ar' ? ar : en;
+      const femaleVoice = appLang === 'ar' ? DEFAULT_VOICES.ar.female : DEFAULT_VOICES.en.female;
+      const gender: 'male' | 'female' = selectedVoice === femaleVoice ? 'female' : 'male';
+
+      setVoiceGender(gender);
+      voiceGenderRef.current = gender;
+
+      console.log('[Talk] Voice synced from drawer', {
+        reason,
+        appLang,
+        selectedVoice,
+        gender,
+        openaiVoice: getOpenAIVoiceForGender(gender),
+      });
+
+      return gender;
+    } catch (error) {
+      console.warn('[Talk] Failed to sync voice from drawer:', error);
+      return voiceGenderRef.current;
+    }
+  }, [language]);
+
+  useEffect(() => {
+    detectedLanguageRef.current = language === 'ar' ? 'ar' : 'en';
+    syncVoiceFromDrawer('language-sync');
+  }, [language, syncVoiceFromDrawer]);
 
   const setMicTracksEnabled = useCallback((enabled: boolean) => {
     if (streamRef.current) {
@@ -773,7 +804,7 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     return section;
   }, []);
 
-  // Fetch user's nickname from PersonalTouchManager and voice gender from TTS settings
+  // Fetch user's nickname from PersonalTouchManager and location
   useEffect(() => {
     const fetchUserData = async () => {
       // Get nickname from PersonalTouchManager settings (localStorage)
@@ -789,31 +820,6 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
         }
       } catch (e) {
         console.warn('[Talk] Could not fetch nickname from PersonalTouch:', e);
-      }
-
-      // Get voice gender from Talk Back settings (localStorage)
-      try {
-        const lsKey = language === 'ar' ? 'wakti_tts_voice_ar' : 'wakti_tts_voice_en';
-        const savedVoice = localStorage.getItem(lsKey) || '';
-        const femaleVoice = language === 'ar' ? DEFAULT_VOICES.ar.female : DEFAULT_VOICES.en.female;
-        const maleVoice = language === 'ar' ? DEFAULT_VOICES.ar.male : DEFAULT_VOICES.en.male;
-        
-        // Check if it's female voice
-        const isFemale = savedVoice === femaleVoice;
-        const gender = isFemale ? 'female' : 'male';
-        
-        console.log('[Talk] Voice gender check:', {
-          savedVoice,
-          femaleVoice,
-          maleVoice,
-          isFemale,
-          gender
-        });
-        
-        setVoiceGender(gender);
-        voiceGenderRef.current = gender;
-      } catch (e) {
-        console.warn('[Talk] Could not get voice gender:', e);
       }
 
       // Get user location - try Natively SDK first, then fallback to profile
@@ -1250,6 +1256,8 @@ What to do instead:
           `You are WAKTI — a warm, natural voice assistant. You're having a real conversation, not reading from a manual. ${personalTouch}
 ${locationContext}
 
+LANGUAGE RULE (MANDATORY): Reply in English only. Do not switch to Arabic unless the user explicitly asks to switch language.
+
 VOICE STYLE (this is SPEECH, not text — every rule matters):
 - Talk like a smart friend, but keep phrasing clean and clear.
 - Natural contractions are fine, but avoid filler/disfluencies like "you know", "like", "um", repeated starts, or rambling lead-ins.
@@ -1286,8 +1294,7 @@ ${memoryContext ? memoryContext : ''}`
         );
         
         // Select OpenAI Realtime voice based on Talk Back settings
-        // Valid voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, mann, cedar
-        // male=echo (deep), female=shimmer (expressive)
+        // Premium quality picks from OpenAI: male=cedar, female=marin
         const openaiVoice = getOpenAIVoiceForGender(currentVoiceGender);
         console.log('[Talk] Instructions:', instructions);
         console.log('[Talk] User name:', currentUserName, '| Voice:', openaiVoice, '(gender:', currentVoiceGender, ')');
@@ -1552,6 +1559,40 @@ ${memoryContext ? memoryContext : ''}`
     }
   }, [buildMemoryContext, buildPersonalTouchSection, language, sendRealtimeClientEvent, startMicLevelAnimation, t]);
 
+  useEffect(() => {
+    const handleVoiceChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{ lang?: 'ar' | 'en'; voiceId?: string }>).detail;
+      const appLang: 'ar' | 'en' = language === 'ar' ? 'ar' : 'en';
+      if (detail?.lang && detail.lang !== appLang) {
+        return;
+      }
+
+      const nextGender = syncVoiceFromDrawer('drawer-change');
+
+      if (!isOpen || !isConnectionReady) {
+        return;
+      }
+
+      if (isConversationActiveRef.current || assistantResponseActiveRef.current) {
+        setDebugHint(t(
+          'Voice setting saved. It will apply after this turn.',
+          'تم حفظ إعداد الصوت. سيُطبَّق بعد انتهاء هذه الجولة.'
+        ));
+        return;
+      }
+
+      console.log('[Talk] Reconnecting to apply updated drawer voice', {
+        nextGender,
+        openaiVoice: getOpenAIVoiceForGender(nextGender),
+      });
+      pendingAutoStartAfterConnectRef.current = false;
+      void initializeConnection();
+    };
+
+    window.addEventListener('wakti-tts-voice-changed', handleVoiceChanged as EventListener);
+    return () => window.removeEventListener('wakti-tts-voice-changed', handleVoiceChanged as EventListener);
+  }, [initializeConnection, isConnectionReady, isOpen, language, syncVoiceFromDrawer, t]);
+
   // Initialize connection when Talk bubble opens
   useEffect(() => {
     if (isOpen) {
@@ -1658,20 +1699,27 @@ ${memoryContext ? memoryContext : ''}`
           }
 
           const detectedLangResult = detectTranscriptLanguage(transcript);
-          const fallbackLang: 'ar' | 'en' = detectedLanguageRef.current || (language === 'ar' ? 'ar' : 'en');
-          const detectedLang = detectedLangResult === 'unknown' ? fallbackLang : detectedLangResult;
+          const appLang: 'ar' | 'en' = language === 'ar' ? 'ar' : 'en';
+          const detectedLang = appLang;
 
           disableNoiseGuard(true);
           resetNoiseStrikes();
 
           if (detectedLangResult === 'unknown') {
-            console.warn('[Talk] Transcript language unknown; using fallback language:', detectedLang, transcript);
-            setDebugHint(tLang(detectedLang, 'I heard you, but language detection was unclear. Continuing…', 'سمعتك، لكن تحديد اللغة غير واضح. مستمر...'));
+            console.warn('[Talk] Transcript language unknown; locking to app language:', appLang, transcript);
+            setDebugHint(tLang(appLang, 'I heard you. I will keep replying in your app language.', 'سمعتك، وسأستمر بالرد بلغة التطبيق.'));
+          } else if (detectedLangResult !== appLang) {
+            console.warn('[Talk] Transcript language differs from app language; locking response language to app language', {
+              appLang,
+              detectedLangResult,
+              transcript,
+            });
+            setDebugHint(tLang(appLang, 'Got it. I will keep replying in your app language.', 'تمام. سأستمر بالرد بلغة التطبيق.'));
           } else {
             setDebugHint('');
           }
 
-          detectedLanguageRef.current = detectedLang;
+          detectedLanguageRef.current = appLang;
 
           addConversationTurn('user', transcript, true);
           

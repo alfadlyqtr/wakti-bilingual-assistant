@@ -48,11 +48,11 @@ async function ensureRepo(token: string, owner: string, repo: string, isPrivate:
       body: JSON.stringify({
         name: repo,
         private: isPrivate,
-        auto_init: false,
+        auto_init: true, // creates initial commit so Git Data API works immediately
         description: "Created with Wakti AI Coder",
       }),
     });
-    return true; // brand new = empty
+    return false; // auto_init creates first commit so NOT empty
   }
   throw new Error(`Failed to check repo: ${resp.status}`);
 }
@@ -60,6 +60,59 @@ async function ensureRepo(token: string, owner: string, repo: string, isPrivate:
 async function branchExists(token: string, owner: string, repo: string, branch: string): Promise<boolean> {
   const resp = await ghFetch(token, `/repos/${owner}/${repo}/git/refs/heads/${branch}`);
   return resp.ok;
+}
+
+/**
+ * Resolves HEAD SHA and base tree SHA for the target branch.
+ * Handles the 409 "Git Repository is empty" case by initializing
+ * the repo via the Contents API (which works on uninitialized git repos)
+ * before any Git Data API calls are made.
+ */
+async function resolveHead(
+  token: string,
+  owner: string,
+  repo: string,
+  branch: string,
+): Promise<{ headSha: string | null; baseTreeSha: string | null }> {
+  // First probe: does the git repo have any commits at all?
+  const refsResp = await ghFetch(token, `/repos/${owner}/${repo}/git/refs`);
+
+  if (refsResp.status === 409) {
+    // Truly uninitialized git repo — bootstrap via Contents API
+    console.log(`[github-push] Repo ${owner}/${repo} is uninitialized. Bootstrapping via Contents API...`);
+    const initResult = await ghJson<{ commit: { sha: string } }>(
+      token,
+      `/repos/${owner}/${repo}/contents/.wakti`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          message: "chore: initialize repository",
+          content: btoa("# Initialized by Wakti AI Coder\n"),
+        }),
+      },
+    );
+    // Return init commit SHA as parent (no base_tree so our tree replaces everything)
+    return { headSha: initResult.commit.sha, baseTreeSha: null };
+  }
+
+  // Repo is initialized — try to get the target branch
+  const branchResp = await ghFetch(token, `/repos/${owner}/${repo}/git/refs/heads/${branch}`);
+  if (branchResp.ok) {
+    const refData = await branchResp.json() as { object: { sha: string } };
+    const headSha = refData.object.sha;
+    try {
+      const commitData = await ghJson<{ tree: { sha: string } }>(
+        token,
+        `/repos/${owner}/${repo}/git/commits/${headSha}`,
+      );
+      return { headSha, baseTreeSha: commitData.tree.sha };
+    } catch {
+      return { headSha, baseTreeSha: null };
+    }
+  }
+
+  // Branch doesn't exist yet (first push to this branch)
+  return { headSha: null, baseTreeSha: null };
 }
 
 async function createBlob(token: string, owner: string, repo: string, content: string): Promise<string> {
@@ -86,34 +139,19 @@ async function pushToGitHub(params: {
   branch: string;
   files: { path: string; content: string }[];
   commitMessage: string;
-  treatAsEmpty: boolean;
 }): Promise<string> {
-  const { token, owner, repo, branch, files, commitMessage, treatAsEmpty } = params;
+  const { token, owner, repo, branch, files, commitMessage } = params;
 
-  console.log(`[github-push] Creating ${files.length} blobs for ${owner}/${repo}@${branch}`);
+  console.log(`[github-push] Pushing ${files.length} files to ${owner}/${repo}@${branch}`);
 
-  // 1. Create blobs
+  // 1. Resolve HEAD — handles uninitialized repos before any blob calls
+  const { headSha, baseTreeSha } = await resolveHead(token, owner, repo, branch);
+
+  // 2. Create blobs (safe to call now — repo is guaranteed to be initialized)
   const treeItems: { path: string; mode: string; type: string; sha: string }[] = [];
   for (const file of files) {
     const sha = await createBlob(token, owner, repo, file.content);
     treeItems.push({ path: file.path, mode: "100644", type: "blob", sha });
-  }
-
-  // 2. Get current HEAD + base tree (if branch exists)
-  let headSha: string | null = null;
-  let baseTreeSha: string | null = null;
-
-  if (!treatAsEmpty) {
-    try {
-      const ref = await ghJson<{ object: { sha: string } }>(token, `/repos/${owner}/${repo}/git/refs/heads/${branch}`);
-      headSha = ref.object.sha;
-      const commit = await ghJson<{ tree: { sha: string } }>(token, `/repos/${owner}/${repo}/git/commits/${headSha}`);
-      baseTreeSha = commit.tree.sha;
-    } catch {
-      // Branch may not exist yet — treat as empty
-      headSha = null;
-      baseTreeSha = null;
-    }
   }
 
   // 3. Create tree
@@ -252,9 +290,8 @@ serve(async (req) => {
       });
     }
 
-    // Ensure repo exists; detect if empty
-    const repoIsEmpty = await ensureRepo(githubToken, owner, repoName, isPrivate);
-    const branchMissing = !repoIsEmpty && !(await branchExists(githubToken, owner, repoName, branch));
+    // Ensure repo exists (creates it if needed with auto_init)
+    await ensureRepo(githubToken, owner, repoName, isPrivate);
 
     const finalMsg = commitMessage
       || `Update from Wakti AI Coder — ${new Date().toISOString().split("T")[0]}`;
@@ -266,7 +303,6 @@ serve(async (req) => {
       branch,
       files: pushFiles,
       commitMessage: finalMsg,
-      treatAsEmpty: repoIsEmpty || branchMissing,
     });
 
     // Persist github_repo + github_branch on the project row
