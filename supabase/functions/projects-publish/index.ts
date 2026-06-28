@@ -736,7 +736,7 @@ serve(async (req) => {
       const path = (rec.path ?? rec.file ?? "").toString();
       const rawContent = (rec.content ?? rec.data ?? "").toString();
       assertSafePath(path);
-      if (!rawContent) throw new Error("BAD_REQUEST_EMPTY_FILE_CONTENT");
+      if (!rawContent) continue; // skip empty files (e.g. no-CSS projects)
       const content = path === "index.html"
         ? upgradeLegacyPublishedHtml(rawContent, projectNameRaw || "Wakti Project")
         : rawContent;
