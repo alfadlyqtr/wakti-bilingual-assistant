@@ -1,14 +1,13 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
-const WAKTI_BADGE = `<div id="_wakti_credit" style="text-align:center;padding:8px 0 12px;font-size:11px;color:rgba(120,120,120,0.8);">Made by <a href="https://wakti.qa" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6;text-decoration:none;font-weight:600;">Wakti AI</a></div>`;
-const DEFERRED_TAILWIND = `<script>(function(){var lt=function(){var s=document.createElement('script');s.src='https://cdn.tailwindcss.com';s.onload=function(){if(window.tailwind&&window.tailwind.scan)window.tailwind.scan();};document.head.appendChild(s);};typeof requestAnimationFrame!=='undefined'?requestAnimationFrame(function(){requestAnimationFrame(lt);}):setTimeout(lt,50);})();</script>`;
+const WAKTI_BADGE = `<div id="_wakti_credit" style="background:#0a0a0a;text-align:center;padding:10px 0 14px;font-size:11px;color:rgba(160,160,160,0.7);letter-spacing:0.02em;">Made by <a href="https://wakti.qa" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6;text-decoration:none;font-weight:600;">Wakti AI</a></div>`;
+const TAILWIND_RESCAN = `<script>(function(){var rs=function(){if(window.tailwind&&typeof window.tailwind.scan==="function")window.tailwind.scan();};typeof requestAnimationFrame!=="undefined"?requestAnimationFrame(function(){requestAnimationFrame(rs);}):setTimeout(rs,50);})();</script>`;
 
 function patchHtml(html: string): string {
   return html
     .replace(/https:\/\/cdn\.jsdelivr\.net\/npm\/@tailwindcss\/browser@[^"'\s]*/g, "https://cdn.tailwindcss.com")
-    .replace(/<script\s[^>]*src="https:\/\/cdn\.tailwindcss\.com"[^>]*><\/script>/g, "")
-    .replace("</body>", `${DEFERRED_TAILWIND}\n${WAKTI_BADGE}\n</body>`);
+    .replace("</body>", `${TAILWIND_RESCAN}\n${WAKTI_BADGE}\n</body>`);
 }
 
 async function fetchText(url: string): Promise<string | null> {

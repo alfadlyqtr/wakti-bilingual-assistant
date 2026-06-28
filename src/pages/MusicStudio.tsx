@@ -3820,9 +3820,9 @@ function VoicesTab({
     'شامي': ['رومانسي', 'عاطفي', 'حنون'],
     'بوب عربي': ['رومانسي', 'عاطفي', 'سعيد'],
     'أناشيد': ['روحاني', 'هادئ', 'فخور'],
-    'قصيدة خليجية': ['هادئ', 'روحاني', 'عاطفي'],
-    'قصيدة عربية فصحى': ['هادئ', 'روحاني', 'حالم'],
-    'قصيدة إنجليزية': ['هادئ', 'حالم', 'عاطفي'],
+    'قصيدة خليجية': ['شاعري', 'هادئ', 'روحاني'],
+    'قصيدة عربية فصحى': ['شاعري', 'هادئ', 'روحاني'],
+    'قصيدة إنجليزية': ['شاعري', 'هادئ', 'حالم'],
     'بوب': ['سعيد', 'مفعم بالطاقة', 'محفز'],
     'دانس بوب': ['مفعم بالطاقة', 'حفلة', 'سعيد'],
     'تين بوب': ['سعيد', 'مرح', 'محفز'],
@@ -3879,9 +3879,9 @@ function VoicesTab({
     'Arabic Pop': ['romantic', 'emotional', 'happy'],
     'Levant Pop': ['romantic', 'emotional', 'tender'],
     'Anasheed': ['spiritual', 'calm', 'proud'],
-    'GCC Poem': ['calm', 'spiritual', 'emotional'],
-    'Arabic Poem': ['calm', 'spiritual', 'dreamy'],
-    'English Poem': ['calm', 'dreamy', 'emotional'],
+    'GCC Poem': ['poetic', 'calm', 'spiritual'],
+    'Arabic Poem': ['poetic', 'calm', 'spiritual'],
+    'English Poem': ['poetic', 'calm', 'dreamy'],
     // ── Arabic equivalents for new regional styles ──
     'عراقي': ['عاطفي', 'نوستالجي', 'روحاني'],
     'لبناني': ['رومانسي', 'حنون', 'احتفالي'],
@@ -4155,13 +4155,13 @@ function VoicesTab({
   const MODE_GROUPS = useMemo<Array<{ title: string; items: string[] }>>(() => {
     if (language === 'ar') {
       return [
-        { title: 'المشاعر', items: ['سعيد', 'حزين', 'كئيب', 'رومانسي', 'حنون', 'واثق', 'عاطفي', 'نوستالجي', 'حالم', 'جريء', 'فخور', 'روحاني', 'درامي', 'مشع', 'فاخر', 'عميق', 'مرح', 'غاضب', 'محفز', 'متمايل'] },
+        { title: 'المشاعر', items: ['سعيد', 'حزين', 'كئيب', 'رومانسي', 'حنون', 'واثق', 'عاطفي', 'نوستالجي', 'حالم', 'جريء', 'فخور', 'روحاني', 'شاعري', 'درامي', 'مشع', 'فاخر', 'عميق', 'مرح', 'غاضب', 'محفز', 'متمايل'] },
         { title: 'الطاقة', items: ['هادئ', 'مفعم بالطاقة', 'مثير', 'ملحمي', 'حماسي', 'قوي', 'مظلم', 'ساطع', 'غامض', 'سينمائي', 'مكثف'] },
         { title: 'المناسبة', items: ['حفلة', 'احتفالي', 'أعراس', 'وطني', 'مهرجاني', 'نادي', 'صيفي', 'سفر', 'ضخم', 'جماهيري', 'حميمي', 'استرخاء', 'تركيز'] },
       ];
     }
     return [
-      { title: 'Emotion', items: ['happy', 'sad', 'melancholic', 'romantic', 'tender', 'confident', 'emotional', 'nostalgic', 'dreamy', 'bold', 'proud', 'spiritual', 'dramatic', 'radiant', 'luxurious', 'soulful', 'playful', 'angry', 'uplifting', 'groovy'] },
+      { title: 'Emotion', items: ['happy', 'sad', 'melancholic', 'romantic', 'tender', 'confident', 'emotional', 'nostalgic', 'dreamy', 'bold', 'proud', 'spiritual', 'poetic', 'dramatic', 'radiant', 'luxurious', 'soulful', 'playful', 'angry', 'uplifting', 'groovy'] },
       { title: 'Energy', items: ['calm', 'energetic', 'exciting', 'epic', 'anthemic', 'powerful', 'dark', 'bright', 'mysterious', 'cinematic', 'intense'] },
       { title: 'Scene', items: ['party', 'celebratory', 'wedding', 'national', 'festival', 'club', 'summer', 'road trip', 'grand', 'anthemic crowd', 'intimate', 'relaxing', 'focus'] },
     ];

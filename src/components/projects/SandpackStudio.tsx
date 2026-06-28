@@ -202,7 +202,8 @@ function buildReactPreviewShell(html: string): string {
     headContent = `${headContent}${headContent ? '\n' : ''}<meta name="viewport" content="width=device-width, initial-scale=1.0" />`;
   }
 
-  return `<!DOCTYPE html>\n<html${htmlAttrs}>\n<head>\n${headContent}\n</head>\n<body${bodyAttrs}>\n<div id="root"></div>\n</body>\n</html>`;
+  const waktiBadge = `<div id="_wakti_credit" style="background:#0a0a0a;text-align:center;padding:10px 0 14px;font-size:11px;color:rgba(160,160,160,0.7);letter-spacing:0.02em;">Made by <a href="https://wakti.qa" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6;text-decoration:none;font-weight:600;">Wakti AI</a></div>`;
+  return `<!DOCTYPE html>\n<html${htmlAttrs}>\n<head>\n${headContent}\n</head>\n<body${bodyAttrs}>\n<div id="root"></div>\n${waktiBadge}\n</body>\n</html>`;
 }
 
 function parseRequestUrl(input: unknown): URL | null {
@@ -1351,6 +1352,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
   </head>
   <body>
     <div id="root"></div>
+    <div id="_wakti_credit" style="background:#0a0a0a;text-align:center;padding:10px 0 14px;font-size:11px;color:rgba(160,160,160,0.7);letter-spacing:0.02em;">Made by <a href="https://wakti.qa" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6;text-decoration:none;font-weight:600;">Wakti AI</a></div>
   </body>
 </html>`;
 
