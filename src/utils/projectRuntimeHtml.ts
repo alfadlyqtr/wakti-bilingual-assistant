@@ -127,7 +127,6 @@ export function buildProjectStaticPublishFiles({
   <script src="https://cdn.jsdelivr.net/npm/framer-motion@6.5.1/dist/framer-motion.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
   <script>
     window.FramerMotion = window.FramerMotion || window.Motion || null;
     if (typeof window.lucide !== 'undefined' && window.lucide) {
@@ -151,8 +150,26 @@ export function buildProjectStaticPublishFiles({
       }
       var root = window.ReactDOM.createRoot(rootElement);
       root.render(window.React.createElement(window.App));
+
+      // Load Tailwind CDN AFTER React renders so it scans the full DOM
+      var loadTailwind = function() {
+        var s = document.createElement('script');
+        s.src = 'https://cdn.tailwindcss.com';
+        s.onload = function() {
+          if (window.tailwind && typeof window.tailwind.scan === 'function') {
+            window.tailwind.scan();
+          }
+        };
+        document.head.appendChild(s);
+      };
+      if (typeof requestAnimationFrame !== 'undefined') {
+        requestAnimationFrame(function() { requestAnimationFrame(loadTailwind); });
+      } else {
+        setTimeout(loadTailwind, 50);
+      }
     })();
   </script>
+  <div id="_wakti_credit" style="text-align:center;padding:8px 0 12px;font-size:11px;color:rgba(120,120,120,0.8);">Made by <a href="https://wakti.qa" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6;text-decoration:none;font-weight:600;">Wakti AI</a></div>
 </body>
 </html>`;
 

@@ -740,11 +740,16 @@ serve(async (req) => {
       const upgradedHtml = path === "index.html"
         ? upgradeLegacyPublishedHtml(rawContent, projectNameRaw || "Wakti Project")
         : rawContent;
+      const WAKTI_BADGE = `<div id="_wakti_credit" style="text-align:center;padding:8px 0 12px;font-size:11px;color:rgba(120,120,120,0.8);">Made by <a href="https://wakti.qa" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6;text-decoration:none;font-weight:600;">Wakti AI</a></div>`;
+      const DEFERRED_TAILWIND = `<script>(function(){var lt=function(){var s=document.createElement('script');s.src='https://cdn.tailwindcss.com';s.onload=function(){if(window.tailwind&&window.tailwind.scan)window.tailwind.scan();};document.head.appendChild(s);};typeof requestAnimationFrame!=='undefined'?requestAnimationFrame(function(){requestAnimationFrame(lt);}):setTimeout(lt,50);})();</script>`;
       const content = path === "index.html"
-        ? upgradedHtml.replace(
-            /https:\/\/cdn\.jsdelivr\.net\/npm\/@tailwindcss\/browser@[^"'\s]*/g,
-            "https://cdn.tailwindcss.com"
-          )
+        ? upgradedHtml
+          // Fix legacy jsDelivr Tailwind CDN URL
+          .replace(/https:\/\/cdn\.jsdelivr\.net\/npm\/@tailwindcss\/browser@[^"'\s]*/g, "https://cdn.tailwindcss.com")
+          // Remove any blocking Tailwind CDN script — we load it deferred below
+          .replace(/<script\s[^>]*src="https:\/\/cdn\.tailwindcss\.com"[^>]*><\/script>/g, "")
+          // Inject deferred Tailwind + Wakti badge before </body>
+          .replace("</body>", `${DEFERRED_TAILWIND}\n${WAKTI_BADGE}\n</body>`)
         : upgradedHtml;
       publishFiles.push({ path, content });
     }

@@ -187,6 +187,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
   const onUserMessageRef = useRef(onUserMessage);
   const onAssistantMessageRef = useRef(onAssistantMessage);
+  // Always holds the latest handleRealtimeEvent to avoid stale closure in dc.onmessage
+  const handleRealtimeEventRef = useRef<(msg: any) => void>(() => {});
 
   useEffect(() => {
     onUserMessageRef.current = onUserMessage;
@@ -1353,7 +1355,7 @@ ${memoryContext ? memoryContext : ''}`
         }
         try {
           const msg = JSON.parse(event.data);
-          handleRealtimeEvent(msg);
+          handleRealtimeEventRef.current(msg);
         } catch (e) {
           console.warn('Failed to parse realtime event:', e);
         }
@@ -1853,6 +1855,11 @@ ${memoryContext ? memoryContext : ''}`
         break;
     }
   }, [addConversationTurn, bumpAssistantPlaybackLock, clearAssistantTurnRecovery, detectTranscriptLanguage, disableNoiseGuard, finishAssistantTurn, isAssistantPlaybackLocked, isDuplicateUserTranscript, isLikelyAssistantEcho, language, normalizeAssistantTranscript, rearmListening, registerNoiseStrike, resetNoiseStrikes, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
+
+  // Keep ref in sync so dc.onmessage always dispatches the latest handler
+  useEffect(() => {
+    handleRealtimeEventRef.current = handleRealtimeEvent;
+  }, [handleRealtimeEvent]);
 
   // Perform web search using live-talk-search Edge Function
   const performWebSearch = useCallback(async (query: string, lang: 'ar' | 'en'): Promise<string> => {
