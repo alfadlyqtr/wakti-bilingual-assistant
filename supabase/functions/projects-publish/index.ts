@@ -740,16 +740,15 @@ serve(async (req) => {
       const upgradedHtml = path === "index.html"
         ? upgradeLegacyPublishedHtml(rawContent, projectNameRaw || "Wakti Project")
         : rawContent;
-      const WAKTI_BADGE = `<div id="_wakti_credit" style="text-align:center;padding:8px 0 12px;font-size:11px;color:rgba(120,120,120,0.8);">Made by <a href="https://wakti.qa" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6;text-decoration:none;font-weight:600;">Wakti AI</a></div>`;
-      const DEFERRED_TAILWIND = `<script>(function(){var lt=function(){var s=document.createElement('script');s.src='https://cdn.tailwindcss.com';s.onload=function(){if(window.tailwind&&window.tailwind.scan)window.tailwind.scan();};document.head.appendChild(s);};typeof requestAnimationFrame!=='undefined'?requestAnimationFrame(function(){requestAnimationFrame(lt);}):setTimeout(lt,50);})();</script>`;
+      const WAKTI_BADGE = `<div id="_wakti_credit" style="background:#0a0a0a;text-align:center;padding:10px 0 14px;font-size:11px;color:rgba(160,160,160,0.7);letter-spacing:0.02em;">Made by <a href="https://wakti.qa" target="_blank" rel="noopener noreferrer" style="color:#8b5cf6;text-decoration:none;font-weight:600;">Wakti AI</a></div>`;
+      // Re-scan only (Tailwind CDN is already loaded as a blocking script above)
+      const TAILWIND_RESCAN = `<script>(function(){var rs=function(){if(window.tailwind&&typeof window.tailwind.scan==="function")window.tailwind.scan();};typeof requestAnimationFrame!=="undefined"?requestAnimationFrame(function(){requestAnimationFrame(rs);}):setTimeout(rs,50);})();</script>`;
       const content = path === "index.html"
         ? upgradedHtml
-          // Fix legacy jsDelivr Tailwind CDN URL
+          // Fix Tailwind CDN URL (replace broken jsDelivr @4 URL with the working one)
           .replace(/https:\/\/cdn\.jsdelivr\.net\/npm\/@tailwindcss\/browser@[^"'\s]*/g, "https://cdn.tailwindcss.com")
-          // Remove any blocking Tailwind CDN script — we load it deferred below
-          .replace(/<script\s[^>]*src="https:\/\/cdn\.tailwindcss\.com"[^>]*><\/script>/g, "")
-          // Inject deferred Tailwind + Wakti badge before </body>
-          .replace("</body>", `${DEFERRED_TAILWIND}\n${WAKTI_BADGE}\n</body>`)
+          // Inject post-render re-scan + Wakti badge (blocking CDN stays in place)
+          .replace("</body>", `${TAILWIND_RESCAN}\n${WAKTI_BADGE}\n</body>`)
         : upgradedHtml;
       publishFiles.push({ path, content });
     }
