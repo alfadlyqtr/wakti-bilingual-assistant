@@ -2575,6 +2575,10 @@ function VoicesTab({
           items: ['أناشيد']
         },
         {
+          title: 'الشعر والإلقاء',
+          items: ['قصيدة خليجية','قصيدة عربية فصحى','قصيدة إنجليزية']
+        },
+        {
           title: 'بوب وحديث',
           items: ['بوب','دانس بوب','تين بوب','باور بوب','بوب روك','إندي بوب','آر آند بي','نيو سول','ديسكو معاصر','سينث بوب','إلكترو بوب','بوب الثمانينات','بوب التسعينات','كي-بوب','جي-بوب','لاتن بوب']
         },
@@ -2660,6 +2664,10 @@ function VoicesTab({
       {
         title: 'Islamic',
         items: ['Anasheed']
+      },
+      {
+        title: 'Poetry / Spoken',
+        items: ['GCC Poem','Arabic Poem','English Poem']
       },
       {
         title: 'Pop',
@@ -2786,6 +2794,21 @@ function VoicesTab({
     () => [...new Set(includeTags.map((tag) => KHALIJI_STYLE_ALIASES[tag] ?? tag))],
     [includeTags, KHALIJI_STYLE_ALIASES],
   );
+  type PoemMode = 'gcc' | 'arabic' | 'english';
+  const POEM_STYLE_MODE_MAP: Record<string, PoemMode> = {
+    'GCC Poem': 'gcc',
+    'قصيدة خليجية': 'gcc',
+    'Arabic Poem': 'arabic',
+    'قصيدة عربية فصحى': 'arabic',
+    'English Poem': 'english',
+    'قصيدة إنجليزية': 'english',
+  };
+  const selectedPoemMode: PoemMode | null =
+    effectiveIncludeTags
+      .map((tag) => POEM_STYLE_MODE_MAP[tag])
+      .find((mode): mode is PoemMode => mode !== undefined) ?? null;
+  const isPoemStyleSelected = selectedPoemMode !== null;
+  const instrumentSelectionLimit = isPoemStyleSelected ? 2 : 6;
   const [showIncludePicker, setShowIncludePicker] = useState(false);
   const [showInstrumentPicker, setShowInstrumentPicker] = useState(false);
   const [showMoodPicker, setShowMoodPicker] = useState(false);
@@ -2918,6 +2941,7 @@ function VoicesTab({
     'GCC Radio Pop', 'GCC Dance Pop', 'GCC Electro Pop', 'GCC Synth Pop',
     'Modern Khaleeji Fusion', 'English GCC Pop',
     'GCC R&B Pop', 'Luxury GCC Pop', 'Cinematic GCC', 'GCC Anthem', 'National Event GCC',
+    'GCC Poem',
     'GCC Traditional', 'Sheilat', 'Samri', 'Ardah', 'Jalsa', 'Liwa', 'GCC Shaabi', 'Zar', 'Khaleeji Trap',
     // ── AR display labels (mirror IDs used in pickers + mappings) ──
     'بوب خليجي', 'خليجي راب', 'خليجي عصري',
@@ -2925,7 +2949,7 @@ function VoicesTab({
     'خليجي إذاعي', 'خليجي دانس', 'خليجي إلكتروني', 'خليجي سينث بوب',
     'فيوجن خليجي', 'إنجليزي بطابع خليجي',
     'خليجي آر أند بي', 'خليجي فاخر', 'خليجي سينمائي', 'خليجي جماهيري', 'مناسبات وطنية خليجية',
-    'خليجي تراثي', 'شيلات', 'سامري', 'جلسة', 'ليوان', 'شعبي خليجي',
+    'خليجي تراثي', 'شيلات', 'سامري', 'جلسة', 'ليوان', 'شعبي خليجي', 'قصيدة خليجية',
   ]), []);
 
   const isGccStyleSelected = useMemo(
@@ -2943,6 +2967,13 @@ function VoicesTab({
   }, [effectiveIncludeTags, rhythmTags]);
   const khaleejiDialectActive = isGccStyleSelected || khaleejiSelected;
   const selectedKhaleejiDialectContract = KHALEEJI_DIALECT_CONTRACTS[khaleejiDialect];
+
+  useEffect(() => {
+    if (!isPoemStyleSelected) return;
+    if (instrumentTags.length <= instrumentSelectionLimit) return;
+    setInstrumentTags((prev) => prev.slice(0, instrumentSelectionLimit));
+    toast.error(isAr ? 'وضع القصيدة يسمح بآلتين كحد أقصى' : 'Poem mode allows up to 2 instruments');
+  }, [instrumentSelectionLimit, instrumentTags, isAr, isPoemStyleSelected]);
 
   // Recommended slider defaults — recomputed whenever the user's style selection changes.
   // Populates Style Strength / Creative Freedom sliders in Advanced. When user hasn't
@@ -3020,6 +3051,12 @@ function VoicesTab({
       // ── GCC Core ──
       'GCC Pop':              ['mirwas', 'darbuka', 'tar', 'synth lead', 'synth pad'],
       'بوب خليجي':            ['mirwas', 'darbuka', 'tar', 'synth lead', 'synth pad'],
+      'GCC Poem':             ['oud', 'ney'],
+      'قصيدة خليجية':         ['oud', 'ney'],
+      'Arabic Poem':          ['oud', 'qanun'],
+      'قصيدة عربية فصحى':     ['oud', 'qanun'],
+      'English Poem':         ['soft piano', 'acoustic guitar'],
+      'قصيدة إنجليزية':       ['soft piano', 'acoustic guitar'],
       'GCC Rap':              ['808 bass', 'hi-hat', 'darbuka', 'mirwas', 'synth bass'],
       'خليجي راب':            ['808 bass', 'hi-hat', 'darbuka', 'mirwas', 'synth bass'],
       'Modern Khaleeji Fusion':['darbuka', 'mirwas', 'electric guitar', 'synth pad', 'bass guitar'],
@@ -3426,6 +3463,25 @@ function VoicesTab({
     const isAnasheedSelected = effectiveIncludeTags.some((tag) => tag === 'Anasheed' || tag === 'أناشيد');
     if (isAnasheedSelected) return ['Vocal Harmony'];
 
+    if (isPoemStyleSelected) {
+      const poemSuggested: string[] = [];
+      for (const style of effectiveIncludeTags) {
+        const mapped = STYLE_INSTRUMENT_MAPPING[style];
+        if (mapped) poemSuggested.push(...mapped);
+      }
+      const fallbackByMode: Record<PoemMode, string[]> = {
+        gcc: ['oud', 'ney'],
+        arabic: ['oud', 'qanun'],
+        english: ['soft piano', 'acoustic guitar'],
+      };
+      const base = poemSuggested.length > 0
+        ? poemSuggested
+        : selectedPoemMode
+          ? fallbackByMode[selectedPoemMode]
+          : ['soft piano', 'acoustic guitar'];
+      return normalizeInstrumentKeys(base).slice(0, 2);
+    }
+
     const recommended: string[] = [];
     for (const style of effectiveIncludeTags) {
       const mapped = STYLE_INSTRUMENT_MAPPING[style];
@@ -3448,7 +3504,7 @@ function VoicesTab({
       if (!merged.includes(fallback)) merged.push(fallback);
     }
     return merged;
-  }, [effectiveIncludeTags, rhythmTags, moodTags, STYLE_INSTRUMENT_MAPPING, isGccStyleSelected, GCC_UNSAFE_RECOMMENDED_INSTRUMENTS, GCC_SAFE_RECOMMENDED_INSTRUMENTS]);
+  }, [effectiveIncludeTags, rhythmTags, moodTags, STYLE_INSTRUMENT_MAPPING, isGccStyleSelected, GCC_UNSAFE_RECOMMENDED_INSTRUMENTS, GCC_SAFE_RECOMMENDED_INSTRUMENTS, isPoemStyleSelected, selectedPoemMode]);
 
   // Style → recommended rhythms (top 2)
   const STYLE_RHYTHM_MAPPING: Record<string, string[]> = {
@@ -3482,6 +3538,9 @@ function VoicesTab({
     'شامي': ['مقسوم', 'بالاد هادئ'],
     'بوب عربي': ['مقسوم', 'بوب ٤/٤'],
     'أناشيد': ['بدون إيقاع'],
+    'قصيدة خليجية': ['عدني', 'بالاد هادئ'],
+    'قصيدة عربية فصحى': ['بالاد هادئ', 'والتز ٣/٤'],
+    'قصيدة إنجليزية': ['بالاد هادئ', 'بوب ٤/٤'],
     'بوب': ['بوب ٤/٤', 'بالاد هادئ'],
     'دانس بوب': ['إيقاع نادي', 'بوب ٤/٤'],
     'هيب هوب': ['تراب بيت', 'بوب ٤/٤'],
@@ -3532,6 +3591,9 @@ function VoicesTab({
     'Arabic Pop': ['Maqsoum', 'Pop 4/4'],
     'Levant Pop': ['Maqsoum', 'Ballad Slow Groove'],
     'Anasheed': ['None'],
+    'GCC Poem': ['Adani', 'Ballad Slow Groove'],
+    'Arabic Poem': ['Ballad Slow Groove', 'Waltz 3/4'],
+    'English Poem': ['Ballad Slow Groove', 'Pop 4/4'],
     // ── Arabic equivalents for new regional styles ──
     'عراقي': ['مقسوم', 'بالاد هادئ'],
     'لبناني': ['مقسوم', 'بالاد هادئ'],
@@ -3756,6 +3818,9 @@ function VoicesTab({
     'شامي': ['رومانسي', 'عاطفي', 'حنون'],
     'بوب عربي': ['رومانسي', 'عاطفي', 'سعيد'],
     'أناشيد': ['روحاني', 'هادئ', 'فخور'],
+    'قصيدة خليجية': ['هادئ', 'روحاني', 'عاطفي'],
+    'قصيدة عربية فصحى': ['هادئ', 'روحاني', 'حالم'],
+    'قصيدة إنجليزية': ['هادئ', 'حالم', 'عاطفي'],
     'بوب': ['سعيد', 'مفعم بالطاقة', 'محفز'],
     'دانس بوب': ['مفعم بالطاقة', 'حفلة', 'سعيد'],
     'تين بوب': ['سعيد', 'مرح', 'محفز'],
@@ -3812,6 +3877,9 @@ function VoicesTab({
     'Arabic Pop': ['romantic', 'emotional', 'happy'],
     'Levant Pop': ['romantic', 'emotional', 'tender'],
     'Anasheed': ['spiritual', 'calm', 'proud'],
+    'GCC Poem': ['calm', 'spiritual', 'emotional'],
+    'Arabic Poem': ['calm', 'spiritual', 'dreamy'],
+    'English Poem': ['calm', 'dreamy', 'emotional'],
     // ── Arabic equivalents for new regional styles ──
     'عراقي': ['عاطفي', 'نوستالجي', 'روحاني'],
     'لبناني': ['رومانسي', 'حنون', 'احتفالي'],
@@ -4670,9 +4738,9 @@ function VoicesTab({
 
   function handleSelectRecommendedInstruments() {
     if (recommendedInstruments.length === 0) return;
-    const limited = normalizeInstrumentKeys(recommendedInstruments).slice(0, 6);
+    const limited = normalizeInstrumentKeys(recommendedInstruments).slice(0, instrumentSelectionLimit);
     setInstrumentTags(limited);
-    if (limited.length >= 6) {
+    if (limited.length >= instrumentSelectionLimit) {
       setTimeout(() => {
         setInstrumentsOpen(false);
         setVocalsOpen(true);
@@ -4689,14 +4757,18 @@ function VoicesTab({
         return prev.filter((tag) => tag !== normalizedInst);
       }
 
-      if (prev.length >= 6) {
-        toast.error(isAr ? 'يمكنك اختيار 6 آلات كحد أقصى' : 'You can select up to 6 instruments');
+      if (prev.length >= instrumentSelectionLimit) {
+        toast.error(
+          isPoemStyleSelected
+            ? (isAr ? 'وضع القصيدة يسمح بآلتين كحد أقصى' : 'Poem mode allows up to 2 instruments')
+            : (isAr ? 'يمكنك اختيار 6 آلات كحد أقصى' : 'You can select up to 6 instruments')
+        );
         return prev;
       }
 
       const next = [...prev, normalizedInst];
 
-      if (next.length === 6) {
+      if (next.length === instrumentSelectionLimit) {
         setTimeout(() => {
           setInstrumentsOpen(false);
           setStylesOpen(false);
@@ -4770,6 +4842,9 @@ function VoicesTab({
 
   const GCC_PRONUNCIATION_NEGATIVES: Record<string, string> = {
     'English GCC Pop': '', 'إنجليزي بطابع خليجي': '',
+    'GCC Poem': `${GCC_DIALECT_BLOCK}, singing, sung chorus, belting, screaming, shouting, rap, trap, loud vocals`,
+    'Arabic Poem': 'english, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, screaming, shouting',
+    'English Poem': 'arabic, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, screaming, shouting',
     'GCC Pop': GCC_DIALECT_BLOCK,
     'GCC Rap': `${GCC_DIALECT_BLOCK}, ballad, orchestral pop, wedding chant, traditional folk lead, soft romantic pop`,
     'Khaleeji Pop': GCC_DIALECT_BLOCK,
@@ -4807,10 +4882,14 @@ function VoicesTab({
     'خليجي تراثي': GCC_DIALECT_BLOCK_AR, 'شيلات': GCC_DIALECT_BLOCK_AR,
     'سامري': GCC_DIALECT_BLOCK_AR, 'جلسة': GCC_DIALECT_BLOCK_AR,
     'ليوان': GCC_DIALECT_BLOCK_AR,
+    'قصيدة خليجية': `${GCC_DIALECT_BLOCK_AR}, غناء, كورس, صراخ, هتاف, راب`,
+    'قصيدة عربية فصحى': 'إنجليزي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
+    'قصيدة إنجليزية': 'عربي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
   };
 
   // Default rhythm + instrument anchors per GCC style — auto-filled when user skips those sections
   const GCC_STYLE_ANCHORS: Record<string, { rhythm: string; instrument: string; production?: string }> = {
+    'GCC Poem': { rhythm: 'adani rhythm', instrument: 'oud lead', production: 'ney texture' },
     'GCC Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
     'GCC Rap': { rhythm: 'drill beat', instrument: '808 bass groove', production: 'trap hi-hats' },
     'Khaleeji Pop': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
@@ -4850,6 +4929,7 @@ function VoicesTab({
     'خليجي إلكتروني': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
     'خليجي سينث بوب': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth pad' },
     'فيوجن خليجي': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: '808 bass groove' },
+    'قصيدة خليجية': { rhythm: 'adani rhythm', instrument: 'oud lead', production: 'ney texture' },
     'إنجليزي بطابع خليجي': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'synth lead' },
     'خليجي آر أند بي': { rhythm: 'khaleeji groove', instrument: 'mirwas percussion', production: 'electric piano lead' },
     'خليجي فاخر': { rhythm: 'adani rhythm', instrument: 'violin lead', production: 'strings texture' },
@@ -5151,8 +5231,9 @@ function VoicesTab({
   ]);
   const HERITAGE_CHIPS = new Set<string>([
     'GCC Traditional','Sheilat','Samri','Jalsa','Liwa','GCC Shaabi','Zar','Ardah','GCC Wedding',
+    'GCC Poem',
     'Khaleeji Traditional','Khaleeji Shaabi','Khaleeji Wedding',
-    'خليجي تراثي','شيلات','سامري','جلسة','ليوان','شعبي خليجي','خليجي أعراس',
+    'خليجي تراثي','شيلات','سامري','جلسة','ليوان','شعبي خليجي','خليجي أعراس','قصيدة خليجية',
   ]);
   const URBAN_CHIPS = new Set<string>([
     'GCC Rap','Khaleeji Rap','Khaleeji Trap','خليجي راب',
@@ -5714,6 +5795,16 @@ function VoicesTab({
     const cap = vocalType === 'male' ? 'male' : 'female';
     const v = GENRE_VOCAB[genreFamily];
 
+    if (selectedPoemMode === 'gcc') {
+      return `[Spoken poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, soft calm ${cap} recitation, intentional pauses, no singing, no chorus, no screaming]`;
+    }
+    if (selectedPoemMode === 'arabic') {
+      return `[Classical Arabic spoken poem recitation only, Quranic/Fusha tone, soft calm ${cap} recitation, intentional pauses, no singing, no chorus, no screaming]`;
+    }
+    if (selectedPoemMode === 'english') {
+      return `[English spoken poem recitation only, soft calm ${cap} recitation, intentional pauses, no singing, no chorus, no screaming]`;
+    }
+
     const alreadyKhaleeji = genreFamily.startsWith('khaleeji-');
     if (alreadyKhaleeji || forceKhaleejiAnchor) {
       return `[Strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${selectedKhaleejiDialectContract.phrasingLabel}, ${v.vocalCueAdj} ${cap} Khaleeji vocal, ${v.vocalCueDelivery}]`;
@@ -5798,12 +5889,16 @@ function VoicesTab({
     const styleAnchor = rawStyleAnchor ? normalizeKhalijiPromptToken(rawStyleAnchor) : null;
     const isGccStyle = primaryStyle ? GCC_KEYS.has(primaryStyle) : false;
     const gccAnchor = primaryStyle ? GCC_STYLE_ANCHORS[primaryStyle] : null;
-    const selectedInstruments = instrumentTags.map((tag) => normalizeKhalijiPromptToken(tag));
+    const poemMode = selectedPoemMode;
+    const poemActive = poemMode !== null;
+    const selectedInstruments = instrumentTags
+      .map((tag) => normalizeKhalijiPromptToken(tag))
+      .slice(0, poemActive ? 2 : instrumentTags.length);
     const instrumentLayer = selectedInstruments.length > 0
       ? selectedInstruments
       : isGccStyle && gccAnchor
         ? [gccAnchor.instrument, ...(gccAnchor.production ? [gccAnchor.production] : [])]
-            .slice(0, 3)
+            .slice(0, poemActive ? 2 : 3)
             .map((tag) => normalizeKhalijiPromptToken(tag))
         : [];
     // Option A/B — spotlight only when the USER actually picked 1-2 instruments.
@@ -5832,6 +5927,13 @@ function VoicesTab({
     const khaleejiPrimaryAnchor = dialectLock ? 'khaleeji main anchor' : null;
     const dialectIdentityAnchor = dialectLock ? `authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji identity` : null;
     const productionShellAnchor = isFusionShell && primaryStyle ? `${normalizeChipForDisplay(primaryStyle)} production shell only` : null;
+    const poemStyleDirective = poemMode === 'gcc'
+      ? `spoken GCC poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent, soft pauses, no singing, no screaming, max two instruments`
+      : poemMode === 'arabic'
+        ? 'spoken Arabic poem recitation only, strict classical Fusha/Quranic tone, soft pauses, no singing, no screaming, max two instruments'
+        : poemMode === 'english'
+          ? 'spoken English poem recitation only, strict English-only language, soft pauses, no singing, no screaming, max two instruments'
+          : null;
     const styleParts: string[] = [
       dialectLock,
       accentAnchor,
@@ -5839,6 +5941,7 @@ function VoicesTab({
       phrasingAnchor,
       khaleejiPrimaryAnchor,
       dialectIdentityAnchor,
+      poemStyleDirective,
       productionShellAnchor ?? styleAnchor,
       primaryRhythm,
       supportingRhythms.length > 0 ? `supporting rhythms: ${supportingRhythms.join(', ')}` : null,
@@ -6006,6 +6109,9 @@ function VoicesTab({
     'GCC Synth Pop':         LOCK_POP('synth-driven khaleeji pop'),
     'Modern Khaleeji Fusion': LOCK_POP('modern khaleeji fusion'),
     'English GCC Pop':       LOCK_POP('english lyrics, khaleeji pop crossover'),
+    'GCC Poem':              `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, soft calm storytelling delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
+    'Arabic Poem':           'classical Arabic (Fusha / Quranic tone) spoken poem recitation, soft calm reading voice, clear pauses, no singing, no chorus, no screaming, max two instruments',
+    'English Poem':          'English spoken poem recitation, soft calm storytelling voice, clear pauses, no singing, no chorus, no screaming, max two instruments',
     'GCC R&B Pop':           LOCK_POP('khaleeji r&b pop'),
     'Luxury GCC Pop':        LOCK_POP('luxury khaleeji pop, premium orchestral, polished pop delivery'),
     'Cinematic GCC':         LOCK_HERITAGE('cinematic khaleeji, dramatic atmosphere'),
@@ -6033,6 +6139,9 @@ function VoicesTab({
     'خليجي سينث بوب':        LOCK_POP('synth-driven khaleeji pop'),
     'فيوجن خليجي':           LOCK_POP('modern khaleeji fusion'),
     'إنجليزي بطابع خليجي':   LOCK_POP('english lyrics, khaleeji pop crossover'),
+    'قصيدة خليجية':          `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, soft calm storytelling delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
+    'قصيدة عربية فصحى':      'إلقاء قصيدة عربية فصحى بنبرة قرآنية هادئة، وقفات واضحة، بدون غناء، بدون كورس، بدون صراخ، حد أقصى آلتين',
+    'قصيدة إنجليزية':        'English spoken poem recitation, soft calm storytelling voice, clear pauses, no singing, no chorus, no screaming, max two instruments',
     'خليجي آر أند بي':       LOCK_POP('khaleeji r&b pop'),
     'خليجي فاخر':            LOCK_POP('luxury khaleeji pop, premium orchestral, polished pop delivery'),
     'خليجي سينمائي':         LOCK_HERITAGE('cinematic khaleeji, dramatic atmosphere'),
@@ -6236,7 +6345,9 @@ function VoicesTab({
       (k) => ![
         'Egyptian','Egyptian Shaabi','Arabic Pop','Levant Pop','Anasheed',
         'Iraqi Style','Lebanese Style','Moroccan Style',
+        'Arabic Poem','English Poem',
         'مصري','شعبي مصري','عراقي','لبناني','مغربي','بوب عربي','شامي','أناشيد',
+        'قصيدة عربية فصحى','قصيدة إنجليزية',
         // ── Global Pop (excluded from GCC pipeline) ──
         'pop','Dance Pop','Teen Pop','Power Pop','Pop Rock','Indie Pop',
         'Bubblegum Pop','K-Pop','J-Pop','Latin Pop','80s pop','90s pop','Synthpop','Electropop',
@@ -6574,6 +6685,19 @@ function VoicesTab({
     return structured.join('\n\n');
   }
 
+  function buildPoemPromptPrefix(mode: PoemMode | null): string {
+    if (mode === 'gcc') {
+      return `[Spoken poem mode: strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent only, soft intimate recitation, clear pauses, no singing, no chorus, no screaming, sparse accompaniment, max 2 instruments.]`;
+    }
+    if (mode === 'arabic') {
+      return '[Spoken poem mode: strict Classical Arabic (Fusha / Quranic tone) only, soft calm recitation, clear pauses, no singing, no chorus, no screaming, sparse accompaniment, max 2 instruments.]';
+    }
+    if (mode === 'english') {
+      return '[Spoken poem mode: strict English-only recitation, soft calm delivery, clear pauses, no singing, no chorus, no screaming, sparse accompaniment, max 2 instruments.]';
+    }
+    return '';
+  }
+
   const handleGenerate = async () => {
     if (overLimit) return;
     if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
@@ -6613,6 +6737,22 @@ function VoicesTab({
       setMusicStyleOpen(false);
       setVocalsOpen(false);
       setLyricsOpen(true);
+      return;
+    }
+    if (isPoemStyleSelected && vocalType === 'none') {
+      toast.error(isAr ? 'وضع القصيدة يحتاج صوت إلقاء (ليس بدون غناء)' : 'Poem mode requires spoken vocals (not instrumental-only)');
+      setTitleOpen(false);
+      setMusicStyleOpen(false);
+      setVocalsOpen(true);
+      setLyricsOpen(false);
+      return;
+    }
+    if (isPoemStyleSelected && instrumentTags.length > 2) {
+      toast.error(isAr ? 'وضع القصيدة يسمح بآلتين كحد أقصى' : 'Poem mode allows up to 2 instruments');
+      setTitleOpen(false);
+      setMusicStyleOpen(true);
+      setVocalsOpen(false);
+      setLyricsOpen(false);
       return;
     }
     if (vocalType === 'custom') {
@@ -6707,8 +6847,9 @@ function VoicesTab({
         vocalType === 'male' ? 'm' : vocalType === 'female' ? 'f' : undefined;
       const rawLyrics = lyricsText.trim() || styleText.trim();
       const durationTarget = DURATION_VALUES.includes(duration) ? duration : 30;
+      const activeInstrumentTags = isPoemStyleSelected ? instrumentTags.slice(0, 2) : instrumentTags;
       const smartSectionPlan = shouldSmartStructureLyrics
-        ? buildSmartLyricStructure(lyricPlanningText, durationTarget, instrumentTags)
+        ? buildSmartLyricStructure(lyricPlanningText, durationTarget, activeInstrumentTags)
         : null;
       const khalijiControlBlock = buildKhalijiControlBlock(durationTarget, smartSectionPlan?.stanzas.length, smartSectionPlan?.includeSolo ?? false);
       const kieStyle = khalijiControlBlock.styleString;
@@ -6716,17 +6857,18 @@ function VoicesTab({
       const cueVocal: 'male' | 'female' | 'none' = vocalType === 'male' || vocalType === 'female' ? vocalType : 'none';
       const genreFamily = getGenreFamily(effectiveIncludeTags, isGccStyleSelected, khalijiControlBlock.family);
       const khaleejiTriggerActive = hasKhaleejiTrigger(effectiveIncludeTags, rhythmTags);
+      const poemPromptPrefix = buildPoemPromptPrefix(selectedPoemMode);
       // Option A — when Spotlight is on, lead the PROMPT with an explicit solo-instrument
       // directive so the chosen instrument is not buried under the Khaleeji vocal text.
-      const spotlightLeadActive = instrumentSpotlight && instrumentTags.length >= 1 && instrumentTags.length <= 2 && !instrumental;
-      const soloLeadInstrument = instrumentTags[0] ?? '';
+      const spotlightLeadActive = instrumentSpotlight && activeInstrumentTags.length >= 1 && activeInstrumentTags.length <= 2 && !instrumental;
+      const soloLeadInstrument = activeInstrumentTags[0] ?? '';
       const soloPromptDirective = spotlightLeadActive && soloLeadInstrument
         ? `[Instrumental direction: solo ${soloLeadInstrument} leads the whole track — ${soloLeadInstrument} carries the melody up front, sparse minimal backing, no other lead instruments]\n\n`
         : '';
-      const structuredPrompt = soloPromptDirective + formatLyricsWithStructure(
+      const baseStructuredPrompt = soloPromptDirective + formatLyricsWithStructure(
         rawLyrics,
         instrumental,
-        instrumentTags,
+        activeInstrumentTags,
         isGccStyleSelected,
         durationTarget,
         cueVocal,
@@ -6736,6 +6878,9 @@ function VoicesTab({
         autoLabelLyrics,
         khaleejiTriggerActive,
       );
+      const structuredPrompt = poemPromptPrefix
+        ? `${poemPromptPrefix}\n\n${baseStructuredPrompt}`
+        : baseStructuredPrompt;
 
       // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
       const REGIONAL_NEGATIVE: Record<string, string> = {
@@ -6746,6 +6891,12 @@ function VoicesTab({
         'شعبي مصري':       'خليجي, خليج, مغربي, دارجة, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
         'Anasheed':        'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, [Exclude: 300Hz-500Hz mud, boxiness, frequency masking], noise, hiss, low quality, distorted',
         'أناشيد':          'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, [Exclude: 300Hz-500Hz mud, boxiness, frequency masking], noise, hiss, low quality, distorted',
+        'GCC Poem':        'singing, sung chorus, screaming, shouting, non-khaleeji, non-gcc dialect, egyptian, levantine, maghrebi, iraqi',
+        'Arabic Poem':     'english, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, screaming, shouting',
+        'English Poem':    'arabic, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, screaming, shouting',
+        'قصيدة خليجية':    'غناء, كورس, صراخ, هتاف, غير خليجي, غير لهجة خليجية',
+        'قصيدة عربية فصحى': 'إنجليزي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
+        'قصيدة إنجليزية':  'عربي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
         // ── Iraqi ──
         'Iraqi Style':     'egyptian, levantine, shami, moroccan, maghrebi, darija, khaleeji, gulf, fusha, msa, noise, hiss, low quality, distorted',
         'عراقي':           'مصري, شامي, مغربي, دارجة, خليجي, فصحى, noise, hiss, low quality, distorted',
@@ -7027,7 +7178,7 @@ function VoicesTab({
       // oud/qanun/darbuka/riq/mirwas/hand-claps bleed. Placed FIRST in the
       // merge order so these tokens survive the 200-char cap.
       const modernFamily = getKhalijiFamily(effectiveIncludeTags[0] ?? null);
-      const userPickedTraditionalInstrument = instrumentTags.some((t) => /oud|qanun|darbuka|riq|mirwas|hand\s*clap/i.test(t));
+      const userPickedTraditionalInstrument = activeInstrumentTags.some((t) => /oud|qanun|darbuka|riq|mirwas|hand\s*clap/i.test(t));
       const traditionalAntiTokens: string[] = [];
       if (hasGccTag && (modernFamily === 'pop' || modernFamily === 'urban') && !userPickedTraditionalInstrument) {
         traditionalAntiTokens.push('oud', 'qanun', 'darbuka', 'riq', 'mirwas', 'hand claps');
@@ -7036,10 +7187,10 @@ function VoicesTab({
       // When spotlight is on (1-2 instruments), push the common bleed instruments the
       // user did NOT pick to the FRONT of the negative list so they survive the hard
       // 200-char cap and Suno keeps the chosen instrument out front.
-      const instrumentSpotlightActive = instrumentSpotlight && instrumentTags.length >= 1 && instrumentTags.length <= 2;
+      const instrumentSpotlightActive = instrumentSpotlight && activeInstrumentTags.length >= 1 && activeInstrumentTags.length <= 2;
       const spotlightAntiTokens: string[] = [];
       if (instrumentSpotlightActive) {
-        const selectedLower = instrumentTags.map((t) => t.toLowerCase());
+        const selectedLower = activeInstrumentTags.map((t) => t.toLowerCase());
         const bleedPool = hasGccTag
           ? ['oud', 'qanun', 'darbuka', 'riq', 'mirwas', 'ney']
           : ['piano', 'electric guitar', 'synth', 'strings', 'drum kit', 'brass'];
@@ -7947,8 +8098,8 @@ function VoicesTab({
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-[10px] sm:text-xs text-muted-foreground/70 dark:text-muted-foreground/60">
                       {isAr
-                        ? `${instrumentTags.length}/6 آلات مختارة`
-                        : `${instrumentTags.length}/6 instruments selected`}
+                        ? `${instrumentTags.length}/${instrumentSelectionLimit} آلات مختارة`
+                        : `${instrumentTags.length}/${instrumentSelectionLimit} instruments selected`}
                     </span>
                     <div className="flex items-center gap-2">
                     {recommendedInstruments.length > 0 && (

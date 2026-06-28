@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Globe, CheckCircle2, AlertCircle, Loader2, Trash2, Copy, ExternalLink, ShoppingCart } from 'lucide-react';
+import { Globe, CheckCircle2, AlertCircle, Loader2, Trash2, Copy } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
@@ -124,17 +124,6 @@ export default function CustomDomainSection({ projectId, initialDomain, isRTL = 
             <Globe className="h-4 w-4" />
             {isRTL ? '+ ربط نطاق مخصص' : '+ Connect a custom domain'}
           </button>
-          {/* Buy domain link */}
-          <a
-            href="https://wakti.xyz"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-1.5 text-xs text-zinc-400 dark:text-zinc-500 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors"
-          >
-            <ShoppingCart className="h-3 w-3" />
-            {isRTL ? 'لا تملك نطاقاً؟ اشترِ واحداً من wakti.xyz' : "Don't have a domain? Buy one at wakti.xyz"}
-            <ExternalLink className="h-3 w-3" />
-          </a>
         </div>
       )}
 
@@ -165,16 +154,6 @@ export default function CustomDomainSection({ projectId, initialDomain, isRTL = 
               {isRTL ? 'إلغاء' : 'Cancel'}
             </button>
           </div>
-          <a
-            href="https://wakti.xyz"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-indigo-500 transition-colors"
-          >
-            <ShoppingCart className="h-3 w-3" />
-            {isRTL ? 'اشترِ نطاقاً من wakti.xyz' : 'Buy a domain at wakti.xyz'}
-            <ExternalLink className="h-3 w-3" />
-          </a>
         </div>
       )}
 

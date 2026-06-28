@@ -737,9 +737,15 @@ serve(async (req) => {
       const rawContent = (rec.content ?? rec.data ?? "").toString();
       assertSafePath(path);
       if (!rawContent) continue; // skip empty files (e.g. no-CSS projects)
-      const content = path === "index.html"
+      const upgradedHtml = path === "index.html"
         ? upgradeLegacyPublishedHtml(rawContent, projectNameRaw || "Wakti Project")
         : rawContent;
+      const content = path === "index.html"
+        ? upgradedHtml.replace(
+            /https:\/\/cdn\.jsdelivr\.net\/npm\/@tailwindcss\/browser@[^"'\s]*/g,
+            "https://cdn.tailwindcss.com"
+          )
+        : upgradedHtml;
       publishFiles.push({ path, content });
     }
 
