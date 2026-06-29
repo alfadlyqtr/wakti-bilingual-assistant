@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw, Eye, EyeOff, ArrowLeftRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, ChevronUp, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw, Eye, EyeOff, ArrowLeftRight } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -329,6 +329,7 @@ export default function DeenQuran() {
   const [showExplanation, setShowExplanation] = useState(false);
   const [explanation, setExplanation] = useState("");
   const [explLoading, setExplLoading] = useState(false);
+  const [meaningExpanded, setMeaningExpanded] = useState(true);
   const [bookmarkedAyahs, setBookmarkedAyahs] = useState<Set<number>>(new Set());
   const [lastProgress, setLastProgress] = useState<LastProgress | null>(null);
   const [pendingBookmarkAyah, setPendingBookmarkAyah] = useState<Ayah | null>(null);
@@ -1353,21 +1354,11 @@ export default function DeenQuran() {
     }
     setExplLoading(true);
     try {
-      const edition = isAr ? "ar-tafsir-muyassar" : "en-tafisr-ibn-kathir";
-      const proxyUrl = new URL(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/deen-quran-proxy`);
-      proxyUrl.searchParams.set("source", "tafsir");
-      proxyUrl.searchParams.set("path", `${edition}/${activeSurah.number}/${ayah.numberInSurah}.json`);
-      const session = await supabase.auth.getSession();
-      const token = session.data.session?.access_token ?? "";
-      const res = await fetch(proxyUrl.toString(), {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          apikey: import.meta.env.VITE_SUPABASE_ANON_KEY ?? "",
-        },
-      });
+      const tafsirId = isAr ? 16 : 169;
+      const res = await fetch(`https://api.qurancdn.com/api/qdc/tafsirs/${tafsirId}/by_ayah/${activeSurah.number}:${ayah.numberInSurah}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
-      const text: string = json?.ayah?.text ?? json?.text ?? "";
+      const text: string = json?.tafsir?.text ?? "";
       if (!text) throw new Error("empty");
       tafsirCacheRef.current[cacheKey] = text;
       setExplanation(text);
@@ -1377,6 +1368,13 @@ export default function DeenQuran() {
       setExplLoading(false);
     }
   };
+
+  // Re-fetch tafsir when language changes while the meaning popup is open
+  useEffect(() => {
+    if (showExplanation && selectedAyah) {
+      explainAyah(selectedAyah);
+    }
+  }, [isAr, showExplanation, selectedAyah]);
 
   const isBismillahAyah = (ayah: Ayah) =>
     ayah.numberInSurah === 1 && ayah.text.includes("بِسْم") && ayah.text.includes("رَّح");
@@ -1401,7 +1399,15 @@ export default function DeenQuran() {
   };
 
   const cleanExplanation = (value: string) => {
-    const cleaned = value.replace(/\*\*/g, "").trim();
+    const cleaned = value
+      .replace(/<[^>]+>/g, "")
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/\*\*/g, "")
+      .trim();
     // Take only the first 5 sentences — tafsir can be very long
     const sentences = cleaned.match(/[^.!?]+[.!?]+/g) ?? [];
     if (sentences.length >= 5) return (sentences[0] + sentences[1] + sentences[2] + sentences[3] + sentences[4]).trim();
@@ -2621,13 +2627,13 @@ export default function DeenQuran() {
                         : (isDark ? "0 8px 24px rgba(0,0,0,0.22)" : "0 8px 20px rgba(59,130,246,0.10)"),
                       backdropFilter: "blur(10px)",
                     }}
-                    title={isAr ? (readerPlayAllEnabled ? "تشغيل الكل مفعل" : "تشغيل الكل") : (readerPlayAllEnabled ? "Play all enabled" : "Play all")}
+                    title={isAr ? (readerPlayAllEnabled ? "التالي تلقائي مفعل" : "التالي تلقائي") : (readerPlayAllEnabled ? "Auto-next on" : "Auto-next")}
                   >
                     {readerPlayAllEnabled
                       ? <Check className="w-4 h-4" style={{ color: "#22c55e" }} />
                       : <Volume2 className="w-4 h-4" style={{ color: "hsl(210,100%,65%)" }} />}
                     <span className="text-[12px] font-medium" style={{ color: readerPlayAllEnabled ? "#22c55e" : (isDark ? "#dbeafe" : "#1d4ed8") }}>
-                      {isAr ? (readerPlayAllEnabled ? "تشغيل الكل مفعل" : "تشغيل الكل") : (readerPlayAllEnabled ? "Play all on" : "Play all")}
+                      {isAr ? (readerPlayAllEnabled ? "التالي تلقائي" : "التالي تلقائي") : (readerPlayAllEnabled ? "Auto-next on" : "Auto-next")}
                     </span>
                   </button>
                   {isAr && (
@@ -3190,13 +3196,16 @@ export default function DeenQuran() {
           const popupText = isDark ? "#e8dfc8" : "#1a120a";
           const popupSub = isDark ? "hsla(44,30%,70%,0.6)" : "hsla(30,30%,30%,0.55)";
           const popupTrans = activeTrans.find((t) => t.numberInSurah === selectedAyah.numberInSurah) ?? selectedAyahTrans;
+          const sheetGold = isDark ? "#e5c07b" : "#a67c2e";
+          const sheetGoldGlow = isDark ? "rgba(229,192,123,0.32)" : "rgba(166,124,46,0.28)";
+          const sheetGoldFaint = isDark ? "hsla(45,65%,50%,0.12)" : "hsla(35,55%,42%,0.10)";
 
           return (
             <div className="fixed inset-0 z-40 flex items-center justify-center px-4" onClick={() => setShowExplanation(false)}>
               <div className="absolute inset-0" style={{ background: "rgba(0,0,0,0.52)", backdropFilter: "blur(4px)" }} />
               <div
                 className="relative w-full max-w-md rounded-3xl px-5 py-5"
-                style={{ background: popupBg, border: `1px solid ${popupBorder}`, boxShadow: "0 24px 80px rgba(0,0,0,0.35)" }}
+                style={{ background: popupBg, border: `1px solid ${popupBorder}`, boxShadow: "0 24px 80px rgba(0,0,0,0.35)", maxHeight: "85vh", overflowY: "auto" }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-start justify-between gap-3 mb-3">
@@ -3257,19 +3266,28 @@ export default function DeenQuran() {
                 </div>
 
                 <div className="rounded-2xl px-4 py-4" style={{ background: isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.72)", border: `1px solid ${popupBorder}` }}>
-                  <p className="text-xs font-semibold mb-2" style={{ color: popupGold }}>
-                    {isAr ? "المعنى" : "Meaning"}
-                  </p>
-                  {explLoading ? (
-                    <p className="text-sm" style={{ color: popupSub }}>{isAr ? "يتم تجهيز المعنى..." : "Loading meaning..."}</p>
-                  ) : (
-                    <p className="text-[14px] leading-[1.8] whitespace-pre-wrap" style={{ color: popupText }}>
-                      {cleanExplanation(explanation || (isAr ? "التفسير غير متاح لهذه الآية." : "Tafsir not available for this verse."))}
-                    </p>
+                  <button
+                    onClick={() => setMeaningExpanded((v) => !v)}
+                    className="flex items-center justify-between w-full mb-2"
+                    style={{ color: popupGold }}
+                  >
+                    <span className="text-xs font-semibold">{isAr ? "المعنى" : "Meaning"}</span>
+                    {meaningExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                  {meaningExpanded && (
+                    <div>
+                      {explLoading ? (
+                        <p className="text-sm" style={{ color: popupSub }}>{isAr ? "يتم تجهيز المعنى..." : "Loading meaning..."}</p>
+                      ) : (
+                        <p className="text-[14px] leading-[1.8] whitespace-pre-wrap" style={{ color: popupText }}>
+                          {cleanExplanation(explanation || (isAr ? "التفسير غير متاح لهذه الآية." : "Tafsir not available for this verse."))}
+                        </p>
+                      )}
+                      <p className="text-[11px] mt-3" style={{ color: popupSub }}>
+                        {isAr ? "المصدر: تفسير الميسر" : "Source: tafsir-ibn-kathir"}
+                      </p>
+                    </div>
                   )}
-                  <p className="text-[11px] mt-3" style={{ color: popupSub }}>
-                    {isAr ? "المصدر: تفسير ابن كثير" : "Source: tafsir-ibn-kathir"}
-                  </p>
                 </div>
               </div>
             </div>

@@ -40,13 +40,9 @@ export default function DeenHadith() {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
 
-  const openCollection = async (col: typeof COLLECTIONS[0]) => {
-    setActiveCollection(col);
-    setView("reader");
+  const loadHadiths = async (col: typeof COLLECTIONS[0], editionPrefix: string) => {
     setLoading(true);
-    setPage(1);
     try {
-      const editionPrefix = isAr ? "ara" : "eng";
       const res = await fetch(`${HADITH_API_BASE}/${editionPrefix}-${col.id}.json`);
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
@@ -70,6 +66,20 @@ export default function DeenHadith() {
       setLoading(false);
     }
   };
+
+  const openCollection = async (col: typeof COLLECTIONS[0]) => {
+    setActiveCollection(col);
+    setView("reader");
+    setPage(1);
+    await loadHadiths(col, isAr ? "ara" : "eng");
+  };
+
+  // Re-fetch hadiths when language changes while in reader view
+  useEffect(() => {
+    if (!activeCollection || view !== "reader") return;
+    setPage(1);
+    loadHadiths(activeCollection, isAr ? "ara" : "eng");
+  }, [isAr, activeCollection, view]);
 
   const handleExplain = async () => {
     if (!selectedHadith || !activeCollection) return;
