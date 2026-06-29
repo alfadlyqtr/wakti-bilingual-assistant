@@ -2576,7 +2576,7 @@ function VoicesTab({
         },
         {
           title: 'الشعر والإلقاء',
-          items: ['قصيدة خليجية','قصيدة خليجية — سعودي','قصيدة خليجية — كويتي','قصيدة خليجية — قطري','قصيدة عربية فصحى','قصيدة إنجليزية']
+          items: ['قصيدة خليجية','قصيدة عربية فصحى','قصيدة إنجليزية']
         },
         {
           title: 'بوب وحديث',
@@ -2667,7 +2667,7 @@ function VoicesTab({
       },
       {
         title: 'Poetry / Spoken',
-        items: ['GCC Poem','GCC Poem — Saudi','GCC Poem — Kuwaiti','GCC Poem — Qatari','Arabic Poem','English Poem']
+        items: ['GCC Poem','Arabic Poem','English Poem']
       },
       {
         title: 'Pop',
@@ -2789,12 +2789,6 @@ function VoicesTab({
     'Khaleeji Traditional': 'GCC Traditional',
     'Khaleeji Shaabi': 'GCC Shaabi',
     'Khaleeji Trap': 'Khaleeji Trap',
-    'GCC Poem — Saudi': 'GCC Poem',
-    'GCC Poem — Kuwaiti': 'GCC Poem',
-    'GCC Poem — Qatari': 'GCC Poem',
-    'قصيدة خليجية — سعودي': 'قصيدة خليجية',
-    'قصيدة خليجية — كويتي': 'قصيدة خليجية',
-    'قصيدة خليجية — قطري': 'قصيدة خليجية',
   }), []);
   const effectiveIncludeTags = useMemo(
     () => [...new Set(includeTags.map((tag) => KHALIJI_STYLE_ALIASES[tag] ?? tag))],
@@ -2804,12 +2798,6 @@ function VoicesTab({
   const POEM_STYLE_MODE_MAP: Record<string, PoemMode> = {
     'GCC Poem': 'gcc',
     'قصيدة خليجية': 'gcc',
-    'GCC Poem — Saudi': 'gcc',
-    'GCC Poem — Kuwaiti': 'gcc',
-    'GCC Poem — Qatari': 'gcc',
-    'قصيدة خليجية — سعودي': 'gcc',
-    'قصيدة خليجية — كويتي': 'gcc',
-    'قصيدة خليجية — قطري': 'gcc',
     'Arabic Poem': 'arabic',
     'قصيدة عربية فصحى': 'arabic',
     'English Poem': 'english',
@@ -2911,14 +2899,6 @@ function VoicesTab({
       negativeBlockEnglish: 'kuwaiti, qatari, saudi, emirati, bahraini, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-omani, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
       negativeBlockArabic: 'كويتي, قطري, سعودي, إماراتي, بحريني, مصري, شامي, مغربي, عراقي, فصحى, غير عماني, غير خليجي, جودة منخفضة',
     },
-  };
-  const POEM_DIALECT_PRESET_MAP: Partial<Record<string, KhaleejiDialect>> = {
-    'GCC Poem — Saudi': 'saudi',
-    'GCC Poem — Kuwaiti': 'kuwaiti',
-    'GCC Poem — Qatari': 'qatari',
-    'قصيدة خليجية — سعودي': 'saudi',
-    'قصيدة خليجية — كويتي': 'kuwaiti',
-    'قصيدة خليجية — قطري': 'qatari',
   };
   // Minimal mode only: styles include/exclude + prompt + duration
   const [submitting, setSubmitting] = useState(false);
@@ -4732,10 +4712,6 @@ function VoicesTab({
       setRhythmOpen(false);
     } else {
       setIncludeTags([style]);
-      const poemDialectPreset = POEM_DIALECT_PRESET_MAP[style];
-      if (poemDialectPreset) {
-        setKhaleejiDialect(poemDialectPreset);
-      }
       setStylesCollapsed(true);
       setRhythmOpen(true);
       setMoodOpen(false);
@@ -5808,18 +5784,18 @@ function VoicesTab({
     const lead = opts.instruments[0] ?? 'the lead instrument';
     const s2 = opts.spotlight
       ? (isPoemFamily
-          ? `A minimal spoken-word bed centered on ${lead} at low background level${rhythmClause}. No instrumental lead melody and no hooks.`
+          ? `A minimal spoken-word bed centered on ${lead} at low background level${rhythmClause}. Keep this background layer continuous from intro to outro with no dropouts. No instrumental lead melody and no hooks.`
           : `A sparse, intimate arrangement built around a solo ${lead}, where ${lead} carries the main melody up front${rhythmClause}. Keep the backing minimal.`)
       : (isPoemFamily
-          ? `A ${v.arrangementAdj} arrangement with ${instList} as a low background bed only${rhythmClause}${supRhythmClause}.`
+          ? `A ${v.arrangementAdj} arrangement with ${instList} as a low background bed only${rhythmClause}${supRhythmClause}. Keep this soft bed continuous under the full recitation from intro to outro.`
           : `A ${v.arrangementAdj} arrangement built around ${instList}${rhythmClause}${supRhythmClause}.`);
     const paletteSentence = opts.instruments.length > 0
       ? (opts.spotlight
           ? (isPoemFamily
-              ? `${lead} stays subtle behind the voice. Voice remains dominant and clearly out front. No instrumental solos and no competing lead instrument.`
+              ? `${lead} stays subtle behind the voice and continues gently across all sections. Voice remains dominant and clearly out front. No instrumental solos and no competing lead instrument.`
               : `${lead} is the single featured lead instrument, mixed loud and clearly out front. Minimal accompaniment only — no full traditional ensemble and no other lead instruments competing with ${lead}.`)
           : (isPoemFamily
-              ? `Featured instruments: ${instList}. Keep them as soft background texture only. Voice is the clear main lead at all times.`
+              ? `Featured instruments: ${instList}. Keep them as soft continuous background texture only with no dropouts. Voice is the clear main lead at all times.`
               : `Featured instruments: ${instList}. ${label} only shapes the groove feel, energy, and playing style around the Khaleeji vocal lead.`))
       : '';
 
@@ -5930,9 +5906,12 @@ function VoicesTab({
     if (vocalType === 'none') return null;
     const cap = vocalType === 'male' ? 'male' : 'female';
     const v = GENRE_VOCAB[genreFamily];
+    const poemBedHint = instrumentTags.length > 0
+      ? `${instrumentTags.slice(0, 2).join(' + ')} as a continuous low background bed from intro to outro`
+      : 'a continuous low ambient background bed from intro to outro';
 
     if (selectedPoemMode === 'gcc') {
-      return `[Spoken poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, gentle poetic ${cap} voice, voice dominant and clearly out front, instruments low background bed only, Nabati-inspired lyrical wording, vivid imagery and metaphor, intentional pauses, no singing, no chorus, no screaming]`;
+      return `[Spoken poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, gentle poetic ${cap} voice, voice dominant and clearly out front, ${poemBedHint}, Nabati-inspired Khaleeji wording and Gulf idioms, vivid imagery and metaphor, intentional pauses, no singing, no chorus, no screaming]`;
     }
     if (selectedPoemMode === 'arabic') {
       return `[Classical Arabic spoken poem recitation only, Quranic/Fusha tone, elegant balagha diction, rhetorical imagery and metaphor, soft calm ${cap} recitation, intentional pauses, no singing, no chorus, no screaming]`;
@@ -6080,11 +6059,11 @@ function VoicesTab({
     const dialectIdentityAnchor = dialectLock ? `authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji identity` : null;
     const productionShellAnchor = isFusionShell && primaryStyle ? `${normalizeChipForDisplay(primaryStyle)} production shell only` : null;
     const poemStyleDirective = poemMode === 'gcc'
-      ? `spoken GCC poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent, voice dominant in foreground, instruments low background texture only, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments`
+      ? `spoken GCC poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, Nabati-inspired Khaleeji wording and Gulf idioms, free-tempo spoken pacing, no fixed beat grid, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments`
       : poemMode === 'arabic'
-        ? 'spoken Arabic poem recitation only, strict classical Fusha/Quranic tone, voice dominant in foreground, instruments low background texture only, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, elevated poetic diction, rich rhetorical imagery, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments'
+        ? 'spoken Arabic poem recitation only, strict classical Fusha/Quranic tone, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, elevated poetic diction, rich rhetorical imagery, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments'
         : poemMode === 'english'
-          ? 'spoken English poem recitation only, strict English-only language, voice dominant in foreground, instruments low background texture only, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, literary poetic wording, imagery-driven lines, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments'
+          ? 'spoken English poem recitation only, strict English-only language, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, literary poetic wording, imagery-driven lines, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments'
           : null;
     const styleParts: string[] = [
       dialectLock,
@@ -6261,7 +6240,7 @@ function VoicesTab({
     'GCC Synth Pop':         LOCK_POP('synth-driven khaleeji pop'),
     'Modern Khaleeji Fusion': LOCK_POP('modern khaleeji fusion'),
     'English GCC Pop':       LOCK_POP('english lyrics, khaleeji pop crossover'),
-    'GCC Poem':              `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, voice dominant in foreground, instruments low background texture only, no instrumental lead melody, poetic gulf storytelling, metaphor-rich lines, elegant emotional cadence, soft calm delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
+    'GCC Poem':              `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, Nabati-inspired Gulf storytelling and idioms, metaphor-rich lines, elegant emotional cadence, soft calm delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
     'Arabic Poem':           'classical Arabic (Fusha / Quranic tone) spoken poem recitation, elevated poetic diction, eloquent rhetoric, vivid imagery and metaphor, soft calm reading voice, clear pauses, no singing, no chorus, no screaming, max two instruments',
     'English Poem':          'English spoken poem recitation, literary poetic storytelling, vivid imagery, elegant metaphors, soft calm storytelling voice, clear pauses, no singing, no chorus, no screaming, max two instruments',
     'GCC R&B Pop':           LOCK_POP('khaleeji r&b pop'),
@@ -6291,7 +6270,7 @@ function VoicesTab({
     'خليجي سينث بوب':        LOCK_POP('synth-driven khaleeji pop'),
     'فيوجن خليجي':           LOCK_POP('modern khaleeji fusion'),
     'إنجليزي بطابع خليجي':   LOCK_POP('english lyrics, khaleeji pop crossover'),
-    'قصيدة خليجية':          `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, voice dominant in foreground, instruments low background texture only, no instrumental lead melody, poetic gulf storytelling, metaphor-rich lines, elegant emotional cadence, soft calm delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
+    'قصيدة خليجية':          `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, Nabati-inspired Gulf storytelling and idioms, metaphor-rich lines, elegant emotional cadence, soft calm delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
     'قصيدة عربية فصحى':      'إلقاء قصيدة عربية فصحى بنبرة قرآنية هادئة، بلغة شاعرية عالية، صور بلاغية واستعارات واضحة، وقفات متعمدة، بدون غناء، بدون كورس، بدون صراخ، حد أقصى آلتين',
     'قصيدة إنجليزية':        'English spoken poem recitation, literary poetic storytelling, vivid imagery, elegant metaphors, soft calm storytelling voice, clear pauses, no singing, no chorus, no screaming, max two instruments',
     'خليجي آر أند بي':       LOCK_POP('khaleeji r&b pop'),
@@ -6860,8 +6839,12 @@ function VoicesTab({
   }
 
   function buildPoemPromptPrefix(mode: PoemMode | null): string {
+    const poemBedInstruments = instrumentTags.length > 0 ? instrumentTags.slice(0, 2).join(' + ') : '';
+    const poemBedDirective = poemBedInstruments
+      ? `continuous low-volume ${poemBedInstruments} background bed from intro to outro`
+      : 'continuous low-volume ambient background bed from intro to outro';
     if (mode === 'gcc') {
-      return `[Spoken poem mode hard lock: strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent only, voice dominant and clearly out front, instruments low background bed only, no instrumental solo or lead hook, free-tempo spoken recitation with clear pauses, no singing, no chorus, no screaming, no claps, no drums, no percussion, max 2 instruments.]`;
+      return `[Spoken poem mode hard lock: strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent only, voice dominant and clearly out front, ${poemBedDirective}, no instrumental solo or lead hook, Nabati-inspired Khaleeji wording and Gulf idioms, free-tempo spoken recitation with clear pauses, no singing, no chorus, no screaming, no claps, no drums, no percussion, max 2 instruments.]`;
     }
     if (mode === 'arabic') {
       return '[Spoken poem mode: strict Classical Arabic (Fusha / Quranic tone) only, elevated poetic diction, clear rhetorical imagery and metaphors, soft calm recitation, clear pauses, no singing, no chorus, no screaming, sparse accompaniment, max 2 instruments.]';
@@ -8501,7 +8484,7 @@ function VoicesTab({
               )}
             </div>
           )}
-          {khaleejiDialectActive && vocalType !== 'none' && !isPoemStyleSelected && (
+          {khaleejiDialectActive && vocalType !== 'none' && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold text-[#060541] dark:text-white/90">

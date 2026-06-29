@@ -73,8 +73,8 @@ const POEM_NEGATIVE_TOKENS = [
   "screaming",
   "shouting",
 ];
-const POEM_HARD_LOCK_STYLE = "spoken poem recitation only, voice dominant foreground, instruments low background bed only, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, no melodic key-led phrasing, no singing, no chorus, no chant, no clapping, no drums, no percussion";
-const POEM_HARD_LOCK_PROMPT = "[POEM HARD LOCK: spoken recitation only, voice loud and clearly out front, instruments quiet background bed only, no instrumental solos, no singing, no chorus, no chant, no claps, no drums, no percussion, free-tempo with no beat-driven groove]";
+const POEM_HARD_LOCK_STYLE = "spoken Khaleeji poem recitation only, voice dominant foreground, Nabati-inspired Khaleeji diction and Gulf idioms, instruments low continuous background bed only from intro to outro, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, no melodic key-led phrasing, no singing, no chorus, no chant, no clapping, no drums, no percussion";
+const POEM_HARD_LOCK_PROMPT = "[POEM HARD LOCK: spoken recitation only, voice loud and clearly out front, Nabati-inspired Khaleeji diction and Gulf idioms, instruments quiet continuous background bed only from intro to outro, no instrumental solos, no singing, no chorus, no chant, no claps, no drums, no percussion, free-tempo with no beat-driven groove]";
 
 // ── Style-aware persona resolver ──
 // The chip drives persona via the LOCK anchor string. Only LOCK_HERITAGE emits the word
@@ -308,18 +308,36 @@ function stripPoemSongCues(value: string): string {
     .trim();
 }
 
-function applyPoemStyleHardLock(style: string, khaleejiDialectLabel: string, khaleejiAccentAnchor: string, maxStyleLength: number): string {
+function extractLockedInstrumentsFromControlBlock(controlBlock: string): string[] {
+  const match = controlBlock.match(/locked instruments:\s*([^\n\r]+)/i);
+  if (!match?.[1]) return [];
+  return match[1]
+    .split(",")
+    .map((token) => token.trim().replace(/[.;]+$/g, ""))
+    .filter(Boolean);
+}
+
+function applyPoemStyleHardLock(
+  style: string,
+  khaleejiDialectLabel: string,
+  khaleejiAccentAnchor: string,
+  maxStyleLength: number,
+  controlBlock: string,
+): string {
   const dialectBlock = [khaleejiDialectLabel, khaleejiAccentAnchor]
     .map((value) => value.trim())
     .filter(Boolean)
     .join(", ");
-  const lockedInstruments = extractLockedInstruments(style)
+  const lockedInstruments = dedupeCommaSeparatedTokens([
+    ...extractLockedInstrumentsFromControlBlock(controlBlock),
+    ...extractLockedInstruments(style),
+  ])
     .map((token) => stripPoemSongCues(token))
     .filter(Boolean)
     .slice(0, 2);
   const instrumentBlock = lockedInstruments.length > 0
-    ? `locked instruments: ${lockedInstruments.join(", ")}, low background only`
-    : "locked instruments: sparse soft background bed only";
+    ? `locked instruments: ${lockedInstruments.join(", ")}, continuous low background only across all sections`
+    : "locked instruments: sparse soft continuous background bed only across all sections";
   const compactPoemStyle = [
     POEM_HARD_LOCK_STYLE,
     dialectBlock,
@@ -334,9 +352,13 @@ function applyPoemStyleHardLock(style: string, khaleejiDialectLabel: string, kha
   return compactPoemStyle.slice(0, Math.max(80, maxStyleLength - 1)).trim();
 }
 
-function applyPoemPromptHardLock(prompt: string): string {
+function applyPoemPromptHardLock(prompt: string, controlBlock: string): string {
   const cleanedPrompt = stripPoemSongCues(prompt);
-  return [POEM_HARD_LOCK_PROMPT, cleanedPrompt].filter(Boolean).join("\n\n").trim();
+  const lockedInstruments = extractLockedInstrumentsFromControlBlock(controlBlock).slice(0, 2);
+  const continuityLine = lockedInstruments.length > 0
+    ? `[Background bed lock: continuous low-volume ${lockedInstruments.join(" + ")} texture under full recitation from intro to outro, no dropouts]`
+    : "[Background bed lock: continuous low-volume ambient texture under full recitation from intro to outro, no dropouts]";
+  return [POEM_HARD_LOCK_PROMPT, continuityLine, cleanedPrompt].filter(Boolean).join("\n\n").trim();
 }
 
 // No-op wrapper retained so existing call-sites keep compiling. The Khaleeji vocal cue
@@ -437,11 +459,11 @@ serve(async (req) => {
     const poemSignal = [style, prompt, styleTags.join(",")].join(" ").toLowerCase();
     const isPoemEffective = /\b(?:gcc\s*poem|arabic\s*poem|english\s*poem|poem\s*cadence|spoken\s*poem|spoken-word\s*poem|poem\s*recitation)\b|قصيدة|إلقاء\s*شعري/.test(poemSignal);
     const effectiveStyle = isPoemEffective
-      ? applyPoemStyleHardLock(style, khaleejiDialectLabel, khaleejiAccentAnchor, styleLimit)
+      ? applyPoemStyleHardLock(style, khaleejiDialectLabel, khaleejiAccentAnchor, styleLimit, controlBlock)
       : style;
     const isGccEffective = GCC_STYLE_MARKERS.test(effectiveStyle);
     const effectivePrompt = isPoemEffective
-      ? applyPoemPromptHardLock(prompt)
+      ? applyPoemPromptHardLock(prompt, controlBlock)
       : (!instrumental && isGccEffective ? applyGccPromptShaping(prompt, effectiveStyle, vocalGender) : prompt);
     let effectiveNegativeTags = negativeTags;
     if (isPoemEffective) {
