@@ -14,7 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getMessages, sendMessage, markAsRead, uploadMessageAttachment, addReaction, removeReaction, deleteMessage } from "@/services/messageService";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { VoiceRecorder } from "./VoiceRecorder";
+import { VoiceRecorder, type VoiceRecorderHandle } from "./VoiceRecorder";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePresence } from "@/hooks/usePresence";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
@@ -46,6 +46,8 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const audioRefs = useRef<{ [key: string]: HTMLAudioElement }>({});
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<DirectMessage | null>(null);
+  const [voiceRecorderState, setVoiceRecorderState] = useState<'idle' | 'recording' | 'preview'>('idle');
+  const voiceRecorderRef = useRef<VoiceRecorderHandle>(null);
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [selectedActionMessage, setSelectedActionMessage] = useState<DirectMessage | null>(null);
   const [selectedActionIsSentByMe, setSelectedActionIsSentByMe] = useState(false);
@@ -79,18 +81,15 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Convert URLs in plain text into clickable links
+  // Convert URLs and emails in plain text into clickable links
   const linkifyText = (text: string, isSentByMe?: boolean) => {
     if (!text) return null;
-    const urlRegex = /((https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w\-._~:/?#[\]@!$&'()*+,;=%]*)?)/gi;
-    // Split text by URLs and interleave with anchors
+    const combinedRegex = /((https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w\-._~:/?#[\]@!$&'()*+,;=%]*)?|[\w.+-]+@[\w-]+\.[\w.-]+)/gi;
     const parts: Array<string> = [];
     let lastIndex = 0;
     let match: RegExpExecArray | null;
-    // Ensure global flag is respected
-    const regex = new RegExp(urlRegex);
-    (urlRegex as any).lastIndex = 0;
-    while ((match = urlRegex.exec(text)) !== null) {
+    (combinedRegex as any).lastIndex = 0;
+    while ((match = combinedRegex.exec(text)) !== null) {
       const [full] = match;
       const start = match.index;
       if (start > lastIndex) parts.push(text.slice(lastIndex, start));
@@ -100,15 +99,27 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     if (lastIndex < text.length) parts.push(text.slice(lastIndex));
 
     return parts.map((part, i) => {
-      const isUrl = /^(https?:\/\/)?([\w-]+\.)+[\w-]+/.test(part);
-      if (!isUrl) return <span key={i}>{part}</span>;
-      const href = part.startsWith('http') ? part : `https://${part}`;
-      // Use high-contrast link colors depending on bubble background
+      const isEmail = /^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(part);
+      const isUrl = !isEmail && /^(https?:\/\/)?([\w-]+\.)+[\w-]+/.test(part);
+      if (!isEmail && !isUrl) return <span key={i}>{part}</span>;
+
       const linkClass = isSentByMe
-        // Sent by me: blue bubble with white text -> use amber for strong contrast
         ? 'underline underline-offset-2 text-amber-200 hover:text-amber-100 visited:text-yellow-200'
-        // Received: light surface -> deep blue for readability
         : 'underline underline-offset-2 text-blue-700 hover:text-blue-800 visited:text-purple-700 dark:text-sky-300 dark:hover:text-sky-200';
+
+      if (isEmail) {
+        return (
+          <a
+            key={i}
+            href={`mailto:${part}`}
+            className={`${linkClass} break-words`}
+          >
+            {part}
+          </a>
+        );
+      }
+
+      const href = part.startsWith('http') ? part : `https://${part}`;
       return (
         <a
           key={i}
@@ -630,7 +641,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               >
               {/* Quoted reply */}
               {message.is_deleted ? (
-                <div className={`text-sm italic ${isDark ? 'text-gray-300' : 'text-gray-500'}`}>
+                <div className={`text-sm italic ${isSentByMe ? 'text-white/70' : isDark ? 'text-gray-300' : 'text-gray-500'}`}>
                   {language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted'}
                 </div>
               ) : message.reply_to && (
@@ -809,7 +820,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       style={{ width: messagePreviewWidth, WebkitUserSelect: 'none', userSelect: 'none', WebkitTouchCallout: 'none' }}
     >
       {message.is_deleted ? (
-        <div className={`text-sm italic ${isDark ? 'text-gray-300' : 'text-gray-500'}`}>
+        <div className={`text-sm italic ${selectedActionIsSentByMe ? 'text-white/70' : isDark ? 'text-gray-300' : 'text-gray-500'}`}>
           {language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted'}
         </div>
       ) : message.reply_to && (
@@ -1038,7 +1049,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 >
                   <FileText className="h-4 w-4" />
                 </Button>
-                <VoiceRecorder onRecordingComplete={handleVoiceRecording} onRecordingStart={() => broadcastRecording(true)} onRecordingStop={() => broadcastRecording(false)} disabled={!canSend || sendMessageMutation.isPending || isUploading} />
               </div>
 
               {!canSend && sendBlockedReason && (
@@ -1051,49 +1061,78 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               <input ref={fileInputRef} type="file" accept="image/*,image/heic,image/heif,.png,.jpg,.jpeg,.gif,.webp,.heic,.heif,.bmp,.tiff" className="hidden" onChange={handleImageSelected} aria-label="Upload image" />
               <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} aria-label="Upload PDF" />
 
-              {/* Bottom: text input + send button */}
+              {/* Bottom: mic + input + send, or voice recorder in recording/preview mode */}
               <div className="flex items-center gap-2">
-                {/* Text input area with character counter */}
-                <div className="flex-1 flex items-start">
-                  <Textarea
-                    value={messageText}
-                    onChange={(e) => {
-                      // auto-expand (max ~4 lines)
-                      e.currentTarget.style.height = 'auto';
-                      const nextH = Math.min(e.currentTarget.scrollHeight, 100);
-                      e.currentTarget.style.height = `${nextH}px`;
-                      handleInputChange(e as any);
-                    }}
-                    placeholder={t('typeMessage', language)}
-                    maxLength={MAX_CHARS}
-                    rows={1}
-                    className={`min-h-[32px] max-h-[100px] h-[32px] px-2 py-[5px] text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                <div className={voiceRecorderState !== 'idle' ? 'flex-1' : ''}>
+                  <VoiceRecorder
+                    ref={voiceRecorderRef}
+                    onRecordingComplete={handleVoiceRecording}
+                    onRecordingStart={() => broadcastRecording(true)}
+                    onRecordingStop={() => broadcastRecording(false)}
+                    onStateChange={setVoiceRecorderState}
                     disabled={!canSend || sendMessageMutation.isPending || isUploading}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        sendTextMessage();
-                      }
-                    }}
-                    onFocus={() => setUserTyping(true)}
-                    onBlur={() => {
-                      if (typingTimeoutRef.current) {
-                        clearTimeout(typingTimeoutRef.current);
-                      }
-                      setUserTyping(false);
-                    }}
                   />
-                  {/* Inline tiny counter */}
-                  <span className={`ml-2 mt-1 text-[10px] ${isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`}>{charCount}/{MAX_CHARS}</span>
                 </div>
+                {voiceRecorderState === 'idle' && (
+                  <div className="flex-1 flex items-start">
+                    <Textarea
+                      value={messageText}
+                      onChange={(e) => {
+                        // auto-expand (max ~4 lines)
+                        e.currentTarget.style.height = 'auto';
+                        const nextH = Math.min(e.currentTarget.scrollHeight, 100);
+                        e.currentTarget.style.height = `${nextH}px`;
+                        handleInputChange(e as any);
+                      }}
+                      placeholder={t('typeMessage', language)}
+                      maxLength={MAX_CHARS}
+                      rows={1}
+                      className={`min-h-[32px] max-h-[100px] h-[32px] px-2 py-[5px] text-sm rounded-md border border-gray-200 flex-1 resize-none overflow-y-auto leading-[1.35] ${isDark ? 'bg-transparent text-white placeholder:text-gray-400' : 'bg-white text-light-primary placeholder:text-gray-500'} focus-visible:ring-0 focus-visible:ring-offset-0`}
+                      disabled={!canSend || sendMessageMutation.isPending || isUploading}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          sendTextMessage();
+                        }
+                      }}
+                      onFocus={() => setUserTyping(true)}
+                      onBlur={() => {
+                        if (typingTimeoutRef.current) {
+                          clearTimeout(typingTimeoutRef.current);
+                        }
+                        setUserTyping(false);
+                      }}
+                    />
+                    {/* Inline tiny counter */}
+                    <span className={`ml-2 mt-1 text-[10px] ${isOverLimit ? 'text-red-500' : isDark ? 'text-gray-400' : 'text-gray-500'}`}>{charCount}/{MAX_CHARS}</span>
+                  </div>
+                )}
 
-                {/* Send button on the right */}
+                {/* Send button — always visible */}
                 <Button
                   type="button"
                   size="icon"
-                  onClick={sendTextMessage}
-                  disabled={!canSend || !messageText.trim() || isOverLimit || sendMessageMutation.isPending || isUploading}
-                  className={`rounded-md h-8 w-8 ${messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading ? 'bg-blue-500 hover:bg-blue-600 text-white' : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'} transition-colors`}
+                  onClick={() => {
+                    if (voiceRecorderState === 'preview') {
+                      voiceRecorderRef.current?.send();
+                    } else {
+                      sendTextMessage();
+                    }
+                  }}
+                  disabled={
+                    voiceRecorderState === 'recording' ||
+                    (voiceRecorderState === 'idle' && (!canSend || !messageText.trim() || isOverLimit)) ||
+                    sendMessageMutation.isPending || isUploading
+                  }
+                  className={`rounded-md h-8 w-8 transition-colors ${
+                    voiceRecorderState === 'recording'
+                      ? 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
+                      : voiceRecorderState === 'preview'
+                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                        : messageText.trim() && !isOverLimit && !sendMessageMutation.isPending && !isUploading
+                          ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                          : 'bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500'
+                  }`}
                 >
                   <Send className={`h-4 w-4 ${sendMessageMutation.isPending ? 'animate-pulse' : ''}`} />
                 </Button>

@@ -25,7 +25,7 @@ import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import { ImageModal } from "@/components/wakti-ai-v2/ImageModal";
 import { prepareAvatarUploadFile } from "@/utils/avatarUpload";
-import { VoiceRecorder } from "@/components/contacts/VoiceRecorder";
+import { VoiceRecorder, type VoiceRecorderHandle } from "@/components/contacts/VoiceRecorder";
 
 function getMentionInfo(text: string): { startIndex: number; filter: string } | null {
   const match = text.match(/(?:^|\s)(@[^\s]*)$/);
@@ -70,6 +70,8 @@ export default function GroupChatPage() {
   const [pendingMessageIds, setPendingMessageIds] = useState<Set<string>>(new Set());
   const [replyingTo, setReplyingTo] = useState<GroupChatMessage | null>(null);
   const [editingMessage, setEditingMessage] = useState<GroupChatMessage | null>(null);
+  const [voiceRecorderState, setVoiceRecorderState] = useState<'idle' | 'recording' | 'preview'>('idle');
+  const voiceRecorderRef = useRef<VoiceRecorderHandle>(null);
   const [selectedActionMessage, setSelectedActionMessage] = useState<GroupChatMessage | null>(null);
   const [selectedActionIsSentByMe, setSelectedActionIsSentByMe] = useState(false);
   const groupAvatarInputRef = useRef<HTMLInputElement>(null);
@@ -1082,6 +1084,49 @@ export default function GroupChatPage() {
     setAudioProgress((prev) => ({ ...prev, [messageId]: audio.currentTime }));
   };
 
+  // Convert URLs and emails in plain text into clickable links
+  const linkifyText = (text: string, isSentByMe?: boolean) => {
+    if (!text) return null;
+    const combinedRegex = /((https?:\/\/)?([\w-]+\.)+[\w-]+(\/[\w\-._~:/?#[\]@!$&'()*+,;=%]*)?|[\w.+-]+@[\w-]+\.[\w.-]+)/gi;
+    const parts: Array<string> = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    (combinedRegex as any).lastIndex = 0;
+    while ((match = combinedRegex.exec(text)) !== null) {
+      const [full] = match;
+      const start = match.index;
+      if (start > lastIndex) parts.push(text.slice(lastIndex, start));
+      parts.push(full);
+      lastIndex = start + full.length;
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+
+    return parts.map((part, i) => {
+      const isEmail = /^[\w.+-]+@[\w-]+\.[\w.-]+$/.test(part);
+      const isUrl = !isEmail && /^(https?:\/\/)?([\w-]+\.)+[\w-]+/.test(part);
+      if (!isEmail && !isUrl) return <span key={i}>{part}</span>;
+
+      const linkClass = isSentByMe
+        ? 'underline underline-offset-2 text-amber-200 hover:text-amber-100 visited:text-yellow-200'
+        : 'underline underline-offset-2 text-blue-700 hover:text-blue-800 visited:text-purple-700 dark:text-sky-300 dark:hover:text-sky-200';
+
+      if (isEmail) {
+        return (
+          <a key={i} href={`mailto:${part}`} className={`${linkClass} break-words`}>
+            {part}
+          </a>
+        );
+      }
+
+      const href = part.startsWith('http') ? part : `https://${part}`;
+      return (
+        <a key={i} href={href} target="_blank" rel="noopener noreferrer" className={`${linkClass} break-words`}>
+          {part}
+        </a>
+      );
+    });
+  };
+
   const renderReplySnippet = (message: GroupChatMessage, isSentByMe: boolean) => {
     if (!message.reply_to || message.is_deleted) return null;
 
@@ -1111,7 +1156,7 @@ export default function GroupChatPage() {
     const isLastTwoImages = index >= totalMessages - 2;
     if (message.is_deleted) {
       return (
-        <div className={cn("text-sm italic", isDark ? "text-gray-300" : "text-gray-500")}>
+        <div className={cn("text-sm italic", isSentByMe ? "text-white/70" : isDark ? "text-gray-300" : "text-gray-500")}>
           {language === "ar" ? "تم حذف هذه الرسالة" : "This message was deleted"}
         </div>
       );
@@ -1150,7 +1195,7 @@ export default function GroupChatPage() {
             )}
           </div>
           {message.content && (
-            <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.content}</p>
+            <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">{linkifyText(message.content, isSentByMe)}</div>
           )}
         </div>
       );
@@ -1209,7 +1254,7 @@ export default function GroupChatPage() {
     }
 
     return (
-      <p className="whitespace-pre-wrap break-words text-sm leading-6">{message.content}</p>
+      <div className="text-sm leading-relaxed break-words whitespace-pre-wrap">{linkifyText(message.content || '', isSentByMe)}</div>
     );
   };
 
@@ -1698,13 +1743,6 @@ export default function GroupChatPage() {
               {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Image className="h-4 w-4" />}
             </Button>
 
-            <VoiceRecorder
-              onRecordingComplete={handleVoiceRecording}
-              onRecordingStart={() => broadcastRecording(true)}
-              onRecordingStop={() => broadcastRecording(false)}
-              disabled={uploading || sendMutation.isPending}
-            />
-
             {/* PDF picker */}
             <input ref={pdfInputRef} type="file" accept=".pdf" className="hidden" onChange={handlePDFSelected} aria-label={language === "ar" ? "اختر ملف PDF" : "Choose PDF"} />
             <Button
@@ -1807,91 +1845,117 @@ export default function GroupChatPage() {
             </div>
           </div>
 
-          {/* Bottom row: compact input + send */}
+          {/* Bottom row: mic + input + send, or voice recorder in recording/preview mode */}
           <div className="flex items-center gap-2">
-            <Textarea
-              ref={textareaRef}
-              value={messageText}
-              onChange={(e) => {
-                const text = e.target.value;
-                setMessageText(text);
-                const mentionInfo = getMentionInfo(text);
-                if (mentionInfo) {
-                  setShowMentionPicker(true);
-                } else if (showMentionPicker) {
-                  setShowMentionPicker(false);
-                }
-                if (text.length >= 1) {
-                  const now = Date.now();
-                  if (now - lastTypingSentRef.current > 800) {
-                    broadcastTyping(true);
-                    lastTypingSentRef.current = now;
-                  }
-                }
-              }}
-              onFocus={() => broadcastTyping(true)}
-              onBlur={() => broadcastTyping(false)}
-              placeholder={editingMessage
-                ? (language === "ar" ? "عدّل رسالتك..." : "Edit your message...")
-                : attachedImage
-                  ? (language === "ar" ? "أضف تعليق... (اختياري)" : "Add a caption... (optional)")
-                  : (language === "ar" ? "اكتب رسالة للمجموعة" : "Write a message to the group")
-              }
-              rows={1}
-              className={cn(
-                "min-h-[36px] max-h-[100px] h-[36px] rounded-xl resize-none flex-1 text-sm px-3 py-[6px] leading-[1.35] overflow-y-auto border",
-                isDark ? "bg-transparent text-white placeholder:text-gray-400 border-gray-700" : "bg-white text-light-primary placeholder:text-gray-500 border-gray-200"
-              )}
-              disabled={uploading || editGroupMessageMutation.isPending}
-              onKeyDown={(e) => {
-                if (showMentionPicker) {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    const currentText = e.currentTarget.value;
-                    const info = getMentionInfo(currentText);
-                    const filter = info?.filter.toLowerCase() || "";
-                    const candidates = (conversation?.participants || [])
-                      .filter((p) => p.user_id !== user?.id)
-                      .filter((p) => {
-                        const n = (p.profile?.display_name || p.profile?.username || "").toLowerCase();
-                        return n.includes(filter);
-                      });
-                    if (candidates.length > 0) {
-                      const p = candidates[0];
-                      const n = p.profile?.display_name || p.profile?.username || (language === "ar" ? "عضو" : "Member");
-                      const isAi = p.user_id === WAKTI_AI_ID;
-                      const mention = isAi ? "@wakti " : `@${n} `;
-                      if (info) {
-                        const before = currentText.slice(0, info.startIndex);
-                        setMessageText(before + mention);
-                      } else {
-                        setMessageText((prev) => prev + mention);
-                      }
-                      setShowMentionPicker(false);
-                    }
-                    return;
-                  }
-                  if (e.key === "Escape") {
-                    e.preventDefault();
+            <div className={voiceRecorderState !== 'idle' ? 'flex-1' : ''}>
+              <VoiceRecorder
+                ref={voiceRecorderRef}
+                onRecordingComplete={handleVoiceRecording}
+                onRecordingStart={() => broadcastRecording(true)}
+                onRecordingStop={() => broadcastRecording(false)}
+                onStateChange={setVoiceRecorderState}
+                disabled={uploading || sendMutation.isPending}
+              />
+            </div>
+            {voiceRecorderState === 'idle' && (
+              <Textarea
+                ref={textareaRef}
+                value={messageText}
+                onChange={(e) => {
+                  const text = e.target.value;
+                  setMessageText(text);
+                  const mentionInfo = getMentionInfo(text);
+                  if (mentionInfo) {
+                    setShowMentionPicker(true);
+                  } else if (showMentionPicker) {
                     setShowMentionPicker(false);
-                    return;
                   }
+                  if (text.length >= 1) {
+                    const now = Date.now();
+                    if (now - lastTypingSentRef.current > 800) {
+                      broadcastTyping(true);
+                      lastTypingSentRef.current = now;
+                    }
+                  }
+                }}
+                onFocus={() => broadcastTyping(true)}
+                onBlur={() => broadcastTyping(false)}
+                placeholder={editingMessage
+                  ? (language === "ar" ? "عدّل رسالتك..." : "Edit your message...")
+                  : attachedImage
+                    ? (language === "ar" ? "أضف تعليق... (اختياري)" : "Add a caption... (optional)")
+                    : (language === "ar" ? "اكتب رسالة للمجموعة" : "Write a message to the group")
                 }
-                if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!editGroupMessageMutation.isPending) handleSendText(); }
-              }}
-            />
+                rows={1}
+                className={cn(
+                  "min-h-[36px] max-h-[100px] h-[36px] rounded-xl resize-none flex-1 text-sm px-3 py-[6px] leading-[1.35] overflow-y-auto border",
+                  isDark ? "bg-transparent text-white placeholder:text-gray-400 border-gray-700" : "bg-white text-light-primary placeholder:text-gray-500 border-gray-200"
+                )}
+                disabled={uploading || editGroupMessageMutation.isPending}
+                onKeyDown={(e) => {
+                  if (showMentionPicker) {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      const currentText = e.currentTarget.value;
+                      const info = getMentionInfo(currentText);
+                      const filter = info?.filter.toLowerCase() || "";
+                      const candidates = (conversation?.participants || [])
+                        .filter((p) => p.user_id !== user?.id)
+                        .filter((p) => {
+                          const n = (p.profile?.display_name || p.profile?.username || "").toLowerCase();
+                          return n.includes(filter);
+                        });
+                      if (candidates.length > 0) {
+                        const p = candidates[0];
+                        const n = p.profile?.display_name || p.profile?.username || (language === "ar" ? "عضو" : "Member");
+                        const isAi = p.user_id === WAKTI_AI_ID;
+                        const mention = isAi ? "@wakti " : `@${n} `;
+                        if (info) {
+                          const before = currentText.slice(0, info.startIndex);
+                          setMessageText(before + mention);
+                        } else {
+                          setMessageText((prev) => prev + mention);
+                        }
+                        setShowMentionPicker(false);
+                      }
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setShowMentionPicker(false);
+                      return;
+                    }
+                  }
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); if (!editGroupMessageMutation.isPending) handleSendText(); }
+                }}
+              />
+            )}
 
             <Button
               type="button"
               size="icon"
               className={cn(
                 "h-10 w-10 rounded-xl shrink-0 p-0 transition-colors",
-                messageText.trim() || attachedImage
-                  ? "bg-blue-500 hover:bg-blue-600 text-white"
-                  : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                voiceRecorderState === 'recording'
+                  ? "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
+                  : voiceRecorderState === 'preview'
+                    ? "bg-blue-500 hover:bg-blue-600 text-white"
+                    : messageText.trim() || attachedImage
+                      ? "bg-blue-500 hover:bg-blue-600 text-white"
+                      : "bg-gray-200 text-gray-400 dark:bg-gray-700 dark:text-gray-500"
               )}
-              onClick={handleSendText}
-              disabled={(!messageText.trim() && !attachedImage && !editingMessage) || sendMutation.isPending || editGroupMessageMutation.isPending || uploading}
+              onClick={() => {
+                if (voiceRecorderState === 'preview') {
+                  voiceRecorderRef.current?.send();
+                } else {
+                  handleSendText();
+                }
+              }}
+              disabled={
+                voiceRecorderState === 'recording' ||
+                (voiceRecorderState === 'idle' && (!messageText.trim() && !attachedImage && !editingMessage)) ||
+                sendMutation.isPending || editGroupMessageMutation.isPending || uploading
+              }
             >
               {editGroupMessageMutation.isPending ? (
                 <Loader2 className="h-5 w-5 animate-spin" />
