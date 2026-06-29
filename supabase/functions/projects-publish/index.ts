@@ -439,6 +439,10 @@ function unwrapNestedBundledSource(source: string): string {
 }
 
 function upgradeLegacyPublishedHtml(html: string, fallbackProjectName: string): string {
+  // Current-version HTML — skip entirely, it's already correct
+  if (html.includes("wakti-runtime-v2")) {
+    return html;
+  }
   const looksLikeRuntimeHtml = html.includes("Loading app...") && html.includes(RUNTIME_EXECUTE_BUNDLE_MARKER);
   if (!looksLikeRuntimeHtml && !html.includes(BUNDLED_APP_MARKER)) {
     return html;

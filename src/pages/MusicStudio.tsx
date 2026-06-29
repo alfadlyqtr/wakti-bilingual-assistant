@@ -8501,7 +8501,7 @@ function VoicesTab({
               )}
             </div>
           )}
-          {khaleejiDialectActive && vocalType !== 'none' && (
+          {khaleejiDialectActive && vocalType !== 'none' && !isPoemStyleSelected && (
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[11px] font-semibold text-[#060541] dark:text-white/90">

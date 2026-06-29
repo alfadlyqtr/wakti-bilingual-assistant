@@ -308,17 +308,30 @@ function stripPoemSongCues(value: string): string {
     .trim();
 }
 
-function applyPoemStyleHardLock(style: string, khaleejiDialectLabel: string, khaleejiAccentAnchor: string): string {
+function applyPoemStyleHardLock(style: string, khaleejiDialectLabel: string, khaleejiAccentAnchor: string, maxStyleLength: number): string {
   const dialectBlock = [khaleejiDialectLabel, khaleejiAccentAnchor]
     .map((value) => value.trim())
     .filter(Boolean)
     .join(", ");
-  const cleanedStyle = stripPoemSongCues(style);
-  return [POEM_HARD_LOCK_STYLE, dialectBlock, cleanedStyle]
+  const lockedInstruments = extractLockedInstruments(style)
+    .map((token) => stripPoemSongCues(token))
+    .filter(Boolean)
+    .slice(0, 2);
+  const instrumentBlock = lockedInstruments.length > 0
+    ? `locked instruments: ${lockedInstruments.join(", ")}, low background only`
+    : "locked instruments: sparse soft background bed only";
+  const compactPoemStyle = [
+    POEM_HARD_LOCK_STYLE,
+    dialectBlock,
+    instrumentBlock,
+  ]
     .filter(Boolean)
     .join(", ")
     .replace(/\s{2,}/g, " ")
     .trim();
+
+  if (compactPoemStyle.length <= maxStyleLength) return compactPoemStyle;
+  return compactPoemStyle.slice(0, Math.max(80, maxStyleLength - 1)).trim();
 }
 
 function applyPoemPromptHardLock(prompt: string): string {
@@ -424,7 +437,7 @@ serve(async (req) => {
     const poemSignal = [style, prompt, styleTags.join(",")].join(" ").toLowerCase();
     const isPoemEffective = /\b(?:gcc\s*poem|arabic\s*poem|english\s*poem|poem\s*cadence|spoken\s*poem|spoken-word\s*poem|poem\s*recitation)\b|قصيدة|إلقاء\s*شعري/.test(poemSignal);
     const effectiveStyle = isPoemEffective
-      ? applyPoemStyleHardLock(style, khaleejiDialectLabel, khaleejiAccentAnchor)
+      ? applyPoemStyleHardLock(style, khaleejiDialectLabel, khaleejiAccentAnchor, styleLimit)
       : style;
     const isGccEffective = GCC_STYLE_MARKERS.test(effectiveStyle);
     const effectivePrompt = isPoemEffective

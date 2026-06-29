@@ -235,6 +235,7 @@ export function buildProjectRuntimeHtml({
   ]);
 
   return `<!DOCTYPE html>
+<!-- wakti-runtime-v2 -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
