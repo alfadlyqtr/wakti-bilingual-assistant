@@ -822,25 +822,27 @@ serve(async (req) => {
 
 function extractTailwindClasses(bundledJs: string): string[] {
   const classSet = new Set<string>();
-  // Match className="..." or className={`...`} or class="..." patterns in compiled JS strings
-  const patterns = [
-    /className:\s*["'`]([^"'`]+)["'`]/g,
-    /className=["'`]([^"'`]+)["'`]/g,
-    /"className":\s*["'`]([^"'`]+)["'`]/g,
-    /class=["']([^"']+)["']/g,
-  ];
 
-  for (const pattern of patterns) {
+  // Helper: split a string value into individual class tokens and add valid ones
+  function addClasses(value: string) {
+    for (const cls of value.split(/\s+/)) {
+      const trimmed = cls.trim();
+      if (trimmed && /^[a-z0-9:!_\-\/\.\[\]#%]+$/i.test(trimmed) && trimmed.length < 100) {
+        classSet.add(trimmed);
+      }
+    }
+  }
+
+  // Strategy 1: All string literals in the entire bundle (catches everything — className values,
+  // cn() args, clsx() args, ternary branches, concatenated parts, template literal segments)
+  // This is the most powerful approach: just extract ALL quoted strings and filter to valid Tailwind tokens
+  const allStrings = [
+    /["'`]([^"'`\n\r]{1,200})["'`]/g,
+  ];
+  for (const pattern of allStrings) {
     let match: RegExpExecArray | null;
     while ((match = pattern.exec(bundledJs)) !== null) {
-      const classString = match[1];
-      for (const cls of classString.split(/\s+/)) {
-        const trimmed = cls.trim();
-        // Only include valid Tailwind-looking class names (filter out JS expressions)
-        if (trimmed && /^[a-z0-9:!_\-\/\.\[\]]+$/i.test(trimmed) && trimmed.length < 80) {
-          classSet.add(trimmed);
-        }
-      }
+      addClasses(match[1]);
     }
   }
 

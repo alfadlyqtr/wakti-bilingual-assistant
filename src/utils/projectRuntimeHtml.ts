@@ -188,16 +188,19 @@ export function buildProjectRuntimeHtml({
   bundledJs,
   bundledCss,
   useBabelRuntime = false,
+  safelist = [],
 }: {
   projectName: string;
   bundledJs: string;
   bundledCss: string;
   useBabelRuntime?: boolean;
+  safelist?: string[];
 }): string {
   const safeTitle = escapeHtml(projectName || 'Wakti Preview');
   const safeJs = escapeInlineScript(bundledJs || '');
   const safeCss = escapeInlineStyle(bundledCss || '');
   const encodedBundledJs = JSON.stringify(safeJs);
+  const safelistJson = JSON.stringify(safelist);
   const reactUrls = JSON.stringify([
     'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js',
     'https://unpkg.com/react@18/umd/react.production.min.js',
@@ -241,6 +244,7 @@ export function buildProjectRuntimeHtml({
   <script>
     window.tailwind = window.tailwind || {};
     window.tailwind.config = {
+      safelist: ${safelistJson},
       theme: {
         extend: {
           fontFamily: {
