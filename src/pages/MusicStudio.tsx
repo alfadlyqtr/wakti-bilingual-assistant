@@ -2969,6 +2969,14 @@ function VoicesTab({
   }, [effectiveIncludeTags, rhythmTags]);
   const khaleejiDialectActive = isGccStyleSelected || khaleejiSelected;
   const selectedKhaleejiDialectContract = KHALEEJI_DIALECT_CONTRACTS[khaleejiDialect];
+  const POEM_ALLOWED_RHYTHMS = useMemo(() => new Set([
+    'Poem Cadence',
+    'None',
+    'إلقاء شعري',
+    'بدون إيقاع',
+  ]), []);
+  const POEM_BLOCKED_INSTRUMENT_RE = /hand\s*clap|group\s*chant|choir|drum|darbuka|riq|mirwas|tabl|daff|duff|\btar\b|frame\s*drum|percussion|808|hi-hat|trap\s*hi-hats?/i;
+  const isPoemBlockedInstrument = (inst: string): boolean => POEM_BLOCKED_INSTRUMENT_RE.test(inst);
 
   useEffect(() => {
     if (!isPoemStyleSelected) return;
@@ -2976,6 +2984,22 @@ function VoicesTab({
     setInstrumentTags((prev) => prev.slice(0, instrumentSelectionLimit));
     toast.error(isAr ? 'وضع القصيدة يسمح بآلتين كحد أقصى' : 'Poem mode allows up to 2 instruments');
   }, [instrumentSelectionLimit, instrumentTags, isAr, isPoemStyleSelected]);
+
+  useEffect(() => {
+    if (!isPoemStyleSelected) return;
+
+    const blockedSelected = instrumentTags.some((inst) => isPoemBlockedInstrument(inst));
+    if (blockedSelected) {
+      setInstrumentTags((prev) => prev.filter((inst) => !isPoemBlockedInstrument(inst)).slice(0, instrumentSelectionLimit));
+      toast.error(isAr ? 'وضع القصيدة يمنع آلات الإيقاع والتصفيق' : 'Poem mode blocks claps and percussion instruments');
+    }
+
+    const invalidRhythmSelected = rhythmTags.some((rhythm) => !POEM_ALLOWED_RHYTHMS.has(rhythm));
+    if (invalidRhythmSelected) {
+      setRhythmTags((prev) => prev.filter((rhythm) => POEM_ALLOWED_RHYTHMS.has(rhythm)).slice(0, 2));
+      toast.error(isAr ? 'وضع القصيدة يسمح فقط بإيقاع شعري أو بدون إيقاع' : 'Poem mode allows only Poem Cadence or None');
+    }
+  }, [instrumentSelectionLimit, instrumentTags, isAr, isPoemStyleSelected, rhythmTags, POEM_ALLOWED_RHYTHMS]);
 
   // Recommended slider defaults — recomputed whenever the user's style selection changes.
   // Populates Style Strength / Creative Freedom sliders in Advanced. When user hasn't
@@ -3032,12 +3056,12 @@ function VoicesTab({
     if (language === 'ar') {
       return [
         { title: 'خليجي', items: ['إيقاع خليجي','خليجي متمايل','عدني','سامري','إيقاع أعراس','إيقاع تصفيق','إيقاع الليوان','مقسوم'] },
-        { title: 'عالمي', items: ['٦/٨ فيوجن','أفرو خليجي','بوب ٤/٤','بالاد هادئ','إيقاع جماهيري','إيقاع نادي','والتز ٣/٤','تراب بيت','دريل بيت'] },
+        { title: 'عالمي', items: ['٦/٨ فيوجن','أفرو خليجي','بوب ٤/٤','بالاد هادئ','إيقاع جماهيري','إيقاع نادي','والتز ٣/٤','تراب بيت','دريل بيت','إلقاء شعري','بدون إيقاع'] },
       ];
     }
     return [
       { title: 'Khaleeji Rhythms', items: ['Khaleeji Groove','Khaleeji Shuffle','Adani','Samri Rhythm','Wedding Beat','Clap-Driven Groove','Leiwah Rhythm','Maqsoum'] },
-      { title: 'Universal', items: ['6/8 Fusion','Afro-Khaleeji Groove','Pop 4/4','Ballad Slow Groove','Marching Anthem','Club Beat','Waltz 3/4','Trap Beat','Drill Beat'] },
+      { title: 'Universal', items: ['6/8 Fusion','Afro-Khaleeji Groove','Pop 4/4','Ballad Slow Groove','Marching Anthem','Club Beat','Waltz 3/4','Trap Beat','Drill Beat','Poem Cadence','None'] },
     ];
   }, [language]);
 
@@ -3540,9 +3564,9 @@ function VoicesTab({
     'شامي': ['مقسوم', 'بالاد هادئ'],
     'بوب عربي': ['مقسوم', 'بوب ٤/٤'],
     'أناشيد': ['بدون إيقاع'],
-    'قصيدة خليجية': ['عدني', 'بالاد هادئ'],
-    'قصيدة عربية فصحى': ['بالاد هادئ', 'والتز ٣/٤'],
-    'قصيدة إنجليزية': ['بالاد هادئ', 'بوب ٤/٤'],
+    'قصيدة خليجية': ['إلقاء شعري', 'بدون إيقاع'],
+    'قصيدة عربية فصحى': ['إلقاء شعري', 'بدون إيقاع'],
+    'قصيدة إنجليزية': ['إلقاء شعري', 'بدون إيقاع'],
     'بوب': ['بوب ٤/٤', 'بالاد هادئ'],
     'دانس بوب': ['إيقاع نادي', 'بوب ٤/٤'],
     'هيب هوب': ['تراب بيت', 'بوب ٤/٤'],
@@ -3593,9 +3617,9 @@ function VoicesTab({
     'Arabic Pop': ['Maqsoum', 'Pop 4/4'],
     'Levant Pop': ['Maqsoum', 'Ballad Slow Groove'],
     'Anasheed': ['None'],
-    'GCC Poem': ['Adani', 'Ballad Slow Groove'],
-    'Arabic Poem': ['Ballad Slow Groove', 'Waltz 3/4'],
-    'English Poem': ['Ballad Slow Groove', 'Pop 4/4'],
+    'GCC Poem': ['Poem Cadence', 'None'],
+    'Arabic Poem': ['Poem Cadence', 'None'],
+    'English Poem': ['Poem Cadence', 'None'],
     // ── Arabic equivalents for new regional styles ──
     'عراقي': ['مقسوم', 'بالاد هادئ'],
     'لبناني': ['مقسوم', 'بالاد هادئ'],
@@ -4108,6 +4132,7 @@ function VoicesTab({
     'Leiwah Rhythm':      ['energetic', 'celebratory', 'bold'],
     'Maqsoum':            ['emotional', 'romantic', 'nostalgic'],
     'Waltz 3/4':          ['romantic', 'dreamy', 'elegant'],
+    'Poem Cadence':       ['poetic', 'calm', 'intimate'],
     'Trap Beat':          ['confident', 'intense', 'bold'],
     'Drill Beat':         ['intense', 'dark', 'bold'],
     // Arabic rhythm keys
@@ -4126,6 +4151,7 @@ function VoicesTab({
     'إيقاع الليوان':      ['مفعم بالطاقة', 'احتفالي', 'جريء'],
     'مقسوم':              ['عاطفي', 'رومانسي', 'نوستالجي'],
     'والتز ٣/٤':          ['رومانسي', 'حالم', 'أنيق'],
+    'إلقاء شعري':         ['شاعري', 'هادئ', 'حميمي'],
     'تراب بيت':           ['واثق', 'مكثف', 'جريء'],
     'دريل بيت':           ['مكثف', 'مظلم', 'جريء'],
   };
@@ -4701,6 +4727,11 @@ function VoicesTab({
   }
 
   function handleRhythmToggle(rhythm: string) {
+    if (isPoemStyleSelected && !POEM_ALLOWED_RHYTHMS.has(rhythm)) {
+      toast.error(isAr ? 'وضع القصيدة يسمح فقط بإيقاع شعري أو بدون إيقاع' : 'Poem mode allows only Poem Cadence or None');
+      return;
+    }
+
     setRhythmTags((prev) => {
       if (prev.includes(rhythm)) return prev.filter((t) => t !== rhythm);
       if (prev.length >= 2) {
@@ -4721,8 +4752,11 @@ function VoicesTab({
   }
 
   function handleSelectRecommendedRhythms() {
-    if (recommendedRhythms.length === 0) return;
-    setRhythmTags(recommendedRhythms.slice(0, 2));
+    const recommendedPool = isPoemStyleSelected
+      ? recommendedRhythms.filter((rhythm) => POEM_ALLOWED_RHYTHMS.has(rhythm))
+      : recommendedRhythms;
+    if (recommendedPool.length === 0) return;
+    setRhythmTags(recommendedPool.slice(0, 2));
     setTimeout(() => {
       setRhythmOpen(false);
       setMoodOpen(true);
@@ -4754,6 +4788,10 @@ function VoicesTab({
   function handleInstrumentToggle(inst: string) {
     const normalizedInst = normalizeInstrumentKey(inst);
     if (!normalizedInst) return;
+    if (isPoemStyleSelected && isPoemBlockedInstrument(normalizedInst)) {
+      toast.error(isAr ? 'وضع القصيدة يمنع آلات الإيقاع والتصفيق' : 'Poem mode blocks claps and percussion instruments');
+      return;
+    }
     setInstrumentTags((prev) => {
       if (prev.includes(normalizedInst)) {
         return prev.filter((tag) => tag !== normalizedInst);
@@ -4964,6 +5002,36 @@ function VoicesTab({
   }
 
   function getKhalijiStructurePlan(targetSeconds: number, desiredSections?: number, includeSolo: boolean = false) {
+    if (selectedPoemMode) {
+      const preset = getDurationPreset(targetSeconds);
+      const stanzaLimit = preset.stanzaLimit;
+      const sectionCount = Math.max(1, Math.min(desiredSections ?? stanzaLimit, stanzaLimit));
+      const sections = Array.from({ length: sectionCount }, (_, idx) => {
+        const label: RoadmapLabel = idx === 0
+          ? 'Verse 1'
+          : idx === 1
+            ? 'Verse 2'
+            : idx % 2 === 0
+              ? 'Bridge'
+              : 'Verse 3';
+        return {
+          label,
+          stanzaIndex: idx,
+        };
+      });
+      const orderedLabels = sections.map((section) => section.label);
+      return {
+        normalizedSeconds: preset.seconds,
+        sections,
+        labels: orderedLabels,
+        tailLabels: [] as RoadmapLabel[],
+        stanzaLimit,
+        allowAutoSolo: false,
+        shortRoadmap: `intro, ${orderedLabels.map((label) => label.toLowerCase()).join(', ')}, outro`,
+        longRoadmap: `Intro → ${orderedLabels.join(' → ')} → Outro`,
+      };
+    }
+
     const preset = getDurationPreset(targetSeconds);
     const stanzaLimit = preset.stanzaLimit;
     const sectionCount = Math.max(1, Math.min(desiredSections ?? stanzaLimit, stanzaLimit));
@@ -5215,7 +5283,7 @@ function VoicesTab({
   // ============================================================================
   const WAKTI_RECIPE_V1 = true;
 
-  type KhalijiFamily = 'pop' | 'heritage' | 'urban' | 'party';
+  type KhalijiFamily = 'pop' | 'heritage' | 'urban' | 'party' | 'poem';
 
   const POP_CHIPS = new Set<string>([
     'GCC Pop','GCC Romantic','GCC Elegant','GCC R&B Pop','Luxury GCC Pop',
@@ -5243,9 +5311,14 @@ function VoicesTab({
   const PARTY_CHIPS = new Set<string>([
     'GCC Party','Khaleeji Party','خليجي حفلات',
   ]);
+  const POEM_CHIPS = new Set<string>([
+    'GCC Poem',
+    'قصيدة خليجية',
+  ]);
 
   function getKhalijiFamily(chip: string | null): KhalijiFamily {
     if (!chip) return 'pop';
+    if (POEM_CHIPS.has(chip)) return 'poem';
     if (URBAN_CHIPS.has(chip)) return 'urban';
     if (PARTY_CHIPS.has(chip)) return 'party';
     if (HERITAGE_CHIPS.has(chip)) return 'heritage';
@@ -5270,7 +5343,7 @@ function VoicesTab({
   //     instruments — that's the user's domain.
   // ============================================================================
   type GenreFamily =
-    | 'khaleeji-pop' | 'khaleeji-heritage' | 'khaleeji-urban' | 'khaleeji-party'
+    | 'khaleeji-pop' | 'khaleeji-heritage' | 'khaleeji-urban' | 'khaleeji-party' | 'khaleeji-poem'
     | 'pop' | 'rock' | 'urban' | 'electronic' | 'roots' | 'jazz-blues'
     | 'classical' | 'reggae' | 'metal' | 'punk' | 'world' | 'anasheed'
     | 'generic';
@@ -5342,6 +5415,18 @@ function VoicesTab({
       preChorusChar: 'building call-and-response with rising percussion',
       vocalCueAdj: 'Energetic',
       vocalCueDelivery: 'celebratory Khaleeji hook delivery',
+    },
+    'khaleeji-poem': {
+      introScene: (insts) => describeUserInstruments(insts)
+        ? `${describeUserInstruments(insts)}, intimate spoken-poetry opening`
+        : `soft tonal bed, intimate spoken-poetry opening`,
+      outroFade: (insts) => `quiet fade on ${insts[0] || 'soft tonal bed'}, final spoken pause`,
+      chorusLift: 'gentle spoken rise',
+      verseAdj: 'intimate, reflective, spoken-word',
+      bridgeChar: 'brief spoken reflection with restrained texture',
+      preChorusChar: 'subtle spoken intensity with calm pacing',
+      vocalCueAdj: 'Soft',
+      vocalCueDelivery: 'clear spoken recitation with intentional pauses',
     },
     pop: {
       introScene: (insts) => describeUserInstruments(insts)
@@ -5636,6 +5721,18 @@ function VoicesTab({
       introScene: (insts) => insts.slice(0, 2).join(' and ') || 'percussion entrance',
       outroFade: (insts) => insts[0] || 'percussion',
     },
+    poem: {
+      s1Prefix: 'Spoken',
+      arrangementAdj: 'minimal, intimate, spoken-word focused',
+      vocalDelivery: 'soft spoken recitation with measured pauses',
+      vocalOrnament: 'subtle poetic emphasis only, no sung melisma',
+      productionChar: 'Dry close vocal, restrained ambience, no percussion accents',
+      excludeTraditional: false,
+      chorusLift: 'gentle spoken refrain',
+      verseAdj: 'reflective, narrative, calm',
+      introScene: (insts) => insts.slice(0, 2).join(' and ') || 'soft tonal bed',
+      outroFade: (insts) => insts[0] || 'soft tonal bed',
+    },
   };
 
   // Build the 4-sentence production brief from user picks.
@@ -5846,6 +5943,13 @@ function VoicesTab({
     const lower = label.toLowerCase();
     const v = GENRE_VOCAB[genreFamily];
 
+    if (selectedPoemMode) {
+      if (/^bridge$/i.test(lower)) return '[Poem bridge — reflective spoken transition, clear pause, no sung hook]';
+      if (/^instrumental\s*lift$/i.test(lower) || /^instrumental\s*solo$/i.test(lower)) return '[Poem interlude — very light texture only, no drums, no claps, no lead melody]';
+      if (/^hook\s*reprise$/i.test(lower) || /^mini\s*chorus$/i.test(lower) || /^chorus$/i.test(lower) || /^final\s*chorus$/i.test(lower)) return '[Poem refrain — spoken line reprise only, no singing, no chanting]';
+      if (/^outro$/i.test(lower)) return '[Poem outro — soft spoken ending, final pause, gentle fade]';
+    }
+
     if (/^bridge$/i.test(lower)) return `[Instrumental bridge — no lead lyric, ${v.bridgeChar}, transition into the next section]`;
     if (/^instrumental\s*lift$/i.test(lower)) return `[Instrumental lift — no lead lyric, quick ${v.chorusLift} swell, push the arrangement forward]`;
     if (/^instrumental\s*solo$/i.test(lower)) return `[Instrumental solo — no lead lyric, featured ${v.introScene(instruments)} lead takes the spotlight]`;
@@ -5906,8 +6010,13 @@ function VoicesTab({
     // Option A/B — spotlight only when the USER actually picked 1-2 instruments.
     const spotlightActive = instrumentSpotlight && selectedInstruments.length >= 1 && selectedInstruments.length <= 2;
     const selectedRhythms = rhythmTags.map((tag) => normalizeKhalijiPromptToken(RHYTHM_LABELS[tag] ?? tag));
-    const primaryRhythm = selectedRhythms[0] ?? (gccAnchor ? normalizeKhalijiPromptToken(RHYTHM_LABELS[gccAnchor.rhythm] ?? gccAnchor.rhythm) : null);
-    const supportingRhythms = primaryRhythm && selectedRhythms[0] === primaryRhythm ? selectedRhythms.slice(1) : selectedRhythms;
+    const poemRhythmFallback = poemActive
+      ? normalizeKhalijiPromptToken(RHYTHM_LABELS[language === 'ar' ? 'إلقاء شعري' : 'Poem Cadence'] ?? 'poem cadence')
+      : null;
+    const primaryRhythm = selectedRhythms[0] ?? poemRhythmFallback ?? (gccAnchor ? normalizeKhalijiPromptToken(RHYTHM_LABELS[gccAnchor.rhythm] ?? gccAnchor.rhythm) : null);
+    const supportingRhythms = poemActive
+      ? selectedRhythms.slice(1).filter((rh) => !/none|بدون\s*إيقاع/i.test(rh))
+      : (primaryRhythm && selectedRhythms[0] === primaryRhythm ? selectedRhythms.slice(1) : selectedRhythms);
     const selectedMoods = moodTags.map((tag) => normalizeKhalijiPromptToken(tag));
     const structurePlan = getKhalijiStructurePlan(durationSeconds, structuredSectionCount, includeSolo);
     const freeText = styleText.trim() ? normalizeKhalijiPromptToken(styleText.trim()) : null;
@@ -5930,11 +6039,11 @@ function VoicesTab({
     const dialectIdentityAnchor = dialectLock ? `authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji identity` : null;
     const productionShellAnchor = isFusionShell && primaryStyle ? `${normalizeChipForDisplay(primaryStyle)} production shell only` : null;
     const poemStyleDirective = poemMode === 'gcc'
-      ? `spoken GCC poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent, poetic narrative language, metaphor-rich imagery, soft pauses, no singing, no screaming, max two instruments`
+      ? `spoken GCC poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent, poetic narrative language, metaphor-rich imagery, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments`
       : poemMode === 'arabic'
-        ? 'spoken Arabic poem recitation only, strict classical Fusha/Quranic tone, elevated poetic diction, rich rhetorical imagery, soft pauses, no singing, no screaming, max two instruments'
+        ? 'spoken Arabic poem recitation only, strict classical Fusha/Quranic tone, elevated poetic diction, rich rhetorical imagery, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments'
         : poemMode === 'english'
-          ? 'spoken English poem recitation only, strict English-only language, literary poetic wording, imagery-driven lines, soft pauses, no singing, no screaming, max two instruments'
+          ? 'spoken English poem recitation only, strict English-only language, literary poetic wording, imagery-driven lines, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments'
           : null;
     const styleParts: string[] = [
       dialectLock,
@@ -6410,6 +6519,7 @@ function VoicesTab({
       'Leiwah Rhythm': 'leiwah rhythm',
       'Maqsoum': 'maqsoum',
       'Waltz 3/4': 'waltz 3/4',
+      'Poem Cadence': 'poem cadence, free-tempo spoken recitation, no percussion',
       'Trap Beat': 'trap beat',
       'Drill Beat': 'drill beat',
       'إيقاع خليجي': 'إيقاع خليجي',
@@ -6425,6 +6535,7 @@ function VoicesTab({
       'إيقاع الليوان': 'إيقاع الليوان',
       'مقسوم': 'مقسوم',
       'والتز ٣/٤': 'والتز ٣/٤',
+      'إلقاء شعري': 'إلقاء شعري حر بلا إيقاع طبول',
       'تراب بيت': 'تراب بيت',
       'دريل بيت': 'دريل بيت',
       'إيقاع جماهيري': 'إيقاع جماهيري',
@@ -6498,6 +6609,7 @@ function VoicesTab({
   ): string {
     const blocks = text.split(/\n{2,}/).map((b) => b.trim()).filter(Boolean);
     if (blocks.length === 0) return text;
+    const poemActive = selectedPoemMode !== null;
 
     // First pass: collect tags already present so we don't duplicate.
     const usedTags = new Set<string>();
@@ -6522,7 +6634,21 @@ function VoicesTab({
 
       // Unlabeled stanza — pick a smart positional label.
       let label: string;
-      if (verseCount === 0 && !usedTags.has('verse 1')) {
+      if (poemActive) {
+        if (verseCount === 0 && !usedTags.has('verse 1')) {
+          label = 'Verse 1';
+          verseCount = 1;
+          usedTags.add('verse 1');
+        } else if ((verseCount <= 1) && !usedTags.has('verse 2')) {
+          label = 'Verse 2';
+          verseCount = Math.max(verseCount, 2);
+          usedTags.add('verse 2');
+        } else {
+          label = 'Verse 3';
+          verseCount = Math.max(verseCount, 3);
+          usedTags.add('verse 3');
+        }
+      } else if (verseCount === 0 && !usedTags.has('verse 1')) {
         label = 'Verse 1';
         verseCount = 1;
         usedTags.add('verse 1');
@@ -6573,6 +6699,11 @@ function VoicesTab({
 
     // STAGE 2: Normalize user parens → brackets so they're treated as proper Suno tags.
     text = normalizeUserParens(text);
+    if (selectedPoemMode) {
+      text = text
+        .replace(/\[(?:pre[- ]?chorus|chorus|final\s+chorus|hook\s+reprise|mini\s+chorus)\]/gi, '[Verse 2]')
+        .replace(/\[(?:instrumental\s+lift|instrumental\s+solo|drop)\]/gi, '[Bridge]');
+    }
     const parsedInput = parseUserLyricStructure(text);
 
     // Universal enrichment gate — fires for EVERY genre family.
@@ -6757,6 +6888,22 @@ function VoicesTab({
       setLyricsOpen(false);
       return;
     }
+    if (isPoemStyleSelected && instrumentTags.some((inst) => isPoemBlockedInstrument(inst))) {
+      toast.error(isAr ? 'وضع القصيدة يمنع آلات الإيقاع والتصفيق' : 'Poem mode blocks claps and percussion instruments');
+      setTitleOpen(false);
+      setMusicStyleOpen(true);
+      setVocalsOpen(false);
+      setLyricsOpen(false);
+      return;
+    }
+    if (isPoemStyleSelected && rhythmTags.some((rhythm) => !POEM_ALLOWED_RHYTHMS.has(rhythm))) {
+      toast.error(isAr ? 'وضع القصيدة يسمح فقط بإيقاع شعري أو بدون إيقاع' : 'Poem mode allows only Poem Cadence or None');
+      setTitleOpen(false);
+      setMusicStyleOpen(true);
+      setVocalsOpen(false);
+      setLyricsOpen(false);
+      return;
+    }
     if (vocalType === 'custom') {
       if (!selectedMusicVoice || selectedMusicVoice.status !== 'ready' || !selectedMusicVoice.kieVoiceId) {
         toast.error(isAr ? 'الصوت المخصص غير جاهز بعد. افتح تبويب الأصوات وتحقق من الحالة.' : 'Custom voice is not ready yet. Open the Voices tab and check its status.');
@@ -6894,11 +7041,11 @@ function VoicesTab({
         'Anasheed':        'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, [Exclude: 300Hz-500Hz mud, boxiness, frequency masking], noise, hiss, low quality, distorted',
         'أناشيد':          'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, [Exclude: 300Hz-500Hz mud, boxiness, frequency masking], noise, hiss, low quality, distorted',
         'GCC Poem':        'singing, sung chorus, screaming, shouting, non-khaleeji, non-gcc dialect, egyptian, levantine, maghrebi, iraqi',
-        'Arabic Poem':     'english, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, screaming, shouting',
-        'English Poem':    'arabic, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, screaming, shouting',
-        'قصيدة خليجية':    'غناء, كورس, صراخ, هتاف, غير خليجي, غير لهجة خليجية',
-        'قصيدة عربية فصحى': 'إنجليزي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
-        'قصيدة إنجليزية':  'عربي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
+        'Arabic Poem':     'english, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, chanting, clapping, drums, percussion, screaming, shouting',
+        'English Poem':    'arabic, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, chanting, clapping, drums, percussion, screaming, shouting',
+        'قصيدة خليجية':    'غناء, كورس, هتاف, تصفيق, طبول, إيقاع, صراخ, غير خليجي, غير لهجة خليجية',
+        'قصيدة عربية فصحى': 'إنجليزي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, هتاف, تصفيق, طبول, إيقاع, صراخ',
+        'قصيدة إنجليزية':  'عربي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, هتاف, تصفيق, طبول, إيقاع, صراخ',
         // ── Iraqi ──
         'Iraqi Style':     'egyptian, levantine, shami, moroccan, maghrebi, darija, khaleeji, gulf, fusha, msa, noise, hiss, low quality, distorted',
         'عراقي':           'مصري, شامي, مغربي, دارجة, خليجي, فصحى, noise, hiss, low quality, distorted',
@@ -7201,13 +7348,23 @@ function VoicesTab({
         }
         spotlightAntiTokens.push('full ensemble');
       }
+      const poemShieldTokens: string[] = isPoemStyleSelected
+        ? ['singing', 'sung chorus', 'chorus', 'hook', 'chant', 'hand claps', 'clapping', 'drum kit', 'percussion', 'trap beat', 'drill beat', 'club beat', 'marching anthem', 'screaming', 'shouting']
+        : [];
       const finalNegativeTags = fitNegativeTags(
-        orderedDedupeNeg([...spotlightAntiTokens, ...traditionalAntiTokens, ...gccPronunciationTokens, ...regionalTokens])
+        orderedDedupeNeg([...poemShieldTokens, ...spotlightAntiTokens, ...traditionalAntiTokens, ...gccPronunciationTokens, ...regionalTokens])
       );
 
       // ── Final style string (resolved with GCC fallback) ──
       const GCC_FALLBACK_STYLE = `${selectedKhaleejiDialectContract.dialectLabel}, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${selectedKhaleejiDialectContract.phrasingLabel}, authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji identity, khaleeji main anchor, seasoned Khaleeji vocalist timbre, khaleeji pop, vocal-forward, close-mic intimacy, crystal-clear vocal articulation, expressive melismatic mawwal, audible breath support, authentic khaleeji quarter-tone scale`;
-      const resolvedStyle = (kieStyle || GCC_FALLBACK_STYLE).slice(0, 1000);
+      const POEM_FALLBACK_STYLE = selectedPoemMode === 'gcc'
+        ? `spoken GCC poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent, poetic narrative language, metaphor-rich imagery, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, sparse accompaniment, max two instruments`
+        : selectedPoemMode === 'arabic'
+          ? 'spoken Arabic poem recitation only, strict Classical Arabic Fusha/Quranic tone, poetic diction, rich imagery, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, sparse accompaniment, max two instruments'
+          : selectedPoemMode === 'english'
+            ? 'spoken English poem recitation only, literary spoken-word cadence, poetic imagery, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, sparse accompaniment, max two instruments'
+            : null;
+      const resolvedStyle = (kieStyle || POEM_FALLBACK_STYLE || GCC_FALLBACK_STYLE).slice(0, 1000);
       // ── Bulletproof GCC detection ──
       // 1) Chip-based: the canonical set (most precise).
       // 2) Content-based: the resolved style string contains a GCC marker. This catches

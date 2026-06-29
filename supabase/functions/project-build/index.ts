@@ -56,6 +56,7 @@ interface BuildResponse {
   bundle?: {
     js: string;
     css: string;
+    safelist: string[];
   };
   error?: string;
 }
@@ -789,11 +790,15 @@ serve(async (req) => {
     const importedCss = importedCssChunks.join('\n\n');
     console.log(`esbuild output: ${bundledJs.length} bytes JS, ${importedCss.length} bytes imported CSS (${importedCssChunks.length} chunks)`);
 
+    // Extract all Tailwind class names from the bundled JS for safelist injection
+    const safelist = extractTailwindClasses(bundledJs);
+    console.log(`Tailwind safelist: ${safelist.length} unique classes extracted from bundle`);
+
     // Build the final bundle with ONLY imported CSS
-    const finalBundle = buildFinalBundle(bundledJs, importedCss);
+    const finalBundle = buildFinalBundle(bundledJs, importedCss, safelist);
 
     const buildTime = Date.now() - startTime;
-    console.log(`Build successful in ${buildTime}ms: ${finalBundle.js.length} bytes JS, ${finalBundle.css.length} bytes CSS`);
+    console.log(`Build successful in ${buildTime}ms: ${finalBundle.js.length} bytes JS, ${finalBundle.css.length} bytes CSS, ${safelist.length} safelisted classes`);
 
     return new Response(
       JSON.stringify({ success: true, bundle: finalBundle }),
@@ -815,7 +820,34 @@ serve(async (req) => {
   }
 });
 
-function buildFinalBundle(bundledJs: string, css: string): { js: string; css: string } {
+function extractTailwindClasses(bundledJs: string): string[] {
+  const classSet = new Set<string>();
+  // Match className="..." or className={`...`} or class="..." patterns in compiled JS strings
+  const patterns = [
+    /className:\s*["'`]([^"'`]+)["'`]/g,
+    /className=["'`]([^"'`]+)["'`]/g,
+    /"className":\s*["'`]([^"'`]+)["'`]/g,
+    /class=["']([^"']+)["']/g,
+  ];
+
+  for (const pattern of patterns) {
+    let match: RegExpExecArray | null;
+    while ((match = pattern.exec(bundledJs)) !== null) {
+      const classString = match[1];
+      for (const cls of classString.split(/\s+/)) {
+        const trimmed = cls.trim();
+        // Only include valid Tailwind-looking class names (filter out JS expressions)
+        if (trimmed && /^[a-z0-9:!_\-\/\.\[\]]+$/i.test(trimmed) && trimmed.length < 80) {
+          classSet.add(trimmed);
+        }
+      }
+    }
+  }
+
+  return Array.from(classSet);
+}
+
+function buildFinalBundle(bundledJs: string, css: string, safelist: string[] = []): { js: string; css: string; safelist: string[] } {
   // The bundled code creates AppBundle as an IIFE result
   // We need to execute it first, then extract the App component
   // IMPORTANT: Don't wrap in another IIFE - let AppBundle be global
@@ -868,7 +900,7 @@ ${bundledJs}
 })();
 `;
 
-  return { js: wrappedJs, css };
+  return { js: wrappedJs, css, safelist };
 }
 
 function getReactRouterShim(): string {

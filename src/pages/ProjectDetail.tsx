@@ -2702,14 +2702,15 @@ ${priorSection}`;
         throw new Error(buildResult?.error || 'Project bundling failed');
       }
 
-      const { js: bundledJs, css: bundledCss } = buildResult.bundle;
-      console.log(`Bundle successful: ${bundledJs.length} bytes JS, ${bundledCss.length} bytes CSS`);
+      const { js: bundledJs, css: bundledCss, safelist: bundleSafelist = [] } = buildResult.bundle;
+      console.log(`Bundle successful: ${bundledJs.length} bytes JS, ${bundledCss.length} bytes CSS, ${bundleSafelist.length} safelisted classes`);
 
       const projectName = project.name || 'Wakti Project';
       const publishFiles = buildProjectStaticPublishFiles({
         projectName,
         bundledJs,
         bundledCss,
+        safelist: bundleSafelist,
       });
 
       console.log('Generated publish files sizes:', {

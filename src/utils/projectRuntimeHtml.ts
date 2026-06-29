@@ -48,10 +48,12 @@ export function buildProjectStaticPublishFiles({
   projectName,
   bundledJs,
   bundledCss,
+  safelist = [],
 }: {
   projectName: string;
   bundledJs: string;
   bundledCss: string;
+  safelist?: string[];
 }): {
   indexHtml: string;
   appJs: string;
@@ -61,6 +63,7 @@ export function buildProjectStaticPublishFiles({
   const safeTitle = escapeHtml(projectName || 'Wakti Preview');
   const appJs = bundledJs || '';
   const appCss = bundledCss || '';
+  const safelistJson = JSON.stringify(safelist);
 
   const indexHtml = `<!DOCTYPE html>
 <html lang="en">
@@ -72,6 +75,7 @@ export function buildProjectStaticPublishFiles({
   <script>
     window.tailwind = window.tailwind || {};
     window.tailwind.config = {
+      safelist: ${safelistJson},
       theme: {
         extend: {
           fontFamily: {

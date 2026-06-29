@@ -55,6 +55,24 @@ const DEFAULT_KHALEEJI_INSTRUMENTS = [
   "qanun",
   "hand claps",
 ];
+const POEM_NEGATIVE_TOKENS = [
+  "singing",
+  "sung chorus",
+  "chorus",
+  "hook",
+  "chant",
+  "clapping",
+  "hand claps",
+  "drums",
+  "drum kit",
+  "percussion",
+  "trap beat",
+  "drill beat",
+  "club beat",
+  "marching anthem",
+  "screaming",
+  "shouting",
+];
 
 // ── Style-aware persona resolver ──
 // The chip drives persona via the LOCK anchor string. Only LOCK_HERITAGE emits the word
@@ -269,6 +287,14 @@ function buildGccNegativeTags(style: string = "", preferredNegativeTags: string 
   return fitCommaSeparatedTokens(tokens, 200);
 }
 
+function buildPoemNegativeTags(preferredNegativeTags: string = ""): string {
+  const tokens = dedupeCommaSeparatedTokens([
+    ...tokenizeCommaSeparatedTokens(preferredNegativeTags),
+    ...POEM_NEGATIVE_TOKENS,
+  ]);
+  return fitCommaSeparatedTokens(tokens, 200);
+}
+
 // No-op wrapper retained so existing call-sites keep compiling. The Khaleeji vocal cue
 // is now emitted by the frontend (single Suno-format bracket above [Intro]). We do not
 // prepend [Language:] or a long [Vocal persona:] paragraph here anymore.
@@ -365,8 +391,16 @@ serve(async (req) => {
     const durationHint = rawDurationSeconds !== null ? Math.round(rawDurationSeconds) : null;
     const { prompt: promptLimit, style: styleLimit } = getModelLimits(model);
     const isGccEffective = GCC_STYLE_MARKERS.test(style);
+    const poemSignal = [style, prompt, styleTags.join(",")].join(" ").toLowerCase();
+    const isPoemEffective = /\b(?:gcc\s*poem|arabic\s*poem|english\s*poem|poem\s*cadence|spoken\s*poem|spoken-word\s*poem|poem\s*recitation)\b|قصيدة|إلقاء\s*شعري/.test(poemSignal);
     const effectivePrompt = !instrumental && isGccEffective ? applyGccPromptShaping(prompt, style, vocalGender) : prompt;
-    const effectiveNegativeTags = isGccEffective ? buildGccNegativeTags(style, negativeTags) : negativeTags;
+    let effectiveNegativeTags = negativeTags;
+    if (isPoemEffective) {
+      effectiveNegativeTags = buildPoemNegativeTags(effectiveNegativeTags);
+    }
+    if (isGccEffective) {
+      effectiveNegativeTags = buildGccNegativeTags(style, effectiveNegativeTags);
+    }
     // Frontend now sends the correct value (user override or genre-based recommended).
     // Only fall back to old GCC defaults when no value was sent (backwards compat).
     const effectiveWeirdnessConstraint = weirdnessConstraint !== undefined ? weirdnessConstraint : (isGccEffective ? 0.55 : undefined);
