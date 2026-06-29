@@ -120,7 +120,7 @@ import {
   detectChatIntent,
   ChatIntent
 } from '@/utils/chatIntents';
-import { buildProjectStaticPublishFiles, getProjectEntryPoint } from '@/utils/projectRuntimeHtml';
+import { buildProjectRuntimeHtml, getProjectEntryPoint } from '@/utils/projectRuntimeHtml';
 import GitHubPanel from '@/components/projects/GitHubPanel';
 import CustomDomainSection from '@/components/projects/CustomDomainSection';
 import {
@@ -2706,18 +2706,18 @@ ${priorSection}`;
       console.log(`Bundle successful: ${bundledJs.length} bytes JS, ${bundledCss.length} bytes CSS, ${bundleSafelist.length} safelisted classes`);
 
       const projectName = project.name || 'Wakti Project';
-      const publishFiles = buildProjectStaticPublishFiles({
+      const indexHtml = buildProjectRuntimeHtml({
         projectName,
         bundledJs,
         bundledCss,
         safelist: bundleSafelist,
       });
 
-      console.log('Generated publish files sizes:', {
-        indexHtml: publishFiles.indexHtml.length,
-        appJs: publishFiles.appJs.length,
-        appCss: publishFiles.appCss.length,
-      });
+      const vercelJson = JSON.stringify({
+        rewrites: [{ source: '/(.*)', destination: '/index.html' }],
+      }, null, 2);
+
+      console.log('Generated publish HTML size:', indexHtml.length);
 
       setPublishStep(isRTL ? 'رفع الملفات...' : 'Uploading to servers...');
 
@@ -2732,19 +2732,11 @@ ${priorSection}`;
           files: [
             {
               path: 'index.html',
-              content: publishFiles.indexHtml,
-            },
-            {
-              path: 'app.js',
-              content: publishFiles.appJs,
-            },
-            {
-              path: 'app.css',
-              content: publishFiles.appCss,
+              content: indexHtml,
             },
             {
               path: 'vercel.json',
-              content: publishFiles.vercelJson,
+              content: vercelJson,
             },
           ],
         }

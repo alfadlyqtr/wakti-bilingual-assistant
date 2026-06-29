@@ -73,6 +73,8 @@ const POEM_NEGATIVE_TOKENS = [
   "screaming",
   "shouting",
 ];
+const POEM_HARD_LOCK_STYLE = "spoken poem recitation only, voice dominant foreground, instruments low background bed only, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, no melodic key-led phrasing, no singing, no chorus, no chant, no clapping, no drums, no percussion";
+const POEM_HARD_LOCK_PROMPT = "[POEM HARD LOCK: spoken recitation only, voice loud and clearly out front, instruments quiet background bed only, no instrumental solos, no singing, no chorus, no chant, no claps, no drums, no percussion, free-tempo with no beat-driven groove]";
 
 // ── Style-aware persona resolver ──
 // The chip drives persona via the LOCK anchor string. Only LOCK_HERITAGE emits the word
@@ -295,6 +297,48 @@ function buildPoemNegativeTags(preferredNegativeTags: string = ""): string {
   return fitCommaSeparatedTokens(tokens, 200);
 }
 
+function stripPoemSongCues(value: string): string {
+  return value
+    .replace(/\b\d+\s*BPM\b/gi, "free-tempo")
+    .replace(/\bdriving\s+the\s+groove\b/gi, "supporting spoken cadence")
+    .replace(/\bgroove\s+feel\b/gi, "spoken cadence")
+    .replace(/\b(?:focused|modern|warm)\s+khaleeji\s+groove\b/gi, "spoken cadence")
+    .replace(/\b[A-G](?:#|b)?\s*(?:minor|major)\s*(?:tonal\s*center)?\b/gi, "soft tonal bed")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function applyPoemStyleHardLock(style: string, khaleejiDialectLabel: string, khaleejiAccentAnchor: string, maxStyleLength: number): string {
+  const dialectBlock = [khaleejiDialectLabel, khaleejiAccentAnchor]
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .join(", ");
+  const lockedInstruments = extractLockedInstruments(style)
+    .map((token) => stripPoemSongCues(token))
+    .filter(Boolean)
+    .slice(0, 2);
+  const instrumentBlock = lockedInstruments.length > 0
+    ? `locked instruments: ${lockedInstruments.join(", ")}, low background only`
+    : "locked instruments: sparse soft background bed only";
+  const compactPoemStyle = [
+    POEM_HARD_LOCK_STYLE,
+    dialectBlock,
+    instrumentBlock,
+  ]
+    .filter(Boolean)
+    .join(", ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+
+  if (compactPoemStyle.length <= maxStyleLength) return compactPoemStyle;
+  return compactPoemStyle.slice(0, Math.max(80, maxStyleLength - 1)).trim();
+}
+
+function applyPoemPromptHardLock(prompt: string): string {
+  const cleanedPrompt = stripPoemSongCues(prompt);
+  return [POEM_HARD_LOCK_PROMPT, cleanedPrompt].filter(Boolean).join("\n\n").trim();
+}
+
 // No-op wrapper retained so existing call-sites keep compiling. The Khaleeji vocal cue
 // is now emitted by the frontend (single Suno-format bracket above [Intro]). We do not
 // prepend [Language:] or a long [Vocal persona:] paragraph here anymore.
@@ -390,21 +434,33 @@ serve(async (req) => {
     const ALLOWED_DURATION_SECONDS = new Set([30, 60, 90, 120, 150, 180, 210]);
     const durationHint = rawDurationSeconds !== null ? Math.round(rawDurationSeconds) : null;
     const { prompt: promptLimit, style: styleLimit } = getModelLimits(model);
-    const isGccEffective = GCC_STYLE_MARKERS.test(style);
     const poemSignal = [style, prompt, styleTags.join(",")].join(" ").toLowerCase();
     const isPoemEffective = /\b(?:gcc\s*poem|arabic\s*poem|english\s*poem|poem\s*cadence|spoken\s*poem|spoken-word\s*poem|poem\s*recitation)\b|قصيدة|إلقاء\s*شعري/.test(poemSignal);
-    const effectivePrompt = !instrumental && isGccEffective ? applyGccPromptShaping(prompt, style, vocalGender) : prompt;
+    const effectiveStyle = isPoemEffective
+      ? applyPoemStyleHardLock(style, khaleejiDialectLabel, khaleejiAccentAnchor, styleLimit)
+      : style;
+    const isGccEffective = GCC_STYLE_MARKERS.test(effectiveStyle);
+    const effectivePrompt = isPoemEffective
+      ? applyPoemPromptHardLock(prompt)
+      : (!instrumental && isGccEffective ? applyGccPromptShaping(prompt, effectiveStyle, vocalGender) : prompt);
     let effectiveNegativeTags = negativeTags;
     if (isPoemEffective) {
       effectiveNegativeTags = buildPoemNegativeTags(effectiveNegativeTags);
     }
     if (isGccEffective) {
-      effectiveNegativeTags = buildGccNegativeTags(style, effectiveNegativeTags);
+      effectiveNegativeTags = buildGccNegativeTags(effectiveStyle, effectiveNegativeTags);
     }
+    const effectiveStyleWeight = isPoemEffective
+      ? Math.min(styleWeight ?? 0.72, 0.78)
+      : styleWeight;
     // Frontend now sends the correct value (user override or genre-based recommended).
     // Only fall back to old GCC defaults when no value was sent (backwards compat).
-    const effectiveWeirdnessConstraint = weirdnessConstraint !== undefined ? weirdnessConstraint : (isGccEffective ? 0.55 : undefined);
-    const effectiveAudioWeight = audioWeight !== undefined ? audioWeight : (isGccEffective ? 0.65 : undefined);
+    const effectiveWeirdnessConstraint = isPoemEffective
+      ? Math.min(weirdnessConstraint ?? 0.2, 0.25)
+      : (weirdnessConstraint !== undefined ? weirdnessConstraint : (isGccEffective ? 0.55 : undefined));
+    const effectiveAudioWeight = isPoemEffective
+      ? Math.max(audioWeight ?? 0.95, 0.9)
+      : (audioWeight !== undefined ? audioWeight : (isGccEffective ? 0.65 : undefined));
 
     if (title.length > 80) {
       throw new Error("Title exceeds 80 characters");
@@ -435,7 +491,7 @@ serve(async (req) => {
     }
 
     if (customMode) {
-      if (style.length > styleLimit) {
+      if (effectiveStyle.length > styleLimit) {
         throw new Error(`Style exceeds ${styleLimit} characters for model ${model}`);
       }
 
@@ -448,14 +504,14 @@ serve(async (req) => {
 
     // Validation per API rules
     if (customMode) {
-      if (instrumental && (!style || !title)) {
-        console.error("[music-generate] Validation failed: instrumental missing style or title", { style, title });
+      if (instrumental && (!effectiveStyle || !title)) {
+        console.error("[music-generate] Validation failed: instrumental missing style or title", { style: effectiveStyle, title });
         return new Response(JSON.stringify({ error: "Custom instrumental mode requires style and title" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (!instrumental && (!style || !title || !effectivePrompt)) {
-        console.error("[music-generate] Validation failed: lyrical missing fields", { style: !!style, title: !!title, prompt: !!effectivePrompt });
+      if (!instrumental && (!effectiveStyle || !title || !effectivePrompt)) {
+        console.error("[music-generate] Validation failed: lyrical missing fields", { style: !!effectiveStyle, title: !!title, prompt: !!effectivePrompt });
         return new Response(JSON.stringify({ error: "Custom lyrical mode requires style, title, and prompt (lyrics)" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -482,12 +538,12 @@ serve(async (req) => {
     }
 
     if (customMode) {
-      kiePayload.style = style;
+      kiePayload.style = effectiveStyle;
       kiePayload.title = title;
       kiePayload.duration = durationHint;
       if (effectiveNegativeTags) kiePayload.negativeTags = effectiveNegativeTags;
       if (vocalGender && !instrumental) kiePayload.vocalGender = vocalGender;
-      if (styleWeight !== undefined) kiePayload.styleWeight = styleWeight;
+      if (effectiveStyleWeight !== undefined) kiePayload.styleWeight = effectiveStyleWeight;
       if (effectiveWeirdnessConstraint !== undefined) kiePayload.weirdnessConstraint = effectiveWeirdnessConstraint;
       if (effectiveAudioWeight !== undefined) kiePayload.audioWeight = effectiveAudioWeight;
       if (resolvedPersonaId) kiePayload.personaId = resolvedPersonaId;
@@ -504,7 +560,7 @@ serve(async (req) => {
       instrumental,
       duration: durationHint,
       payloadDuration: kiePayload.duration ?? null,
-      styleLen: style.length,
+      styleLen: effectiveStyle.length,
       promptLen: effectivePrompt.length,
       hasPersonaId: Boolean(personaId),
       personaModel: personaModel || null,
@@ -566,12 +622,13 @@ serve(async (req) => {
     const requestPayload: Record<string, unknown> = {
       customMode, instrumental, model,
       prompt: effectivePrompt || null,
-      style: style || null,
+      style: effectiveStyle || null,
+      raw_style: style || null,
       styleTags: styleTags.length > 0 ? styleTags : null,
       title: title || null,
       negativeTags: effectiveNegativeTags || null,
       vocalGender: vocalGender || null,
-      styleWeight: styleWeight ?? null,
+      styleWeight: effectiveStyleWeight ?? null,
       weirdnessConstraint: effectiveWeirdnessConstraint ?? null,
       audioWeight: effectiveAudioWeight ?? null,
       controlBlock: controlBlock || null,
@@ -600,7 +657,7 @@ serve(async (req) => {
           task_id: taskId,
           title: title || null,
           prompt: effectivePrompt || null,
-          include_styles: style ? [style] : null,
+          include_styles: effectiveStyle ? [effectiveStyle] : null,
           requested_duration_seconds: durationHint ? Math.round(durationHint) : null,
           provider: "kie",
           model: model,
@@ -613,7 +670,7 @@ serve(async (req) => {
             is_generation_root: true,
             customMode,
             instrumental,
-            style: style || null,
+            style: effectiveStyle || null,
             styleTags: styleTags.length > 0 ? styleTags : null,
             negativeTags: effectiveNegativeTags || null,
             vocalGender: vocalGender || null,
