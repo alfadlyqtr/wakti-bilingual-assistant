@@ -2489,7 +2489,11 @@ export default function DeenQuran() {
                               onClick={() => {
                                 setColorPickerKey(null);
                                 if (isBookmarked) {
-                                  if (currentColorId !== c.id) void recolorBookmark(ayah, c.id);
+                                  if (currentColorId === c.id) {
+                                    void removeBookmark(ayah);
+                                  } else {
+                                    void recolorBookmark(ayah, c.id);
+                                  }
                                 } else {
                                   void addBookmarkWithColor(ayah, c.id);
                                 }
@@ -2511,16 +2515,6 @@ export default function DeenQuran() {
                             </button>
                           );
                         })}
-                        {isBookmarked && (
-                          <button
-                            onClick={() => { setColorPickerKey(null); void removeBookmark(ayah); }}
-                            className="w-7 h-7 rounded-full flex items-center justify-center active:scale-90 transition-all"
-                            style={{ background: isDark ? "rgba(255,255,255,0.06)" : "rgba(6,5,65,0.06)", color: isDark ? "#f87171" : "#dc2626" }}
-                            title={isAr ? "إزالة" : "Remove"}
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        )}
                       </div>
                     </>
                   )}
