@@ -243,11 +243,12 @@ export const VoiceRecorder = forwardRef<VoiceRecorderHandle, VoiceRecorderProps>
           <span className="text-sm font-mono font-bold text-red-600">
             {formatTime(recordingTime)} / {formatTime(MAX_DURATION)}
           </span>
+          <div className="flex-1" />
           <Button
             size="sm"
             variant="ghost"
             onClick={stopRecording}
-            className="h-7 w-7 p-0 ml-1 text-red-600 hover:bg-red-500/20 hover:text-red-700"
+            className="h-7 w-7 p-0 mr-2 text-red-600 hover:bg-red-500/20 hover:text-red-700"
           >
             <Square className="h-3.5 w-3.5 fill-current" />
           </Button>
