@@ -13,6 +13,7 @@ import { BOOKING_CAPABILITY } from "./booking.ts";
 import { ECOMMERCE_CAPABILITY } from "./ecommerce.ts";
 import { BLOG_CAPABILITY } from "./blog.ts";
 import { SPORTS_CAPABILITY } from "./sports.ts";
+import { MULTI_FILE_FEATURES_CAPABILITY } from "./multiFileFeatures.ts";
 
 export type CapabilityName =
   | "phaser_game"
@@ -21,7 +22,8 @@ export type CapabilityName =
   | "booking"
   | "ecommerce"
   | "blog"
-  | "sports";
+  | "sports"
+  | "multi_file_features";
 
 // The short menu — always sent to the AI so it knows what's available.
 export const CAPABILITY_MANIFEST = `
@@ -40,6 +42,7 @@ auto-injected when the user's request matches.
 | blog            | Blog, CMS, articles, posts, news, magazine content.                   |
 | sports          | Sports fan sites, rosters, standings, fixtures, team news.            |
 | phaser_game     | 2D games (racing, shooter, puzzle, platformer, arcade).               |
+| multi_file_features | Language toggle, dark mode, cart, auth, animations, modals, toasts, new pages, search. |
 
 Rules:
 - Never hardcode data the backend provides (products, services).
@@ -56,6 +59,7 @@ const DOCS: Record<CapabilityName, string> = {
   ecommerce: ECOMMERCE_CAPABILITY,
   blog: BLOG_CAPABILITY,
   sports: SPORTS_CAPABILITY,
+  multi_file_features: MULTI_FILE_FEATURES_CAPABILITY,
 };
 
 export function getCapabilityDoc(name: string): string | null {
@@ -121,6 +125,20 @@ const RULES: DetectionRule[] = [
     keywords: [
       // Default-on for most site types; keep broad so nearly every project gets image guidance.
       /\b(landing|website|portfolio|hero|gallery|images?|photos?|showcase|restaurant|cafe|hotel|fitness|gym|about|team|agency|studio|business|brand)\b/i,
+    ],
+  },
+  {
+    capability: "multi_file_features",
+    keywords: [
+      /\b(language|arabic|english|rtl|ltr|bilingual|i18n|translation|toggle|switch\s*lang)\b/i,
+      /\b(dark\s*mode|light\s*mode|theme\s*toggle|night\s*mode|color\s*scheme)\b/i,
+      /\b(cart|shopping|add\s*to\s*cart|checkout|basket)\b/i,
+      /\b(login|signup|sign\s*up|auth|authentication|logout|register|user\s*account)\b/i,
+      /\b(animation|animate|fade|slide|scroll\s*effect|aos|framer|motion|transition)\b/i,
+      /\b(modal|popup|pop-up|dialog|overlay|lightbox)\b/i,
+      /\b(toast|notification|alert\s*message|snackbar)\b/i,
+      /\b(new\s*page|add\s*page|create\s*page|new\s*route|add\s*route|routing)\b/i,
+      /\b(search|filter|sort|searchable)\b/i,
     ],
   },
 ];

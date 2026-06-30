@@ -5060,7 +5060,84 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
               }
             }
 
-            // Embed queuedFollowup inside the plan JSON so it survives being saved as a chat message
+            // ================================================================
+            // 🚀 AUTO-EXECUTE: Apply plan changes directly to DB
+            // Never show raw JSON/code in chat — implement it silently,
+            // then return a clean human-readable summary to the user.
+            // ================================================================
+            try {
+              const filesToWrite: Record<string, string> = {};
+              const changesApplied: string[] = [];
+              const primaryFile = typeof parsed.file === 'string' ? parsed.file : null;
+
+              // Helper: fetch current file content from DB
+              const getCurrentContent = async (fp: string): Promise<string> => {
+                const np = fp.startsWith('/') ? fp : `/${fp}`;
+                const { data } = await supabase
+                  .from('project_files')
+                  .select('content')
+                  .eq('project_id', projectId)
+                  .eq('path', np)
+                  .maybeSingle();
+                return (data as { content?: string } | null)?.content || '';
+              };
+
+              // Helper: apply one change (new file or morphed edit)
+              const applyChange = async (fp: string, changeTo: string, current: string, desc: string) => {
+                const np = fp.startsWith('/') ? fp : `/${fp}`;
+                if (!current.trim()) {
+                  filesToWrite[np] = changeTo;
+                  changesApplied.push(`Created ${np}`);
+                } else {
+                  const morphResult = await morphFastApply({ original: current, codeEdit: changeTo, instructions: desc });
+                  if (morphResult.success && morphResult.content) {
+                    filesToWrite[np] = morphResult.content;
+                    changesApplied.push(`Updated ${np}`);
+                  } else if (changeTo.length > 150) {
+                    filesToWrite[np] = changeTo;
+                    changesApplied.push(`Applied ${np}`);
+                  }
+                }
+              };
+
+              // Process steps array
+              if (Array.isArray(parsed.steps)) {
+                for (const step of parsed.steps as Array<Record<string, unknown>>) {
+                  const stepFile = (typeof step.file === 'string' ? step.file : primaryFile);
+                  if (stepFile && typeof step.changeTo === 'string' && step.changeTo.trim()) {
+                    const currentContent = typeof step.current === 'string' && step.current.trim()
+                      ? step.current
+                      : await getCurrentContent(stepFile);
+                    await applyChange(stepFile, step.changeTo, currentContent, typeof step.title === 'string' ? step.title : 'Update');
+                  }
+                }
+              }
+
+              // Process codeChanges array
+              if (Array.isArray(parsed.codeChanges)) {
+                for (const change of parsed.codeChanges as Array<Record<string, unknown>>) {
+                  if (typeof change.file === 'string' && typeof change.code === 'string' && change.code.trim()) {
+                    const np = change.file.startsWith('/') ? change.file : `/${change.file}`;
+                    if (!filesToWrite[np]) {
+                      const currentContent = await getCurrentContent(change.file);
+                      await applyChange(change.file, change.code, currentContent, 'Code change');
+                    }
+                  }
+                }
+              }
+
+              // Save all changed files to DB
+              if (Object.keys(filesToWrite).length > 0) {
+                await upsertProjectFiles(supabase, projectId, filesToWrite);
+                const title = typeof parsed.title === 'string' ? parsed.title.replace(/^[^\w]+/, '') : 'Changes applied';
+                const summary = `✅ Done! ${title}\n\nFiles updated:\n${changesApplied.map(c => `• ${c}`).join('\n')}${queuedFollowup ? '\n\n⏳ More components will be translated in the next pass.' : ''}`;
+                return createResponse({ ok: true, message: summary, mode: 'agent', creditUsage: chatCreditUsage, filesChanged: Object.keys(filesToWrite) });
+              }
+            } catch (autoExecErr) {
+              console.error('[Chat Auto-Execute] Failed, falling back to plan:', autoExecErr);
+            }
+
+            // Fallback: if auto-execution failed or produced no files, return the plan
             const planJsonToReturn = queuedFollowup
               ? JSON.stringify({ ...parsed, queuedFollowup })
               : extractedJson;
@@ -5580,7 +5657,11 @@ The user attached a screenshot. I analyzed it and found these text anchors:
       };
       
       // Build system prompt with project ID - replace placeholder with actual project ID
-      const systemPromptWithProjectId = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId) + buildAgentExecutionModeInstructions(agentExecutionMode);
+      // Option B: inject relevant capability docs based on prompt (lean core + smart injection)
+      const agentCapabilityDocs = assembleCapabilityDocs(prompt || '');
+      const systemPromptWithProjectId = AGENT_SYSTEM_PROMPT.replace(/\{\{PROJECT_ID\}\}/g, projectId)
+        + buildAgentExecutionModeInstructions(agentExecutionMode)
+        + (agentCapabilityDocs.text ? agentCapabilityDocs.text : '');
       
       // ========================================================================
       // CONTEXT OPTIMIZATION: Send only file NAMES, not full content
