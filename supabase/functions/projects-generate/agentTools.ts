@@ -2502,7 +2502,7 @@ export const AGENT_TOOLS = [
   },
   {
     name: "task_complete",
-    description: "MANDATORY: Call this when you have finished the user's request. You MUST call this tool after making changes. Provide a clear summary of what you did and which files were changed.",
+    description: "MANDATORY: Call this when you have finished the user's request. You MUST call this tool after making changes. BEFORE calling this: if you added or changed a visible UI element (button, toggle, nav item, section), you MUST read_file the component that renders it and confirm the element is present in the JSX. If the component doesn't import and render your new element, the user cannot see it — do not call task_complete until you fix that. Provide a clear summary of what you did and which files were changed.",
     parameters: {
       type: "object",
       properties: {
@@ -3117,7 +3117,8 @@ When making edits, you can ALSO output \`<edit>\` blocks for complex changes. Th
 3. **STATE PLAN**: Tell user what you will do before doing it
 4. **MORPH_EDIT**: Use morph_edit with '// ... existing code ...' markers (PRIMARY!)
 5. **VERIFY**: Re-read the file to confirm your change worked!
-6. **DONE**: Call task_complete with summary
+6. **UI CHECK** ⭐ CRITICAL: If you added or changed any visible UI element (button, toggle, nav item, section, badge, link) — you MUST read_file on the component that RENDERS it (e.g. the Navbar, App, or parent component) and confirm the JSX actually contains your new element. If it's not there, the user cannot see it. DO NOT call task_complete until you confirm the UI element is present in the rendered component.
+7. **DONE**: Call task_complete with summary
 
 **⭐ morph_edit is powered by Morph AI - it handles fuzzy matching and doesn't need exact strings!**
 **⚠️ ENFORCEMENT: The system tracks if you read files before editing. If you edit without reading first, you will get a warning.**

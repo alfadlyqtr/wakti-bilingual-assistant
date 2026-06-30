@@ -73,8 +73,38 @@ const POEM_NEGATIVE_TOKENS = [
   "screaming",
   "shouting",
 ];
+const POEM_DELIVERY_NEGATIVE_TOKENS = [
+  "news anchor delivery",
+  "formal khutbah cadence",
+  "quranic recitation",
+  "classical enunciation",
+  "robotic monotone",
+  "over-formal diction",
+];
 const POEM_HARD_LOCK_STYLE = "spoken Khaleeji poem recitation, natural human delivery with subtle breathing and micro-pauses, voice dominant foreground, Nabati-inspired Khaleeji diction and Gulf idioms, instruments low continuous background bed only from intro to outro, no instrumental lead melody, avoid robotic monotone, free-tempo spoken pacing, no fixed beat grid, no melodic key-led phrasing, no singing, no chorus, no chant, no clapping, no drums, no percussion";
 const POEM_HARD_LOCK_PROMPT = "[POEM HARD LOCK: spoken recitation, voice loud and clearly out front, natural human delivery with subtle breathing and micro-pauses, Nabati-inspired Khaleeji diction and Gulf idioms, instruments quiet continuous background bed only from intro to outro, no instrumental solos, avoid robotic monotone, no singing, no chorus, no chant, no claps, no drums, no percussion, free-tempo with no beat-driven groove]";
+
+function resolvePoemDialectNegativeTokens(khaleejiDialect: string): string[] {
+  const key = khaleejiDialect.toLowerCase();
+  const common = [
+    "non-khaleeji",
+    "egyptian",
+    "levantine",
+    "maghrebi",
+    "iraqi",
+    "fusha",
+    "msa",
+  ];
+
+  if (key === "kuwaiti") return ["qatari", "saudi", "emirati", "bahraini", "omani", ...common];
+  if (key === "qatari") return ["kuwaiti", "saudi", "emirati", "bahraini", "omani", ...common];
+  if (key === "saudi") return ["kuwaiti", "qatari", "emirati", "bahraini", "omani", ...common];
+  if (key === "emirati") return ["kuwaiti", "qatari", "saudi", "bahraini", "omani", ...common];
+  if (key === "bahraini") return ["kuwaiti", "qatari", "saudi", "emirati", "omani", ...common];
+  if (key === "omani") return ["kuwaiti", "qatari", "saudi", "emirati", "bahraini", ...common];
+
+  return ["non-target khaleeji dialect", ...common];
+}
 
 type PoemDialectProfile = {
   fingerprint: string;
@@ -335,10 +365,13 @@ function buildGccNegativeTags(style: string = "", preferredNegativeTags: string 
   return fitCommaSeparatedTokens(tokens, 200);
 }
 
-function buildPoemNegativeTags(preferredNegativeTags: string = ""): string {
+function buildPoemNegativeTags(preferredNegativeTags: string = "", khaleejiDialect: string = ""): string {
+  const dialectPriorityTokens = resolvePoemDialectNegativeTokens(khaleejiDialect);
   const tokens = dedupeCommaSeparatedTokens([
+    ...dialectPriorityTokens,
     ...tokenizeCommaSeparatedTokens(preferredNegativeTags),
     ...POEM_NEGATIVE_TOKENS,
+    ...POEM_DELIVERY_NEGATIVE_TOKENS,
   ]);
   return fitCommaSeparatedTokens(tokens, 200);
 }
@@ -390,7 +423,7 @@ function applyPoemStyleHardLock(
     POEM_HARD_LOCK_STYLE,
     dialectBlock,
     `human delivery: ${dialectProfile.humanDelivery}`,
-    `dialect guard: ${dialectProfile.driftGuard}`,
+    `strict dialect lock: ${khaleejiDialectLabel || "Khaleeji"} only, ${dialectProfile.driftGuard}`,
     instrumentBlock,
   ]
     .filter(Boolean)
@@ -410,8 +443,9 @@ function applyPoemPromptHardLock(prompt: string, controlBlock: string, khaleejiD
     ? `[Background bed lock: continuous low-volume ${lockedInstruments.join(" + ")} texture under full recitation from intro to outro, no dropouts]`
     : "[Background bed lock: continuous low-volume ambient texture under full recitation from intro to outro, no dropouts]";
   const dialectLine = `[Dialect profile: ${dialectProfile.fingerprint}, ${dialectProfile.voiceColor}, ${dialectProfile.driftGuard}]`;
+  const driftLine = `[Dialect drift guard: strict ${khaleejiDialectLabel || "Khaleeji"} only, no non-target Khaleeji accent switching between lines]`;
   const humanLine = `[Human delivery lock: ${dialectProfile.humanDelivery}, avoid robotic monotone and over-formal newsreader tone]`;
-  return [POEM_HARD_LOCK_PROMPT, dialectLine, humanLine, continuityLine, cleanedPrompt].filter(Boolean).join("\n\n").trim();
+  return [POEM_HARD_LOCK_PROMPT, dialectLine, driftLine, humanLine, continuityLine, cleanedPrompt].filter(Boolean).join("\n\n").trim();
 }
 
 // No-op wrapper retained so existing call-sites keep compiling. The Khaleeji vocal cue
@@ -520,7 +554,7 @@ serve(async (req) => {
       : (!instrumental && isGccEffective ? applyGccPromptShaping(prompt, effectiveStyle, vocalGender) : prompt);
     let effectiveNegativeTags = negativeTags;
     if (isPoemEffective) {
-      effectiveNegativeTags = buildPoemNegativeTags(effectiveNegativeTags);
+      effectiveNegativeTags = buildPoemNegativeTags(effectiveNegativeTags, khaleejiDialect);
     }
     if (isGccEffective) {
       effectiveNegativeTags = buildGccNegativeTags(effectiveStyle, effectiveNegativeTags);

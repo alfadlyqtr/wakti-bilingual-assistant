@@ -50,6 +50,17 @@ interface KieCallbackPayload {
   data?: SunoTrack[];
 }
 
+const COPYRIGHT_LYRICS_ERROR_MESSAGE = "Your lyrics contain copyrighted material. Please change it and try again.";
+
+function normalizeMusicFailureMessage(raw: unknown): string {
+  const message = typeof raw === "string" ? raw.trim() : "";
+  if (!message) return "Generation failed";
+  if (/copyright/i.test(message) && /(lyric|lyrics|material)/i.test(message)) {
+    return COPYRIGHT_LYRICS_ERROR_MESSAGE;
+  }
+  return message;
+}
+
 function normalizeTrack(track: SunoTrack) {
   return {
     id: track.id,
@@ -126,6 +137,16 @@ serve(async (req) => {
       const normalizedTracks = sunoData.map(normalizeTrack).filter((track) => track.audioUrl);
 
       if (normalizedTracks.length === 0) {
+        const upstreamFailureRaw =
+          payload.errorMessage ||
+          parsed?.data?.errorMessage ||
+          parsed?.data?.error_message ||
+          parsed?.errorMessage ||
+          parsed?.error?.message ||
+          parsed?.msg ||
+          payload.errorCode ||
+          null;
+        const normalizedFailureMessage = normalizeMusicFailureMessage(upstreamFailureRaw || "No audio data returned");
         const { data: existingRows, error: fetchError } = await supabaseService
           .from("user_music_tracks")
           .select("id, meta")
@@ -148,12 +169,13 @@ serve(async (req) => {
             meta: {
               ...existingMeta,
               status: "failed",
-              error: "No audio data returned",
+              error: normalizedFailureMessage,
               callback_status: status || null,
               callback_type: type || null,
               callback_debug: {
                 payloadDataLength: Array.isArray(payload.data) ? payload.data.length : null,
                 responseSunoDataLength: Array.isArray(payload.response?.sunoData) ? payload.response?.sunoData.length : null,
+                upstreamFailureRaw,
               },
             },
           })
@@ -197,7 +219,16 @@ serve(async (req) => {
       });
 
     } else if (status === "FAILED" || status === "ERROR" || type === "failed") {
-      const failureMessage = payload.errorMessage || payload.errorCode || parsed?.msg || "Generation failed";
+      const failureMessage = normalizeMusicFailureMessage(
+        payload.errorMessage ||
+        parsed?.data?.errorMessage ||
+        parsed?.data?.error_message ||
+        parsed?.errorMessage ||
+        parsed?.error?.message ||
+        payload.errorCode ||
+        parsed?.msg ||
+        "Generation failed"
+      );
       console.error(`[music-callback] Task failed taskId=${taskId}:`, failureMessage);
 
       const { data: existingRows } = await supabaseService
