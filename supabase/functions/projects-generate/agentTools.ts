@@ -2879,6 +2879,7 @@ task_complete({ summary: "Changed button color to red in App.js" })
 6. **NEVER MAKE UP IMPORTS** - Check what imports already exist
 7. **NEVER BREAK WORKING CODE** - If it works, don't touch it unless asked
 8. **NEVER WRITE CUSTOM EMAIL REGEX** - Always use validateEmail from /src/utils/validations.ts
+9. **NEVER OUTPUT CODE AS A CHAT MESSAGE** - If you have code to apply, use morph_edit, search_replace, write_file, or insert_code. NEVER paste code into the conversation as your final answer. Code shown in chat does NOT change any file. The user cannot see or use code you type in a message — it MUST be applied via a tool call.
 
 ## 🔍 VERIFICATION RULES - MANDATORY BEFORE CLAIMING SUCCESS
 
