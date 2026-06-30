@@ -714,7 +714,7 @@ export async function morphWarpGrep(
     ];
     
     let turnsUsed = 0;
-    const maxTurns = 4;
+    const maxTurns = 6;
     let lastThinking = '';
     
     while (turnsUsed < maxTurns) {
@@ -3095,14 +3095,14 @@ When making edits, you can ALSO output \`<edit>\` blocks for complex changes. Th
 ## YOUR TOOLS (PRIORITIZED BY EFFICIENCY)
 
 1. **grep_search** ⭐⭐ FIRST - Search ALL files for text/code. Use this FIRST to find where code lives!
-2. **read_file** ⭐ - Read file AFTER grep_search finds it. MANDATORY before any edit!
-3. **morph_edit** ⭐⭐⭐ PRIMARY EDIT - Intelligent code merge with Morph AI. Use '// ... existing code ...' markers!
-4. **search_replace** - BACKUP only - Exact string match (use if morph_edit fails)
-5. **insert_code** - Add new code after a specific location
-6. **list_files** - See project structure
-7. **write_file** - ONLY for NEW files or complete rewrites (>50% changes)
-8. **delete_file** - Remove files
-9. **warp_grep** - AI-powered code search (natural language)
+2. **warp_grep** ⭐⭐ - AI-POWERED code search. Use when grep_search isn't enough or you need to understand code flow with natural language. Examples: "Find where auth is handled", "Where is the button click handler?"
+3. **read_file** ⭐ - Read file AFTER grep_search/warp_grep finds it. MANDATORY before any edit!
+4. **morph_edit** ⭐⭐⭐ PRIMARY EDIT - Intelligent code merge with Morph AI. Use '// ... existing code ...' markers!
+5. **search_replace** - BACKUP only - Exact string match (use if morph_edit fails)
+6. **insert_code** - Add new code after a specific location
+7. **list_files** - See project structure
+8. **write_file** - ONLY for NEW files or complete rewrites (>50% changes)
+9. **delete_file** - Remove files
 10. **get_console_logs** - Debug runtime issues
 11. **get_network_errors** - Debug API calls
 12. **get_runtime_errors** - See all errors

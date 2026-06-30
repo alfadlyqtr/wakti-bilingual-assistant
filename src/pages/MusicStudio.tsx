@@ -2830,6 +2830,9 @@ function VoicesTab({
     phrasingLabel: string;
     timbreLabel: string;
     accentAnchor: string;
+    poemDialectFingerprint: string;
+    poemVoiceColor: string;
+    poemHumanDelivery: string;
     negativeBlockEnglish: string;
     negativeBlockArabic: string;
   }> = {
@@ -2841,6 +2844,9 @@ function VoicesTab({
       phrasingLabel: 'colloquial Kuwaiti Khaleeji phrasing',
       timbreLabel: 'authentic Kuwaiti Khaleeji timbre',
       accentAnchor: 'exact Kuwaiti Khaleeji accent only',
+      poemDialectFingerprint: 'Kuwaiti everyday idioms and unmistakable Kuwaiti sentence tails',
+      poemVoiceColor: 'warm close-mic Kuwaiti majlis voice color',
+      poemHumanDelivery: 'natural breathing, soft micro-pauses, slight timing imperfections, conversational non-robotic flow',
       negativeBlockEnglish: 'qatari, saudi, emirati, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-kuwaiti, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
       negativeBlockArabic: 'قطري, سعودي, إماراتي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير كويتي, غير خليجي, جودة منخفضة',
     },
@@ -2852,6 +2858,9 @@ function VoicesTab({
       phrasingLabel: 'colloquial Qatari Khaleeji phrasing',
       timbreLabel: 'authentic Qatari Khaleeji timbre',
       accentAnchor: 'exact Qatari Khaleeji accent only',
+      poemDialectFingerprint: 'Qatari colloquial idioms with measured majlis storytelling cadence',
+      poemVoiceColor: 'deep relaxed Qatari majlis voice color',
+      poemHumanDelivery: 'natural chest resonance, calm thought-by-thought pauses, slight human timing drift, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, saudi, emirati, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-qatari, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
       negativeBlockArabic: 'كويتي, سعودي, إماراتي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير قطري, غير خليجي, جودة منخفضة',
     },
@@ -2863,6 +2872,9 @@ function VoicesTab({
       phrasingLabel: 'colloquial Saudi Khaleeji phrasing',
       timbreLabel: 'authentic Saudi Khaleeji timbre',
       accentAnchor: 'exact Saudi Khaleeji accent only',
+      poemDialectFingerprint: 'Saudi Gulf idioms with Najdi-leaning colloquial cadence',
+      poemVoiceColor: 'grounded Saudi Khaleeji chest-led voice color',
+      poemHumanDelivery: 'natural breathing, grounded starts with relaxed line endings, subtle timing imperfections, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, qatari, emirati, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-saudi, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
       negativeBlockArabic: 'كويتي, قطري, إماراتي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير سعودي, غير خليجي, جودة منخفضة',
     },
@@ -2874,6 +2886,9 @@ function VoicesTab({
       phrasingLabel: 'colloquial Emirati Khaleeji phrasing',
       timbreLabel: 'authentic Emirati Khaleeji timbre',
       accentAnchor: 'exact Emirati Khaleeji accent only',
+      poemDialectFingerprint: 'Emirati colloquial wording and natural Emirati phrasing tails',
+      poemVoiceColor: 'warm Emirati majlis voice color',
+      poemHumanDelivery: 'gentle breathing, natural pauses, slight human timing imperfections, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, qatari, saudi, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-emirati, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
       negativeBlockArabic: 'كويتي, قطري, سعودي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير إماراتي, غير خليجي, جودة منخفضة',
     },
@@ -2885,6 +2900,9 @@ function VoicesTab({
       phrasingLabel: 'colloquial Bahraini Khaleeji phrasing',
       timbreLabel: 'authentic Bahraini Khaleeji timbre',
       accentAnchor: 'exact Bahraini Khaleeji accent only',
+      poemDialectFingerprint: 'Bahraini colloquial idioms with soft Bahraini cadence',
+      poemVoiceColor: 'clear soft Bahraini spoken voice color',
+      poemHumanDelivery: 'natural breathing, reflective pauses, subtle human timing, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, qatari, saudi, emirati, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-bahraini, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
       negativeBlockArabic: 'كويتي, قطري, سعودي, إماراتي, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير بحريني, غير خليجي, جودة منخفضة',
     },
@@ -2896,6 +2914,9 @@ function VoicesTab({
       phrasingLabel: 'colloquial Omani Khaleeji phrasing',
       timbreLabel: 'authentic Omani Khaleeji timbre',
       accentAnchor: 'exact Omani Khaleeji accent only',
+      poemDialectFingerprint: 'Omani colloquial idioms with relaxed Omani cadence',
+      poemVoiceColor: 'calm earthy Omani spoken voice color',
+      poemHumanDelivery: 'natural breathing, steady pauses, slight human timing imperfections, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, qatari, saudi, emirati, bahraini, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-omani, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
       negativeBlockArabic: 'كويتي, قطري, سعودي, إماراتي, بحريني, مصري, شامي, مغربي, عراقي, فصحى, غير عماني, غير خليجي, جودة منخفضة',
     },
@@ -5800,7 +5821,7 @@ function VoicesTab({
       : '';
 
     // S3 — vocal sentence packed with dialect-rich keywords Suno responds to.
-    const s3 = `Vocals stay unmistakably Khaleeji with ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, and ${selectedKhaleejiDialectContract.phrasingLabel}, locked to authentic ${selectedKhaleejiDialectContract.labelEn} identity, ${v.vocalDelivery}, featuring ${v.vocalOrnament}${isPoemFamily ? ', mixed loud and clearly out front with close spoken clarity' : ''}.`;
+    const s3 = `Vocals stay unmistakably Khaleeji with ${selectedKhaleejiDialectContract.timbreLabel}, ${selectedKhaleejiDialectContract.pronunciationLabel}, and ${selectedKhaleejiDialectContract.phrasingLabel}, locked to authentic ${selectedKhaleejiDialectContract.labelEn} identity, ${v.vocalDelivery}, featuring ${v.vocalOrnament}${isPoemFamily ? `, mixed loud and clearly out front with close spoken clarity, ${selectedKhaleejiDialectContract.poemHumanDelivery}` : ''}.`;
 
     const moodPart = opts.moods.length > 0 ? `The mood is ${opts.moods.join(', ')}.` : '';
     // Split "{N} BPM {feel}" into two natural clauses; drop redundant "tonal center".
@@ -5911,7 +5932,7 @@ function VoicesTab({
       : 'a continuous low ambient background bed from intro to outro';
 
     if (selectedPoemMode === 'gcc') {
-      return `[Spoken poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, gentle poetic ${cap} voice, voice dominant and clearly out front, ${poemBedHint}, Nabati-inspired Khaleeji wording and Gulf idioms, vivid imagery and metaphor, intentional pauses, no singing, no chorus, no screaming]`;
+      return `[Spoken poem recitation, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect lock, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${selectedKhaleejiDialectContract.poemDialectFingerprint}, ${selectedKhaleejiDialectContract.poemVoiceColor}, gentle poetic ${cap} voice, voice dominant and clearly out front, ${poemBedHint}, natural human delivery with subtle breathing, micro-pauses, and slight timing imperfections, no robotic monotone, Nabati-inspired Khaleeji wording and Gulf idioms, vivid imagery and metaphor, no singing, no chorus, no screaming]`;
     }
     if (selectedPoemMode === 'arabic') {
       return `[Classical Arabic spoken poem recitation only, Quranic/Fusha tone, elegant balagha diction, rhetorical imagery and metaphor, soft calm ${cap} recitation, intentional pauses, no singing, no chorus, no screaming]`;
@@ -6059,7 +6080,7 @@ function VoicesTab({
     const dialectIdentityAnchor = dialectLock ? `authentic ${selectedKhaleejiDialectContract.labelEn} Khaleeji identity` : null;
     const productionShellAnchor = isFusionShell && primaryStyle ? `${normalizeChipForDisplay(primaryStyle)} production shell only` : null;
     const poemStyleDirective = poemMode === 'gcc'
-      ? `spoken GCC poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, Nabati-inspired Khaleeji wording and Gulf idioms, free-tempo spoken pacing, no fixed beat grid, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments`
+      ? `spoken GCC poem recitation only, strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent, ${selectedKhaleejiDialectContract.poemDialectFingerprint}, ${selectedKhaleejiDialectContract.poemVoiceColor}, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, Nabati-inspired Khaleeji wording and Gulf idioms, natural human delivery with subtle breathing, micro-pauses, and slight timing imperfections, no robotic monotone, free-tempo spoken pacing, no fixed beat grid, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments`
       : poemMode === 'arabic'
         ? 'spoken Arabic poem recitation only, strict classical Fusha/Quranic tone, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, elevated poetic diction, rich rhetorical imagery, soft pauses, no singing, no chorus, no chanting, no clapping, no drums, no percussion groove, max two instruments'
         : poemMode === 'english'
@@ -6240,7 +6261,7 @@ function VoicesTab({
     'GCC Synth Pop':         LOCK_POP('synth-driven khaleeji pop'),
     'Modern Khaleeji Fusion': LOCK_POP('modern khaleeji fusion'),
     'English GCC Pop':       LOCK_POP('english lyrics, khaleeji pop crossover'),
-    'GCC Poem':              `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, Nabati-inspired Gulf storytelling and idioms, metaphor-rich lines, elegant emotional cadence, soft calm delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
+    'GCC Poem':              `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${selectedKhaleejiDialectContract.poemDialectFingerprint}, ${selectedKhaleejiDialectContract.poemVoiceColor}, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, Nabati-inspired Gulf storytelling and idioms, natural human delivery with subtle breathing, micro-pauses, slight timing imperfections, no robotic monotone, metaphor-rich lines, elegant emotional cadence, soft calm delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
     'Arabic Poem':           'classical Arabic (Fusha / Quranic tone) spoken poem recitation, elevated poetic diction, eloquent rhetoric, vivid imagery and metaphor, soft calm reading voice, clear pauses, no singing, no chorus, no screaming, max two instruments',
     'English Poem':          'English spoken poem recitation, literary poetic storytelling, vivid imagery, elegant metaphors, soft calm storytelling voice, clear pauses, no singing, no chorus, no screaming, max two instruments',
     'GCC R&B Pop':           LOCK_POP('khaleeji r&b pop'),
@@ -6270,7 +6291,7 @@ function VoicesTab({
     'خليجي سينث بوب':        LOCK_POP('synth-driven khaleeji pop'),
     'فيوجن خليجي':           LOCK_POP('modern khaleeji fusion'),
     'إنجليزي بطابع خليجي':   LOCK_POP('english lyrics, khaleeji pop crossover'),
-    'قصيدة خليجية':          `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, Nabati-inspired Gulf storytelling and idioms, metaphor-rich lines, elegant emotional cadence, soft calm delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
+    'قصيدة خليجية':          `strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect spoken-word poem recitation, ${selectedKhaleejiDialectContract.accentAnchor}, ${selectedKhaleejiDialectContract.pronunciationLabel}, ${selectedKhaleejiDialectContract.poemDialectFingerprint}, ${selectedKhaleejiDialectContract.poemVoiceColor}, voice dominant in foreground, instruments low continuous background texture only with no dropouts, no instrumental lead melody, Nabati-inspired Gulf storytelling and idioms, natural human delivery with subtle breathing, micro-pauses, slight timing imperfections, no robotic monotone, metaphor-rich lines, elegant emotional cadence, soft calm delivery with clear pauses, no singing, no chorus, no screaming, max two instruments`,
     'قصيدة عربية فصحى':      'إلقاء قصيدة عربية فصحى بنبرة قرآنية هادئة، بلغة شاعرية عالية، صور بلاغية واستعارات واضحة، وقفات متعمدة، بدون غناء، بدون كورس، بدون صراخ، حد أقصى آلتين',
     'قصيدة إنجليزية':        'English spoken poem recitation, literary poetic storytelling, vivid imagery, elegant metaphors, soft calm storytelling voice, clear pauses, no singing, no chorus, no screaming, max two instruments',
     'خليجي آر أند بي':       LOCK_POP('khaleeji r&b pop'),
@@ -6844,7 +6865,7 @@ function VoicesTab({
       ? `continuous low-volume ${poemBedInstruments} background bed from intro to outro`
       : 'continuous low-volume ambient background bed from intro to outro';
     if (mode === 'gcc') {
-      return `[Spoken poem mode hard lock: strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent only, voice dominant and clearly out front, ${poemBedDirective}, no instrumental solo or lead hook, Nabati-inspired Khaleeji wording and Gulf idioms, free-tempo spoken recitation with clear pauses, no singing, no chorus, no screaming, no claps, no drums, no percussion, max 2 instruments.]`;
+      return `[Spoken poem mode hard lock: strict ${selectedKhaleejiDialectContract.labelEn} Khaleeji dialect and accent only, ${selectedKhaleejiDialectContract.poemDialectFingerprint}, ${selectedKhaleejiDialectContract.poemVoiceColor}, voice dominant and clearly out front, ${poemBedDirective}, no instrumental solo or lead hook, Nabati-inspired Khaleeji wording and Gulf idioms, natural human delivery with subtle breathing, micro-pauses, and slight timing imperfections, no robotic monotone, free-tempo spoken recitation with clear pauses, no singing, no chorus, no screaming, no claps, no drums, no percussion, max 2 instruments.]`;
     }
     if (mode === 'arabic') {
       return '[Spoken poem mode: strict Classical Arabic (Fusha / Quranic tone) only, elevated poetic diction, clear rhetorical imagery and metaphors, soft calm recitation, clear pauses, no singing, no chorus, no screaming, sparse accompaniment, max 2 instruments.]';
@@ -7418,12 +7439,12 @@ function VoicesTab({
         // weight is what enforces the lead. Custom voice without spotlight eases the weight so
         // the cloned voice (carried by personaId + audioWeight) stays prominent.
         styleWeight: isPoemStyleSelected
-          ? Math.min(styleWeightOverride ?? 0.72, 0.78)
+          ? Math.min(styleWeightOverride ?? 0.69, 0.72)
           : (styleWeightOverride ?? (instrumentSpotlightActive ? Math.max(recommendedParams.styleWeight, 0.85) : (customVoiceActive ? Math.min(recommendedParams.styleWeight, 0.65) : recommendedParams.styleWeight))),
         weirdnessConstraint: isPoemStyleSelected
-          ? Math.min(weirdnessOverride ?? 0.2, 0.25)
+          ? Math.min(weirdnessOverride ?? 0.2, 0.22)
           : (weirdnessOverride ?? recommendedParams.weirdnessConstraint),
-        audioWeight: isPoemStyleSelected ? 0.96 : 0.8,
+        audioWeight: isPoemStyleSelected ? 0.95 : 0.8,
         negativeTags: finalNegativeTags,
         controlBlock: khalijiControlBlock.controlBlock,
         structurePlan: khalijiControlBlock.structurePlan,

@@ -73,8 +73,54 @@ const POEM_NEGATIVE_TOKENS = [
   "screaming",
   "shouting",
 ];
-const POEM_HARD_LOCK_STYLE = "spoken Khaleeji poem recitation only, voice dominant foreground, Nabati-inspired Khaleeji diction and Gulf idioms, instruments low continuous background bed only from intro to outro, no instrumental lead melody, free-tempo spoken pacing, no fixed beat grid, no melodic key-led phrasing, no singing, no chorus, no chant, no clapping, no drums, no percussion";
-const POEM_HARD_LOCK_PROMPT = "[POEM HARD LOCK: spoken recitation only, voice loud and clearly out front, Nabati-inspired Khaleeji diction and Gulf idioms, instruments quiet continuous background bed only from intro to outro, no instrumental solos, no singing, no chorus, no chant, no claps, no drums, no percussion, free-tempo with no beat-driven groove]";
+const POEM_HARD_LOCK_STYLE = "spoken Khaleeji poem recitation, natural human delivery with subtle breathing and micro-pauses, voice dominant foreground, Nabati-inspired Khaleeji diction and Gulf idioms, instruments low continuous background bed only from intro to outro, no instrumental lead melody, avoid robotic monotone, free-tempo spoken pacing, no fixed beat grid, no melodic key-led phrasing, no singing, no chorus, no chant, no clapping, no drums, no percussion";
+const POEM_HARD_LOCK_PROMPT = "[POEM HARD LOCK: spoken recitation, voice loud and clearly out front, natural human delivery with subtle breathing and micro-pauses, Nabati-inspired Khaleeji diction and Gulf idioms, instruments quiet continuous background bed only from intro to outro, no instrumental solos, avoid robotic monotone, no singing, no chorus, no chant, no claps, no drums, no percussion, free-tempo with no beat-driven groove]";
+
+type PoemDialectProfile = {
+  fingerprint: string;
+  voiceColor: string;
+  humanDelivery: string;
+  driftGuard: string;
+};
+
+function resolvePoemDialectProfile(khaleejiDialect: string, khaleejiDialectLabel: string): PoemDialectProfile {
+  const key = khaleejiDialect.toLowerCase();
+
+  if (key === "kuwaiti") {
+    return {
+      fingerprint: "Kuwaiti everyday idioms and unmistakable Kuwaiti sentence tails",
+      voiceColor: "warm close-mic Kuwaiti majlis voice color",
+      humanDelivery: "soft micro-pauses, conversational breath flow, slight timing imperfections",
+      driftGuard: "avoid Saudi/Qatari/Emirati/Bahraini/Omani drift",
+    };
+  }
+
+  if (key === "qatari") {
+    return {
+      fingerprint: "Qatari colloquial idioms with measured majlis storytelling cadence",
+      voiceColor: "deep relaxed Qatari majlis voice color",
+      humanDelivery: "calm thought-by-thought pauses, natural chest resonance, slight human timing drift",
+      driftGuard: "avoid Kuwaiti/Saudi/Emirati/Bahraini/Omani drift",
+    };
+  }
+
+  if (key === "saudi") {
+    return {
+      fingerprint: "Saudi Gulf idioms with Najdi-leaning colloquial cadence",
+      voiceColor: "grounded Saudi Khaleeji chest-led voice color",
+      humanDelivery: "grounded starts, relaxed line endings, natural breathing, subtle timing imperfections",
+      driftGuard: "avoid Kuwaiti/Qatari/Emirati/Bahraini/Omani drift",
+    };
+  }
+
+  const label = khaleejiDialectLabel || "Khaleeji";
+  return {
+    fingerprint: `${label} colloquial idioms and local sentence tails`,
+    voiceColor: `${label} majlis spoken voice color`,
+    humanDelivery: "natural breathing, intentional micro-pauses, slight timing imperfections",
+    driftGuard: "avoid non-target Khaleeji dialect drift",
+  };
+}
 
 // ── Style-aware persona resolver ──
 // The chip drives persona via the LOCK anchor string. Only LOCK_HERITAGE emits the word
@@ -319,12 +365,14 @@ function extractLockedInstrumentsFromControlBlock(controlBlock: string): string[
 
 function applyPoemStyleHardLock(
   style: string,
+  khaleejiDialect: string,
   khaleejiDialectLabel: string,
   khaleejiAccentAnchor: string,
   maxStyleLength: number,
   controlBlock: string,
 ): string {
-  const dialectBlock = [khaleejiDialectLabel, khaleejiAccentAnchor]
+  const dialectProfile = resolvePoemDialectProfile(khaleejiDialect, khaleejiDialectLabel);
+  const dialectBlock = [khaleejiDialectLabel, khaleejiAccentAnchor, dialectProfile.fingerprint, dialectProfile.voiceColor]
     .map((value) => value.trim())
     .filter(Boolean)
     .join(", ");
@@ -341,6 +389,8 @@ function applyPoemStyleHardLock(
   const compactPoemStyle = [
     POEM_HARD_LOCK_STYLE,
     dialectBlock,
+    `human delivery: ${dialectProfile.humanDelivery}`,
+    `dialect guard: ${dialectProfile.driftGuard}`,
     instrumentBlock,
   ]
     .filter(Boolean)
@@ -352,13 +402,16 @@ function applyPoemStyleHardLock(
   return compactPoemStyle.slice(0, Math.max(80, maxStyleLength - 1)).trim();
 }
 
-function applyPoemPromptHardLock(prompt: string, controlBlock: string): string {
+function applyPoemPromptHardLock(prompt: string, controlBlock: string, khaleejiDialect: string, khaleejiDialectLabel: string): string {
+  const dialectProfile = resolvePoemDialectProfile(khaleejiDialect, khaleejiDialectLabel);
   const cleanedPrompt = stripPoemSongCues(prompt);
   const lockedInstruments = extractLockedInstrumentsFromControlBlock(controlBlock).slice(0, 2);
   const continuityLine = lockedInstruments.length > 0
     ? `[Background bed lock: continuous low-volume ${lockedInstruments.join(" + ")} texture under full recitation from intro to outro, no dropouts]`
     : "[Background bed lock: continuous low-volume ambient texture under full recitation from intro to outro, no dropouts]";
-  return [POEM_HARD_LOCK_PROMPT, continuityLine, cleanedPrompt].filter(Boolean).join("\n\n").trim();
+  const dialectLine = `[Dialect profile: ${dialectProfile.fingerprint}, ${dialectProfile.voiceColor}, ${dialectProfile.driftGuard}]`;
+  const humanLine = `[Human delivery lock: ${dialectProfile.humanDelivery}, avoid robotic monotone and over-formal newsreader tone]`;
+  return [POEM_HARD_LOCK_PROMPT, dialectLine, humanLine, continuityLine, cleanedPrompt].filter(Boolean).join("\n\n").trim();
 }
 
 // No-op wrapper retained so existing call-sites keep compiling. The Khaleeji vocal cue
@@ -459,11 +512,11 @@ serve(async (req) => {
     const poemSignal = [style, prompt, styleTags.join(",")].join(" ").toLowerCase();
     const isPoemEffective = /\b(?:gcc\s*poem|arabic\s*poem|english\s*poem|poem\s*cadence|spoken\s*poem|spoken-word\s*poem|poem\s*recitation)\b|قصيدة|إلقاء\s*شعري/.test(poemSignal);
     const effectiveStyle = isPoemEffective
-      ? applyPoemStyleHardLock(style, khaleejiDialectLabel, khaleejiAccentAnchor, styleLimit, controlBlock)
+      ? applyPoemStyleHardLock(style, khaleejiDialect, khaleejiDialectLabel, khaleejiAccentAnchor, styleLimit, controlBlock)
       : style;
     const isGccEffective = GCC_STYLE_MARKERS.test(effectiveStyle);
     const effectivePrompt = isPoemEffective
-      ? applyPoemPromptHardLock(prompt, controlBlock)
+      ? applyPoemPromptHardLock(prompt, controlBlock, khaleejiDialect, khaleejiDialectLabel)
       : (!instrumental && isGccEffective ? applyGccPromptShaping(prompt, effectiveStyle, vocalGender) : prompt);
     let effectiveNegativeTags = negativeTags;
     if (isPoemEffective) {
@@ -473,15 +526,15 @@ serve(async (req) => {
       effectiveNegativeTags = buildGccNegativeTags(effectiveStyle, effectiveNegativeTags);
     }
     const effectiveStyleWeight = isPoemEffective
-      ? Math.min(styleWeight ?? 0.72, 0.78)
+      ? Math.min(styleWeight ?? 0.69, 0.72)
       : styleWeight;
     // Frontend now sends the correct value (user override or genre-based recommended).
     // Only fall back to old GCC defaults when no value was sent (backwards compat).
     const effectiveWeirdnessConstraint = isPoemEffective
-      ? Math.min(weirdnessConstraint ?? 0.2, 0.25)
+      ? Math.min(weirdnessConstraint ?? 0.2, 0.22)
       : (weirdnessConstraint !== undefined ? weirdnessConstraint : (isGccEffective ? 0.55 : undefined));
     const effectiveAudioWeight = isPoemEffective
-      ? Math.max(audioWeight ?? 0.95, 0.9)
+      ? Math.min(Math.max(audioWeight ?? 0.95, 0.93), 0.96)
       : (audioWeight !== undefined ? audioWeight : (isGccEffective ? 0.65 : undefined));
 
     if (title.length > 80) {

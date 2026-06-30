@@ -5946,7 +5946,7 @@ Update the relevant content/data files with this REAL information.`;
       if (agentDebugContext.errors.length > 0 || agentDebugContext.networkErrors.length > 0) {
         userMessageContent += `\n\n🚨🚨🚨 CRITICAL: RUNTIME ERRORS DETECTED - YOU MUST FIX THESE! 🚨🚨🚨\n`;
         userMessageContent += `\n⛔ YOU CANNOT COMPLETE THIS TASK UNTIL THESE ERRORS ARE FIXED.\n`;
-        userMessageContent += `\n📋 REQUIRED STEPS:\n1. Use read_file to see the broken file\n2. Find the exact line causing the error\n3. Use search_replace to fix it\n4. Only then call task_complete\n`;
+        userMessageContent += `\n📋 REQUIRED STEPS:\n1. Use read_file to see the broken file\n2. Find the exact line causing the error\n3. Use morph_edit to fix it (preferred) or search_replace as backup\n4. Only then call task_complete\n`;
         
         if (agentDebugContext.errors.length > 0) {
           userMessageContent += `\n**Runtime Errors (MUST FIX):**\n`;
