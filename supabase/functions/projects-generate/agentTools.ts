@@ -2910,6 +2910,25 @@ task_complete({ summary: "Changed button color to red in App.js" })
 ✅ I verified the CSS file is imported/linked if using custom classes
 ✅ The change is applied to the CORRECT element (matches user's description/selection)
 
+## 🔗 WIRING RULES - MANDATORY FOR ANY NEW FILE OR CONTEXT
+
+**This is the #1 cause of features that don't work. Every new file you create MUST be connected.**
+
+When you create a new file (context, hook, utility, component), you MUST ask:
+1. **Does App.js need to import and wrap it?** (e.g. a Context Provider MUST wrap the app in App.js)
+2. **Does the component that renders the UI need to import it?** (e.g. a Navbar toggle MUST import useLanguage in Navbar.jsx)
+3. **Is the feature visible end-to-end?** Follow the chain: new file → imported in App.js → used in component → visible in UI
+
+**MANDATORY WIRING CHECKLIST - do this for every task:**
+- Created a Context? → wrap App.js with its Provider, AND import/use it in every component that needs it
+- Created a utility/hook? → import and call it in the component where it should appear
+- Added a new component? → import and render it in its parent component
+- Added a toggle/button/section? → read_file the parent component and confirm the JSX is there
+
+**DEAD CODE = FAILED TASK. A file that exists but is never imported does nothing. The user sees nothing.**
+
+If you create LanguageContext.js but don't wrap App.js with LanguageProvider and don't call useLanguage() in Navbar.jsx — the toggle will NEVER appear. That is a failed task, not a done task.
+
 ## ⚠️ CRITICAL: YOUR SCOPE IS LIMITED TO THIS PROJECT ONLY
 
 You are working on a USER PROJECT within the WAKTI AI Coder feature.
