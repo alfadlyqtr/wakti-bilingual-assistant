@@ -388,7 +388,7 @@ export default function DeenAsk() {
     try {
       const recentHistory = turns
         .filter((t) => t.explanation?.summary)
-        .slice(-2)
+        .slice(-5)
         .map((t) => ({
           question: t.query,
           answer: t.explanation!.summary.slice(0, 300),

@@ -195,6 +195,8 @@ async function generateGroundedSummary(
   language: "ar" | "en",
   quranResults: ResponseSource[],
   hadithResults: ResponseSource[],
+  conversationHistory: ConversationTurn[] = [],
+  intent?: IntentResult | null,
 ) {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
   const allSources = [...quranResults, ...hadithResults].slice(0, 6);
@@ -209,28 +211,54 @@ async function generateGroundedSummary(
   }).join("\n\n");
 
   const system = language === "ar"
-    ? `أنت مساعد Deen Ask في Wakti. أجب فقط من المصادر المعروضة لك من القرآن والحديث. لا تستخدم أي مصدر خارجي. لا تذكر Google أو العلماء أو مواقع خارجية. إذا كانت الأدلة غير كافية فقل ذلك بوضوح. لا تضف سؤال متابعة. لا تستخدم markdown. أخرج JSON فقط بهذا الشكل: {"summary":"...","quran_summary":"","hadith_summary":""}`
-    : `You are Wakti's Deen Ask assistant. Answer only from the Quran and Hadith sources shown to you. Do not use any outside source. Do not mention Google, scholars, or external websites. If the evidence is limited, say so clearly. Do not add a follow-up question. Do not use markdown. Output JSON only in this shape: {"summary":"...","quran_summary":"","hadith_summary":""}`;
+    ? `أنت مساعد Deen Ask في Wakti. أجب من المصادر المعروضة من القرآن والحديث. للأسئلة الفقهية والفتاوى يمكنك أيضاً البحث في موقع islamweb.net. لا تستخدم أي مصدر خارجي آخر. لا تذكر Google أو العلماء أو مواقع خارجية أخرى. إذا كانت الأدلة غير كافية فقل ذلك بوضوح. لا تضف سؤال متابعة. لا تستخدم markdown. سياق المحادثة السابقة للرجوع فقط — يجب أن يأتي جوابك من المصادر المعروضة أدناه. أخرج JSON فقط بهذا الشكل: {"summary":"...","quran_summary":"","hadith_summary":""}`
+    : `You are Wakti's Deen Ask assistant. Answer from the Quran and Hadith sources shown to you. For fiqh and fatwa questions, you may also search islamweb.net. Do not use any other outside source. Do not mention Google, scholars, or other external websites. If the evidence is limited, say so clearly. Do not add a follow-up question. Do not use markdown. Previous conversation context is for reference only — your answer must come from the Sources shown below. Output JSON only in this shape: {"summary":"...","quran_summary":"","hadith_summary":""}`;
+
+  let contextBlock = "";
+  if (conversationHistory.length > 0) {
+    const formattedHistory = conversationHistory.map((turn, i) => {
+      const q = turn.question?.trim() ?? "";
+      const a = turn.answer?.trim() ?? "";
+      return language === "ar"
+        ? `${i + 1}. المستخدم: ${q}\n   الجواب السابق: ${a}`
+        : `${i + 1}. User: ${q}\n   Previous answer: ${a}`;
+    }).join("\n\n");
+    contextBlock = language === "ar"
+      ? `سياق المحادثة السابق (للرجوع فقط):\n${formattedHistory}\n\n`
+      : `Previous conversation context (for reference only):\n${formattedHistory}\n\n`;
+  }
 
   const userPrompt = language === "ar"
-    ? `السؤال: ${question}\n\nالمصادر:\n${evidenceBlock}\n\nاكتب جواباً مباشراً وقصيراً ومفيداً، مرتبطاً بالنصوص فقط.`
-    : `Question: ${question}\n\nSources:\n${evidenceBlock}\n\nWrite a direct, helpful answer tied only to these texts.`;
+    ? `${contextBlock}السؤال الحالي: ${question}\n\nالمصادر:\n${evidenceBlock}\n\nاكتب جواباً مباشراً وقصيراً ومفيداً، مرتبطاً بالنصوص فقط.`
+    : `${contextBlock}Current question: ${question}\n\nSources:\n${evidenceBlock}\n\nWrite a direct, helpful answer tied only to these texts.`;
 
   const startedAt = Date.now();
   try {
+    const shouldSearchWeb = intent && (
+      intent.question_type === "fiqh_question" ||
+      intent.question_type === "sensitive" ||
+      intent.question_type === "general_islamic"
+    );
+
+    const requestBody: Record<string, unknown> = {
+      contents: [{ role: "user", parts: [{ text: `${system}\n\n${userPrompt}` }] }],
+      generationConfig: {
+        temperature: 0.15,
+        maxOutputTokens: 500,
+        responseMimeType: "application/json",
+      },
+    };
+
+    if (shouldSearchWeb) {
+      requestBody.tools = [{ google_search: {} }];
+    }
+
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: `${system}\n\n${userPrompt}` }] }],
-          generationConfig: {
-            temperature: 0.15,
-            maxOutputTokens: 500,
-            responseMimeType: "application/json",
-          },
-        }),
+        body: JSON.stringify(requestBody),
       },
     );
 
@@ -459,7 +487,7 @@ serve(async (req) => {
         }]
         : [];
       const summary = quranResults.length > 0
-        ? await generateGroundedSummary(req, query, language, quranResults, [])
+        ? await generateGroundedSummary(req, query, language, quranResults, [], conversationHistory, intent)
         : buildNoResultsSummary(language);
       return json({
         query,
@@ -503,7 +531,7 @@ serve(async (req) => {
         }];
       }
       const summary = result.length > 0
-        ? await generateGroundedSummary(req, query, language, [], result)
+        ? await generateGroundedSummary(req, query, language, [], result, conversationHistory, intent)
         : buildNoResultsSummary(language);
       return json({
         query,
@@ -568,7 +596,7 @@ serve(async (req) => {
         : hadithResults.length > 0; // fiqh/sensitive/followup requires hadith
 
     const summary = rows.length > 0
-      ? await generateGroundedSummary(req, query, language, quranResults, hadithResults)
+      ? await generateGroundedSummary(req, query, language, quranResults, hadithResults, conversationHistory, intent)
       : buildNoResultsSummary(language);
 
     return json({
