@@ -80,9 +80,20 @@ const POEM_DELIVERY_NEGATIVE_TOKENS = [
   "classical enunciation",
   "robotic monotone",
   "over-formal diction",
+  "deep baritone narrator",
+  "trailer voice",
+  "boomy low-pitch voice",
+  "theatrical overacting",
 ];
-const POEM_HARD_LOCK_STYLE = "spoken Khaleeji poem recitation, natural human delivery with subtle breathing and micro-pauses, voice dominant foreground, Nabati-inspired Khaleeji diction and Gulf idioms, instruments low continuous background bed only from intro to outro, no instrumental lead melody, avoid robotic monotone, free-tempo spoken pacing, no fixed beat grid, no melodic key-led phrasing, no singing, no chorus, no chant, no clapping, no drums, no percussion";
-const POEM_HARD_LOCK_PROMPT = "[POEM HARD LOCK: spoken recitation, voice loud and clearly out front, natural human delivery with subtle breathing and micro-pauses, Nabati-inspired Khaleeji diction and Gulf idioms, instruments quiet continuous background bed only from intro to outro, no instrumental solos, avoid robotic monotone, no singing, no chorus, no chant, no claps, no drums, no percussion, free-tempo with no beat-driven groove]";
+const POEM_CORE_VOICE_NEGATIVE_TOKENS = [
+  "deep baritone",
+  "trailer narrator",
+  "boomy low voice",
+  "theatrical drama",
+];
+const POEM_NATURAL_VOICE_LOCK = "natural conversational mid-range spoken voice, warm human tone, no exaggerated low-pitch narration";
+const POEM_HARD_LOCK_STYLE = "spoken Khaleeji poem recitation, natural conversational mid-range spoken voice, natural human delivery with subtle breathing and micro-pauses, voice dominant foreground, Nabati-inspired Khaleeji diction and Gulf idioms, instruments low continuous background bed only from intro to outro, no instrumental lead melody, avoid robotic monotone and exaggerated deep narration, free-tempo spoken pacing, no fixed beat grid, no melodic key-led phrasing, no singing, no chorus, no chant, no clapping, no drums, no percussion";
+const POEM_HARD_LOCK_PROMPT = "[POEM HARD LOCK: spoken recitation, voice loud and clearly out front, natural conversational mid-range spoken voice, natural human delivery with subtle breathing and micro-pauses, Nabati-inspired Khaleeji diction and Gulf idioms, instruments quiet continuous background bed only from intro to outro, no instrumental solos, avoid robotic monotone and exaggerated deep narration, no singing, no chorus, no chant, no claps, no drums, no percussion, free-tempo with no beat-driven groove]";
 
 function resolvePoemDialectNegativeTokens(khaleejiDialect: string): string[] {
   const key = khaleejiDialect.toLowerCase();
@@ -369,6 +380,7 @@ function buildPoemNegativeTags(preferredNegativeTags: string = "", khaleejiDiale
   const dialectPriorityTokens = resolvePoemDialectNegativeTokens(khaleejiDialect);
   const tokens = dedupeCommaSeparatedTokens([
     ...dialectPriorityTokens,
+    ...POEM_CORE_VOICE_NEGATIVE_TOKENS,
     ...tokenizeCommaSeparatedTokens(preferredNegativeTags),
     ...POEM_NEGATIVE_TOKENS,
     ...POEM_DELIVERY_NEGATIVE_TOKENS,
@@ -422,6 +434,7 @@ function applyPoemStyleHardLock(
   const compactPoemStyle = [
     POEM_HARD_LOCK_STYLE,
     dialectBlock,
+    `voice lock: ${POEM_NATURAL_VOICE_LOCK}`,
     `human delivery: ${dialectProfile.humanDelivery}`,
     `strict dialect lock: ${khaleejiDialectLabel || "Khaleeji"} only, ${dialectProfile.driftGuard}`,
     instrumentBlock,
@@ -444,8 +457,9 @@ function applyPoemPromptHardLock(prompt: string, controlBlock: string, khaleejiD
     : "[Background bed lock: continuous low-volume ambient texture under full recitation from intro to outro, no dropouts]";
   const dialectLine = `[Dialect profile: ${dialectProfile.fingerprint}, ${dialectProfile.voiceColor}, ${dialectProfile.driftGuard}]`;
   const driftLine = `[Dialect drift guard: strict ${khaleejiDialectLabel || "Khaleeji"} only, no non-target Khaleeji accent switching between lines]`;
+  const naturalVoiceLine = `[Voice lock: ${POEM_NATURAL_VOICE_LOCK}]`;
   const humanLine = `[Human delivery lock: ${dialectProfile.humanDelivery}, avoid robotic monotone and over-formal newsreader tone]`;
-  return [POEM_HARD_LOCK_PROMPT, dialectLine, driftLine, humanLine, continuityLine, cleanedPrompt].filter(Boolean).join("\n\n").trim();
+  return [POEM_HARD_LOCK_PROMPT, dialectLine, driftLine, naturalVoiceLine, humanLine, continuityLine, cleanedPrompt].filter(Boolean).join("\n\n").trim();
 }
 
 // No-op wrapper retained so existing call-sites keep compiling. The Khaleeji vocal cue
