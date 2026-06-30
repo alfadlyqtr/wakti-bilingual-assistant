@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { GroupAvatar } from "@/components/GroupAvatar";
 import { useTheme } from "@/providers/ThemeProvider";
+import { formatDayLabel, isSameDay, formatBubbleTime } from "@/lib/dateLabels";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, editGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatConversation, type GroupChatMessage } from "@/services/groupChatService";
@@ -1365,6 +1366,7 @@ export default function GroupChatPage() {
                 const mine = message.sender_id === user?.id;
                 const isWakti = message.sender_id === WAKTI_AI_ID;
                 const showUnreadDivider = unreadSeparatorMessageId === message.id;
+                const showDayHeader = index === 0 || !isSameDay(message.created_at, messages[index - 1].created_at);
                 const senderLabel = mine
                   ? (language === "ar" ? "أنت" : "You")
                   : isWakti
@@ -1376,6 +1378,13 @@ export default function GroupChatPage() {
 
                 return (
                   <Fragment key={message.id}>
+                    {showDayHeader && (
+                      <div className="sticky top-0 z-10 flex justify-center py-2">
+                        <span className={`text-[11px] font-medium px-3 py-1 rounded-full shadow-sm ${isDark ? 'bg-[#606062] text-[#858384]' : 'bg-gray-200 text-gray-500'}`}>
+                          {formatDayLabel(message.created_at, language)}
+                        </span>
+                      </div>
+                    )}
                     {showUnreadDivider && (
                       <div ref={unreadDividerRef} className="my-2 flex items-center gap-3 px-1">
                         <div className="h-px flex-1 bg-border/80" />
@@ -1468,8 +1477,8 @@ export default function GroupChatPage() {
                           )}
                         </div>
 
-                        <div className={cn("mt-1 px-1 text-[11px] text-muted-foreground flex items-center gap-1", mine ? "justify-end" : "justify-start")}>
-                          <span>{formatDistanceToNow(new Date(message.created_at), { addSuffix: true })}</span>
+                        <div className={cn("mt-1 px-1 text-[10px] text-muted-foreground flex items-center gap-1", mine ? "justify-end" : "justify-start")}>
+                          <span>{formatBubbleTime(message.created_at)}</span>
                           {message.edited_at && (
                             <span className="opacity-70">{language === "ar" ? "(تم التعديل)" : "(edited)"}</span>
                           )}

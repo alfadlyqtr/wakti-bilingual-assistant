@@ -1,7 +1,8 @@
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { Fragment, useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
+import { formatDayLabel, isSameDay, formatBubbleTime } from "@/lib/dateLabels";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -585,7 +586,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
     return (
       <motion.div
-        key={message.id}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
@@ -774,11 +774,11 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               )}
             </div>
 
-            {/* Timestamp */}
-            <div className={`text-[11px] mt-2 ${
+            {/* Status */}
+            <div className={`text-[10px] mt-1 ${
               isSentByMe ? 'self-end mr-1' : 'self-start ml-1'
             } ${isDark ? 'text-gray-300' : 'text-gray-600'} flex items-center gap-1`}>
-              <span>{formatMessageTime(message.created_at)}</span>
+              <span>{formatBubbleTime(message.created_at)}</span>
               {isSentByMe && (
                 <span title={message.is_read ? 'Read' : 'Sent'} className="inline-flex items-center">
                   <CheckCheck className={`h-3.5 w-3.5 ${message.is_read ? 'text-green-500' : 'text-gray-400'}`} />
@@ -982,9 +982,21 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                 <div className="mt-auto">
                   <div className="space-y-1 py-2">
                     <AnimatePresence>
-                      {allMessages.map((message, index) => (
-                        renderMessage(message, index, allMessages)
-                      ))}
+                      {allMessages.map((message, index) => {
+                        const showDayHeader = index === 0 || !isSameDay(message.created_at, allMessages[index - 1].created_at);
+                        return (
+                          <Fragment key={message.id}>
+                            {showDayHeader && (
+                              <div className="sticky top-0 z-10 flex justify-center py-2">
+                                <span className={`text-[11px] font-medium px-3 py-1 rounded-full shadow-sm ${isDark ? 'bg-[#606062] text-[#858384]' : 'bg-gray-200 text-gray-500'}`}>
+                                  {formatDayLabel(message.created_at, language)}
+                                </span>
+                              </div>
+                            )}
+                            {renderMessage(message, index, allMessages)}
+                          </Fragment>
+                        );
+                      })}
                     </AnimatePresence>
                     <div ref={messageEndRef} />
                   </div>

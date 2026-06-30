@@ -8,6 +8,7 @@ import { Fragment, useState, useEffect, useLayoutEffect, useRef, useCallback, us
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
+import { formatDayLabel, isSameDay, formatBubbleTime } from "@/lib/dateLabels";
 import { emitEvent } from "@/utils/eventBus";
 import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from "@/utils/waktiOperator";
 import { Button } from "@/components/ui/button";
@@ -1035,11 +1036,11 @@ export default function ChatPage() {
               )}
             </div>
 
-            {/* Timestamp */}
-            <div className={`text-[11px] mt-2 ${
+            {/* Status */}
+            <div className={`text-[10px] mt-1 ${
               isSentByMe ? 'self-end mr-1' : 'self-start ml-1'
             } ${isDark ? 'text-gray-300' : 'text-gray-600'} flex items-center gap-1`}>
-              <span>{formatMessageTime(message.created_at)}</span>
+              <span>{formatBubbleTime(message.created_at)}</span>
               {message.edited_at && (
                 <span className="opacity-70">{language === 'ar' ? '(تم التعديل)' : '(edited)'}</span>
               )}
@@ -1242,20 +1243,30 @@ export default function ChatPage() {
             <div className="mt-auto">
               <div className="space-y-1 py-2">
                 <AnimatePresence>
-                  {allMessages.map((message, index) => (
-                    <Fragment key={message.id}>
-                      {firstUnreadMessageId === message.id && (
-                        <div ref={unreadDividerRef} className="my-2 flex items-center gap-3 px-1">
-                          <div className="h-px flex-1 bg-border/80" />
-                          <span className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(210_100%_55%)]">
-                            {language === "ar" ? "رسائل غير مقروءة" : "Unread messages"}
-                          </span>
-                          <div className="h-px flex-1 bg-border/80" />
-                        </div>
-                      )}
-                      {renderMessage(message, index, allMessages)}
-                    </Fragment>
-                  ))}
+                  {allMessages.map((message, index) => {
+                    const showDayHeader = index === 0 || !isSameDay(message.created_at, allMessages[index - 1].created_at);
+                    return (
+                      <Fragment key={message.id}>
+                        {showDayHeader && (
+                          <div className="sticky top-0 z-10 flex justify-center py-2">
+                            <span className={`text-[11px] font-medium px-3 py-1 rounded-full shadow-sm ${isDark ? 'bg-[#606062] text-[#858384]' : 'bg-gray-200 text-gray-500'}`}>
+                              {formatDayLabel(message.created_at, language)}
+                            </span>
+                          </div>
+                        )}
+                        {firstUnreadMessageId === message.id && (
+                          <div ref={unreadDividerRef} className="my-2 flex items-center gap-3 px-1">
+                            <div className="h-px flex-1 bg-border/80" />
+                            <span className="text-[11px] font-semibold uppercase tracking-wide text-[hsl(210_100%_55%)]">
+                              {language === "ar" ? "رسائل غير مقروءة" : "Unread messages"}
+                            </span>
+                            <div className="h-px flex-1 bg-border/80" />
+                          </div>
+                        )}
+                        {renderMessage(message, index, allMessages)}
+                      </Fragment>
+                    );
+                  })}
                 </AnimatePresence>
 
                 {/* Contact typing indicator */}
