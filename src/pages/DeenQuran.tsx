@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, ChevronUp, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw, Eye, EyeOff, ArrowLeftRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, Search, Play, Pause, Bookmark, BookmarkCheck, BookOpen, MessageCircle, RotateCcw, ChevronRight, ChevronDown, ChevronUp, X, Volume2, Clock, Check, ListMusic, Settings2, ListVideo, SkipBack, SkipForward, RotateCw, Eye, EyeOff, ArrowLeftRight, Loader2 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -340,6 +340,7 @@ export default function DeenQuran() {
   const [currentPlaybackAyahIndex, setCurrentPlaybackAyahIndex] = useState(-1);
   const [readerPlayAllEnabled, setReaderPlayAllEnabled] = useState(false);
   const [readerReciterOpen, setReaderReciterOpen] = useState(false);
+  const [loadingAudioIndex, setLoadingAudioIndex] = useState<number | null>(null);
   const [pagePickerOpen, setPagePickerOpen] = useState(false);
   const [bookmarksDropdownOpen, setBookmarksDropdownOpen] = useState(false);
   const bookmarksDropdownRef = useRef<HTMLDivElement | null>(null);
@@ -1287,12 +1288,22 @@ export default function DeenQuran() {
 
     if (readerPlayAllEnabled && activeSurah) {
       surahPlaybackCancelledRef.current = false;
-      void playSurahSequentially(globalIdx, activeSurah, surahs.find((s) => s.number === activeSurah.number));
+      setLoadingAudioIndex(globalIdx);
+      try {
+        await playSurahSequentially(globalIdx, activeSurah, surahs.find((s) => s.number === activeSurah.number));
+      } finally {
+        setLoadingAudioIndex(null);
+      }
       return;
     }
 
-    const started = await playAyahAudio(ayah);
-    if (started && activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah);
+    setLoadingAudioIndex(globalIdx);
+    try {
+      const started = await playAyahAudio(ayah);
+      if (started && activeSurah) saveProgress(activeSurah.number, ayah.numberInSurah);
+    } finally {
+      setLoadingAudioIndex(null);
+    }
   };
 
   const handleBackNavigation = () => {
@@ -1554,15 +1565,19 @@ export default function DeenQuran() {
     }
   };
 
-  const removeBookmark = async (ayah: Ayah, fromSheet = false) => {
-    if (!activeSurah) return;
+  const removeBookmark = async (ayah: Ayah, fromSheet = false, surahNumber?: number) => {
+    const surahNum = surahNumber ?? activeSurah?.number;
+    if (!surahNum) return;
     const uid = currentUserId;
-    const surahKey = String(activeSurah.number);
+    const surahKey = String(surahNum);
     const storedBookmarks = readStoredBookmarks(uid);
     const currentStored = Array.isArray(storedBookmarks[surahKey]) ? storedBookmarks[surahKey] : [];
-    const k = `${activeSurah.number}:${ayah.numberInSurah}`;
+    const k = `${surahNum}:${ayah.numberInSurah}`;
 
-    setBookmarkedAyahs((prev) => { const s = new Set(prev); s.delete(ayah.numberInSurah); return s; });
+    // Only update bookmarkedAyahs state if we're removing from the currently open surah
+    if (!surahNumber || surahNumber === activeSurah?.number) {
+      setBookmarkedAyahs((prev) => { const s = new Set(prev); s.delete(ayah.numberInSurah); return s; });
+    }
     writeStoredBookmarks({
       ...storedBookmarks,
       [surahKey]: currentStored.filter((n) => n !== ayah.numberInSurah),
@@ -1579,7 +1594,7 @@ export default function DeenQuran() {
           .from("deen_quran_bookmarks")
           .delete()
           .eq("user_id", uid)
-          .eq("surah_number", activeSurah.number)
+          .eq("surah_number", surahNum)
           .eq("ayah_number", ayah.numberInSurah);
       } catch {}
     }
@@ -1918,7 +1933,7 @@ export default function DeenQuran() {
                 </p>
                 <p className="text-[12px] mt-0.5" style={{ color: isDark ? "#858384" : "#606062", overflow: "hidden", overflowWrap: "break-word" }}>
                   {isAr ? lastSurah.name : lastSurah.englishName} —{" "}
-                  {isAr ? "آية" : "Ayah"} {lastProgress!.ayah_number}
+                  {isAr ? "صفحة" : "Page"} {Math.floor((lastProgress!.ayah_number - 1) / AYAHS_PER_PAGE) + 1}
                 </p>
               </div>
               <ChevronRight
@@ -2007,36 +2022,51 @@ export default function DeenQuran() {
                       </div>
                     )}
                     {allBookmarks.map((b, idx) => (
-                      <button
+                      <div
                         key={`${b.surah.number}-${b.ayah}`}
-                        onClick={() => { setBookmarksDropdownOpen(false); openSurah(b.surah, b.ayah); }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 active:scale-[0.99] transition-all"
+                        className="w-full flex items-center gap-3 px-3 py-2.5"
                         style={{
                           borderBottom: idx < allBookmarks.length - 1 ? `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.06)"}` : "none",
                         }}
                       >
-                        <div
-                          className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-                          style={{
-                            background: getBookmarkColor(b.color).bg,
-                            color: getBookmarkColor(b.color).text,
-                          }}
+                        <button
+                          onClick={() => { setBookmarksDropdownOpen(false); openSurah(b.surah, b.ayah); }}
+                          className="flex-1 flex items-center gap-3 min-w-0 active:scale-[0.99] transition-all"
                         >
-                          {b.surah.number}
-                        </div>
-                        <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
-                          <p className="text-sm font-medium" style={{ color: textPrimary }}>
-                            {isAr ? b.surah.name : b.surah.englishName}
-                          </p>
-                          <p className="text-[10px]" style={{ color: textMuted }}>
-                            {isAr ? "آية" : "Ayah"} {b.ayah}
-                          </p>
-                        </div>
-                        <ChevronRight
-                          className="w-3.5 h-3.5 flex-shrink-0"
-                          style={{ color: textMuted, transform: isAr ? "rotate(180deg)" : undefined }}
-                        />
-                      </button>
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                            style={{
+                              background: getBookmarkColor(b.color).bg,
+                              color: getBookmarkColor(b.color).text,
+                            }}
+                          >
+                            {b.surah.number}
+                          </div>
+                          <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
+                            <p className="text-sm font-medium" style={{ color: textPrimary }}>
+                              {isAr ? b.surah.name : b.surah.englishName}
+                            </p>
+                            <p className="text-[10px]" style={{ color: textMuted }}>
+                              {isAr ? "آية" : "Ayah"} {b.ayah}
+                            </p>
+                          </div>
+                          <ChevronRight
+                            className="w-3.5 h-3.5 flex-shrink-0"
+                            style={{ color: textMuted, transform: isAr ? "rotate(180deg)" : undefined }}
+                          />
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); void removeBookmark({ numberInSurah: b.ayah } as Ayah, false, b.surah.number); }}
+                          className="w-7 h-7 rounded-full flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
+                          style={{
+                            background: isDark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.04)",
+                            color: isDark ? "#ef4444" : "#dc2626",
+                          }}
+                          title={isAr ? "إزالة" : "Remove"}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -2718,36 +2748,51 @@ export default function DeenQuran() {
                               </div>
                             )}
                             {allBookmarks.map((b, idx) => (
-                              <button
+                              <div
                                 key={`${b.surah.number}-${b.ayah}`}
-                                onClick={() => { setBookmarksDropdownOpen(false); openSurah(b.surah, b.ayah); }}
-                                className="w-full flex items-center gap-3 px-3 py-2.5 active:scale-[0.99] transition-all"
+                                className="w-full flex items-center gap-3 px-3 py-2.5"
                                 style={{
                                   borderBottom: idx < allBookmarks.length - 1 ? `1px solid ${isDark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.06)"}` : "none",
                                 }}
                               >
-                                <div
-                                  className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0"
-                                  style={{
-                                    background: getBookmarkColor(b.color).bg,
-                                    color: getBookmarkColor(b.color).text,
-                                  }}
+                                <button
+                                  onClick={() => { setBookmarksDropdownOpen(false); openSurah(b.surah, b.ayah); }}
+                                  className="flex-1 flex items-center gap-3 min-w-0 active:scale-[0.99] transition-all"
                                 >
-                                  {b.surah.number}
-                                </div>
-                                <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
-                                  <p className="text-sm font-medium" style={{ color: textPrimary }}>
-                                    {isAr ? b.surah.name : b.surah.englishName}
-                                  </p>
-                                  <p className="text-[10px]" style={{ color: textMuted }}>
-                                    {isAr ? "آية" : "Ayah"} {b.ayah}
-                                  </p>
-                                </div>
-                                <ChevronRight
-                                  className="w-3.5 h-3.5 flex-shrink-0"
-                                  style={{ color: textMuted, transform: isAr ? "rotate(180deg)" : undefined }}
-                                />
-                              </button>
+                                  <div
+                                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                                    style={{
+                                      background: getBookmarkColor(b.color).bg,
+                                      color: getBookmarkColor(b.color).text,
+                                    }}
+                                  >
+                                    {b.surah.number}
+                                  </div>
+                                  <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
+                                    <p className="text-sm font-medium" style={{ color: textPrimary }}>
+                                      {isAr ? b.surah.name : b.surah.englishName}
+                                    </p>
+                                    <p className="text-[10px]" style={{ color: textMuted }}>
+                                      {isAr ? "آية" : "Ayah"} {b.ayah}
+                                    </p>
+                                  </div>
+                                  <ChevronRight
+                                    className="w-3.5 h-3.5 flex-shrink-0"
+                                    style={{ color: textMuted, transform: isAr ? "rotate(180deg)" : undefined }}
+                                  />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); void removeBookmark({ numberInSurah: b.ayah } as Ayah, false, b.surah.number); }}
+                                  className="w-7 h-7 rounded-full flex items-center justify-center active:scale-95 transition-all flex-shrink-0"
+                                  style={{
+                                    background: isDark ? "rgba(255,255,255,0.04)" : "rgba(6,5,65,0.04)",
+                                    color: isDark ? "#ef4444" : "#dc2626",
+                                  }}
+                                  title={isAr ? "إزالة" : "Remove"}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
                             ))}
                           </div>
                         )}
@@ -2914,6 +2959,8 @@ export default function DeenQuran() {
                       {activeSurah.ayahs.slice(pageBreaks[readerPage], pageBreaks[readerPage + 1]).map((ayah, idx) => {
                         const globalIdx = pageBreaks[readerPage] + idx;
                         const isPlaying = playing && currentPlaybackAyahIndex === globalIdx;
+                        const isLoading = loadingAudioIndex === globalIdx;
+                        const isActive = isPlaying || isLoading;
                         const isBookmarked = bookmarkedAyahs.has(ayah.numberInSurah);
                         const trans = activeTrans[globalIdx] ?? null;
                         return (
@@ -2921,7 +2968,7 @@ export default function DeenQuran() {
                             key={ayah.numberInSurah}
                             ref={(el) => { ayahItemRefs.current[globalIdx] = el; }}
                             className="w-full flex flex-col gap-3 py-3 rounded-xl transition-all"
-                            style={{ borderBottom: `1px solid ${goldFaint}`, background: isPlaying ? (isDark ? "hsla(45,65%,50%,0.10)" : "hsla(38,85%,85%,0.55)") : "transparent", boxShadow: isPlaying ? (isDark ? `0 0 18px hsla(45,65%,50%,0.22)` : `0 0 14px hsla(38,75%,60%,0.22)`) : "none" }}
+                            style={{ borderBottom: `1px solid ${goldFaint}`, background: isActive ? (isDark ? "hsla(45,65%,50%,0.10)" : "hsla(38,85%,85%,0.55)") : "transparent", boxShadow: isActive ? (isDark ? `0 0 18px hsla(45,65%,50%,0.22)` : `0 0 14px hsla(38,75%,60%,0.22)`) : "none" }}
                           >
                             <button
                               onClick={() => openAyahSheet(ayah, trans)}
@@ -2930,8 +2977,8 @@ export default function DeenQuran() {
                               <p dir="rtl" style={{
                                 fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif",
                                 fontSize: "21px", lineHeight: "2.2",
-                                color: isPlaying ? gold : pageTxt,
-                                textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
+                                color: isActive ? gold : pageTxt,
+                                textShadow: isActive && isDark ? `0 0 12px ${goldGlow}` : "none",
                                 textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
                                 overflow: "hidden",
                                 overflowWrap: "break-word",
@@ -2960,13 +3007,13 @@ export default function DeenQuran() {
                                 className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
                                 style={{
                                   border: `1px solid ${goldGlow}`,
-                                  background: isPlaying ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
+                                  background: isActive ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
                                   color: gold,
-                                  boxShadow: isPlaying ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
+                                  boxShadow: isActive ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
                                 }}
                                 title={isAr ? (isPlaying ? "إيقاف مؤقت" : "استمع") : (isPlaying ? "Pause" : "Play")}
                               >
-                                {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                                {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />)}
                               </button>
                             </div>
                           </div>
@@ -2980,13 +3027,15 @@ export default function DeenQuran() {
                         const globalIdx = pageBreaks[readerPage] + idx;
                         const trans = activeTrans[globalIdx] ?? null;
                         const isPlaying = playing && currentPlaybackAyahIndex === globalIdx;
+                        const isLoading = loadingAudioIndex === globalIdx;
+                        const isActive = isPlaying || isLoading;
                         const isBookmarked = bookmarkedAyahs.has(ayah.numberInSurah);
                         return (
                           <div
                             key={ayah.numberInSurah}
                             ref={(el) => { ayahItemRefs.current[globalIdx] = el; }}
                             className="w-full flex flex-col gap-3 py-3 rounded-xl transition-all"
-                            style={{ borderBottom: `1px solid ${goldFaint}`, background: isPlaying ? (isDark ? "hsla(45,65%,50%,0.10)" : "hsla(38,85%,85%,0.55)") : "transparent", boxShadow: isPlaying ? (isDark ? `0 0 18px hsla(45,65%,50%,0.22)` : `0 0 14px hsla(38,75%,60%,0.22)`) : "none" }}
+                            style={{ borderBottom: `1px solid ${goldFaint}`, background: isActive ? (isDark ? "hsla(45,65%,50%,0.10)" : "hsla(38,85%,85%,0.55)") : "transparent", boxShadow: isActive ? (isDark ? `0 0 18px hsla(45,65%,50%,0.22)` : `0 0 14px hsla(38,75%,60%,0.22)`) : "none" }}
                           >
                             <button
                               onClick={() => openAyahSheet(ayah, trans ?? null)}
@@ -2996,8 +3045,8 @@ export default function DeenQuran() {
                                 <p dir="rtl" style={{
                                   fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif",
                                   fontSize: "21px", lineHeight: "2.2",
-                                  color: isPlaying ? gold : pageTxt,
-                                  textShadow: isPlaying && isDark ? `0 0 12px ${goldGlow}` : "none",
+                                  color: isActive ? gold : pageTxt,
+                                  textShadow: isActive && isDark ? `0 0 12px ${goldGlow}` : "none",
                                   textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
                                   textAlign: "right",
                                   marginBottom: "8px",
@@ -3011,8 +3060,8 @@ export default function DeenQuran() {
                               {trans && (
                                 <p style={{
                                   fontSize: "17px", lineHeight: "1.85",
-                                  color: isPlaying ? gold : pageTxt,
-                                  textShadow: isPlaying && isDark ? `0 0 10px ${goldFaint}` : "none",
+                                  color: isActive ? gold : pageTxt,
+                                  textShadow: isActive && isDark ? `0 0 10px ${goldFaint}` : "none",
                                   textDecoration: isBookmarked ? `underline ${goldGlow}` : "none",
                                 }}>
                                   <span
@@ -3055,13 +3104,13 @@ export default function DeenQuran() {
                                 className="w-9 h-9 rounded-full flex items-center justify-center active:scale-95 transition-all"
                                 style={{
                                   border: `1px solid ${goldGlow}`,
-                                  background: isPlaying ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
+                                  background: isActive ? goldFaint : (isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.7)"),
                                   color: gold,
-                                  boxShadow: isPlaying ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
+                                  boxShadow: isActive ? `0 0 14px ${goldGlow}` : (isDark ? `0 0 10px ${goldFaint}` : `0 2px 8px ${goldFaint}`),
                                 }}
                                 title={isAr ? (isPlaying ? "إيقاف مؤقت" : "استمع") : (isPlaying ? "Pause" : "Play")}
                               >
-                                {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
+                                {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : (isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />)}
                               </button>
                             </div>
                           </div>
