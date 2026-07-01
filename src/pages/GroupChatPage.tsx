@@ -1,7 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AtSign, Camera, ChevronDown, Clock, Copy, Crown, Expand, FileText, Image, Loader2, LogOut, Mic, Pause, Pencil, Play, Reply, Send, Sparkles, Square, Trash2, UserPlus, Users, X } from "lucide-react";
+import { ArrowLeft, AtSign, Camera, ChevronDown, Clock, Copy, Crown, Expand, FileText, Image, Info, Loader2, LogOut, Mic, Pause, Pencil, Play, Reply, Send, Sparkles, Square, Trash2, UserPlus, Users, X } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -60,6 +60,7 @@ export default function GroupChatPage() {
   const [waktiTyping, setWaktiTyping] = useState(false);
   const [pendingWaktiSince, setPendingWaktiSince] = useState<string | null>(null);
   const [reactionDetails, setReactionDetails] = useState<{ messageId: string } | null>(null);
+  const [messageInfoFor, setMessageInfoFor] = useState<GroupChatMessage | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
   const [audioSpeed, setAudioSpeed] = useState<Record<string, number>>({});
@@ -866,6 +867,7 @@ export default function GroupChatPage() {
     const existingReaction = message.reactions?.find((reaction) => reaction.user_id === user.id);
     const isSameEmoji = existingReaction?.emoji === emoji;
 
+    closeMessageActions();
     pendingReactionsRef.current.add(messageId);
     try {
       if (isSameEmoji) {
@@ -902,7 +904,6 @@ export default function GroupChatPage() {
     } finally {
       pendingReactionsRef.current.delete(messageId);
     }
-    closeMessageActions();
   };
 
   const reactionDetailsUsers = useMemo(() => {
@@ -1346,7 +1347,8 @@ export default function GroupChatPage() {
   const actionMenuButtonCount = 1 // Reply
     + (selectedActionIsSentByMe && selectedActionMessage?.content && !selectedActionMessage.is_deleted && isWithinEditWindow(selectedActionMessage) ? 1 : 0) // Edit
     + (selectedActionMessage?.content && !selectedActionMessage.is_deleted ? 1 : 0) // Copy
-    + (selectedActionIsSentByMe ? 1 : 0); // Delete
+    + (selectedActionIsSentByMe ? 1 : 0) // Delete
+    + (selectedActionIsSentByMe ? 1 : 0); // Info
   const actionMenuHeight = actionMenuButtonCount * 54;
   const messagePreviewTop = selectedMessageRect ? clamp(selectedMessageRect.top, 96, Math.max(96, viewportHeight - selectedMessageRect.height - 210)) : 96;
   const reactionBarTop = selectedMessageRect ? Math.max(20, messagePreviewTop - 58) : 20;
@@ -2157,6 +2159,18 @@ export default function GroupChatPage() {
                   <span>{language === "ar" ? "حذف" : "Delete"}</span>
                 </button>
               )}
+              {selectedActionIsSentByMe && (
+                <button
+                  onClick={() => {
+                    setMessageInfoFor(selectedActionMessage);
+                    closeMessageActions();
+                  }}
+                  className="flex w-full items-center gap-3 border-t border-white/10 px-5 py-4 text-left text-base text-white hover:bg-white/5"
+                >
+                  <Info className="h-4 w-4" />
+                  <span>{language === "ar" ? "معلومات" : "Info"}</span>
+                </button>
+              )}
             </motion.div>
           </>
         )}
@@ -2628,6 +2642,93 @@ export default function GroupChatPage() {
                 ))}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Message Info Modal ── */}
+      <Dialog open={!!messageInfoFor} onOpenChange={(open) => !open && setMessageInfoFor(null)}>
+        <DialogContent className="rounded-2xl border border-border/60 max-w-sm p-0 overflow-hidden">
+          <div className="p-5 pb-3">
+            <DialogHeader>
+              <DialogTitle className="text-center text-lg font-bold">
+                {language === 'ar' ? 'معلومات الرسالة' : 'Message Info'}
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto px-5 pb-5">
+            {(() => {
+              if (!messageInfoFor || !conversation) return null;
+              const msgTime = new Date(messageInfoFor.created_at).getTime();
+              const readers = conversation.participants.filter(
+                (p) => p.user_id !== user?.id && p.last_read_at && new Date(p.last_read_at).getTime() >= msgTime
+              );
+              const nonReaders = conversation.participants.filter(
+                (p) => p.user_id !== user?.id && (!p.last_read_at || new Date(p.last_read_at).getTime() < msgTime)
+              );
+              return (
+                <div className="space-y-4">
+                  {/* Message preview */}
+                  <div className="rounded-xl bg-muted/50 p-3 text-sm text-center">
+                    {messageInfoFor.is_deleted
+                      ? (language === 'ar' ? 'تم حذف هذه الرسالة' : 'This message was deleted')
+                      : messageInfoFor.content || (language === 'ar' ? 'ملف مرفق' : 'Attachment')}
+                  </div>
+                  {/* Read by */}
+                  {readers.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {language === 'ar' ? `مقروءة (${readers.length})` : `Read by (${readers.length})`}
+                      </p>
+                      <div className="space-y-2">
+                        {readers.map((p) => (
+                          <div key={p.user_id} className="flex items-center gap-3">
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={p.profile?.avatar_url || undefined} alt={p.profile?.display_name || p.profile?.username || ''} />
+                              <AvatarFallback>{(p.profile?.display_name || p.profile?.username || '?').charAt(0).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col flex-1">
+                              <span className="text-sm font-medium">
+                                {p.profile?.display_name || p.profile?.username || (language === 'ar' ? 'عضو' : 'Member')}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground">
+                                {p.last_read_at && formatDistanceToNow(new Date(p.last_read_at), { addSuffix: true })}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Not read by */}
+                  {nonReaders.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        {language === 'ar' ? `لم يتم القراءة (${nonReaders.length})` : `Not read (${nonReaders.length})`}
+                      </p>
+                      <div className="space-y-2">
+                        {nonReaders.map((p) => (
+                          <div key={p.user_id} className="flex items-center gap-3 opacity-60">
+                            <Avatar className="h-9 w-9">
+                              <AvatarImage src={p.profile?.avatar_url || undefined} alt={p.profile?.display_name || p.profile?.username || ''} />
+                              <AvatarFallback>{(p.profile?.display_name || p.profile?.username || '?').charAt(0).toUpperCase()}</AvatarFallback>
+                            </Avatar>
+                            <span className="text-sm font-medium">
+                              {p.profile?.display_name || p.profile?.username || (language === 'ar' ? 'عضو' : 'Member')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {readers.length === 0 && nonReaders.length === 0 && (
+                    <p className="text-center text-sm text-muted-foreground">
+                      {language === 'ar' ? 'لا يوجد أعضاء آخرين' : 'No other members'}
+                    </p>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>

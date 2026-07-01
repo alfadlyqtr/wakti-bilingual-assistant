@@ -230,6 +230,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     const existingReaction = msg.reactions?.find((r: any) => r.user_id === currentUserId);
     const isSameEmoji = existingReaction?.emoji === emoji;
 
+    closeMessageActions();
     pendingReactionsRef.current.add(messageId);
     try {
       if (isSameEmoji) {
@@ -266,7 +267,6 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     } finally {
       pendingReactionsRef.current.delete(messageId);
     }
-    closeMessageActions();
   };
 
   const reactionDetailsUsers = useMemo(() => {

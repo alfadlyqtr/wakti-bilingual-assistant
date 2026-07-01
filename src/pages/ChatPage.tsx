@@ -359,6 +359,7 @@ export default function ChatPage() {
     const existingReaction = msg.reactions?.find((r: any) => r.user_id === currentUserId);
     const isSameEmoji = existingReaction?.emoji === emoji;
 
+    closeMessageActions();
     pendingReactionsRef.current.add(messageId);
     try {
       if (isSameEmoji) {
@@ -395,7 +396,6 @@ export default function ChatPage() {
     } finally {
       pendingReactionsRef.current.delete(messageId);
     }
-    closeMessageActions();
   };
 
   const reactionDetailsUsers = useMemo(() => {
