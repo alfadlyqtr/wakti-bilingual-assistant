@@ -103,6 +103,7 @@ export default function GroupChatPage() {
   const suppressNextImageTapRef = useRef(false);
   const ignoreNextImageClickRef = useRef(false);
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const pendingReactionsRef = useRef<Set<string>>(new Set());
   const entryReadCapturedRef = useRef(false);
   const isDark = theme === "dark";
   const entrySource = searchParams.get("from");
@@ -436,29 +437,19 @@ export default function GroupChatPage() {
     return () => { supabase.removeChannel(channel); };
   }, [conversationId, queryClient]);
 
-  // Fallback: scroll to bottom on first load when there are no unread messages
+  // Scroll to bottom on first load only when there are no unread messages
   useLayoutEffect(() => {
     if (messages.length === 0) return;
     if (entryLastReadAt === undefined) return;
+    if (initialScrollDoneRef.current) return;
     const end = endRef.current;
     if (!end) return;
 
-    if (!initialScrollDoneRef.current && !unreadSeparatorMessageId) {
+    if (!unreadSeparatorMessageId) {
       end.scrollIntoView({ behavior: "auto" });
-      initialScrollDoneRef.current = true;
-    } else if (initialScrollDoneRef.current && isNearBottomRef.current) {
-      // New message arrived while user is already at bottom — smooth scroll
-      end.scrollIntoView({ behavior: "smooth" });
     }
+    initialScrollDoneRef.current = true;
   }, [entryLastReadAt, messages, unreadSeparatorMessageId]);
-
-  // Scroll to bottom when Wakti starts typing so the indicator is visible
-  useEffect(() => {
-    if (waktiTyping && endRef.current) {
-      endRef.current.scrollIntoView({ behavior: "smooth" });
-      setShowScrollToBottom(false);
-    }
-  }, [waktiTyping]);
 
   // Detect if user has scrolled away from bottom
   const handleMessagesScroll = useCallback(() => {
@@ -857,20 +848,59 @@ export default function GroupChatPage() {
 
   const formatSeconds = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+  const groupQueryKey = ["groupConversationMessages", conversationId];
+
+  const updateReactionCache = (messageId: string, mutate: (reactions: any[]) => any[]) => {
+    const previous = queryClient.getQueryData(groupQueryKey);
+    queryClient.setQueryData(groupQueryKey, (old: any) => {
+      if (!old) return old;
+      return old.map((m: any) => m.id === messageId ? { ...m, reactions: mutate(m.reactions || []) } : m);
+    });
+    return previous;
+  };
+
   const handleReaction = async (messageId: string, emoji: string) => {
-    if (!user?.id) return;
+    if (!user?.id || pendingReactionsRef.current.has(messageId)) return;
     const message = messages.find((entry) => entry.id === messageId);
     if (!message || message.is_deleted) return;
-    const hasReacted = message.reactions?.some((reaction) => reaction.user_id === user.id && reaction.emoji === emoji);
+    const existingReaction = message.reactions?.find((reaction) => reaction.user_id === user.id);
+    const isSameEmoji = existingReaction?.emoji === emoji;
+
+    pendingReactionsRef.current.add(messageId);
     try {
-      if (hasReacted) {
-        await removeGroupReaction(messageId, emoji);
+      if (isSameEmoji) {
+        const previous = updateReactionCache(messageId, reactions =>
+          reactions.filter((r: any) => !(r.user_id === user.id && r.emoji === emoji))
+        );
+        try {
+          await removeGroupReaction(messageId, emoji);
+        } catch (error) {
+          queryClient.setQueryData(groupQueryKey, previous);
+          toast.error(language === 'ar' ? 'تعذر إزالة رد الفعل' : 'Could not remove reaction');
+          console.error("Group reaction error:", error);
+        }
       } else {
-        await addGroupReaction(messageId, emoji);
+        const tempReaction = { id: `temp-${Date.now()}`, conversation_message_id: messageId, user_id: user.id, emoji, created_at: new Date().toISOString() };
+        const previous = updateReactionCache(messageId, reactions =>
+          [...reactions.filter((r: any) => r.user_id !== user.id), tempReaction]
+        );
+        try {
+          const result = await addGroupReaction(messageId, emoji);
+          queryClient.setQueryData(groupQueryKey, (old: any) => {
+            if (!old) return old;
+            return old.map((m: any) => {
+              if (m.id !== messageId) return m;
+              return { ...m, reactions: [...(m.reactions || []).filter((r: any) => r.user_id !== user.id), result] };
+            });
+          });
+        } catch (error) {
+          queryClient.setQueryData(groupQueryKey, previous);
+          toast.error(language === 'ar' ? 'تعذر إضافة رد الفعل' : 'Could not add reaction');
+          console.error("Group reaction error:", error);
+        }
       }
-      queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
-    } catch (error) {
-      console.error("Group reaction error:", error);
+    } finally {
+      pendingReactionsRef.current.delete(messageId);
     }
     closeMessageActions();
   };
@@ -893,18 +923,25 @@ export default function GroupChatPage() {
   }, [reactionDetails, conversation, messages, user, language]);
 
   const handleReactionDetails = async (messageId: string) => {
-    if (!user?.id) return;
+    if (!user?.id || pendingReactionsRef.current.has(messageId)) return;
     const message = messages.find((m) => m.id === messageId);
     const userReaction = message?.reactions?.find((r) => r.user_id === user.id);
-    if (userReaction) {
-      try {
-        await removeGroupReaction(messageId, userReaction.emoji);
-        queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
-      } catch (error) {
-        console.error("Group reaction remove error:", error);
-      }
-    }
+    if (!userReaction) return;
+
+    pendingReactionsRef.current.add(messageId);
     setReactionDetails(null);
+    const previous = updateReactionCache(messageId, reactions =>
+      reactions.filter((r: any) => !(r.user_id === user.id && r.emoji === userReaction.emoji))
+    );
+    try {
+      await removeGroupReaction(messageId, userReaction.emoji);
+    } catch (error) {
+      queryClient.setQueryData(groupQueryKey, previous);
+      toast.error(language === 'ar' ? 'تعذر إزالة رد الفعل' : 'Could not remove reaction');
+      console.error("Group reaction remove error:", error);
+    } finally {
+      pendingReactionsRef.current.delete(messageId);
+    }
   };
 
   const handleReplyTo = (message: GroupChatMessage) => {
@@ -1418,7 +1455,7 @@ export default function GroupChatPage() {
                 return (
                   <Fragment key={message.id}>
                     {showDayHeader && (
-                      <div className="sticky top-0 z-10 flex justify-center py-2">
+                      <div className="sticky top-0 z-20 flex justify-center py-2">
                         <span className={`text-[11px] font-medium px-3 py-1 rounded-full shadow-sm ${isDark ? 'bg-[#606062] text-[#858384]' : 'bg-gray-200 text-gray-500'}`}>
                           {formatDayLabel(message.created_at, language)}
                         </span>

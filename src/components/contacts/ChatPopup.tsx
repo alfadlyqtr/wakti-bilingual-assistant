@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { usePresence } from "@/hooks/usePresence";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { useRealtimeRelationshipStatus } from "@/hooks/useRealtimeRelationshipStatus";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 interface ChatPopupProps {
   isOpen: boolean;
@@ -33,11 +34,13 @@ const MAX_CHARS = 200;
 
 export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvatar }: ChatPopupProps) {
   const { language, theme } = useTheme();
+  const { profile: currentUserProfile } = useUserProfile();
   const [messageText, setMessageText] = useState("");
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messageEndRef = useRef<HTMLDivElement>(null);
+  const initialScrollDoneRef = useRef(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -57,6 +60,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const [selectedMessageRect, setSelectedMessageRect] = useState<{ top: number; left: number; width: number; height: number; right: number; } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const pendingReactionsRef = useRef<Set<string>>(new Set());
 
   const charCount = messageText.length;
   const isOverLimit = charCount > MAX_CHARS;
@@ -175,10 +179,15 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     // refetchInterval removed — realtime handles incremental updates now.
   });
 
-  // Auto scroll when messages change or on open
+  // Auto scroll on first open only
   useEffect(() => {
-    if (allMessages && allMessages.length > 0) {
+    if (!isOpen) {
+      initialScrollDoneRef.current = false;
+      return;
+    }
+    if (allMessages && allMessages.length > 0 && !initialScrollDoneRef.current) {
       setTimeout(scrollToBottom, 100); // Small delay to ensure content is rendered
+      initialScrollDoneRef.current = true;
     }
   }, [allMessages, isOpen]);
 
@@ -203,20 +212,59 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   };
   
   // Reaction helpers
+  const queryKey = ['directMessages', contactId];
+
+  const updateReactionCache = (messageId: string, mutate: (reactions: any[]) => any[]) => {
+    const previous = queryClient.getQueryData(queryKey);
+    queryClient.setQueryData(queryKey, (old: any) => {
+      if (!old) return old;
+      return old.map((m: any) => m.id === messageId ? { ...m, reactions: mutate(m.reactions || []) } : m);
+    });
+    return previous;
+  };
+
   const handleReaction = async (messageId: string, emoji: string) => {
-    if (!currentUserId) return;
+    if (!currentUserId || pendingReactionsRef.current.has(messageId)) return;
     const msg = allMessages?.find((m: any) => m.id === messageId);
     if (!msg || msg.is_deleted) return;
-    const hasReacted = msg.reactions?.some((r: any) => r.user_id === currentUserId && r.emoji === emoji);
+    const existingReaction = msg.reactions?.find((r: any) => r.user_id === currentUserId);
+    const isSameEmoji = existingReaction?.emoji === emoji;
+
+    pendingReactionsRef.current.add(messageId);
     try {
-      if (hasReacted) {
-        await removeReaction(messageId, emoji);
+      if (isSameEmoji) {
+        const previous = updateReactionCache(messageId, reactions =>
+          reactions.filter((r: any) => !(r.user_id === currentUserId && r.emoji === emoji))
+        );
+        try {
+          await removeReaction(messageId, emoji);
+        } catch (e) {
+          queryClient.setQueryData(queryKey, previous);
+          toast.error(language === 'ar' ? 'تعذر إزالة رد الفعل' : 'Could not remove reaction');
+          console.error("Reaction error:", e);
+        }
       } else {
-        await addReaction(messageId, emoji);
+        const tempReaction = { id: `temp-${Date.now()}`, message_id: messageId, user_id: currentUserId, emoji, created_at: new Date().toISOString() };
+        const previous = updateReactionCache(messageId, reactions =>
+          [...reactions.filter((r: any) => r.user_id !== currentUserId), tempReaction]
+        );
+        try {
+          const result = await addReaction(messageId, emoji);
+          queryClient.setQueryData(queryKey, (old: any) => {
+            if (!old) return old;
+            return old.map((m: any) => {
+              if (m.id !== messageId) return m;
+              return { ...m, reactions: [...(m.reactions || []).filter((r: any) => r.user_id !== currentUserId), result] };
+            });
+          });
+        } catch (e) {
+          queryClient.setQueryData(queryKey, previous);
+          toast.error(language === 'ar' ? 'تعذر إضافة رد الفعل' : 'Could not add reaction');
+          console.error("Reaction error:", e);
+        }
       }
-      queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
-    } catch (e) {
-      console.error("Reaction error:", e);
+    } finally {
+      pendingReactionsRef.current.delete(messageId);
     }
     closeMessageActions();
   };
@@ -230,26 +278,33 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       return {
         userId: reaction.user_id,
         name: isContact ? contactName : (language === 'ar' ? 'أنت' : 'You'),
-        avatarUrl: isContact ? contactAvatar : null,
+        avatarUrl: isContact ? contactAvatar : currentUserProfile?.avatar_url || null,
         isMe: !isContact,
         emoji: reaction.emoji,
       };
     }).sort((a: any, b: any) => (a.isMe === b.isMe ? 0 : a.isMe ? -1 : 1));
-  }, [reactionDetails, allMessages, currentUserId, contactName, contactAvatar, language]);
+  }, [reactionDetails, allMessages, currentUserId, contactName, contactAvatar, currentUserProfile, language]);
 
   const handleReactionDetails = async (messageId: string) => {
-    if (!currentUserId) return;
+    if (!currentUserId || pendingReactionsRef.current.has(messageId)) return;
     const message = allMessages?.find((m: any) => m.id === messageId);
     const userReaction = message?.reactions?.find((r: any) => r.user_id === currentUserId);
-    if (userReaction) {
-      try {
-        await removeReaction(messageId, userReaction.emoji);
-        queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
-      } catch (error) {
-        console.error("Reaction remove error:", error);
-      }
-    }
+    if (!userReaction) return;
+
+    pendingReactionsRef.current.add(messageId);
     setReactionDetails(null);
+    const previous = updateReactionCache(messageId, reactions =>
+      reactions.filter((r: any) => !(r.user_id === currentUserId && r.emoji === userReaction.emoji))
+    );
+    try {
+      await removeReaction(messageId, userReaction.emoji);
+    } catch (error) {
+      queryClient.setQueryData(queryKey, previous);
+      toast.error(language === 'ar' ? 'تعذر إزالة رد الفعل' : 'Could not remove reaction');
+      console.error("Reaction remove error:", error);
+    } finally {
+      pendingReactionsRef.current.delete(messageId);
+    }
   };
 
   const handleReplyTo = (message: DirectMessage) => {
@@ -1030,7 +1085,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
                         return (
                           <Fragment key={message.id}>
                             {showDayHeader && (
-                              <div className="sticky top-0 z-10 flex justify-center py-2">
+                              <div className="sticky top-0 z-20 flex justify-center py-2">
                                 <span className={`text-[11px] font-medium px-3 py-1 rounded-full shadow-sm ${isDark ? 'bg-[#606062] text-[#858384]' : 'bg-gray-200 text-gray-500'}`}>
                                   {formatDayLabel(message.created_at, language)}
                                 </span>

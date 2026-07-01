@@ -26,6 +26,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { usePresence } from "@/hooks/usePresence";
 import { useRealtimeMessages } from "@/hooks/useRealtimeMessages";
 import { useRealtimeRelationshipStatus } from "@/hooks/useRealtimeRelationshipStatus";
+import { useUserProfile } from "@/hooks/useUserProfile";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
 const MAX_CHARS = 200;
@@ -35,6 +36,7 @@ export default function ChatPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { language, theme } = useTheme();
+  const { profile: currentUserProfile } = useUserProfile();
   const operatorPayloadId = searchParams.get('waktiOperator');
   const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
   
@@ -67,6 +69,7 @@ export default function ChatPage() {
   const [selectedMessageRect, setSelectedMessageRect] = useState<{ top: number; left: number; width: number; height: number; right: number; } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const pendingReactionsRef = useRef<Set<string>>(new Set());
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const hasScrolledToUnreadRef = useRef(false);
   const isNearBottomRef = useRef(true);
@@ -276,17 +279,13 @@ export default function ChatPage() {
     }
   }, [contactId, currentUserId, allMessages, queryClient]);
 
-  // Auto scroll on first load and new messages
+  // Auto scroll on first load only
   useLayoutEffect(() => {
-    if (!allMessages?.length || !messageEndRef.current) return;
-    if (!initialScrollDoneRef.current) {
-      if (!hasScrolledToUnreadRef.current) {
-        messageEndRef.current?.scrollIntoView({ behavior: "auto" });
-      }
-      initialScrollDoneRef.current = true;
-    } else if (isNearBottomRef.current) {
-      messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!allMessages?.length || !messageEndRef.current || initialScrollDoneRef.current) return;
+    if (!hasScrolledToUnreadRef.current) {
+      messageEndRef.current?.scrollIntoView({ behavior: "auto" });
     }
+    initialScrollDoneRef.current = true;
   }, [allMessages]);
 
   // Detect when user scrolls away from bottom using IntersectionObserver
@@ -342,20 +341,59 @@ export default function ChatPage() {
   };
   
   // Reaction helpers
+  const queryKey = ['directMessages', contactId];
+
+  const updateReactionCache = (messageId: string, mutate: (reactions: any[]) => any[]) => {
+    const previous = queryClient.getQueryData(queryKey);
+    queryClient.setQueryData(queryKey, (old: any) => {
+      if (!old) return old;
+      return old.map((m: any) => m.id === messageId ? { ...m, reactions: mutate(m.reactions || []) } : m);
+    });
+    return previous;
+  };
+
   const handleReaction = async (messageId: string, emoji: string) => {
-    if (!currentUserId) return;
+    if (!currentUserId || pendingReactionsRef.current.has(messageId)) return;
     const msg = allMessages?.find(m => m.id === messageId);
     if (!msg || msg.is_deleted) return;
-    const hasReacted = msg.reactions?.some(r => r.user_id === currentUserId && r.emoji === emoji);
+    const existingReaction = msg.reactions?.find((r: any) => r.user_id === currentUserId);
+    const isSameEmoji = existingReaction?.emoji === emoji;
+
+    pendingReactionsRef.current.add(messageId);
     try {
-      if (hasReacted) {
-        await removeReaction(messageId, emoji);
+      if (isSameEmoji) {
+        const previous = updateReactionCache(messageId, reactions =>
+          reactions.filter((r: any) => !(r.user_id === currentUserId && r.emoji === emoji))
+        );
+        try {
+          await removeReaction(messageId, emoji);
+        } catch (e) {
+          queryClient.setQueryData(queryKey, previous);
+          toast.error(language === 'ar' ? 'تعذر إزالة رد الفعل' : 'Could not remove reaction');
+          console.error("Reaction error:", e);
+        }
       } else {
-        await addReaction(messageId, emoji);
+        const tempReaction = { id: `temp-${Date.now()}`, message_id: messageId, user_id: currentUserId, emoji, created_at: new Date().toISOString() };
+        const previous = updateReactionCache(messageId, reactions =>
+          [...reactions.filter((r: any) => r.user_id !== currentUserId), tempReaction]
+        );
+        try {
+          const result = await addReaction(messageId, emoji);
+          queryClient.setQueryData(queryKey, (old: any) => {
+            if (!old) return old;
+            return old.map((m: any) => {
+              if (m.id !== messageId) return m;
+              return { ...m, reactions: [...(m.reactions || []).filter((r: any) => r.user_id !== currentUserId), result] };
+            });
+          });
+        } catch (e) {
+          queryClient.setQueryData(queryKey, previous);
+          toast.error(language === 'ar' ? 'تعذر إضافة رد الفعل' : 'Could not add reaction');
+          console.error("Reaction error:", e);
+        }
       }
-      queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
-    } catch (e) {
-      console.error("Reaction error:", e);
+    } finally {
+      pendingReactionsRef.current.delete(messageId);
     }
     closeMessageActions();
   };
@@ -369,26 +407,33 @@ export default function ChatPage() {
       return {
         userId: reaction.user_id,
         name: isContact ? contactName : (language === 'ar' ? 'أنت' : 'You'),
-        avatarUrl: isContact ? contactAvatar : null,
+        avatarUrl: isContact ? contactAvatar : currentUserProfile?.avatar_url || null,
         isMe: !isContact,
         emoji: reaction.emoji,
       };
     }).sort((a, b) => (a.isMe === b.isMe ? 0 : a.isMe ? -1 : 1));
-  }, [reactionDetails, allMessages, currentUserId, contactName, contactAvatar, language]);
+  }, [reactionDetails, allMessages, currentUserId, contactName, contactAvatar, currentUserProfile, language]);
 
   const handleReactionDetails = async (messageId: string) => {
-    if (!currentUserId) return;
+    if (!currentUserId || pendingReactionsRef.current.has(messageId)) return;
     const message = allMessages?.find(m => m.id === messageId);
-    const userReaction = message?.reactions?.find(r => r.user_id === currentUserId);
-    if (userReaction) {
-      try {
-        await removeReaction(messageId, userReaction.emoji);
-        queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
-      } catch (error) {
-        console.error("Reaction remove error:", error);
-      }
-    }
+    const userReaction = message?.reactions?.find((r: any) => r.user_id === currentUserId);
+    if (!userReaction) return;
+
+    pendingReactionsRef.current.add(messageId);
     setReactionDetails(null);
+    const previous = updateReactionCache(messageId, reactions =>
+      reactions.filter((r: any) => !(r.user_id === currentUserId && r.emoji === userReaction.emoji))
+    );
+    try {
+      await removeReaction(messageId, userReaction.emoji);
+    } catch (error) {
+      queryClient.setQueryData(queryKey, previous);
+      toast.error(language === 'ar' ? 'تعذر إزالة رد الفعل' : 'Could not remove reaction');
+      console.error("Reaction remove error:", error);
+    } finally {
+      pendingReactionsRef.current.delete(messageId);
+    }
   };
 
   const handleReplyTo = (message: DirectMessage) => {
@@ -1291,7 +1336,7 @@ export default function ChatPage() {
                     return (
                       <Fragment key={message.id}>
                         {showDayHeader && (
-                          <div className="sticky top-0 z-10 flex justify-center py-2">
+                          <div className="sticky top-0 z-20 flex justify-center py-2">
                             <span className={`text-[11px] font-medium px-3 py-1 rounded-full shadow-sm ${isDark ? 'bg-[#606062] text-[#858384]' : 'bg-gray-200 text-gray-500'}`}>
                               {formatDayLabel(message.created_at, language)}
                             </span>
