@@ -207,10 +207,39 @@ export function ContactsContent({
       })
       .subscribe();
 
+    // Listen for updates to current user's outgoing contacts (e.g. pending -> approved)
+    const outgoingUpdateChannel = supabase
+      .channel(`contacts-outgoing-update:${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'contacts',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      })
+      .subscribe();
+
+    // Listen for updates to current user's incoming contacts (e.g. someone accepts)
+    const incomingUpdateChannel = supabase
+      .channel(`contacts-incoming-update:${user.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'contacts',
+        filter: `contact_id=eq.${user.id}`
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['contacts'] });
+        queryClient.invalidateQueries({ queryKey: ['pendingRequestsCount'] });
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(dmChannel);
       supabase.removeChannel(groupChannel);
       supabase.removeChannel(requestChannel);
+      supabase.removeChannel(outgoingUpdateChannel);
+      supabase.removeChannel(incomingUpdateChannel);
       realtimeSetupRef.current = false;
     };
   }, [user?.id, queryClient]);
