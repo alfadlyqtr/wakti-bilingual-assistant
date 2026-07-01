@@ -2468,6 +2468,10 @@ ${priorSection}`;
         ));
       }
       
+      // Terminal state result — set outside try/catch so job failure is never swallowed as a network error
+      let terminalJob: GenerationJob | null = null;
+      let terminalError: Error | null = null;
+
       try {
         const res = await supabase.functions.invoke('projects-generate', {
           body: { action: 'status', jobId }
@@ -2508,33 +2512,36 @@ ${priorSection}`;
 
         if (job.status === 'succeeded') {
           console.log(`[Poll ${pollCount}] Job succeeded!`);
-          return job;
-        }
-        if (job.status === 'paused') {
-          throw new Error(job.result_summary || job.error || (isRTL ? 'تم إيقاف البناء مؤقتًا.' : 'The build was paused.'));
-        }
-        if (job.status === 'failed') {
+          terminalJob = job;
+        } else if (job.status === 'paused') {
+          terminalError = new Error(job.result_summary || job.error || (isRTL ? 'تم إيقاف البناء مؤقتًا.' : 'The build was paused.'));
+        } else if (job.status === 'failed') {
           const metadata = getCreateJobMetadata(job);
           if (metadata.draftSaved === true) {
-            return job;
+            terminalJob = job;
+          } else {
+            terminalError = new Error(buildCreateFailureMessage(job.error || job.result_summary || 'Generation failed', job));
           }
-          throw new Error(buildCreateFailureMessage(job.error || job.result_summary || 'Generation failed', job));
+        } else {
+          // Job still running - this is normal, keep polling
+          // Use slower polling to avoid rate limiting (429 errors)
+          const elapsed = Math.round((Date.now() - start) / 1000);
+          console.log(`[Poll ${pollCount}] Job status: ${job.status}, elapsed: ${elapsed}s, waiting...`);
+          await delay(5000); // Poll every 5 seconds
         }
-
-        // Job still running - this is normal, keep polling
-        // Use slower polling to avoid rate limiting (429 errors)
-        const elapsed = Math.round((Date.now() - start) / 1000);
-        console.log(`[Poll ${pollCount}] Job status: ${job.status}, elapsed: ${elapsed}s, waiting...`);
-        await delay(5000); // Poll every 5 seconds (reduced from 2s to avoid rate limiting)
       } catch (pollErr: any) {
-        // Network errors during polling - retry unless too many
+        // Only catches actual network/transport errors — terminal state signals use terminalJob/terminalError above
         consecutiveErrors++;
         console.warn(`[Poll ${pollCount}] Poll error (${consecutiveErrors}/${maxConsecutiveErrors}): ${pollErr.message}`);
         if (consecutiveErrors >= maxConsecutiveErrors) {
           throw pollErr;
         }
-        await delay(8000); // Wait longer on errors (increased from 3s)
+        await delay(8000); // Wait longer on errors
       }
+
+      // Handle terminal states outside the catch so they are never swallowed
+      if (terminalJob !== null) return terminalJob;
+      if (terminalError !== null) throw terminalError;
     }
 
     throw new Error(isRTL ? 'انتهت مهلة الإنشاء بعد 10 دقائق' : 'Generation timed out after 10 minutes');

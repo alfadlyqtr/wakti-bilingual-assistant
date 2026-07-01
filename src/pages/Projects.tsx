@@ -102,7 +102,21 @@ const buildFallbackContextForm = (
 ): { siteType: string; heading: string; fields: ContextField[] } | null => {
   const prompt = (rawPrompt || '').toLowerCase();
 
-  if (/portfolio|company portfolio|agency|startup|tech company|cto|software company|digital company|professional company|digital agency|founder|our services|about us page|company website/.test(prompt)) {
+  if (/personal portfolio|student portfolio|my portfolio|cv portfolio|resume website|portfolio website|portfolio site|my resume|about me|developer portfolio|designer portfolio|freelancer|creative portfolio/.test(prompt)) {
+    return {
+      siteType: isRTL ? 'بورتفوليو شخصي' : 'Personal Portfolio',
+      heading: isRTL ? 'أخبرنا عنك' : 'Tell us about you',
+      fields: [
+        { id: 'full_name', label: isRTL ? 'الاسم الكامل' : 'Full Name', placeholder: isRTL ? 'أحمد المحمد' : 'Ahmed Al-Mohammed', type: 'text' },
+        { id: 'title', label: isRTL ? 'المسمى الوظيفي' : 'Title / Role', placeholder: isRTL ? 'مطوّر واجهات أمامية' : 'Front-end Developer', type: 'text' },
+        { id: 'contact_email', label: isRTL ? 'البريد الإلكتروني' : 'Email', placeholder: isRTL ? 'me@example.com' : 'me@example.com', type: 'email' },
+        { id: 'linkedin', label: isRTL ? 'لينكدإن' : 'LinkedIn', placeholder: 'linkedin.com/in/yourname', type: 'url' },
+        { id: 'about', label: isRTL ? 'نبذة عنك' : 'About You', placeholder: isRTL ? 'خبراتك ومهاراتك باختصار' : 'Your experience and skills in brief', type: 'textarea' },
+      ],
+    };
+  }
+
+  if (/company portfolio|agency|startup|tech company|cto|software company|digital company|professional company|digital agency|founder|our services|about us page|company website/.test(prompt)) {
     return {
       siteType: isRTL ? 'شركة أو وكالة' : 'Company / Agency',
       heading: isRTL ? 'أخبرنا عن شركتك' : 'Tell us about your company',

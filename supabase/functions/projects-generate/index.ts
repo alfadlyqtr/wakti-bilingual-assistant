@@ -1094,7 +1094,7 @@ async function callGeminiWithModel(
             }),
           }
         ),
-        55000, // 55 seconds — safe within Supabase's 150s gateway limit, fast enough to fail-fast on hangs
+        120000, // 120 seconds — CREATE mode generates large files (10k-30k tokens) via waitUntil, not limited by 150s gateway
         'GEMINI_CALL'
       );
 
