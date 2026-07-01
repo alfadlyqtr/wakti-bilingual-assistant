@@ -1536,7 +1536,7 @@ async function callGeminiVisionWithFiles(
         }),
       }
     ),
-    300000, // 300 seconds
+    120000, // 120 seconds — reduced from 300s; consistent with callGeminiWithModel limit
     'GEMINI_25_PRO_VISION'
   );
 
@@ -1864,7 +1864,8 @@ The user attached a screenshot. I analyzed it and found these text anchors:
               const pdfMimeType = pdfMatches[1];
               const pdfBase64 = pdfMatches[2];
               
-              const extractResponse = await fetch(
+              const extractResponse = await withTimeout(
+                fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/${getDocumentExtractionModel()}:generateContent`,
                 {
                   method: "POST",
@@ -1894,6 +1895,9 @@ Format the output clearly with sections. Do NOT summarize - extract the FULL tex
                     generationConfig: { temperature: 0.1, maxOutputTokens: 8192 },
                   }),
                 }
+              ),
+              30000, // 30s timeout — PDF extraction should be fast; no timeout was causing indefinite hang
+              'PDF_EXTRACTION'
               );
               
               if (extractResponse.ok) {
@@ -8147,11 +8151,11 @@ Return ONLY the JSON object. No explanation.`;
             polishPrompt,
             files,
             userInstructions,
-            Array.isArray(images) ? images as string[] : undefined,
+            undefined, // CV/images not needed — draft already has CV content baked in; re-passing causes PDF re-extraction hang
             assetIntent,
             uploadedAssets,
             backendContext,
-            documentContentStr,
+            documentContentStr, // already extracted CV/doc text
             visionInspirationStr,
             projectId,
           );
