@@ -59,6 +59,7 @@ export default function GroupChatPage() {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [waktiTyping, setWaktiTyping] = useState(false);
   const [pendingWaktiSince, setPendingWaktiSince] = useState<string | null>(null);
+  const [reactionDetails, setReactionDetails] = useState<{ messageId: string } | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
   const [audioSpeed, setAudioSpeed] = useState<Record<string, number>>({});
@@ -874,6 +875,38 @@ export default function GroupChatPage() {
     closeMessageActions();
   };
 
+  const reactionDetailsUsers = useMemo(() => {
+    if (!reactionDetails || !conversation) return [];
+    const message = messages.find((m) => m.id === reactionDetails.messageId);
+    const reactions = message?.reactions || [];
+    return reactions.map((reaction) => {
+      const participant = conversation.participants.find((p) => p.user_id === reaction.user_id);
+      const profile = participant?.profile;
+      return {
+        userId: reaction.user_id,
+        name: profile?.display_name || profile?.username || (language === 'ar' ? 'عضو' : 'Member'),
+        avatarUrl: profile?.avatar_url || null,
+        isMe: reaction.user_id === user?.id,
+        emoji: reaction.emoji,
+      };
+    }).sort((a, b) => (a.isMe === b.isMe ? 0 : a.isMe ? -1 : 1));
+  }, [reactionDetails, conversation, messages, user, language]);
+
+  const handleReactionDetails = async (messageId: string) => {
+    if (!user?.id) return;
+    const message = messages.find((m) => m.id === messageId);
+    const userReaction = message?.reactions?.find((r) => r.user_id === user.id);
+    if (userReaction) {
+      try {
+        await removeGroupReaction(messageId, userReaction.emoji);
+        queryClient.invalidateQueries({ queryKey: ["groupConversationMessages", conversationId] });
+      } catch (error) {
+        console.error("Group reaction remove error:", error);
+      }
+    }
+    setReactionDetails(null);
+  };
+
   const handleReplyTo = (message: GroupChatMessage) => {
     setReplyingTo(message);
     closeMessageActions();
@@ -1372,8 +1405,14 @@ export default function GroupChatPage() {
                   : isWakti
                     ? "Wakti"
                     : message.sender?.display_name || message.sender?.username || (language === "ar" ? "عضو" : "Member");
-                const displayedReaction = !message.is_deleted && message.reactions && message.reactions.length > 0
-                  ? [...message.reactions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+                const reactionSummary = !message.is_deleted && message.reactions && message.reactions.length > 0
+                  ? (() => {
+                      const sorted = [...message.reactions].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+                      return {
+                        emojis: Array.from(new Set(sorted.map((r) => r.emoji))),
+                        total: message.reactions.length,
+                      };
+                    })()
                   : null;
 
                 return (
@@ -1441,14 +1480,14 @@ export default function GroupChatPage() {
                           </div>
                         )}
 
-                        <div className={cn("relative inline-block max-w-full", displayedReaction && "pb-4")}>
+                        <div className={cn("relative inline-block max-w-full", reactionSummary && "pb-4")}>
                           <div
                             ref={(element) => {
                               messageBubbleRefs.current[message.id] = element;
                             }}
                             className={cn(
                               "max-w-full overflow-hidden select-none rounded-3xl px-4 shadow-sm",
-                              displayedReaction ? "pt-5 pb-3" : "py-3",
+                              reactionSummary ? "pt-5 pb-3" : "py-3",
                               mine
                                 ? "bg-[linear-gradient(135deg,hsl(210_100%_55%)_0%,hsl(195_100%_50%)_100%)] text-white"
                                 : isWakti
@@ -1461,18 +1500,23 @@ export default function GroupChatPage() {
                             {renderMessageContent(message, mine, false, index, messages.length)}
                           </div>
 
-                          {displayedReaction && (
+                          {reactionSummary && (
                             <button
                               onClick={(event) => {
                                 event.stopPropagation();
-                                handleReaction(message.id, displayedReaction.emoji);
+                                setReactionDetails({ messageId: message.id });
                               }}
                               className={cn(
                                 "absolute -top-2 right-2 z-10 flex h-7 min-w-7 items-center justify-center rounded-full border px-1.5 text-sm shadow-md",
                                 isDark ? "border-white/10 bg-[#1f1f1f] text-white" : "border-black/10 bg-white text-gray-900"
                               )}
                             >
-                              <span>{displayedReaction.emoji}</span>
+                              <span className="flex items-center gap-1.5">
+                                {reactionSummary.emojis.map((emoji, idx) => (
+                                  <span key={idx}>{emoji}</span>
+                                ))}
+                                <span className="text-xs opacity-80">{reactionSummary.total}</span>
+                              </span>
                             </button>
                           )}
                         </div>
@@ -2498,6 +2542,55 @@ export default function GroupChatPage() {
               {addMembersMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UserPlus className="h-4 w-4 mr-2" />}
               {language === "ar" ? `إضافة (${selectedNewMembers.length})` : `Add (${selectedNewMembers.length})`}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Reaction Details Modal ── */}
+      <Dialog open={!!reactionDetails} onOpenChange={(open) => !open && setReactionDetails(null)}>
+        <DialogContent className="rounded-2xl border border-border/60 max-w-sm p-0 overflow-hidden">
+          <div className="p-5 pb-3">
+            <DialogHeader>
+              <DialogTitle className="text-center text-lg font-bold">
+                {reactionDetailsUsers.length} {reactionDetailsUsers.length === 1 ? (language === 'ar' ? 'رد فعل' : 'reaction') : (language === 'ar' ? 'ردود فعل' : 'reactions')}
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto px-5 pb-5">
+            {reactionDetailsUsers.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground">
+                {language === 'ar' ? 'لا يوجد ردود فعل' : 'No reactions'}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {reactionDetailsUsers.map((u) => (
+                  <div
+                    key={u.userId}
+                    onClick={() => u.isMe && reactionDetails && handleReactionDetails(reactionDetails.messageId)}
+                    className={cn(
+                      "flex items-center gap-3",
+                      u.isMe && "cursor-pointer hover:bg-accent/50 rounded-lg -mx-2 px-2 py-1 transition-colors"
+                    )}
+                  >
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={u.avatarUrl || undefined} alt={u.name} />
+                      <AvatarFallback>{u.name.charAt(0).toUpperCase()}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col flex-1">
+                      <span className="text-sm font-medium">
+                        {u.isMe ? (language === 'ar' ? 'أنت' : 'You') : u.name}
+                      </span>
+                      {u.isMe && (
+                        <span className="text-xs italic text-muted-foreground">
+                          {language === 'ar' ? 'انقر للإزالة' : 'Tap to remove'}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-base">{u.emoji}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

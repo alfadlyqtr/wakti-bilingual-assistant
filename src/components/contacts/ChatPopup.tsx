@@ -1,5 +1,5 @@
 
-import { Fragment, useState, useEffect, useRef, useCallback } from "react";
+import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { formatDayLabel, isSameDay, formatBubbleTime } from "@/lib/dateLabels";
@@ -53,6 +53,7 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
   const [selectedActionMessage, setSelectedActionMessage] = useState<DirectMessage | null>(null);
   const [selectedActionIsSentByMe, setSelectedActionIsSentByMe] = useState(false);
   const [reactionPickerFor, setReactionPickerFor] = useState<string | null>(null);
+  const [reactionDetails, setReactionDetails] = useState<{ messageId: string } | null>(null);
   const [selectedMessageRect, setSelectedMessageRect] = useState<{ top: number; left: number; width: number; height: number; right: number; } | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const messageBubbleRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -218,6 +219,37 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
       console.error("Reaction error:", e);
     }
     closeMessageActions();
+  };
+
+  const reactionDetailsUsers = useMemo(() => {
+    if (!reactionDetails) return [];
+    const message = allMessages?.find((m: any) => m.id === reactionDetails.messageId);
+    const reactions = message?.reactions || [];
+    return reactions.map((reaction: any) => {
+      const isContact = reaction.user_id !== currentUserId;
+      return {
+        userId: reaction.user_id,
+        name: isContact ? contactName : (language === 'ar' ? 'أنت' : 'You'),
+        avatarUrl: isContact ? contactAvatar : null,
+        isMe: !isContact,
+        emoji: reaction.emoji,
+      };
+    }).sort((a: any, b: any) => (a.isMe === b.isMe ? 0 : a.isMe ? -1 : 1));
+  }, [reactionDetails, allMessages, currentUserId, contactName, contactAvatar, language]);
+
+  const handleReactionDetails = async (messageId: string) => {
+    if (!currentUserId) return;
+    const message = allMessages?.find((m: any) => m.id === messageId);
+    const userReaction = message?.reactions?.find((r: any) => r.user_id === currentUserId);
+    if (userReaction) {
+      try {
+        await removeReaction(messageId, userReaction.emoji);
+        queryClient.invalidateQueries({ queryKey: ['directMessages', contactId] });
+      } catch (error) {
+        console.error("Reaction remove error:", error);
+      }
+    }
+    setReactionDetails(null);
   };
 
   const handleReplyTo = (message: DirectMessage) => {
@@ -580,8 +612,14 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     const isSentByMe = message.sender_id === currentUserId;
     const showAvatar = !isSentByMe && (index === 0 || messages[index - 1]?.sender_id !== message.sender_id);
     const isLastOfGroup = index === messages.length - 1 || messages[index + 1]?.sender_id !== message.sender_id;
-    const displayedReaction = !message.is_deleted && message.reactions && message.reactions.length > 0
-      ? [...message.reactions].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+    const reactionSummary = !message.is_deleted && message.reactions && message.reactions.length > 0
+      ? (() => {
+          const sorted = [...message.reactions].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          return {
+            emojis: Array.from(new Set(sorted.map((r: any) => r.emoji))),
+            total: message.reactions.length,
+          };
+        })()
       : null;
 
     return (
@@ -625,14 +663,14 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           {/* Invisible placeholder to align sent messages */}
           {!isSentByMe && !showAvatar && <div className="w-8 flex-shrink-0"></div>}
           
-          <div className={`flex flex-col ${displayedReaction ? 'pb-4' : ''}`}>
+          <div className={`flex flex-col ${reactionSummary ? 'pb-4' : ''}`}>
             {/* Message bubble */}
             <div className="relative inline-block">
               <div
                 ref={(element) => {
                   messageBubbleRefs.current[message.id] = element;
                 }}
-                className={`select-none px-4 ${displayedReaction ? 'pt-5 pb-3' : 'py-3'} rounded-2xl ${
+                className={`select-none px-4 ${reactionSummary ? 'pt-5 pb-3' : 'py-3'} rounded-2xl ${
                   isSentByMe
                     ? `bg-gradient-to-br from-blue-500 to-blue-600 text-white ${isLastOfGroup ? 'rounded-br-sm' : ''}`
                     : `${isDark ? 'bg-dark-secondary/60 text-white' : 'bg-light-secondary/40 text-light-primary'} ${isLastOfGroup ? 'rounded-bl-sm' : ''}`
@@ -764,12 +802,17 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
 
               </div>
 
-              {displayedReaction && (
+              {reactionSummary && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); handleReaction(message.id, displayedReaction.emoji); }}
+                  onClick={(e) => { e.stopPropagation(); setReactionDetails({ messageId: message.id }); }}
                   className={`absolute -top-2 right-2 z-10 flex h-7 min-w-7 items-center justify-center rounded-full border px-1.5 text-sm shadow-md ${isDark ? 'border-white/10 bg-[#1f1f1f] text-white' : 'border-black/10 bg-white text-gray-900'}`}
                 >
-                  <span>{displayedReaction.emoji}</span>
+                  <span className="flex items-center gap-1.5">
+                    {reactionSummary.emojis.map((emoji: string, idx: number) => (
+                      <span key={idx}>{emoji}</span>
+                    ))}
+                    <span className="text-xs opacity-80">{reactionSummary.total}</span>
+                  </span>
                 </button>
               )}
             </div>
@@ -1279,6 +1322,52 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Reaction details modal */}
+      <Dialog open={!!reactionDetails} onOpenChange={(open) => !open && setReactionDetails(null)}>
+        <DialogContent className="rounded-2xl border border-border/60 max-w-sm p-0 overflow-hidden">
+          <div className="p-5 pb-3">
+            <DialogHeader>
+              <DialogTitle className="text-center text-lg font-bold">
+                {reactionDetailsUsers.length} {reactionDetailsUsers.length === 1 ? (language === 'ar' ? 'رد فعل' : 'reaction') : (language === 'ar' ? 'ردود فعل' : 'reactions')}
+              </DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto px-5 pb-5">
+            {reactionDetailsUsers.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground">
+                {language === 'ar' ? 'لا يوجد ردود فعل' : 'No reactions'}
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {reactionDetailsUsers.map((u: any) => (
+                  <div
+                    key={u.userId}
+                    onClick={() => u.isMe && reactionDetails && handleReactionDetails(reactionDetails.messageId)}
+                    className={`flex items-center gap-3 ${u.isMe ? 'cursor-pointer hover:bg-accent/50 rounded-lg -mx-2 px-2 py-1 transition-colors' : ''}`}
+                  >
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={u.avatarUrl || ""} alt={u.name} />
+                      <AvatarFallback className="text-sm font-semibold bg-muted">
+                        {u.name.substring(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col flex-1">
+                      <span className="text-sm font-medium">{u.name}</span>
+                      {u.isMe && (
+                        <span className="text-xs italic text-muted-foreground">
+                          {language === 'ar' ? 'انقر للإزالة' : 'Tap to remove'}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-base">{u.emoji}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
