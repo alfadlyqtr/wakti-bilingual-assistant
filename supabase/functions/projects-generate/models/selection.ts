@@ -35,20 +35,23 @@ export const MODEL_PRICING: Record<string, { input: number; output: number }> = 
 // ============================================================================
 // GEMINI MODEL SELECTION
 // ============================================================================
-// gemini-3.1-pro-preview = Google's best Pro model (Preview, real & live)
-// gemini-3.5-flash       = Google's best Flash model (Stable GA, real & live)
-// Fallback map below auto-downgrades to 2.5 stable on 429/503/404.
+// gemini-3.1-pro-preview = Google's best Pro model — optimized for software engineering,
+//                          agentic workflows, precise tool usage, multi-step execution.
+// gemini-3.5-flash       = Google's best Flash model (Stable GA) — optimized for
+//                          agentic loops, rapid coding cycles, multi-step workflows.
 export const GEMINI_MODEL_CREATE = Deno.env.get('GEMINI_MODEL_CREATE') || 'gemini-3.1-pro-preview';
 export const GEMINI_MODEL_AGENT  = Deno.env.get('GEMINI_MODEL_AGENT')  || 'gemini-3.1-pro-preview';
 export const GEMINI_MODEL_PLAN   = Deno.env.get('GEMINI_MODEL_PLAN')   || 'gemini-3.5-flash';
 export const GEMINI_MODEL_SIMPLE = Deno.env.get('GEMINI_MODEL_SIMPLE') || 'gemini-3.5-flash';
 export const GEMINI_MODEL_VISION = Deno.env.get('GEMINI_MODEL_VISION') || 'gemini-3.5-flash';
 
-/** Fallback map: if a 3.x model fails, retry with its 2.5 equivalent. */
+/** Fallback map: if a model fails (429/503/404), retry with a stable equivalent. */
 export const MODEL_FALLBACK: Record<string, string> = {
-  'gemini-3.1-pro-preview': 'gemini-2.5-pro',
-  'gemini-3.5-flash': 'gemini-2.5-flash',
-  'gemini-3-flash-preview': 'gemini-2.5-flash',
+  'gemini-3.1-pro-preview':         'gemini-2.5-pro',
+  'gemini-3.1-pro-preview-customtools': 'gemini-3.1-pro-preview',
+  'gemini-3.5-flash':               'gemini-2.5-flash',
+  'gemini-3-flash-preview':         'gemini-2.5-flash',
+  'gemini-2.5-pro':                 'gemini-2.5-flash',
 };
 
 // Patterns shared by plan / execute / chat and agent modes.

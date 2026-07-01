@@ -1049,7 +1049,7 @@ async function callGeminiWithModel(
   systemPrompt: string,
   userPrompt: string,
   jsonMode: boolean = true,
-  maxRetries: number = 3,
+  maxRetries: number = 2,
   options: { enableGoogleSearch?: boolean } = {}
 ): Promise<string> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
@@ -1094,8 +1094,8 @@ async function callGeminiWithModel(
             }),
           }
         ),
-        300000, // 300 seconds (5 minutes) - Note: Supabase gateway may still timeout at ~150s
-        'GEMINI_25_PRO'
+        55000, // 55 seconds — safe within Supabase's 150s gateway limit, fast enough to fail-fast on hangs
+        'GEMINI_CALL'
       );
 
       // Handle rate limiting with retry
