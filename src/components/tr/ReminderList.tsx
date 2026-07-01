@@ -431,7 +431,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                   onClick={() => handleMarkDone(reminder)}
                 >
                   <CheckCircle2 className="h-4 w-4 mr-1.5" />
-                  {language === 'ar' ? 'تم' : 'Done'}
+                  {language === 'ar' ? 'تم' : 'Mark as Done'}
                 </Button>
               </div>
 

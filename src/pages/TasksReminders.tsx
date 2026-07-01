@@ -454,45 +454,45 @@ export default function TasksReminders() {
       <div className="max-w-4xl mx-auto px-4 -mt-3 space-y-4">
         {/* ── Glass-morphism Tabs ── */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="w-full grid grid-cols-4 h-12 rounded-2xl p-1.5 gap-1
+          <TabsList className="w-full grid grid-cols-[1fr_1fr_1.35fr_1.25fr] h-10 rounded-2xl p-1 gap-1
             bg-white/80 dark:bg-white/[0.06] backdrop-blur-xl
             border border-white/60 dark:border-white/[0.08]
             shadow-[0_4px_24px_hsla(0,0%,0%,0.06)] dark:shadow-[0_4px_24px_hsla(0,0%,0%,0.4)]">
-            <TabsTrigger value="activity_main" className="rounded-xl text-[13px] font-bold tracking-wide
+            <TabsTrigger value="activity_main" className="rounded-xl text-[12px] font-bold tracking-wide whitespace-nowrap
               data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
               dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
               data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
               data-[state=inactive]:text-muted-foreground transition-all duration-200">
               {language === 'ar' ? 'النشاط' : 'Activity'}
             </TabsTrigger>
-            <TabsTrigger value="tasks" className="rounded-xl text-[13px] font-bold tracking-wide
+            <TabsTrigger value="tasks" className="rounded-xl text-[12px] font-bold tracking-wide whitespace-nowrap
               data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
               dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
               data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
               data-[state=inactive]:text-muted-foreground transition-all duration-200">
               {language === 'ar' ? 'المهام' : 'Tasks'}
               {tasks.length > 0 && (
-                <span className="ml-1.5 text-[10px] font-black px-1.5 py-0.5 rounded-full
+                <span className="ml-1 text-[9px] font-black px-1 py-[1px] rounded-full
                   bg-white/20 data-[state=inactive]:bg-[#060541]/10 dark:data-[state=inactive]:bg-indigo-500/20">
                   {tasks.length}
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="activity" className="rounded-xl text-[13px] font-bold tracking-wide
+            <TabsTrigger value="activity" className="rounded-xl text-[12px] font-bold tracking-wide whitespace-nowrap
               data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
               dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
               data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
               data-[state=inactive]:text-muted-foreground transition-all duration-200">
               {language === 'ar' ? 'المهام المشتركة' : 'Shared Tasks'}
             </TabsTrigger>
-            <TabsTrigger value="reminders" className="rounded-xl text-[13px] font-bold tracking-wide
+            <TabsTrigger value="reminders" className="rounded-xl text-[12px] font-bold tracking-wide whitespace-nowrap
               data-[state=active]:bg-gradient-to-r data-[state=active]:from-[#060541] data-[state=active]:to-[#1a1080]
               dark:data-[state=active]:from-indigo-600 dark:data-[state=active]:to-indigo-500
               data-[state=active]:text-white data-[state=active]:shadow-[0_2px_12px_hsla(240,80%,30%,0.3)]
               data-[state=inactive]:text-muted-foreground transition-all duration-200">
               {language === 'ar' ? 'التذكيرات' : 'Reminders'}
               {reminders.length > 0 && (
-                <span className="ml-1.5 text-[10px] font-black px-1.5 py-0.5 rounded-full
+                <span className="ml-1 text-[9px] font-black px-1 py-[1px] rounded-full
                   bg-white/20 data-[state=inactive]:bg-[#060541]/10 dark:data-[state=inactive]:bg-indigo-500/20">
                   {reminders.length}
                 </span>
