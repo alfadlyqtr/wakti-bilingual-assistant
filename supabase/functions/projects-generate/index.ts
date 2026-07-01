@@ -2060,9 +2060,33 @@ function extractJsonObject(text: string): string {
     .trim();
 
   const jsonStart = cleaned.indexOf("{");
-  const jsonEnd = cleaned.lastIndexOf("}");
-  if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) return cleaned;
-  return cleaned.substring(jsonStart, jsonEnd + 1);
+  if (jsonStart === -1) return cleaned;
+
+  // Walk character-by-character to find the first COMPLETE balanced JSON object.
+  // This prevents including stray text or a second JSON block that Gemini sometimes
+  // appends after the main object — which causes "Unexpected non-whitespace after JSON".
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = jsonStart; i < cleaned.length; i++) {
+    const c = cleaned[i];
+    if (escaped) { escaped = false; continue; }
+    if (c === '\\' && inString) { escaped = true; continue; }
+    if (c === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (c === '{') depth++;
+    if (c === '}') {
+      depth--;
+      if (depth === 0) {
+        return cleaned.substring(jsonStart, i + 1); // First complete object — stop here
+      }
+    }
+  }
+
+  // No balanced object found — fall back to last } (original behaviour)
+  const fallbackEnd = cleaned.lastIndexOf("}");
+  return fallbackEnd > jsonStart ? cleaned.substring(jsonStart, fallbackEnd + 1) : cleaned;
 }
 
 function normalizeGeminiResponseText(text: string): string {
