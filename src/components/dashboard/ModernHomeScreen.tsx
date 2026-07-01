@@ -1644,6 +1644,17 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const taskAccent      = pct >= 70 ? '#22c55e' : pct >= 30 ? '#f59e0b' : pendingTasks === 0 ? '#22c55e' : '#ef4444';
   const taskIconBg      = pct >= 70 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : pct >= 30 ? 'linear-gradient(135deg,#b45309,#f59e0b)' : pendingTasks === 0 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#be123c,#ef4444)';
 
+  const now = new Date();
+  const overdueRemindersCount = reminders.filter(r => {
+    const due = new Date(r.due_date);
+    if (r.due_time) {
+      const [h, m] = r.due_time.split(':').map(Number);
+      due.setHours(h, m, 0, 0);
+    }
+    if (r.snoozed_until && new Date(r.snoozed_until) > now) return false;
+    return due <= now;
+  }).length;
+
   const upcomingCount = maw3dEvents.filter(e => {
     try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
   }).length;
@@ -2135,7 +2146,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
             </h3>
             <div className="grid grid-cols-3 md:grid-cols-4" style={{ gap: `${productivityGridGap}px` }}>
               {PRODUCTIVITY_APPS.map((app) => (
-                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={compactAppScale} badgeCount={app.id === 'social' ? connectBadge : 0} />
+                <AppCircle key={app.id} app={app} language={language} onClick={() => navigate(app.path)} size="compact" scale={compactAppScale} badgeCount={app.id === 'tasks' ? overdueRemindersCount : app.id === 'social' ? connectBadge : 0} />
               ))}
             </div>
           </section>
