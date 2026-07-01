@@ -306,7 +306,7 @@ async function generateGroundedSummary(
     };
 
     const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -330,7 +330,7 @@ async function generateGroundedSummary(
     await logAIFromRequest(req, {
       functionName: "deen-search",
       provider: "google",
-      model: "gemini-2.0-flash",
+      model: "gemini-3.1-flash-lite",
       inputText: userPrompt,
       outputText: summary,
       durationMs: Date.now() - startedAt,
@@ -346,7 +346,7 @@ async function generateGroundedSummary(
     await logAIFromRequest(req, {
       functionName: "deen-search",
       provider: "google",
-      model: "gemini-2.0-flash",
+      model: "gemini-3.1-flash-lite",
       inputText: userPrompt,
       outputText: buildFallbackSummary(language, quranResults, hadithResults),
       durationMs: Date.now() - startedAt,

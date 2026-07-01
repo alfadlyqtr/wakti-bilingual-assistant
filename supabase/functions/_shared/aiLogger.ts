@@ -97,6 +97,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
   "gemini-2.0-flash-exp": { input: 0.075, output: 0.30 },
   "gemini-2.0-flash-001": { input: 0.075, output: 0.30 },
   "gemini-2.5-flash-lite": { input: 0.075, output: 0.30 },
+  "gemini-3.1-flash-lite": { input: 0.075, output: 0.30 },
   "gemini-1.5-flash": { input: 0.075, output: 0.30 },
   "gemini-pro": { input: 0.50, output: 1.50 },
   
