@@ -2675,6 +2675,16 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
   const whoopData = useWhoopData();
   const journalData = useJournalData();
   const pendingTasks  = tasks.filter(t => !t.completed).length;
+  const now = new Date();
+  const overdueRemindersCount = reminders.filter(r => {
+    const due = new Date(r.due_date);
+    if (r.due_time) {
+      const [h, m] = r.due_time.split(':').map(Number);
+      due.setHours(h, m, 0, 0);
+    }
+    if (r.snoozed_until && new Date(r.snoozed_until) > now) return false;
+    return due <= now;
+  }).length;
   const upcomingCount = maw3dEvents.filter(e => {
     try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
   }).length;
@@ -3958,7 +3968,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
                         gridArea={gp}
                         compact={isMobileGlass}
                         avatarUrl={avatarUrl}
-                        badgeCount={app.id === 'social' ? connectBadge : 0}
+                        badgeCount={app.id === 'social' ? connectBadge : app.id === 'tr' ? overdueRemindersCount : 0}
                         onLongPress={bulkMoveOptions ? undefined : () => setContextMenu({ itemId: itemId })}
                         bulkSelectionActive={!!bulkMoveOptions}
                         isBulkSelected={bulkMoveOptions?.selectedSet.has(itemId) || false}
@@ -4031,7 +4041,7 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
               <SortableContext items={dockApps.map(a => `dock::${a.id}`)} strategy={horizontalListSortingStrategy}>
                 <div className="relative z-10 flex w-full items-center justify-around gap-1.5">
                   {dockApps.map(app => (
-                    <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'social' ? connectBadge : 0} dockColor={dockColor} />
+                    <DockIcon key={app.id} app={app} editMode={editMode} onTap={() => navigate(app.path)} glowEnabled={hsBg.glow} avatarUrl={avatarUrl} badgeCount={app.id === 'social' ? connectBadge : app.id === 'tr' ? overdueRemindersCount : 0} dockColor={dockColor} />
                   ))}
                   {Array.from({ length: Math.max(0, maxDock - dockApps.length) }).map((_, i) => (
                     <div key={`slot-${i}`} className="w-[72px] h-[72px] rounded-[30%] border border-dashed border-white/20 bg-white/[0.04]" />

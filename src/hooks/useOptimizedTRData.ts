@@ -1,6 +1,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { TRService, TRTask, TRReminder } from '@/services/trService';
+import { supabase } from '@/integrations/supabase/client';
 import { useDebounced } from './useDebounced';
 
 // Simple cache to prevent duplicate requests
@@ -19,6 +20,7 @@ export const useOptimizedTRData = () => {
   const [error, setError] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const fetchingRef = useRef(false);
+  const rtDebounceRef = useRef<number | null>(null);
 
   const fetchData = useCallback(async (force = false) => {
     // Prevent multiple simultaneous requests
@@ -79,7 +81,7 @@ export const useOptimizedTRData = () => {
     return fetchData(true);
   }, [fetchData]);
 
-  // Single effect for initial load only
+  // Initial load
   useEffect(() => {
     mountedRef.current = true;
     fetchData();
@@ -88,6 +90,42 @@ export const useOptimizedTRData = () => {
       mountedRef.current = false;
     };
   }, []); // Empty dependencies - only run once on mount
+
+  // Realtime: keep tasks/reminders fresh across tabs/devices
+  useEffect(() => {
+    let remindersChannel: ReturnType<typeof supabase.channel> | null = null;
+    let tasksChannel: ReturnType<typeof supabase.channel> | null = null;
+
+    const scheduleRefetch = () => {
+      if (rtDebounceRef.current) window.clearTimeout(rtDebounceRef.current);
+      rtDebounceRef.current = window.setTimeout(() => {
+        if (mountedRef.current) {
+          dataCache = null;
+          fetchData(true);
+        }
+      }, 200);
+    };
+
+    try {
+      remindersChannel = supabase
+        .channel('rt-optimized-tr_reminders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_reminders' }, () => scheduleRefetch())
+        .subscribe();
+
+      tasksChannel = supabase
+        .channel('rt-optimized-tr_tasks')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tr_tasks' }, () => scheduleRefetch())
+        .subscribe();
+    } catch (e) {
+      console.warn('useOptimizedTRData: Failed to attach realtime channels', e);
+    }
+
+    return () => {
+      if (rtDebounceRef.current) window.clearTimeout(rtDebounceRef.current);
+      remindersChannel?.unsubscribe();
+      tasksChannel?.unsubscribe();
+    };
+  }, [fetchData]);
 
   return { 
     tasks, 
