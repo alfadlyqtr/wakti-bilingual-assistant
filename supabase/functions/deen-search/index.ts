@@ -69,6 +69,17 @@ type ResponseSource = {
   grade: string;
 };
 
+type WebResult = {
+  title: string;
+  url: string;
+  snippet: string;
+};
+
+type SummaryResult = {
+  summary: string;
+  web_results: WebResult[];
+};
+
 function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
@@ -92,9 +103,57 @@ function uniqueTerms(values: string[]) {
 
 function detectSourcePreference(query: string): SourcePreference {
   const normalized = normalizeText(query);
-  if (/\b(quran|verse|ayah|surah)\b|قرآن|القران|آية|اية|سورة/.test(normalized)) return "quran_only";
-  if (/\b(hadith|sunnah|bukhari|muslim|tirmidhi|nasai|ibn majah|abu dawud)\b|حديث|السنة|بخاري|مسلم|ترمذي|نسائي|ابن ماجه|أبو داود|ابو داود/.test(normalized)) return "hadith_only";
+  if (/\b(quran\s+only|only\s+quran|only\s+the\s+quran)\b|فقط\s+القرآن|القرآن\s+فقط|فقط\s+القران|القران\s+فقط|فقط\s+قرآن|قرآن\s+فقط/.test(normalized)) return "quran_only";
+  if (/\b(hadith\s+only|only\s+hadith|only\s+the\s+hadith|sunnah\s+only|only\s+sunnah)\b|فقط\s+الحديث|الحديث\s+فقط|فقط\s+السنة|السنة\s+فقط/.test(normalized)) return "hadith_only";
   return "both";
+}
+
+function isIslamwebUrl(url: string) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === "islamweb.net" || host.endsWith(".islamweb.net");
+  } catch {
+    return url.toLowerCase().includes("islamweb.net");
+  }
+}
+
+function extractWebResults(groundingMetadata: unknown): WebResult[] {
+  if (!groundingMetadata || typeof groundingMetadata !== "object") return [];
+
+  const metadata = groundingMetadata as {
+    groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+    groundingSupports?: Array<{ groundingChunkIndices?: number[]; segment?: { text?: string } }>;
+  };
+
+  const chunks = Array.isArray(metadata.groundingChunks) ? metadata.groundingChunks : [];
+  const supports = Array.isArray(metadata.groundingSupports) ? metadata.groundingSupports : [];
+  const supportTextByChunk = new Map<number, string>();
+
+  supports.forEach((support) => {
+    const indices = Array.isArray(support.groundingChunkIndices) ? support.groundingChunkIndices : [];
+    const segmentText = typeof support.segment?.text === "string" ? support.segment.text.trim() : "";
+    if (!segmentText) return;
+    indices.forEach((index) => {
+      if (!supportTextByChunk.has(index)) supportTextByChunk.set(index, segmentText);
+    });
+  });
+
+  return chunks
+    .map((chunk, index) => {
+      const uri = chunk.web?.uri;
+      if (typeof uri !== "string" || uri.length === 0) return null;
+      if (!isIslamwebUrl(uri)) return null;
+      const title = typeof chunk.web?.title === "string" && chunk.web.title.trim().length > 0
+        ? chunk.web.title.trim()
+        : uri;
+      return {
+        title,
+        url: uri,
+        snippet: supportTextByChunk.get(index) ?? "",
+      } satisfies WebResult;
+    })
+    .filter((item): item is WebResult => Boolean(item))
+    .slice(0, 6);
 }
 
 function detectQuestionType(query: string, priorTopic: string | null): QuestionType {
@@ -196,12 +255,14 @@ async function generateGroundedSummary(
   quranResults: ResponseSource[],
   hadithResults: ResponseSource[],
   conversationHistory: ConversationTurn[] = [],
-  intent?: IntentResult | null,
-) {
+): Promise<SummaryResult> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") ?? "";
   const allSources = [...quranResults, ...hadithResults].slice(0, 6);
   if (!GEMINI_API_KEY || allSources.length === 0) {
-    return buildFallbackSummary(language, quranResults, hadithResults);
+    return {
+      summary: buildFallbackSummary(language, quranResults, hadithResults),
+      web_results: [],
+    };
   }
 
   const evidenceBlock = allSources.map((item, index) => {
@@ -211,8 +272,8 @@ async function generateGroundedSummary(
   }).join("\n\n");
 
   const system = language === "ar"
-    ? `أنت مساعد Deen Ask في Wakti. أجب من المصادر المعروضة من القرآن والحديث. للأسئلة الفقهية والفتاوى يمكنك أيضاً البحث في موقع islamweb.net. لا تستخدم أي مصدر خارجي آخر. لا تذكر Google أو العلماء أو مواقع خارجية أخرى. إذا كانت الأدلة غير كافية فقل ذلك بوضوح. لا تضف سؤال متابعة. لا تستخدم markdown. سياق المحادثة السابقة للرجوع فقط — يجب أن يأتي جوابك من المصادر المعروضة أدناه. أخرج JSON فقط بهذا الشكل: {"summary":"...","quran_summary":"","hadith_summary":""}`
-    : `You are Wakti's Deen Ask assistant. Answer from the Quran and Hadith sources shown to you. For fiqh and fatwa questions, you may also search islamweb.net. Do not use any other outside source. Do not mention Google, scholars, or other external websites. If the evidence is limited, say so clearly. Do not add a follow-up question. Do not use markdown. Previous conversation context is for reference only — your answer must come from the Sources shown below. Output JSON only in this shape: {"summary":"...","quran_summary":"","hadith_summary":""}`;
+    ? `أنت مساعد Deen Ask في Wakti. تحدث عن الإسلام فقط. أجب اعتماداً على المصادر المعروضة من القرآن والحديث، ويمكنك استخدام نتائج islamweb.net إذا كانت متاحة. لا تستخدم أي مصدر خارجي آخر. لا تذكر Google أو أسماء مواقع في النص. إذا كانت الأدلة قليلة فقل ذلك بوضوح. أضف نصائح عملية مشجعة تساعد المستخدم بدون مخالفة للأدلة. لا تضف سؤال متابعة. لا تستخدم markdown. سياق المحادثة السابقة للرجوع فقط — يجب أن يأتي جوابك من المصادر المعروضة أدناه. أخرج JSON فقط بهذا الشكل: {"summary":"...","quran_summary":"","hadith_summary":""}`
+    : `You are Wakti's Deen Ask assistant. Talk only about Islam. Answer using the Quran and Hadith sources shown to you, and use islamweb.net results when available. Do not use any other outside source. Do not mention Google or website names in the answer. If the evidence is limited, say so clearly. Add practical, encouraging advice that helps the user without contradicting the sources. Do not add a follow-up question. Do not use markdown. Previous conversation context is for reference only — your answer must come from the Sources shown below. Output JSON only in this shape: {"summary":"...","quran_summary":"","hadith_summary":""}`;
 
   let contextBlock = "";
   if (conversationHistory.length > 0) {
@@ -234,12 +295,6 @@ async function generateGroundedSummary(
 
   const startedAt = Date.now();
   try {
-    const shouldSearchWeb = intent && (
-      intent.question_type === "fiqh_question" ||
-      intent.question_type === "sensitive" ||
-      intent.question_type === "general_islamic"
-    );
-
     const requestBody: Record<string, unknown> = {
       contents: [{ role: "user", parts: [{ text: `${system}\n\n${userPrompt}` }] }],
       generationConfig: {
@@ -247,11 +302,8 @@ async function generateGroundedSummary(
         maxOutputTokens: 500,
         responseMimeType: "application/json",
       },
+      tools: [{ google_search: {} }],
     };
-
-    if (shouldSearchWeb) {
-      requestBody.tools = [{ google_search: {} }];
-    }
 
     const resp = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
@@ -273,6 +325,7 @@ async function generateGroundedSummary(
     const summary = typeof parsed?.summary === "string" && parsed.summary.trim().length > 0
       ? parsed.summary.trim()
       : buildFallbackSummary(language, quranResults, hadithResults);
+    const webResults = extractWebResults(payload?.candidates?.[0]?.groundingMetadata);
 
     await logAIFromRequest(req, {
       functionName: "deen-search",
@@ -288,7 +341,7 @@ async function generateGroundedSummary(
       },
     });
 
-    return summary;
+    return { summary, web_results: webResults };
   } catch (error) {
     await logAIFromRequest(req, {
       functionName: "deen-search",
@@ -304,7 +357,10 @@ async function generateGroundedSummary(
         source_count: allSources.length,
       },
     });
-    return buildFallbackSummary(language, quranResults, hadithResults);
+    return {
+      summary: buildFallbackSummary(language, quranResults, hadithResults),
+      web_results: [],
+    };
   }
 }
 
@@ -453,6 +509,7 @@ serve(async (req) => {
         query,
         quran_results: [],
         hadith_results: [],
+        web_results: [],
         intent,
         clarify: intent.clarification_prompt,
         summary: intent.clarification_prompt,
@@ -486,14 +543,15 @@ serve(async (req) => {
           grade: "",
         }]
         : [];
-      const summary = quranResults.length > 0
-        ? await generateGroundedSummary(req, query, language, quranResults, [], conversationHistory, intent)
-        : buildNoResultsSummary(language);
+      const summaryResult = quranResults.length > 0
+        ? await generateGroundedSummary(req, query, language, quranResults, [], conversationHistory)
+        : { summary: buildNoResultsSummary(language), web_results: [] };
       return json({
         query,
         quran_results: quranResults,
         hadith_results: [],
-        summary,
+        web_results: summaryResult.web_results,
+        summary: summaryResult.summary,
         intent,
         meta: { found: quranResults.length > 0, quran_count: quranResults.length, hadith_count: 0, sufficient: true },
       });
@@ -530,14 +588,15 @@ serve(async (req) => {
           grade: data.grade || "",
         }];
       }
-      const summary = result.length > 0
-        ? await generateGroundedSummary(req, query, language, [], result, conversationHistory, intent)
-        : buildNoResultsSummary(language);
+      const summaryResult = result.length > 0
+        ? await generateGroundedSummary(req, query, language, [], result, conversationHistory)
+        : { summary: buildNoResultsSummary(language), web_results: [] };
       return json({
         query,
         quran_results: [],
         hadith_results: result,
-        summary,
+        web_results: summaryResult.web_results,
+        summary: summaryResult.summary,
         intent,
         meta: { found: result.length > 0, quran_count: 0, hadith_count: result.length, sufficient: true },
       });
@@ -571,16 +630,6 @@ serve(async (req) => {
       rows = rows.filter((r) => r.source_type === "hadith");
     } else if (intent.source_preference === "quran_only") {
       rows = rows.filter((r) => r.source_type === "quran");
-    } else if (intent.question_type === "fiqh_question" || intent.question_type === "sensitive") {
-      const hadithRows = rows.filter((r) => r.source_type === "hadith");
-      const quranRows = rows.filter((r) => r.source_type === "quran");
-      // Only include quran results if we also have hadith — prevents weak quran matches from dominating fiqh answers
-      if (hadithRows.length > 0) {
-        // Keep top 2 quran + top 3 hadith for fiqh (hadith-weighted)
-        rows = [...quranRows.slice(0, 2), ...hadithRows.slice(0, 3)];
-      } else {
-        rows = [...quranRows, ...hadithRows];
-      }
     }
 
     const quranResults = rows.filter((r) => r.source_type === "quran").map((r) => mapSearchRow(r, language));
@@ -595,15 +644,16 @@ serve(async (req) => {
         ? rows.length > 0
         : hadithResults.length > 0; // fiqh/sensitive/followup requires hadith
 
-    const summary = rows.length > 0
-      ? await generateGroundedSummary(req, query, language, quranResults, hadithResults, conversationHistory, intent)
-      : buildNoResultsSummary(language);
+    const summaryResult = rows.length > 0
+      ? await generateGroundedSummary(req, query, language, quranResults, hadithResults, conversationHistory)
+      : { summary: buildNoResultsSummary(language), web_results: [] };
 
     return json({
       query,
       quran_results: quranResults,
       hadith_results: hadithResults,
-      summary,
+      web_results: summaryResult.web_results,
+      summary: summaryResult.summary,
       intent,
       meta: {
         found: quranResults.length > 0 || hadithResults.length > 0,

@@ -55,10 +55,17 @@ interface EvidenceResult {
   ayah_number?: number;
 }
 
+interface WebResult {
+  title: string;
+  url: string;
+  snippet?: string;
+}
+
 interface SearchResponse {
   query: string;
   quran_results: EvidenceResult[];
   hadith_results: EvidenceResult[];
+  web_results?: WebResult[];
   summary?: string;
   meta?: {
     found: boolean;
@@ -124,6 +131,80 @@ function CopyButton({ text, isDark, isAr }: { text: string; isDark: boolean; isA
         ? <><Check className="w-3 h-3" />{isAr ? "تم النسخ" : "Copied"}</>
         : <><Copy className="w-3 h-3" />{isAr ? "نسخ" : "Copy"}</>}
     </button>
+  );
+}
+
+function SourcesDropdown({
+  title,
+  isDark,
+  isAr,
+  children,
+}: {
+  title: string;
+  isDark: boolean;
+  isAr: boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full rounded-2xl px-4 py-3 text-left"
+        style={{
+          background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)",
+          border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <p className={`text-[11px] font-semibold uppercase tracking-wider ${isDark ? "text-[#c4c8d4]" : "text-[#3a3f5c]"}`}>
+            {title}
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`text-[11px] ${isDark ? "text-[#858384]" : "text-[#606062]"}`}>
+              {open ? (isAr ? "إخفاء" : "Hide") : (isAr ? "إظهار" : "Show")}
+            </span>
+            {open
+              ? <ChevronUp className={`w-4 h-4 ${isDark ? "text-sky-300" : "text-sky-600"}`} />
+              : <ChevronDown className={`w-4 h-4 ${isDark ? "text-sky-300" : "text-sky-600"}`} />}
+          </div>
+        </div>
+      </button>
+      {open && <div className="flex flex-col gap-2">{children}</div>}
+    </div>
+  );
+}
+
+function WebSourceCard({
+  item,
+  isDark,
+  isAr,
+}: {
+  item: WebResult;
+  isDark: boolean;
+  isAr: boolean;
+}) {
+  const bg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)";
+  const border = isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)";
+  const titleColor = isDark ? "text-sky-300" : "text-sky-700";
+  const textColor = isDark ? "text-[#e8eaf0]" : "text-[#1a1f2e]";
+  const linkColor = isDark ? "text-sky-400" : "text-sky-600";
+
+  return (
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noreferrer"
+      className="rounded-2xl p-4 block transition-all active:scale-[0.99]"
+      style={{ background: bg, border }}
+    >
+      <p className={`text-[12px] font-semibold ${titleColor}`}>{item.title}</p>
+      {item.snippet && (
+        <p className={`text-xs mt-1 leading-relaxed ${textColor}`}>{item.snippet}</p>
+      )}
+      <p className={`text-[11px] mt-2 ${linkColor}`}>{isAr ? "فتح المصدر" : "Open source"}</p>
+    </a>
   );
 }
 
@@ -421,12 +502,14 @@ export default function DeenAsk() {
 
       const quranResults = Array.isArray(data?.quran_results) ? data.quran_results : [];
       const hadithResults = Array.isArray(data?.hadith_results) ? data.hadith_results : [];
+      const webResults = Array.isArray(data?.web_results) ? data.web_results : [];
       const summary = cleanSummary(data?.summary ?? "");
       updateTurn(id, {
         results: {
           query: data?.query ?? q,
           quran_results: quranResults,
           hadith_results: hadithResults,
+          web_results: webResults,
           summary,
           meta: data?.meta,
         },
@@ -441,7 +524,7 @@ export default function DeenAsk() {
       });
     } catch {
       updateTurn(id, {
-        results: { query: q, quran_results: [], hadith_results: [], meta: { found: false, quran_count: 0, hadith_count: 0 } },
+        results: { query: q, quran_results: [], hadith_results: [], web_results: [], meta: { found: false, quran_count: 0, hadith_count: 0 } },
         explanation: {
           summary: isAr ? "تعذر الوصول إلى مصادر القرآن والحديث الآن. حاول مرة أخرى بعد قليل." : "I could not reach the Quran and Hadith sources right now. Please try again in a moment.",
           quran_summary: "",
@@ -610,7 +693,10 @@ export default function DeenAsk() {
 
         {/* Rendered turns */}
         {turns.map((turn) => {
-          const turnHasResults = !!turn.results && ((turn.results.quran_results?.length ?? 0) > 0 || (turn.results.hadith_results?.length ?? 0) > 0);
+          const quranCount = turn.results?.quran_results?.length ?? 0;
+          const hadithCount = turn.results?.hadith_results?.length ?? 0;
+          const webCount = turn.results?.web_results?.length ?? 0;
+          const hasSources = quranCount + hadithCount + webCount > 0;
           const isLastTurn = turn.id === turns[turns.length - 1]?.id;
           return (
             <div key={turn.id} className="flex flex-col gap-3 md:gap-4 max-w-4xl w-full mx-auto">
@@ -632,44 +718,8 @@ export default function DeenAsk() {
               )}
 
 
-              {/* Sources */}
-              {turnHasResults && (
-                <div className="flex flex-col gap-2">
-                  {!!turn.results!.quran_results.length && (
-                    <SourceGroup
-                      title={isAr ? "من القرآن الكريم" : "From the Quran"}
-                      icon={<BookOpen className={`w-3.5 h-3.5 ${isDark ? "text-sky-300" : "text-sky-600"}`} />}
-                      colorClass={isDark ? "text-sky-300" : "text-sky-700"}
-                      isDark={isDark}
-                      isAr={isAr}
-                    >
-                      <div className="flex flex-col gap-2">
-                        {turn.results!.quran_results.map((item, index) => (
-                          <SourceCard key={`q-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="blue" isDark={isDark} />
-                        ))}
-                      </div>
-                    </SourceGroup>
-                  )}
-                  {!!turn.results!.hadith_results.length && (
-                    <SourceGroup
-                      title={isAr ? "من الحديث الشريف" : "From the Hadith"}
-                      icon={<ScrollText className={`w-3.5 h-3.5 ${isDark ? "text-emerald-400" : "text-emerald-700"}`} />}
-                      colorClass={isDark ? "text-emerald-400" : "text-emerald-700"}
-                      isDark={isDark}
-                      isAr={isAr}
-                    >
-                      <div className="flex flex-col gap-2">
-                        {turn.results!.hadith_results.map((item, index) => (
-                          <SourceCard key={`h-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="green" isDark={isDark} />
-                        ))}
-                      </div>
-                    </SourceGroup>
-                  )}
-                </div>
-              )}
-
               {/* AI reply — typing dots while generating, then conversational bubble */}
-              {(turnHasResults || turn.explaining || turn.explanation) && (
+              {(hasSources || turn.explaining || turn.explanation) && (
                 <>
                   {turn.explaining && (
                     <div className="flex items-center gap-2 px-1">
@@ -699,6 +749,57 @@ export default function DeenAsk() {
                     </div>
                   )}
                 </>
+              )}
+
+              {/* Sources (collapsed by default) */}
+              {hasSources && (
+                <SourcesDropdown title={isAr ? "المصادر" : "Sources"} isDark={isDark} isAr={isAr}>
+                  {!!quranCount && (
+                    <SourceGroup
+                      title={isAr ? "من القرآن الكريم" : "From the Quran"}
+                      icon={<BookOpen className={`w-3.5 h-3.5 ${isDark ? "text-sky-300" : "text-sky-600"}`} />}
+                      colorClass={isDark ? "text-sky-300" : "text-sky-700"}
+                      isDark={isDark}
+                      isAr={isAr}
+                    >
+                      <div className="flex flex-col gap-2">
+                        {turn.results!.quran_results.map((item, index) => (
+                          <SourceCard key={`q-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="blue" isDark={isDark} />
+                        ))}
+                      </div>
+                    </SourceGroup>
+                  )}
+                  {!!hadithCount && (
+                    <SourceGroup
+                      title={isAr ? "من الحديث الشريف" : "From the Hadith"}
+                      icon={<ScrollText className={`w-3.5 h-3.5 ${isDark ? "text-emerald-400" : "text-emerald-700"}`} />}
+                      colorClass={isDark ? "text-emerald-400" : "text-emerald-700"}
+                      isDark={isDark}
+                      isAr={isAr}
+                    >
+                      <div className="flex flex-col gap-2">
+                        {turn.results!.hadith_results.map((item, index) => (
+                          <SourceCard key={`h-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="green" isDark={isDark} />
+                        ))}
+                      </div>
+                    </SourceGroup>
+                  )}
+                  {!!webCount && (
+                    <SourceGroup
+                      title={isAr ? "من موقع إسلام ويب" : "From Islamweb"}
+                      icon={<BookOpen className={`w-3.5 h-3.5 ${isDark ? "text-sky-300" : "text-sky-600"}`} />}
+                      colorClass={isDark ? "text-sky-300" : "text-sky-700"}
+                      isDark={isDark}
+                      isAr={isAr}
+                    >
+                      <div className="flex flex-col gap-2">
+                        {turn.results!.web_results?.map((item, index) => (
+                          <WebSourceCard key={`w-${turn.id}-${item.url}-${index}`} item={item} isDark={isDark} isAr={isAr} />
+                        ))}
+                      </div>
+                    </SourceGroup>
+                  )}
+                </SourcesDropdown>
               )}
             </div>
           );
