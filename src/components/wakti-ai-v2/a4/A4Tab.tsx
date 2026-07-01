@@ -1679,8 +1679,8 @@ const A4Tab: React.FC = () => {
   const [referenceImageRole, setReferenceImageRole] = useState<A4ReferenceImageRole>("logo");
   const [formMode, setFormMode] = useState<"basic" | "advanced">("basic");
 
-  const theme = themeId ? findTheme(themeId) : null;
-  const schema = theme ? getFormSchema(theme, purposeId) : [];
+  const theme = useMemo(() => (themeId ? findTheme(themeId) : null), [themeId]);
+  const schema = useMemo(() => (theme ? getFormSchema(theme, purposeId) : []), [theme, purposeId]);
   const needsPurpose = theme ? themeRequiresPurpose(theme) : false;
   const canShowForm = !!theme;
   const maxPages = theme ? maxPagesForTheme(theme) : 3;
@@ -1750,7 +1750,7 @@ const A4Tab: React.FC = () => {
     setRetryingRowId(null);
   }, []);
 
-  // When theme changes, re-init formState with default values from schema
+  // When theme/purpose changes, re-init formState with default values from schema.
   useEffect(() => {
     if (!theme) return;
     const initial: Record<string, unknown> = {};
@@ -1761,14 +1761,19 @@ const A4Tab: React.FC = () => {
       initial.raw_content = pendingOperatorRawContentRef.current;
     }
     setFormState(initial);
+    setFormMode("basic");
+  }, [theme, schema]);
+
+  // Keep lane-aware design defaults synced without touching form text values.
+  useEffect(() => {
+    if (!theme) return;
     setDesignSettings((prev) => ({
       ...prev,
       orientation: prev.orientation === "landscape" ? "landscape" : "portrait",
       border_style: laneAwareDesignDefaults.border_style,
       include_decorative_images: laneAwareDesignDefaults.include_decorative_images,
     }));
-    setFormMode("basic");
-  }, [themeId, purposeId, laneAwareDesignDefaults, schema, theme]);
+  }, [theme, laneAwareDesignDefaults]);
 
   useEffect(() => {
     if (operatorBridgeAppliedRef.current) return;
