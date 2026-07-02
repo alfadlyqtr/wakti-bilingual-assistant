@@ -326,7 +326,7 @@ export function buildProjectRuntimeHtml({
       if (bootDiv) {
         bootDiv.innerHTML = '<div style="color:#f87171;font-size:18px;margin-bottom:16px;">❌ Error</div>' +
           '<pre style="background:#1e1e1e;padding:16px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;color:#f87171;">' + 
-          msg + '\n' + ((error && error.stack) || '') + '</pre>' +
+          msg + '\\n' + ((error && error.stack) || '') + '</pre>' +
           '<div style="color:#9ca3af;margin-top:16px;font-size:12px;">Check console for details</div>';
       }
       return false;
@@ -371,7 +371,7 @@ export function buildProjectRuntimeHtml({
       }
       bootDiv.innerHTML = '<div style="color:#f87171;font-size:18px;margin-bottom:16px;">❌ Error</div>' +
         '<pre style="background:#1e1e1e;padding:16px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;color:#f87171;white-space:pre-wrap;">' +
-        String(message || 'Unknown runtime error') + (details ? '\n\n' + details : '') + '</pre>' +
+        String(message || 'Unknown runtime error') + (details ? '\\n\\n' + details : '') + '</pre>' +
         '<div style="color:#9ca3af;margin-top:16px;font-size:12px;">The published app could not start.</div>';
     }
 
@@ -491,7 +491,7 @@ export function buildProjectRuntimeHtml({
         waktiLog('RENDER ERROR: ' + message);
         console.error('[Wakti] Render error:', err);
         waktiRunnerNotify('error', { message: message, stack: err && err.stack ? err.stack : '' });
-        document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#f87171;font-family:Inter,sans-serif;"><h2>Error loading app</h2><pre style="background:#1e1e1e;padding:20px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;">' + message + '</pre><details style="margin-top:20px;text-align:left;"><summary style="cursor:pointer;color:#9ca3af;">Boot Log</summary><pre style="background:#1e1e1e;padding:12px;border-radius:4px;font-size:10px;margin-top:8px;">' + (window.__waktiBootLog || []).join('\n') + '</pre></details></div>';
+        document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#f87171;font-family:Inter,sans-serif;"><h2>Error loading app</h2><pre style="background:#1e1e1e;padding:20px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;">' + message + '</pre><details style="margin-top:20px;text-align:left;"><summary style="cursor:pointer;color:#9ca3af;">Boot Log</summary><pre style="background:#1e1e1e;padding:12px;border-radius:4px;font-size:10px;margin-top:8px;">' + (window.__waktiBootLog || []).join('\\n') + '</pre></details></div>';
       }
     }
 
@@ -506,7 +506,7 @@ export function buildProjectRuntimeHtml({
       } catch (error) {
         var message = error && error.message ? error.message : String(error);
         waktiLog('BOOT ERROR: ' + message);
-        setBootError(message, (window.__waktiBootLog || []).join('\n'));
+        setBootError(message, (window.__waktiBootLog || []).join('\\n'));
       }
     }
 

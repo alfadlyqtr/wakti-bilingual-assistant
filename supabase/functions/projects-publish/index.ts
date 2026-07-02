@@ -215,7 +215,7 @@ function buildPublishedRuntimeHtml(params: {
       if (bootDiv) {
         bootDiv.innerHTML = '<div style="color:#f87171;font-size:18px;margin-bottom:16px;">❌ Error</div>' +
           '<pre style="background:#1e1e1e;padding:16px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;color:#f87171;">' +
-          msg + '\n' + ((error && error.stack) || '') + '</pre>' +
+          msg + '\\n' + ((error && error.stack) || '') + '</pre>' +
           '<div style="color:#9ca3af;margin-top:16px;font-size:12px;">Check console for details</div>';
       }
       return false;
@@ -260,7 +260,7 @@ function buildPublishedRuntimeHtml(params: {
       }
       bootDiv.innerHTML = '<div style="color:#f87171;font-size:18px;margin-bottom:16px;">❌ Error</div>' +
         '<pre style="background:#1e1e1e;padding:16px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;color:#f87171;white-space:pre-wrap;">' +
-        String(message || 'Unknown runtime error') + (details ? '\n\n' + details : '') + '</pre>' +
+        String(message || 'Unknown runtime error') + (details ? '\\n\\n' + details : '') + '</pre>' +
         '<div style="color:#9ca3af;margin-top:16px;font-size:12px;">The published app could not start.</div>';
     }
 
@@ -370,7 +370,7 @@ function buildPublishedRuntimeHtml(params: {
         waktiLog('RENDER ERROR: ' + message);
         console.error('[Wakti] Render error:', err);
         waktiRunnerNotify('error', { message: message, stack: err && err.stack ? err.stack : '' });
-        document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#f87171;font-family:Inter,sans-serif;"><h2>Error loading app</h2><pre style="background:#1e1e1e;padding:20px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;">' + message + '</pre><details style="margin-top:20px;text-align:left;"><summary style="cursor:pointer;color:#9ca3af;">Boot Log</summary><pre style="background:#1e1e1e;padding:12px;border-radius:4px;font-size:10px;margin-top:8px;">' + (window.__waktiBootLog || []).join('\n') + '</pre></details></div>';
+        document.getElementById('root').innerHTML = '<div style="padding:40px;text-align:center;color:#f87171;font-family:Inter,sans-serif;"><h2>Error loading app</h2><pre style="background:#1e1e1e;padding:20px;border-radius:8px;text-align:left;overflow:auto;max-width:100%;font-size:12px;">' + message + '</pre><details style="margin-top:20px;text-align:left;"><summary style="cursor:pointer;color:#9ca3af;">Boot Log</summary><pre style="background:#1e1e1e;padding:12px;border-radius:4px;font-size:10px;margin-top:8px;">' + (window.__waktiBootLog || []).join('\\n') + '</pre></details></div>';
       }
     }
 
@@ -385,7 +385,7 @@ function buildPublishedRuntimeHtml(params: {
       } catch (error) {
         var message = error && error.message ? error.message : String(error);
         waktiLog('BOOT ERROR: ' + message);
-        setBootError(message, (window.__waktiBootLog || []).join('\n'));
+        setBootError(message, (window.__waktiBootLog || []).join('\\n'));
       }
     }
 
@@ -749,6 +749,8 @@ serve(async (req) => {
       const TAILWIND_RESCAN = `<script>(function(){var rs=function(){if(window.tailwind&&typeof window.tailwind.scan==="function")window.tailwind.scan();};typeof requestAnimationFrame!=="undefined"?requestAnimationFrame(function(){requestAnimationFrame(rs);}):setTimeout(rs,50);})();</script>`;
       const content = path === "index.html"
         ? upgradedHtml
+          // Fix literal newlines inside JS string literals caused by '\n' in template literals
+          .replace(/'(\n+)'/g, (_: string, nl: string): string => "'" + nl.split("\n").join("\\n") + "'")
           // Fix Tailwind CDN URL (replace broken jsDelivr @4 URL with the working one)
           .replace(/https:\/\/cdn\.jsdelivr\.net\/npm\/@tailwindcss\/browser@[^"'\s]*/g, "https://cdn.tailwindcss.com")
           // Inject post-render re-scan + Wakti badge (blocking CDN stays in place)
