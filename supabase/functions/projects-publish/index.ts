@@ -121,7 +121,6 @@ function buildPublishedRuntimeHtml(params: {
     "https://unpkg.com/recharts/umd/Recharts.min.js",
   ]);
   const tailwindUrls = JSON.stringify([
-    "https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4",
     "https://cdn.tailwindcss.com",
   ]);
 
@@ -280,7 +279,6 @@ function buildPublishedRuntimeHtml(params: {
 
         script.src = url;
         script.async = true;
-        script.crossOrigin = 'anonymous';
         script.onload = function() {
           if (settled) {
             return;
@@ -329,11 +327,13 @@ function buildPublishedRuntimeHtml(params: {
     async function ensureRuntimeDependencies() {
       await loadFirstAvailable('React', ${reactUrls}, true);
       await loadFirstAvailable('ReactDOM', ${reactDomUrls}, true);
-      await loadFirstAvailable('ReactIs', ${reactIsUrls}, false);
-      await loadFirstAvailable('Framer Motion', ${framerMotionUrls}, false);
-      await loadFirstAvailable('Lucide', ${lucideUrls}, false);
-      await loadFirstAvailable('Recharts', ${rechartsUrls}, false);
-      await loadFirstAvailable('Tailwind Browser Runtime', ${tailwindUrls}, false);
+      await Promise.allSettled([
+        loadFirstAvailable('ReactIs', ${reactIsUrls}, false),
+        loadFirstAvailable('Framer Motion', ${framerMotionUrls}, false),
+        loadFirstAvailable('Lucide', ${lucideUrls}, false),
+        loadFirstAvailable('Recharts', ${rechartsUrls}, false),
+        loadFirstAvailable('Tailwind Browser Runtime', ${tailwindUrls}, false),
+      ]);
     }
 
     function executeBundledApp() {

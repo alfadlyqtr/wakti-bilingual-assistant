@@ -226,7 +226,6 @@ export function buildProjectRuntimeHtml({
     'https://unpkg.com/recharts/umd/Recharts.min.js',
   ]);
   const tailwindUrls = JSON.stringify([
-    'https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4',
     'https://cdn.tailwindcss.com',
   ]);
   const babelUrls = JSON.stringify([
@@ -391,7 +390,6 @@ export function buildProjectRuntimeHtml({
 
         script.src = url;
         script.async = true;
-        script.crossOrigin = 'anonymous';
         script.onload = function() {
           if (settled) {
             return;
@@ -440,14 +438,16 @@ export function buildProjectRuntimeHtml({
     async function ensureRuntimeDependencies() {
       await loadFirstAvailable('React', ${reactUrls}, true);
       await loadFirstAvailable('ReactDOM', ${reactDomUrls}, true);
-      await loadFirstAvailable('ReactIs', ${reactIsUrls}, false);
-      await loadFirstAvailable('Framer Motion', ${framerMotionUrls}, false);
-      await loadFirstAvailable('Lucide', ${lucideUrls}, false);
-      await loadFirstAvailable('Recharts', ${rechartsUrls}, false);
+      await Promise.allSettled([
+        loadFirstAvailable('ReactIs', ${reactIsUrls}, false),
+        loadFirstAvailable('Framer Motion', ${framerMotionUrls}, false),
+        loadFirstAvailable('Lucide', ${lucideUrls}, false),
+        loadFirstAvailable('Recharts', ${rechartsUrls}, false),
+        loadFirstAvailable('Tailwind Browser Runtime', ${tailwindUrls}, false),
+      ]);
       if (${useBabelRuntime ? 'true' : 'false'}) {
         await loadFirstAvailable('Babel', ${babelUrls}, true);
       }
-      await loadFirstAvailable('Tailwind Browser Runtime', ${tailwindUrls}, false);
     }
 
     function executeBundledApp() {
