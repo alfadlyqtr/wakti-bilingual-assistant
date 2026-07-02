@@ -2687,14 +2687,9 @@ export default function GroupChatPage() {
                               <AvatarImage src={p.profile?.avatar_url || undefined} alt={p.profile?.display_name || p.profile?.username || ''} />
                               <AvatarFallback>{(p.profile?.display_name || p.profile?.username || '?').charAt(0).toUpperCase()}</AvatarFallback>
                             </Avatar>
-                            <div className="flex flex-col flex-1">
-                              <span className="text-sm font-medium">
-                                {p.profile?.display_name || p.profile?.username || (language === 'ar' ? 'عضو' : 'Member')}
-                              </span>
-                              <span className="text-[11px] text-muted-foreground">
-                                {p.last_read_at && formatDistanceToNow(new Date(p.last_read_at), { addSuffix: true })}
-                              </span>
-                            </div>
+                            <span className="text-sm font-medium">
+                              {p.profile?.display_name || p.profile?.username || (language === 'ar' ? 'عضو' : 'Member')}
+                            </span>
                           </div>
                         ))}
                       </div>
