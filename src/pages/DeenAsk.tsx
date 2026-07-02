@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Copy, Check, ScrollText, Send, Sparkles, BookText } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Copy, Check, ScrollText, Send, Sparkles, BookText, Globe } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -67,6 +67,8 @@ interface SearchResponse {
   hadith_results: EvidenceResult[];
   web_results?: WebResult[];
   summary?: string;
+  mode?: string;
+  search_options?: string[];
   meta?: {
     found: boolean;
     quran_count: number;
@@ -89,6 +91,13 @@ interface IntentMeta {
   needs_caution?: boolean;
 }
 
+interface FollowUpResult {
+  summary: string;
+  quran_results: EvidenceResult[];
+  hadith_results: EvidenceResult[];
+  web_results: WebResult[];
+}
+
 interface ChatTurn {
   id: number;
   query: string;
@@ -99,6 +108,11 @@ interface ChatTurn {
   topic?: string;
   intent?: IntentMeta;
   meta?: { sufficient?: boolean; [key: string]: unknown };
+  mode?: string;
+  searchOptions?: string[];
+  chipsResolved?: boolean;
+  followUp?: FollowUpResult | null;
+  followUpLoading?: boolean;
 }
 
 const TRUNCATE_CHARS = 220;
@@ -205,6 +219,40 @@ function WebSourceCard({
       )}
       <p className={`text-[11px] mt-2 ${linkColor}`}>{isAr ? "فتح المصدر" : "Open source"}</p>
     </a>
+  );
+}
+
+function SearchChip({
+  label,
+  icon,
+  onClick,
+  isDark,
+  disabled,
+  variant = "accent",
+}: {
+  label: string;
+  icon?: ReactNode;
+  onClick: () => void;
+  isDark: boolean;
+  disabled?: boolean;
+  variant?: "accent" | "muted";
+}) {
+  const accentClass = isDark
+    ? "bg-sky-500/15 text-sky-300 border border-sky-400/30 hover:bg-sky-500/25"
+    : "bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100";
+  const mutedClass = isDark
+    ? "bg-white/5 text-[#c4c8d4] border border-white/10 hover:bg-white/10"
+    : "bg-black/5 text-[#3a3f5c] border border-black/10 hover:bg-black/10";
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center gap-1.5 text-xs md:text-[13px] px-3.5 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40 ${variant === "accent" ? accentClass : mutedClass}`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
@@ -504,6 +552,8 @@ export default function DeenAsk() {
       const hadithResults = Array.isArray(data?.hadith_results) ? data.hadith_results : [];
       const webResults = Array.isArray(data?.web_results) ? data.web_results : [];
       const summary = cleanSummary(data?.summary ?? "");
+      const mode = typeof data?.mode === "string" ? data.mode : "chat";
+      const searchOptions = Array.isArray(data?.search_options) ? data.search_options : [];
       updateTurn(id, {
         results: {
           query: data?.query ?? q,
@@ -511,8 +561,13 @@ export default function DeenAsk() {
           hadith_results: hadithResults,
           web_results: webResults,
           summary,
+          mode,
+          search_options: searchOptions,
           meta: data?.meta,
         },
+        mode,
+        searchOptions,
+        chipsResolved: mode !== "offer_search",
         topic: data?.intent?.normalized_topic || data?.intent?.topic || "",
         intent: data?.intent ?? undefined,
         meta: data?.meta ?? undefined,
@@ -525,6 +580,7 @@ export default function DeenAsk() {
     } catch {
       updateTurn(id, {
         results: { query: q, quran_results: [], hadith_results: [], web_results: [], meta: { found: false, quran_count: 0, hadith_count: 0 } },
+        chipsResolved: true,
         explanation: {
           summary: isAr ? "تعذر الوصول إلى مصادر القرآن والحديث الآن. حاول مرة أخرى بعد قليل." : "I could not reach the Quran and Hadith sources right now. Please try again in a moment.",
           quran_summary: "",
@@ -534,6 +590,62 @@ export default function DeenAsk() {
     } finally {
       setSearching(false);
       setLoadingLabel("");
+    }
+  };
+
+  const handleChipChoice = async (turnId: number, choice: "quran" | "hadith" | "islamweb" | "none") => {
+    const turn = turns.find((t) => t.id === turnId);
+    if (!turn || turn.chipsResolved) return;
+
+    updateTurn(turnId, { chipsResolved: true, followUpLoading: true });
+
+    try {
+      const recentHistory = turns
+        .filter((t) => t.id !== turnId && t.explanation?.summary)
+        .slice(-5)
+        .map((t) => ({
+          question: t.query,
+          answer: t.explanation!.summary.slice(0, 300),
+          topic: t.topic || "",
+        }));
+
+      const { data, error } = await supabase.functions.invoke("deen-search", {
+        body: {
+          query: turn.query,
+          language,
+          forced_search: choice,
+          conversation_history: recentHistory.length > 0 ? recentHistory : undefined,
+        },
+      });
+      if (error) throw error;
+
+      const quranResults = Array.isArray(data?.quran_results) ? data.quran_results : [];
+      const hadithResults = Array.isArray(data?.hadith_results) ? data.hadith_results : [];
+      const webResults = Array.isArray(data?.web_results) ? data.web_results : [];
+      const summary = cleanSummary(data?.summary ?? "");
+
+      updateTurn(turnId, {
+        followUpLoading: false,
+        followUp: {
+          summary: summary || (isAr ? "لم أجد جواباً واضحاً من المصادر المعروضة." : "I could not form a clear answer from the sources shown."),
+          quran_results: quranResults,
+          hadith_results: hadithResults,
+          web_results: webResults,
+        },
+        topic: data?.intent?.normalized_topic || data?.intent?.topic || turn.topic,
+        intent: data?.intent ?? turn.intent,
+        meta: data?.meta ?? turn.meta,
+      });
+    } catch {
+      updateTurn(turnId, {
+        followUpLoading: false,
+        followUp: {
+          summary: isAr ? "تعذر إتمام هذا البحث الآن. حاول مرة أخرى بعد قليل." : "I could not complete that search right now. Please try again in a moment.",
+          quran_results: [],
+          hadith_results: [],
+          web_results: [],
+        },
+      });
     }
   };
 
@@ -693,10 +805,14 @@ export default function DeenAsk() {
 
         {/* Rendered turns */}
         {turns.map((turn) => {
-          const quranCount = turn.results?.quran_results?.length ?? 0;
-          const hadithCount = turn.results?.hadith_results?.length ?? 0;
-          const webCount = turn.results?.web_results?.length ?? 0;
+          const displayQuranResults = turn.followUp?.quran_results ?? turn.results?.quran_results ?? [];
+          const displayHadithResults = turn.followUp?.hadith_results ?? turn.results?.hadith_results ?? [];
+          const displayWebResults = turn.followUp?.web_results ?? turn.results?.web_results ?? [];
+          const quranCount = displayQuranResults.length;
+          const hadithCount = displayHadithResults.length;
+          const webCount = displayWebResults.length;
           const hasSources = quranCount + hadithCount + webCount > 0;
+          const showChips = turn.mode === "offer_search" && !turn.chipsResolved;
           const isLastTurn = turn.id === turns[turns.length - 1]?.id;
           return (
             <div key={turn.id} className="flex flex-col gap-3 md:gap-4 max-w-4xl w-full mx-auto">
@@ -748,6 +864,70 @@ export default function DeenAsk() {
                       <p className={`text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap ${textColor}`}>{turn.explanation.summary}</p>
                     </div>
                   )}
+
+                  {showChips && (
+                    <div className={`flex flex-wrap gap-2 px-1 ${isAr ? "flex-row-reverse justify-end" : ""}`}>
+                      {(turn.searchOptions ?? []).includes("hadith") && (
+                        <SearchChip
+                          label={isAr ? "ابحث في الحديث" : "Search Hadith"}
+                          icon={<ScrollText className="w-3.5 h-3.5" />}
+                          onClick={() => handleChipChoice(turn.id, "hadith")}
+                          isDark={isDark}
+                        />
+                      )}
+                      {(turn.searchOptions ?? []).includes("quran") && (
+                        <SearchChip
+                          label={isAr ? "ابحث في القرآن" : "Search Quran"}
+                          icon={<BookOpen className="w-3.5 h-3.5" />}
+                          onClick={() => handleChipChoice(turn.id, "quran")}
+                          isDark={isDark}
+                        />
+                      )}
+                      {(turn.searchOptions ?? []).includes("islamweb") && (
+                        <SearchChip
+                          label={isAr ? "ابحث في إسلام ويب" : "Search IslamWeb"}
+                          icon={<Globe className="w-3.5 h-3.5" />}
+                          onClick={() => handleChipChoice(turn.id, "islamweb")}
+                          isDark={isDark}
+                        />
+                      )}
+                      <SearchChip
+                        label={isAr ? "لا، أعطني رأيك فقط" : "No thanks, just your take"}
+                        onClick={() => handleChipChoice(turn.id, "none")}
+                        isDark={isDark}
+                        variant="muted"
+                      />
+                    </div>
+                  )}
+
+                  {turn.followUpLoading && (
+                    <div className="flex items-center gap-2 px-1">
+                      <Sparkles className={`w-3.5 h-3.5 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "0ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "150ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  )}
+
+                  {turn.followUp && (
+                    <div
+                      className="rounded-2xl px-4 py-3 md:px-5 md:py-4"
+                      style={{
+                        background: isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+                        border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+                      }}
+                    >
+                      <div className={`flex items-center gap-1.5 mb-2 ${isAr ? "flex-row-reverse" : ""}`}>
+                        <Sparkles className={`w-3 h-3 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
+                        <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-sky-400" : "text-sky-600"}`}>
+                          Wakti
+                        </p>
+                        <div className="flex-1" />
+                        <CopyButton text={turn.followUp.summary} isDark={isDark} isAr={isAr} />
+                      </div>
+                      <p className={`text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap ${textColor}`}>{turn.followUp.summary}</p>
+                    </div>
+                  )}
                 </>
               )}
 
@@ -763,7 +943,7 @@ export default function DeenAsk() {
                       isAr={isAr}
                     >
                       <div className="flex flex-col gap-2">
-                        {turn.results!.quran_results.map((item, index) => (
+                        {displayQuranResults.map((item, index) => (
                           <SourceCard key={`q-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="blue" isDark={isDark} />
                         ))}
                       </div>
@@ -778,7 +958,7 @@ export default function DeenAsk() {
                       isAr={isAr}
                     >
                       <div className="flex flex-col gap-2">
-                        {turn.results!.hadith_results.map((item, index) => (
+                        {displayHadithResults.map((item, index) => (
                           <SourceCard key={`h-${turn.id}-${item.reference}-${index}`} item={item} isAr={isAr} accent="green" isDark={isDark} />
                         ))}
                       </div>
@@ -793,7 +973,7 @@ export default function DeenAsk() {
                       isAr={isAr}
                     >
                       <div className="flex flex-col gap-2">
-                        {turn.results!.web_results?.map((item, index) => (
+                        {displayWebResults.map((item, index) => (
                           <WebSourceCard key={`w-${turn.id}-${item.url}-${index}`} item={item} isDark={isDark} isAr={isAr} />
                         ))}
                       </div>
