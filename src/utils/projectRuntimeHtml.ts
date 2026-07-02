@@ -1,4 +1,10 @@
 export const PROJECT_ENTRY_CANDIDATES = [
+  '/App.tsx',
+  '/App.jsx',
+  '/App.js',
+  '/src/App.tsx',
+  '/src/App.jsx',
+  '/src/App.js',
   '/index.tsx',
   '/index.jsx',
   '/index.js',
@@ -8,12 +14,6 @@ export const PROJECT_ENTRY_CANDIDATES = [
   '/src/main.tsx',
   '/src/main.jsx',
   '/src/main.js',
-  '/App.tsx',
-  '/App.jsx',
-  '/App.js',
-  '/src/App.tsx',
-  '/src/App.jsx',
-  '/src/App.js',
 ] as const;
 
 export function getProjectEntryPoint(files: Record<string, string>): string {
