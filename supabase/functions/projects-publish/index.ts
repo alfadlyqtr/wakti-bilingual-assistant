@@ -124,6 +124,19 @@ function buildPublishedRuntimeHtml(params: {
     "https://cdn.tailwindcss.com",
   ]);
 
+  const needsRecharts = (params.bundledJs || "").includes("window.Recharts");
+  const needsFramerMotion = (params.bundledJs || "").includes("[framer-motion shim]");
+  const needsLucide = (params.bundledJs || "").includes("LUCIDE ICONS CDN-BASED SHIM");
+  const needsReactIs = needsFramerMotion || needsRecharts;
+
+  const optionalLoaders: string[] = [];
+  if (needsReactIs) optionalLoaders.push(`loadFirstAvailable('ReactIs', ${reactIsUrls}, false)`);
+  if (needsFramerMotion) optionalLoaders.push(`loadFirstAvailable('Framer Motion', ${framerMotionUrls}, false)`);
+  if (needsLucide) optionalLoaders.push(`loadFirstAvailable('Lucide', ${lucideUrls}, false)`);
+  if (needsRecharts) optionalLoaders.push(`loadFirstAvailable('Recharts', ${rechartsUrls}, false)`);
+  optionalLoaders.push(`loadFirstAvailable('Tailwind Browser Runtime', ${tailwindUrls}, false)`);
+  const optionalLoadersJs = optionalLoaders.join(",\n        ");
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -197,6 +210,7 @@ function buildPublishedRuntimeHtml(params: {
   </div>
   <script>
     window.__waktiBootLog = [];
+    window.__waktiDepsLoading = true;
     function waktiRunnerNotify(type, payload) {
       try {
         if (window.parent && window.parent !== window) {
@@ -211,6 +225,10 @@ function buildPublishedRuntimeHtml(params: {
     window.onerror = function(msg, url, line, col, error) {
       waktiLog('UNCAUGHT ERROR: ' + msg + ' at ' + url + ':' + line);
       waktiRunnerNotify('error', { message: String(msg || 'Unknown runtime error'), stack: error && error.stack ? error.stack : '' });
+      if (window.__waktiDepsLoading) {
+        waktiLog('Ignoring error during dependency loading phase (non-fatal)');
+        return false;
+      }
       var bootDiv = document.getElementById('wakti-boot-status');
       if (bootDiv) {
         bootDiv.innerHTML = '<div style="color:#f87171;font-size:18px;margin-bottom:16px;">❌ Error</div>' +
@@ -328,11 +346,7 @@ function buildPublishedRuntimeHtml(params: {
       await loadFirstAvailable('React', ${reactUrls}, true);
       await loadFirstAvailable('ReactDOM', ${reactDomUrls}, true);
       await Promise.allSettled([
-        loadFirstAvailable('ReactIs', ${reactIsUrls}, false),
-        loadFirstAvailable('Framer Motion', ${framerMotionUrls}, false),
-        loadFirstAvailable('Lucide', ${lucideUrls}, false),
-        loadFirstAvailable('Recharts', ${rechartsUrls}, false),
-        loadFirstAvailable('Tailwind Browser Runtime', ${tailwindUrls}, false),
+        ${optionalLoadersJs}
       ]);
     }
 
@@ -377,6 +391,7 @@ function buildPublishedRuntimeHtml(params: {
     async function bootPublishedApp() {
       try {
         await ensureRuntimeDependencies();
+        window.__waktiDepsLoading = false;
 
         syncRuntimeGlobals('Framer Motion available after load');
 
@@ -690,7 +705,7 @@ async function assignVercelAlias(params: {
   }
 }
 
-const CODE_VERSION = "2026-06-21-V7";
+const CODE_VERSION = "2026-07-02-V2";
 
 serve(async (req) => {
   console.log(`[projects-publish] CODE_VERSION=${CODE_VERSION}`);

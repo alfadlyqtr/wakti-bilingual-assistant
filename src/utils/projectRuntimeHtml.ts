@@ -233,6 +233,21 @@ export function buildProjectRuntimeHtml({
     'https://unpkg.com/@babel/standalone/babel.min.js',
   ]);
 
+  // Only load optional CDN libraries the bundle actually references (shim markers are only
+  // present in the bundled JS when the corresponding package was imported by the project).
+  const needsRecharts = (bundledJs || '').includes('window.Recharts');
+  const needsFramerMotion = (bundledJs || '').includes('[framer-motion shim]');
+  const needsLucide = (bundledJs || '').includes('LUCIDE ICONS CDN-BASED SHIM');
+  const needsReactIs = needsFramerMotion || needsRecharts;
+
+  const optionalLoaders: string[] = [];
+  if (needsReactIs) optionalLoaders.push(`loadFirstAvailable('ReactIs', ${reactIsUrls}, false)`);
+  if (needsFramerMotion) optionalLoaders.push(`loadFirstAvailable('Framer Motion', ${framerMotionUrls}, false)`);
+  if (needsLucide) optionalLoaders.push(`loadFirstAvailable('Lucide', ${lucideUrls}, false)`);
+  if (needsRecharts) optionalLoaders.push(`loadFirstAvailable('Recharts', ${rechartsUrls}, false)`);
+  optionalLoaders.push(`loadFirstAvailable('Tailwind Browser Runtime', ${tailwindUrls}, false)`);
+  const optionalLoadersJs = optionalLoaders.join(',\n    ');
+
   return `<!DOCTYPE html>
 <!-- wakti-runtime-v2 -->
 <html lang="en">
@@ -308,6 +323,7 @@ export function buildProjectRuntimeHtml({
   </div>
   <script>
     window.__waktiBootLog = [];
+    window.__waktiDepsLoading = true;
     function waktiRunnerNotify(type, payload) {
       try {
         if (window.parent && window.parent !== window) {
@@ -322,6 +338,12 @@ export function buildProjectRuntimeHtml({
     window.onerror = function(msg, url, line, col, error) {
       waktiLog('UNCAUGHT ERROR: ' + msg + ' at ' + url + ':' + line);
       waktiRunnerNotify('error', { message: String(msg || 'Unknown runtime error'), stack: error && error.stack ? error.stack : '' });
+      if (window.__waktiDepsLoading) {
+        // Errors during best-effort CDN dependency loading (e.g. a third-party library's
+        // own internal bug) are non-fatal by design - don't hijack the boot screen for these.
+        waktiLog('Ignoring error during dependency loading phase (non-fatal)');
+        return false;
+      }
       var bootDiv = document.getElementById('wakti-boot-status');
       if (bootDiv) {
         bootDiv.innerHTML = '<div style="color:#f87171;font-size:18px;margin-bottom:16px;">❌ Error</div>' +
@@ -439,11 +461,7 @@ export function buildProjectRuntimeHtml({
       await loadFirstAvailable('React', ${reactUrls}, true);
       await loadFirstAvailable('ReactDOM', ${reactDomUrls}, true);
       await Promise.allSettled([
-        loadFirstAvailable('ReactIs', ${reactIsUrls}, false),
-        loadFirstAvailable('Framer Motion', ${framerMotionUrls}, false),
-        loadFirstAvailable('Lucide', ${lucideUrls}, false),
-        loadFirstAvailable('Recharts', ${rechartsUrls}, false),
-        loadFirstAvailable('Tailwind Browser Runtime', ${tailwindUrls}, false),
+        ${optionalLoadersJs}
       ]);
       if (${useBabelRuntime ? 'true' : 'false'}) {
         await loadFirstAvailable('Babel', ${babelUrls}, true);
@@ -498,6 +516,7 @@ export function buildProjectRuntimeHtml({
     async function bootPublishedApp() {
       try {
         await ensureRuntimeDependencies();
+        window.__waktiDepsLoading = false;
 
         syncRuntimeGlobals('Framer Motion available after load');
 

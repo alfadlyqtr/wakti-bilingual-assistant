@@ -512,6 +512,8 @@ ${priorSection}`;
   const getCreateStageLabel = (job?: GenerationJob | null): string | null => {
     const metadata = getCreateJobMetadata(job);
     switch (metadata.createStage) {
+      case 'generating_images':
+        return isRTL ? 'جاري إنشاء صور مخصصة لموقعك...' : 'Generating custom images for your site...';
       case 'drafting':
         return isRTL ? 'جاري بناء المسودة الأولى العاملة...' : 'Building your working first draft...';
       case 'saving_draft':

@@ -7812,6 +7812,17 @@ Call task_complete when finished.`;
 
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {
+        await patchJobMetadata(
+          supabase,
+          job.id,
+          { createStage: 'generating_images' },
+          {
+            at: new Date().toISOString(),
+            step: 'generating_images',
+            status: 'in_progress',
+            note: 'Generating custom images for your site',
+          },
+        );
         // Pre-generate and store images from Nano Banana 2 based on user's prompt
         const imageSectionQueries = await extractImageQueriesAI(prompt);
         const imageQueryStrings = imageSectionQueries.map((q) => q.query);
