@@ -294,6 +294,16 @@ export function buildProjectStaticPublishFiles({
 
   const vercelJson = JSON.stringify({
     rewrites: [{ source: '/(.*)', destination: '/index.html' }],
+    headers: [
+      {
+        source: '/(.*)',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' },
+          { key: 'Surrogate-Control', value: 'no-store' },
+          { key: 'Pragma', value: 'no-cache' },
+        ],
+      },
+    ],
   }, null, 2);
 
   return {
