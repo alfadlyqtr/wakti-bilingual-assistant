@@ -59,7 +59,7 @@ export function detectRuntimeNeeds(bundledJs: string): RuntimeNeeds {
   const js = bundledJs || '';
   const needsRecharts = js.includes('window.Recharts');
   const needsFramerMotion = js.includes('[framer-motion shim]');
-  const needsLucide = js.includes('LUCIDE ICONS CDN-BASED SHIM');
+  const needsLucide = js.includes('__lucideIcons');
   return {
     needsRecharts,
     needsFramerMotion,
@@ -148,8 +148,6 @@ export function buildProjectStaticPublishFiles({
   vendor: VendorSources;
 }): {
   indexHtml: string;
-  appJs: string;
-  appCss: string;
   vercelJson: string;
 } {
   // React/ReactDOM are non-negotiable - if we couldn't fetch them, refuse to
@@ -162,8 +160,8 @@ export function buildProjectStaticPublishFiles({
 
   const needs = detectRuntimeNeeds(bundledJs);
   const safeTitle = escapeHtml(projectName || 'Wakti Preview');
-  const appJs = bundledJs || '';
-  const appCss = bundledCss || '';
+  const safeAppJs = escapeInlineScript(bundledJs || '');
+  const safeAppCss = escapeInlineStyle(bundledCss || '');
   const safelistJson = JSON.stringify(safelist);
 
   const vendorScripts: string[] = [
@@ -249,7 +247,7 @@ export function buildProjectStaticPublishFiles({
       },
     };
   </script>
-  <link rel="stylesheet" href="./app.css">
+  <style>${safeAppCss}</style>
 </head>
 <body>
   <div id="root"></div>
@@ -261,7 +259,7 @@ export function buildProjectStaticPublishFiles({
     }
   </script>
   ${tailwindScriptHtml}
-  <script src="./app.js"></script>
+  <script>${safeAppJs}</script>
   <script>
     (function() {
       var rootElement = document.getElementById('root');
@@ -274,7 +272,7 @@ export function buildProjectStaticPublishFiles({
       }
       if (typeof window.App === 'undefined' || window.App === null) {
         rootElement.innerHTML = '<div style="padding:24px;font-family:Inter,system-ui,sans-serif;color:#dc2626;">Failed to load app bundle.</div>';
-        throw new Error('App component not found after loading app.js');
+        throw new Error('App component not found after loading app bundle');
       }
       var root = window.ReactDOM.createRoot(rootElement);
       root.render(window.React.createElement(window.App));
@@ -300,8 +298,6 @@ export function buildProjectStaticPublishFiles({
 
   return {
     indexHtml,
-    appJs,
-    appCss,
     vercelJson,
   };
 }
@@ -360,7 +356,7 @@ export function buildProjectRuntimeHtml({
   // present in the bundled JS when the corresponding package was imported by the project).
   const needsRecharts = (bundledJs || '').includes('window.Recharts');
   const needsFramerMotion = (bundledJs || '').includes('[framer-motion shim]');
-  const needsLucide = (bundledJs || '').includes('LUCIDE ICONS CDN-BASED SHIM');
+  const needsLucide = (bundledJs || '').includes('__lucideIcons');
   const needsReactIs = needsFramerMotion || needsRecharts;
 
   const optionalLoaders: string[] = [];

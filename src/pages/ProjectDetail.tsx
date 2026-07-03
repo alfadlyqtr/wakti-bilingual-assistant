@@ -2723,7 +2723,7 @@ ${priorSection}`;
       const runtimeNeeds = detectRuntimeNeeds(bundledJs);
       const vendor = await fetchVendorSources(runtimeNeeds);
 
-      const { indexHtml, appJs, appCss, vercelJson } = buildProjectStaticPublishFiles({
+      const { indexHtml, vercelJson } = buildProjectStaticPublishFiles({
         projectName,
         bundledJs,
         bundledCss,
@@ -2747,14 +2747,6 @@ ${priorSection}`;
             {
               path: 'index.html',
               content: indexHtml,
-            },
-            {
-              path: 'app.js',
-              content: appJs,
-            },
-            {
-              path: 'app.css',
-              content: appCss,
             },
             {
               path: 'vercel.json',
