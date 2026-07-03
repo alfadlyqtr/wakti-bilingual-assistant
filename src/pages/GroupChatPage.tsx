@@ -21,7 +21,7 @@ import { formatDayLabel, isSameDay, formatBubbleTime } from "@/lib/dateLabels";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { addGroupMembers, addGroupReaction, addWaktiToGroup, deleteGroupMessage, editGroupMessage, getEligibleGroupContacts, getGroupConversation, getGroupConversationMessages, isWaktiInGroup, leaveGroupConversation, markGroupConversationRead, removeGroupReaction, removeWaktiFromGroup, renameGroupConversation, sendGroupConversationMessage, triggerWaktiAI, updateGroupAiSettings, updateGroupAvatar, uploadGroupMessageAttachment, type GroupChatConversation, type GroupChatMessage } from "@/services/groupChatService";
-import { cn } from "@/lib/utils";
+import { cn, getImageDimensions } from "@/lib/utils";
 import { toast } from "sonner";
 import { AnimatePresence, motion } from "framer-motion";
 import { ImageModal } from "@/components/wakti-ai-v2/ImageModal";
@@ -55,7 +55,7 @@ export default function GroupChatPage() {
   const [aiLength, setAiLength] = useState("medium");
   const [aiStyle, setAiStyle] = useState("natural");
   const [aiSearchEnabled, setAiSearchEnabled] = useState(true);
-  const [attachedImage, setAttachedImage] = useState<{ url: string; type: string; size: number } | null>(null);
+  const [attachedImage, setAttachedImage] = useState<{ url: string; type: string; size: number; width?: number; height?: number } | null>(null);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [waktiTyping, setWaktiTyping] = useState(false);
   const [pendingWaktiSince, setPendingWaktiSince] = useState<string | null>(null);
@@ -148,6 +148,8 @@ export default function GroupChatPage() {
         media_type: payloadObj.media_type || null,
         voice_duration: payloadObj.voice_duration || null,
         file_size: payloadObj.file_size || null,
+        image_width: payloadObj.image_width || null,
+        image_height: payloadObj.image_height || null,
         created_at: new Date().toISOString(),
         is_deleted: false,
         deleted_at: null,
@@ -692,6 +694,8 @@ export default function GroupChatPage() {
         media_url: attachedImage.url,
         media_type: attachedImage.type,
         file_size: attachedImage.size,
+        image_width: attachedImage.width,
+        image_height: attachedImage.height,
         reply_to_id: replyingTo?.id || null,
       };
     } else if (replyingTo) {
@@ -775,8 +779,11 @@ export default function GroupChatPage() {
     e.target.value = "";
     setUploading(true);
     try {
-      const url = await uploadGroupMessageAttachment(file, "image");
-      setAttachedImage({ url, type: file.type, size: file.size });
+      const [url, dimensions] = await Promise.all([
+        uploadGroupMessageAttachment(file, "image"),
+        getImageDimensions(file),
+      ]);
+      setAttachedImage({ url, type: file.type, size: file.size, width: dimensions?.width, height: dimensions?.height });
     } catch (err: any) {
       toast.error(err?.message || (language === "ar" ? "تعذر رفع الصورة" : "Failed to upload image"));
     } finally {
@@ -1236,18 +1243,22 @@ export default function GroupChatPage() {
 
     if (message.message_type === "image" && message.media_url) {
       const imageUrl = cleanMediaUrl(message.media_url);
+      const hasDims = !!(message.image_width && message.image_height);
 
       return (
         <div className="flex max-w-full flex-col gap-2">
-          <div className={cn("relative max-w-full overflow-hidden rounded-lg", !compact && "group w-full max-w-[260px]")}>
+          <div
+            className={cn("relative max-w-full overflow-hidden rounded-lg", hasDims && "bg-gray-200 dark:bg-gray-700", !compact && "group w-full max-w-[260px]")}
+            style={hasDims ? { aspectRatio: `${message.image_width} / ${message.image_height}`, maxHeight: compact ? 260 : 320 } : undefined}
+          >
             <img
               src={imageUrl}
               alt="sent image"
               className={cn(
-                "block h-auto w-full max-w-full cursor-pointer rounded-lg object-contain",
-                compact ? "max-h-[260px]" : "max-h-[320px]"
+                "block cursor-pointer rounded-lg object-contain",
+                hasDims ? "h-full w-full" : cn("h-auto w-full max-w-full", compact ? "max-h-[260px]" : "max-h-[320px]")
               )}
-              loading={isLastTwoImages ? undefined : "lazy"}
+              loading={hasDims ? "lazy" : (isLastTwoImages ? undefined : "lazy")}
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
               onClick={(event) => handleImageExpand(event, imageUrl)}
@@ -1883,20 +1894,49 @@ export default function GroupChatPage() {
                     {(() => {
                       const info = getMentionInfo(messageText);
                       const filter = info?.filter.toLowerCase() || "";
+                      const showAll = filter === "" || "all".startsWith(filter);
                       const candidates = (conversation?.participants || [])
                         .filter((p) => p.user_id !== user?.id)
                         .filter((p) => {
                           const n = (p.profile?.display_name || p.profile?.username || "").toLowerCase();
                           return n.includes(filter);
                         });
-                      if (candidates.length === 0) {
+                      if (!showAll && candidates.length === 0) {
                         return (
                           <p className="text-xs text-muted-foreground text-center py-3">
                             {language === "ar" ? "لا يوجد أعضاء مطابقون" : "No matching members"}
                           </p>
                         );
                       }
-                      return candidates.map((participant) => {
+                      return (
+                        <>
+                          {showAll && (
+                            <button
+                              type="button"
+                              className="w-full flex items-center gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-muted/60 transition-colors"
+                              onClick={() => {
+                                if (info) {
+                                  const before = messageText.slice(0, info.startIndex);
+                                  setMessageText(before + "@all ");
+                                } else {
+                                  setMessageText((prev) => prev + "@all ");
+                                }
+                                setShowMentionPicker(false);
+                                setTimeout(() => textareaRef.current?.focus(), 0);
+                              }}
+                            >
+                              <div className="h-7 w-7 shrink-0 rounded-full bg-[hsl(280_60%_65%)]/15 flex items-center justify-center">
+                                <Users className="h-3.5 w-3.5 text-[hsl(280_60%_65%)]" />
+                              </div>
+                              <span className="text-sm truncate flex-1">
+                                {language === "ar" ? "الجميع" : "All"}
+                              </span>
+                              <Badge className="bg-[hsl(280_60%_65%)]/15 text-[hsl(280_60%_65%)] border-[hsl(280_60%_65%)]/25 text-[9px] px-1 py-0">
+                                {language === "ar" ? "إشعار للكل" : "Notify all"}
+                              </Badge>
+                            </button>
+                          )}
+                          {candidates.map((participant) => {
                         const name = participant.profile?.display_name || participant.profile?.username || (language === "ar" ? "عضو" : "Member");
                         const isAi = participant.user_id === WAKTI_AI_ID;
                         const initials = name.slice(0, 2).toUpperCase();
@@ -1929,7 +1969,9 @@ export default function GroupChatPage() {
                             )}
                           </button>
                         );
-                      });
+                      })}
+                        </>
+                      );
                     })()}
                   </div>
                 </div>
@@ -1997,7 +2039,16 @@ export default function GroupChatPage() {
                           const n = (p.profile?.display_name || p.profile?.username || "").toLowerCase();
                           return n.includes(filter);
                         });
-                      if (candidates.length > 0) {
+                      const showAll = filter === "" || "all".startsWith(filter);
+                      if (showAll) {
+                        if (info) {
+                          const before = currentText.slice(0, info.startIndex);
+                          setMessageText(before + "@all ");
+                        } else {
+                          setMessageText((prev) => prev + "@all ");
+                        }
+                        setShowMentionPicker(false);
+                      } else if (candidates.length > 0) {
                         const p = candidates[0];
                         const n = p.profile?.display_name || p.profile?.username || (language === "ar" ? "عضو" : "Member");
                         const isAi = p.user_id === WAKTI_AI_ID;

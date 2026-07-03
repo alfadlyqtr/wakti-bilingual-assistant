@@ -3,6 +3,7 @@ import { Fragment, useState, useEffect, useRef, useCallback, useMemo } from "rea
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { formatDayLabel, isSameDay, formatBubbleTime } from "@/lib/dateLabels";
+import { getImageDimensions } from "@/lib/utils";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -406,12 +407,17 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
     try {
       setIsUploading(true);
       // Upload image then send as image message
-      const url = await uploadMessageAttachment(file, 'image');
+      const [url, dimensions] = await Promise.all([
+        uploadMessageAttachment(file, 'image'),
+        getImageDimensions(file),
+      ]);
       sendMessageMutation.mutate({
         message_type: 'image',
         media_url: url,
         media_type: file.type,
         file_size: file.size,
+        image_width: dimensions?.width,
+        image_height: dimensions?.height,
         reply_to_id: replyingTo?.id || null,
       });
       setReplyingTo(null);
@@ -753,24 +759,49 @@ export function ChatPopup({ isOpen, onClose, contactId, contactName, contactAvat
               )}
               {!message.is_deleted && message.message_type === 'image' ? (
                 <div className="relative group">
-                  <img 
-                    src={cleanMediaUrl(message.media_url)} 
-                    alt="Image message" 
-                    className="max-w-full max-w-[420px] h-auto rounded-lg cursor-pointer"
-                    loading="lazy"
-                    crossOrigin="anonymous"
-                    referrerPolicy="no-referrer"
-                    onClick={() => setExpandedImage(cleanMediaUrl(message.media_url))}
-                    onError={(e) => {
-                      console.error('Image load error:', cleanMediaUrl(message.media_url));
-                      // Try without crossOrigin as fallback
-                      const img = e.currentTarget;
-                      if (img.crossOrigin) {
-                        img.crossOrigin = null as any;
-                        img.src = cleanMediaUrl(message.media_url);
-                      }
-                    }}
-                  />
+                  {message.image_width && message.image_height ? (
+                    <div
+                      className="max-w-full overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-700 sm:max-w-[420px]"
+                      style={{ aspectRatio: `${message.image_width} / ${message.image_height}` }}
+                    >
+                      <img
+                        src={cleanMediaUrl(message.media_url)}
+                        alt="Image message"
+                        className="block h-full w-full rounded-lg object-contain cursor-pointer"
+                        loading="lazy"
+                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
+                        onClick={() => setExpandedImage(cleanMediaUrl(message.media_url))}
+                        onError={(e) => {
+                          console.error('Image load error:', cleanMediaUrl(message.media_url));
+                          const img = e.currentTarget;
+                          if (img.crossOrigin) {
+                            img.crossOrigin = null as any;
+                            img.src = cleanMediaUrl(message.media_url);
+                          }
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <img 
+                      src={cleanMediaUrl(message.media_url)} 
+                      alt="Image message" 
+                      className="max-w-full max-w-[420px] h-auto rounded-lg cursor-pointer"
+                      loading="lazy"
+                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
+                      onClick={() => setExpandedImage(cleanMediaUrl(message.media_url))}
+                      onError={(e) => {
+                        console.error('Image load error:', cleanMediaUrl(message.media_url));
+                        // Try without crossOrigin as fallback
+                        const img = e.currentTarget;
+                        if (img.crossOrigin) {
+                          img.crossOrigin = null as any;
+                          img.src = cleanMediaUrl(message.media_url);
+                        }
+                      }}
+                    />
+                  )}
                   {/* Image overlay buttons */}
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
                     <Button

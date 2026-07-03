@@ -9,6 +9,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTheme } from "@/providers/ThemeProvider";
 import { t } from "@/utils/translations";
 import { formatDayLabel, isSameDay, formatBubbleTime } from "@/lib/dateLabels";
+import { getImageDimensions } from "@/lib/utils";
 import { emitEvent } from "@/utils/eventBus";
 import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from "@/utils/waktiOperator";
 import { Button } from "@/components/ui/button";
@@ -550,6 +551,8 @@ export default function ChatPage() {
         media_type: variables.media_type,
         voice_duration: variables.voice_duration,
         file_size: variables.file_size,
+        image_width: variables.image_width,
+        image_height: variables.image_height,
         created_at: new Date().toISOString(),
         is_read: false,
         is_deleted: false,
@@ -647,12 +650,17 @@ export default function ChatPage() {
 
     try {
       setIsUploading(true);
-      const url = await uploadMessageAttachment(file, 'image');
+      const [url, dimensions] = await Promise.all([
+        uploadMessageAttachment(file, 'image'),
+        getImageDimensions(file),
+      ]);
       sendMessageMutation.mutate({
         message_type: 'image',
         media_url: url,
         media_type: file.type,
         file_size: file.size,
+        image_width: dimensions?.width,
+        image_height: dimensions?.height,
         reply_to_id: replyingTo?.id || null,
       });
       setReplyingTo(null);
@@ -1018,15 +1026,32 @@ export default function ChatPage() {
               )}
               {!message.is_deleted && message.message_type === 'image' ? (
                 <div className="relative group">
-                  <img
-                    src={cleanMediaUrl(message.media_url)}
-                    alt="Image message"
-                    className="max-w-full h-auto rounded-lg cursor-pointer sm:max-w-[260px] sm:max-h-[320px]"
-                    loading={isLastTwoImages ? undefined : "lazy"}
-                    crossOrigin="anonymous"
-                    referrerPolicy="no-referrer"
-                    onClick={() => setExpandedImage(cleanMediaUrl(message.media_url))}
-                  />
+                  {message.image_width && message.image_height ? (
+                    <div
+                      className="max-w-full overflow-hidden rounded-lg bg-gray-200 dark:bg-gray-700 sm:max-w-[260px] sm:max-h-[320px]"
+                      style={{ aspectRatio: `${message.image_width} / ${message.image_height}` }}
+                    >
+                      <img
+                        src={cleanMediaUrl(message.media_url)}
+                        alt="Image message"
+                        className="block h-full w-full rounded-lg object-contain cursor-pointer"
+                        loading="lazy"
+                        crossOrigin="anonymous"
+                        referrerPolicy="no-referrer"
+                        onClick={() => setExpandedImage(cleanMediaUrl(message.media_url))}
+                      />
+                    </div>
+                  ) : (
+                    <img
+                      src={cleanMediaUrl(message.media_url)}
+                      alt="Image message"
+                      className="max-w-full h-auto rounded-lg cursor-pointer sm:max-w-[260px] sm:max-h-[320px]"
+                      loading={isLastTwoImages ? undefined : "lazy"}
+                      crossOrigin="anonymous"
+                      referrerPolicy="no-referrer"
+                      onClick={() => setExpandedImage(cleanMediaUrl(message.media_url))}
+                    />
+                  )}
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col gap-1">
                     <Button
                       size="sm"

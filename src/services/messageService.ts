@@ -21,6 +21,8 @@ export interface DirectMessage {
   media_type?: string;
   voice_duration?: number;
   file_size?: number;
+  image_width?: number | null;
+  image_height?: number | null;
   created_at: string;
   is_read: boolean;
   is_deleted?: boolean;
@@ -65,6 +67,8 @@ export async function getMessages(contactId: string): Promise<DirectMessage[]> {
       media_type,
       voice_duration,
       file_size,
+      image_width,
+      image_height,
       created_at,
       is_read,
       is_deleted,
@@ -405,6 +409,8 @@ export async function sendMessage(recipientId: string, messageData: {
   media_type?: string;
   voice_duration?: number;
   file_size?: number;
+  image_width?: number;
+  image_height?: number;
   reply_to_id?: string | null;
 }): Promise<DirectMessage> {
   const userId = await getCurrentUserId();
@@ -431,6 +437,8 @@ export async function sendMessage(recipientId: string, messageData: {
       media_type: messageData.media_type,
       voice_duration: messageData.voice_duration,
       file_size: messageData.file_size,
+      image_width: messageData.image_width,
+      image_height: messageData.image_height,
       reply_to_id: messageData.reply_to_id || null
     })
     .select()

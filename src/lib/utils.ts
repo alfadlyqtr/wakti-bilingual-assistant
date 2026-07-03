@@ -6,6 +6,28 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+// Read natural width/height from an image file before upload (used to reserve
+// exact space in chat bubbles and prevent layout shift / auto-scroll issues)
+export function getImageDimensions(file: File): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const img = new window.Image();
+      img.onload = () => {
+        resolve({ width: img.naturalWidth, height: img.naturalHeight });
+        URL.revokeObjectURL(url);
+      };
+      img.onerror = () => {
+        resolve(null);
+        URL.revokeObjectURL(url);
+      };
+      img.src = url;
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
 // Enhanced date validation function that handles relative dates
 export function isValidDate(dateString: string | null | undefined): boolean {
   if (!dateString) return false;

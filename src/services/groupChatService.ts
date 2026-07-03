@@ -48,6 +48,8 @@ export interface GroupChatMessage {
   media_type?: string | null;
   voice_duration?: number | null;
   file_size?: number | null;
+  image_width?: number | null;
+  image_height?: number | null;
   created_at: string;
   is_deleted?: boolean;
   deleted_at?: string | null;
@@ -281,7 +283,7 @@ export async function getGroupConversationMessages(conversationId: string): Prom
 
   const { data: rows, error } = await (supabase as any)
     .from("conversation_messages")
-    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at, is_deleted, deleted_at, edited_at, reply_to_id, reply_to:reply_to_id(id, content, sender_id, message_type, is_deleted)")
+    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, image_width, image_height, created_at, is_deleted, deleted_at, edited_at, reply_to_id, reply_to:reply_to_id(id, content, sender_id, message_type, is_deleted)")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -330,6 +332,8 @@ export async function getGroupConversationMessages(conversationId: string): Prom
     media_type: row.media_type || null,
     voice_duration: row.voice_duration ?? null,
     file_size: row.file_size ?? null,
+    image_width: row.image_width ?? null,
+    image_height: row.image_height ?? null,
     created_at: row.created_at,
     is_deleted: row.is_deleted ?? false,
     deleted_at: row.deleted_at ?? null,
@@ -366,6 +370,8 @@ export async function sendGroupConversationMessage(
     media_type?: string;
     voice_duration?: number;
     file_size?: number;
+    image_width?: number;
+    image_height?: number;
     reply_to_id?: string | null;
   }
 ) {
@@ -388,7 +394,7 @@ export async function sendGroupConversationMessage(
   const { data, error } = await (supabase as any)
     .from("conversation_messages")
     .insert(insertData)
-    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, created_at, is_deleted, deleted_at, reply_to_id")
+    .select("id, conversation_id, sender_id, message_type, content, media_url, media_type, voice_duration, file_size, image_width, image_height, created_at, is_deleted, deleted_at, reply_to_id")
     .single();
 
   if (error) {
