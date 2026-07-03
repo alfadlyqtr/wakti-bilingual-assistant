@@ -486,7 +486,7 @@ export function TaskForm({ isOpen, onClose, task, prefill, onTaskSaved }: TaskFo
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden touch-pan-y">
         <DialogHeader>
           <DialogTitle>
             {task ? t('editTask', language) : t('createTask', language)}

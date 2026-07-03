@@ -427,7 +427,7 @@ export const ReminderList: React.FC<ReminderListProps> = ({
                 {/* Beautiful Done Button */}
                 <Button
                   size="sm"
-                  className="h-8 px-4 rounded-full bg-gradient-to-r from-emerald-500 to-green-500 text-white hover:from-emerald-600 hover:to-green-600 shadow-md hover:shadow-lg transition-all duration-200 font-medium text-xs"
+                  className="h-8 px-4 rounded-full bg-emerald-100/80 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-200 dark:hover:bg-emerald-800/40 border border-emerald-200/60 dark:border-emerald-700/30 transition-all duration-200 font-medium text-xs"
                   onClick={() => handleMarkDone(reminder)}
                 >
                   <CheckCircle2 className="h-4 w-4 mr-1.5" />

@@ -154,17 +154,21 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
       
       await TRService.updateTask(task.id, updates);
       // Mirror owner action into shared responses so ActivityMonitor and stamps show correct actor
+      // Only do this for shared tasks — normal tasks should not create shared responses
       try {
-        if (!task.completed) {
-          await TRSharedService.markTaskCompleted(task.id, ownerName, true);
-        } else {
-          await TRSharedService.markTaskCompleted(task.id, ownerName, false);
+        if (task.is_shared) {
+          if (!task.completed) {
+            await TRSharedService.markTaskCompleted(task.id, ownerName, true);
+          } else {
+            await TRSharedService.markTaskCompleted(task.id, ownerName, false);
+          }
         }
       } catch (e) {
         console.warn('Non-fatal: failed to mirror owner main-task completion to shared responses', e);
       }
       toast.success(t(task.completed ? 'taskIncomplete' : 'taskCompleted', language));
-      onTasksChanged();
+      // Let Supabase realtime subscription update the task list silently in the background
+      // instead of forcing a full page refresh via onTasksChanged()
     } catch (error) {
       console.error('Error toggling task completion:', error);
       toast.error(t('errorUpdatingTask', language));
