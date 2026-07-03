@@ -136,12 +136,14 @@ export async function fetchVendorSources(needs: RuntimeNeeds): Promise<VendorSou
 
 export function buildProjectStaticPublishFiles({
   projectName,
+  projectSlug,
   bundledJs,
   bundledCss,
   safelist = [],
   vendor,
 }: {
   projectName: string;
+  projectSlug: string;
   bundledJs: string;
   bundledCss: string;
   safelist?: string[];
@@ -292,6 +294,7 @@ export function buildProjectStaticPublishFiles({
 </body>
 </html>`;
 
+  const cacheTag = `site-${projectSlug}`;
   const vercelJson = JSON.stringify({
     rewrites: [{ source: '/(.*)', destination: '/index.html' }],
     headers: [
@@ -301,6 +304,7 @@ export function buildProjectStaticPublishFiles({
           { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' },
           { key: 'Surrogate-Control', value: 'no-store' },
           { key: 'Pragma', value: 'no-cache' },
+          { key: 'Cache-Tag', value: cacheTag },
         ],
       },
     ],
