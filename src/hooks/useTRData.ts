@@ -13,9 +13,9 @@ export const useTRData = () => {
   const debounceTimer = useRef<number | null>(null);
   const unsubscribed = useRef(false);
 
-  const fetchData = async () => {
+  const fetchData = async (silent = false) => {
     console.log('useTRData: Starting data fetch');
-    setLoading(true);
+    if (!silent) setLoading(true);
     setError(null);
     
     try {
@@ -38,7 +38,7 @@ export const useTRData = () => {
       setTasks([]);
       setReminders([]);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -81,9 +81,9 @@ export const useTRData = () => {
 
     const scheduleRefetch = () => {
       if (debounceTimer.current) window.clearTimeout(debounceTimer.current);
-      // Debounce rapid bursts to a single fetch
+      // Debounce rapid bursts to a single fetch (silent = no loading spinners)
       debounceTimer.current = window.setTimeout(() => {
-        if (!unsubscribed.current) fetchData();
+        if (!unsubscribed.current) fetchData(true);
       }, 200);
     };
 
@@ -98,11 +98,18 @@ export const useTRData = () => {
     };
   }, []);
 
+  const updateTaskLocal = (id: string, updates: Partial<TRTask>) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
+    );
+  };
+
   return { 
     tasks, 
     reminders, 
     loading, 
     error, 
-    refresh: fetchData 
+    refresh: fetchData,
+    updateTaskLocal
   };
 };

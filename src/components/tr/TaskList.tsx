@@ -24,9 +24,10 @@ interface TaskListProps {
   tasks: TRTask[];
   onTaskEdit: (task: TRTask) => void;
   onTasksChanged: () => void;
+  onOptimisticUpdate?: (id: string, updates: Partial<TRTask>) => void;
 }
 
-export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksChanged }) => {
+export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksChanged, onOptimisticUpdate }) => {
   const { language } = useTheme();
   const { user: authUser } = useAuth();
   const { profile: cachedProfile } = useUserProfile();
@@ -146,18 +147,27 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
   };
 
   const handleToggleComplete = async (task: TRTask) => {
+    const wasCompleted = task.completed;
+    const nextCompleted = !wasCompleted;
+    const optimisticUpdates: Partial<TRTask> = {
+      completed: nextCompleted,
+      completed_at: nextCompleted ? new Date().toISOString() : undefined
+    };
+
+    // 1. Instantly flip the checkbox
+    onOptimisticUpdate?.(task.id, optimisticUpdates);
+
     try {
-      const updates: Partial<TRTask> = {
-        completed: !task.completed,
-        completed_at: !task.completed ? new Date().toISOString() : undefined
-      };
-      
-      await TRService.updateTask(task.id, updates);
+      await TRService.updateTask(task.id, {
+        completed: nextCompleted,
+        completed_at: nextCompleted ? new Date().toISOString() : undefined
+      });
+
       // Mirror owner action into shared responses so ActivityMonitor and stamps show correct actor
       // Only do this for shared tasks — normal tasks should not create shared responses
       try {
         if (task.is_shared) {
-          if (!task.completed) {
+          if (!wasCompleted) {
             await TRSharedService.markTaskCompleted(task.id, ownerName, true);
           } else {
             await TRSharedService.markTaskCompleted(task.id, ownerName, false);
@@ -166,11 +176,16 @@ export const TaskList: React.FC<TaskListProps> = ({ tasks, onTaskEdit, onTasksCh
       } catch (e) {
         console.warn('Non-fatal: failed to mirror owner main-task completion to shared responses', e);
       }
-      toast.success(t(task.completed ? 'taskIncomplete' : 'taskCompleted', language));
-      // Let Supabase realtime subscription update the task list silently in the background
-      // instead of forcing a full page refresh via onTasksChanged()
+
+      toast.success(t(wasCompleted ? 'taskIncomplete' : 'taskCompleted', language));
+      // Skip full refresh — realtime subscription will silently sync background data
     } catch (error) {
       console.error('Error toggling task completion:', error);
+      // Revert the optimistic update on failure
+      onOptimisticUpdate?.(task.id, {
+        completed: wasCompleted,
+        completed_at: wasCompleted ? task.completed_at : undefined
+      });
       toast.error(t('errorUpdatingTask', language));
     }
   };

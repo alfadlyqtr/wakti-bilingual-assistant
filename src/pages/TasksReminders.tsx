@@ -67,7 +67,7 @@ export default function TasksReminders() {
   const [activeTab, setActiveTab] = useState(
     incomingShareLink ? 'activity' : 'activity_main'
   );
-  const { tasks, reminders, loading, error, refresh } = useTRData();
+  const { tasks, reminders, loading, error, refresh, updateTaskLocal } = useTRData();
 
   // When a ?shared= param arrives, switch to Shared Tasks tab
   useEffect(() => {
@@ -388,7 +388,7 @@ export default function TasksReminders() {
             <div className="text-center py-8">
               <div className="text-red-500 mb-4">{t('error', language)}</div>
               <p className="text-muted-foreground mb-4">{error}</p>
-              <Button onClick={refresh} variant="outline">
+              <Button onClick={() => refresh()} variant="outline">
                 {t('retry', language)}
               </Button>
             </div>
@@ -572,6 +572,7 @@ export default function TasksReminders() {
                 tasks={tasks}
                 onTaskEdit={handleEditTask}
                 onTasksChanged={handleDataChanged}
+                onOptimisticUpdate={updateTaskLocal}
               />
             )}
           </TabsContent>
