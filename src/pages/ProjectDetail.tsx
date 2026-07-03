@@ -120,7 +120,7 @@ import {
   detectChatIntent,
   ChatIntent
 } from '@/utils/chatIntents';
-import { buildProjectRuntimeHtml, getProjectEntryPoint } from '@/utils/projectRuntimeHtml';
+import { buildProjectStaticPublishFiles, detectRuntimeNeeds, fetchVendorSources, getProjectEntryPoint } from '@/utils/projectRuntimeHtml';
 import GitHubPanel from '@/components/projects/GitHubPanel';
 import CustomDomainSection from '@/components/projects/CustomDomainSection';
 import {
@@ -2715,16 +2715,21 @@ ${priorSection}`;
       console.log(`Bundle successful: ${bundledJs.length} bytes JS, ${bundledCss.length} bytes CSS, ${bundleSafelist.length} safelisted classes`);
 
       const projectName = project.name || 'Wakti Project';
-      const indexHtml = buildProjectRuntimeHtml({
+
+      // Fetch the runtime libraries (React, etc.) once here at publish time so
+      // the published site is a fully self-contained static site with zero
+      // runtime CDN dependency - no "loading app" wait for visitors.
+      setPublishStep(isRTL ? 'تجهيز موارد التطبيق...' : 'Preparing app resources...');
+      const runtimeNeeds = detectRuntimeNeeds(bundledJs);
+      const vendor = await fetchVendorSources(runtimeNeeds);
+
+      const { indexHtml, appJs, appCss, vercelJson } = buildProjectStaticPublishFiles({
         projectName,
         bundledJs,
         bundledCss,
         safelist: bundleSafelist,
+        vendor,
       });
-
-      const vercelJson = JSON.stringify({
-        rewrites: [{ source: '/(.*)', destination: '/index.html' }],
-      }, null, 2);
 
       console.log('Generated publish HTML size:', indexHtml.length);
 
@@ -2742,6 +2747,14 @@ ${priorSection}`;
             {
               path: 'index.html',
               content: indexHtml,
+            },
+            {
+              path: 'app.js',
+              content: appJs,
+            },
+            {
+              path: 'app.css',
+              content: appCss,
             },
             {
               path: 'vercel.json',

@@ -44,28 +44,156 @@ function escapeInlineStyle(source: string): string {
   return source.replace(/<\/style/gi, '<\\/style');
 }
 
+export interface RuntimeNeeds {
+  needsRecharts: boolean;
+  needsFramerMotion: boolean;
+  needsLucide: boolean;
+  needsReactIs: boolean;
+}
+
+// Detects which optional runtime libraries a bundle actually references, based
+// on the marker strings project-build's shims leave behind when a package is
+// imported. Shared by both the publish path and the fetch step below so the
+// two never drift out of sync.
+export function detectRuntimeNeeds(bundledJs: string): RuntimeNeeds {
+  const js = bundledJs || '';
+  const needsRecharts = js.includes('window.Recharts');
+  const needsFramerMotion = js.includes('[framer-motion shim]');
+  const needsLucide = js.includes('LUCIDE ICONS CDN-BASED SHIM');
+  return {
+    needsRecharts,
+    needsFramerMotion,
+    needsLucide,
+    needsReactIs: needsFramerMotion || needsRecharts,
+  };
+}
+
+const STATIC_REACT_URLS = [
+  'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js',
+  'https://unpkg.com/react@18/umd/react.production.min.js',
+];
+const STATIC_REACT_DOM_URLS = [
+  'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js',
+  'https://unpkg.com/react-dom@18/umd/react-dom.production.min.js',
+];
+const STATIC_REACT_IS_URLS = [
+  'https://cdn.jsdelivr.net/npm/react-is@18/umd/react-is.production.min.js',
+  'https://unpkg.com/react-is/umd/react-is.production.min.js',
+];
+const STATIC_FRAMER_MOTION_URLS = [
+  'https://cdn.jsdelivr.net/npm/framer-motion@6.5.1/dist/framer-motion.js',
+  'https://unpkg.com/framer-motion@6.5.1/dist/framer-motion.js',
+];
+const STATIC_LUCIDE_URLS = [
+  'https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js',
+  'https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js',
+];
+const STATIC_RECHARTS_URLS = [
+  'https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js',
+  'https://unpkg.com/recharts/umd/Recharts.min.js',
+];
+const STATIC_TAILWIND_RUNTIME_URLS = ['https://cdn.tailwindcss.com'];
+
+export interface VendorSources {
+  react: string | null;
+  reactDom: string | null;
+  reactIs: string | null;
+  framerMotion: string | null;
+  lucide: string | null;
+  recharts: string | null;
+  tailwind: string | null;
+}
+
+async function fetchFirstAvailable(urls: string[]): Promise<string | null> {
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) continue;
+      const text = await res.text();
+      if (text && text.trim().length > 0) return text;
+    } catch {
+      // Try the next mirror.
+    }
+  }
+  return null;
+}
+
+// Downloads the actual runtime library source ONCE, at publish time, so the
+// published site can embed everything it needs and run with zero runtime CDN
+// calls - no "loading app" wait for visitors, just a normal static site.
+export async function fetchVendorSources(needs: RuntimeNeeds): Promise<VendorSources> {
+  const [react, reactDom, reactIs, framerMotion, lucide, recharts, tailwind] = await Promise.all([
+    fetchFirstAvailable(STATIC_REACT_URLS),
+    fetchFirstAvailable(STATIC_REACT_DOM_URLS),
+    needs.needsReactIs ? fetchFirstAvailable(STATIC_REACT_IS_URLS) : Promise.resolve(null),
+    needs.needsFramerMotion ? fetchFirstAvailable(STATIC_FRAMER_MOTION_URLS) : Promise.resolve(null),
+    needs.needsLucide ? fetchFirstAvailable(STATIC_LUCIDE_URLS) : Promise.resolve(null),
+    needs.needsRecharts ? fetchFirstAvailable(STATIC_RECHARTS_URLS) : Promise.resolve(null),
+    fetchFirstAvailable(STATIC_TAILWIND_RUNTIME_URLS),
+  ]);
+  return { react, reactDom, reactIs, framerMotion, lucide, recharts, tailwind };
+}
+
 export function buildProjectStaticPublishFiles({
   projectName,
   bundledJs,
   bundledCss,
   safelist = [],
+  vendor,
 }: {
   projectName: string;
   bundledJs: string;
   bundledCss: string;
   safelist?: string[];
+  vendor: VendorSources;
 }): {
   indexHtml: string;
   appJs: string;
   appCss: string;
   vercelJson: string;
 } {
+  // React/ReactDOM are non-negotiable - if we couldn't fetch them, refuse to
+  // publish a broken site instead of shipping one that will never render.
+  const reactSrc = vendor.react;
+  const reactDomSrc = vendor.reactDom;
+  if (!reactSrc || !reactDomSrc) {
+    throw new Error('Could not download the app runtime needed to publish this site. Please try publishing again.');
+  }
+
+  const needs = detectRuntimeNeeds(bundledJs);
   const safeTitle = escapeHtml(projectName || 'Wakti Preview');
   const appJs = bundledJs || '';
   const appCss = bundledCss || '';
   const safelistJson = JSON.stringify(safelist);
 
+  const vendorScripts: string[] = [
+    `<script>${escapeInlineScript(reactSrc)}</script>`,
+    `<script>${escapeInlineScript(reactDomSrc)}</script>`,
+  ];
+  if (needs.needsReactIs && vendor.reactIs) {
+    vendorScripts.push(`<script>${escapeInlineScript(vendor.reactIs)}</script>`);
+  }
+  if (needs.needsFramerMotion && vendor.framerMotion) {
+    vendorScripts.push(`<script>${escapeInlineScript(vendor.framerMotion)}</script>`);
+  }
+  if (needs.needsLucide && vendor.lucide) {
+    vendorScripts.push(`<script>${escapeInlineScript(vendor.lucide)}</script>`);
+  }
+  if (needs.needsRecharts && vendor.recharts) {
+    vendorScripts.push(`<script>${escapeInlineScript(vendor.recharts)}</script>`);
+  }
+  const vendorScriptsHtml = vendorScripts.join('\n  ');
+  // cdn.tailwindcss.com does not send CORS headers, so it can never be fetched
+  // and embedded inline like the other vendor scripts. Fall back to a normal
+  // `async` <script src> tag instead - it does not block the app from
+  // rendering (Tailwind scans the DOM whenever it finishes loading, and the
+  // app already forces a re-scan after render further below).
+  const tailwindScriptHtml = vendor.tailwind
+    ? `<script>${escapeInlineScript(vendor.tailwind)}</script>`
+    : '<script async src="https://cdn.tailwindcss.com"></script>';
+
   const indexHtml = `<!DOCTYPE html>
+<!-- wakti-static-v1 -->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -125,19 +253,14 @@ export function buildProjectStaticPublishFiles({
 </head>
 <body>
   <div id="root"></div>
-  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-is@18/umd/react-is.production.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/framer-motion@6.5.1/dist/framer-motion.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/recharts@2.12.7/umd/Recharts.min.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
+  ${vendorScriptsHtml}
   <script>
     window.FramerMotion = window.FramerMotion || window.Motion || null;
     if (typeof window.lucide !== 'undefined' && window.lucide) {
       window.__lucideIcons = window.lucide;
     }
   </script>
+  ${tailwindScriptHtml}
   <script src="./app.js"></script>
   <script>
     (function() {
