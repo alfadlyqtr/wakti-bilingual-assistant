@@ -705,7 +705,37 @@ async function assignVercelAlias(params: {
   }
 }
 
-const CODE_VERSION = "2026-07-02-V2";
+async function invalidateVercelCacheByTag(params: {
+  token: string;
+  teamId: string | null;
+  projectId: string | null;
+  tag: string;
+}): Promise<void> {
+  const qsArr = [];
+  if (params.projectId) qsArr.push(`projectIdOrName=${encodeURIComponent(params.projectId)}`);
+  if (params.teamId) qsArr.push(`teamId=${encodeURIComponent(params.teamId)}`);
+  const qs = qsArr.length > 0 ? `?${qsArr.join("&")}` : "";
+  const endpoint = `https://api.vercel.com/v1/edge-cache/invalidate-by-tags${qs}`;
+
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({ tags: [params.tag], target: "production" }),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    throw new Error(`VERCEL_CACHE_INVALIDATE_FAILED_${resp.status}: ${text}`);
+  }
+
+  console.log("[projects-publish] Cache invalidated for tag:", params.tag);
+}
+
+const CODE_VERSION = "2026-07-03-V3-auto-cache-invalidate";
 
 serve(async (req) => {
   console.log(`[projects-publish] CODE_VERSION=${CODE_VERSION}`);
@@ -858,6 +888,20 @@ serve(async (req) => {
         // Non-fatal — subdomain alias already succeeded, log and continue
         console.warn("[projects-publish] Custom domain re-assign failed (non-fatal):", domainErr);
       }
+    }
+
+    // Automatically clear any cached copy of this exact site's cache tag so
+    // visitors never see stale content after a publish — no manual purge needed.
+    try {
+      await invalidateVercelCacheByTag({
+        token: VERCEL_TOKEN,
+        teamId,
+        projectId: VERCEL_PROJECT_ID || null,
+        tag: `site-${projectSlug}`,
+      });
+    } catch (cacheErr) {
+      // Non-fatal — the deploy itself already succeeded, log and continue
+      console.warn("[projects-publish] Cache invalidation failed (non-fatal):", cacheErr);
     }
 
     const finalUrl = `https://${subdomainAlias}`;

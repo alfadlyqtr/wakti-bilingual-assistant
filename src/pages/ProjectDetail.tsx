@@ -2725,6 +2725,7 @@ ${priorSection}`;
 
       const { indexHtml, vercelJson } = buildProjectStaticPublishFiles({
         projectName,
+        projectSlug: finalSubdomain,
         bundledJs,
         bundledCss,
         safelist: bundleSafelist,
