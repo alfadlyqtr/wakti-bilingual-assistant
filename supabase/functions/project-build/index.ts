@@ -782,6 +782,32 @@ serve(async (req) => {
       }
     }
     
+    // PHASE 2 FIX: esbuild only sees CSS reachable from `entryPoint` (usually
+    // App.js). Some projects keep the global CSS import in a separate
+    // bootstrap file (e.g. index.js imports "./styles.css" while App.js is
+    // the chosen entry for extracting the App component), which silently
+    // drops that stylesheet - including :root theme variables - from the
+    // published bundle. Recover any CSS imported anywhere in the project
+    // that esbuild's dependency graph (rooted at entryPoint) didn't capture.
+    const cssImportPattern = /import\s+(?:[^'";]*?\s+from\s+)?["'](\.[^'"]+\.css)["']/g;
+    for (const [filePath, fileContent] of Object.entries(files)) {
+      if (!/\.(js|jsx|ts|tsx)$/.test(filePath)) continue;
+      cssImportPattern.lastIndex = 0;
+      let cssMatch: RegExpExecArray | null;
+      while ((cssMatch = cssImportPattern.exec(fileContent)) !== null) {
+        const resolvedCssPath = resolvePath(cssMatch[1], filePath);
+        const rawCss = files[resolvedCssPath];
+        if (!rawCss) continue;
+        const cleanedCss = rawCss
+          .replace(/@tailwind\s+[^;]+;/g, '')
+          .replace(/@import\s+url\([^)]+\);?/g, '');
+        const trimmedCss = cleanedCss.trim();
+        if (trimmedCss && !importedCssChunks.some((chunk) => chunk.includes(trimmedCss.slice(0, 100)))) {
+          importedCssChunks.push(cleanedCss);
+        }
+      }
+    }
+
     // If no JS output found, use the first output as fallback
     if (!bundledJs && result.outputFiles?.[0]) {
       bundledJs = result.outputFiles[0].text;
