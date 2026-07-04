@@ -454,8 +454,10 @@ function unwrapNestedBundledSource(source: string): string {
 }
 
 function upgradeLegacyPublishedHtml(html: string, fallbackProjectName: string): string {
-  // Current-version HTML — skip entirely, it's already correct
-  if (html.includes("wakti-runtime-v2")) {
+  // Current-version HTML — skip entirely, it's already correct.
+  // wakti-static-v1 is the fully static, zero-CDN publish format; it must never
+  // be run through the legacy CDN-runtime upgrader below.
+  if (html.includes("wakti-runtime-v2") || html.includes("wakti-static-v1")) {
     return html;
   }
   const looksLikeRuntimeHtml = html.includes("Loading app...") && html.includes(RUNTIME_EXECUTE_BUNDLE_MARKER);
@@ -735,7 +737,7 @@ async function invalidateVercelCacheByTag(params: {
   console.log("[projects-publish] Cache invalidated for tag:", params.tag);
 }
 
-const CODE_VERSION = "2026-07-03-V3-auto-cache-invalidate";
+const CODE_VERSION = "2026-07-04-V4-fix-static-v1-downgrade-bug";
 
 serve(async (req) => {
   console.log(`[projects-publish] CODE_VERSION=${CODE_VERSION}`);
