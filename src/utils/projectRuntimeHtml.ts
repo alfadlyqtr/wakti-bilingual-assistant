@@ -184,13 +184,22 @@ export function buildProjectStaticPublishFiles({
   }
   const vendorScriptsHtml = vendorScripts.join('\n  ');
   // cdn.tailwindcss.com does not send CORS headers, so it can never be fetched
-  // and embedded inline like the other vendor scripts. Fall back to a normal
-  // `async` <script src> tag instead - it does not block the app from
-  // rendering (Tailwind scans the DOM whenever it finishes loading, and the
-  // app already forces a re-scan after render further below).
+  // and embedded inline like the other vendor scripts. Fall back to loading it
+  // as a normal <script src>, but track its readiness with a promise so the
+  // app can wait for it before revealing content - otherwise visitors briefly
+  // see raw, unstyled HTML until the CDN script happens to finish loading.
   const tailwindScriptHtml = vendor.tailwind
     ? `<script>${escapeInlineScript(vendor.tailwind)}</script>`
-    : '<script async src="https://cdn.tailwindcss.com"></script>';
+    : `<script>
+    window.__waktiTailwindReady = new Promise(function(resolve) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.tailwindcss.com';
+      s.onload = resolve;
+      s.onerror = resolve;
+      setTimeout(resolve, 2500);
+      document.head.appendChild(s);
+    });
+  </script>`;
 
   const indexHtml = `<!DOCTYPE html>
 <!-- wakti-static-v1 -->
@@ -252,7 +261,7 @@ export function buildProjectStaticPublishFiles({
   <style>${safeAppCss}</style>
 </head>
 <body>
-  <div id="root"></div>
+  <div id="root" style="visibility:hidden"></div>
   ${vendorScriptsHtml}
   <script>
     window.FramerMotion = window.FramerMotion || window.Motion || null;
@@ -269,25 +278,37 @@ export function buildProjectStaticPublishFiles({
         throw new Error('Root element not found');
       }
       if (!window.React || !window.ReactDOM || typeof window.ReactDOM.createRoot !== 'function') {
+        rootElement.style.visibility = 'visible';
         rootElement.innerHTML = '<div style="padding:24px;font-family:Inter,system-ui,sans-serif;color:#dc2626;">Failed to load React runtime.</div>';
         throw new Error('React runtime not available');
       }
       if (typeof window.App === 'undefined' || window.App === null) {
+        rootElement.style.visibility = 'visible';
         rootElement.innerHTML = '<div style="padding:24px;font-family:Inter,system-ui,sans-serif;color:#dc2626;">Failed to load app bundle.</div>';
         throw new Error('App component not found after loading app bundle');
       }
-      var root = window.ReactDOM.createRoot(rootElement);
-      root.render(window.React.createElement(window.App));
-      // Force Tailwind re-scan after React renders to pick up all dynamic classes
-      var reScan = function() {
-        if (window.tailwind && typeof window.tailwind.scan === 'function') {
-          window.tailwind.scan();
+      var startApp = function() {
+        var root = window.ReactDOM.createRoot(rootElement);
+        root.render(window.React.createElement(window.App));
+        // Force Tailwind re-scan after React renders to pick up all dynamic classes,
+        // then reveal the app - by now Tailwind has either finished loading or the
+        // safety timeout has elapsed, so this never blocks forever.
+        var reveal = function() {
+          if (window.tailwind && typeof window.tailwind.scan === 'function') {
+            window.tailwind.scan();
+          }
+          rootElement.style.visibility = 'visible';
+        };
+        if (typeof requestAnimationFrame !== 'undefined') {
+          requestAnimationFrame(function() { requestAnimationFrame(reveal); });
+        } else {
+          setTimeout(reveal, 50);
         }
       };
-      if (typeof requestAnimationFrame !== 'undefined') {
-        requestAnimationFrame(function() { requestAnimationFrame(reScan); });
+      if (window.__waktiTailwindReady && typeof window.__waktiTailwindReady.then === 'function') {
+        window.__waktiTailwindReady.then(startApp);
       } else {
-        setTimeout(reScan, 50);
+        startApp();
       }
     })();
   </script>
