@@ -61,6 +61,12 @@ interface WebResult {
   snippet?: string;
 }
 
+interface ClarificationOption {
+  id: string;
+  label: string;
+  topic: string;
+}
+
 interface SearchResponse {
   query: string;
   quran_results: EvidenceResult[];
@@ -69,6 +75,8 @@ interface SearchResponse {
   summary?: string;
   mode?: string;
   search_options?: string[];
+  options?: ClarificationOption[];
+  search_type?: string;
   meta?: {
     found: boolean;
     quran_count: number;
@@ -111,6 +119,8 @@ interface ChatTurn {
   mode?: string;
   searchOptions?: string[];
   chipsResolved?: boolean;
+  clarificationOptions?: ClarificationOption[];
+  clarificationSearchType?: string;
   followUp?: FollowUpResult | null;
   followUpLoading?: boolean;
 }
@@ -454,6 +464,11 @@ export default function DeenAsk() {
   const [showPopup, setShowPopup] = useState(false);
   const [loadingLabel, setLoadingLabel] = useState("");
   const [guestDialogOpen, setGuestDialogOpen] = useState(false);
+  const [clarifyOpen, setClarifyOpen] = useState(false);
+  const [clarifyTurnId, setClarifyTurnId] = useState<number | null>(null);
+  const [clarifyOptions, setClarifyOptions] = useState<ClarificationOption[]>([]);
+  const [clarifySearchType, setClarifySearchType] = useState<string>("");
+  const [clarifyLoading, setClarifyLoading] = useState(false);
 
   useEffect(() => {
     // Always show friendly popup on entry
@@ -597,7 +612,13 @@ export default function DeenAsk() {
     const turn = turns.find((t) => t.id === turnId);
     if (!turn || turn.chipsResolved) return;
 
-    updateTurn(turnId, { chipsResolved: true, followUpLoading: true });
+    if (choice === "none") {
+      updateTurn(turnId, { chipsResolved: true });
+      return;
+    }
+
+    setClarifyLoading(true);
+    setClarifyTurnId(turnId);
 
     try {
       const recentHistory = turns
@@ -614,6 +635,66 @@ export default function DeenAsk() {
           query: turn.query,
           language,
           forced_search: choice,
+          phase: "clarify",
+          conversation_history: recentHistory.length > 0 ? recentHistory : undefined,
+        },
+      });
+      if (error) throw error;
+
+      const options = Array.isArray(data?.options) ? data.options : [];
+      const searchType = typeof data?.search_type === "string" ? data.search_type : choice;
+
+      if (options.length === 1) {
+        await handleClarifySelect(turnId, options[0], searchType);
+        return;
+      }
+
+      setClarifyOptions(options);
+      setClarifySearchType(searchType);
+      setClarifyOpen(true);
+      updateTurn(turnId, {
+        clarificationOptions: options,
+        clarificationSearchType: searchType,
+      });
+    } catch {
+      updateTurn(turnId, {
+        chipsResolved: true,
+        followUp: {
+          summary: isAr ? "تعذر إتمام هذا البحث الآن. حاول مرة أخرى بعد قليل." : "I could not complete that search right now. Please try again in a moment.",
+          quran_results: [],
+          hadith_results: [],
+          web_results: [],
+        },
+      });
+    } finally {
+      setClarifyLoading(false);
+    }
+  };
+
+  const handleClarifySelect = async (turnId: number, option: ClarificationOption, searchType: string) => {
+    setClarifyOpen(false);
+    const turn = turns.find((t) => t.id === turnId);
+    if (!turn) return;
+
+    updateTurn(turnId, { chipsResolved: true, followUpLoading: true });
+
+    try {
+      const recentHistory = turns
+        .filter((t) => t.id !== turnId && t.explanation?.summary)
+        .slice(-5)
+        .map((t) => ({
+          question: t.query,
+          answer: t.explanation!.summary.slice(0, 300),
+          topic: t.topic || "",
+        }));
+
+      const { data, error } = await supabase.functions.invoke("deen-search", {
+        body: {
+          query: turn.query,
+          language,
+          forced_search: searchType,
+          phase: "search",
+          selected_option: option,
           conversation_history: recentHistory.length > 0 ? recentHistory : undefined,
         },
       });
@@ -768,6 +849,78 @@ export default function DeenAsk() {
         </DialogContent>
       </Dialog>
 
+      {/* Clarification options popup */}
+      <Dialog open={clarifyOpen} onOpenChange={setClarifyOpen}>
+        <DialogContent
+          className="p-0 border-0 overflow-hidden"
+          style={{
+            maxWidth: "340px",
+            borderRadius: "20px",
+            background: isDark ? "#16181d" : "#ffffff",
+            boxShadow: isDark
+              ? "0 20px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.08)"
+              : "0 20px 60px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.06)",
+          }}
+        >
+          <div className="pt-5 pb-3 px-5 text-center">
+            <DialogTitle
+              className="font-bold"
+              style={{
+                fontSize: "17px",
+                color: isDark ? "#f2f2f2" : "#1a1a1a",
+              }}
+            >
+              {isAr ? "ما الذي تقصده؟" : "What did you mean?"}
+            </DialogTitle>
+          </div>
+          <div className="px-5 pb-4" dir={isAr ? "rtl" : "ltr"}>
+            <p
+              className="text-[13px] leading-relaxed text-center"
+              style={{ color: isDark ? "rgba(242,242,242,0.65)" : "rgba(0,0,0,0.65)" }}
+            >
+              {isAr
+                ? "اختر أحد الموضوعات التالية لأبحث لك عنها."
+                : "Pick one of the topics below so I can search for it."}
+            </p>
+          </div>
+          <div className="px-5 pb-5 flex flex-col gap-2.5">
+            {clarifyOptions.map((option, index) => {
+              const letter = String.fromCharCode(65 + index);
+              return (
+                <button
+                  key={option.id}
+                  onClick={() => {
+                    if (clarifyTurnId !== null) {
+                      handleClarifySelect(clarifyTurnId, option, clarifySearchType);
+                    }
+                  }}
+                  className="w-full text-left py-3 px-4 rounded-xl text-sm font-medium transition-all active:scale-[0.96]"
+                  style={{
+                    background: isDark ? "#2a2d35" : "#f3f4f6",
+                    color: isDark ? "#ffffff" : "#1a1a1a",
+                    border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.08)",
+                  }}
+                >
+                  <span className={`${isDark ? "text-sky-400" : "text-sky-600"} font-bold`}>{letter}.</span>{" "}
+                  {option.label}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => setClarifyOpen(false)}
+              className="w-full py-2.5 px-4 rounded-xl text-sm font-medium transition-all active:scale-[0.96]"
+              style={{
+                background: isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)",
+                color: isDark ? "#858384" : "#606062",
+                border: isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)",
+              }}
+            >
+              {isAr ? "إلغاء" : "Cancel"}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Chat area — fills all remaining space, scrolls */}
       <div
         ref={scrollRef}
@@ -867,36 +1020,43 @@ export default function DeenAsk() {
 
                   {showChips && (
                     <div className={`flex flex-wrap gap-2 px-1 ${isAr ? "flex-row-reverse justify-end" : ""}`}>
-                      {(turn.searchOptions ?? []).includes("hadith") && (
-                        <SearchChip
-                          label={isAr ? "ابحث في الحديث" : "Search Hadith"}
-                          icon={<ScrollText className="w-3.5 h-3.5" />}
-                          onClick={() => handleChipChoice(turn.id, "hadith")}
-                          isDark={isDark}
-                        />
-                      )}
-                      {(turn.searchOptions ?? []).includes("quran") && (
-                        <SearchChip
-                          label={isAr ? "ابحث في القرآن" : "Search Quran"}
-                          icon={<BookOpen className="w-3.5 h-3.5" />}
-                          onClick={() => handleChipChoice(turn.id, "quran")}
-                          isDark={isDark}
-                        />
-                      )}
-                      {(turn.searchOptions ?? []).includes("islamweb") && (
-                        <SearchChip
-                          label={isAr ? "ابحث في إسلام ويب" : "Search IslamWeb"}
-                          icon={<Globe className="w-3.5 h-3.5" />}
-                          onClick={() => handleChipChoice(turn.id, "islamweb")}
-                          isDark={isDark}
-                        />
-                      )}
+                      <SearchChip
+                        label={isAr ? "ابحث في الحديث" : "Search Hadith"}
+                        icon={<ScrollText className="w-3.5 h-3.5" />}
+                        onClick={() => handleChipChoice(turn.id, "hadith")}
+                        isDark={isDark}
+                        disabled={clarifyLoading}
+                      />
+                      <SearchChip
+                        label={isAr ? "ابحث في القرآن" : "Search Quran"}
+                        icon={<BookOpen className="w-3.5 h-3.5" />}
+                        onClick={() => handleChipChoice(turn.id, "quran")}
+                        isDark={isDark}
+                        disabled={clarifyLoading}
+                      />
+                      <SearchChip
+                        label={isAr ? "ابحث في إسلام ويب" : "Search IslamWeb"}
+                        icon={<Globe className="w-3.5 h-3.5" />}
+                        onClick={() => handleChipChoice(turn.id, "islamweb")}
+                        isDark={isDark}
+                        disabled={clarifyLoading}
+                      />
                       <SearchChip
                         label={isAr ? "لا، أعطني رأيك فقط" : "No thanks, just your take"}
                         onClick={() => handleChipChoice(turn.id, "none")}
                         isDark={isDark}
                         variant="muted"
+                        disabled={clarifyLoading}
                       />
+                    </div>
+                  )}
+
+                  {clarifyLoading && (
+                    <div className="flex items-center gap-2 px-1">
+                      <Sparkles className={`w-3.5 h-3.5 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "0ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "150ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "300ms" }} />
                     </div>
                   )}
 
