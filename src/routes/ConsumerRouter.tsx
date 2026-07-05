@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { GiftNotificationProvider } from "@/components/notifications/GiftNotificationProvider";
 import { ImageShareNotificationProvider } from "@/components/notifications/ImageShareNotificationProvider";
 import { MusicShareNotificationProvider } from "@/components/notifications/MusicShareNotificationProvider";
+import { ProjectShareNotificationProvider } from "@/components/notifications/ProjectShareNotificationProvider";
 import { TaskShareNotificationProvider } from "@/components/notifications/TaskShareNotificationProvider";
 import { GameInviteNotificationProvider } from "@/components/notifications/GameInviteNotificationProvider";
 import { MessageNotificationProvider } from "@/components/notifications/MessageNotificationProvider";
@@ -177,15 +178,17 @@ export default function ConsumerRouter() {
           <GiftNotificationProvider>
             <ImageShareNotificationProvider>
               <MusicShareNotificationProvider>
-                <TaskShareNotificationProvider>
-                  <GameInviteNotificationProvider>
-                    <MessageNotificationProvider>
-                      <ErrorBoundary>
-                        <AppLayout />
-                      </ErrorBoundary>
-                    </MessageNotificationProvider>
-                  </GameInviteNotificationProvider>
-                </TaskShareNotificationProvider>
+                <ProjectShareNotificationProvider>
+                  <TaskShareNotificationProvider>
+                    <GameInviteNotificationProvider>
+                      <MessageNotificationProvider>
+                        <ErrorBoundary>
+                          <AppLayout />
+                        </ErrorBoundary>
+                      </MessageNotificationProvider>
+                    </GameInviteNotificationProvider>
+                  </TaskShareNotificationProvider>
+                </ProjectShareNotificationProvider>
               </MusicShareNotificationProvider>
             </ImageShareNotificationProvider>
           </GiftNotificationProvider>

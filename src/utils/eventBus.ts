@@ -41,6 +41,7 @@ type EventMap = {
   'wakti-operator-visual-mode': {
     mode: 'default' | 'subtle';
   };
+  'wakti-projects-reload': void;
 
   // ─── Registered for type-safety, still emitted via window.dispatchEvent ─
   // Safe to migrate incrementally — the listeners already accept these shapes.

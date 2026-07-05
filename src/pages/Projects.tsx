@@ -13,6 +13,7 @@ import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { Button } from '@/components/ui/button';
 import ShareButton from '@/components/ui/ShareButton';
+import { ProjectSharePickerDialog } from '@/components/projects/ProjectSharePickerDialog';
 import { 
   Code2, 
   Trash2, 
@@ -45,7 +46,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { emitEvent } from '@/utils/eventBus';
+import { emitEvent, onEvent } from '@/utils/eventBus';
 import { clearWaktiOperatorPayload, readWaktiOperatorPayload } from '@/utils/waktiOperator';
 
 interface Project {
@@ -987,6 +988,7 @@ export default function Projects() {
   const [searchParams, setSearchParams] = useSearchParams();
   const isRTL = language === 'ar';
   const isDark = theme === 'dark';
+  const WaktiShareIcon = () => <img src="/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png" alt="" className="w-full h-full object-cover rounded-full" />;
   const fileInputRef = useRef<HTMLInputElement>(null);
   const operatorPayloadId = searchParams.get('waktiOperator');
   const operatorPayload = React.useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
@@ -1010,6 +1012,7 @@ export default function Projects() {
   const [selectedTheme, setSelectedTheme] = useState('user_prompt');
   const [backendStatus, setBackendStatus] = useState<Record<string, boolean>>({});
   const [togglingBackend, setTogglingBackend] = useState<string | null>(null);
+  const [shareProjectTarget, setShareProjectTarget] = useState<{ id: string; title: string; thumbnailUrl: string | null } | null>(null);
   const [showThemes, setShowThemes] = useState(false);
   const [themeSearch, setThemeSearch] = useState('');
   
@@ -1112,6 +1115,12 @@ export default function Projects() {
     if (user) {
       fetchProjects();
     }
+  }, [user]);
+
+  useEffect(() => {
+    return onEvent('wakti-projects-reload', () => {
+      if (user) fetchProjects();
+    });
   }, [user]);
 
   useEffect(() => {
@@ -2862,15 +2871,36 @@ Apply these styles consistently throughout the entire design.`;
                     {/* Actions - Top right */}
                     <div className="absolute top-4 right-4 flex gap-2 z-10">
                       {/* Share Button */}
-                      {hasLiveDeployment(project) && project.subdomain && (
+                      {hasLiveDeployment(project) && project.subdomain ? (
                         <div onClick={(e) => e.stopPropagation()}>
                           <ShareButton
                             shareUrl={`https://${project.subdomain}.wakti.ai`}
                             shareTitle={project.name}
                             shareDescription={isRTL ? `شاهد موقعي: ${project.name}` : `Check out my site: ${project.name}`}
                             size="sm"
+                            extraActions={[
+                              {
+                                name: 'wakti',
+                                icon: WaktiShareIcon,
+                                bgColor: 'bg-transparent !p-0 overflow-hidden',
+                                angle: 309,
+                                action: () => setShareProjectTarget({ id: project.id, title: project.name, thumbnailUrl: project.thumbnail_url || null }),
+                              },
+                            ]}
                           />
                         </div>
+                      ) : (
+                        <Button
+                          size="icon"
+                          className="h-9 w-9 rounded-full backdrop-blur-sm shadow-lg hover:shadow-xl transition-all bg-white/90 dark:bg-zinc-800/90 hover:bg-white dark:hover:bg-zinc-700 text-fuchsia-600 dark:text-fuchsia-400"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShareProjectTarget({ id: project.id, title: project.name, thumbnailUrl: project.thumbnail_url || null });
+                          }}
+                          title={isRTL ? 'إرسال إلى صديق في وقتي' : 'Send to a Wakti friend'}
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
                       )}
                       
                       {/* Server/Backend Button */}
@@ -3244,6 +3274,13 @@ Apply these styles consistently throughout the entire design.`;
         onOpenChange={setGuestDialogOpen}
         redirectTo={typeof window === 'undefined' ? '/projects' : `${window.location.pathname}${window.location.search}`}
         language={isRTL ? 'ar' : 'en'}
+      />
+
+      <ProjectSharePickerDialog
+        isOpen={!!shareProjectTarget}
+        project={shareProjectTarget}
+        onClose={() => setShareProjectTarget(null)}
+        onSent={() => setShareProjectTarget(null)}
       />
       </div>{/* end scrollable content */}
     </div>
