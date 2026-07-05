@@ -72,7 +72,14 @@ export function ProjectSharePickerDialog({ isOpen, project, onClose, onSent }: P
       onClose();
     } catch (error: any) {
       console.error('[ProjectSharePickerDialog] send error:', error);
-      toast.error((isAr ? 'فشل إرسال المشروع' : 'Failed to send project') + (error?.message ? `: ${error.message}` : ''));
+      const isRecipientFull = typeof error?.message === 'string' && error.message.includes('RECIPIENT_PROJECT_LIMIT_REACHED');
+      if (isRecipientFull) {
+        toast.error(isAr
+          ? `${recipient.displayName} لديه 3 مشاريع بالفعل ولا يمكنه استقبال مشروع جديد الآن.`
+          : `${recipient.displayName} already has 3 projects and can't receive a new one right now.`);
+      } else {
+        toast.error((isAr ? 'فشل إرسال المشروع' : 'Failed to send project') + (error?.message ? `: ${error.message}` : ''));
+      }
     } finally {
       setSendingId(null);
     }

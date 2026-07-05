@@ -54,44 +54,14 @@ export async function sendProjectShare(params: {
   if (!userId) throw new Error('User not authenticated');
   await ensurePassport();
 
-  const [{ data: profile, error: profileError }, { data: project, error: projectError }] = await Promise.all([
-    supabase
-      .from('profiles')
-      .select('display_name, username, avatar_url')
-      .eq('id', userId)
-      .maybeSingle(),
-    (supabase as any)
-      .from('projects')
-      .select('id, user_id, name, description, thumbnail_url')
-      .eq('id', params.projectId)
-      .eq('user_id', userId)
-      .single(),
-  ]);
-
-  if (profileError) throw profileError;
-  if (projectError) throw projectError;
-  if (!project || project.user_id !== userId) throw new Error('Project not found');
-
-  const { data, error } = await (supabase as any)
-    .from('project_shares')
-    .insert({
-      sender_id: userId,
-      recipient_id: params.recipientId,
-      source_project_id: params.projectId,
-      note: params.note?.trim() || null,
-      sender_snapshot: {
-        display_name: profile?.display_name || null,
-        username: profile?.username || null,
-        avatar_url: profile?.avatar_url || null,
-      },
-      project_snapshot: {
-        name: project.name || null,
-        description: project.description || null,
-        thumbnail_url: project.thumbnail_url || null,
-      },
-    })
-    .select('*')
-    .single();
+  // Server-side function validates ownership + mutual contacts, and — critically —
+  // checks the RECIPIENT's own project count (max 3) before creating the row,
+  // so a share is never created if they have no open slot to accept it into.
+  const { data, error } = await (supabase as any).rpc('send_project_share', {
+    p_recipient_id: params.recipientId,
+    p_project_id: params.projectId,
+    p_note: params.note?.trim() || null,
+  });
 
   if (error) throw error;
   return data as ProjectShareRecord;
