@@ -57,8 +57,7 @@ export const SANDPACK_PACKAGES: SandpackPackage[] = [
   { name: "react-dom", version: "18.3.1", category: "core" },
 
   // Icons
-  { name: "lucide-react", version: "^0.462.0", category: "icons", note: "PRIMARY icon library — use this over react-icons" },
-  { name: "react-icons",  version: "^5.0.1",   category: "icons", note: "Fallback only; prefer lucide-react" },
+  { name: "lucide-react", version: "^0.462.0", category: "icons", note: "PRIMARY icon library" },
 
   // Animation
   { name: "framer-motion",          version: "^11.0.0", category: "animation", note: "Primary animation library" },
@@ -135,11 +134,6 @@ export const SANDPACK_PACKAGES: SandpackPackage[] = [
   // HTTP
   { name: "axios", version: "^1.6.7", category: "http" },
 
-  // Games / Graphics
-  { name: "chess.js",         version: "^1.0.0-beta.6", category: "games" },
-  { name: "react-chessboard", version: "^4.7.3",        category: "games" },
-  { name: "pixi.js",          version: "^8.10.2",       category: "games" },
-
   // Media
   { name: "react-player", version: "^2.14.1", category: "media" },
 
@@ -150,9 +144,6 @@ export const SANDPACK_PACKAGES: SandpackPackage[] = [
   // Syntax Highlighting
   { name: "prismjs",                  version: "^1.29.0", category: "syntax" },
   { name: "react-syntax-highlighter", version: "^15.5.0", category: "syntax" },
-
-  // Supabase
-  { name: "@supabase/supabase-js", version: "^2.39.7", category: "supabase" },
 
   // Maps
   { name: "leaflet",       version: "^1.9.4", category: "maps" },
