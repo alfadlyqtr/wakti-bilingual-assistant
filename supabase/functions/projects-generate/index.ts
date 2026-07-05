@@ -7850,7 +7850,11 @@ Call task_complete when finished.`;
         }
         textPrompt += `\n\n🏆 MASTER BUILDER STANDARD:\nYou are the master builder behind the screen. You have one shot to stop the user in their tracks, make them feel the weight of what you've built, and impress them and wow them and ensure they never forget the experience.\n\nThe user's prompt is your brief — it is the floor, never the ceiling. You own the structure, the priority, and the final outcome. Your job is to listen to what they asked for, obey it, identify what they actually need to be blown away, and deliver that.\n\nBuild the most powerful, visceral, and uncompromising version of this reality. You are to deliver the best of the best only.`;
         
-        // Add pre-fetched images as a SECTION MAP so AI places each image in the right section
+        // Add pre-fetched images as a SECTION MAP so AI places each image in the right section.
+        // Hoisted into its own variable so the timeout-retry slim prompt below can reuse it too —
+        // previously the slim prompt dropped this entirely, so any draft that needed a retry
+        // shipped with zero image usage even though the images were already generated and paid for.
+        let imageSectionMapBlock = '';
         if (preFetchedImages.length > 0) {
           // Build section → URL map by matching stored image queries back to their section
           const sectionMap: Record<string, string> = {};
@@ -7863,7 +7867,8 @@ Call task_complete when finished.`;
           const sectionLines = Object.entries(sectionMap)
             .map(([section, url]) => `  ${section.toUpperCase().replace(/_/g, ' ')} → ${url}`)
             .join('\n');
-          textPrompt += `\n\n🖼️ PRE-GENERATED IMAGES — SECTION MAP (NANO-BANANA-2, 1K):\nEach image was generated specifically for its designated section. Place each URL only in its matching section:\n${sectionLines}\n\nRULES:\n- Use each URL in its designated section only\n- Use these URLs directly as <img src="..."> — do NOT call any stock image API\n- If a section has no mapped image, use another URL creatively by vibe — never leave an image slot empty`;
+          imageSectionMapBlock = `\n\n🖼️ PRE-GENERATED IMAGES — SECTION MAP (NANO-BANANA-2-LITE):\nEach image was generated specifically for its designated section. Place each URL only in its matching section:\n${sectionLines}\n\nRULES:\n- Use each URL in its designated section only\n- Use these URLs directly as <img src="..."> — do NOT call any stock image API\n- If a section has no mapped image, use another URL creatively by vibe — never leave an image slot empty`;
+          textPrompt += imageSectionMapBlock;
         }
         if (sharedCreateAwarenessContext) {
           textPrompt += `\n\n${sharedCreateAwarenessContext}`;
@@ -8003,7 +8008,7 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
             throw draftErr;
           }
           draftFallbackUsed = true;
-          const slimPrompt = `CREATE NEW PROJECT.\n\nREQUEST SUMMARY:\n${prompt}\n\n${userInstructions || ""}\n\nDRAFT-FIRST FALLBACK MODE:\nReturn a smaller but complete first draft. Prioritize one strong homepage/app shell, valid routing, mounted runtime entry, key sections, backend-safe structure, and clear CTA flow. Keep the project polished enough to ship as a first draft, but avoid extra complexity that could break the run.`;
+          const slimPrompt = `CREATE NEW PROJECT.\n\nREQUEST SUMMARY:\n${prompt}\n\n${userInstructions || ""}\n\nDRAFT-FIRST FALLBACK MODE:\nReturn a smaller but complete first draft. Prioritize one strong homepage/app shell, valid routing, mounted runtime entry, key sections, backend-safe structure, and clear CTA flow. Keep the project polished enough to ship as a first draft, but avoid extra complexity that could break the run.${imageSectionMapBlock}`;
           await patchJobMetadata(
             supabase,
             job.id,
@@ -8178,6 +8183,54 @@ Return ONLY the JSON object. No explanation.`;
           finalSummary = `${finalSummary} | ${bootstrappedNotes.join(' | ')}`;
         }
 
+        // Safety budget: polish runs a second full Gemini call (up to 120s) on top of
+        // whatever drafting already took. If drafting alone (including a timeout-retry)
+        // already ate a large chunk of the background-task time budget, attempting polish
+        // risks the whole worker being killed by the platform mid-call, which leaves the
+        // job stuck in "running" forever since neither the success path nor the catch
+        // below ever gets to run. Skip polish outright once past a safe threshold so the
+        // draft we already saved reliably ships as the final result instead of risking a hang.
+        const elapsedSinceStartMs = Date.now() - createStartTime;
+        const POLISH_TIME_BUDGET_MS = 240000; // 4 minutes
+        if (elapsedSinceStartMs > POLISH_TIME_BUDGET_MS) {
+          finalSummary = `${finalSummary} | Working draft saved. Premium polish was skipped to avoid a timeout (drafting already took ${Math.round(elapsedSinceStartMs / 1000)}s).`;
+          createRecoveredSummary = finalSummary;
+          await patchJobMetadata(
+            supabase,
+            job.id,
+            {
+              createStage: 'done',
+              draftSaved: true,
+              polishAttempted: false,
+              polishApplied: false,
+              polishSkippedReason: 'time_budget_exceeded',
+            },
+            {
+              at: new Date().toISOString(),
+              step: 'done',
+              status: 'completed',
+              note: 'Working draft kept — skipped premium polish to avoid a timeout',
+            },
+          );
+        } else {
+        await patchJobMetadata(
+          supabase,
+          job.id,
+          {
+            createStage: 'polishing',
+            draftSaved: true,
+            draftSummary: createRecoveredSummary,
+            polishAttempted: true,
+            polishApplied: false,
+          },
+          {
+            at: new Date().toISOString(),
+            step: 'polishing',
+            status: 'in_progress',
+            note: 'Working draft saved. Adding premium polish.',
+          },
+        );
+
         try {
           const polishPrompt = `${prompt}\n\nThe working first draft is already saved. Upgrade it into a premium final version without breaking the runtime entry, routing, backend wiring, or any working section. Improve hierarchy, composition, visual rhythm, CTA clarity, spacing, premium feel, and first impression. Keep all existing working functionality intact.`;
           const polishResult = await callGeminiFullRewriteEdit(
@@ -8252,6 +8305,7 @@ Return ONLY the JSON object. No explanation.`;
               note: 'Working draft kept because premium polish failed',
             },
           );
+        }
         }
 
         stopHeartbeat();
