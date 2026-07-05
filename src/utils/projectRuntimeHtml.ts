@@ -80,10 +80,6 @@ const STATIC_REACT_IS_URLS = [
   'https://cdn.jsdelivr.net/npm/react-is@18/umd/react-is.production.min.js',
   'https://unpkg.com/react-is/umd/react-is.production.min.js',
 ];
-const STATIC_FRAMER_MOTION_URLS = [
-  'https://cdn.jsdelivr.net/npm/framer-motion@6.5.1/dist/framer-motion.js',
-  'https://unpkg.com/framer-motion@6.5.1/dist/framer-motion.js',
-];
 const STATIC_LUCIDE_URLS = [
   'https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js',
   'https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js',
@@ -122,16 +118,15 @@ async function fetchFirstAvailable(urls: string[]): Promise<string | null> {
 // published site can embed everything it needs and run with zero runtime CDN
 // calls - no "loading app" wait for visitors, just a normal static site.
 export async function fetchVendorSources(needs: RuntimeNeeds): Promise<VendorSources> {
-  const [react, reactDom, reactIs, framerMotion, lucide, recharts, tailwind] = await Promise.all([
+  const [react, reactDom, reactIs, lucide, recharts, tailwind] = await Promise.all([
     fetchFirstAvailable(STATIC_REACT_URLS),
     fetchFirstAvailable(STATIC_REACT_DOM_URLS),
     needs.needsReactIs ? fetchFirstAvailable(STATIC_REACT_IS_URLS) : Promise.resolve(null),
-    needs.needsFramerMotion ? fetchFirstAvailable(STATIC_FRAMER_MOTION_URLS) : Promise.resolve(null),
     needs.needsLucide ? fetchFirstAvailable(STATIC_LUCIDE_URLS) : Promise.resolve(null),
     needs.needsRecharts ? fetchFirstAvailable(STATIC_RECHARTS_URLS) : Promise.resolve(null),
     fetchFirstAvailable(STATIC_TAILWIND_RUNTIME_URLS),
   ]);
-  return { react, reactDom, reactIs, framerMotion, lucide, recharts, tailwind };
+  return { react, reactDom, reactIs, framerMotion: null, lucide, recharts, tailwind };
 }
 
 export function buildProjectStaticPublishFiles({
@@ -172,9 +167,6 @@ export function buildProjectStaticPublishFiles({
   ];
   if (needs.needsReactIs && vendor.reactIs) {
     vendorScripts.push(`<script>${escapeInlineScript(vendor.reactIs)}</script>`);
-  }
-  if (needs.needsFramerMotion && vendor.framerMotion) {
-    vendorScripts.push(`<script>${escapeInlineScript(vendor.framerMotion)}</script>`);
   }
   if (needs.needsLucide && vendor.lucide) {
     vendorScripts.push(`<script>${escapeInlineScript(vendor.lucide)}</script>`);
@@ -264,7 +256,6 @@ export function buildProjectStaticPublishFiles({
   <div id="root" style="visibility:hidden"></div>
   ${vendorScriptsHtml}
   <script>
-    window.FramerMotion = window.FramerMotion || window.Motion || null;
     if (typeof window.lucide !== 'undefined' && window.lucide) {
       window.__lucideIcons = window.lucide;
     }
