@@ -660,26 +660,83 @@ serve(async (req) => {
 
           const watch = useCallback((name) => name ? values[name] : {...values}, [values]);
 
-          const register = useCallback((name, opts = {}) => ({
-            name,
-            onChange: (e) => {
-              const v = e && e.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e;
-              setValues(prev => ({...prev, [name]: v}));
-              setIsDirty(true);
-              if (errors[name]) setErrors(prev => { const n={...prev}; delete n[name]; return n; });
-            },
-            onBlur: () => { touchedRef.current[name] = true; },
-            ref: () => {},
-          }), [errors]);
+          const fieldRulesRef = useRef({});
+
+          const register = useCallback((name, opts = {}) => {
+            fieldRulesRef.current[name] = opts;
+            return {
+              name,
+              onChange: (e) => {
+                const v = e && e.target ? (e.target.type === 'checkbox' ? e.target.checked : e.target.value) : e;
+                setValues(prev => ({...prev, [name]: v}));
+                setIsDirty(true);
+                if (errors[name]) setErrors(prev => { const n={...prev}; delete n[name]; return n; });
+              },
+              onBlur: () => { touchedRef.current[name] = true; },
+              ref: () => {},
+            };
+          }, [errors]);
+
+          const validateBuiltIn = useCallback((vals) => {
+            const errs = {};
+            Object.keys(fieldRulesRef.current).forEach((name) => {
+              const rule = fieldRulesRef.current[name] || {};
+              const value = vals[name];
+              const isEmpty = value === undefined || value === null || value === '';
+              if (rule.required && isEmpty) {
+                errs[name] = { type: 'required', message: (rule.required && rule.required.message) || (typeof rule.required === 'string' ? rule.required : 'This field is required') };
+                return;
+              }
+              if (isEmpty) return;
+              if (rule.pattern) {
+                const re = rule.pattern.value || rule.pattern;
+                if (!re.test(value)) { errs[name] = { type: 'pattern', message: rule.pattern.message || 'Invalid format' }; return; }
+              }
+              if (rule.minLength) {
+                const min = rule.minLength.value != null ? rule.minLength.value : rule.minLength;
+                if (String(value).length < min) { errs[name] = { type: 'minLength', message: rule.minLength.message || ('Minimum length is ' + min) }; return; }
+              }
+              if (rule.maxLength) {
+                const max = rule.maxLength.value != null ? rule.maxLength.value : rule.maxLength;
+                if (String(value).length > max) { errs[name] = { type: 'maxLength', message: rule.maxLength.message || ('Maximum length is ' + max) }; return; }
+              }
+              if (rule.min != null) {
+                const min = rule.min.value != null ? rule.min.value : rule.min;
+                if (Number(value) < min) { errs[name] = { type: 'min', message: rule.min.message || ('Minimum value is ' + min) }; return; }
+              }
+              if (rule.max != null) {
+                const max = rule.max.value != null ? rule.max.value : rule.max;
+                if (Number(value) > max) { errs[name] = { type: 'max', message: rule.max.message || ('Maximum value is ' + max) }; return; }
+              }
+            });
+            return errs;
+          }, []);
 
           const handleSubmit = useCallback((onValid, onInvalid) => async (e) => {
             if (e && e.preventDefault) e.preventDefault();
             if (e && e.stopPropagation) e.stopPropagation();
             setIsSubmitting(true);
-            try { await onValid({...values}); } 
+            try {
+              let fieldErrors = {};
+              let dataToSubmit = {...values};
+              if (typeof options.resolver === 'function') {
+                const result = await options.resolver({...values});
+                fieldErrors = result.errors || {};
+                if (result.values && Object.keys(result.values).length > 0) dataToSubmit = result.values;
+              } else {
+                fieldErrors = validateBuiltIn(values);
+              }
+              if (Object.keys(fieldErrors).length > 0) {
+                setErrors(fieldErrors);
+                if (onInvalid) onInvalid(fieldErrors);
+              } else {
+                setErrors({});
+                await onValid(dataToSubmit);
+              }
+            }
             catch(err) { if (onInvalid) onInvalid(err); }
             finally { setIsSubmitting(false); }
-          }, [values]);
+          }, [values, validateBuiltIn]);
 
           const setError = useCallback((name, error) => setErrors(prev => ({...prev, [name]: error})), []);
           const clearErrors = useCallback((name) => {
@@ -740,6 +797,2853 @@ serve(async (req) => {
           return control ? control.formState : {};
         }
         export default { useForm, Controller, FormProvider, useFormContext, useWatch, useController, useFieldArray, useFormState };
+      `,
+      '__waktiToastCore': `
+        let container = null;
+        let idCounter = 0;
+        let toasts = [];
+        let currentPosition = 'bottom-right';
+        const listeners = new Set();
+
+        function ensureContainer() {
+          if (!container) {
+            container = document.createElement('div');
+            container.id = 'wakti-toast-container';
+            document.body.appendChild(container);
+          }
+          const posStyles = {
+            'top-left': { top: '16px', left: '16px', right: '', bottom: '', transform: '' },
+            'top-center': { top: '16px', left: '50%', right: '', bottom: '', transform: 'translateX(-50%)' },
+            'top-right': { top: '16px', right: '16px', left: '', bottom: '', transform: '' },
+            'bottom-left': { bottom: '16px', left: '16px', right: '', top: '', transform: '' },
+            'bottom-center': { bottom: '16px', left: '50%', right: '', top: '', transform: 'translateX(-50%)' },
+            'bottom-right': { bottom: '16px', right: '16px', left: '', top: '', transform: '' },
+          };
+          const chosen = posStyles[currentPosition] || posStyles['bottom-right'];
+          Object.assign(container.style, {
+            position: 'fixed', zIndex: '999999', display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'none',
+          }, chosen);
+          return container;
+        }
+
+        function colorFor(type) {
+          if (type === 'success') return { bg: '#065f46', border: '#10b981' };
+          if (type === 'error') return { bg: '#7f1d1d', border: '#ef4444' };
+          if (type === 'warning') return { bg: '#78350f', border: '#f59e0b' };
+          if (type === 'loading') return { bg: '#1e293b', border: '#64748b' };
+          return { bg: '#1f2937', border: '#374151' };
+        }
+
+        function render() {
+          const el = ensureContainer();
+          el.innerHTML = '';
+          toasts.forEach(function(t) {
+            const item = document.createElement('div');
+            const colors = colorFor(t.type);
+            Object.assign(item.style, {
+              background: colors.bg, border: '1px solid ' + colors.border, color: '#f9fafb',
+              padding: '10px 14px', borderRadius: '8px', fontSize: '13px', fontFamily: 'Inter, system-ui, sans-serif',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.3)', pointerEvents: 'auto', minWidth: '220px', maxWidth: '360px', cursor: 'pointer',
+            });
+            const title = document.createElement('div');
+            title.style.fontWeight = '600';
+            title.textContent = String(t.message);
+            item.appendChild(title);
+            if (t.description) {
+              const desc = document.createElement('div');
+              desc.style.opacity = '0.85';
+              desc.style.marginTop = '2px';
+              desc.textContent = String(t.description);
+              item.appendChild(desc);
+            }
+            item.addEventListener('click', function() { dismiss(t.id); });
+            el.appendChild(item);
+          });
+        }
+
+        function dismiss(id) {
+          if (id === undefined) { toasts = []; render(); return; }
+          toasts = toasts.filter(function(t) { return t.id !== id; });
+          render();
+        }
+
+        function push(message, options) {
+          options = options || {};
+          const id = options.id || ++idCounter;
+          const toast = {
+            id: id, message: message, type: options.type || 'default',
+            description: options.description,
+            duration: options.duration != null ? options.duration : 4000,
+          };
+          toasts = toasts.filter(function(t) { return t.id !== id; }).concat([toast]);
+          render();
+          if (toast.duration !== Infinity && toast.duration > 0) {
+            setTimeout(function() { dismiss(id); }, toast.duration);
+          }
+          return id;
+        }
+
+        function setPosition(pos) {
+          if (pos) currentPosition = pos;
+          render();
+        }
+
+        export const toastCore = { push: push, dismiss: dismiss, setPosition: setPosition };
+      `,
+      '__waktiRadixCore': `
+        const useControllableState = (value, defaultValue, onChange) => {
+          const [internal, setInternal] = window.React.useState(defaultValue);
+          const isControlled = value !== undefined;
+          const current = isControlled ? value : internal;
+          const setValue = (next) => {
+            const resolved = typeof next === 'function' ? next(current) : next;
+            if (!isControlled) setInternal(resolved);
+            if (typeof onChange === 'function') onChange(resolved);
+          };
+          return [current, setValue];
+        };
+
+        const useClickOutside = (ref, handler, active) => {
+          window.React.useEffect(() => {
+            if (!active) return;
+            const listener = (event) => {
+              if (ref.current && !ref.current.contains(event.target)) handler(event);
+            };
+            document.addEventListener('mousedown', listener, true);
+            document.addEventListener('touchstart', listener, true);
+            return () => {
+              document.removeEventListener('mousedown', listener, true);
+              document.removeEventListener('touchstart', listener, true);
+            };
+          }, [active, handler]);
+        };
+
+        const useEscapeKey = (handler, active) => {
+          window.React.useEffect(() => {
+            if (!active) return;
+            const listener = (event) => { if (event.key === 'Escape') handler(event); };
+            document.addEventListener('keydown', listener, true);
+            return () => document.removeEventListener('keydown', listener, true);
+          }, [active, handler]);
+        };
+
+        const mergeRefs = (...refs) => (node) => {
+          refs.forEach((ref) => {
+            if (!ref) return;
+            if (typeof ref === 'function') ref(node);
+            else ref.current = node;
+          });
+        };
+
+        const mergeProps = (slotProps, childProps) => {
+          const merged = Object.assign({}, slotProps, childProps);
+          if (slotProps.className || childProps.className) {
+            merged.className = [slotProps.className, childProps.className].filter(Boolean).join(' ');
+          }
+          if (slotProps.style || childProps.style) {
+            merged.style = Object.assign({}, slotProps.style, childProps.style);
+          }
+          ['onClick', 'onChange', 'onKeyDown', 'onMouseEnter', 'onMouseLeave', 'onFocus', 'onBlur'].forEach((handlerName) => {
+            const a = slotProps[handlerName];
+            const b = childProps[handlerName];
+            if (a && b) merged[handlerName] = (...args) => { a(...args); b(...args); };
+          });
+          return merged;
+        };
+
+        const Slot = window.React.forwardRef((props, ref) => {
+          const rest = {};
+          Object.keys(props).forEach((key) => { if (key !== 'children') rest[key] = props[key]; });
+          const children = props.children;
+          if (window.React.isValidElement(children)) {
+            const merged = mergeProps(rest, children.props || {});
+            merged.ref = mergeRefs(ref, children.ref);
+            return window.React.cloneElement(children, merged);
+          }
+          return children || null;
+        });
+
+        export { useControllableState, useClickOutside, useEscapeKey, mergeRefs, mergeProps, Slot };
+      `,
+      'uuid': `
+        function randomUUID() {
+          if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+          const bytes = new Uint8Array(16);
+          if (window.crypto && window.crypto.getRandomValues) window.crypto.getRandomValues(bytes);
+          else for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256);
+          bytes[6] = (bytes[6] & 0x0f) | 0x40;
+          bytes[8] = (bytes[8] & 0x3f) | 0x80;
+          const hex = Array.prototype.map.call(bytes, function(b) { return b.toString(16).padStart(2, '0'); });
+          return hex.slice(0,4).join('') + '-' + hex.slice(4,6).join('') + '-' + hex.slice(6,8).join('') + '-' + hex.slice(8,10).join('') + '-' + hex.slice(10,16).join('');
+        }
+        export function v4() { return randomUUID(); }
+        export function v1() { return randomUUID(); }
+        export function v3() { return randomUUID(); }
+        export function v5() { return randomUUID(); }
+        export const NIL = '00000000-0000-0000-0000-000000000000';
+        export function validate(id) { return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id); }
+        export function version(id) { return parseInt(String(id || '').charAt(14), 16) || 0; }
+        export default { v4: v4, v1: v1, v3: v3, v5: v5, NIL: NIL, validate: validate, version: version };
+      `,
+      'dayjs': `
+        const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        function pad(n) { return (n < 10 ? '0' : '') + n; }
+        function dayjsAddSubtract(instance, value, unit, sign) {
+          const d = new Date(instance._d.getTime());
+          const amount = value * sign;
+          if (unit === 'day' || unit === 'days' || unit === 'd') d.setDate(d.getDate() + amount);
+          else if (unit === 'month' || unit === 'months' || unit === 'M') d.setMonth(d.getMonth() + amount);
+          else if (unit === 'year' || unit === 'years' || unit === 'y') d.setFullYear(d.getFullYear() + amount);
+          else if (unit === 'hour' || unit === 'hours' || unit === 'h') d.setHours(d.getHours() + amount);
+          else if (unit === 'minute' || unit === 'minutes' || unit === 'm') d.setMinutes(d.getMinutes() + amount);
+          else if (unit === 'second' || unit === 'seconds' || unit === 's') d.setSeconds(d.getSeconds() + amount);
+          else if (unit === 'week' || unit === 'weeks' || unit === 'w') d.setDate(d.getDate() + amount * 7);
+          return new Dayjs(d);
+        }
+        class Dayjs {
+          constructor(input) {
+            this._d = input === undefined ? new Date() : (input instanceof Date ? new Date(input.getTime()) : new Date(input));
+          }
+          format(tpl) {
+            if (!tpl) return this._d.toISOString();
+            const d = this._d;
+            const map = {
+              'YYYY': String(d.getFullYear()), 'YY': String(d.getFullYear()).slice(-2),
+              'MMMM': MONTH_NAMES[d.getMonth()], 'MMM': MONTH_NAMES[d.getMonth()].slice(0,3),
+              'MM': pad(d.getMonth() + 1), 'M': String(d.getMonth() + 1),
+              'DD': pad(d.getDate()), 'D': String(d.getDate()),
+              'dddd': DAY_NAMES[d.getDay()], 'ddd': DAY_NAMES[d.getDay()].slice(0,3),
+              'HH': pad(d.getHours()), 'H': String(d.getHours()),
+              'hh': pad((d.getHours() % 12) || 12), 'h': String((d.getHours() % 12) || 12),
+              'mm': pad(d.getMinutes()), 'm': String(d.getMinutes()),
+              'ss': pad(d.getSeconds()), 's': String(d.getSeconds()),
+              'A': d.getHours() < 12 ? 'AM' : 'PM', 'a': d.getHours() < 12 ? 'am' : 'pm'
+            };
+            const keys = Object.keys(map).sort(function(a, b) { return b.length - a.length; });
+            const placeholders = [];
+            let result = tpl;
+            keys.forEach(function(key) {
+              while (result.indexOf(key) !== -1) {
+                placeholders.push(map[key]);
+                result = result.replace(key, '\\u0000' + (placeholders.length - 1) + '\\u0000');
+              }
+            });
+            result = result.replace(/\\u0000(\\d+)\\u0000/g, function(_, idx) { return String(placeholders[Number(idx)]); });
+            return result;
+          }
+          add(value, unit) { return dayjsAddSubtract(this, value, unit, 1); }
+          subtract(value, unit) { return dayjsAddSubtract(this, value, unit, -1); }
+          diff(other, unit) {
+            const otherMs = other && other._d ? other._d.getTime() : new Date(other).getTime();
+            const ms = this._d.getTime() - otherMs;
+            const divisors = { day: 86400000, hour: 3600000, minute: 60000, second: 1000, month: 2629800000, year: 31557600000 };
+            return Math.floor(ms / (divisors[unit] || 1));
+          }
+          isBefore(other) { return this._d.getTime() < (other && other._d ? other._d.getTime() : new Date(other).getTime()); }
+          isAfter(other) { return this._d.getTime() > (other && other._d ? other._d.getTime() : new Date(other).getTime()); }
+          isSame(other) { return this._d.getTime() === (other && other._d ? other._d.getTime() : new Date(other).getTime()); }
+          toDate() { return new Date(this._d.getTime()); }
+          valueOf() { return this._d.getTime(); }
+          unix() { return Math.floor(this._d.getTime() / 1000); }
+          year() { return this._d.getFullYear(); }
+          month() { return this._d.getMonth(); }
+          date() { return this._d.getDate(); }
+          day() { return this._d.getDay(); }
+          hour() { return this._d.getHours(); }
+          minute() { return this._d.getMinutes(); }
+          second() { return this._d.getSeconds(); }
+          clone() { return new Dayjs(this._d); }
+        }
+        function dayjs(input) { return new Dayjs(input); }
+        dayjs.extend = function() {};
+        export default dayjs;
+      `,
+      'moment': `
+        import dayjsFactory from 'dayjs';
+        function moment(input) {
+          const instance = dayjsFactory(input);
+          instance.fromNow = function() {
+            const diffMs = Date.now() - instance.toDate().getTime();
+            const seconds = Math.round(diffMs / 1000);
+            const abs = Math.abs(seconds);
+            const suffix = seconds >= 0 ? ' ago' : ' from now';
+            if (abs < 60) return 'a few seconds' + suffix;
+            if (abs < 3600) return Math.round(abs / 60) + ' minutes' + suffix;
+            if (abs < 86400) return Math.round(abs / 3600) + ' hours' + suffix;
+            if (abs < 2629800) return Math.round(abs / 86400) + ' days' + suffix;
+            if (abs < 31557600) return Math.round(abs / 2629800) + ' months' + suffix;
+            return Math.round(abs / 31557600) + ' years' + suffix;
+          };
+          instance.startOf = function(unit) {
+            const d = instance.toDate();
+            if (unit === 'day') d.setHours(0,0,0,0);
+            else if (unit === 'month') { d.setDate(1); d.setHours(0,0,0,0); }
+            else if (unit === 'year') { d.setMonth(0,1); d.setHours(0,0,0,0); }
+            else if (unit === 'hour') d.setMinutes(0,0,0);
+            return dayjsFactory(d);
+          };
+          instance.isValid = function() { return !isNaN(instance.toDate().getTime()); };
+          return instance;
+        }
+        moment.utc = moment;
+        export default moment;
+      `,
+      'canvas-confetti': `
+        function confetti(opts) {
+          opts = opts || {};
+          const particleCount = opts.particleCount || 50;
+          const spread = opts.spread || 70;
+          const originX = (opts.origin && opts.origin.x != null) ? opts.origin.x : 0.5;
+          const originY = (opts.origin && opts.origin.y != null) ? opts.origin.y : 0.5;
+          const colors = opts.colors || ['#26ccff', '#a25afd', '#ff5e7e', '#88ff5a', '#fcff42', '#ffa62d', '#ff36ff'];
+
+          const canvas = document.createElement('canvas');
+          canvas.style.position = 'fixed';
+          canvas.style.top = '0'; canvas.style.left = '0';
+          canvas.style.width = '100vw'; canvas.style.height = '100vh';
+          canvas.style.pointerEvents = 'none'; canvas.style.zIndex = '999999';
+          canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+          document.body.appendChild(canvas);
+          const ctx = canvas.getContext('2d');
+
+          const particles = [];
+          for (let i = 0; i < particleCount; i++) {
+            const angle = (Math.random() * spread - spread / 2) * (Math.PI / 180) - Math.PI / 2;
+            const speed = 4 + Math.random() * 6;
+            particles.push({
+              x: originX * canvas.width, y: originY * canvas.height,
+              vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed,
+              color: colors[Math.floor(Math.random() * colors.length)],
+              size: 4 + Math.random() * 4, rotation: Math.random() * 360,
+              rotationSpeed: (Math.random() - 0.5) * 20, gravity: 0.15 + Math.random() * 0.1, opacity: 1
+            });
+          }
+
+          let frame = 0;
+          const maxFrames = 120;
+          function tick() {
+            frame++;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            let alive = false;
+            particles.forEach(function(p) {
+              p.x += p.vx; p.y += p.vy; p.vy += p.gravity; p.rotation += p.rotationSpeed;
+              p.opacity = Math.max(0, 1 - frame / maxFrames);
+              if (p.opacity > 0) {
+                alive = true;
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate((p.rotation * Math.PI) / 180);
+                ctx.globalAlpha = p.opacity;
+                ctx.fillStyle = p.color;
+                ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                ctx.restore();
+              }
+            });
+            if (alive && frame < maxFrames) window.requestAnimationFrame(tick);
+            else canvas.remove();
+          }
+          window.requestAnimationFrame(tick);
+          return Promise.resolve();
+        }
+        confetti.reset = function() {};
+        confetti.create = function() { return confetti; };
+        export default confetti;
+      `,
+      'react-copy-to-clipboard': `
+        const CopyToClipboard = (props) => {
+          const handleClick = (e) => {
+            const text = props.text != null ? String(props.text) : '';
+            const doCopy = function() { if (typeof props.onCopy === 'function') props.onCopy(text, true); };
+            if (window.navigator && window.navigator.clipboard && window.navigator.clipboard.writeText) {
+              window.navigator.clipboard.writeText(text).then(doCopy).catch(doCopy);
+            } else {
+              const el = document.createElement('textarea');
+              el.value = text;
+              el.style.position = 'fixed';
+              el.style.opacity = '0';
+              document.body.appendChild(el);
+              el.select();
+              try { document.execCommand('copy'); } catch (err) {}
+              document.body.removeChild(el);
+              doCopy();
+            }
+            const child = props.children;
+            if (child && child.props && typeof child.props.onClick === 'function') child.props.onClick(e);
+          };
+          const child = props.children;
+          if (!child) return null;
+          return window.React.cloneElement(child, { onClick: handleClick });
+        };
+        export { CopyToClipboard };
+        export default CopyToClipboard;
+      `,
+      'react-intersection-observer': `
+        const useInView = (options) => {
+          options = options || {};
+          const [ref, setRef] = window.React.useState(null);
+          const [entryState, setEntryState] = window.React.useState({ inView: !!options.initialInView, entry: undefined });
+          window.React.useEffect(() => {
+            if (!ref) return;
+            if (typeof window.IntersectionObserver === 'undefined') { setEntryState({ inView: true, entry: undefined }); return; }
+            const observer = new window.IntersectionObserver((entries) => {
+              const entry = entries[0];
+              if (!entry) return;
+              const inView = entry.isIntersecting;
+              setEntryState({ inView: inView, entry: entry });
+              if (inView && options.triggerOnce) observer.disconnect();
+            }, { threshold: options.threshold || 0, root: options.root || null, rootMargin: options.rootMargin || '0px' });
+            observer.observe(ref);
+            return () => observer.disconnect();
+          }, [ref, options.threshold, options.triggerOnce, options.rootMargin]);
+          return { ref: setRef, inView: entryState.inView, entry: entryState.entry };
+        };
+        export { useInView };
+        const InView = (props) => {
+          const state = useInView({ threshold: props.threshold, triggerOnce: props.triggerOnce, initialInView: props.initialInView, rootMargin: props.rootMargin, root: props.root });
+          window.React.useEffect(() => { if (typeof props.onChange === 'function') props.onChange(state.inView); }, [state.inView]);
+          if (typeof props.children === 'function') return props.children({ inView: state.inView, ref: state.ref });
+          return window.React.createElement('div', { ref: state.ref }, props.children);
+        };
+        export { InView };
+        export default InView;
+      `,
+      'react-loading-skeleton': `
+        const Skeleton = (props) => {
+          const count = props.count || 1;
+          const circle = props.circle;
+          const style = Object.assign({
+            display: 'block',
+            width: props.width != null ? (typeof props.width === 'number' ? props.width + 'px' : props.width) : '100%',
+            height: props.height != null ? (typeof props.height === 'number' ? props.height + 'px' : props.height) : '1em',
+            borderRadius: circle ? '50%' : (props.borderRadius != null ? props.borderRadius : '0.25rem'),
+            background: 'linear-gradient(90deg, rgba(120,120,120,0.15) 25%, rgba(120,120,120,0.3) 37%, rgba(120,120,120,0.15) 63%)',
+            backgroundSize: '400% 100%', animation: 'wakti-skeleton-pulse 1.4s ease infinite', lineHeight: 1,
+          }, props.style || {});
+          if (!document.getElementById('wakti-skeleton-keyframes')) {
+            const styleEl = document.createElement('style');
+            styleEl.id = 'wakti-skeleton-keyframes';
+            styleEl.textContent = '@keyframes wakti-skeleton-pulse { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }';
+            document.head.appendChild(styleEl);
+          }
+          const items = [];
+          for (let i = 0; i < count; i++) {
+            items.push(window.React.createElement('span', { key: i, style: Object.assign({}, style, { marginBottom: count > 1 ? '0.4em' : 0 }) }));
+          }
+          return window.React.createElement(window.React.Fragment, null, items);
+        };
+        export { Skeleton };
+        export default Skeleton;
+      `,
+      'react-masonry-css': `
+        const Masonry = (props) => {
+          const breakpointCols = props.breakpointCols;
+          const [columnCount, setColumnCount] = window.React.useState(3);
+          window.React.useEffect(() => {
+            const compute = function() {
+              let cols = 3;
+              if (typeof breakpointCols === 'number') cols = breakpointCols;
+              else if (breakpointCols && typeof breakpointCols === 'object') {
+                const width = window.innerWidth;
+                cols = breakpointCols.default || 3;
+                Object.keys(breakpointCols).forEach(function(key) {
+                  if (key !== 'default' && width <= parseInt(key, 10)) cols = Math.min(cols, breakpointCols[key]);
+                });
+              }
+              setColumnCount(Math.max(1, cols));
+            };
+            compute();
+            window.addEventListener('resize', compute);
+            return () => window.removeEventListener('resize', compute);
+          }, [JSON.stringify(breakpointCols)]);
+
+          const children = window.React.Children.toArray(props.children);
+          const columns = [];
+          for (let i = 0; i < columnCount; i++) columns.push([]);
+          children.forEach((child, i) => { columns[i % columnCount].push(child); });
+
+          return window.React.createElement(
+            'div',
+            { className: props.className, style: { display: 'flex', gap: '1rem', alignItems: 'flex-start' } },
+            columns.map((col, i) => window.React.createElement(
+              'div',
+              { key: i, className: props.columnClassName || '', style: { display: 'flex', flexDirection: 'column', gap: '1rem', flex: 1, minWidth: 0 } },
+              col
+            ))
+          );
+        };
+        export default Masonry;
+      `,
+      'react-infinite-scroll-component': `
+        const InfiniteScroll = (props) => {
+          const sentinelRef = window.React.useRef(null);
+          const loadingRef = window.React.useRef(false);
+          window.React.useEffect(() => {
+            const node = sentinelRef.current;
+            if (!node || !props.hasMore) return;
+            if (typeof window.IntersectionObserver === 'undefined') return;
+            const observer = new window.IntersectionObserver((entries) => {
+              if (entries[0] && entries[0].isIntersecting && !loadingRef.current && props.hasMore) {
+                loadingRef.current = true;
+                const result = props.next && props.next();
+                if (result && typeof result.then === 'function') result.then(() => { loadingRef.current = false; });
+                else setTimeout(() => { loadingRef.current = false; }, 200);
+              }
+            }, { threshold: 0 });
+            observer.observe(node);
+            return () => observer.disconnect();
+          }, [props.hasMore, props.dataLength]);
+
+          return window.React.createElement(
+            'div',
+            { id: props.id, className: props.className, style: props.height ? { height: props.height, overflow: 'auto' } : undefined },
+            props.children,
+            window.React.createElement('div', { ref: sentinelRef, style: { height: 1 } }),
+            props.hasMore ? (props.loader || null) : (props.endMessage || null)
+          );
+        };
+        export default InfiniteScroll;
+      `,
+      'zod': `
+        class ZodError extends Error {
+          constructor(errors) {
+            super('Validation failed');
+            this.errors = errors;
+            this.issues = errors;
+          }
+        }
+
+        class ZodType {
+          constructor() {
+            this._isOptional = false;
+            this._isNullable = false;
+            this._hasDefault = false;
+            this._defaultValue = undefined;
+            this._refinements = [];
+          }
+          optional() { const c = this._clone(); c._isOptional = true; return c; }
+          nullable() { const c = this._clone(); c._isNullable = true; return c; }
+          nullish() { const c = this._clone(); c._isOptional = true; c._isNullable = true; return c; }
+          default(value) { const c = this._clone(); c._hasDefault = true; c._defaultValue = value; return c; }
+          refine(fn, message) {
+            const c = this._clone();
+            c._refinements = c._refinements.concat([{ fn: fn, message: (message && message.message) || message || 'Invalid value' }]);
+            return c;
+          }
+          _clone() {
+            const c = Object.create(Object.getPrototypeOf(this));
+            Object.assign(c, this);
+            c._refinements = this._refinements.slice();
+            return c;
+          }
+          _checkBase(value, path, errors) {
+            if (value === undefined) {
+              if (this._hasDefault) return this._defaultValue;
+              if (this._isOptional) return undefined;
+              errors.push({ path: path, message: 'Required' });
+              return undefined;
+            }
+            if (value === null) {
+              if (this._isNullable) return null;
+              errors.push({ path: path, message: 'Expected value, received null' });
+              return undefined;
+            }
+            return value;
+          }
+          _runRefinements(value, path, errors) {
+            this._refinements.forEach(function(r) {
+              try { if (!r.fn(value)) errors.push({ path: path, message: r.message }); }
+              catch (e) { errors.push({ path: path, message: r.message }); }
+            });
+          }
+          parse(value) {
+            const errors = [];
+            const result = this._check(value, [], errors);
+            if (errors.length > 0) throw new ZodError(errors);
+            return result;
+          }
+          safeParse(value) {
+            const errors = [];
+            const result = this._check(value, [], errors);
+            if (errors.length > 0) return { success: false, error: new ZodError(errors) };
+            return { success: true, data: result };
+          }
+        }
+
+        class ZodString extends ZodType {
+          constructor() { super(); this._checks = []; }
+          _clone() { const c = super._clone(); c._checks = this._checks.slice(); return c; }
+          min(len, msg) { const c = this._clone(); c._checks.push({ type: 'min', value: len, message: (msg && msg.message) || msg || ('String must contain at least ' + len + ' character(s)') }); return c; }
+          max(len, msg) { const c = this._clone(); c._checks.push({ type: 'max', value: len, message: (msg && msg.message) || msg || ('String must contain at most ' + len + ' character(s)') }); return c; }
+          length(len, msg) { const c = this._clone(); c._checks.push({ type: 'length', value: len, message: (msg && msg.message) || msg || ('String must be exactly ' + len + ' character(s)') }); return c; }
+          email(msg) { const c = this._clone(); c._checks.push({ type: 'email', message: (msg && msg.message) || msg || 'Invalid email' }); return c; }
+          url(msg) { const c = this._clone(); c._checks.push({ type: 'url', message: (msg && msg.message) || msg || 'Invalid url' }); return c; }
+          regex(re, msg) { const c = this._clone(); c._checks.push({ type: 'regex', value: re, message: (msg && msg.message) || msg || 'Invalid format' }); return c; }
+          trim() { const c = this._clone(); c._checks.push({ type: 'trim' }); return c; }
+          nonempty(msg) { return this.min(1, msg); }
+          _check(value, path, errors) {
+            const v = this._checkBase(value, path, errors);
+            if (v === undefined || v === null) return v;
+            if (typeof v !== 'string') { errors.push({ path: path, message: 'Expected string' }); return v; }
+            let result = v;
+            for (const check of this._checks) {
+              if (check.type === 'trim') { result = result.trim(); continue; }
+              if (check.type === 'min' && result.length < check.value) errors.push({ path: path, message: check.message });
+              if (check.type === 'max' && result.length > check.value) errors.push({ path: path, message: check.message });
+              if (check.type === 'length' && result.length !== check.value) errors.push({ path: path, message: check.message });
+              if (check.type === 'email' && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(result)) errors.push({ path: path, message: check.message });
+              if (check.type === 'url') { try { new URL(result); } catch (e) { errors.push({ path: path, message: check.message }); } }
+              if (check.type === 'regex' && !check.value.test(result)) errors.push({ path: path, message: check.message });
+            }
+            this._runRefinements(result, path, errors);
+            return result;
+          }
+        }
+
+        class ZodNumber extends ZodType {
+          constructor() { super(); this._checks = []; }
+          _clone() { const c = super._clone(); c._checks = this._checks.slice(); return c; }
+          min(n, msg) { const c = this._clone(); c._checks.push({ type: 'min', value: n, message: (msg && msg.message) || msg || ('Number must be greater than or equal to ' + n) }); return c; }
+          max(n, msg) { const c = this._clone(); c._checks.push({ type: 'max', value: n, message: (msg && msg.message) || msg || ('Number must be less than or equal to ' + n) }); return c; }
+          int(msg) { const c = this._clone(); c._checks.push({ type: 'int', message: (msg && msg.message) || msg || 'Expected integer' }); return c; }
+          positive(msg) { return this.min(0.0000001, msg); }
+          nonnegative(msg) { return this.min(0, msg); }
+          negative(msg) { const c = this._clone(); c._checks.push({ type: 'max', value: -0.0000001, message: (msg && msg.message) || msg || 'Number must be negative' }); return c; }
+          _check(value, path, errors) {
+            let v = this._checkBase(value, path, errors);
+            if (v === undefined || v === null) return v;
+            if (typeof v === 'string' && v !== '' && !isNaN(Number(v))) v = Number(v);
+            if (typeof v !== 'number' || isNaN(v)) { errors.push({ path: path, message: 'Expected number' }); return v; }
+            for (const check of this._checks) {
+              if (check.type === 'min' && v < check.value) errors.push({ path: path, message: check.message });
+              if (check.type === 'max' && v > check.value) errors.push({ path: path, message: check.message });
+              if (check.type === 'int' && !Number.isInteger(v)) errors.push({ path: path, message: check.message });
+            }
+            this._runRefinements(v, path, errors);
+            return v;
+          }
+        }
+
+        class ZodBoolean extends ZodType {
+          _check(value, path, errors) {
+            const v = this._checkBase(value, path, errors);
+            if (v === undefined || v === null) return v;
+            if (typeof v !== 'boolean') { errors.push({ path: path, message: 'Expected boolean' }); return v; }
+            this._runRefinements(v, path, errors);
+            return v;
+          }
+        }
+
+        class ZodDate extends ZodType {
+          _check(value, path, errors) {
+            const v = this._checkBase(value, path, errors);
+            if (v === undefined || v === null) return v;
+            const d = v instanceof Date ? v : new Date(v);
+            if (isNaN(d.getTime())) { errors.push({ path: path, message: 'Expected date' }); return v; }
+            this._runRefinements(d, path, errors);
+            return d;
+          }
+        }
+
+        class ZodLiteral extends ZodType {
+          constructor(literalValue) { super(); this._literal = literalValue; }
+          _check(value, path, errors) {
+            const v = this._checkBase(value, path, errors);
+            if (v === undefined || v === null) return v;
+            if (v !== this._literal) errors.push({ path: path, message: 'Invalid literal value' });
+            return v;
+          }
+        }
+
+        class ZodEnum extends ZodType {
+          constructor(values) { super(); this._values = values; }
+          _check(value, path, errors) {
+            const v = this._checkBase(value, path, errors);
+            if (v === undefined || v === null) return v;
+            if (this._values.indexOf(v) === -1) errors.push({ path: path, message: 'Invalid enum value. Expected ' + this._values.join(' | ') });
+            return v;
+          }
+        }
+
+        class ZodArray extends ZodType {
+          constructor(itemSchema) { super(); this._item = itemSchema; this._checks = []; }
+          _clone() { const c = super._clone(); c._checks = this._checks.slice(); return c; }
+          min(n, msg) { const c = this._clone(); c._checks.push({ type: 'min', value: n, message: (msg && msg.message) || msg || ('Array must contain at least ' + n + ' element(s)') }); return c; }
+          max(n, msg) { const c = this._clone(); c._checks.push({ type: 'max', value: n, message: (msg && msg.message) || msg || ('Array must contain at most ' + n + ' element(s)') }); return c; }
+          nonempty(msg) { return this.min(1, msg); }
+          _check(value, path, errors) {
+            const v = this._checkBase(value, path, errors);
+            if (v === undefined || v === null) return v;
+            if (!Array.isArray(v)) { errors.push({ path: path, message: 'Expected array' }); return v; }
+            for (const check of this._checks) {
+              if (check.type === 'min' && v.length < check.value) errors.push({ path: path, message: check.message });
+              if (check.type === 'max' && v.length > check.value) errors.push({ path: path, message: check.message });
+            }
+            const item = this._item;
+            const result = v.map(function(entry, i) { return item._check(entry, path.concat([i]), errors); });
+            this._runRefinements(result, path, errors);
+            return result;
+          }
+        }
+
+        class ZodObject extends ZodType {
+          constructor(shape) { super(); this._shape = shape; }
+          partial() {
+            const c = this._clone();
+            const newShape = {};
+            Object.keys(c._shape).forEach(function(key) { newShape[key] = c._shape[key].optional(); });
+            c._shape = newShape;
+            return c;
+          }
+          extend(shape) {
+            const c = this._clone();
+            c._shape = Object.assign({}, c._shape, shape);
+            return c;
+          }
+          _check(value, path, errors) {
+            const v = this._checkBase(value, path, errors);
+            if (v === undefined || v === null) return v;
+            if (typeof v !== 'object' || Array.isArray(v)) { errors.push({ path: path, message: 'Expected object' }); return v; }
+            const result = {};
+            const shape = this._shape;
+            Object.keys(shape).forEach(function(key) {
+              const fieldResult = shape[key]._check(v[key], path.concat([key]), errors);
+              if (fieldResult !== undefined) result[key] = fieldResult;
+            });
+            this._runRefinements(result, path, errors);
+            return result;
+          }
+        }
+
+        class ZodUnion extends ZodType {
+          constructor(options) { super(); this._options = options; }
+          _check(value, path, errors) {
+            const v = this._checkBase(value, path, errors);
+            if (v === undefined || v === null) return v;
+            for (const option of this._options) {
+              const localErrors = [];
+              const result = option._check(v, path, localErrors);
+              if (localErrors.length === 0) return result;
+            }
+            errors.push({ path: path, message: 'Invalid input' });
+            return v;
+          }
+        }
+
+        const z = {
+          string: function() { return new ZodString(); },
+          number: function() { return new ZodNumber(); },
+          boolean: function() { return new ZodBoolean(); },
+          date: function() { return new ZodDate(); },
+          literal: function(v) { return new ZodLiteral(v); },
+          enum: function(values) { return new ZodEnum(values); },
+          array: function(item) { return new ZodArray(item); },
+          object: function(shape) { return new ZodObject(shape); },
+          union: function(options) { return new ZodUnion(options); },
+          any: function() {
+            const t = new ZodType();
+            t._check = function(value, path, errors) { return t._checkBase(value, path, errors); };
+            return t;
+          },
+        };
+        z.unknown = z.any;
+
+        export { z, ZodError };
+        export default { z: z, ZodError: ZodError };
+      `,
+      '@hookform/resolvers': `
+        import { z } from 'zod';
+        export function zodResolver(schema) {
+          return function(values) {
+            const result = schema.safeParse(values);
+            if (result.success) return { values: result.data, errors: {} };
+            const errors = {};
+            (result.error && result.error.errors || []).forEach(function(e) {
+              const key = e.path && e.path.length ? e.path.join('.') : 'root';
+              if (!errors[key]) errors[key] = { type: 'validation', message: e.message };
+            });
+            return { values: {}, errors: errors };
+          };
+        }
+      `,
+      'axios': `
+        function buildURL(url, params) {
+          if (!params) return url;
+          const query = Object.keys(params)
+            .filter(function(k) { return params[k] !== undefined && params[k] !== null; })
+            .map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); })
+            .join('&');
+          if (!query) return url;
+          return url + (url.indexOf('?') === -1 ? '?' : '&') + query;
+        }
+
+        function mergeConfig(base, config) {
+          return Object.assign({}, base, config, {
+            headers: Object.assign({}, base && base.headers, config && config.headers),
+          });
+        }
+
+        function createInstance(defaults) {
+          defaults = defaults || {};
+
+          async function request(config) {
+            config = mergeConfig(defaults, config);
+            const baseURL = config.baseURL || '';
+            const url = (config.url || '').indexOf('http') === 0 ? config.url : baseURL + (config.url || '');
+            const fullUrl = buildURL(url, config.params);
+            const fetchOpts = {
+              method: (config.method || 'get').toUpperCase(),
+              headers: Object.assign({}, config.headers),
+            };
+            if (config.data !== undefined) {
+              if (typeof config.data === 'object' && !(config.data instanceof FormData)) {
+                fetchOpts.headers['Content-Type'] = fetchOpts.headers['Content-Type'] || 'application/json';
+                fetchOpts.body = JSON.stringify(config.data);
+              } else {
+                fetchOpts.body = config.data;
+              }
+            }
+            let response;
+            try {
+              response = await fetch(fullUrl, fetchOpts);
+            } catch (networkErr) {
+              const err = new Error(networkErr && networkErr.message ? networkErr.message : 'Network Error');
+              err.isAxiosError = true;
+              err.config = config;
+              throw err;
+            }
+            const contentType = response.headers.get('content-type') || '';
+            let data;
+            try {
+              data = contentType.indexOf('application/json') !== -1 ? await response.json() : await response.text();
+            } catch (e) {
+              data = null;
+            }
+            const axiosResponse = {
+              data: data, status: response.status, statusText: response.statusText,
+              headers: response.headers, config: config,
+            };
+            if (!response.ok) {
+              const err = new Error('Request failed with status code ' + response.status);
+              err.isAxiosError = true;
+              err.response = axiosResponse;
+              err.config = config;
+              throw err;
+            }
+            return axiosResponse;
+          }
+
+          const instance = function(config) { return request(typeof config === 'string' ? { url: config, method: 'get' } : config); };
+          instance.request = request;
+          instance.get = function(url, config) { return request(Object.assign({}, config, { url: url, method: 'get' })); };
+          instance.delete = function(url, config) { return request(Object.assign({}, config, { url: url, method: 'delete' })); };
+          instance.head = function(url, config) { return request(Object.assign({}, config, { url: url, method: 'head' })); };
+          instance.post = function(url, data, config) { return request(Object.assign({}, config, { url: url, method: 'post', data: data })); };
+          instance.put = function(url, data, config) { return request(Object.assign({}, config, { url: url, method: 'put', data: data })); };
+          instance.patch = function(url, data, config) { return request(Object.assign({}, config, { url: url, method: 'patch', data: data })); };
+          instance.defaults = defaults;
+          instance.interceptors = {
+            request: { use: function() { return 0; }, eject: function() {} },
+            response: { use: function() { return 0; }, eject: function() {} },
+          };
+          instance.create = function(config) { return createInstance(Object.assign({}, defaults, config)); };
+          instance.isAxiosError = function(payload) { return !!(payload && payload.isAxiosError); };
+          instance.CancelToken = { source: function() { return { token: {}, cancel: function() {} }; } };
+          return instance;
+        }
+
+        const axios = createInstance({});
+        export default axios;
+      `,
+      'swr': `
+        const cache = new Map();
+        const listenersMap = new Map();
+
+        function notify(key) {
+          const listeners = listenersMap.get(key);
+          if (listeners) listeners.forEach(function(fn) { fn(); });
+        }
+
+        function useSWR(key, fetcher, options) {
+          options = options || {};
+          const keyStr = Array.isArray(key) ? JSON.stringify(key) : key;
+          const [, forceRender] = window.React.useState(0);
+
+          window.React.useEffect(() => {
+            if (!keyStr) return undefined;
+            const listeners = listenersMap.get(keyStr) || new Set();
+            const rerender = () => forceRender((n) => n + 1);
+            listeners.add(rerender);
+            listenersMap.set(keyStr, listeners);
+            return () => { listeners.delete(rerender); };
+          }, [keyStr]);
+
+          window.React.useEffect(() => {
+            if (!keyStr || typeof fetcher !== 'function') return undefined;
+            let cancelled = false;
+            const existing = cache.get(keyStr);
+            if (!existing || options.revalidateOnMount !== false) {
+              const entry = cache.get(keyStr) || {};
+              cache.set(keyStr, Object.assign({}, entry, { isLoading: true }));
+              notify(keyStr);
+              Promise.resolve(fetcher(key))
+                .then((data) => {
+                  if (cancelled) return;
+                  cache.set(keyStr, { data: data, error: undefined, isLoading: false });
+                  notify(keyStr);
+                })
+                .catch((error) => {
+                  if (cancelled) return;
+                  cache.set(keyStr, { data: undefined, error: error, isLoading: false });
+                  notify(keyStr);
+                  if (typeof options.onError === 'function') options.onError(error);
+                });
+            }
+            return () => { cancelled = true; };
+          }, [keyStr]);
+
+          const entry = cache.get(keyStr) || { data: options.fallbackData, error: undefined, isLoading: keyStr != null };
+          const mutate = (newData) => {
+            if (typeof newData === 'function') {
+              const current = (cache.get(keyStr) || {}).data;
+              cache.set(keyStr, Object.assign({}, cache.get(keyStr), { data: newData(current) }));
+            } else if (newData !== undefined) {
+              cache.set(keyStr, Object.assign({}, cache.get(keyStr), { data: newData }));
+            }
+            notify(keyStr);
+          };
+
+          return { data: entry.data, error: entry.error, isLoading: !!entry.isLoading, isValidating: !!entry.isLoading, mutate: mutate };
+        }
+
+        export default useSWR;
+        export { useSWR };
+        export function useSWRConfig() { return { cache: cache, mutate: function() {} }; }
+      `,
+      'sonner': `
+        import { toastCore } from '__waktiToastCore';
+
+        function toast(message, options) { return toastCore.push(message, options); }
+        toast.success = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'success' })); };
+        toast.error = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'error' })); };
+        toast.warning = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'warning' })); };
+        toast.info = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'default' })); };
+        toast.loading = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'loading', duration: Infinity })); };
+        toast.dismiss = function(id) { return toastCore.dismiss(id); };
+        toast.promise = function(promise, msgs) {
+          const id = toast.loading((msgs && msgs.loading) || 'Loading...');
+          return Promise.resolve(promise).then(function(result) {
+            toastCore.dismiss(id);
+            toast.success(typeof (msgs && msgs.success) === 'function' ? msgs.success(result) : ((msgs && msgs.success) || 'Success'));
+            return result;
+          }).catch(function(err) {
+            toastCore.dismiss(id);
+            toast.error(typeof (msgs && msgs.error) === 'function' ? msgs.error(err) : ((msgs && msgs.error) || 'Error'));
+            throw err;
+          });
+        };
+        export { toast };
+
+        export const Toaster = (props) => {
+          window.React.useEffect(() => { toastCore.setPosition(props.position); }, [props.position]);
+          return null;
+        };
+
+        export default toast;
+      `,
+      'react-toastify': `
+        import { toastCore } from '__waktiToastCore';
+
+        function toast(message, options) { return toastCore.push(message, options); }
+        toast.success = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'success' })); };
+        toast.error = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'error' })); };
+        toast.warning = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'warning' })); };
+        toast.warn = toast.warning;
+        toast.info = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'default' })); };
+        toast.loading = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'loading', duration: Infinity })); };
+        toast.dismiss = function(id) { return toastCore.dismiss(id); };
+        toast.isActive = function() { return false; };
+        export { toast };
+
+        export const ToastContainer = (props) => {
+          window.React.useEffect(() => { toastCore.setPosition(props.position); }, [props.position]);
+          return null;
+        };
+
+        export const Slide = 'slide';
+        export const Bounce = 'bounce';
+        export const Zoom = 'zoom';
+        export const Flip = 'flip';
+
+        export default toast;
+      `,
+      'react-hot-toast': `
+        import { toastCore } from '__waktiToastCore';
+
+        function toast(message, options) { return toastCore.push(message, options); }
+        toast.success = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'success' })); };
+        toast.error = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'error' })); };
+        toast.loading = function(message, options) { return toastCore.push(message, Object.assign({}, options, { type: 'loading', duration: Infinity })); };
+        toast.dismiss = function(id) { return toastCore.dismiss(id); };
+        toast.remove = function(id) { return toastCore.dismiss(id); };
+        toast.promise = function(promise, msgs) {
+          const id = toast.loading((msgs && msgs.loading) || 'Loading...');
+          return Promise.resolve(promise).then(function(result) {
+            toastCore.dismiss(id);
+            toast.success(typeof (msgs && msgs.success) === 'function' ? msgs.success(result) : ((msgs && msgs.success) || 'Success'));
+            return result;
+          }).catch(function(err) {
+            toastCore.dismiss(id);
+            toast.error(typeof (msgs && msgs.error) === 'function' ? msgs.error(err) : ((msgs && msgs.error) || 'Error'));
+            throw err;
+          });
+        };
+
+        export const Toaster = (props) => {
+          window.React.useEffect(() => { toastCore.setPosition(props.position); }, [props.position]);
+          return null;
+        };
+
+        export default toast;
+      `,
+      '@radix-ui/react-slot': `
+        import { Slot } from '__waktiRadixCore';
+        export { Slot };
+        export default Slot;
+      `,
+      '@radix-ui/react-dialog': `
+        import { useControllableState, useClickOutside, useEscapeKey, Slot } from '__waktiRadixCore';
+
+        const DialogContext = window.React.createContext(null);
+
+        export const Root = (props) => {
+          const [open, setOpen] = useControllableState(props.open, !!props.defaultOpen, props.onOpenChange);
+          return window.React.createElement(DialogContext.Provider, { value: { open: open, setOpen: setOpen } }, props.children);
+        };
+
+        export const Trigger = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(DialogContext);
+          const handleClick = (e) => { if (ctx) ctx.setOpen(true); if (props.onClick) props.onClick(e); };
+          if (props.asChild) return window.React.createElement(Slot, Object.assign({}, props, { ref: ref, onClick: handleClick }));
+          return window.React.createElement('button', Object.assign({}, props, { ref: ref, onClick: handleClick, type: props.type || 'button' }));
+        });
+
+        export const Close = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(DialogContext);
+          const handleClick = (e) => { if (ctx) ctx.setOpen(false); if (props.onClick) props.onClick(e); };
+          if (props.asChild) return window.React.createElement(Slot, Object.assign({}, props, { ref: ref, onClick: handleClick }));
+          return window.React.createElement('button', Object.assign({}, props, { ref: ref, onClick: handleClick, type: props.type || 'button' }));
+        });
+
+        export const Portal = (props) => props.children;
+
+        export const Overlay = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(DialogContext);
+          if (!ctx || !ctx.open) return null;
+          return window.React.createElement('div', Object.assign({}, props, {
+            ref: ref, style: Object.assign({ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 50 }, props.style),
+          }));
+        });
+
+        export const Content = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(DialogContext);
+          const localRef = window.React.useRef(null);
+          useClickOutside(localRef, () => { if (ctx) ctx.setOpen(false); }, !!(ctx && ctx.open));
+          useEscapeKey(() => { if (ctx) ctx.setOpen(false); }, !!(ctx && ctx.open));
+          if (!ctx || !ctx.open) return null;
+          return window.React.createElement('div', Object.assign({}, props, {
+            ref: (node) => { localRef.current = node; if (typeof ref === 'function') ref(node); else if (ref) ref.current = node; },
+            role: 'dialog', 'aria-modal': 'true',
+            style: Object.assign({ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 51 }, props.style),
+          }));
+        });
+
+        export const Title = (props) => window.React.createElement('h2', props);
+        export const Description = (props) => window.React.createElement('p', props);
+      `,
+      '@radix-ui/react-popover': `
+        import { useControllableState, useClickOutside, useEscapeKey, Slot } from '__waktiRadixCore';
+
+        const PopoverContext = window.React.createContext(null);
+
+        export const Root = (props) => {
+          const [open, setOpen] = useControllableState(props.open, !!props.defaultOpen, props.onOpenChange);
+          const triggerRef = window.React.useRef(null);
+          return window.React.createElement(PopoverContext.Provider, { value: { open: open, setOpen: setOpen, triggerRef: triggerRef } }, props.children);
+        };
+
+        export const Trigger = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(PopoverContext);
+          const handleClick = (e) => { if (ctx) ctx.setOpen(!ctx.open); if (props.onClick) props.onClick(e); };
+          const setRefs = (node) => {
+            if (ctx) ctx.triggerRef.current = node;
+            if (typeof ref === 'function') ref(node); else if (ref) ref.current = node;
+          };
+          if (props.asChild) return window.React.createElement(Slot, Object.assign({}, props, { ref: setRefs, onClick: handleClick }));
+          return window.React.createElement('button', Object.assign({}, props, { ref: setRefs, onClick: handleClick, type: props.type || 'button' }));
+        });
+
+        export const Anchor = Trigger;
+        export const Portal = (props) => props.children;
+
+        export const Content = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(PopoverContext);
+          const localRef = window.React.useRef(null);
+          const [pos, setPos] = window.React.useState({ top: 0, left: 0 });
+          useClickOutside(localRef, () => { if (ctx) ctx.setOpen(false); }, !!(ctx && ctx.open));
+          useEscapeKey(() => { if (ctx) ctx.setOpen(false); }, !!(ctx && ctx.open));
+          window.React.useEffect(() => {
+            if (ctx && ctx.open && ctx.triggerRef.current) {
+              const rect = ctx.triggerRef.current.getBoundingClientRect();
+              setPos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX });
+            }
+          }, [ctx && ctx.open]);
+          if (!ctx || !ctx.open) return null;
+          return window.React.createElement('div', Object.assign({}, props, {
+            ref: (node) => { localRef.current = node; if (typeof ref === 'function') ref(node); else if (ref) ref.current = node; },
+            style: Object.assign({ position: 'absolute', top: pos.top + 'px', left: pos.left + 'px', zIndex: 50 }, props.style),
+          }));
+        });
+
+        export const Close = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(PopoverContext);
+          const handleClick = (e) => { if (ctx) ctx.setOpen(false); if (props.onClick) props.onClick(e); };
+          return window.React.createElement('button', Object.assign({}, props, { ref: ref, onClick: handleClick, type: props.type || 'button' }));
+        });
+
+        export const Arrow = () => null;
+      `,
+      '@radix-ui/react-dropdown-menu': `
+        import { useControllableState, useClickOutside, useEscapeKey, Slot } from '__waktiRadixCore';
+
+        const MenuContext = window.React.createContext(null);
+
+        export const Root = (props) => {
+          const [open, setOpen] = useControllableState(props.open, !!props.defaultOpen, props.onOpenChange);
+          const triggerRef = window.React.useRef(null);
+          return window.React.createElement(MenuContext.Provider, { value: { open: open, setOpen: setOpen, triggerRef: triggerRef } }, props.children);
+        };
+
+        export const Trigger = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(MenuContext);
+          const handleClick = (e) => { if (ctx) ctx.setOpen(!ctx.open); if (props.onClick) props.onClick(e); };
+          const setRefs = (node) => {
+            if (ctx) ctx.triggerRef.current = node;
+            if (typeof ref === 'function') ref(node); else if (ref) ref.current = node;
+          };
+          if (props.asChild) return window.React.createElement(Slot, Object.assign({}, props, { ref: setRefs, onClick: handleClick }));
+          return window.React.createElement('button', Object.assign({}, props, { ref: setRefs, onClick: handleClick, type: props.type || 'button' }));
+        });
+
+        export const Portal = (props) => props.children;
+        export const Group = (props) => window.React.createElement('div', { role: 'group' }, props.children);
+        export const Label = (props) => window.React.createElement('div', props);
+        export const Separator = (props) => window.React.createElement('div', Object.assign({}, props, { style: Object.assign({ height: 1, background: 'currentColor', opacity: 0.15, margin: '4px 0' }, props.style) }));
+        export const Sub = (props) => window.React.createElement(window.React.Fragment, null, props.children);
+        export const SubTrigger = Trigger;
+        export const SubContent = (props) => window.React.createElement('div', props);
+
+        export const Content = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(MenuContext);
+          const localRef = window.React.useRef(null);
+          const [pos, setPos] = window.React.useState({ top: 0, left: 0 });
+          useClickOutside(localRef, () => { if (ctx) ctx.setOpen(false); }, !!(ctx && ctx.open));
+          useEscapeKey(() => { if (ctx) ctx.setOpen(false); }, !!(ctx && ctx.open));
+          window.React.useEffect(() => {
+            if (ctx && ctx.open && ctx.triggerRef.current) {
+              const rect = ctx.triggerRef.current.getBoundingClientRect();
+              setPos({ top: rect.bottom + window.scrollY + 6, left: rect.left + window.scrollX });
+            }
+          }, [ctx && ctx.open]);
+          if (!ctx || !ctx.open) return null;
+          return window.React.createElement('div', Object.assign({}, props, {
+            ref: (node) => { localRef.current = node; if (typeof ref === 'function') ref(node); else if (ref) ref.current = node; },
+            role: 'menu',
+            style: Object.assign({ position: 'absolute', top: pos.top + 'px', left: pos.left + 'px', zIndex: 50 }, props.style),
+          }));
+        });
+
+        export const Item = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(MenuContext);
+          const handleClick = (e) => {
+            if (props.disabled) return;
+            if (props.onSelect) props.onSelect(e);
+            if (props.onClick) props.onClick(e);
+            if (ctx) ctx.setOpen(false);
+          };
+          return window.React.createElement('div', Object.assign({}, props, { ref: ref, role: 'menuitem', onClick: handleClick, style: Object.assign({ cursor: props.disabled ? 'default' : 'pointer' }, props.style) }));
+        });
+
+        export const CheckboxItem = window.React.forwardRef((props, ref) => {
+          const handleClick = (e) => { if (props.onCheckedChange) props.onCheckedChange(!props.checked); if (props.onClick) props.onClick(e); };
+          return window.React.createElement('div', Object.assign({}, props, { ref: ref, role: 'menuitemcheckbox', 'aria-checked': !!props.checked, onClick: handleClick, style: Object.assign({ cursor: 'pointer' }, props.style) }));
+        });
+
+        export const RadioGroup = (props) => window.React.createElement('div', { role: 'group' }, props.children);
+        export const RadioItem = window.React.forwardRef((props, ref) => {
+          const handleClick = (e) => { if (props.onSelect) props.onSelect(e); if (props.onClick) props.onClick(e); };
+          return window.React.createElement('div', Object.assign({}, props, { ref: ref, role: 'menuitemradio', onClick: handleClick, style: Object.assign({ cursor: 'pointer' }, props.style) }));
+        });
+
+        export const ItemIndicator = (props) => window.React.createElement(window.React.Fragment, null, props.children);
+      `,
+      '@radix-ui/react-tooltip': `
+        export const Provider = (props) => props.children;
+
+        const TooltipContext = window.React.createContext(null);
+
+        export const Root = (props) => {
+          const [open, setOpen] = window.React.useState(!!props.defaultOpen);
+          const triggerRef = window.React.useRef(null);
+          return window.React.createElement(TooltipContext.Provider, { value: { open: open, setOpen: setOpen, triggerRef: triggerRef } }, props.children);
+        };
+
+        export const Trigger = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(TooltipContext);
+          const setRefs = (node) => {
+            if (ctx) ctx.triggerRef.current = node;
+            if (typeof ref === 'function') ref(node); else if (ref) ref.current = node;
+          };
+          const handleEnter = (e) => { if (ctx) ctx.setOpen(true); if (props.onMouseEnter) props.onMouseEnter(e); };
+          const handleLeave = (e) => { if (ctx) ctx.setOpen(false); if (props.onMouseLeave) props.onMouseLeave(e); };
+          if (props.asChild && window.React.isValidElement(props.children)) {
+            return window.React.cloneElement(props.children, { ref: setRefs, onMouseEnter: handleEnter, onMouseLeave: handleLeave });
+          }
+          return window.React.createElement('span', Object.assign({}, props, { ref: setRefs, onMouseEnter: handleEnter, onMouseLeave: handleLeave }));
+        });
+
+        export const Portal = (props) => props.children;
+
+        export const Content = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(TooltipContext);
+          const [pos, setPos] = window.React.useState({ top: 0, left: 0 });
+          window.React.useEffect(() => {
+            if (ctx && ctx.open && ctx.triggerRef.current) {
+              const rect = ctx.triggerRef.current.getBoundingClientRect();
+              setPos({ top: rect.top + window.scrollY - 36, left: rect.left + window.scrollX });
+            }
+          }, [ctx && ctx.open]);
+          if (!ctx || !ctx.open) return null;
+          return window.React.createElement('div', Object.assign({}, props, {
+            ref: ref, role: 'tooltip',
+            style: Object.assign({ position: 'absolute', top: pos.top + 'px', left: pos.left + 'px', zIndex: 50, pointerEvents: 'none' }, props.style),
+          }));
+        });
+
+        export const Arrow = () => null;
+      `,
+      '@radix-ui/react-select': `
+        import { useControllableState, useClickOutside } from '__waktiRadixCore';
+
+        const SelectContext = window.React.createContext(null);
+
+        export const Root = (props) => {
+          const [value, setValue] = useControllableState(props.value, props.defaultValue || '', props.onValueChange);
+          const [open, setOpen] = window.React.useState(false);
+          const triggerRef = window.React.useRef(null);
+          const itemLabelsRef = window.React.useRef({});
+          return window.React.createElement(SelectContext.Provider, { value: { value: value, setValue: setValue, open: open, setOpen: setOpen, triggerRef: triggerRef, itemLabelsRef: itemLabelsRef } }, props.children);
+        };
+
+        export const Trigger = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(SelectContext);
+          const setRefs = (node) => {
+            if (ctx) ctx.triggerRef.current = node;
+            if (typeof ref === 'function') ref(node); else if (ref) ref.current = node;
+          };
+          const handleClick = (e) => { if (ctx) ctx.setOpen(!ctx.open); if (props.onClick) props.onClick(e); };
+          return window.React.createElement('button', Object.assign({}, props, { ref: setRefs, onClick: handleClick, type: 'button' }));
+        });
+
+        export const Value = (props) => {
+          const ctx = window.React.useContext(SelectContext);
+          const label = ctx && ctx.itemLabelsRef.current[ctx.value];
+          return window.React.createElement('span', null, label || props.placeholder || (ctx && ctx.value) || '');
+        };
+
+        export const Icon = (props) => window.React.createElement('span', null, props.children);
+        export const Portal = (props) => props.children;
+
+        export const Content = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(SelectContext);
+          const localRef = window.React.useRef(null);
+          const [pos, setPos] = window.React.useState({ top: 0, left: 0, width: 0 });
+          useClickOutside(localRef, () => { if (ctx) ctx.setOpen(false); }, !!(ctx && ctx.open));
+          window.React.useEffect(() => {
+            if (ctx && ctx.open && ctx.triggerRef.current) {
+              const rect = ctx.triggerRef.current.getBoundingClientRect();
+              setPos({ top: rect.bottom + window.scrollY + 4, left: rect.left + window.scrollX, width: rect.width });
+            }
+          }, [ctx && ctx.open]);
+          if (!ctx || !ctx.open) return null;
+          return window.React.createElement('div', Object.assign({}, props, {
+            ref: (node) => { localRef.current = node; if (typeof ref === 'function') ref(node); else if (ref) ref.current = node; },
+            style: Object.assign({ position: 'absolute', top: pos.top + 'px', left: pos.left + 'px', minWidth: pos.width + 'px', zIndex: 50 }, props.style),
+          }));
+        });
+
+        export const Viewport = (props) => window.React.createElement('div', null, props.children);
+        export const Group = (props) => window.React.createElement('div', { role: 'group' }, props.children);
+        export const Label = (props) => window.React.createElement('div', props);
+        export const Separator = (props) => window.React.createElement('div', Object.assign({}, props, { style: Object.assign({ height: 1, background: 'currentColor', opacity: 0.15, margin: '4px 0' }, props.style) }));
+
+        export const Item = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(SelectContext);
+          window.React.useEffect(() => {
+            if (ctx && props.value !== undefined) {
+              const text = props.textValue || (typeof props.children === 'string' ? props.children : props.value);
+              ctx.itemLabelsRef.current[props.value] = text;
+            }
+          }, [props.value, props.textValue]);
+          const handleClick = (e) => {
+            if (props.disabled) return;
+            if (ctx) { ctx.setValue(props.value); ctx.setOpen(false); }
+            if (props.onClick) props.onClick(e);
+          };
+          return window.React.createElement('div', Object.assign({}, props, { ref: ref, role: 'option', onClick: handleClick, 'aria-selected': !!(ctx && ctx.value === props.value), style: Object.assign({ cursor: props.disabled ? 'default' : 'pointer' }, props.style) }));
+        });
+
+        export const ItemText = (props) => window.React.createElement('span', null, props.children);
+        export const ItemIndicator = (props) => window.React.createElement(window.React.Fragment, null, props.children);
+        export const ScrollUpButton = () => null;
+        export const ScrollDownButton = () => null;
+      `,
+      '@radix-ui/react-tabs': `
+        import { useControllableState } from '__waktiRadixCore';
+
+        const TabsContext = window.React.createContext(null);
+
+        export const Root = (props) => {
+          const [value, setValue] = useControllableState(props.value, props.defaultValue || '', props.onValueChange);
+          return window.React.createElement('div', { className: props.className, style: props.style, dir: props.dir },
+            window.React.createElement(TabsContext.Provider, { value: { value: value, setValue: setValue } }, props.children)
+          );
+        };
+
+        export const List = window.React.forwardRef((props, ref) => window.React.createElement('div', Object.assign({}, props, { ref: ref, role: 'tablist' })));
+
+        export const Trigger = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(TabsContext);
+          const active = !!(ctx && ctx.value === props.value);
+          const handleClick = (e) => { if (!props.disabled && ctx) ctx.setValue(props.value); if (props.onClick) props.onClick(e); };
+          return window.React.createElement('button', Object.assign({}, props, {
+            ref: ref, type: 'button', role: 'tab', 'aria-selected': active, 'data-state': active ? 'active' : 'inactive',
+            onClick: handleClick,
+          }));
+        });
+
+        export const Content = window.React.forwardRef((props, ref) => {
+          const ctx = window.React.useContext(TabsContext);
+          if (!ctx || ctx.value !== props.value) return null;
+          return window.React.createElement('div', Object.assign({}, props, { ref: ref, role: 'tabpanel' }));
+        });
+      `,
+      '@radix-ui/react-checkbox': `
+        import { useControllableState } from '__waktiRadixCore';
+
+        const CheckboxContext = window.React.createContext(false);
+
+        export const Root = window.React.forwardRef((props, ref) => {
+          const [checked, setChecked] = useControllableState(props.checked, !!props.defaultChecked, props.onCheckedChange);
+          const handleClick = (e) => {
+            if (props.disabled) return;
+            const next = checked === 'indeterminate' ? true : !checked;
+            setChecked(next);
+            if (props.onClick) props.onClick(e);
+          };
+          return window.React.createElement('button', Object.assign({}, props, {
+            ref: ref, type: 'button', role: 'checkbox', 'aria-checked': checked === 'indeterminate' ? 'mixed' : !!checked,
+            'data-state': checked === 'indeterminate' ? 'indeterminate' : (checked ? 'checked' : 'unchecked'),
+            onClick: handleClick,
+          }), window.React.createElement(CheckboxContext.Provider, { value: checked }, props.children));
+        });
+
+        export const Indicator = (props) => {
+          const checked = window.React.useContext(CheckboxContext);
+          if (!checked) return null;
+          return window.React.createElement('span', props, props.children);
+        };
+      `,
+      '@radix-ui/react-switch': `
+        import { useControllableState } from '__waktiRadixCore';
+
+        export const Root = window.React.forwardRef((props, ref) => {
+          const [checked, setChecked] = useControllableState(props.checked, !!props.defaultChecked, props.onCheckedChange);
+          const handleClick = (e) => {
+            if (props.disabled) return;
+            setChecked(!checked);
+            if (props.onClick) props.onClick(e);
+          };
+          return window.React.createElement('button', Object.assign({}, props, {
+            ref: ref, type: 'button', role: 'switch', 'aria-checked': !!checked,
+            'data-state': checked ? 'checked' : 'unchecked',
+            onClick: handleClick,
+          }), props.children);
+        });
+
+        export const Thumb = (props) => window.React.createElement('span', props);
+      `,
+      '@radix-ui/react-slider': `
+        import { useControllableState } from '__waktiRadixCore';
+
+        export const Root = window.React.forwardRef((props, ref) => {
+          const [value, setValue] = useControllableState(
+            props.value ? props.value[0] : undefined,
+            props.defaultValue ? props.defaultValue[0] : (props.min || 0),
+            (v) => { if (props.onValueChange) props.onValueChange([v]); }
+          );
+          const min = props.min != null ? props.min : 0;
+          const max = props.max != null ? props.max : 100;
+          const step = props.step != null ? props.step : 1;
+          const handleChange = (e) => {
+            const v = Number(e.target.value);
+            setValue(v);
+            if (props.onValueCommit) props.onValueCommit([v]);
+          };
+          return window.React.createElement('div', { className: props.className, style: Object.assign({ position: 'relative', display: 'flex', alignItems: 'center' }, props.style) },
+            window.React.createElement('input', {
+              ref: ref, type: 'range', min: min, max: max, step: step, value: value,
+              disabled: props.disabled, onChange: handleChange,
+              style: { width: '100%' },
+            })
+          );
+        });
+
+        export const Track = (props) => window.React.createElement('div', props, props.children);
+        export const Range = (props) => window.React.createElement('div', props);
+        export const Thumb = (props) => window.React.createElement('div', props);
+      `,
+      '@radix-ui/react-progress': `
+        const ProgressContext = window.React.createContext(null);
+
+        export const Root = window.React.forwardRef((props, ref) => {
+          const value = props.value != null ? props.value : 0;
+          const max = props.max != null ? props.max : 100;
+          return window.React.createElement('div', Object.assign({}, props, {
+            ref: ref, role: 'progressbar', 'aria-valuenow': value, 'aria-valuemax': max,
+          }), window.React.createElement(ProgressContext.Provider, { value: { value: value, max: max } }, props.children));
+        });
+
+        export const Indicator = (props) => {
+          const ctx = window.React.useContext(ProgressContext);
+          const pct = ctx && ctx.max ? (ctx.value / ctx.max) * 100 : 0;
+          return window.React.createElement('div', Object.assign({}, props, {
+            style: Object.assign({ transform: 'translateX(-' + (100 - pct) + '%)', transition: 'transform 0.3s ease' }, props.style),
+          }));
+        };
+      `,
+      '@radix-ui/react-avatar': `
+        export const Root = (props) => window.React.createElement('span', Object.assign({}, props, { style: Object.assign({ display: 'inline-flex', overflow: 'hidden', borderRadius: '50%' }, props.style) }));
+
+        export const Image = window.React.forwardRef((props, ref) => {
+          const [errored, setErrored] = window.React.useState(false);
+          if (errored) return null;
+          return window.React.createElement('img', Object.assign({}, props, {
+            ref: ref, onError: (e) => { setErrored(true); if (props.onError) props.onError(e); },
+            style: Object.assign({ width: '100%', height: '100%', objectFit: 'cover' }, props.style),
+          }));
+        });
+
+        export const Fallback = (props) => window.React.createElement('span', props, props.children);
+      `,
+      '@radix-ui/react-accordion': `
+        import { useControllableState } from '__waktiRadixCore';
+
+        const AccordionContext = window.React.createContext(null);
+        const AccordionItemContext = window.React.createContext(null);
+
+        export const Root = (props) => {
+          const isMultiple = props.type === 'multiple';
+          const [value, setValue] = useControllableState(props.value, props.defaultValue || (isMultiple ? [] : ''), props.onValueChange);
+          const toggle = (itemValue) => {
+            if (isMultiple) {
+              const arr = Array.isArray(value) ? value : [];
+              setValue(arr.indexOf(itemValue) === -1 ? arr.concat([itemValue]) : arr.filter((v) => v !== itemValue));
+            } else {
+              setValue(value === itemValue ? (props.collapsible ? '' : value) : itemValue);
+            }
+          };
+          const isOpen = (itemValue) => isMultiple ? (Array.isArray(value) && value.indexOf(itemValue) !== -1) : value === itemValue;
+          return window.React.createElement('div', { className: props.className, style: props.style },
+            window.React.createElement(AccordionContext.Provider, { value: { toggle: toggle, isOpen: isOpen } }, props.children)
+          );
+        };
+
+        export const Item = (props) => window.React.createElement(AccordionItemContext.Provider, { value: props.value },
+          window.React.createElement('div', { className: props.className, style: props.style, 'data-disabled': props.disabled }, props.children)
+        );
+
+        export const Header = (props) => window.React.createElement('div', props, props.children);
+
+        export const Trigger = window.React.forwardRef((props, ref) => {
+          const accordionCtx = window.React.useContext(AccordionContext);
+          const itemValue = window.React.useContext(AccordionItemContext);
+          const open = !!(accordionCtx && accordionCtx.isOpen(itemValue));
+          const handleClick = (e) => { if (accordionCtx) accordionCtx.toggle(itemValue); if (props.onClick) props.onClick(e); };
+          return window.React.createElement('button', Object.assign({}, props, {
+            ref: ref, type: 'button', 'data-state': open ? 'open' : 'closed', 'aria-expanded': open, onClick: handleClick,
+          }));
+        });
+
+        export const Content = window.React.forwardRef((props, ref) => {
+          const accordionCtx = window.React.useContext(AccordionContext);
+          const itemValue = window.React.useContext(AccordionItemContext);
+          const open = accordionCtx && accordionCtx.isOpen(itemValue);
+          if (!open) return null;
+          return window.React.createElement('div', Object.assign({}, props, { ref: ref, 'data-state': 'open' }));
+        });
+      `,
+      'react-modal': `
+        import { useEscapeKey } from '__waktiRadixCore';
+
+        function ReactModal(props) {
+          useEscapeKey(() => { if (props.onRequestClose) props.onRequestClose(); }, !!(props.isOpen && props.shouldCloseOnEsc !== false));
+          if (!props.isOpen) return null;
+          const overlayStyle = Object.assign({
+            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }, props.style && props.style.overlay);
+          const contentStyle = Object.assign({
+            position: 'relative', background: '#fff', borderRadius: '8px', padding: '20px', maxWidth: '90vw', maxHeight: '90vh', overflow: 'auto',
+          }, props.style && props.style.content);
+          const handleOverlayClick = (e) => {
+            if (e.target === e.currentTarget && props.shouldCloseOnOverlayClick !== false && props.onRequestClose) props.onRequestClose();
+          };
+          return window.React.createElement('div', { className: props.overlayClassName, style: overlayStyle, onClick: handleOverlayClick },
+            window.React.createElement('div', { className: props.className, style: contentStyle, role: 'dialog', 'aria-label': props.contentLabel },
+              props.children
+            )
+          );
+        }
+        ReactModal.setAppElement = function() {};
+        ReactModal.defaultStyles = { overlay: {}, content: {} };
+        export default ReactModal;
+      `,
+      'react-select': `
+        import { useClickOutside } from '__waktiRadixCore';
+
+        function Select(props) {
+          const [open, setOpen] = window.React.useState(false);
+          const [search, setSearch] = window.React.useState('');
+          const containerRef = window.React.useRef(null);
+          useClickOutside(containerRef, () => setOpen(false), open);
+
+          const options = props.options || [];
+          const isMulti = !!props.isMulti;
+          const currentValue = props.value;
+
+          const filtered = search
+            ? options.filter((o) => String(o.label).toLowerCase().indexOf(search.toLowerCase()) !== -1)
+            : options;
+
+          const isSelected = (opt) => {
+            if (isMulti) return Array.isArray(currentValue) && currentValue.some((v) => v && v.value === opt.value);
+            return currentValue && currentValue.value === opt.value;
+          };
+
+          const selectOption = (opt) => {
+            if (isMulti) {
+              const arr = Array.isArray(currentValue) ? currentValue : [];
+              const next = isSelected(opt) ? arr.filter((v) => v.value !== opt.value) : arr.concat([opt]);
+              if (props.onChange) props.onChange(next);
+            } else {
+              if (props.onChange) props.onChange(opt);
+              setOpen(false);
+            }
+            setSearch('');
+          };
+
+          const clearValue = (e) => {
+            e.stopPropagation();
+            if (props.onChange) props.onChange(isMulti ? [] : null);
+          };
+
+          const displayLabel = isMulti
+            ? (Array.isArray(currentValue) && currentValue.length ? currentValue.map((v) => v.label).join(', ') : '')
+            : (currentValue ? currentValue.label : '');
+
+          return window.React.createElement('div', { ref: containerRef, className: props.className, style: { position: 'relative', minWidth: '160px' } },
+            window.React.createElement('div', {
+              onClick: () => setOpen(!open),
+              style: { border: '1px solid #d1d5db', borderRadius: '6px', padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: '#fff' },
+            },
+              open && props.isSearchable !== false
+                ? window.React.createElement('input', {
+                    autoFocus: true, value: search, placeholder: displayLabel || props.placeholder || 'Select...',
+                    onChange: (e) => setSearch(e.target.value),
+                    style: { border: 'none', outline: 'none', width: '100%' },
+                    onClick: (e) => e.stopPropagation(),
+                  })
+                : window.React.createElement('span', { style: { color: displayLabel ? 'inherit' : '#9ca3af' } }, displayLabel || props.placeholder || 'Select...'),
+              window.React.createElement('span', { style: { display: 'flex', gap: '6px', alignItems: 'center' } },
+                props.isClearable && displayLabel ? window.React.createElement('span', { onClick: clearValue, style: { cursor: 'pointer', opacity: 0.6 } }, '\\u00d7') : null,
+                window.React.createElement('span', { style: { opacity: 0.5 } }, '\\u25be')
+              )
+            ),
+            open ? window.React.createElement('div', {
+              style: { position: 'absolute', top: '100%', left: 0, right: 0, marginTop: '4px', background: '#fff', border: '1px solid #d1d5db', borderRadius: '6px', maxHeight: '220px', overflow: 'auto', zIndex: 50 },
+            },
+              filtered.length === 0
+                ? window.React.createElement('div', { style: { padding: '8px 10px', color: '#9ca3af' } }, props.noOptionsMessage ? props.noOptionsMessage() : 'No options')
+                : filtered.map((opt) => window.React.createElement('div', {
+                    key: opt.value, onClick: () => selectOption(opt),
+                    style: { padding: '8px 10px', cursor: 'pointer', background: isSelected(opt) ? '#f3f4f6' : 'transparent' },
+                  }, opt.label))
+            ) : null
+          );
+        }
+        export default Select;
+        export function createFilter() { return function() { return true; }; }
+        export const components = {};
+      `,
+      '@dnd-kit/utilities': `
+        export const CSS = {
+          Transform: {
+            toString: function(transform) {
+              if (!transform) return undefined;
+              const parts = [];
+              if (transform.x != null || transform.y != null) parts.push('translate3d(' + (transform.x || 0) + 'px, ' + (transform.y || 0) + 'px, 0)');
+              if (transform.scaleX != null || transform.scaleY != null) parts.push('scaleX(' + (transform.scaleX != null ? transform.scaleX : 1) + ') scaleY(' + (transform.scaleY != null ? transform.scaleY : 1) + ')');
+              return parts.join(' ');
+            },
+          },
+          Transition: {
+            toString: function(transition) {
+              if (!transition) return undefined;
+              return (transition.property || 'transform') + ' ' + (transition.duration || 250) + 'ms ' + (transition.easing || 'ease');
+            },
+          },
+        };
+      `,
+      '@dnd-kit/core': `
+        const DndContext_ = window.React.createContext(null);
+
+        export function DndContext(props) {
+          const [active, setActive] = window.React.useState(null);
+          const [activeDelta, setActiveDelta] = window.React.useState({ x: 0, y: 0 });
+          const dropZonesRef = window.React.useRef({});
+          const dragStateRef = window.React.useRef(null);
+
+          const registerDropZone = (id, node, data) => { dropZonesRef.current[id] = { id: id, node: node, data: data }; };
+          const unregisterDropZone = (id) => { delete dropZonesRef.current[id]; };
+
+          const findOverZone = (clientX, clientY) => {
+            const zones = Object.values(dropZonesRef.current);
+            for (const zone of zones) {
+              if (!zone.node) continue;
+              const rect = zone.node.getBoundingClientRect();
+              if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) return zone;
+            }
+            return null;
+          };
+
+          const startDrag = (id, data, event) => {
+            const point = event.touches ? event.touches[0] : event;
+            dragStateRef.current = { id: id, data: data, startX: point.clientX, startY: point.clientY };
+            setActive({ id: id, data: data });
+            setActiveDelta({ x: 0, y: 0 });
+            if (props.onDragStart) props.onDragStart({ active: { id: id, data: { current: data } } });
+
+            const handleMove = (moveEvent) => {
+              const movePoint = moveEvent.touches ? moveEvent.touches[0] : moveEvent;
+              const dx = movePoint.clientX - dragStateRef.current.startX;
+              const dy = movePoint.clientY - dragStateRef.current.startY;
+              dragStateRef.current.delta = { x: dx, y: dy };
+              setActiveDelta({ x: dx, y: dy });
+              const overZone = findOverZone(movePoint.clientX, movePoint.clientY);
+              if (props.onDragOver) props.onDragOver({ active: { id: id, data: { current: data } }, over: overZone ? { id: overZone.id, data: { current: overZone.data } } : null });
+            };
+
+            const handleUp = (upEvent) => {
+              const upPoint = upEvent.changedTouches ? upEvent.changedTouches[0] : upEvent;
+              const overZone = findOverZone(upPoint.clientX, upPoint.clientY);
+              const delta = dragStateRef.current ? (dragStateRef.current.delta || { x: 0, y: 0 }) : { x: 0, y: 0 };
+              if (props.onDragEnd) {
+                props.onDragEnd({
+                  active: { id: id, data: { current: data } },
+                  over: overZone ? { id: overZone.id, data: { current: overZone.data } } : null,
+                  delta: delta,
+                });
+              }
+              setActive(null);
+              setActiveDelta({ x: 0, y: 0 });
+              dragStateRef.current = null;
+              document.removeEventListener('mousemove', handleMove);
+              document.removeEventListener('mouseup', handleUp);
+              document.removeEventListener('touchmove', handleMove);
+              document.removeEventListener('touchend', handleUp);
+            };
+
+            document.addEventListener('mousemove', handleMove);
+            document.addEventListener('mouseup', handleUp);
+            document.addEventListener('touchmove', handleMove, { passive: false });
+            document.addEventListener('touchend', handleUp);
+          };
+
+          const ctxValue = { active: active, activeDelta: activeDelta, startDrag: startDrag, registerDropZone: registerDropZone, unregisterDropZone: unregisterDropZone };
+          return window.React.createElement(DndContext_.Provider, { value: ctxValue }, props.children);
+        }
+
+        export function useDraggable(options) {
+          const ctx = window.React.useContext(DndContext_);
+          const isDragging = !!(ctx && ctx.active && ctx.active.id === options.id);
+          const handlePointerDown = (e) => { if (ctx) ctx.startDrag(options.id, options.data, e); };
+          return {
+            attributes: { role: 'button', tabIndex: 0 },
+            listeners: { onMouseDown: handlePointerDown, onTouchStart: handlePointerDown },
+            setNodeRef: function() {},
+            transform: isDragging ? ctx.activeDelta : null,
+            isDragging: isDragging,
+          };
+        }
+
+        export function useDroppable(options) {
+          const ctx = window.React.useContext(DndContext_);
+          const nodeRef = window.React.useRef(null);
+          const setNodeRef = (node) => {
+            nodeRef.current = node;
+            if (ctx) ctx.registerDropZone(options.id, node, options.data);
+          };
+          window.React.useEffect(() => {
+            return () => { if (ctx) ctx.unregisterDropZone(options.id); };
+          }, []);
+          const isOver = !!(ctx && ctx.active);
+          return { setNodeRef: setNodeRef, isOver: isOver };
+        }
+
+        export function DragOverlay(props) { return props.children || null; }
+
+        export const PointerSensor = function() {};
+        export const MouseSensor = function() {};
+        export const TouchSensor = function() {};
+        export function useSensor(sensor, options) { return { sensor: sensor, options: options }; }
+        export function useSensors() { return Array.prototype.slice.call(arguments); }
+        export const closestCenter = function() { return []; };
+        export const closestCorners = function() { return []; };
+      `,
+      '@dnd-kit/sortable': `
+        import { CSS } from '@dnd-kit/utilities';
+
+        export function arrayMove(array, from, to) {
+          const result = array.slice();
+          const removed = result.splice(from, 1)[0];
+          result.splice(to, 0, removed);
+          return result;
+        }
+
+        const SortableContext_ = window.React.createContext(null);
+
+        export function SortableContext(props) {
+          return window.React.createElement(SortableContext_.Provider, { value: { items: props.items || [] } }, props.children);
+        }
+
+        export function useSortable(options) {
+          const ctx = window.React.useContext(SortableContext_);
+          const nodeRef = window.React.useRef(null);
+          const items = (ctx && ctx.items) || [];
+          const index = items.indexOf(options.id);
+          return {
+            attributes: { role: 'button', tabIndex: 0 },
+            listeners: { onMouseDown: function() {}, onTouchStart: function() {} },
+            setNodeRef: function(node) { nodeRef.current = node; },
+            transform: null,
+            transition: 'transform 200ms ease',
+            isDragging: false,
+            index: index,
+          };
+        }
+
+        export const verticalListSortingStrategy = function() { return null; };
+        export const horizontalListSortingStrategy = function() { return null; };
+        export const rectSortingStrategy = function() { return null; };
+        export { CSS };
+      `,
+      'react-slick': `
+        function Slider(props) {
+          const [index, setIndex] = window.React.useState(0);
+          const children = window.React.Children.toArray(props.children);
+          const count = children.length;
+          const slidesToShow = props.slidesToShow || 1;
+          const autoplay = props.autoplay;
+          const autoplaySpeed = props.autoplaySpeed || 3000;
+
+          window.React.useEffect(() => {
+            if (!autoplay || count <= slidesToShow) return undefined;
+            const timer = setInterval(() => { setIndex((i) => (i + 1) % count); }, autoplaySpeed);
+            return () => clearInterval(timer);
+          }, [autoplay, autoplaySpeed, count, slidesToShow]);
+
+          const goTo = (i) => setIndex(((i % count) + count) % count);
+          const next = () => goTo(index + 1);
+          const prev = () => goTo(index - 1);
+
+          return window.React.createElement('div', { className: props.className, style: { position: 'relative', overflow: 'hidden' } },
+            window.React.createElement('div', {
+              style: { display: 'flex', transform: 'translateX(-' + (index * (100 / slidesToShow)) + '%)', transition: 'transform 0.4s ease' },
+            }, children.map((child, i) => window.React.createElement('div', { key: i, style: { flex: '0 0 ' + (100 / slidesToShow) + '%' } }, child))),
+            props.arrows !== false ? window.React.createElement(window.React.Fragment, null,
+              window.React.createElement('button', { type: 'button', onClick: prev, style: { position: 'absolute', left: '8px', top: '50%', transform: 'translateY(-50%)', zIndex: 2, background: 'rgba(0,0,0,0.4)', color: '#fff', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer' } }, '\\u2039'),
+              window.React.createElement('button', { type: 'button', onClick: next, style: { position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', zIndex: 2, background: 'rgba(0,0,0,0.4)', color: '#fff', border: 'none', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer' } }, '\\u203a')
+            ) : null,
+            props.dots ? window.React.createElement('div', { style: { display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '8px' } },
+              children.map((_, i) => window.React.createElement('span', {
+                key: i, onClick: () => goTo(i),
+                style: { width: '8px', height: '8px', borderRadius: '50%', background: i === index ? '#333' : '#ccc', cursor: 'pointer' },
+              }))
+            ) : null
+          );
+        }
+        export default Slider;
+      `,
+      'embla-carousel-react': `
+        function useEmblaCarousel(options, plugins) {
+          options = options || {};
+          const viewportRef = window.React.useRef(null);
+          const [selectedIndex, setSelectedIndex] = window.React.useState(0);
+          const [, setSlideCount] = window.React.useState(0);
+          const listenersRef = window.React.useRef({});
+
+          const emit = (event) => { (listenersRef.current[event] || []).forEach(function(cb) { cb(api); }); };
+
+          const measureSlides = () => {
+            const viewport = viewportRef.current;
+            if (!viewport) return 0;
+            const container = viewport.firstElementChild;
+            return container ? container.children.length : 0;
+          };
+
+          const scrollTo = (index) => {
+            const count = measureSlides();
+            if (count === 0) return;
+            const next = ((index % count) + count) % count;
+            setSelectedIndex(next);
+            const viewport = viewportRef.current;
+            if (viewport) {
+              const container = viewport.firstElementChild;
+              const slide = container && container.children[next];
+              if (slide) viewport.scrollTo({ left: slide.offsetLeft, behavior: 'smooth' });
+            }
+            emit('select');
+          };
+
+          const api = {
+            scrollNext: () => scrollTo(selectedIndex + 1),
+            scrollPrev: () => scrollTo(selectedIndex - 1),
+            scrollTo: scrollTo,
+            selectedScrollSnap: () => selectedIndex,
+            scrollSnapList: () => { const c = measureSlides(); return Array.from({ length: c }, (_, i) => i); },
+            canScrollNext: () => true,
+            canScrollPrev: () => true,
+            on: (event, cb) => { listenersRef.current[event] = (listenersRef.current[event] || []).concat([cb]); return api; },
+            off: (event, cb) => { listenersRef.current[event] = (listenersRef.current[event] || []).filter((fn) => fn !== cb); return api; },
+            reInit: () => { setSlideCount(measureSlides()); },
+          };
+
+          window.React.useEffect(() => {
+            setSlideCount(measureSlides());
+            const activePlugins = (plugins || []).map(function(p) { if (p && p.init) p.init(api); return p; });
+            return function() { activePlugins.forEach(function(p) { if (p && p.destroy) p.destroy(); }); };
+          }, []);
+
+          return [viewportRef, api];
+        }
+        export default useEmblaCarousel;
+        export { useEmblaCarousel };
+      `,
+      'embla-carousel-autoplay': `
+        function Autoplay(options) {
+          options = options || {};
+          const plugin = {
+            name: 'autoplay',
+            options: options,
+            _timer: null,
+            init: function(embla) {
+              const delay = options.delay || 4000;
+              plugin._timer = setInterval(function() { embla.scrollNext(); }, delay);
+            },
+            destroy: function() { if (plugin._timer) clearInterval(plugin._timer); },
+          };
+          return plugin;
+        }
+        export default Autoplay;
+      `,
+      '@react-spring/web': `
+        function useSpring(config) {
+          config = typeof config === 'function' ? config() : (config || {});
+          const to = config.to || config;
+          const from = config.from || {};
+          const [style, setStyle] = window.React.useState(Object.assign({}, from, to));
+          window.React.useEffect(() => {
+            const raf = window.requestAnimationFrame(() => setStyle(Object.assign({}, from, to)));
+            return () => window.cancelAnimationFrame(raf);
+          }, [JSON.stringify(to)]);
+          const result = Object.assign({}, style);
+          result.__waktiSpringConfig = config;
+          return result;
+        }
+
+        function useSprings(count, configFn) {
+          const results = [];
+          for (let i = 0; i < count; i++) results.push(useSpring(typeof configFn === 'function' ? configFn(i) : configFn[i]));
+          return results;
+        }
+
+        function useTransition(items, config) {
+          return (items || []).map(function(item, i) { return [Object.assign({}, config && config.enter), item, i]; });
+        }
+
+        const animated = new Proxy({}, {
+          get: function(_, tag) {
+            return window.React.forwardRef(function(props, ref) {
+              const style = Object.assign({}, props.style);
+              const springConfig = style.__waktiSpringConfig;
+              delete style.__waktiSpringConfig;
+              const duration = (springConfig && springConfig.config && springConfig.config.duration) || 400;
+              style.transition = style.transition || ('all ' + duration + 'ms ease');
+              const rest = Object.assign({}, props, { style: style, ref: ref });
+              return window.React.createElement(String(tag) || 'div', rest);
+            });
+          },
+        });
+
+        export { useSpring, useSprings, useTransition, animated };
+        export const config = { default: { tension: 170, friction: 26 }, gentle: { tension: 120, friction: 14 }, wobbly: { tension: 180, friction: 12 }, stiff: { tension: 210, friction: 20 }, slow: { tension: 280, friction: 60 }, molasses: { tension: 280, friction: 120 } };
+      `,
+      'react-circular-progressbar': `
+        function CircularProgressbar(props) {
+          const value = props.value != null ? props.value : 0;
+          const maxValue = props.maxValue != null ? props.maxValue : 100;
+          const minValue = props.minValue != null ? props.minValue : 0;
+          const pct = Math.max(0, Math.min(1, (value - minValue) / ((maxValue - minValue) || 1)));
+          const radius = 40;
+          const circumference = 2 * Math.PI * radius;
+          const dashOffset = circumference * (1 - pct);
+          const strokeWidth = props.strokeWidth || 8;
+          const pathColor = (props.styles && props.styles.path && props.styles.path.stroke) || '#3b82f6';
+          const trailColor = (props.styles && props.styles.trail && props.styles.trail.stroke) || '#e5e7eb';
+          const textColor = (props.styles && props.styles.text && props.styles.text.fill) || '#111827';
+
+          return window.React.createElement('svg', { viewBox: '0 0 100 100', className: props.className, style: { width: '100%', height: '100%' } },
+            window.React.createElement('circle', { cx: 50, cy: 50, r: radius, fill: 'none', stroke: trailColor, strokeWidth: strokeWidth }),
+            window.React.createElement('circle', {
+              cx: 50, cy: 50, r: radius, fill: 'none', stroke: pathColor, strokeWidth: strokeWidth,
+              strokeDasharray: circumference, strokeDashoffset: dashOffset, strokeLinecap: props.strokeLinecap || 'round',
+              transform: 'rotate(-90 50 50)', style: { transition: 'stroke-dashoffset 0.5s ease' },
+            }),
+            props.text ? window.React.createElement('text', { x: 50, y: 54, textAnchor: 'middle', fontSize: 20, fill: textColor }, props.text) : null
+          );
+        }
+        export const CircularProgressbarWithChildren = function(props) {
+          return window.React.createElement('div', { style: { position: 'relative', display: 'inline-block' } },
+            window.React.createElement(CircularProgressbar, props),
+            window.React.createElement('div', { style: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' } }, props.children)
+          );
+        };
+        export const buildStyles = function(styles) { return styles || {}; };
+        export default CircularProgressbar;
+      `,
+      'react-day-picker': `
+        const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const DAY_LABELS = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+        function isSameDay(a, b) { return a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+
+        function DayPicker(props) {
+          const [month, setMonth] = window.React.useState(props.month || props.defaultMonth || new Date());
+          const selected = props.selected;
+
+          const year = month.getFullYear();
+          const monthIndex = month.getMonth();
+          const firstDay = new Date(year, monthIndex, 1);
+          const startOffset = firstDay.getDay();
+          const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+
+          const cells = [];
+          for (let i = 0; i < startOffset; i++) cells.push(null);
+          for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, monthIndex, d));
+
+          const goPrev = () => setMonth(new Date(year, monthIndex - 1, 1));
+          const goNext = () => setMonth(new Date(year, monthIndex + 1, 1));
+
+          const isSelected = (date) => {
+            if (!date || !selected) return false;
+            if (Array.isArray(selected)) return selected.some((d) => isSameDay(d, date));
+            if (selected instanceof Date) return isSameDay(selected, date);
+            if (selected.from) return date >= selected.from && date <= (selected.to || selected.from);
+            return false;
+          };
+
+          const handleSelect = (date) => {
+            if (props.onSelect) props.onSelect(date);
+            if (props.onDayClick) props.onDayClick(date);
+          };
+
+          return window.React.createElement('div', { className: props.className, style: { fontFamily: 'Inter, system-ui, sans-serif' } },
+            window.React.createElement('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' } },
+              window.React.createElement('button', { type: 'button', onClick: goPrev, style: { border: 'none', background: 'transparent', cursor: 'pointer' } }, '\\u2039'),
+              window.React.createElement('span', { style: { fontWeight: 600 } }, MONTH_NAMES[monthIndex] + ' ' + year),
+              window.React.createElement('button', { type: 'button', onClick: goNext, style: { border: 'none', background: 'transparent', cursor: 'pointer' } }, '\\u203a')
+            ),
+            window.React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', textAlign: 'center', fontSize: '12px', opacity: 0.6, marginBottom: '4px' } },
+              DAY_LABELS.map((label, i) => window.React.createElement('div', { key: i }, label))
+            ),
+            window.React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px' } },
+              cells.map((date, i) => date ? window.React.createElement('button', {
+                key: i, type: 'button', onClick: () => handleSelect(date),
+                style: {
+                  padding: '6px 0', borderRadius: '6px', border: 'none', cursor: 'pointer', fontSize: '13px',
+                  background: isSelected(date) ? '#3b82f6' : 'transparent',
+                  color: isSelected(date) ? '#fff' : 'inherit',
+                },
+              }, date.getDate()) : window.React.createElement('div', { key: i }))
+            )
+          );
+        }
+        export { DayPicker };
+        export default DayPicker;
+      `,
+      'react-colorful': `
+        function hexToHsv(hex) {
+          hex = (hex || '#000000').replace('#', '');
+          if (hex.length === 3) hex = hex.split('').map(function(c) { return c + c; }).join('');
+          const r = parseInt(hex.substring(0, 2), 16) / 255;
+          const g = parseInt(hex.substring(2, 4), 16) / 255;
+          const b = parseInt(hex.substring(4, 6), 16) / 255;
+          const max = Math.max(r, g, b), min = Math.min(r, g, b);
+          const d = max - min;
+          let h = 0;
+          if (d !== 0) {
+            if (max === r) h = ((g - b) / d) % 6;
+            else if (max === g) h = (b - r) / d + 2;
+            else h = (r - g) / d + 4;
+          }
+          h = Math.round(h * 60);
+          if (h < 0) h += 360;
+          const s = max === 0 ? 0 : d / max;
+          const v = max;
+          return { h: h, s: s, v: v };
+        }
+
+        function hsvToHex(h, s, v) {
+          const c = v * s;
+          const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+          const m = v - c;
+          let r = 0, g = 0, b = 0;
+          if (h < 60) { r = c; g = x; b = 0; }
+          else if (h < 120) { r = x; g = c; b = 0; }
+          else if (h < 180) { r = 0; g = c; b = x; }
+          else if (h < 240) { r = 0; g = x; b = c; }
+          else if (h < 300) { r = x; g = 0; b = c; }
+          else { r = c; g = 0; b = x; }
+          const toHex = function(n) { return Math.round((n + m) * 255).toString(16).padStart(2, '0'); };
+          return '#' + toHex(r) + toHex(g) + toHex(b);
+        }
+
+        function ColorPicker(props) {
+          const hsv = hexToHsv(props.color);
+          const areaRef = window.React.useRef(null);
+
+          const updateFromArea = (e) => {
+            const rect = areaRef.current.getBoundingClientRect();
+            const point = e.touches ? e.touches[0] : e;
+            const x = Math.max(0, Math.min(1, (point.clientX - rect.left) / rect.width));
+            const y = Math.max(0, Math.min(1, (point.clientY - rect.top) / rect.height));
+            const nextHex = hsvToHex(hsv.h, x, 1 - y);
+            if (props.onChange) props.onChange(nextHex);
+          };
+
+          const handleAreaDown = (e) => {
+            updateFromArea(e);
+            const move = (ev) => updateFromArea(ev);
+            const up = () => {
+              document.removeEventListener('mousemove', move);
+              document.removeEventListener('mouseup', up);
+              document.removeEventListener('touchmove', move);
+              document.removeEventListener('touchend', up);
+            };
+            document.addEventListener('mousemove', move);
+            document.addEventListener('mouseup', up);
+            document.addEventListener('touchmove', move);
+            document.addEventListener('touchend', up);
+          };
+
+          const handleHueChange = (e) => {
+            const nextHex = hsvToHex(Number(e.target.value), hsv.s, hsv.v);
+            if (props.onChange) props.onChange(nextHex);
+          };
+
+          return window.React.createElement('div', { className: props.className, style: { width: '200px' } },
+            window.React.createElement('div', {
+              ref: areaRef, onMouseDown: handleAreaDown, onTouchStart: handleAreaDown,
+              style: {
+                position: 'relative', width: '100%', height: '150px', borderRadius: '8px', cursor: 'crosshair',
+                background: 'linear-gradient(to top, #000, rgba(0,0,0,0)), linear-gradient(to right, #fff, hsl(' + hsv.h + ',100%,50%))',
+              },
+            },
+              window.React.createElement('div', {
+                style: {
+                  position: 'absolute', width: '12px', height: '12px', borderRadius: '50%', border: '2px solid #fff',
+                  boxShadow: '0 0 2px rgba(0,0,0,0.5)', transform: 'translate(-50%, -50%)',
+                  left: (hsv.s * 100) + '%', top: ((1 - hsv.v) * 100) + '%', pointerEvents: 'none',
+                },
+              })
+            ),
+            window.React.createElement('input', {
+              type: 'range', min: 0, max: 360, value: hsv.h, onChange: handleHueChange,
+              style: { width: '100%', marginTop: '8px' },
+            })
+          );
+        }
+        export const HexColorPicker = ColorPicker;
+        export const RgbColorPicker = ColorPicker;
+        export const HslColorPicker = ColorPicker;
+        export const HsvColorPicker = ColorPicker;
+        export function HexColorInput(props) {
+          return window.React.createElement('input', Object.assign({}, props, {
+            value: props.color || '', onChange: function(e) { if (props.onChange) props.onChange(e.target.value); },
+          }));
+        }
+      `,
+      '@tanstack/react-table': `
+        function makeRow(original, index, table) {
+          return {
+            id: String(index), index: index, original: original,
+            getValue: function(colId) {
+              const col = table._columns.find(function(c) { return (c.id || c.accessorKey) === colId; });
+              if (!col) return undefined;
+              return col.accessorFn ? col.accessorFn(original) : original[col.accessorKey];
+            },
+            getVisibleCells: function() {
+              const row = this;
+              return table._columns.map(function(col, ci) {
+                return {
+                  id: index + '_' + (col.id || col.accessorKey || ci),
+                  column: { id: col.id || col.accessorKey, columnDef: col },
+                  getContext: function() { return { row: row, column: col, getValue: function() { return row.getValue(col.id || col.accessorKey); } }; },
+                  renderValue: function() { return col.accessorFn ? col.accessorFn(original) : original[col.accessorKey]; },
+                };
+              });
+            },
+          };
+        }
+
+        function useReactTable(options) {
+          const [sorting, setSorting] = window.React.useState((options.state && options.state.sorting) || []);
+          const [pagination, setPagination] = window.React.useState((options.state && options.state.pagination) || { pageIndex: 0, pageSize: 10 });
+
+          const columns = options.columns || [];
+          const data = options.data || [];
+
+          const table = {
+            _columns: columns,
+            _coreRows: function() { return data.map(function(row, i) { return makeRow(row, i, table); }); },
+            _sortedRows: function() {
+              const rows = table._coreRows();
+              if (!sorting.length) return rows;
+              return rows.slice().sort(function(a, b) {
+                for (const s of sorting) {
+                  const av = a.getValue(s.id);
+                  const bv = b.getValue(s.id);
+                  if (av === bv) continue;
+                  const cmp = av > bv ? 1 : -1;
+                  return s.desc ? -cmp : cmp;
+                }
+                return 0;
+              });
+            },
+            getHeaderGroups: function() {
+              return [{
+                id: 'header-group-0',
+                headers: columns.map(function(col, i) {
+                  const colId = col.id || col.accessorKey || String(i);
+                  return {
+                    id: colId,
+                    column: {
+                      id: colId,
+                      columnDef: col,
+                      getIsSorted: function() { const s = sorting.find(function(x) { return x.id === colId; }); return s ? (s.desc ? 'desc' : 'asc') : false; },
+                      getToggleSortingHandler: function() {
+                        return function() {
+                          setSorting(function(prev) {
+                            const existing = prev.find(function(x) { return x.id === colId; });
+                            if (!existing) return [{ id: colId, desc: false }];
+                            if (!existing.desc) return [{ id: colId, desc: true }];
+                            return [];
+                          });
+                        };
+                      },
+                    },
+                    getContext: function() { return { column: this.column, header: this }; },
+                    isPlaceholder: false,
+                  };
+                }),
+              }];
+            },
+            getRowModel: function() {
+              const sorted = table._sortedRows();
+              if (!options.getPaginationRowModel) return { rows: sorted };
+              const start = pagination.pageIndex * pagination.pageSize;
+              return { rows: sorted.slice(start, start + pagination.pageSize) };
+            },
+            getState: function() { return { sorting: sorting, pagination: pagination }; },
+            setPageIndex: function(i) { setPagination(function(p) { return Object.assign({}, p, { pageIndex: i }); }); },
+            nextPage: function() { setPagination(function(p) { return Object.assign({}, p, { pageIndex: p.pageIndex + 1 }); }); },
+            previousPage: function() { setPagination(function(p) { return Object.assign({}, p, { pageIndex: Math.max(0, p.pageIndex - 1) }); }); },
+            getCanNextPage: function() { return (pagination.pageIndex + 1) * pagination.pageSize < data.length; },
+            getCanPreviousPage: function() { return pagination.pageIndex > 0; },
+            getPageCount: function() { return Math.ceil(data.length / pagination.pageSize); },
+          };
+          return table;
+        }
+
+        export { useReactTable };
+        export function getCoreRowModel() { return function() {}; }
+        export function getSortedRowModel() { return function() {}; }
+        export function getPaginationRowModel() { return function() {}; }
+        export function getFilteredRowModel() { return function() {}; }
+        export function flexRender(component, props) {
+          if (typeof component === 'function') return component(props);
+          return component;
+        }
+        export function createColumnHelper() {
+          return {
+            accessor: function(key, config) { return Object.assign({ accessorKey: key }, config); },
+            display: function(config) { return config; },
+          };
+        }
+      `,
+      'react-window': `
+        function FixedSizeList(props) {
+          const containerRef = window.React.useRef(null);
+          const [scrollTop, setScrollTop] = window.React.useState(0);
+          const itemCount = props.itemCount || 0;
+          const itemSize = props.itemSize || 35;
+          const height = props.height || 300;
+          const overscan = props.overscanCount || 3;
+
+          const startIndex = Math.max(0, Math.floor(scrollTop / itemSize) - overscan);
+          const visibleCount = Math.ceil(height / itemSize) + overscan * 2;
+          const endIndex = Math.min(itemCount - 1, startIndex + visibleCount);
+
+          const handleScroll = (e) => setScrollTop(e.target.scrollTop);
+
+          const items = [];
+          for (let i = startIndex; i <= endIndex; i++) {
+            items.push(window.React.createElement('div', {
+              key: i, style: { position: 'absolute', top: i * itemSize, left: 0, right: 0, height: itemSize },
+            }, props.children({ index: i, style: { height: itemSize }, data: props.itemData })));
+          }
+
+          return window.React.createElement('div', {
+            ref: containerRef, onScroll: handleScroll, className: props.className,
+            style: { height: height, width: props.width || '100%', overflow: 'auto', position: 'relative' },
+          },
+            window.React.createElement('div', { style: { height: itemCount * itemSize, position: 'relative' } }, items)
+          );
+        }
+        export { FixedSizeList };
+        export const VariableSizeList = FixedSizeList;
+        export const FixedSizeGrid = FixedSizeList;
+        export const VariableSizeGrid = FixedSizeList;
+      `,
+      'react-virtualized': `
+        import { FixedSizeList } from 'react-window';
+
+        function List(props) {
+          return window.React.createElement(FixedSizeList, {
+            height: props.height, width: props.width, itemCount: props.rowCount, itemSize: props.rowHeight || 30,
+            children: function(args) { return props.rowRenderer({ index: args.index, key: args.index, style: args.style }); },
+          });
+        }
+        export { List };
+
+        export function AutoSizer(props) {
+          const ref = window.React.useRef(null);
+          const [size, setSize] = window.React.useState({ width: 300, height: 300 });
+          window.React.useEffect(() => {
+            const el = ref.current;
+            if (!el) return undefined;
+            const update = () => setSize({ width: el.offsetWidth, height: el.offsetHeight });
+            update();
+            if (typeof window.ResizeObserver !== 'undefined') {
+              const observer = new window.ResizeObserver(update);
+              observer.observe(el);
+              return () => observer.disconnect();
+            }
+            window.addEventListener('resize', update);
+            return () => window.removeEventListener('resize', update);
+          }, []);
+          return window.React.createElement('div', { ref: ref, style: { width: '100%', height: '100%' } }, props.children(size));
+        }
+        export const Grid = List;
+        export const Table = List;
+        export const Column = function() { return null; };
+      `,
+      'react-player': `
+        function getYouTubeId(url) {
+          const match = String(url || '').match(/(?:youtube\\.com\\/(?:watch\\?v=|embed\\/|shorts\\/)|youtu\\.be\\/)([\\w-]{6,})/);
+          return match ? match[1] : null;
+        }
+        function getVimeoId(url) {
+          const match = String(url || '').match(/vimeo\\.com\\/(\\d+)/);
+          return match ? match[1] : null;
+        }
+
+        function ReactPlayer(props) {
+          const url = props.url;
+          const width = props.width || '100%';
+          const height = props.height || '360px';
+          const youTubeId = getYouTubeId(url);
+          const vimeoId = getVimeoId(url);
+
+          if (youTubeId) {
+            return window.React.createElement('iframe', {
+              src: 'https://www.youtube.com/embed/' + youTubeId + (props.playing ? '?autoplay=1' : ''),
+              width: width, height: height, style: { border: 'none' }, allow: 'autoplay; fullscreen',
+              allowFullScreen: true,
+            });
+          }
+          if (vimeoId) {
+            return window.React.createElement('iframe', {
+              src: 'https://player.vimeo.com/video/' + vimeoId + (props.playing ? '?autoplay=1' : ''),
+              width: width, height: height, style: { border: 'none' }, allow: 'autoplay; fullscreen',
+              allowFullScreen: true,
+            });
+          }
+          const isAudio = /\\.(mp3|wav|ogg|m4a)($|\\?)/i.test(String(url || ''));
+          return window.React.createElement(isAudio ? 'audio' : 'video', {
+            src: url, controls: props.controls !== false, autoPlay: !!props.playing, loop: !!props.loop, muted: !!props.muted,
+            width: isAudio ? undefined : width, height: isAudio ? undefined : height,
+            onEnded: props.onEnded, onPlay: props.onPlay, onPause: props.onPause,
+            style: { width: width, height: isAudio ? 'auto' : height },
+          });
+        }
+        export default ReactPlayer;
+      `,
+      'react-markdown': `
+        function escapeHtml(s) {
+          return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+
+        function renderInline(text) {
+          let html = escapeHtml(text);
+          html = html.replace(/\\!\\[([^\\]]*)\\]\\(([^)]+)\\)/g, '<img alt="$1" src="$2" style="max-width:100%" />');
+          html = html.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+          html = html.replace(/\\*\\*([^*]+)\\*\\*/g, '<strong>$1</strong>');
+          html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+          html = html.replace(/\\*([^*]+)\\*/g, '<em>$1</em>');
+          html = html.replace(/_([^_]+)_/g, '<em>$1</em>');
+          html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+          html = html.replace(/\\x60([^\\x60]+)\\x60/g, '<code>$1</code>');
+          return html;
+        }
+
+        function parseMarkdown(md) {
+          const lines = String(md || '').replace(/\\r\\n/g, '\\n').split('\\n');
+          const blocks = [];
+          let i = 0;
+          while (i < lines.length) {
+            const line = lines[i];
+            if (/^\\x60\\x60\\x60/.test(line)) {
+              const lang = line.replace(/^\\x60\\x60\\x60/, '').trim();
+              const codeLines = [];
+              i++;
+              while (i < lines.length && !/^\\x60\\x60\\x60/.test(lines[i])) { codeLines.push(lines[i]); i++; }
+              i++;
+              blocks.push({ type: 'code', lang: lang, content: codeLines.join('\\n') });
+              continue;
+            }
+            if (/^\\|.+\\|$/.test(line.trim()) && lines[i + 1] && /^\\|?[\\s:-]+\\|[\\s:|-]+$/.test(lines[i + 1].trim())) {
+              const headerCells = line.trim().replace(/^\\||\\|$/g, '').split('|').map(function(c) { return c.trim(); });
+              i += 2;
+              const rows = [];
+              while (i < lines.length && /^\\|.+\\|$/.test(lines[i].trim())) {
+                rows.push(lines[i].trim().replace(/^\\||\\|$/g, '').split('|').map(function(c) { return c.trim(); }));
+                i++;
+              }
+              blocks.push({ type: 'table', header: headerCells, rows: rows });
+              continue;
+            }
+            if (/^#{1,6}\\s/.test(line)) {
+              const level = line.match(/^#{1,6}/)[0].length;
+              blocks.push({ type: 'heading', level: level, text: line.replace(/^#{1,6}\\s/, '') });
+              i++;
+              continue;
+            }
+            if (/^>\\s?/.test(line)) {
+              const quoteLines = [];
+              while (i < lines.length && /^>\\s?/.test(lines[i])) { quoteLines.push(lines[i].replace(/^>\\s?/, '')); i++; }
+              blocks.push({ type: 'blockquote', text: quoteLines.join(' ') });
+              continue;
+            }
+            if (/^(-{3,}|\\*{3,})$/.test(line.trim())) {
+              blocks.push({ type: 'hr' });
+              i++;
+              continue;
+            }
+            if (/^\\s*([-*+])\\s/.test(line)) {
+              const items = [];
+              while (i < lines.length && /^\\s*([-*+])\\s/.test(lines[i])) { items.push(lines[i].replace(/^\\s*([-*+])\\s/, '')); i++; }
+              blocks.push({ type: 'ul', items: items });
+              continue;
+            }
+            if (/^\\s*\\d+\\.\\s/.test(line)) {
+              const items = [];
+              while (i < lines.length && /^\\s*\\d+\\.\\s/.test(lines[i])) { items.push(lines[i].replace(/^\\s*\\d+\\.\\s/, '')); i++; }
+              blocks.push({ type: 'ol', items: items });
+              continue;
+            }
+            if (line.trim() === '') { i++; continue; }
+            const paraLines = [];
+            while (i < lines.length && lines[i].trim() !== '' && !/^#{1,6}\\s/.test(lines[i]) && !/^\\x60\\x60\\x60/.test(lines[i])) { paraLines.push(lines[i]); i++; }
+            blocks.push({ type: 'p', text: paraLines.join(' ') });
+          }
+          return blocks;
+        }
+
+        function ReactMarkdown(props) {
+          const blocks = parseMarkdown(props.children);
+          const nodes = blocks.map(function(block, i) {
+            if (block.type === 'heading') {
+              const Tag = 'h' + block.level;
+              return window.React.createElement(Tag, { key: i, dangerouslySetInnerHTML: { __html: renderInline(block.text) } });
+            }
+            if (block.type === 'code') {
+              return window.React.createElement('pre', { key: i, style: { background: '#1e1e1e', color: '#d4d4d4', padding: '12px', borderRadius: '6px', overflow: 'auto' } },
+                window.React.createElement('code', null, block.content)
+              );
+            }
+            if (block.type === 'table') {
+              return window.React.createElement('table', { key: i, style: { borderCollapse: 'collapse', width: '100%' } },
+                window.React.createElement('thead', null, window.React.createElement('tr', null, block.header.map(function(h, j) {
+                  return window.React.createElement('th', { key: j, style: { border: '1px solid #ccc', padding: '6px', textAlign: 'left' }, dangerouslySetInnerHTML: { __html: renderInline(h) } });
+                }))),
+                window.React.createElement('tbody', null, block.rows.map(function(row, ri) {
+                  return window.React.createElement('tr', { key: ri }, row.map(function(cell, ci) {
+                    return window.React.createElement('td', { key: ci, style: { border: '1px solid #ccc', padding: '6px' }, dangerouslySetInnerHTML: { __html: renderInline(cell) } });
+                  }));
+                }))
+              );
+            }
+            if (block.type === 'blockquote') {
+              return window.React.createElement('blockquote', { key: i, style: { borderLeft: '3px solid #ccc', paddingLeft: '12px', opacity: 0.85 }, dangerouslySetInnerHTML: { __html: renderInline(block.text) } });
+            }
+            if (block.type === 'hr') return window.React.createElement('hr', { key: i });
+            if (block.type === 'ul') return window.React.createElement('ul', { key: i }, block.items.map(function(item, j) { return window.React.createElement('li', { key: j, dangerouslySetInnerHTML: { __html: renderInline(item) } }); }));
+            if (block.type === 'ol') return window.React.createElement('ol', { key: i }, block.items.map(function(item, j) { return window.React.createElement('li', { key: j, dangerouslySetInnerHTML: { __html: renderInline(item) } }); }));
+            return window.React.createElement('p', { key: i, dangerouslySetInnerHTML: { __html: renderInline(block.text) } });
+          });
+          return window.React.createElement('div', { className: props.className }, nodes);
+        }
+        export default ReactMarkdown;
+      `,
+      'remark-gfm': `
+        export default function remarkGfm() { return function() {}; }
+      `,
+      'prismjs': `
+        const Prism = {
+          highlight: function(code) { return String(code); },
+          highlightAll: function() {},
+          highlightElement: function() {},
+          languages: new Proxy({}, { get: function() { return {}; } }),
+          plugins: {},
+        };
+        export default Prism;
+      `,
+      'react-syntax-highlighter': `
+        function SyntaxHighlighter(props) {
+          return window.React.createElement('pre', {
+            className: props.className,
+            style: Object.assign({ background: '#1e1e1e', color: '#d4d4d4', padding: '14px', borderRadius: '8px', overflow: 'auto', fontSize: '13px', lineHeight: 1.5 }, props.customStyle),
+          }, window.React.createElement('code', null, props.children));
+        }
+        export default SyntaxHighlighter;
+        export { SyntaxHighlighter as Prism };
+        export { SyntaxHighlighter as Light };
+      `,
+      'leaflet': `
+        function Icon(options) { return { options: options || {} }; }
+        Icon.Default = function(options) { return new Icon(options); };
+        function LatLng(lat, lng) { return { lat: lat, lng: lng }; }
+        const L = {
+          Icon: Icon,
+          icon: function(options) { return new Icon(options); },
+          latLng: LatLng,
+          marker: function(latlng, options) { return { latlng: latlng, options: options || {} }; },
+          map: function() { return { setView: function() { return this; }, on: function() { return this; }, remove: function() {} }; },
+          tileLayer: function() { return { addTo: function() { return this; } }; },
+        };
+        export default L;
+        export { Icon, LatLng };
+      `,
+      'react-leaflet': `
+        const MapCenterContext = window.React.createContext(null);
+
+        export function MapContainer(props) {
+          const center = props.center || [0, 0];
+          const zoom = props.zoom || 13;
+          const markersRef = window.React.useRef([]);
+          const [, forceUpdate] = window.React.useState(0);
+
+          const registerMarker = (position) => {
+            markersRef.current = markersRef.current.concat([position]);
+            forceUpdate((n) => n + 1);
+            return () => {
+              markersRef.current = markersRef.current.filter((m) => m !== position);
+              forceUpdate((n) => n + 1);
+            };
+          };
+
+          const lat = center[0];
+          const lng = center[1];
+          const delta = 0.02 * (21 - zoom > 0 ? 21 - zoom : 1);
+          const bbox = [lng - delta, lat - delta, lng + delta, lat + delta].join(',');
+          const markerParams = markersRef.current.map((m) => '&marker=' + m[0] + ',' + m[1]).join('');
+          const src = 'https://www.openstreetmap.org/export/embed.html?bbox=' + bbox + markerParams;
+
+          return window.React.createElement(MapCenterContext.Provider, { value: { registerMarker: registerMarker } },
+            window.React.createElement('div', { className: props.className, style: Object.assign({ position: 'relative' }, props.style) },
+              window.React.createElement('iframe', { src: src, style: { width: '100%', height: '100%', border: 'none' }, title: 'Map' }),
+              window.React.createElement('div', { style: { display: 'none' } }, props.children)
+            )
+          );
+        }
+
+        export function TileLayer() { return null; }
+
+        export function Marker(props) {
+          const ctx = window.React.useContext(MapCenterContext);
+          window.React.useEffect(() => {
+            if (ctx && ctx.registerMarker) return ctx.registerMarker(props.position);
+            return undefined;
+          }, [JSON.stringify(props.position)]);
+          return window.React.createElement('div', { style: { display: 'none' } }, props.children);
+        }
+
+        export function Popup(props) { return window.React.createElement('div', { style: { display: 'none' } }, props.children); }
+        export function useMap() { return { setView: function() { return this; }, flyTo: function() { return this; } }; }
+        export function useMapEvents() { return null; }
+        export function Circle() { return null; }
+        export function Polygon() { return null; }
+        export function Polyline() { return null; }
+      `,
+      '@react-pdf/renderer': `
+        export function Document(props) {
+          return window.React.createElement('div', { className: 'wakti-pdf-document', style: { background: '#fff', color: '#000' } }, props.children);
+        }
+        export function Page(props) {
+          const size = props.size || 'A4';
+          const sizes = { A4: { width: '210mm', minHeight: '297mm' }, LETTER: { width: '216mm', minHeight: '279mm' } };
+          const dims = sizes[size] || sizes.A4;
+          return window.React.createElement('div', {
+            style: Object.assign({ width: dims.width, minHeight: dims.minHeight, padding: '20mm', margin: '0 auto 12px', background: '#fff', boxShadow: '0 0 8px rgba(0,0,0,0.15)', pageBreakAfter: 'always' }, props.style),
+          }, props.children);
+        }
+        export function View(props) { return window.React.createElement('div', { style: props.style }, props.children); }
+        export function Text(props) { return window.React.createElement('span', { style: Object.assign({ display: 'block' }, props.style) }, props.children); }
+        export function Image(props) { return window.React.createElement('img', { src: props.src, style: props.style }); }
+        export function Link(props) { return window.React.createElement('a', { href: props.src, style: props.style }, props.children); }
+        export function Font() { return { register: function() {} }; }
+        export const StyleSheet = { create: function(styles) { return styles; } };
+
+        export function PDFDownloadLink(props) {
+          const handleClick = (e) => {
+            e.preventDefault();
+            const printWindow = window.open('', '_blank');
+            const content = document.createElement('div');
+            const root = window.ReactDOM.createRoot(content);
+            root.render(props.document);
+            setTimeout(function() {
+              printWindow.document.write('<html><head><title>' + (props.fileName || 'document') + '</title></head><body>' + content.innerHTML + '</body></html>');
+              printWindow.document.close();
+              printWindow.focus();
+              printWindow.print();
+            }, 100);
+          };
+          if (typeof props.children === 'function') {
+            return window.React.createElement('span', { onClick: handleClick, style: { cursor: 'pointer' } }, props.children({ loading: false, error: null }));
+          }
+          return window.React.createElement('a', { href: '#', onClick: handleClick }, props.children || 'Download PDF');
+        }
+
+        export function PDFViewer(props) {
+          return window.React.createElement('div', { style: Object.assign({ width: '100%', height: '600px', overflow: 'auto', border: '1px solid #ddd' }, props.style) }, props.children);
+        }
+
+        export function pdf() {
+          return {
+            toBlob: function() { return Promise.resolve(new Blob(['PDF generation requires the print dialog - use PDFDownloadLink instead.'], { type: 'text/plain' })); },
+            toBuffer: function() { return Promise.resolve(new Uint8Array()); },
+          };
+        }
+      `,
+      'qrcode.react': `
+        function buildQrUrl(value, size) {
+          return 'https://api.qrserver.com/v1/create-qr-code/?size=' + size + 'x' + size + '&data=' + encodeURIComponent(String(value || ''));
+        }
+        export function QRCodeSVG(props) {
+          const size = props.size || 128;
+          return window.React.createElement('img', {
+            src: buildQrUrl(props.value, size), width: size, height: size,
+            style: Object.assign({ background: props.bgColor || '#fff' }, props.style), alt: 'QR code',
+          });
+        }
+        export const QRCodeCanvas = QRCodeSVG;
+        export default QRCodeSVG;
+      `,
+      'lodash': `
+        function debounce(fn, wait) {
+          wait = wait || 0;
+          let timer = null;
+          const debounced = function(...args) {
+            clearTimeout(timer);
+            timer = setTimeout(() => fn.apply(this, args), wait);
+          };
+          debounced.cancel = function() { clearTimeout(timer); };
+          return debounced;
+        }
+
+        function throttle(fn, wait) {
+          wait = wait || 0;
+          let last = 0;
+          let timer = null;
+          return function(...args) {
+            const now = Date.now();
+            const remaining = wait - (now - last);
+            if (remaining <= 0) {
+              last = now;
+              fn.apply(this, args);
+            } else {
+              clearTimeout(timer);
+              timer = setTimeout(() => { last = Date.now(); fn.apply(this, args); }, remaining);
+            }
+          };
+        }
+
+        function cloneDeep(value) {
+          if (value === null || typeof value !== 'object') return value;
+          if (Array.isArray(value)) return value.map(cloneDeep);
+          if (value instanceof Date) return new Date(value.getTime());
+          const result = {};
+          Object.keys(value).forEach(function(key) { result[key] = cloneDeep(value[key]); });
+          return result;
+        }
+
+        function isEqual(a, b) {
+          if (a === b) return true;
+          if (typeof a !== typeof b) return false;
+          if (a && b && typeof a === 'object') {
+            const aKeys = Object.keys(a);
+            const bKeys = Object.keys(b);
+            if (aKeys.length !== bKeys.length) return false;
+            return aKeys.every(function(key) { return isEqual(a[key], b[key]); });
+          }
+          return false;
+        }
+
+        function get(obj, path, defaultValue) {
+          const parts = Array.isArray(path) ? path : String(path).replace(/\\[(\\d+)\\]/g, '.$1').split('.');
+          let current = obj;
+          for (const part of parts) {
+            if (current == null) return defaultValue;
+            current = current[part];
+          }
+          return current === undefined ? defaultValue : current;
+        }
+
+        function set(obj, path, value) {
+          const parts = Array.isArray(path) ? path : String(path).replace(/\\[(\\d+)\\]/g, '.$1').split('.');
+          let current = obj;
+          for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i];
+            if (current[part] == null || typeof current[part] !== 'object') current[part] = {};
+            current = current[part];
+          }
+          current[parts[parts.length - 1]] = value;
+          return obj;
+        }
+
+        function pick(obj, keys) {
+          const result = {};
+          (keys || []).forEach(function(key) { if (obj && Object.prototype.hasOwnProperty.call(obj, key)) result[key] = obj[key]; });
+          return result;
+        }
+
+        function omit(obj, keys) {
+          const result = Object.assign({}, obj);
+          (keys || []).forEach(function(key) { delete result[key]; });
+          return result;
+        }
+
+        function merge(target) {
+          for (let i = 1; i < arguments.length; i++) {
+            const source = arguments[i];
+            if (!source) continue;
+            Object.keys(source).forEach(function(key) {
+              if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) && target[key] && typeof target[key] === 'object') {
+                merge(target[key], source[key]);
+              } else {
+                target[key] = source[key];
+              }
+            });
+          }
+          return target;
+        }
+
+        function groupBy(collection, iteratee) {
+          const result = {};
+          (collection || []).forEach(function(item) {
+            const key = typeof iteratee === 'function' ? iteratee(item) : item[iteratee];
+            if (!result[key]) result[key] = [];
+            result[key].push(item);
+          });
+          return result;
+        }
+
+        function keyBy(collection, iteratee) {
+          const result = {};
+          (collection || []).forEach(function(item) {
+            const key = typeof iteratee === 'function' ? iteratee(item) : item[iteratee];
+            result[key] = item;
+          });
+          return result;
+        }
+
+        function sortBy(collection, iteratee) {
+          const getVal = typeof iteratee === 'function' ? iteratee : function(item) { return item[iteratee]; };
+          return (collection || []).slice().sort(function(a, b) {
+            const av = getVal(a), bv = getVal(b);
+            return av > bv ? 1 : av < bv ? -1 : 0;
+          });
+        }
+
+        function orderBy(collection, iteratees, orders) {
+          const keys = Array.isArray(iteratees) ? iteratees : [iteratees];
+          const dirs = Array.isArray(orders) ? orders : [orders];
+          return (collection || []).slice().sort(function(a, b) {
+            for (let i = 0; i < keys.length; i++) {
+              const key = keys[i];
+              const getVal = typeof key === 'function' ? key : function(item) { return item[key]; };
+              const av = getVal(a), bv = getVal(b);
+              if (av === bv) continue;
+              const cmp = av > bv ? 1 : -1;
+              return (dirs[i] === 'desc') ? -cmp : cmp;
+            }
+            return 0;
+          });
+        }
+
+        function uniq(array) { return Array.from(new Set(array || [])); }
+        function uniqBy(array, iteratee) {
+          const seen = new Set();
+          const getVal = typeof iteratee === 'function' ? iteratee : function(item) { return item[iteratee]; };
+          return (array || []).filter(function(item) {
+            const key = getVal(item);
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        }
+
+        function chunk(array, size) {
+          size = size || 1;
+          const result = [];
+          for (let i = 0; i < (array || []).length; i += size) result.push(array.slice(i, i + size));
+          return result;
+        }
+
+        function flatten(array) { return [].concat(...(array || [])); }
+        function flattenDeep(array) {
+          return (array || []).reduce(function(acc, item) { return acc.concat(Array.isArray(item) ? flattenDeep(item) : item); }, []);
+        }
+
+        function isEmpty(value) {
+          if (value == null) return true;
+          if (Array.isArray(value) || typeof value === 'string') return value.length === 0;
+          if (typeof value === 'object') return Object.keys(value).length === 0;
+          return false;
+        }
+
+        function isObject(value) { return value !== null && typeof value === 'object'; }
+        function isFunction(value) { return typeof value === 'function'; }
+        function isString(value) { return typeof value === 'string'; }
+        function isNumber(value) { return typeof value === 'number'; }
+        function isNil(value) { return value === null || value === undefined; }
+
+        function capitalize(str) { str = String(str || ''); return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase(); }
+        function camelCase(str) {
+          return String(str || '').replace(/[-_\\s]+(.)?/g, function(_, c) { return c ? c.toUpperCase() : ''; }).replace(/^./, function(c) { return c.toLowerCase(); });
+        }
+        function kebabCase(str) {
+          return String(str || '').replace(/([a-z])([A-Z])/g, '$1-$2').replace(/[\\s_]+/g, '-').toLowerCase();
+        }
+        function snakeCase(str) {
+          return String(str || '').replace(/([a-z])([A-Z])/g, '$1_$2').replace(/[\\s-]+/g, '_').toLowerCase();
+        }
+
+        function range(start, end, step) {
+          if (end === undefined) { end = start; start = 0; }
+          step = step || 1;
+          const result = [];
+          for (let i = start; step > 0 ? i < end : i > end; i += step) result.push(i);
+          return result;
+        }
+
+        function sum(array) { return (array || []).reduce(function(a, b) { return a + b; }, 0); }
+        function sumBy(array, iteratee) {
+          const getVal = typeof iteratee === 'function' ? iteratee : function(item) { return item[iteratee]; };
+          return (array || []).reduce(function(a, item) { return a + getVal(item); }, 0);
+        }
+        function maxBy(array, iteratee) {
+          const getVal = typeof iteratee === 'function' ? iteratee : function(item) { return item[iteratee]; };
+          return (array || []).reduce(function(best, item) { return best === undefined || getVal(item) > getVal(best) ? item : best; }, undefined);
+        }
+        function minBy(array, iteratee) {
+          const getVal = typeof iteratee === 'function' ? iteratee : function(item) { return item[iteratee]; };
+          return (array || []).reduce(function(best, item) { return best === undefined || getVal(item) < getVal(best) ? item : best; }, undefined);
+        }
+        function max(array) { return (array || []).reduce(function(a, b) { return b > a ? b : a; }, (array || [])[0]); }
+        function min(array) { return (array || []).reduce(function(a, b) { return b < a ? b : a; }, (array || [])[0]); }
+
+        function shuffle(array) {
+          const result = (array || []).slice();
+          for (let i = result.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = result[i]; result[i] = result[j]; result[j] = tmp;
+          }
+          return result;
+        }
+        function sample(array) { return (array || [])[Math.floor(Math.random() * (array || []).length)]; }
+        function compact(array) { return (array || []).filter(Boolean); }
+        function difference(array, values) { return (array || []).filter(function(item) { return (values || []).indexOf(item) === -1; }); }
+        function intersection(array, values) { return (array || []).filter(function(item) { return (values || []).indexOf(item) !== -1; }); }
+        function union() { const sets = Array.prototype.slice.call(arguments); return uniq([].concat(...sets)); }
+        function without(array) { const rest = Array.prototype.slice.call(arguments, 1); return (array || []).filter(function(item) { return rest.indexOf(item) === -1; }); }
+        function clamp(value, lower, upper) { if (upper === undefined) { upper = lower; lower = undefined; } if (lower !== undefined) value = Math.max(value, lower); return Math.min(value, upper); }
+        function random(lower, upper, floating) {
+          if (upper === undefined) { upper = lower; lower = 0; }
+          if (floating) return lower + Math.random() * (upper - lower);
+          return Math.floor(lower + Math.random() * (upper - lower + 1));
+        }
+        function times(n, fn) { const result = []; for (let i = 0; i < n; i++) result.push(fn ? fn(i) : i); return result; }
+        function noop() {}
+        function identity(value) { return value; }
+
+        const _ = {
+          debounce: debounce, throttle: throttle, cloneDeep: cloneDeep, isEqual: isEqual, get: get, set: set, pick: pick, omit: omit, merge: merge, groupBy: groupBy, keyBy: keyBy, sortBy: sortBy, orderBy: orderBy,
+          uniq: uniq, uniqBy: uniqBy, chunk: chunk, flatten: flatten, flattenDeep: flattenDeep, isEmpty: isEmpty, isObject: isObject, isFunction: isFunction, isString: isString, isNumber: isNumber, isNil: isNil,
+          capitalize: capitalize, camelCase: camelCase, kebabCase: kebabCase, snakeCase: snakeCase, range: range, sum: sum, sumBy: sumBy, max: max, maxBy: maxBy, min: min, minBy: minBy, shuffle: shuffle, sample: sample,
+          compact: compact, difference: difference, intersection: intersection, union: union, without: without, clamp: clamp, random: random, times: times, noop: noop, identity: identity,
+          isArray: Array.isArray,
+        };
+
+        export default _;
+        export {
+          debounce, throttle, cloneDeep, isEqual, get, set, pick, omit, merge, groupBy, keyBy, sortBy, orderBy,
+          uniq, uniqBy, chunk, flatten, flattenDeep, isEmpty, isObject, isFunction, isString, isNumber, isNil,
+          capitalize, camelCase, kebabCase, snakeCase, range, sum, sumBy, max, maxBy, min, minBy, shuffle, sample,
+          compact, difference, intersection, union, without, clamp, random, times, noop, identity,
+        };
       `
     };
 
