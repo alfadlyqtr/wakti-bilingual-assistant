@@ -170,23 +170,61 @@ serve(async (req) => {
         // animation engine. Real framer-motion (loaded from a third-party CDN)
         // was observed to silently fail to complete its animations on some
         // mobile browsers, leaving whole sections stuck at their "initial"
-        // (often invisible) state forever. This shim resolves the final
-        // visible state itself and fades into it with plain CSS driven by
-        // React state, so content is guaranteed to become visible everywhere.
+        // (often invisible) state forever. This shim resolves every animation
+        // instruction itself - any CSS property (width, color, size...), real
+        // scroll-triggered reveals, and hover/tap feedback - and drives them
+        // with plain CSS transitions, so content is guaranteed to become
+        // visible everywhere while still looking and feeling like real motion.
+        const __motionLastValue = (v) => Array.isArray(v) ? v[v.length - 1] : v;
         const __resolveMotionState = (value, variants) => {
-          if (value && typeof value === 'object') return value;
+          if (value && typeof value === 'object' && !Array.isArray(value)) return value;
           if (typeof value === 'string' && variants && variants[value]) return variants[value];
           return null;
+        };
+        const __motionEase = (ease) => {
+          if (Array.isArray(ease) && ease.length === 4) return 'cubic-bezier(' + ease.join(',') + ')';
+          const map = {
+            linear: 'linear',
+            easeIn: 'cubic-bezier(0.4, 0, 1, 1)',
+            easeOut: 'cubic-bezier(0, 0, 0.2, 1)',
+            easeInOut: 'cubic-bezier(0.4, 0, 0.2, 1)',
+            circIn: 'cubic-bezier(0.55, 0, 1, 0.45)',
+            circOut: 'cubic-bezier(0, 0.55, 0.45, 1)',
+            circInOut: 'cubic-bezier(0.85, 0, 0.15, 1)',
+            backIn: 'cubic-bezier(0.36, 0, 0.66, -0.56)',
+            backOut: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+            backInOut: 'cubic-bezier(0.68, -0.6, 0.32, 1.6)',
+            anticipate: 'cubic-bezier(0.68, -0.6, 0.32, 1.6)'
+          };
+          return (typeof ease === 'string' && map[ease]) ? map[ease] : 'cubic-bezier(0.4, 0, 0.2, 1)';
         };
         const __applyMotionState = (state, base) => {
           const result = { ...base };
           if (!state) return result;
-          if (state.opacity !== undefined) result.opacity = state.opacity;
           const transforms = [];
-          if (state.x !== undefined) transforms.push('translateX(' + state.x + 'px)');
-          if (state.y !== undefined) transforms.push('translateY(' + state.y + 'px)');
-          if (state.scale !== undefined) transforms.push('scale(' + state.scale + ')');
-          if (state.rotate !== undefined) transforms.push('rotate(' + state.rotate + 'deg)');
+          Object.keys(state).forEach((key) => {
+            if (key === 'transition') return;
+            const value = __motionLastValue(state[key]);
+            if (value === undefined || value === null) return;
+            const unit = typeof value === 'number' ? 'px' : '';
+            const deg = typeof value === 'number' ? 'deg' : '';
+            switch (key) {
+              case 'x': transforms.push('translateX(' + value + unit + ')'); break;
+              case 'y': transforms.push('translateY(' + value + unit + ')'); break;
+              case 'z': transforms.push('translateZ(' + value + unit + ')'); break;
+              case 'scale': transforms.push('scale(' + value + ')'); break;
+              case 'scaleX': transforms.push('scaleX(' + value + ')'); break;
+              case 'scaleY': transforms.push('scaleY(' + value + ')'); break;
+              case 'rotate': transforms.push('rotate(' + value + deg + ')'); break;
+              case 'rotateX': transforms.push('rotateX(' + value + deg + ')'); break;
+              case 'rotateY': transforms.push('rotateY(' + value + deg + ')'); break;
+              case 'rotateZ': transforms.push('rotateZ(' + value + deg + ')'); break;
+              case 'skew': transforms.push('skew(' + value + deg + ')'); break;
+              case 'skewX': transforms.push('skewX(' + value + deg + ')'); break;
+              case 'skewY': transforms.push('skewY(' + value + deg + ')'); break;
+              default: result[key] = value;
+            }
+          });
           if (transforms.length > 0) result.transform = transforms.join(' ');
           return result;
         };
@@ -195,33 +233,109 @@ serve(async (req) => {
             return window.React.forwardRef((props, ref) => {
               const {
                 initial, animate, exit, transition, whileHover, whileTap, whileInView,
-                variants, style = {}, ...rest
+                viewport, variants, style = {}, ...rest
               } = props;
 
               const initialState = __resolveMotionState(initial, variants);
-              const targetState = __resolveMotionState(animate, variants) || __resolveMotionState(whileInView, variants);
+              const animateState = __resolveMotionState(animate, variants);
+              const inViewState = __resolveMotionState(whileInView, variants);
+              const hoverState = __resolveMotionState(whileHover, variants);
+              const tapState = __resolveMotionState(whileTap, variants);
+              const targetState = animateState || inViewState;
+              const usesInView = !animateState && !!whileInView;
 
-              const [visible, setVisible] = window.React.useState(false);
+              const nodeRef = window.React.useRef(null);
+              const setRefs = window.React.useCallback((node) => {
+                nodeRef.current = node;
+                if (typeof ref === 'function') ref(node);
+                else if (ref && typeof ref === 'object') ref.current = node;
+              }, [ref]);
+
+              const [mounted, setMounted] = window.React.useState(false);
+              const [inView, setInView] = window.React.useState(false);
+              const [hovered, setHovered] = window.React.useState(false);
+              const [pressed, setPressed] = window.React.useState(false);
+
               window.React.useEffect(() => {
-                const raf = requestAnimationFrame(() => setVisible(true));
+                const raf = requestAnimationFrame(() => setMounted(true));
                 return () => cancelAnimationFrame(raf);
               }, []);
 
-              const duration = (transition && typeof transition.duration === 'number') ? transition.duration : 0.5;
-              const delay = (transition && typeof transition.delay === 'number') ? transition.delay : 0;
-              const computedStyle = __applyMotionState(visible ? (targetState || initialState) : (initialState || targetState), style);
-              if (targetState) {
-                computedStyle.transition = 'opacity ' + duration + 's ease-out ' + delay + 's, transform ' + duration + 's ease-out ' + delay + 's';
+              window.React.useEffect(() => {
+                if (!usesInView) return undefined;
+                const el = nodeRef.current;
+                const amount = (viewport && typeof viewport.amount === 'number') ? viewport.amount : 0.2;
+                const fallback = setTimeout(() => setInView(true), 2500);
+                if (!el || typeof IntersectionObserver === 'undefined') {
+                  setInView(true);
+                  return () => clearTimeout(fallback);
+                }
+                const observer = new IntersectionObserver((entries) => {
+                  for (const entry of entries) {
+                    if (entry.isIntersecting) {
+                      setInView(true);
+                      observer.disconnect();
+                      clearTimeout(fallback);
+                    }
+                  }
+                }, { threshold: Math.min(Math.max(amount, 0), 1) });
+                observer.observe(el);
+                return () => { observer.disconnect(); clearTimeout(fallback); };
+              }, [usesInView]);
+
+              const revealed = usesInView ? inView : mounted;
+              let finalState = revealed ? (targetState || initialState) : (initialState || targetState);
+              let interactive = false;
+              if (pressed && tapState) { finalState = { ...finalState, ...tapState }; interactive = true; }
+              else if (hovered && hoverState) { finalState = { ...finalState, ...hoverState }; interactive = true; }
+
+              const effectiveTransition = transition || (targetState && targetState.transition) || {};
+              const duration = typeof effectiveTransition.duration === 'number' ? effectiveTransition.duration : 0.5;
+              const delay = typeof effectiveTransition.delay === 'number' ? effectiveTransition.delay : 0;
+              const ease = __motionEase(effectiveTransition.ease);
+              const computedStyle = __applyMotionState(finalState, style);
+              if (targetState || hoverState || tapState) {
+                computedStyle.transition = interactive
+                  ? ('all 0.15s ' + ease + ' 0s')
+                  : ('all ' + duration + 's ' + ease + ' ' + delay + 's');
               }
 
-              return window.React.createElement(String(tag) || 'div', { ...rest, ref, style: computedStyle });
+              const handlers = {};
+              if (hoverState) {
+                handlers.onMouseEnter = (e) => { setHovered(true); if (rest.onMouseEnter) rest.onMouseEnter(e); };
+                handlers.onMouseLeave = (e) => { setHovered(false); if (rest.onMouseLeave) rest.onMouseLeave(e); };
+              }
+              if (tapState) {
+                handlers.onMouseDown = (e) => { setPressed(true); if (rest.onMouseDown) rest.onMouseDown(e); };
+                handlers.onMouseUp = (e) => { setPressed(false); if (rest.onMouseUp) rest.onMouseUp(e); };
+                handlers.onTouchStart = (e) => { setPressed(true); if (rest.onTouchStart) rest.onTouchStart(e); };
+                handlers.onTouchEnd = (e) => { setPressed(false); if (rest.onTouchEnd) rest.onTouchEnd(e); };
+              }
+
+              return window.React.createElement(String(tag) || 'div', { ...rest, ...handlers, ref: setRefs, style: computedStyle });
             });
           }
         });
 
         const AnimatePresence = ({ children }) => children;
         const useAnimation = () => ({ start: () => Promise.resolve(), stop: () => {}, set: () => {} });
-        const useInView = (ref, opts) => true;
+        const useInView = (ref, opts) => {
+          const [inView, setInView] = window.React.useState(false);
+          window.React.useEffect(() => {
+            const el = ref && ref.current;
+            const amount = (opts && typeof opts.amount === 'number') ? opts.amount : 0.2;
+            const fallback = setTimeout(() => setInView(true), 2500);
+            if (!el || typeof IntersectionObserver === 'undefined') { setInView(true); return () => clearTimeout(fallback); }
+            const observer = new IntersectionObserver((entries) => {
+              for (const entry of entries) {
+                if (entry.isIntersecting) { setInView(true); observer.disconnect(); clearTimeout(fallback); }
+              }
+            }, { threshold: Math.min(Math.max(amount, 0), 1) });
+            observer.observe(el);
+            return () => { observer.disconnect(); clearTimeout(fallback); };
+          }, [ref && ref.current]);
+          return inView;
+        };
         const useScroll = () => ({
           scrollY: { get: () => 0, set: () => {}, onChange: () => () => {} },
           scrollYProgress: { get: () => 0, onChange: () => () => {} },
