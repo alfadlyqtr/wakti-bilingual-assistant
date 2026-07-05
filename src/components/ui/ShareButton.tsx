@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Share2, Copy, Check, MessageCircle, X, Link, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -284,8 +285,10 @@ const ShareButton: React.FC<ShareButtonProps> = ({
         <Share2 className={config.icon} />
       </button>
 
-      {/* Centered overlay with platform buttons */}
-      {isExpanded && (
+      {/* Centered overlay with platform buttons — portaled to <body> so it
+          always centers on the full viewport, even when a parent card has
+          backdrop-filter/transform (which would otherwise trap position:fixed). */}
+      {isExpanded && createPortal(
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => setIsExpanded(false)}
@@ -356,7 +359,8 @@ const ShareButton: React.FC<ShareButtonProps> = ({
               <X className={config.icon} />
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

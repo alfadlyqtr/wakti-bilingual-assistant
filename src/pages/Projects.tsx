@@ -2806,7 +2806,6 @@ Apply these styles consistently throughout the entire design.`;
                       boxShadow: isDark
                         ? '0 25px 50px -12px rgba(0,0,0,0.5), 0 12px 24px -8px rgba(99,102,241,0.15), inset 0 1px 0 rgba(255,255,255,0.1), 0 0 0 1px rgba(99,102,241,0.1)'
                         : '0 25px 50px -12px rgba(0,0,0,0.15), 0 12px 24px -8px rgba(99,102,241,0.08), inset 0 1px 0 rgba(255,255,255,0.8), 0 0 0 1px rgba(99,102,241,0.05)',
-                      transform: 'perspective(1000px) rotateX(0deg)',
                     }}
                   >
                     {/* 3D Shine Effect on Hover */}
