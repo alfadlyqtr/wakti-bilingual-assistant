@@ -62,6 +62,7 @@ export default function GroupChatPage() {
   const [reactionDetails, setReactionDetails] = useState<{ messageId: string } | null>(null);
   const [messageInfoFor, setMessageInfoFor] = useState<GroupChatMessage | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [loadingAudio, setLoadingAudio] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState<Record<string, number>>({});
   const [audioSpeed, setAudioSpeed] = useState<Record<string, number>>({});
   const [typingUserIds, setTypingUserIds] = useState<Set<string>>(new Set());
@@ -1117,6 +1118,7 @@ export default function GroupChatPage() {
     if (playingAudio === messageId) {
       audioRefs.current[messageId]?.pause();
       setPlayingAudio(null);
+      setLoadingAudio(null);
       return;
     }
 
@@ -1130,15 +1132,19 @@ export default function GroupChatPage() {
       audio.playbackRate = audioSpeed[messageId] || 1;
       audio.onended = () => {
         setPlayingAudio(null);
+        setLoadingAudio(null);
         setAudioProgress((prev) => ({ ...prev, [messageId]: 0 }));
       };
       audio.ontimeupdate = () => {
         setAudioProgress((prev) => ({ ...prev, [messageId]: audio.currentTime }));
       };
+      audio.onwaiting = () => setLoadingAudio(messageId);
+      audio.onplaying = () => setLoadingAudio(null);
     } else {
       audioRefs.current[messageId].playbackRate = audioSpeed[messageId] || 1;
     }
 
+    setLoadingAudio(messageId);
     audioRefs.current[messageId].play();
     setPlayingAudio(messageId);
   };
@@ -1293,7 +1299,7 @@ export default function GroupChatPage() {
             onClick={() => toggleAudioPlayback(message.id, cleanMediaUrl(message.media_url))}
             className={cn("h-8 w-8 p-0 rounded-full shrink-0", isSentByMe ? "hover:bg-white/20" : "hover:bg-black/10")}
           >
-            {playingAudio === message.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+            {loadingAudio === message.id ? <Loader2 className="h-4 w-4 animate-spin" /> : playingAudio === message.id ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
           </Button>
           <button
             onClick={() => cycleAudioSpeed(message.id)}
