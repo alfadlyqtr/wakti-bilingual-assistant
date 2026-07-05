@@ -3010,14 +3010,12 @@ async function preFetchAndStoreImages(
             'Accept': 'application/json',
           },
           body: JSON.stringify({
-            model: 'nano-banana-2',
+            model: 'nano-banana-2-lite',
             ...(callbackUrl ? { callBackUrl: callbackUrl } : {}),
             input: {
               prompt: generationPrompt,
-              image_input: [],
+              image_urls: [],
               aspect_ratio: aspectRatio,
-              resolution: '1K',
-              output_format: 'jpg',
             },
           }),
         });

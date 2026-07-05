@@ -1,8 +1,8 @@
-// Capability doc: AI GENERATED IMAGES (NANO-BANANA-2)
+// Capability doc: AI GENERATED IMAGES (NANO-BANANA-2-LITE)
 // Loaded when the project needs any image (most projects).
 
 export const STOCK_IMAGES_CAPABILITY = `
-## 🖼️ AI IMAGES (NANO-BANANA-2 — MANDATORY)
+## 🖼️ AI IMAGES (NANO-BANANA-2-LITE — MANDATORY)
 
 ### BANNED IMAGE SOURCES
 - ❌ picsum.photos, unsplash.com, via.placeholder.com, placeholder.com, placehold.it
@@ -10,7 +10,7 @@ export const STOCK_IMAGES_CAPABILITY = `
 - ❌ Empty src="" or fake broken image paths
 
 ### IMAGE SOURCE POLICY
-- The system pre-generates image assets using **model: nano-banana-2** with **resolution: 1K**.
+- The system pre-generates image assets using **model: nano-banana-2-lite**.
 - When pre-generated URLs are provided in the prompt, use those URLs directly.
 - Use different image URLs per section (hero/about/services/gallery).
 - If no generated URL is available for a section, use a minimal neutral fallback and keep structure ready for future image replacement.
