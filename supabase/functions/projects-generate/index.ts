@@ -789,7 +789,20 @@ function buildUploadedAssetsAwareness(params: {
     if (params.includeAssetPickerRules && uploadedAssets.length > 1) {
       assetsSection += `\nIf the user says \"my photo\" or \"my image\" without naming a file and multiple assets exist, ask them to choose the exact file before using one.`;
     } else if (uploadedAssets.length === 1) {
-      assetsSection += `\nIf the user says \"my photo\" or \"my image\", use ${uploadedAssets[0].filename}.`;
+      const singleAsset = uploadedAssets[0];
+      const fileType = (singleAsset.file_type || '').toLowerCase();
+      assetsSection += `\nIf the user says \"my photo\" or \"my image\", use ${singleAsset.filename}.`;
+      // 🔧 Auto-use single uploaded file even when the prompt never explicitly
+      // says "use my photo" — previously the file just sat unused unless the
+      // user typed those exact words, even after attaching it specifically
+      // for the site.
+      if (fileType.startsWith('image/')) {
+        assetsSection += `\nThe user uploaded exactly one image (${singleAsset.filename}) with this request. Unless the prompt gives other explicit instructions for it, use this image prominently — as the hero image or personal/profile photo, whichever fits the brief best. Do not leave it unused.`;
+      } else if (fileType.startsWith('video/')) {
+        assetsSection += `\nThe user uploaded exactly one video (${singleAsset.filename}) with this request. Unless the prompt gives other explicit instructions for it, use it as a hero/background video. Do not leave it unused.`;
+      } else if (fileType.includes('pdf') || fileType.includes('word') || fileType.includes('document')) {
+        assetsSection += `\nThe user uploaded exactly one document (${singleAsset.filename}) with this request. Extract and use its real content (text, data, structure) to populate the site — do not invent placeholder content that could come from this document instead.`;
+      }
     }
     sections.push(assetsSection);
   }
@@ -3463,34 +3476,37 @@ interface ImageSectionQuery {
 
 // AI-powered image query extraction — returns section-tagged queries, never blind keyword matches
 async function extractImageQueriesAI(prompt: string): Promise<ImageSectionQuery[]> {
-  const systemPrompt = `You are a web design image curator. Given a website brief, return a JSON object with EXACTLY this structure:
+  const systemPrompt = `You are a web design image curator. Given a website brief, decide ONLY the images this SPECIFIC page will actually use, then return a JSON object with this structure:
 {"sections": [
-  {"section": "hero", "query": "..."},
-  {"section": "proof_case_study", "query": "..."},
-  {"section": "team", "query": "..."},
-  {"section": "portfolio_work", "query": "..."},
-  {"section": "location_atmosphere", "query": "..."},
-  {"section": "services_context", "query": "..."}
+  {"section": "hero", "query": "..."}
 ]}
 
-SECTION ROLES — write each query for its section's specific purpose:
-- hero: The defining first-impression visual. Must perfectly match this brand's identity and tone.
-- proof_case_study: Specific to what they actually built or sold. Children's toy company → warm playful family setting. NOT a generic shopping app.
-- team: Founder or team in their real environment — executive workspace, collaboration, professional setting.
-- portfolio_work: The KIND of work they do, shown through real context and environment. NEVER a design artifact.
-- location_atmosphere: The city or region they operate in — skyline, business district, architectural mood at night.
-- services_context: Their service in action — a strategy session, a build meeting, a product launch moment.
+🔧 CRITICAL — DECIDE REAL NEED FIRST, DO NOT PAD:
+Each image costs real money to generate. Only request an image for a section if the brief genuinely implies that section will exist on the page.
+- A simple one-page personal/founder landing page usually only needs 1-3 images total (e.g. hero, maybe one supporting visual). Do NOT request "team", "portfolio_work", or "services_context" images for a single founder with no team/portfolio/services mentioned.
+- A full multi-section business site (shop, agency, restaurant, multi-service company) can justify up to 6 images if those sections are actually implied by the brief.
+- Never invent a section image just to "fill a slot." An unused generated image is a wasted cost — when in doubt, generate fewer, not more.
+
+AVAILABLE SECTION TYPES (use only the ones that actually apply — do not include ones that don't):
+- hero: The defining first-impression visual. Must perfectly match this brand's identity and tone. Almost always needed.
+- proof_case_study: Specific to what they actually built or sold. Children's toy company → warm playful family setting. NOT a generic shopping app. Only if the brief implies real proof/case-study content.
+- team: Founder or team in their real environment — executive workspace, collaboration, professional setting. Only if there's an actual team or "about us" beyond a single founder photo.
+- portfolio_work: The KIND of work they do, shown through real context and environment. NEVER a design artifact. Only if there's a real portfolio/work-showcase section.
+- location_atmosphere: The city or region they operate in — skyline, business district, architectural mood at night. Only if location/geography is a meaningful part of the brand story.
+- services_context: Their service in action — a strategy session, a build meeting, a product launch moment. Only if there's an actual services section beyond a simple CTA.
 
 CRITICAL RULES:
 - Read the ENTIRE brief before writing any query. Understand what business this actually is.
 - GCC country names (Qatar, Kuwait, UAE, Saudi Arabia) = geographic location ONLY — NEVER trigger football or sports images unless the brief is explicitly about a sports team or event.
-- Tech company / software agency / startup / CTO / founder portfolio:
+- SINGLE FOUNDER, one-page personal landing page, no team/portfolio/services sections mentioned:
+  → Generate ONLY hero (and optionally proof_case_study if there's a real product/story to show). That's it — 1-2 images total. Do NOT add team, portfolio_work, location_atmosphere, or services_context just because this is a "tech founder" brief.
+- Tech company / software agency / startup with an ACTUAL team, portfolio, or services section described in the brief — use only the ones that genuinely apply:
   → hero: founder name or executive workspace description (e.g. "Kuwaiti tech founder at MacBook in modern glass office at night")
-  → proof_case_study: what the actual product served (e.g. children playing with toys, not a shopping app screen)
-  → team: software engineers or executives in a dark creative office environment
-  → portfolio_work: people in a product strategy meeting or code review session
-  → location_atmosphere: Kuwait City or Doha skyline at night from above
-  → services_context: tech team collaborating around monitors in a premium dark office
+  → proof_case_study (only if real product/story exists): what the actual product served (e.g. children playing with toys, not a shopping app screen)
+  → team (only if a real team/about-us exists): software engineers or executives in a dark creative office environment
+  → portfolio_work (only if a real portfolio section exists): people in a product strategy meeting or code review session
+  → location_atmosphere (only if location is a real part of the brand story): Kuwait City or Doha skyline at night from above
+  → services_context (only if a real services section exists): tech team collaborating around monitors in a premium dark office
 
 BANNED QUERY TERMS — these cause KIE to embed text watermarks directly into the image. NEVER use them:
 ❌ "UI mockup", "app mockup", "web app UI", "interface mockup", "dashboard mockup"
@@ -7810,6 +7826,13 @@ Call task_complete when finished.`;
 
       // CREATE MODE: Generate new project from scratch
       if (safeMode === 'create') {
+        // 🔧 FIX: Start the safety clock here, BEFORE image generation, not after.
+        // Previously this was set right before the draft call, which meant the
+        // minutes spent generating 5-6 images were invisible to the polish
+        // time-budget guard below. That let the total job time blow past the
+        // platform's execution limit without the guard ever tripping, leaving
+        // jobs stuck in "running" forever.
+        const createStartTime = Date.now();
         await patchJobMetadata(
           supabase,
           job.id,
@@ -7974,7 +7997,6 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
         }
 
         // Use the configured create model for project generation
-        const createStartTime = Date.now();
         const shouldEnableGoogleSearch = shouldUseGoogleSearchGrounding(prompt);
         if (shouldEnableGoogleSearch) {
           console.log(`[CreateMode] Google Search grounding enabled for freshness-sensitive sports prompt.`);

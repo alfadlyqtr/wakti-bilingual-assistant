@@ -131,7 +131,13 @@ Now enhance the user's prompt:`)
     });
 
     if (!response.ok) {
-      console.error("[EMP] OpenAI API error:", response.status);
+      // 🔧 Diagnostic logging: previously we only logged the HTTP status, which
+      // hid whether the failure was a bad/expired key (401), quota/billing
+      // (429), or an actual OpenAI outage (5xx). Logging the response body lets
+      // us pinpoint the real cause from Supabase function logs next time this
+      // fires, instead of guessing.
+      const errorBody = await response.text().catch(() => '<unable to read response body>');
+      console.error(`[EMP] OpenAI API error: status=${response.status} body=${errorBody}`);
       return new Response(
         JSON.stringify({ ok: false, error: "AI service error" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
