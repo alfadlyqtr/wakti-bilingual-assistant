@@ -3475,11 +3475,14 @@ interface ImageSectionQuery {
 }
 
 // AI-powered image query extraction — returns section-tagged queries, never blind keyword matches
-async function extractImageQueriesAI(prompt: string): Promise<ImageSectionQuery[]> {
+async function extractImageQueriesAI(prompt: string, hasPersonalPhoto: boolean = false): Promise<ImageSectionQuery[]> {
+  const personalPhotoRule = hasPersonalPhoto
+    ? `\n\n🚨 THE USER ALREADY UPLOADED A REAL PERSONAL PHOTO for this brief. That photo — not a generated image — is the hero/profile visual. Do NOT request a "hero" section image, and do NOT request any image containing a person's face or portrait. Only request an image for a genuinely separate need (e.g. a background/environment/atmosphere shot with no person in it) if the brief clearly implies one. If nothing separate is needed, return an empty sections array.`
+    : '';
   const systemPrompt = `You are a web design image curator. Given a website brief, decide ONLY the images this SPECIFIC page will actually use, then return a JSON object with this structure:
 {"sections": [
   {"section": "hero", "query": "..."}
-]}
+]}${personalPhotoRule}
 
 🔧 CRITICAL — DECIDE REAL NEED FIRST, DO NOT PAD:
 Each image costs real money to generate. Only request an image for a section if the brief genuinely implies that section will exist on the page.
@@ -3536,6 +3539,11 @@ Return ONLY the JSON object, nothing else.`;
     }
   } catch (err) {
     console.warn('[ImageQuery] AI extraction failed, using fallback:', err);
+  }
+  if (hasPersonalPhoto) {
+    // The user's real photo already covers the hero/profile slot — don't fall
+    // back to a generic hero image that would just compete with it unused.
+    return [];
   }
   return [
     { section: 'hero', query: 'professional modern business executive workspace interior dark premium' },
@@ -4406,29 +4414,55 @@ ${i + 1}. ${e.method} ${e.url} → ${e.status} ${e.statusText}
           if (dbErr) {
             console.error(`[Assets] DB fetch error:`, dbErr);
           } else if (dbUploads && dbUploads.length > 0) {
-            // Clear client-provided assets — replace with server-side signed URLs
+            // Clear client-provided assets — replace with server-side resolved URLs
             uploadedAssets.length = 0;
             for (const upload of dbUploads as ProjectUploadRow[]) {
               const bucket = upload.bucket_id || 'project-assets';
               const storagePath = upload.storage_path;
-              // Use signed URL (works even for private buckets, 1 hour expiry)
-              const { data: signedData, error: signErr } = await supabase.storage
-                .from(bucket)
-                .createSignedUrl(storagePath, 3600);
-              
-              if (signErr || !signedData?.signedUrl) {
-                // Fallback to public URL
-                const { data: pubData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-                console.warn(`[Assets] Signed URL failed for ${upload.filename}, using public: ${signErr?.message}`);
+              // 🔧 FIX: Previously this used a 1-hour signed URL, which then got
+              // permanently hardcoded into the generated site's static <img src>.
+              // The link died after an hour, breaking the image forever for every
+              // future visitor. `project-uploads` is a bucket we already know
+              // serves real, permanent public URLs (it's what AI-generated images
+              // use). So instead of a temporary signed link, copy the file into
+              // that bucket once and use its permanent public URL everywhere.
+              const permanentPath = `${userId}/${projectId}/asset-${upload.storage_path.split('/').pop()}`;
+              let resolvedUrl = '';
+              try {
+                const { data: existingHead } = await supabase.storage
+                  .from('project-uploads')
+                  .list(`${userId}/${projectId}`, { search: permanentPath.split('/').pop() });
+                const alreadyCopied = Array.isArray(existingHead) && existingHead.some((f) => permanentPath.endsWith(f.name));
+
+                if (!alreadyCopied) {
+                  const { data: fileBlob, error: downloadErr } = await supabase.storage
+                    .from(bucket)
+                    .download(storagePath);
+                  if (downloadErr || !fileBlob) {
+                    throw downloadErr || new Error('Empty file download');
+                  }
+                  const { error: copyUploadErr } = await supabase.storage
+                    .from('project-uploads')
+                    .upload(permanentPath, fileBlob, {
+                      contentType: upload.file_type || fileBlob.type || 'application/octet-stream',
+                      upsert: true,
+                    });
+                  if (copyUploadErr) throw copyUploadErr;
+                }
+
+                const { data: pubData } = supabase.storage.from('project-uploads').getPublicUrl(permanentPath);
+                resolvedUrl = pubData.publicUrl;
+              } catch (copyErr) {
+                console.warn(`[Assets] Permanent copy failed for ${upload.filename}, falling back to signed URL:`, copyErr);
+                // Last-resort fallback: a working (if temporary) signed URL beats no image at all.
+                const { data: signedData } = await supabase.storage.from(bucket).createSignedUrl(storagePath, 3600);
+                resolvedUrl = signedData?.signedUrl || '';
+              }
+
+              if (resolvedUrl) {
                 uploadedAssets.push({
                   filename: upload.filename,
-                  url: pubData.publicUrl,
-                  file_type: upload.file_type
-                });
-              } else {
-                uploadedAssets.push({
-                  filename: upload.filename,
-                  url: signedData.signedUrl,
+                  url: resolvedUrl,
                   file_type: upload.file_type
                 });
               }
@@ -7845,7 +7879,8 @@ Call task_complete when finished.`;
           },
         );
         // Pre-generate and store images from Nano Banana 2 based on user's prompt
-        const imageSectionQueries = await extractImageQueriesAI(prompt);
+        const hasUploadedPersonalPhoto = uploadedAssets.some((a) => (a.file_type || '').toLowerCase().startsWith('image/'));
+        const imageSectionQueries = await extractImageQueriesAI(prompt, hasUploadedPersonalPhoto);
         const imageQueryStrings = imageSectionQueries.map((q) => q.query);
         const projectImageSurface = detectProjectImageSurface(prompt);
         let preFetchedImages: PreFetchedImage[] = [];

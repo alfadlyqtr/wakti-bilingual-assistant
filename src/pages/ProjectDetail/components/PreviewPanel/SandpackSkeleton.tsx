@@ -90,27 +90,63 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
   const tip = BUILD_TIPS[tipIndex];
 
   return (
-    <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center overflow-hidden">
-      <div className="w-full max-w-md mx-auto px-4">
-        {/* Progress bar - driven by real step completion, RTL-aware */}
-        <div className="w-full h-1 bg-gray-800 rounded-full mb-8 overflow-hidden relative" dir={isRTL ? 'rtl' : 'ltr'}>
-          <div 
-            className={`absolute inset-y-0 ${isRTL ? 'right-0' : 'left-0'} bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-700 ease-out`}
-            style={{ width: `${progressPercent}%` }}
-          />
+    <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center overflow-hidden p-6 sm:p-10">
+      <div className="w-full max-w-2xl">
+        {/* Mock browser chrome — sets the scene: a real page is being assembled */}
+        <div className="rounded-t-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 flex items-center gap-2">
+          <span className="w-2.5 h-2.5 rounded-full bg-red-400/40" />
+          <span className="w-2.5 h-2.5 rounded-full bg-yellow-400/40" />
+          <span className="w-2.5 h-2.5 rounded-full bg-green-400/40" />
+          <div className="ms-3 h-2 w-32 rounded-full bg-white/10" />
         </div>
 
-        {/* Skeleton wireframe — simulates the page materializing instead of a static icon */}
-        <div className="relative rounded-xl border border-white/10 bg-white/[0.03] p-4 mb-6 overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.06] to-transparent animate-shimmer" />
-          <div className="h-2.5 w-14 rounded bg-white/10 mb-3" />
-          <div className="h-16 w-full rounded-lg bg-gradient-to-br from-indigo-500/20 to-purple-500/20 mb-3" />
-          <div className="h-2 w-3/4 rounded bg-white/10 mb-2" />
-          <div className="h-2 w-1/2 rounded bg-white/10 mb-3" />
-          <div className="flex gap-2">
-            <div className="h-5 w-16 rounded-md bg-indigo-500/30" />
-            <div className="h-5 w-16 rounded-md bg-white/10" />
+        {/* Page wireframe — a fuller mock layout (nav, hero, cards) instead of one small box */}
+        <div className="relative rounded-b-xl border border-t-0 border-white/10 bg-white/[0.02] overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.07] to-transparent animate-shimmer pointer-events-none" />
+
+          {/* Nav bar */}
+          <div className="relative flex items-center justify-between px-6 py-4 border-b border-white/5">
+            <div className="h-3 w-20 rounded bg-gradient-to-r from-[hsl(210,100%,65%)]/50 to-[hsl(280,70%,65%)]/50" />
+            <div className="flex items-center gap-3">
+              <div className="h-2 w-10 rounded bg-white/10" />
+              <div className="h-2 w-10 rounded bg-white/10" />
+              <div className="h-6 w-16 rounded-full bg-gradient-to-r from-[hsl(210,100%,65%)]/40 to-[hsl(280,70%,65%)]/40" />
+            </div>
           </div>
+
+          {/* Hero block */}
+          <div className="relative px-6 py-9 flex flex-col items-center text-center gap-3">
+            <div className="h-3.5 w-3/4 max-w-sm rounded bg-white/20" />
+            <div className="h-3.5 w-1/2 max-w-xs rounded bg-white/20" />
+            <div className="h-2 w-2/3 max-w-md rounded bg-white/10 mt-3" />
+            <div className="h-2 w-1/2 max-w-sm rounded bg-white/10" />
+            <div className="flex gap-3 mt-5">
+              <div className="h-8 w-28 rounded-full bg-gradient-to-r from-[hsl(210,100%,65%)]/60 to-[hsl(280,70%,65%)]/60" />
+              <div className="h-8 w-28 rounded-full border border-white/15" />
+            </div>
+          </div>
+
+          {/* Card row — echoes real section cards materializing */}
+          <div className="relative grid grid-cols-3 gap-3 px-6 pb-8">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-3 space-y-2">
+                <div
+                  className="h-6 w-6 rounded-full"
+                  style={{ background: i === 0 ? 'hsla(210,100%,65%,0.35)' : i === 1 ? 'hsla(280,70%,65%,0.35)' : 'hsla(25,95%,60%,0.35)' }}
+                />
+                <div className="h-2 w-full rounded bg-white/10" />
+                <div className="h-2 w-3/4 rounded bg-white/10" />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Progress bar - driven by real step completion, RTL-aware */}
+        <div className="w-full h-1 bg-gray-800 rounded-full mt-8 mb-6 overflow-hidden relative" dir={isRTL ? 'rtl' : 'ltr'}>
+          <div
+            className={`absolute inset-y-0 ${isRTL ? 'right-0' : 'left-0'} bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(280,70%,65%)] rounded-full transition-all duration-700 ease-out`}
+            style={{ width: `${progressPercent}%` }}
+          />
         </div>
 
         {/* REAL current stage — identical text/source to the left AI Builder panel */}
@@ -124,7 +160,7 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
           <span>{isRTL ? tip.ar : tip.en}</span>
         </p>
 
-        <p className="text-xs text-center text-gray-500 mt-4">
+        <p className="text-xs text-center text-gray-500 mt-2">
           {isRTL ? 'قد يستغرق هذا حتى 3 دقائق' : 'This may take up to 3 minutes'}
         </p>
       </div>
