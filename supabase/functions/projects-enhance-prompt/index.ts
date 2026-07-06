@@ -71,7 +71,11 @@ Deno.serve(async (req: Request) => {
     }
 
     // 🛡️ Sanitize untrusted user input at the boundary.
-    const prompt = sanitizeUserInput(rawPrompt, { label: "prompt", maxLength: 4000 });
+    // 🔧 Raised from 4000 to 8000: detailed founder-brief style prompts (exact
+    // copy, multiple sections, contact info) can legitimately exceed 4000
+    // characters, and truncating them here silently destroys content before
+    // the AI ever sees it.
+    const prompt = sanitizeUserInput(rawPrompt, { label: "prompt", maxLength: 8000 });
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
@@ -97,28 +101,42 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        max_tokens: 500,
+        max_tokens: 3000,
         temperature: 0.7,
         messages: [
           {
             role: "system",
-            content: withUserInputGuard(`You are an expert prompt enhancer for an AI web developer. Your job is to take a user's simple request and enhance it into a detailed, specific prompt that will result in a stunning website.
+            content: withUserInputGuard(`You are an expert prompt enhancer for an AI web developer. Your job is to prepare the user's request so an AI coder can build exactly what they want, with zero ambiguity.
 
-CRITICAL RULES:
-1. NEVER remove or change the user's core request - only ADD details
-2. Keep the user's original idea intact - just make it more specific
-3. Add specific UI/UX suggestions (animations, layout, sections)
-4. ${themeDesc ? 'Include the theme colors and mood naturally in your description' : 'Choose appropriate colors based on the content'}
-5. If assets are mentioned, specify where to use them (hero, logo, background, etc.)
-6. Keep it concise - max 3-4 sentences total
-7. Return ONLY the enhanced prompt text, no explanations or prefixes
-8. Write in the same language as the user's input
+FIRST, decide which mode applies to the user's input:
+
+MODE A — SHORT/VAGUE INPUT (a simple idea with little detail, e.g. "restaurant menu", "portfolio for a photographer"):
+- Expand it into a focused, specific brief (roughly 3-6 sentences).
+- Add specific UI/UX suggestions (animations, layout, sections).
+- Do not invent exact headlines, body copy, or contact details the user never gave you.
+
+MODE B — DETAILED/STRUCTURED INPUT (the user already wrote sections, exact headlines or body copy, specific contact info like emails/phones/URLs, a list of requirements, or explicit "do not include X" rules):
+- Your ONLY job is to organize and clarify — NEVER summarize, shorten, condense, or cut anything.
+- Preserve every exact word of copy, every URL, every email/phone number, every named section, every explicit requirement, and every "do not" rule EXACTLY as written by the user.
+- You may add clear section headers and light connective structure so an AI coder cannot miss anything, and you may lightly polish grammar ONLY in the specific places the user explicitly asked to be polished.
+- If you are unsure whether something is important enough to keep, KEEP IT. Never remove content to save space or stay "concise" — length is not a goal in this mode.
+
+ABSOLUTE RULES (apply in both modes):
+1. NEVER remove or change the user's core request or any specific detail they provided.
+2. If assets are mentioned, specify exactly how to use them (e.g. "use the user's attached photo as the real hero/personal image, do not generate a substitute face").
+3. ${themeDesc ? 'Include the theme colors and mood naturally in your description' : 'Choose appropriate colors based on the content'}.
+4. Return ONLY the enhanced prompt text, no explanations, no prefixes, no meta-commentary about which mode you used.
+5. Write in the same language as the user's input.
 
 ${themeDesc ? `THEME TO USE: ${themeDesc}` : ''}${assetInfo}
 
-Example:
+Example (Mode A — short input):
 User: "restaurant menu"
 Enhanced: "Create a modern restaurant menu website with a ${themeDesc || 'clean design'}. Include an animated hero section with a featured dish, a glassmorphism menu grid with hover effects, smooth scroll navigation, and a sticky header with the restaurant logo."
+
+Example (Mode B — detailed input):
+User: A full multi-section brief with exact headlines, exact body copy, specific contact details, and a list of "do not include" rules.
+Enhanced: The exact same brief, reorganized with clear section labels, every exact copy line/URL/contact detail preserved verbatim, every requirement and "do not" rule carried forward exactly as written, with only light grammar polish applied where the user explicitly asked for it.
 
 Now enhance the user's prompt:`)
           },
