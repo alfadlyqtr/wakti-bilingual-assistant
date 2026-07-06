@@ -529,6 +529,28 @@ ${priorSection}`;
     }
   };
 
+  // 🔧 FIX: Maps the REAL backend build stage to a fine-grained progress value
+  // (0-1) so the progress bar visibly creeps forward as the build genuinely
+  // advances, instead of sitting frozen on a flat 0.5 "loading" credit for
+  // the entire multi-minute image/draft/polish phase.
+  const getCreateStageProgress = (job?: GenerationJob | null): number | null => {
+    const metadata = getCreateJobMetadata(job);
+    switch (metadata.createStage) {
+      case 'generating_images':
+        return 0.25;
+      case 'drafting':
+        return 0.5;
+      case 'saving_draft':
+        return 0.7;
+      case 'polishing':
+        return 0.9;
+      case 'done':
+        return 0.95;
+      default:
+        return null;
+    }
+  };
+
   const buildCreateFailureMessage = (rawMessage: string, job?: GenerationJob | null): string => {
     const metadata = getCreateJobMetadata(job);
     const failureSummary = typeof metadata.failureSummary === 'string' ? metadata.failureSummary : '';
@@ -1927,7 +1949,7 @@ ${priorSection}`;
       });
       
       // Step 3: Generating
-      setGenerationSteps(prev => prev.map((s, i) => i === 1 ? { ...s, status: 'completed' } : i === 2 ? { ...s, status: 'loading' } : s));
+      setGenerationSteps(prev => prev.map((s, i) => i === 1 ? { ...s, status: 'completed' } : i === 2 ? { ...s, status: 'loading', progress: 0.05 } : s));
 
       const backendContextForCreate = backendContext || await fetchBackendContext();
 
@@ -2501,9 +2523,10 @@ ${priorSection}`;
         }
 
         const stageLabel = getCreateStageLabel(job);
+        const stageProgress = getCreateStageProgress(job);
         if (stageLabel) {
           setGenerationSteps(prev => prev.map((s, i) => 
-            i === 2 ? { ...s, label: stageLabel } : s
+            i === 2 ? { ...s, label: stageLabel, progress: stageProgress ?? s.progress } : s
           ));
         } else if (pollCount % 5 === 0) {
           const msgIndex = Math.min(Math.floor(pollCount / 10), progressMessages.length - 1);

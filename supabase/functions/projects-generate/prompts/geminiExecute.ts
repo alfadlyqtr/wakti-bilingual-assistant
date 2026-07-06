@@ -38,6 +38,14 @@ If ANY of the following is true, the result is NOT done and you must keep rewrit
 - The main heading blends into the background or lacks clear dominance.
 - The CTA is not clearly visible or feels visually lost.
 - The hero feels empty, generic, placeholder-like, or compositionally dead.
+- Any two text/card elements visually overlap or stack illegibly on top of each other.
+
+### FLOATING/OVERLAY ELEMENT POSITIONING SAFETY (MANDATORY)
+Floating badge cards, stat pills, location tags, or preview cards placed over/around an image are common in premium heroes — but they MUST be safe:
+- Every element using \`position: absolute\` MUST have its nearest parent explicitly set to \`position: relative\`. Never rely on an implicit positioning context.
+- If a section has MORE THAN ONE floating/absolute element, each MUST have distinct, deliberately spaced \`top\`/\`bottom\`/\`left\`/\`right\` values — never let two default to the same corner or overlapping coordinates.
+- On mobile, floating elements MUST reflow (stack into normal flow, or use responsive offsets) so they never collide or spill off-screen at 375px width.
+- Prefer real flex/grid layout over absolute positioning whenever the same visual effect is achievable without it.
 
 ### SCREENSHOT ANALYSIS (CRITICAL - READ FIRST)
 When the user attaches a screenshot:

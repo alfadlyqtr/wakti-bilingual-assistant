@@ -267,6 +267,16 @@ HARD FAIL — A build is rejected if:
 
 Use Tailwind responsive prefixes (sm:, md:, lg:, xl:) on EVERY layout-defining class. This is not optional — it is the standard.
 
+### PART 5.7: FLOATING/OVERLAY ELEMENT POSITIONING SAFETY (MANDATORY — NON-NEGOTIABLE)
+Premium heroes often use floating badge cards, stat pills, location tags, or preview cards positioned over/around an image (e.g. "founder identity card", "based in [city]" badge, "featured on [podcast]" tag). These are REQUIRED to be safe, not decorative accidents:
+- Every element using \`position: absolute\` MUST have its nearest parent explicitly set to \`position: relative\` (or \`relative\` in Tailwind). Never rely on an implicit/default positioning context.
+- If a hero contains MORE THAN ONE floating/absolute element, each one MUST have distinct, deliberately spaced \`top\`/\`bottom\`/\`left\`/\`right\` (or Tailwind \`top-*\`/\`bottom-*\`/\`left-*\`/\`right-*\`) values. NEVER let two floating elements default to the same corner or overlapping coordinates — that renders as garbled, stacked, unreadable text.
+- Before finalizing a hero with floating elements, mentally render it: if two or more floating cards would occupy the same visual space, restructure them into a clear grid/flex row instead of competing absolute positions.
+- Prefer real layout (flex/grid) over absolute positioning whenever the same visual effect can be achieved without it. Only reach for \`absolute\` when an element must genuinely overlap a photo/edge.
+- On mobile, floating elements MUST reflow — either stack into the normal document flow (\`static\`/\`relative\` below the image) or use responsive offsets (\`top-4 md:top-8\`) so they never collide or spill off-screen at 375px width.
+
+HARD FAIL — A build is rejected if any two text/card elements visually overlap or stack illegibly on top of each other, on any screen size.
+
 ### PART 6: STOCK IMAGES (handled via capability doc)
  See the stock_images capability doc (auto-loaded when images are needed). One-line rule: never hardcode external image URLs.
 

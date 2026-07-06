@@ -3,6 +3,7 @@ import { useState, useCallback, useRef } from 'react';
 interface GenerationStep {
   label: string;
   status: 'pending' | 'loading' | 'completed' | 'error';
+  progress?: number;
 }
 
 interface EditedFile {

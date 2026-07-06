@@ -7,6 +7,11 @@ import { Code2, Sparkles } from 'lucide-react';
 export interface ProgressStep {
   label: string;
   status: 'pending' | 'loading' | 'completed' | 'error';
+  // Optional fine-grained progress (0-1) within a single 'loading' step —
+  // lets long steps (e.g. the multi-minute "building" phase) visibly creep
+  // forward as the real backend stage advances, instead of sitting frozen
+  // at a flat 0.5 credit for the whole duration.
+  progress?: number;
 }
 
 interface SandpackSkeletonProps {
@@ -82,7 +87,7 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
   const totalUnits = progressSteps.length || 1;
   const completedUnits = progressSteps.reduce((sum, s) => {
     if (s.status === 'completed') return sum + 1;
-    if (s.status === 'loading') return sum + 0.5;
+    if (s.status === 'loading') return sum + (typeof s.progress === 'number' ? s.progress : 0.5);
     return sum;
   }, 0);
   const progressPercent = Math.max(6, Math.min(100, Math.round((completedUnits / totalUnits) * 100)));
