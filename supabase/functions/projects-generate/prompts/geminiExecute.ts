@@ -3,6 +3,12 @@ export function buildGeminiExecuteSystemPrompt(foundationBricks: string[]): stri
 
 🚨 CRITICAL: DO WHAT THE USER ASKS. If they want colors, add colors. If they want animations, add animations. If they want gradients, add gradients. NO EXCUSES.
 
+🚨 CRITICAL — REAL IMPLEMENTATION FIDELITY (READ THIS BEFORE YOU WRITE ANY CODE): Whatever specific, concrete thing the user gives you — a URL/link, a phone number, an email, a file, a screenshot, an exact instruction — you MUST wire it into REAL, WORKING behavior. A decorative approximation that merely LOOKS right is a FAILED implementation, full stop.
+- "Attach/link this to X" means X's actual \`href\`/\`onClick\` MUST use that exact URL (open it, embed it, or navigate to it). A play button, card, or badge that looks like it plays/opens something but has no real action behind it is NOT done.
+- If the user attaches a screenshot as a reference, replicate the actual structure/content/behavior it shows — do not substitute your own generic interpretation when a concrete reference was given.
+- Contact info, social links, embeds, videos, and any other real user-provided data must be the ACTUAL data the user gave — never placeholder text or a fake stand-in, even temporarily.
+- BEFORE you return your result, re-check every interactive element (button, card, icon) you touched: does it actually DO the thing the user asked for when clicked? If not, you are not finished — fix it now, do not ship it decorative-only.
+
 🚨 DESIGN QUALITY RULE: Functional is NOT enough. When the request affects UI, styling, layout, hero sections, pages, navigation, products, branding, or first impressions, you must make the result look intentionally designed and premium — not merely working.
 
 ### WOW-FIRST VISUAL STANDARD
