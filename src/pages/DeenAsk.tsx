@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Copy, Check, ScrollText, Send, Sparkles, BookText, Globe } from "lucide-react";
+import { ArrowLeft, BookOpen, ChevronDown, ChevronUp, Copy, Check, ScrollText, Send, Sparkles, BookText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -34,7 +34,7 @@ function cleanSummary(raw: string): string {
     .replace(/^#{1,6}\s+/gm, "")        // ## headings
     .replace(/\*\*(.+?)\*\*/g, "$1")    // **bold**
     .replace(/\*(.+?)\*/g, "$1")        // *italic*
-    .replace(/^[\*\-]\s+/gm, "")        // * bullet or - bullet at line start
+    .replace(/^[*-]\s+/gm, "")        // * bullet or - bullet at line start
     .replace(/\\"/g, '"')               // escaped quotes
     .replace(/\\n/g, "\n")              // escaped newlines
     .trim();
@@ -55,12 +55,6 @@ interface EvidenceResult {
   ayah_number?: number;
 }
 
-interface WebResult {
-  title: string;
-  url: string;
-  snippet?: string;
-}
-
 interface ClarificationOption {
   id: string;
   label: string;
@@ -71,7 +65,6 @@ interface SearchResponse {
   query: string;
   quran_results: EvidenceResult[];
   hadith_results: EvidenceResult[];
-  web_results?: WebResult[];
   summary?: string;
   mode?: string;
   search_options?: string[];
@@ -103,7 +96,6 @@ interface FollowUpResult {
   summary: string;
   quran_results: EvidenceResult[];
   hadith_results: EvidenceResult[];
-  web_results: WebResult[];
 }
 
 interface ChatTurn {
@@ -124,6 +116,7 @@ interface ChatTurn {
   followUp?: FollowUpResult | null;
   followUpLoading?: boolean;
 }
+
 
 const TRUNCATE_CHARS = 220;
 
@@ -190,45 +183,13 @@ function SourcesDropdown({
               {open ? (isAr ? "إخفاء" : "Hide") : (isAr ? "إظهار" : "Show")}
             </span>
             {open
-              ? <ChevronUp className={`w-4 h-4 ${isDark ? "text-sky-300" : "text-sky-600"}`} />
-              : <ChevronDown className={`w-4 h-4 ${isDark ? "text-sky-300" : "text-sky-600"}`} />}
+              ? <ChevronUp className={`w-4 h-4 ${isDark ? "text-violet-300" : "text-violet-600"}`} />
+              : <ChevronDown className={`w-4 h-4 ${isDark ? "text-violet-300" : "text-violet-600"}`} />}
           </div>
         </div>
       </button>
       {open && <div className="flex flex-col gap-2">{children}</div>}
     </div>
-  );
-}
-
-function WebSourceCard({
-  item,
-  isDark,
-  isAr,
-}: {
-  item: WebResult;
-  isDark: boolean;
-  isAr: boolean;
-}) {
-  const bg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)";
-  const border = isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)";
-  const titleColor = isDark ? "text-sky-300" : "text-sky-700";
-  const textColor = isDark ? "text-[#e8eaf0]" : "text-[#1a1f2e]";
-  const linkColor = isDark ? "text-sky-400" : "text-sky-600";
-
-  return (
-    <a
-      href={item.url}
-      target="_blank"
-      rel="noreferrer"
-      className="rounded-2xl p-4 block transition-all active:scale-[0.99]"
-      style={{ background: bg, border }}
-    >
-      <p className={`text-[12px] font-semibold ${titleColor}`}>{item.title}</p>
-      {item.snippet && (
-        <p className={`text-xs mt-1 leading-relaxed ${textColor}`}>{item.snippet}</p>
-      )}
-      <p className={`text-[11px] mt-2 ${linkColor}`}>{isAr ? "فتح المصدر" : "Open source"}</p>
-    </a>
   );
 }
 
@@ -239,6 +200,7 @@ function SearchChip({
   isDark,
   disabled,
   variant = "accent",
+  selected = false,
 }: {
   label: string;
   icon?: ReactNode;
@@ -246,19 +208,27 @@ function SearchChip({
   isDark: boolean;
   disabled?: boolean;
   variant?: "accent" | "muted";
+  selected?: boolean;
 }) {
   const accentClass = isDark
-    ? "bg-sky-500/15 text-sky-300 border border-sky-400/30 hover:bg-sky-500/25"
-    : "bg-sky-50 text-sky-700 border border-sky-200 hover:bg-sky-100";
+    ? "bg-violet-500/15 text-violet-300 border border-violet-400/30 hover:bg-violet-500/25"
+    : "bg-violet-50 text-violet-700 border border-violet-200 hover:bg-violet-100";
+  const accentSelectedClass = isDark
+    ? "bg-violet-500/30 text-violet-100 border border-violet-300/60"
+    : "bg-violet-600 text-white border border-violet-600";
   const mutedClass = isDark
     ? "bg-white/5 text-[#c4c8d4] border border-white/10 hover:bg-white/10"
     : "bg-black/5 text-[#3a3f5c] border border-black/10 hover:bg-black/10";
+  const mutedSelectedClass = isDark
+    ? "bg-white/15 text-white border border-white/25"
+    : "bg-black/15 text-[#1a1f2e] border border-black/20";
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
-      className={`flex items-center gap-1.5 text-xs md:text-[13px] px-3.5 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40 ${variant === "accent" ? accentClass : mutedClass}`}
+      aria-pressed={selected}
+      className={`flex items-center gap-1.5 text-xs md:text-[13px] px-3.5 py-2 rounded-full font-medium transition-all active:scale-95 disabled:opacity-40 ${variant === "accent" ? (selected ? accentSelectedClass : accentClass) : (selected ? mutedSelectedClass : mutedClass)}`}
     >
       {icon}
       {label}
@@ -296,17 +266,17 @@ function SourceCard({
   const isQuran = item.source_type === "quran";
 
   const bg = isDark
-    ? (isBlue ? "hsla(210,100%,65%,0.08)" : "hsla(142,76%,55%,0.08)")
-    : (isBlue ? "hsla(210,100%,40%,0.06)" : "hsla(142,76%,35%,0.06)");
+    ? (isBlue ? "hsla(280,70%,65%,0.08)" : "hsla(142,76%,55%,0.08)")
+    : (isBlue ? "hsla(280,60%,55%,0.07)" : "hsla(142,76%,35%,0.06)");
   const border = isDark
-    ? (isBlue ? "1px solid hsla(210,100%,65%,0.2)" : "1px solid hsla(142,76%,55%,0.2)")
-    : (isBlue ? "1px solid hsla(210,100%,40%,0.2)" : "1px solid hsla(142,76%,35%,0.2)");
+    ? (isBlue ? "1px solid hsla(280,70%,65%,0.25)" : "1px solid hsla(142,76%,55%,0.2)")
+    : (isBlue ? "1px solid hsla(280,60%,50%,0.24)" : "1px solid hsla(142,76%,35%,0.2)");
   const refColor = isDark
-    ? (isBlue ? "text-sky-300" : "text-emerald-400")
-    : (isBlue ? "text-sky-600" : "text-emerald-700");
+    ? (isBlue ? "text-violet-300" : "text-emerald-400")
+    : (isBlue ? "text-violet-600" : "text-emerald-700");
   const gradeColor = isDark
-    ? (isBlue ? "text-sky-400" : "text-emerald-400")
-    : (isBlue ? "text-sky-500" : "text-emerald-600");
+    ? (isBlue ? "text-violet-400" : "text-emerald-400")
+    : (isBlue ? "text-violet-500" : "text-emerald-600");
   const textColor = isDark ? "text-[#e8eaf0]" : "text-[#1a1f2e]";
   const tafsirBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)";
   const tafsirBorder = isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)";
@@ -565,7 +535,6 @@ export default function DeenAsk() {
 
       const quranResults = Array.isArray(data?.quran_results) ? data.quran_results : [];
       const hadithResults = Array.isArray(data?.hadith_results) ? data.hadith_results : [];
-      const webResults = Array.isArray(data?.web_results) ? data.web_results : [];
       const summary = cleanSummary(data?.summary ?? "");
       const mode = typeof data?.mode === "string" ? data.mode : "chat";
       const searchOptions = Array.isArray(data?.search_options) ? data.search_options : [];
@@ -574,7 +543,6 @@ export default function DeenAsk() {
           query: data?.query ?? q,
           quran_results: quranResults,
           hadith_results: hadithResults,
-          web_results: webResults,
           summary,
           mode,
           search_options: searchOptions,
@@ -594,7 +562,7 @@ export default function DeenAsk() {
       });
     } catch {
       updateTurn(id, {
-        results: { query: q, quran_results: [], hadith_results: [], web_results: [], meta: { found: false, quran_count: 0, hadith_count: 0 } },
+        results: { query: q, quran_results: [], hadith_results: [], meta: { found: false, quran_count: 0, hadith_count: 0 } },
         chipsResolved: true,
         explanation: {
           summary: isAr ? "تعذر الوصول إلى مصادر القرآن والحديث الآن. حاول مرة أخرى بعد قليل." : "I could not reach the Quran and Hadith sources right now. Please try again in a moment.",
@@ -608,14 +576,9 @@ export default function DeenAsk() {
     }
   };
 
-  const handleChipChoice = async (turnId: number, choice: "quran" | "hadith" | "islamweb" | "none") => {
+  const handleChipChoice = async (turnId: number) => {
     const turn = turns.find((t) => t.id === turnId);
     if (!turn || turn.chipsResolved) return;
-
-    if (choice === "none") {
-      updateTurn(turnId, { chipsResolved: true });
-      return;
-    }
 
     setClarifyLoading(true);
     setClarifyTurnId(turnId);
@@ -634,7 +597,7 @@ export default function DeenAsk() {
         body: {
           query: turn.query,
           language,
-          forced_search: choice,
+          forced_search: "both",
           phase: "clarify",
           conversation_history: recentHistory.length > 0 ? recentHistory : undefined,
         },
@@ -642,7 +605,7 @@ export default function DeenAsk() {
       if (error) throw error;
 
       const options = Array.isArray(data?.options) ? data.options : [];
-      const searchType = typeof data?.search_type === "string" ? data.search_type : choice;
+      const searchType = typeof data?.search_type === "string" ? data.search_type : "both";
 
       if (options.length === 1) {
         await handleClarifySelect(turnId, options[0], searchType);
@@ -663,7 +626,6 @@ export default function DeenAsk() {
           summary: isAr ? "تعذر إتمام هذا البحث الآن. حاول مرة أخرى بعد قليل." : "I could not complete that search right now. Please try again in a moment.",
           quran_results: [],
           hadith_results: [],
-          web_results: [],
         },
       });
     } finally {
@@ -671,7 +633,7 @@ export default function DeenAsk() {
     }
   };
 
-  const handleClarifySelect = async (turnId: number, option: ClarificationOption, searchType: string) => {
+  async function handleClarifySelect(turnId: number, option: ClarificationOption, searchType: string) {
     setClarifyOpen(false);
     const turn = turns.find((t) => t.id === turnId);
     if (!turn) return;
@@ -702,7 +664,6 @@ export default function DeenAsk() {
 
       const quranResults = Array.isArray(data?.quran_results) ? data.quran_results : [];
       const hadithResults = Array.isArray(data?.hadith_results) ? data.hadith_results : [];
-      const webResults = Array.isArray(data?.web_results) ? data.web_results : [];
       const summary = cleanSummary(data?.summary ?? "");
 
       updateTurn(turnId, {
@@ -711,7 +672,6 @@ export default function DeenAsk() {
           summary: summary || (isAr ? "لم أجد جواباً واضحاً من المصادر المعروضة." : "I could not form a clear answer from the sources shown."),
           quran_results: quranResults,
           hadith_results: hadithResults,
-          web_results: webResults,
         },
         topic: data?.intent?.normalized_topic || data?.intent?.topic || turn.topic,
         intent: data?.intent ?? turn.intent,
@@ -724,11 +684,10 @@ export default function DeenAsk() {
           summary: isAr ? "تعذر إتمام هذا البحث الآن. حاول مرة أخرى بعد قليل." : "I could not complete that search right now. Please try again in a moment.",
           quran_results: [],
           hadith_results: [],
-          web_results: [],
         },
       });
     }
-  };
+  }
 
   const bg = isDark
     ? "linear-gradient(160deg, #0c0f14 0%, hsl(235 25% 7%) 100%)"
@@ -738,17 +697,17 @@ export default function DeenAsk() {
   const composerInner = isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)";
   const composerBorder = isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)";
   const composerShellBg = isDark ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.9)";
-  const composerShellBorder = isDark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(6,5,65,0.08)";
+  const composerShellBorder = isDark ? "1px solid hsla(280,70%,65%,0.45)" : "1px solid hsla(280,60%,50%,0.35)";
   const composerShellShadow = isDark
-    ? "0 -8px 30px rgba(0,0,0,0.35), 0 0 0 1px rgba(255,255,255,0.03)"
-    : "0 -8px 30px rgba(6,5,65,0.08), 0 0 0 1px rgba(6,5,65,0.03)";
+    ? "0 -8px 30px rgba(0,0,0,0.35), 0 0 0 1px hsla(280,70%,65%,0.2), 0 0 16px hsla(280,70%,65%,0.18)"
+    : "0 -8px 30px rgba(6,5,65,0.08), 0 0 0 1px hsla(280,60%,50%,0.16), 0 0 12px hsla(280,60%,50%,0.12)";
   const titleColor = isDark ? "text-[#f2f2f2]" : "text-[#060541]";
   const subtitleColor = isDark ? "text-[#858384]" : "text-[#606062]";
   const textColor = isDark ? "text-[#e8eaf0]" : "text-[#1a1f2e]";
   const placeholderColor = isDark ? "placeholder:text-[#606062]" : "placeholder:text-[#9ca3b0]";
   const sendBtnBg = isDark
-    ? "linear-gradient(135deg, hsl(210 100% 62%) 0%, hsl(200 90% 55%) 100%)"
-    : "linear-gradient(135deg, hsl(210 100% 50%) 0%, hsl(200 90% 45%) 100%)";
+    ? "linear-gradient(135deg, hsl(280 78% 66%) 0%, hsl(260 85% 62%) 100%)"
+    : "linear-gradient(135deg, hsl(280 70% 60%) 0%, hsl(260 75% 52%) 100%)";
 
   const userBubbleBg = isDark
     ? { background: "hsla(215,25%,22%,0.95)", border: "1px solid hsla(215,20%,35%,0.5)" }
@@ -778,11 +737,7 @@ export default function DeenAsk() {
           borderBottom: isDark ? "1px solid rgba(255,255,255,0.06)" : "1px solid rgba(0,0,0,0.06)",
         }}
       >
-        <div className="w-full mx-auto flex items-center justify-between gap-3 md:px-2 lg:px-4" style={{ maxWidth: shellMaxWidth }}>
-          <div className={isAr ? "text-right" : "text-left"}>
-            <h1 className={`text-base md:text-lg font-bold ${titleColor}`}>{isAr ? "اسأل" : "Ask"}</h1>
-            <p className={`text-[11px] md:text-xs ${subtitleColor}`}>{isAr ? "مصادر القرآن والحديث فقط" : "Quran & Hadith sources only"}</p>
-          </div>
+        <div dir="ltr" className="w-full mx-auto flex items-center gap-3 md:px-2 lg:px-4" style={{ maxWidth: shellMaxWidth }}>
           <button
             onClick={() => navigate("/deen")}
             className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-95 transition-all shrink-0"
@@ -791,6 +746,11 @@ export default function DeenAsk() {
           >
             <ArrowLeft className={`w-4 h-4 ${titleColor}`} />
           </button>
+          <div className="flex-1 text-center">
+            <h1 className={`text-base md:text-lg font-bold ${titleColor}`}>{isAr ? "اسأل" : "Ask"}</h1>
+            <p className={`text-[11px] md:text-xs ${subtitleColor}`}>{isAr ? "مصادر القرآن والحديث فقط" : "Quran & Hadith sources only"}</p>
+          </div>
+          <div className="w-9 shrink-0" aria-hidden="true" />
         </div>
       </div>
 
@@ -894,14 +854,15 @@ export default function DeenAsk() {
                       handleClarifySelect(clarifyTurnId, option, clarifySearchType);
                     }
                   }}
-                  className="w-full text-left py-3 px-4 rounded-xl text-sm font-medium transition-all active:scale-[0.96]"
+                  dir={isAr ? "rtl" : "ltr"}
+                  className={`w-full py-3 px-4 rounded-xl text-sm font-medium transition-all active:scale-[0.96] ${isAr ? "text-right" : "text-left"}`}
                   style={{
                     background: isDark ? "#2a2d35" : "#f3f4f6",
                     color: isDark ? "#ffffff" : "#1a1a1a",
                     border: isDark ? "1px solid rgba(255,255,255,0.1)" : "1px solid rgba(0,0,0,0.08)",
                   }}
                 >
-                  <span className={`${isDark ? "text-sky-400" : "text-sky-600"} font-bold`}>{letter}.</span>{" "}
+                  <span className={`${isDark ? "text-violet-400" : "text-violet-600"} font-bold`}>{letter}.</span>{" "}
                   {option.label}
                 </button>
               );
@@ -933,7 +894,7 @@ export default function DeenAsk() {
         {!searching && turns.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 md:gap-4 py-12 md:py-16 lg:py-20 text-center px-4 md:px-8">
             <div className="w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center mb-1" style={{ background: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)" }}>
-              <BookOpen className={`w-7 h-7 md:w-8 md:h-8 ${isDark ? "text-sky-300" : "text-sky-600"}`} />
+              <BookOpen className={`w-7 h-7 md:w-8 md:h-8 ${isDark ? "text-violet-300" : "text-violet-600"}`} />
             </div>
             <p className={`text-sm md:text-base font-semibold ${titleColor}`}>{isAr ? "اسأل عن القرآن والحديث" : "Ask about Quran & Hadith"}</p>
             <p className={`text-xs md:text-sm leading-relaxed max-w-2xl ${subtitleColor}`}>
@@ -960,11 +921,9 @@ export default function DeenAsk() {
         {turns.map((turn) => {
           const displayQuranResults = turn.followUp?.quran_results ?? turn.results?.quran_results ?? [];
           const displayHadithResults = turn.followUp?.hadith_results ?? turn.results?.hadith_results ?? [];
-          const displayWebResults = turn.followUp?.web_results ?? turn.results?.web_results ?? [];
           const quranCount = displayQuranResults.length;
           const hadithCount = displayHadithResults.length;
-          const webCount = displayWebResults.length;
-          const hasSources = quranCount + hadithCount + webCount > 0;
+          const hasSources = quranCount + hadithCount > 0;
           const showChips = turn.mode === "offer_search" && !turn.chipsResolved;
           const isLastTurn = turn.id === turns[turns.length - 1]?.id;
           return (
@@ -979,9 +938,9 @@ export default function DeenAsk() {
               {/* Searching dots — shown while fetching sources for this turn */}
               {!turn.results && isLastTurn && searching && (
                 <div className="flex items-center gap-2 px-1">
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "0ms" }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "150ms" }} />
-                  <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "300ms" }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "0ms" }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "150ms" }} />
+                  <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "300ms" }} />
                   <span className={`text-xs ${subtitleColor}`}>{loadingLabel || (isAr ? "جارٍ البحث..." : "Searching...")}</span>
                 </div>
               )}
@@ -992,10 +951,10 @@ export default function DeenAsk() {
                 <>
                   {turn.explaining && (
                     <div className="flex items-center gap-2 px-1">
-                      <Sparkles className={`w-3.5 h-3.5 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "0ms" }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "150ms" }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "300ms" }} />
+                      <Sparkles className={`w-3.5 h-3.5 ${isDark ? "text-violet-400" : "text-violet-600"}`} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "0ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "150ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "300ms" }} />
                     </div>
                   )}
                   {turn.explanation && (
@@ -1007,65 +966,50 @@ export default function DeenAsk() {
                       }}
                     >
                       <div className={`flex items-center gap-1.5 mb-2 ${isAr ? "flex-row-reverse" : ""}`}>
-                        <Sparkles className={`w-3 h-3 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
-                        <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-sky-400" : "text-sky-600"}`}>
+                        <Sparkles className={`w-3 h-3 ${isDark ? "text-violet-400" : "text-violet-600"}`} />
+                        <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-violet-400" : "text-violet-600"}`}>
                           Wakti
                         </p>
                         <div className="flex-1" />
                         <CopyButton text={turn.explanation.summary} isDark={isDark} isAr={isAr} />
                       </div>
-                      <p className={`text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap ${textColor}`}>{turn.explanation.summary}</p>
+                      <p dir={isAr ? "rtl" : "ltr"} className={`text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap ${isAr ? "text-right" : "text-left"} ${textColor}`}>{turn.explanation.summary}</p>
                     </div>
                   )}
 
                   {showChips && (
-                    <div className={`flex flex-wrap gap-2 px-1 ${isAr ? "flex-row-reverse justify-end" : ""}`}>
+                    <div className={`flex flex-wrap items-center gap-2 px-1 ${isAr ? "flex-row-reverse justify-end" : ""}`}>
                       <SearchChip
-                        label={isAr ? "ابحث في الحديث" : "Search Hadith"}
-                        icon={<ScrollText className="w-3.5 h-3.5" />}
-                        onClick={() => handleChipChoice(turn.id, "hadith")}
+                        label={isAr ? "ابحث في القرآن والحديث" : "Search Quran & Hadith"}
+                        icon={
+                          <div className="flex items-center gap-0.5">
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <ScrollText className="w-3.5 h-3.5" />
+                          </div>
+                        }
+                        onClick={() => handleChipChoice(turn.id)}
                         isDark={isDark}
                         disabled={clarifyLoading}
-                      />
-                      <SearchChip
-                        label={isAr ? "ابحث في القرآن" : "Search Quran"}
-                        icon={<BookOpen className="w-3.5 h-3.5" />}
-                        onClick={() => handleChipChoice(turn.id, "quran")}
-                        isDark={isDark}
-                        disabled={clarifyLoading}
-                      />
-                      <SearchChip
-                        label={isAr ? "ابحث في إسلام ويب" : "Search IslamWeb"}
-                        icon={<Globe className="w-3.5 h-3.5" />}
-                        onClick={() => handleChipChoice(turn.id, "islamweb")}
-                        isDark={isDark}
-                        disabled={clarifyLoading}
-                      />
-                      <SearchChip
-                        label={isAr ? "لا، أعطني رأيك فقط" : "No thanks, just your take"}
-                        onClick={() => handleChipChoice(turn.id, "none")}
-                        isDark={isDark}
-                        variant="muted"
-                        disabled={clarifyLoading}
+                        selected={false}
                       />
                     </div>
                   )}
 
                   {clarifyLoading && (
                     <div className="flex items-center gap-2 px-1">
-                      <Sparkles className={`w-3.5 h-3.5 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "0ms" }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "150ms" }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "300ms" }} />
+                      <Sparkles className={`w-3.5 h-3.5 ${isDark ? "text-violet-400" : "text-violet-600"}`} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "0ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "150ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "300ms" }} />
                     </div>
                   )}
 
                   {turn.followUpLoading && (
                     <div className="flex items-center gap-2 px-1">
-                      <Sparkles className={`w-3.5 h-3.5 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "0ms" }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "150ms" }} />
-                      <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "300ms" }} />
+                      <Sparkles className={`w-3.5 h-3.5 ${isDark ? "text-violet-400" : "text-violet-600"}`} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "0ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "150ms" }} />
+                      <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "300ms" }} />
                     </div>
                   )}
 
@@ -1078,14 +1022,14 @@ export default function DeenAsk() {
                       }}
                     >
                       <div className={`flex items-center gap-1.5 mb-2 ${isAr ? "flex-row-reverse" : ""}`}>
-                        <Sparkles className={`w-3 h-3 ${isDark ? "text-sky-400" : "text-sky-600"}`} />
-                        <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-sky-400" : "text-sky-600"}`}>
+                        <Sparkles className={`w-3 h-3 ${isDark ? "text-violet-400" : "text-violet-600"}`} />
+                        <p className={`text-[10px] font-bold uppercase tracking-wider ${isDark ? "text-violet-400" : "text-violet-600"}`}>
                           Wakti
                         </p>
                         <div className="flex-1" />
                         <CopyButton text={turn.followUp.summary} isDark={isDark} isAr={isAr} />
                       </div>
-                      <p className={`text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap ${textColor}`}>{turn.followUp.summary}</p>
+                      <p dir={isAr ? "rtl" : "ltr"} className={`text-sm md:text-[15px] leading-relaxed whitespace-pre-wrap ${isAr ? "text-right" : "text-left"} ${textColor}`}>{turn.followUp.summary}</p>
                     </div>
                   )}
                 </>
@@ -1097,8 +1041,8 @@ export default function DeenAsk() {
                   {!!quranCount && (
                     <SourceGroup
                       title={isAr ? "من القرآن الكريم" : "From the Quran"}
-                      icon={<BookOpen className={`w-3.5 h-3.5 ${isDark ? "text-sky-300" : "text-sky-600"}`} />}
-                      colorClass={isDark ? "text-sky-300" : "text-sky-700"}
+                      icon={<BookOpen className={`w-3.5 h-3.5 ${isDark ? "text-violet-300" : "text-violet-600"}`} />}
+                      colorClass={isDark ? "text-violet-300" : "text-violet-700"}
                       isDark={isDark}
                       isAr={isAr}
                     >
@@ -1124,21 +1068,6 @@ export default function DeenAsk() {
                       </div>
                     </SourceGroup>
                   )}
-                  {!!webCount && (
-                    <SourceGroup
-                      title={isAr ? "من موقع إسلام ويب" : "From Islamweb"}
-                      icon={<BookOpen className={`w-3.5 h-3.5 ${isDark ? "text-sky-300" : "text-sky-600"}`} />}
-                      colorClass={isDark ? "text-sky-300" : "text-sky-700"}
-                      isDark={isDark}
-                      isAr={isAr}
-                    >
-                      <div className="flex flex-col gap-2">
-                        {displayWebResults.map((item, index) => (
-                          <WebSourceCard key={`w-${turn.id}-${item.url}-${index}`} item={item} isDark={isDark} isAr={isAr} />
-                        ))}
-                      </div>
-                    </SourceGroup>
-                  )}
                 </SourcesDropdown>
               )}
             </div>
@@ -1148,9 +1077,9 @@ export default function DeenAsk() {
         {/* Searching dots for the very first load before any turn renders */}
         {searching && turns.length === 0 && (
           <div className="flex items-center gap-2 px-1">
-            <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "0ms" }} />
-            <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "150ms" }} />
-            <div className="w-2 h-2 rounded-full animate-bounce bg-sky-400" style={{ animationDelay: "300ms" }} />
+            <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "0ms" }} />
+            <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "150ms" }} />
+            <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "300ms" }} />
           </div>
         )}
         </div>
