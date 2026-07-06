@@ -9544,6 +9544,7 @@ ${fixInstructions}
                       onRuntimeError={handleRuntimeCrash}
                       elementSelectMode={elementSelectMode}
                       isLoading={isGenerating}
+                      progressSteps={generationSteps}
                       onSave={(liveFiles) => {
                         const currentProjectPaths = new Set(Object.keys(generatedFiles));
                         const filteredFiles = Object.entries(liveFiles).reduce<Record<string, string>>((acc, [path, content]) => {

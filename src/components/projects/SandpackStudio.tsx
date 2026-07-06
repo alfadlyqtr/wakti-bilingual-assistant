@@ -12,7 +12,7 @@ import { SandpackConsolePanel } from "./SandpackConsolePanel";
 import { CollapsibleFileTree } from "./CollapsibleFileTree";
 import { atomDark } from "@codesandbox/sandpack-themes";
 import { Code2, Eye, FileCode, FileJson, FileType, CheckCircle2, Monitor, Tablet, Smartphone, ExternalLink, RefreshCw, Download, Upload, Loader2, Settings, Share2, Save, Terminal, PanelLeftClose, PanelLeft, Github } from "lucide-react";
-import { SandpackSkeleton } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
+import { SandpackSkeleton, type ProgressStep } from '@/pages/ProjectDetail/components/PreviewPanel/SandpackSkeleton';
 import { useIncrementalFileUpdater } from '@/pages/ProjectDetail/hooks/useIncrementalFileUpdater';
 import { useSandpackFiles } from '@/pages/ProjectDetail/hooks/useSandpackFiles';
 import {
@@ -855,6 +855,7 @@ interface SandpackStudioProps {
   elementSelectMode?: boolean;
   onElementSelect?: (elementRef: string, elementInfo?: SelectedElementInfo) => void;
   isLoading?: boolean; // Show loading overlay while AI is generating
+  progressSteps?: ProgressStep[]; // Real generation progress — drives the loading overlay's headline/progress bar
   onSave?: (files: Record<string, string>) => void;
   isSaving?: boolean;
   deviceView?: 'desktop' | 'tablet' | 'mobile';
@@ -876,6 +877,7 @@ export default function SandpackStudio({
   elementSelectMode, 
   onElementSelect, 
   isLoading,
+  progressSteps,
   onSave,
   isSaving = false,
   deviceView = 'desktop',
@@ -1758,6 +1760,7 @@ export { LanguageDetector as default } from '../i18next/bundle.js';`;
                       isLoading={isLoading}
                       isError={!hasValidFiles && Object.keys(files).length > 0}
                       isRTL={isRTL}
+                      progressSteps={progressSteps}
                     />
                   )}
 
