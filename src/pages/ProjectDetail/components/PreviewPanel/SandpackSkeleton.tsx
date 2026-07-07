@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Code2, Sparkles } from 'lucide-react';
 
 // Real progress step shape shared with ProjectDetail's generationSteps state —
@@ -106,7 +106,18 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
     if (s.status === 'loading') return sum + (typeof s.progress === 'number' ? s.progress : 0.5);
     return sum;
   }, 0);
-  const progressPercent = Math.max(6, Math.min(96, Math.round((completedUnits / totalUnits) * 100 + tickBonus)));
+  const rawPercent = Math.max(6, Math.min(96, Math.round((completedUnits / totalUnits) * 100 + tickBonus)));
+
+  // 🔧 FIX: Each backend stage transition (drafting → saving_draft → polishing → done)
+  // resets the tickBonus creep above back to 0, but only grants a small fixed jump in
+  // completedUnits. On long stages (drafting/polishing routinely run 90s+), the creep
+  // reaches its +6 cap before the transition — so losing it can outweigh the small fixed
+  // jump, making the bar visibly move backward. A progress bar must never regress, so we
+  // clamp to the highest value ever shown during this component's lifetime (naturally
+  // resets to 0 on remount, i.e. the next separate generation run).
+  const maxPercentRef = useRef(0);
+  maxPercentRef.current = Math.max(maxPercentRef.current, rawPercent);
+  const progressPercent = maxPercentRef.current;
 
   const tip = BUILD_TIPS[tipIndex];
 
