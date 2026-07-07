@@ -156,10 +156,17 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
       const serviceData = { ...service };
       delete serviceData.id;
       
+      // 🔧 FIX: The public site fetch filters on the row-level `status` column
+      // (status = 'active'), but this form only ever wrote the `is_active` flag
+      // inside the `data` JSON blob. A newly added/edited service never had its
+      // `status` column set to match, so it silently never appeared on the live
+      // site regardless of the "Active" toggle shown here.
+      const rowStatus = serviceData.is_active === false ? 'inactive' : 'active';
+
       if (editingService?.id) {
         const { error } = await supabase
           .from('project_collections')
-          .update({ data: JSON.parse(JSON.stringify(serviceData)) })
+          .update({ data: JSON.parse(JSON.stringify(serviceData)), status: rowStatus })
           .eq('id', editingService.id);
         if (error) throw error;
         toast.success(t('Service updated', 'تم تحديث الخدمة'));
@@ -171,7 +178,8 @@ export function BackendBookingsTab({ bookings, projectId, isRTL, onRefresh }: Ba
             project_id: projectId,
             user_id: _bs?.user?.id || '',
             collection_name: 'services',
-            data: JSON.parse(JSON.stringify(serviceData))
+            data: JSON.parse(JSON.stringify(serviceData)),
+            status: rowStatus
           }]);
         if (error) throw error;
         toast.success(t('Service added', 'تمت إضافة الخدمة'));

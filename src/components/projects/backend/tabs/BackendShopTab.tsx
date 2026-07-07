@@ -193,11 +193,16 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh,
       const productData = { ...product };
       delete productData.id;
       
+      // 🔧 FIX: The public site fetch filters on the row-level `status` column
+      // (status = 'active'), but this form only ever wrote `is_active` inside the
+      // `data` JSON blob, so a saved product's row status never matched its toggle.
+      const rowStatus = productData.is_active === false ? 'inactive' : 'active';
+
       // Store products in project_collections instead of project_inventory
       if (editingProduct?.id) {
         const { error } = await supabase
           .from('project_collections')
-          .update({ data: JSON.parse(JSON.stringify(productData)) })
+          .update({ data: JSON.parse(JSON.stringify(productData)), status: rowStatus })
           .eq('id', editingProduct.id);
         if (error) throw error;
 
@@ -223,7 +228,8 @@ export function BackendShopTab({ orders, inventory, projectId, isRTL, onRefresh,
             project_id: projectId,
             user_id: _s1?.user?.id || '',
             collection_name: 'products',
-            data: JSON.parse(JSON.stringify(productData))
+            data: JSON.parse(JSON.stringify(productData)),
+            status: rowStatus
           }])
           .select()
           .single();
