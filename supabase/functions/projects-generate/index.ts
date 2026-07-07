@@ -1067,7 +1067,7 @@ async function callGeminiWithModel(
   userPrompt: string,
   jsonMode: boolean = true,
   maxRetries: number = 2,
-  options: { enableGoogleSearch?: boolean } = {}
+  options: { enableGoogleSearch?: boolean; timeoutMs?: number } = {}
 ): Promise<string> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
@@ -1111,7 +1111,10 @@ async function callGeminiWithModel(
             }),
           }
         ),
-        120000, // 120 seconds — CREATE mode generates large files (10k-30k tokens) via waitUntil, not limited by 150s gateway
+        // Default 120s for most callers. CREATE mode passes a larger, budget-aware
+        // value (see createDraftTimeoutMs/etc.) since generating 10k-30k tokens of
+        // full-site code genuinely needs more than 120s for complex requests.
+        options.timeoutMs ?? 120000,
         'GEMINI_CALL'
       );
 
@@ -1165,7 +1168,7 @@ function callGemini25Pro(
   systemPrompt: string,
   userPrompt: string,
   jsonMode: boolean = true,
-  options: { enableGoogleSearch?: boolean } = {}
+  options: { enableGoogleSearch?: boolean; timeoutMs?: number } = {}
 ): Promise<string> {
   return callGeminiWithModel(GEMINI_MODEL_CREATE, systemPrompt, userPrompt, jsonMode, 3, options);
 }
@@ -1473,7 +1476,8 @@ async function callGeminiVisionWithFiles(
   systemPrompt: string,
   userPrompt: string,
   images?: string[],
-  jsonMode: boolean = true
+  jsonMode: boolean = true,
+  timeoutMs: number = 120000
 ): Promise<string> {
   const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY missing");
@@ -1553,7 +1557,7 @@ async function callGeminiVisionWithFiles(
         }),
       }
     ),
-    120000, // 120 seconds — reduced from 300s; consistent with callGeminiWithModel limit
+    timeoutMs, // default 120s; CREATE mode's polish pass passes a larger, budget-aware value
     'GEMINI_25_PRO_VISION'
   );
 
@@ -1815,7 +1819,8 @@ async function callGeminiFullRewriteEdit(
   backendContext?: BackendContext, // Backend context for AI awareness
   extractedDocumentContent?: string, // Extracted text from PDFs/DOCX
   extractedVisionInspirations?: string, // Design inspiration from images
-  projectId?: string
+  projectId?: string,
+  timeoutMs?: number // Optional override — CREATE mode's polish pass needs more than the 120s default
 ): Promise<{ files: Record<string, string>; summary: string }> {
   const SYSTEM_FILE_RE = /[\\/]_wakti_|[\\/]__wakti_/i; // Protected Wakti system files — never expose to AI
   const fileContext = Object.entries(currentFiles || {})
@@ -1975,7 +1980,7 @@ Implement this request. Return the FULL content of every file that needs to be m
 Return ONLY a valid JSON object with the structure shown in the system prompt.`;
 
   // Full rewrite edits run through the configured Gemini vision-capable model
-  const text = await callGeminiVisionWithFiles(systemPrompt, userMessage, images, true);
+  const text = await callGeminiVisionWithFiles(systemPrompt, userMessage, images, true, timeoutMs ?? 120000);
   
   let parsed: unknown;
   try {
@@ -7777,6 +7782,17 @@ Call task_complete when finished.`;
         // platform's execution limit without the guard ever tripping, leaving
         // jobs stuck in "running" forever.
         const createStartTime = Date.now();
+        // 🔧 FIX: Confirmed via Supabase docs + this project's org plan (Pro) that
+        // background tasks (EdgeRuntime.waitUntil) get a 400s wall-clock ceiling.
+        // Every AI call below used to have a flat hardcoded 120s timeout no matter
+        // how much of that budget was already spent — which caused GEMINI_CALL_TIMEOUT
+        // failures on complex prompts (rich e-commerce/booking flows, detailed custom
+        // themes) that genuinely need more than 120s to generate 10k-30k tokens of
+        // code. Each call below now gets a timeout sized from whatever budget is
+        // actually left, so a fast image-gen phase means a much bigger window for the
+        // draft call, while the total never risks crossing the real platform ceiling.
+        const CREATE_TOTAL_TIME_BUDGET_MS = 360000; // 6 min, ~40s safety margin under the 400s ceiling
+        const remainingCreateBudgetMs = () => CREATE_TOTAL_TIME_BUDGET_MS - (Date.now() - createStartTime);
         await patchJobMetadata(
           supabase,
           job.id,
@@ -7965,8 +7981,12 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
         let aiText: string;
         let draftFallbackUsed = false;
         try {
+          // Reserve 100s of the remaining budget for a possible slim retry + save/polish
+          // bookkeeping; give everything else to this first, best-quality attempt.
+          const draft1TimeoutMs = Math.max(90000, Math.min(220000, remainingCreateBudgetMs() - 100000));
           aiText = await callGemini25Pro(finalSystemPrompt, textPrompt, true, {
             enableGoogleSearch: shouldEnableGoogleSearch,
+            timeoutMs: draft1TimeoutMs,
           });
         } catch (draftErr) {
           const draftErrMsg = draftErr instanceof Error ? draftErr.message : String(draftErr);
@@ -7991,8 +8011,12 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
               note: 'Retrying with a slimmer first-draft prompt',
             },
           );
+          // Retry gets whatever safely remains — smaller if the first attempt ate
+          // most of the budget, but never less than 45s for a genuinely simpler prompt.
+          const draft2TimeoutMs = Math.max(45000, Math.min(180000, remainingCreateBudgetMs() - 30000));
           aiText = await callGemini25Pro(finalSystemPrompt, slimPrompt, true, {
             enableGoogleSearch: shouldEnableGoogleSearch,
+            timeoutMs: draft2TimeoutMs,
           });
         }
         const createDuration = Date.now() - createStartTime;
@@ -8209,6 +8233,10 @@ Return ONLY the JSON object. No explanation.`;
             ? `${imageSectionMapBlock}\n\n⚠️ These images are ALREADY placed in the current draft — KEEP every one of them in its section exactly as-is. Do not remove, replace, or leave any of them unused while polishing.`
             : '';
           const polishPrompt = `${prompt}\n\nThe working first draft is already saved. Upgrade it into a premium final version without breaking the runtime entry, routing, backend wiring, or any working section. Improve hierarchy, composition, visual rhythm, CTA clarity, spacing, premium feel, and first impression. Keep all existing working functionality intact.${polishImageReminder}`;
+          // Give polish whatever safely remains of the total budget, capped at a sane
+          // range — it's a full-rewrite call too, so it's just as prone to the old flat
+          // 120s being too short for a large, feature-rich site.
+          const polishTimeoutMs = Math.max(60000, Math.min(150000, remainingCreateBudgetMs() - 20000));
           const polishResult = await callGeminiFullRewriteEdit(
             polishPrompt,
             files,
@@ -8220,6 +8248,7 @@ Return ONLY the JSON object. No explanation.`;
             documentContentStr, // already extracted CV/doc text
             visionInspirationStr,
             projectId,
+            polishTimeoutMs,
           );
           let finalPolishFiles: Record<string, string> = polishResult.files || {};
           const missing = findMissingReferencedFiles({ changedFiles: finalPolishFiles, existingFiles: files });
