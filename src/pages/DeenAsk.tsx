@@ -497,7 +497,7 @@ export default function DeenAsk() {
     setQuestion("");
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setSearching(true);
-    setLoadingLabel(isAr ? "أبحث في المصادر الآن..." : "Searching the sources now...");
+    setLoadingLabel("");
 
     try {
       const recentHistory = turns
@@ -941,7 +941,7 @@ export default function DeenAsk() {
                   <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "0ms" }} />
                   <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "150ms" }} />
                   <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "300ms" }} />
-                  <span className={`text-xs ${subtitleColor}`}>{loadingLabel || (isAr ? "جارٍ البحث..." : "Searching...")}</span>
+                  <span className={`text-xs ${subtitleColor}`}>{loadingLabel}</span>
                 </div>
               )}
 
@@ -1001,6 +1001,7 @@ export default function DeenAsk() {
                       <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "0ms" }} />
                       <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "150ms" }} />
                       <div className="w-2 h-2 rounded-full animate-bounce bg-violet-400" style={{ animationDelay: "300ms" }} />
+                      <span className={`text-xs ${subtitleColor}`}>{isAr ? "أبحث في المصادر الآن..." : "Searching the sources now..."}</span>
                     </div>
                   )}
 
