@@ -159,20 +159,10 @@ function formatAssistantMessage(rawText: string, fallbackText: string): string {
 
   if (!message) message = fallback;
 
-  message = stripWaAlaikumReply(message);
-
   message = ensureParagraphLayout(message);
 
   if (!message) return fallback;
   return message;
-}
-
-function addSalaamReplyIfNeeded(message: string, language: "ar" | "en", question: string): string {
-  if (!userSentSalaam(question)) return message;
-  const greeting = language === "ar" ? "وعليكم السلام." : "Wa alaikum assalam.";
-  const withoutReply = stripWaAlaikumReply(message);
-  const combined = withoutReply ? `${greeting}\n\n${withoutReply}` : greeting;
-  return ensureParagraphLayout(combined);
 }
 
 function uniqueTerms(values: string[]) {
@@ -444,8 +434,6 @@ function buildChatSystemPrompt(language: "ar" | "en"): string {
 
 لا تذكر أبداً Google أو أي محرك بحث أو أي موقع خارجي.
 
-لا تقل "وعليكم السلام" إلا إذا كانت رسالة المستخدم الحالية نفسها تحتوي تحية "السلام عليكم". لا تعتمد على التحيات الموجودة في سياق المحادثة السابقة.
-
 أجب دائماً بلغة المستخدم، بدون Markdown، وفي فقرات قصيرة واضحة.
 
 أخرج الرد فقط بهذا الشكل:
@@ -464,8 +452,6 @@ Strictly forbidden in knowledge-only replies: quoting specific Quran verses, quo
 If you ask the user whether to look up Quran and Hadith, mode must be offer_search and search_options must be ["quran","hadith"] only.
 
 Never mention Google, search engines, or any external website.
-
-Only say "Wa alaikum assalam" when the current user message itself includes a salam greeting. Never do this due to prior conversation context.
 
 Always reply in the user's language, with no markdown, in clear short paragraphs.
 
@@ -491,14 +477,14 @@ async function generateChatResponse(
       const formattedOffer = formatAssistantMessage(fallbackOffer, fallbackOffer);
       return {
         mode: "offer_search",
-        message: addSalaamReplyIfNeeded(formattedOffer, language, question),
+        message: formattedOffer,
         search_options: fallbackOptions,
       };
     }
     const formattedChat = formatAssistantMessage(fallbackChat, fallbackChat);
     return {
       mode: "chat",
-      message: addSalaamReplyIfNeeded(formattedChat, language, question),
+      message: formattedChat,
       search_options: [],
     };
   }
@@ -592,7 +578,6 @@ async function generateChatResponse(
     }
 
     message = formatAssistantMessage(message, mode === "offer_search" ? fallbackOffer : fallbackChat);
-    message = addSalaamReplyIfNeeded(message, language, question);
 
     await logAIFromRequest(req, {
       functionName: "deen-search",
@@ -623,14 +608,14 @@ async function generateChatResponse(
       const formattedOffer = formatAssistantMessage(fallbackOffer, fallbackOffer);
       return {
         mode: "offer_search",
-        message: addSalaamReplyIfNeeded(formattedOffer, language, question),
+        message: formattedOffer,
         search_options: fallbackOptions,
       };
     }
     const formattedChat = formatAssistantMessage(fallbackChat, fallbackChat);
     return {
       mode: "chat",
-      message: addSalaamReplyIfNeeded(formattedChat, language, question),
+      message: formattedChat,
       search_options: [],
     };
   }
