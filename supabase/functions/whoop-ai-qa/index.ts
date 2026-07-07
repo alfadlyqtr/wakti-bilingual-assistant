@@ -251,8 +251,8 @@ CURRENT USER STATE:
     // Log failed AI usage
     await logAIFromRequest(req, {
       functionName: "whoop-ai-qa",
-      provider: "deepseek",
-      model: "deepseek-chat",
+      provider: "openai",
+      model: "gpt-4o-mini",
       status: "error",
       errorMessage: (e as Error).message
     });

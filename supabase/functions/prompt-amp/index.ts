@@ -590,14 +590,14 @@ async function ampMusicLyricsWithOpenAI(
   return content.trim();
 }
 
-// DeepSeek implementation for text-first AMP modes
-async function ampPromptWithDeepSeek(
+// OpenAI implementation for text-first AMP modes
+async function ampPromptWithOpenAI(
   input: string,
   preferArabic: boolean,
   mode?: string
 ): Promise<string> {
-  const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
-  if (!DEEPSEEK_API_KEY) throw new Error("CONFIG: Missing DEEPSEEK_API_KEY");
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) throw new Error("CONFIG: Missing OPENAI_API_KEY");
 
   const system = buildSystemPrompt(preferArabic, mode);
   const isLyrics = mode === "lyrics";
@@ -605,7 +605,7 @@ async function ampPromptWithDeepSeek(
   const temperature = isLyrics ? 0.25 : isMusic ? 0.3 : 0.5;
 
   const payload = {
-    model: "deepseek-chat",
+    model: "gpt-4o-mini",
     temperature,
     messages: [
       {
@@ -619,11 +619,11 @@ async function ampPromptWithDeepSeek(
     ],
   };
 
-  const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
     },
     body: JSON.stringify(payload),
   });
@@ -632,7 +632,7 @@ async function ampPromptWithDeepSeek(
   if (!resp.ok) {
     throw new Error(
       JSON.stringify({
-        stage: "deepseek",
+        stage: "openai",
         status: resp.status,
         body: data || null,
       }),
@@ -647,7 +647,7 @@ async function ampPromptWithDeepSeek(
   if (typeof alt === "string" && alt.trim().length > 0) {
     return alt.trim();
   }
-  throw new Error("deepseek_empty_response");
+  throw new Error("openai_empty_response");
 }
 
 // ─── Image-to-Video Amp (OpenAI gpt-4o-mini vision) ───
@@ -1104,7 +1104,7 @@ serve(async (req) => {
     }
     // ─── End Music/Lyrics route ───
 
-    // ─── Dedicated Image AMP routes (DeepSeek) ───
+    // ─── Dedicated Image AMP routes (OpenAI) ───
     if (
       mode === "text2image"
       || mode === "image2image"
@@ -1128,12 +1128,12 @@ serve(async (req) => {
       const preferArabic = hasArabic(text);
       const responseLanguage = detectOutputLanguage(text);
 
-      let improved = normalizeAmpText(await ampPromptWithDeepSeek(text, preferArabic, mode));
+      let improved = normalizeAmpText(await ampPromptWithOpenAI(text, preferArabic, mode));
       let qualityRetry = false;
 
       if (isGenericInstructionalAmpText(improved)) {
         const retryInput = buildAmpRetryInput(mode, text, improved);
-        const retryOutput = await ampPromptWithDeepSeek(retryInput, preferArabic, mode);
+        const retryOutput = await ampPromptWithOpenAI(retryInput, preferArabic, mode);
         const normalizedRetry = normalizeAmpText(retryOutput);
         if (normalizedRetry) {
           improved = normalizedRetry;
@@ -1144,13 +1144,13 @@ serve(async (req) => {
       await logAI({
         functionName: "prompt-amp",
         userId,
-        model: "deepseek-chat",
+        model: "gpt-4o-mini",
         inputText,
         outputText: improved,
         durationMs: Date.now() - startTime,
         status: "success",
         metadata: {
-          provider: "deepseek",
+          provider: "openai",
           mode,
           language: responseLanguage,
           qualityRetry,
@@ -1439,19 +1439,19 @@ serve(async (req) => {
     }
 
     const preferArabic = hasArabic(text);
-    const improved = normalizeAmpText(await ampPromptWithDeepSeek(text, preferArabic, mode));
+    const improved = normalizeAmpText(await ampPromptWithOpenAI(text, preferArabic, mode));
 
     // Log successful AI usage with user ID
     await logAI({
       functionName: "prompt-amp",
       userId,
-      model: "deepseek-chat",
+      model: "gpt-4o-mini",
       inputText: text,
       outputText: improved,
       durationMs: Date.now() - startTime,
       status: "success",
       metadata: {
-        provider: "deepseek",
+        provider: "openai",
         mode: mode || "text2image",
         language: preferArabic ? "ar" : "en",
       },
@@ -1479,12 +1479,12 @@ serve(async (req) => {
     await logAI({
       functionName: "prompt-amp",
       userId,
-      model: "deepseek-chat",
+      model: "gpt-4o-mini",
       inputText,
       durationMs: Date.now() - startTime,
       status: "error",
       errorMessage: message,
-      metadata: { provider: "deepseek", mode: mode || "text2image" },
+      metadata: { provider: "openai", mode: mode || "text2image" },
     });
 
     return new Response(

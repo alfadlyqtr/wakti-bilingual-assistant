@@ -161,44 +161,6 @@ async function callOpenAI(systemPrompt: string, userPrompt: string): Promise<str
   }
 }
 
-// Call DeepSeek API (second fallback)
-async function callDeepSeek(systemPrompt: string, userPrompt: string): Promise<string | null> {
-  const deepseekKey = Deno.env.get("DEEPSEEK_API_KEY");
-  if (!deepseekKey) { console.error("DeepSeek: DEEPSEEK_API_KEY missing"); return null; }
-
-  try {
-    const response = await fetch("https://api.deepseek.com/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${deepseekKey}`
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.5,
-        max_tokens: 1024,
-        response_format: { type: "json_object" }
-      })
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      console.error("DeepSeek error:", response.status, errBody);
-      return null;
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || null;
-  } catch (err) {
-    console.error("DeepSeek call failed:", err);
-    return null;
-  }
-}
-
 // Call Gemini API (fallback)
 async function callGemini(systemPrompt: string, userPrompt: string): Promise<{ text: string; model: string } | null> {
   const geminiKey = Deno.env.get("GEMINI_API_KEY");
@@ -345,13 +307,6 @@ Respond with JSON only:
           if (responseText) {
             usedProvider = "openai";
             usedModel = "gpt-4o-mini";
-          } else {
-            console.log("🤖 OpenAI failed, trying DeepSeek...");
-            responseText = await callDeepSeek(systemPrompt, userPrompt);
-            if (responseText) {
-              usedProvider = "openai";
-              usedModel = "deepseek-chat";
-            }
           }
         }
       } else {
@@ -367,13 +322,6 @@ Respond with JSON only:
             responseText = gemini.text;
             usedProvider = "gemini";
             usedModel = gemini.model;
-          } else {
-            console.log("🤖 Gemini failed, trying DeepSeek...");
-            responseText = await callDeepSeek(systemPrompt, userPrompt);
-            if (responseText) {
-              usedProvider = "openai";
-              usedModel = "deepseek-chat";
-            }
           }
         }
       }

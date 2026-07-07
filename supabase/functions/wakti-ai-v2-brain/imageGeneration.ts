@@ -1,5 +1,6 @@
 import '../_types/deno-globals.d.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { generateGemini } from '../_shared/gemini.ts';
 // Note: Edge function runs in Deno; utilities are not used here.
 
 /**
@@ -7,7 +8,6 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
  */
 
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
-const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 const KIE_API_KEY = Deno.env.get('KIE_API_KEY');
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
@@ -240,10 +240,6 @@ export async function generateImageWithRunware(
     
     if (isArabic && !options?.backgroundRemoval) {
       console.log('🌐 ARABIC DETECTED: Translating to English for Runware');
-      
-      if (!DEEPSEEK_API_KEY) {
-        throw new Error('Translation service not available');
-      }
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
@@ -253,37 +249,24 @@ export async function generateImageWithRunware(
         signal.addEventListener('abort', () => controller.abort());
       }
 
-      const translationResponse = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: 'Translate Arabic image prompts to English. Return ONLY the English translation.' },
-            { role: 'user', content: `Translate this to English: ${prompt}` }
-          ],
-          max_tokens: 300,
-          temperature: 0.1
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (controller.signal.aborted || (signal && signal.aborted)) {
-        throw new Error('Translation request was cancelled');
-      }
-
-      if (translationResponse.ok) {
-        const result = await translationResponse.json();
-        const translatedText = result.choices?.[0]?.message?.content?.trim();
+      try {
+        const result = await generateGemini(
+          'gemini-2.5-flash-lite',
+          [{ role: 'user', parts: [{ text: `Translate this to English: ${prompt}` }] }],
+          'Translate Arabic image prompts to English. Return ONLY the English translation.',
+          { temperature: 0.1, maxOutputTokens: 300 }
+        );
+        const translatedText = result?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
         if (translatedText) {
           finalPrompt = translatedText;
           console.log('✅ TRANSLATION SUCCESS:', translatedText.substring(0, 50));
         }
+      } finally {
+        clearTimeout(timeoutId);
+      }
+
+      if (controller.signal.aborted || (signal && signal.aborted)) {
+        throw new Error('Translation request was cancelled');
       }
     }
 

@@ -885,7 +885,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           throw new Error(data?.error || 'No improved prompt returned');
         }
       } else {
-        // Text-to-Video amp: enhance/translate the text prompt via DeepSeek
+        // Text-to-Video amp: enhance/translate the text prompt via OpenAI
         const { data } = await invokePromptAmpWithBetterErrors({
           mode: 'text2video',
           text: prompt.trim(),

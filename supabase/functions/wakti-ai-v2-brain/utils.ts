@@ -2,7 +2,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 export const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
-export const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 export const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 export const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 
@@ -17,7 +16,7 @@ export function generateConversationId(): string {
 
 // OPTIMIZED API key validation
 export function validateApiKeys(): { valid: boolean; missing: string[] } {
-  const keys = { ANTHROPIC_API_KEY, DEEPSEEK_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY };
+  const keys = { ANTHROPIC_API_KEY, TAVILY_API_KEY, RUNWARE_API_KEY };
   const missing = Object.entries(keys).filter(([_, value]) => !value).map(([name]) => name);
   return { valid: missing.length === 0, missing };
 }
@@ -158,45 +157,3 @@ export async function callClaude35API(
   }
 }
 
-// OPTIMIZED: DeepSeek fallback (kept for compatibility but optimized)
-export async function callDeepSeekAPI(
-  messages: any[],
-  maxTokens: number = 4096
-): Promise<any> {
-  if (!DEEPSEEK_API_KEY) {
-    throw new Error('DeepSeek API key not configured');
-  }
-
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.3 // Optimized for consistency
-    }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`DeepSeek API error (${response.status}): ${errorText}`);
-  }
-
-  // OPTIMIZED: Fast JSON parsing
-  const responseText = await response.text();
-  if (!responseText || responseText.trim() === '') {
-    throw new Error('Empty response from DeepSeek API');
-  }
-
-  try {
-    return JSON.parse(responseText);
-  } catch (jsonError) {
-    console.error('❌ DeepSeek JSON parsing error:', jsonError);
-    console.error('❌ Raw response:', responseText.substring(0, 200));
-    throw new Error('Invalid JSON response from DeepSeek API');
-  }
-}

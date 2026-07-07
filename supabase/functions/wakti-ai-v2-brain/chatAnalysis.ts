@@ -2,7 +2,7 @@
 // DO NOT USE THIS FILE - ALL FUNCTIONALITY MOVED TO INDEX.TS
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-import { callClaudeAPI, callDeepSeekAPI, logWithTimestamp, validateApiKeys, parseClaudeStreamChunk } from './utils.ts';
+import { callClaudeAPI, logWithTimestamp, validateApiKeys, parseClaudeStreamChunk } from './utils.ts';
 
 /*
 export async function processWithClaudeAI(

@@ -519,8 +519,8 @@ ${maxHR ? `Max HR: ${maxHR} bpm` : ''}`;
 
     if (!resp.ok) {
       const t = await resp.text();
-      console.error("deepseek error", resp.status, t);
-      return new Response(JSON.stringify({ error: "deepseek_error", status: resp.status, body: t }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      console.error("openai error", resp.status, t);
+      return new Response(JSON.stringify({ error: "openai_error", status: resp.status, body: t }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const json = await resp.json();

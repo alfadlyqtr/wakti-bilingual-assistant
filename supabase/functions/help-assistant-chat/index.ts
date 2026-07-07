@@ -42,7 +42,6 @@ type Chip = {
 
  type ScoredEntry = { entry: ManualEntry; score: number; reasons: string[] };
 
-const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -567,37 +566,6 @@ function _extractChipFromResponse(_text: string): Chip | null {
   return null;
 }
 
-async function callDeepSeek(messages: ChatMessage[]): Promise<string | null> {
-  if (!DEEPSEEK_API_KEY) return null;
-  
-  try {
-    const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages,
-        temperature: 0.2,
-        max_tokens: 800,
-      }),
-    });
-
-    if (!resp.ok) {
-      console.error("DeepSeek error:", resp.status);
-      return null;
-    }
-
-    const json = await resp.json();
-    return String(json?.choices?.[0]?.message?.content ?? "").trim() || null;
-  } catch (e) {
-    console.error("DeepSeek exception:", e);
-    return null;
-  }
-}
-
 async function callOpenAI(messages: ChatMessage[]): Promise<string | null> {
   if (!OPENAI_API_KEY) return null;
   
@@ -709,17 +677,9 @@ serve(async (req) => {
 
     messages.push({ role: "user", content: message });
 
-    // Try DeepSeek first (primary), fallback to OpenAI
-    let reply = await callDeepSeek(messages);
-    let provider = "deepseek";
-    let model = "deepseek-chat";
-
-    if (!reply) {
-      console.log("DeepSeek failed, trying OpenAI fallback...");
-      reply = await callOpenAI(messages);
-      provider = "openai";
-      model = "gpt-4o-mini";
-    }
+    const reply = await callOpenAI(messages);
+    const provider = "openai";
+    const model = "gpt-4o-mini";
 
     const durationMs = Date.now() - start;
 

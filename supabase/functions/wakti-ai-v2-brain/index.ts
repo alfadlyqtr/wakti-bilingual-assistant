@@ -35,7 +35,6 @@ const ANTHROPIC_API_KEY = Deno.env.get('ANTHROPIC_API_KEY');
 const RUNWARE_API_KEY = Deno.env.get('RUNWARE_API_KEY');
 const TAVILY_API_KEY = Deno.env.get('TAVILY_API_KEY');
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
-const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -65,14 +64,6 @@ const models: Record<string, AIModelConfig> = {
     endpoint: 'https://api.openai.com/v1/chat/completions',
     model: 'gpt-5-nano-2025-08-07',
     apiKey: OPENAI_API_KEY,
-    maxTokens: 4000,
-    timeout: 30000
-  },
-  deepseek: {
-    name: 'deepseek',
-    endpoint: 'https://api.deepseek.com/chat/completions',
-    model: 'deepseek-chat',
-    apiKey: DEEPSEEK_API_KEY,
     maxTokens: 4000,
     timeout: 30000
   }
@@ -348,7 +339,7 @@ serve(async (req) => {
     }
 
     // Log API key availability for debugging
-    console.log(`🔑 API Keys available: Claude=${!!ANTHROPIC_API_KEY}, OpenAI=${!!OPENAI_API_KEY}, DeepSeek=${!!DEEPSEEK_API_KEY}`);
+    console.log(`🔑 API Keys available: Claude=${!!ANTHROPIC_API_KEY}, OpenAI=${!!OPENAI_API_KEY}`);
 
     // Global Search pre-processing before model selection
     let browsingUsed = false;
@@ -480,10 +471,10 @@ serve(async (req) => {
         : ['claude', 'openai']; // default and best_fast prefer Claude
     } else {
       modelOrder = modelOverride === 'best_fast'
-        ? ['claude', 'openai', 'deepseek']
+        ? ['claude', 'openai']
         : modelOverride === 'fast'
-          ? ['openai', 'deepseek', 'claude']
-          : ['openai', 'claude', 'deepseek'];
+          ? ['openai', 'claude']
+          : ['openai', 'claude'];
     }
     let lastError: unknown | null = null;
     let fallbackUsed = false;
@@ -508,13 +499,8 @@ serve(async (req) => {
             effectiveMessage, conversationId, requestLanguage, attachedFiles, 
             effectiveTrigger, recentMessages, personalTouch, browsingUsed
           );
-        } else if (modelName === 'openai') {
-          result = await callOpenAIChatAPI(
-            effectiveMessage, conversationId, requestLanguage, attachedFiles, 
-            effectiveTrigger, recentMessages, personalTouch
-          );
         } else {
-          result = await callDeepSeekAPI(
+          result = await callOpenAIChatAPI(
             effectiveMessage, conversationId, requestLanguage, attachedFiles, 
             effectiveTrigger, recentMessages, personalTouch
           );
@@ -879,99 +865,3 @@ ${personalizationContext}`;
   }
 }
 
-async function callDeepSeekAPI(
-  message: string,
-  conversationId?: string,
-  language: string = 'en',
-  attachedFiles: AttachedFile[] = [],
-  activeTrigger: string = 'general',
-  recentMessages: RecentMessageUnknown[] = [],
-  personalTouch: PersonalTouch | null = null
-) {
-  try {
-    if (!DEEPSEEK_API_KEY) {
-      throw new Error('DeepSeek API key not configured');
-    }
-
-    // Build system prompt
-    const currentDate = new Date().toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric',
-      timeZone: 'Asia/Qatar'
-    });
-
-    // Use VisionSystem to build complete system prompt
-    const systemPrompt = VisionSystem.buildCompleteSystemPrompt(language, currentDate, personalTouch);
-
-    // Build messages array
-    const messages: OpenAIMessage[] = [
-      { role: 'system', content: systemPrompt }
-    ];
-
-    // Add conversation history with smart filtering
-    if (recentMessages && recentMessages.length > 0) {
-      const filteredMessages = smartFilterMessages(recentMessages);
-      const historyMessages = filteredMessages.slice(-20); // Increased from 6 to 20
-      historyMessages.forEach(msg => {
-        if (msg.role === 'user' || msg.role === 'assistant') {
-          messages.push({
-            role: msg.role,
-            content: msg.content
-          });
-        }
-      });
-    }
-
-    // Add current message
-    const languagePrefix = language === 'ar' 
-      ? 'يرجى الرد باللغة العربية فقط. ' 
-      : 'Please respond in English only. ';
-    
-    messages.push({
-      role: 'user',
-      content: languagePrefix + message
-    });
-
-    // Make API call to DeepSeek
-    const response = await fetchWithTimeout(
-      'https://api.deepseek.com/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: messages,
-          max_tokens: 4000,
-          temperature: 0.7
-        })
-      },
-      models.deepseek.timeout
-    );
-
-    if (!response.ok) {
-      const errorData = await response.text();
-      throw new Error(`DeepSeek API error: ${response.status} - ${errorData}`);
-    }
-
-    const data = await response.json();
-    
-    if (data.choices && data.choices[0] && data.choices[0].message) {
-      return {
-        response: data.choices[0].message.content,
-        conversationId: conversationId,
-        model: 'deepseek-chat'
-      };
-    } else {
-      throw new Error('Invalid response format from DeepSeek API');
-    }
-
-  } catch (error: unknown) {
-    console.error('🤖 DEEPSEEK API ERROR:', error);
-    throw error;
-  }
-}

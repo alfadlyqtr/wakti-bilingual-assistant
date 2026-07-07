@@ -45,7 +45,7 @@ auto-injected when the user's request matches.
 | multi_file_features | Language toggle, dark mode, cart, auth, animations, modals, toasts, new pages, search. |
 
 Rules:
-- Never hardcode data the backend provides (products, services).
+- Never hardcode data the backend provides (products, services, categories, filters).
 - Never import @supabase/supabase-js in generated projects — use project-backend-api.
 - For Arabic / RTL / multi-language, follow the runtime i18n instructions added separately.
 `;
@@ -97,12 +97,19 @@ const RULES: DetectionRule[] = [
       // booking site) and was causing false ecommerce capability injection.
       // "product catalog" as a phrase is still a strong, specific signal.
       /\b(shop|store|e-?commerce|ecommerce|product\s*catalog|cart|checkout|marketplace|buy|sell|inventory|sku|catalog)\b/i,
+      // Arabic: \b is ASCII-only in JS regex and never matches around Arabic script,
+      // so these run as plain substring checks (Arabic's root-letter structure makes
+      // that safe — e.g. "بيع" only ever appears inside sell/sale/seller-related words).
+      // Deliberately excludes bare "منتج/منتجات" (product/products) for the same
+      // false-positive reason as the English list above.
+      /متجر|تسوق|سلة(?:\s*(?:التسوق|الشراء|المشتريات))?|تجارة\s*إلكترونية|كتالوج|إتمام\s*الشراء|الدفع\s*الإلكتروني|بيع|شراء|مخزون|سوق\s*إلكتروني/,
     ],
   },
   {
     capability: "blog",
     keywords: [
       /\b(blog|cms|content\s*management|article|articles|post|posts|news|newsletter\s*site|magazine|editorial|journal|stories)\b/i,
+      /مدونة|مقالات?|أخبار|مجلة\s*إلكترونية/,
     ],
   },
   {
@@ -110,18 +117,21 @@ const RULES: DetectionRule[] = [
     keywords: [
       /\b(sport|sports|football|soccer|fifa|afc|uefa|club|team|national\s+team|squad|roster|lineup|standings|table|fixtures?|matches?|results?|fans?|supporters?)\b/i,
       /qatar|qatari|القطري|قطر|العنابي/i,
+      /رياض[ةي]|كرة\s*القدم|نادي|فريق|الدوري|مباريات?|بطولة|لاعبين/,
     ],
   },
   {
     capability: "booking",
     keywords: [
       /\b(book(ing)?|appointment|schedule|reservation|barber|salon|spa|clinic|consultation|haircut|massage|therapist|dentist|doctor)\b/i,
+      /حجوزات|حجز|موعد|مواعيد|صالون|حلاق(?:ة)?|سبا|عيادة|استشارة|تدليك|قص\s*شعر/,
     ],
   },
   {
     capability: "forms",
     keywords: [
       /\b(contact\s*(us|form)?|quote\s*request|newsletter|waitlist|feedback|sign[- ]?up|subscribe|get\s*in\s*touch)\b/i,
+      /تواصل\s*معنا|اتصل\s*بنا|نموذج\s*(تواصل|اتصال)|النشرة\s*البريدية|استفسار|طلب\s*عرض\s*سعر|قائمة\s*الانتظار/,
     ],
   },
   {

@@ -11,7 +11,6 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY") || Deno.env.get("GOOGLE_GENAI_API_KEY");
 const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
@@ -347,12 +346,12 @@ serve(async (req) => {
     console.log("🎯 Text Generator: Request method:", req.method);
     console.log("🎯 Text Generator: Request headers:", Object.fromEntries(req.headers.entries()));
     
-    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY && !DEEPSEEK_API_KEY) {
+    if (!ANTHROPIC_API_KEY && !OPENAI_API_KEY) {
       console.error("🚨 Text Generator: No AI provider keys found in environment");
       return new Response(
         JSON.stringify({ 
           success: false,
-          error: "No AI provider configured. Please add ANTHROPIC_API_KEY, OPENAI_API_KEY, or DEEPSEEK_API_KEY to Supabase Edge Function Secrets." 
+          error: "No AI provider configured. Please add ANTHROPIC_API_KEY or OPENAI_API_KEY to Supabase Edge Function Secrets." 
         }),
         { 
           status: 500, 
@@ -1184,60 +1183,6 @@ ${finalPrompt}`;
         }
       } catch (e) {
         console.warn("🎯 Text Generator: Gemini fallback threw:", e);
-      }
-    }
-
-    // ── Fallback 3: DeepSeek ──
-    if (DEEPSEEK_API_KEY && !generatedText) {
-      try {
-        console.log("🎯 Text Generator: FALLBACK 3 - DeepSeek");
-        const startDs = Date.now();
-        const dsResp = await fetch("https://api.deepseek.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-          },
-          body: JSON.stringify({
-            model: 'deepseek-chat',
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: finalPrompt }
-            ],
-            temperature: genParams.temperature,
-            max_tokens: genParams.max_tokens,
-          }),
-        });
-        const dsDuration = Date.now() - startDs;
-        console.log(`🎯 Text Generator: DeepSeek completed in ${dsDuration}ms`);
-        if (dsResp.ok) {
-          const result = await dsResp.json();
-          const content = result.choices?.[0]?.message?.content || "";
-          if (content) {
-            generatedText = applyWordCount(sanitizeEmDashes(content));
-            const trialPayload = trialContext
-              ? buildTrialSuccessPayload(
-                  trialContext.trialKey,
-                  await checkAndConsumeTrialToken(trialContext.supabaseAdmin, trialContext.userId, trialContext.trialKey, 2),
-                )
-              : null;
-            return new Response(
-              JSON.stringify({
-                success: true,
-                generatedText,
-                mode,
-                language,
-                modelUsed: 'deepseek-chat',
-                temperatureUsed: genParams.temperature,
-                contentType: contentType || null,
-                trial: trialPayload,
-              }),
-              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
-          }
-        }
-      } catch (e) {
-        console.warn("🎯 Text Generator: DeepSeek fallback threw:", e);
       }
     }
 

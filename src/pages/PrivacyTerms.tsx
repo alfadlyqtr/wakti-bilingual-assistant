@@ -191,15 +191,6 @@ export default function PrivacyTerms() {
                           : ["Voice transcription & summaries", "Text-to-speech (TTS)", "Summaries generation"],
                       },
                       {
-                        emoji: "⚡",
-                        name: "DeepSeek",
-                        color: "from-blue-500/10 to-indigo-500/10 border-blue-500/20",
-                        badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
-                        uses: language === 'ar'
-                          ? ["تحسين النصوص (AMP)"]
-                          : ["Text enhancement (AMP)"],
-                      },
-                      {
                         emoji: "✨",
                         name: "Google Gemini",
                         color: "from-amber-500/10 to-orange-500/10 border-amber-500/20",

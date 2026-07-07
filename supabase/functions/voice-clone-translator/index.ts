@@ -13,12 +13,12 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
-const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_GENAI_API_KEY');
 
 console.log("🌐 VOICE CLONE TRANSLATOR: Function loaded");
 console.log("🌐 Gemini API Key available:", !!GEMINI_API_KEY);
-console.log("🌐 DeepSeek API Key available:", !!DEEPSEEK_API_KEY);
+console.log("🌐 OpenAI API Key available:", !!OPENAI_API_KEY);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -33,7 +33,7 @@ serve(async (req) => {
     console.log('🌐 === Translation Request Started ===');
     
     // Check if at least one API key is available
-    if (!GEMINI_API_KEY && !DEEPSEEK_API_KEY) {
+    if (!GEMINI_API_KEY && !OPENAI_API_KEY) {
       console.error('🌐 No translation API key found in environment');
       return new Response(JSON.stringify({
         success: false,
@@ -129,18 +129,18 @@ serve(async (req) => {
       }
     }
 
-    // Fallback to DeepSeek if Gemini failed or unavailable
-    if (!translatedText && DEEPSEEK_API_KEY) {
+    // Fallback to OpenAI if Gemini failed or unavailable
+    if (!translatedText && OPENAI_API_KEY) {
       try {
-        console.log('🌐 Falling back to DeepSeek API...');
-        const deepSeekResponse = await fetch('https://api.deepseek.com/chat/completions', {
+        console.log('🌐 Falling back to OpenAI API...');
+        const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+            'Authorization': `Bearer ${OPENAI_API_KEY}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: 'deepseek-chat',
+            model: 'gpt-4o-mini',
             messages: [
               { role: 'system', content: systemPrompt },
               { role: 'user', content: translationPrompt }
@@ -151,30 +151,30 @@ serve(async (req) => {
           }),
         });
 
-        console.log(`🌐 DeepSeek API response status: ${deepSeekResponse.status}`);
+        console.log(`🌐 OpenAI API response status: ${openaiResponse.status}`);
 
-        if (!deepSeekResponse.ok) {
-          const errorText = await deepSeekResponse.text();
-          console.error('🌐 DeepSeek API error:', {
-            status: deepSeekResponse.status,
-            statusText: deepSeekResponse.statusText,
+        if (!openaiResponse.ok) {
+          const errorText = await openaiResponse.text();
+          console.error('🌐 OpenAI API error:', {
+            status: openaiResponse.status,
+            statusText: openaiResponse.statusText,
             error: errorText
           });
-          throw new Error(`DeepSeek API error: ${deepSeekResponse.status} - ${errorText}`);
+          throw new Error(`OpenAI API error: ${openaiResponse.status} - ${errorText}`);
         }
 
-        const result = await deepSeekResponse.json();
-        console.log('🌐 DeepSeek API response received:', {
+        const result = await openaiResponse.json();
+        console.log('🌐 OpenAI API response received:', {
           hasChoices: !!result.choices,
           choicesLength: result.choices?.length || 0
         });
 
         translatedText = result.choices?.[0]?.message?.content?.trim();
         if (translatedText) {
-          console.log('🌐 DeepSeek translation successful:', { translatedLength: translatedText.length });
+          console.log('🌐 OpenAI translation successful:', { translatedLength: translatedText.length });
         }
-      } catch (deepseekError) {
-        console.error('🌐 DeepSeek translation failed:', deepseekError);
+      } catch (openaiError) {
+        console.error('🌐 OpenAI translation failed:', openaiError);
       }
     }
 

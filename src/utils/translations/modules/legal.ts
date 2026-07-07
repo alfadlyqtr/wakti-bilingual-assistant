@@ -26,7 +26,7 @@ export const legal = {
   section2_1Text: "• Your account data: username, name, email, profile picture\n• Your activity: tasks, events, messages, voice recordings, summaries\n• Technical data: device info, app usage, crash logs\n• Temporary content (like audio files) for AI processing",
 
   section2_2Title: "2.2 How It's Used",
-  section2_2Text: "• To operate and personalize your WAKTI experience\n• To process AI features like transcription, summarization, or image generation\n• To monitor app health, ensure legal usage, and improve service\n• For integration and service delivery via third-party providers, including but not limited to OpenAI, DeepSeek, Google Gemini, Claude (Anthropic), Runware, and Supabase",
+  section2_2Text: "• To operate and personalize your WAKTI experience\n• To process AI features like transcription, summarization, or image generation\n• To monitor app health, ensure legal usage, and improve service\n• For integration and service delivery via third-party providers, including but not limited to OpenAI, Google Gemini, Claude (Anthropic), Runware, and Supabase",
 
   section2_3Title: "2.3 Third-Party Data Sharing",
   section2_3Text: "To deliver WAKTI's features, we use carefully selected third-party AI providers.",

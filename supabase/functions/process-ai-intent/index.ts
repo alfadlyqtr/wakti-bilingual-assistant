@@ -7,10 +7,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
-const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-console.log("🎯 TASK CREATION ROUTER: Restored DeepSeek-powered task parsing");
+console.log("🎯 TASK CREATION ROUTER: OpenAI-powered task parsing");
 
 serve(async (req) => {
   // Handle CORS
@@ -140,7 +139,7 @@ serve(async (req) => {
     }
     
     if (isExplicitTaskRequest || isExplicitReminderRequest) {
-      console.log("🎯 EXPLICIT REQUEST DETECTED: Using DeepSeek for structured parsing");
+      console.log("🎯 EXPLICIT REQUEST DETECTED: Using OpenAI for structured parsing");
       
       const taskAnalysis = await analyzeTaskCreationIntent(text);
       
@@ -236,67 +235,34 @@ serve(async (req) => {
     }
 
     // PHASE 2 FIX: Only process with AI if no explicit task/reminder request detected
-    console.log("💬 GENERAL CHAT: Processing with DeepSeek for general responses");
+    console.log("💬 GENERAL CHAT: Processing with OpenAI for general responses");
 
-    let result;
-    try {
-      if (!DEEPSEEK_API_KEY) {
-        throw new Error("DeepSeek API key not configured");
-      }
-      
-      console.log("🤖 CALLING DEEPSEEK API");
-      const deepseekResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "deepseek-chat",
-          messages: [
-            { role: "system", content: getSystemPrompt(mode || "general") },
-            { role: "user", content: text }
-          ],
-          temperature: 0.7,
-        }),
-      });
+    if (!OPENAI_API_KEY) {
+      throw new Error("OpenAI API key not configured");
+    }
 
-      result = await deepseekResponse.json();
-      console.log("DeepSeek response status:", deepseekResponse.status);
+    console.log("🤖 CALLING OPENAI API");
+    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: getSystemPrompt(mode || "general") },
+          { role: "user", content: text }
+        ],
+        temperature: 0.7,
+      }),
+    });
 
-      if (!deepseekResponse.ok) {
-        throw new Error(`DeepSeek API failed: ${JSON.stringify(result)}`);
-      }
-    } catch (error) {
-      console.log("DeepSeek API failed, falling back to OpenAI:", error.message);
-      
-      if (!OPENAI_API_KEY) {
-        throw new Error("OpenAI API key not configured for fallback");
-      }
-      
-      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: getSystemPrompt(mode || "general") },
-            { role: "user", content: text }
-          ],
-          temperature: 0.7,
-        }),
-      });
+    const result = await openaiResponse.json();
+    console.log("OpenAI response status:", openaiResponse.status);
 
-      result = await openaiResponse.json();
-      
-      if (!openaiResponse.ok) {
-        throw new Error(`Both DeepSeek and OpenAI APIs failed: ${JSON.stringify(result)}`);
-      }
-      
-      console.log("OpenAI fallback successful");
+    if (!openaiResponse.ok) {
+      throw new Error(`OpenAI API failed: ${JSON.stringify(result)}`);
     }
 
     const responseContent = result.choices[0].message?.content || "";
@@ -304,8 +270,8 @@ serve(async (req) => {
     // Log successful AI usage
     await logAIFromRequest(req, {
       functionName: "process-ai-intent",
-      provider: "deepseek",
-      model: "deepseek-chat",
+      provider: "openai",
+      model: "gpt-4o-mini",
       inputText: text,
       outputText: responseContent,
       status: "success"
@@ -326,8 +292,8 @@ serve(async (req) => {
     // Log failed AI usage
     await logAIFromRequest(req, {
       functionName: "process-ai-intent",
-      provider: "deepseek",
-      model: "deepseek-chat",
+      provider: "openai",
+      model: "gpt-4o-mini",
       status: "error",
       errorMessage: (error as Error).message
     });
@@ -342,12 +308,12 @@ serve(async (req) => {
   }
 });
 
-// PHASE 2 FIX: Enhanced task analysis using DeepSeek
+// PHASE 2 FIX: Enhanced task analysis using OpenAI
 async function analyzeTaskCreationIntent(text: string) {
-  console.log("🎯 DEEPSEEK TASK ANALYSIS: Parsing task details");
+  console.log("🎯 OPENAI TASK ANALYSIS: Parsing task details");
   
-  if (!DEEPSEEK_API_KEY) {
-    console.error("❌ DEEPSEEK API KEY missing");
+  if (!OPENAI_API_KEY) {
+    console.error("❌ OPENAI API KEY missing");
     return { isTask: false, taskData: null };
   }
 
@@ -378,24 +344,25 @@ Rules:
 - Parse dates/times if mentioned
 - Keep titles concise but descriptive`;
 
-    const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are a task analysis expert. Always respond with valid JSON." },
           { role: "user", content: analysisPrompt }
         ],
         temperature: 0.1,
+        response_format: { type: "json_object" },
       }),
     });
 
     if (!response.ok) {
-      throw new Error(`DeepSeek analysis failed: ${response.status}`);
+      throw new Error(`OpenAI analysis failed: ${response.status}`);
     }
 
     const result = await response.json();
@@ -403,15 +370,15 @@ Rules:
     
     try {
       const analysis = JSON.parse(analysisText);
-      console.log("✅ DEEPSEEK ANALYSIS RESULT:", analysis);
+      console.log("✅ OPENAI ANALYSIS RESULT:", analysis);
       return analysis;
     } catch (parseError) {
-      console.error("❌ FAILED TO PARSE DEEPSEEK ANALYSIS:", analysisText);
+      console.error("❌ FAILED TO PARSE OPENAI ANALYSIS:", analysisText);
       return { isTask: false, taskData: null };
     }
     
   } catch (error) {
-    console.error("❌ DEEPSEEK TASK ANALYSIS ERROR:", error);
+    console.error("❌ OPENAI TASK ANALYSIS ERROR:", error);
     return { isTask: false, taskData: null };
   }
 }
