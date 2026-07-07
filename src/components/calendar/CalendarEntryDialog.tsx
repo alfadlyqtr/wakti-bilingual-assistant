@@ -102,14 +102,14 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
   
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-[450px]">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90dvh] w-[calc(100vw-1rem)] max-w-[450px] flex-col gap-0 overflow-hidden p-0 sm:w-full">
+        <DialogHeader className="border-b px-4 pb-3 pt-4">
           <DialogTitle>
             {entry ? t("editNote", language) : t("createNote", language)}
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
+        <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {error && (
             <div className="text-sm font-medium text-destructive">
               {error}
@@ -123,7 +123,10 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
             <Input
               id="title"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder={t("titlePlaceholder", language)}
               className="w-full"
             />
@@ -137,7 +140,10 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
               <Calendar
                 mode="single"
                 selected={date}
-                onSelect={setDate}
+                onSelect={(nextDate) => {
+                  setDate(nextDate);
+                  if (nextDate) setError(null);
+                }}
                 className="pointer-events-auto"
                 initialFocus
               />
@@ -152,7 +158,10 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
               id="time"
               type="time"
               value={time}
-              onChange={(e) => setTime(e.target.value)}
+              onChange={(e) => {
+                setTime(e.target.value);
+                if (error) setError(null);
+              }}
               className="w-full"
             />
           </div>
@@ -164,26 +173,29 @@ export const CalendarEntryDialog: React.FC<CalendarEntryDialogProps> = ({
             <Textarea
               id="description"
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={(e) => {
+                setDescription(e.target.value);
+                if (error) setError(null);
+              }}
               placeholder={t("descriptionPlaceholder", language)}
               className="min-h-[80px]"
             />
           </div>
         </div>
         
-        <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
-          <div className="flex gap-2">
+        <DialogFooter className="gap-2 border-t bg-background px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 sm:justify-between">
+          <div className="flex gap-2 sm:flex-1">
             {entry && onDelete && (
-              <Button variant="destructive" onClick={handleDelete}>
+              <Button type="button" variant="destructive" onClick={handleDelete}>
                 {t("delete", language)}
               </Button>
             )}
           </div>
-          <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={onClose}>
+          <div className="flex w-full gap-2 sm:w-auto sm:justify-end">
+            <Button type="button" variant="outline" onClick={onClose} className="flex-1 sm:flex-none">
               {t("cancel", language)}
             </Button>
-            <Button onClick={handleSave}>
+            <Button type="button" onClick={handleSave} className="flex-1 sm:flex-none">
               {t("save", language)}
             </Button>
           </div>

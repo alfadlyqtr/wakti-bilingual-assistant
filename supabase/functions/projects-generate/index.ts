@@ -101,7 +101,11 @@ import {
   // 🧪 UPGRADE #3: Smoke-Test Runner
   runSmokeTests,
   type SmokeTestResult,
-  type SmokeTestItem
+  type SmokeTestItem,
+  // 🔗 Dead button/link checker
+  detectFakeInteractiveElements,
+  formatFakeElementNote,
+  type FakeElementFinding
 } from "./agentTools.ts";
 
 // ============================================================================
@@ -7330,10 +7334,23 @@ This is a HARD REQUIREMENT - the system will reject task_complete if no explorat
         console.warn(`[Agent Mode] 🧪 Smoke test FAILED: ${smokeTestResult.criticalErrors.join(', ')}`);
         resultWarnings.push(...smokeTestResult.criticalErrors);
       }
-      
+
+      // 🔗 Dead button/link checker — never blocks, just discloses in the final chat message
+      const agentFakeElements: FakeElementFinding[] = [];
+      for (const filePath of filesEdited) {
+        const content = allFilesCache[filePath];
+        if (content) agentFakeElements.push(...detectFakeInteractiveElements(content, filePath));
+      }
+      const agentFakeElementNote = formatFakeElementNote(agentFakeElements);
+
+      let agentSummary = taskCompleteResult?.summary || `Agent completed after ${toolCallsLog.length} tool calls`;
+      if (agentFakeElementNote) {
+        agentSummary = `${agentSummary} | ${agentFakeElementNote}`;
+      }
+
       const result: AgentResult = {
         success: true,
-        summary: taskCompleteResult?.summary || `Agent completed after ${toolCallsLog.length} tool calls`,
+        summary: agentSummary,
         filesChanged: verifiedPersistedFilesChanged.length > 0
           ? verifiedPersistedFilesChanged
           : (taskCompleteResult?.filesChanged || [...new Set(filesChanged)]),
@@ -8365,6 +8382,17 @@ Return ONLY the JSON object. No explanation.`;
         }
         }
 
+        // 🔗 Dead button/link checker — never blocks, just discloses in the final chat message
+        const createFakeElements: FakeElementFinding[] = [];
+        for (const [path, content] of Object.entries(files)) {
+          createFakeElements.push(...detectFakeInteractiveElements(content, path));
+        }
+        const createFakeElementNote = formatFakeElementNote(createFakeElements);
+        if (createFakeElementNote) {
+          finalSummary = `${finalSummary} | ${createFakeElementNote}`;
+          createRecoveredSummary = createRecoveredSummary ? `${createRecoveredSummary} | ${createFakeElementNote}` : createRecoveredSummary;
+        }
+
         stopHeartbeat();
         await updateJob(supabase, job.id, { status: 'succeeded', result_summary: createRecoveredSummary || finalSummary, error: null });
         return; // Worker done - job status updated in DB
@@ -8439,6 +8467,16 @@ Return ONLY the JSON object. No explanation.`;
         console.warn(formatThemeWarnings(editThemeWarnings));
         const themeSummary = `🎨 ${editThemeWarnings.length} hardcoded color${editThemeWarnings.length === 1 ? '' : 's'} outside :root`;
         result.summary = result.summary ? `${result.summary} | ${themeSummary}` : themeSummary;
+      }
+
+      // 🔗 Dead button/link checker — never blocks, just discloses in the final chat message
+      const editFakeElements: FakeElementFinding[] = [];
+      for (const [path, content] of Object.entries(finalFilesToUpsert)) {
+        editFakeElements.push(...detectFakeInteractiveElements(content, path));
+      }
+      const editFakeElementNote = formatFakeElementNote(editFakeElements);
+      if (editFakeElementNote) {
+        result.summary = result.summary ? `${result.summary} | ${editFakeElementNote}` : editFakeElementNote;
       }
 
       // Inject project ID into backend API calls (catches multiple placeholder patterns)

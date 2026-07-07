@@ -2,34 +2,33 @@
 
 ## Overview
 
-WAKTI offers a **simple, no-code backend** for user projects. This backend is powered by Supabase Edge Functions and provides:
+WAKTI offers a **simple, no-code backend** for user projects. This backend is powered by a single Supabase Edge Function (`project-backend-api`) and provides:
 
-1. **Form Submissions** - Receive contact forms, newsletters, feedback
-2. **Collections** - Store dynamic data like products, blog posts, testimonials
-3. **File Uploads** - Upload images, PDFs, documents (50MB limit per project)
-4. **Site Users** - Simple user authentication for published sites
+1. **Form Submissions** - Contact forms, newsletters, feedback (auto-creates a booking if the form looks like a booking form)
+2. **Collections** - Dynamic data storage like products, blog posts, testimonials (mini-CMS)
+3. **File Uploads** - Images, PDFs, documents (per-project storage limit)
+4. **Site Users** - Simple email/password authentication for published sites (SHA-256 hashed passwords, 7-day tokens)
+5. **Roles & Permissions** - Assign/check roles for site users (owner/admin/custom + permission list)
+6. **Cart & Orders** - Shopping cart persistence and order creation/list/update, with automatic inventory decrement
+7. **Inventory** - Stock tracking, low-stock threshold checks, manual adjust/set
+8. **Bookings** - Appointment/reservation booking with double-booking conflict checks, synced to the owner's WAKTI calendar (`project_calendar_entries`)
+9. **Chat** - Simple chat rooms and messages between site users and the owner
+10. **Comments** - Threaded comments on any item (blog post, product, etc.)
+11. **Notifications + Real-time Push** - Every booking, order, contact form submission, and comment automatically creates a notification for the project owner AND sends a real-time push notification via OneSignal to their phone
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    WAKTI Project Backend                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │   Uploads    │  │    Inbox     │  │    Data      │       │
-│  │  (Storage)   │  │ (Form Subs)  │  │ (Collections)│       │
-│  └──────────────┘  └──────────────┘  └──────────────┘       │
-│                                                              │
-│  ┌──────────────┐                                            │
-│  │    Users     │                                            │
-│  │ (Site Auth)  │                                            │
-│  └──────────────┘                                            │
-│                                                              │
-├─────────────────────────────────────────────────────────────┤
-│            Edge Function: project-backend-api                │
-│            Storage Bucket: project-uploads                   │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│                      WAKTI Project Backend                        │
+├───────────────────────────────────────────────────────────────────┤
+│  Uploads   Inbox(Forms)   Data(Collections)   Users(Site Auth)    │
+│  Cart/Orders   Inventory   Bookings   Chat   Comments   Roles     │
+├───────────────────────────────────────────────────────────────────┤
+│            Edge Function: project-backend-api                     │
+│            Storage Bucket: project-uploads                        │
+│            Push: OneSignal (via createOwnerNotification)          │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ## Database Tables
@@ -83,12 +82,52 @@ Site visitor accounts (NOT WAKTI users).
 - `email` - User email (unique per project)
 - `password_hash` - SHA-256 hashed password
 - `display_name` - Optional display name
+- `role` - "owner" | "admin" | custom role string
+- `permissions` - JSON array of permission strings
 - `status` - "active" | "suspended"
 - `last_login` - Last login timestamp
 
+### 7. `project_carts` / `project_orders`
+Shopping cart and order records.
+- `project_orders`: `items`, `buyer_info`, `total_amount`, `status` (pending/etc.), `notes`, `site_user_id`, `session_id`
+
+### 8. `project_bookings`
+Appointment/reservation records, synced to the owner's WAKTI calendar.
+- `service_name`, `booking_date`, `start_time`, `end_time`, `duration`, `customer_info`, `status`, `calendar_entry_id`
+
+### 9. `project_calendar_entries`
+Calendar entries auto-created for bookings so they show up on the owner's WAKTI calendar.
+
+### 10. `project_chat_rooms` / `project_chat_messages`
+Simple chat between site users and the project owner.
+
+### 11. `project_comments`
+Threaded comments on any item.
+- `item_type`, `item_id`, `content`, `site_user_id`, `author_name`, `parent_id`
+
+### 12. `project_notifications`
+Owner-facing notifications, each mirrored to a real-time push via OneSignal.
+- `type` (booking/order/contact/comment/low_stock), `title`, `message`, `data`, `read`, `push_sent`, `onesignal_notification_id`
+
 ## Edge Function API
 
-**Endpoint:** `https://<project-ref>.supabase.co/functions/v1/project-backend-api`
+**Endpoint:** `https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api`
+
+All namespaced actions follow the pattern `"<namespace>/<action>"`, e.g. `"booking/create"`, `"cart/add"`, `"order/list"`.
+
+| Namespace | Actions |
+|---|---|
+| `collection/<name>` | GET / POST / PUT / DELETE (generic CRUD, auto-creates schema) |
+| `auth/` | `signup`, `login`, `me` |
+| `cart/` | `get`, `add`, `remove`, `update`, `clear` |
+| `order/` | `create`, `list`, `get`, `update` |
+| `inventory/` | `check`, `set`, `adjust` |
+| `booking/` | `check`, `create`, `list`, `update` |
+| `chat/` | `rooms`, `createRoom`, `messages`, `send` |
+| `comments/` | `list`, `add`, `delete` |
+| `roles/` | `assign`, `check`, `list` |
+| `notifications/` | `list`, `markRead` |
+| (top-level) | `submit` (contact form), `subscribe` (newsletter) |
 
 ### Form Submission
 ```javascript
@@ -205,14 +244,27 @@ All backend tables use Row Level Security with project ownership checks:
 2. **Inbox** - Form submissions with read/unread status
 3. **Data** - Collection manager with add/edit/delete modals
 4. **Users** - Site user management with suspend/activate
+5. **Orders** - Order list with status updates
+6. **Bookings** - Booking list synced with the owner's WAKTI calendar
+7. **Chat / Comments** - View and reply to site visitor messages and comments
+
+## Real-time Owner Notifications (Push)
+
+The following events automatically create a notification row AND send a real-time push notification to the project owner's phone via OneSignal (`createOwnerNotification` in `project-backend-api/index.ts`):
+
+- New booking
+- New order
+- New contact form submission (non-booking forms)
+- New comment
+- Low stock alert
 
 ## What WAKTI Backend Does NOT Provide
 
 - ❌ Email sending (requires external service like SendGrid)
 - ❌ Scheduled jobs/cron (not available in Supabase)
-- ❌ Webhooks (requires custom implementation)
-- ❌ SMS/Push notifications (requires external service)
-- ❌ Advanced authentication (OAuth, SSO, MFA)
+- ❌ Webhooks to external URLs (requires custom implementation)
+- ❌ Real payment processing (no Stripe/payment gateway integration - orders are recorded but not charged)
+- ❌ Advanced authentication (OAuth, SSO, MFA) - site users only support email/password
 
 ## Usage in AI Coder
 
@@ -222,7 +274,7 @@ When building projects in the AI Coder, the backend API can be called from the p
 // Example: Submit contact form
 async function submitContactForm(data) {
   const response = await fetch(
-    'https://bphomzehvaubsxmafvxf.supabase.co/functions/v1/project-backend-api',
+    'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api',
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -240,7 +292,7 @@ async function submitContactForm(data) {
 // Example: Fetch products
 async function getProducts() {
   const response = await fetch(
-    'https://bphomzehvaubsxmafvxf.supabase.co/functions/v1/project-backend-api' +
+    'https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api' +
     '?projectId=YOUR_PROJECT_ID&action=collection/products'
   );
   return response.json();

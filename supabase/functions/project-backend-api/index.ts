@@ -1360,6 +1360,21 @@ async function handleComments(action: string, projectId: string, ownerId: string
         .single();
 
       if (error) throw new Error('Failed to add comment');
+
+      try {
+        const preview = String(content).slice(0, 80);
+        await createOwnerNotification(
+          projectId,
+          ownerId,
+          'comment',
+          'New Comment',
+          `${authorName || 'Someone'}: "${preview}${String(content).length > 80 ? '...' : ''}"`,
+          { commentId: comment.id, itemType, itemId }
+        );
+      } catch (notifyErr) {
+        console.error('[project-backend-api] Failed to create comment notification:', notifyErr);
+      }
+
       return { comment };
     }
 

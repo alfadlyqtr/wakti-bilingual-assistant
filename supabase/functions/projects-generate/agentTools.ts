@@ -4603,6 +4603,59 @@ export interface SmokeTestItem {
   message?: string;
 }
 
+// ============================================================================
+// 🔗 Dead button/link checker — detects common "fake" interactive elements
+// (empty click handlers, placeholder hrefs, media tags with no source).
+// Heuristic only: catches the obvious/common fake patterns, not everything.
+// ============================================================================
+
+export interface FakeElementFinding {
+  file: string;
+  issue: string;
+}
+
+const HREF_PLACEHOLDER_REGEX = /href\s*=\s*(["'])\s*#?\s*\1/g;
+const EMPTY_ONCLICK_REGEX = /onClick\s*=\s*\{\s*\(\s*\)\s*=>\s*\{\s*\}\s*\}/g;
+const EMPTY_MEDIA_SRC_TAG_REGEX = /<(video|audio|iframe)\b[^>]*>/gi;
+
+export function detectFakeInteractiveElements(content: string, filePath: string): FakeElementFinding[] {
+  const findings: FakeElementFinding[] = [];
+  const fileName = filePath.split('/').pop() || filePath;
+
+  const hrefMatches = content.match(HREF_PLACEHOLDER_REGEX) || [];
+  for (const _m of hrefMatches) {
+    findings.push({ file: fileName, issue: 'a link with no real destination (empty or "#" href)' });
+  }
+
+  const onClickMatches = content.match(EMPTY_ONCLICK_REGEX) || [];
+  for (const _m of onClickMatches) {
+    findings.push({ file: fileName, issue: 'a button with an empty click handler (does nothing)' });
+  }
+
+  let tagMatch: RegExpExecArray | null;
+  EMPTY_MEDIA_SRC_TAG_REGEX.lastIndex = 0;
+  while ((tagMatch = EMPTY_MEDIA_SRC_TAG_REGEX.exec(content)) !== null) {
+    const tagText = tagMatch[0];
+    if (!/\bsrc\s*=/i.test(tagText)) {
+      findings.push({ file: fileName, issue: `a <${tagMatch[1]}> tag with no source` });
+    }
+  }
+
+  return findings;
+}
+
+/**
+ * Build a short, plain-English note for the chat summary about placeholder
+ * interactive elements found across all final files. Never blocks generation
+ * — this is disclosure only, shown to the user after the build completes.
+ */
+export function formatFakeElementNote(findings: FakeElementFinding[]): string | null {
+  if (findings.length === 0) return null;
+  const shown = findings.slice(0, 5).map((f) => `${f.file} — ${f.issue}`).join('; ');
+  const extra = findings.length > 5 ? ` (+${findings.length - 5} more)` : '';
+  return `⚠️ Placeholder notice: I left ${findings.length} interactive element${findings.length === 1 ? '' : 's'} unwired because I didn't have real info for them — ${shown}${extra}. Tell me the real link/detail and I'll wire it up.`;
+}
+
 /**
  * Run quick smoke tests on changed files
  * Catches obvious errors before user sees them
@@ -4674,6 +4727,19 @@ export function runSmokeTests(
     // Test 5: No console.log in production (warning only)
     if (content.includes('console.log(')) {
       warnings.push(`${fileName}: Contains console.log statements`);
+    }
+
+    // Test 6: Fake/dead interactive elements (warning only — never blocks)
+    const fakeElements = detectFakeInteractiveElements(content, filePath);
+    tests.push({
+      name: `${fileName}: Real interactive elements`,
+      passed: fakeElements.length === 0,
+      message: fakeElements.length > 0
+        ? fakeElements.map((f) => f.issue).join('; ')
+        : undefined
+    });
+    for (const f of fakeElements) {
+      warnings.push(`${fileName}: ${f.issue}`);
     }
   }
   
