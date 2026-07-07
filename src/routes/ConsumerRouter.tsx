@@ -95,6 +95,7 @@ const DeenHadith = lazyRetry(() => import("@/pages/DeenHadith"));
 const DeenAsk = lazyRetry(() => import("@/pages/DeenAsk"));
 const DeenStudy = lazyRetry(() => import("@/pages/DeenStudy"));
 const DeenAzkar = lazyRetry(() => import("@/pages/DeenAzkar"));
+const DeenPrayerTimes = lazyRetry(() => import("@/pages/DeenPrayerTimes"));
 
 function PageFallback() {
   return (
@@ -247,6 +248,7 @@ export default function ConsumerRouter() {
           <Route path="/deen/ask" element={<DeenAsk />} />
           <Route path="/deen/study" element={<DeenStudy />} />
           <Route path="/deen/azkar" element={<DeenAzkar />} />
+          <Route path="/deen/prayer-times" element={<DeenPrayerTimes />} />
         </Route>
 
         {/* ── Preview & slug routes ──────────────────────────────────────── */}

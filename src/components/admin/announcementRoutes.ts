@@ -40,6 +40,7 @@ export const APP_ROUTES: AppRouteOption[] = [
   { path: '/deen/ask',        label: 'Deen · Ask Imam',     group: 'Deen' },
   { path: '/deen/study',      label: 'Deen · Study',        group: 'Deen' },
   { path: '/deen/azkar',      label: 'Deen · Azkar',        group: 'Deen' },
+  { path: '/deen/prayer-times', label: 'Deen · Prayer Times', group: 'Deen' },
 
   // Health
   { path: '/fitness',         label: 'Fitness / Vitality',  group: 'Health' },

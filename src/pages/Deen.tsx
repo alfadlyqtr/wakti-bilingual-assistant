@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { BookOpen, MessageCircle, Brain, ChevronRight, Star, Calendar, Moon, HandHeart } from "lucide-react";
+import { BookOpen, MessageCircle, Brain, ChevronRight, Star, Calendar, Moon, HandHeart, Clock3 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { useState, useEffect } from "react";
 import { usePrayerTimes, formatCountdown } from "@/hooks/usePrayerTimes";
@@ -47,6 +47,7 @@ const tabs = [
   { id: "ask", labelEn: "Ask", labelAr: "اسأل", path: "/deen/ask", gradient: "from-purple-500 to-violet-600", glow: "hsla(280,70%,65%,0.5)", icon: MessageCircle, descEn: "Ask Anything", descAr: "اسأل عن أي شيء" },
   { id: "study", labelEn: "Study", labelAr: "حفظ", path: "/deen/study", gradient: "from-amber-500 to-orange-600", glow: "hsla(45,100%,60%,0.5)", icon: Brain, descEn: "Memorize", descAr: "احفظ وخطّط" },
   { id: "azkar", labelEn: "Adhkar", labelAr: "الأذكار", path: "/deen/azkar", gradient: "from-teal-500 to-green-600", glow: "hsla(160,80%,55%,0.5)", icon: HandHeart, descEn: "Du'a & Dhikr", descAr: "أذكار وأدعية" },
+  { id: "prayer-times", labelEn: "Prayer Times", labelAr: "مواقيت الصلاة", path: "/deen/prayer-times", gradient: "from-cyan-500 to-sky-600", glow: "hsla(180,85%,60%,0.5)", icon: Clock3, descEn: "Today's Salah", descAr: "صلوات اليوم" },
 ];
 
 export default function Deen() {
