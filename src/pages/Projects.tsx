@@ -131,7 +131,27 @@ const buildFallbackContextForm = (
     };
   }
 
-  if (/shop|store|e-?commerce|abaya|fashion|boutique|clothing|متجر|عباية|أزياء|ملابس/.test(prompt)) {
+  // Booking/appointment intent is checked FIRST and is a strong, specific signal.
+  // This must run before the shop/store check below, otherwise a word like
+  // "Barbershop" (which contains the substring "shop") gets misclassified as
+  // an online store instead of a booking business.
+  if (/\b(booking|appointment|salon|spa|clinic|barber(?:shop)?)\b|service|حجز|موعد|صالون|سبا|عيادة|خدمة/.test(prompt)) {
+    return {
+      siteType: isRTL ? 'خدمات وحجوزات' : 'Bookings',
+      heading: isRTL ? 'أخبرنا عن نشاطك' : 'Tell us about your business',
+      fields: [
+        { id: 'business_name', label: isRTL ? 'اسم النشاط' : 'Business Name', placeholder: isRTL ? 'استوديو ليا' : 'Lia Studio', type: 'text' },
+        { id: 'specialty', label: isRTL ? 'التخصص' : 'Specialty', placeholder: isRTL ? 'عناية وجمال' : 'Beauty & wellness', type: 'text' },
+        { id: 'phone_number', label: isRTL ? 'الهاتف' : 'Phone', placeholder: isRTL ? '+974 6666 6666' : '+974 6666 6666', type: 'tel' },
+        { id: 'location', label: isRTL ? 'الموقع' : 'Location', placeholder: isRTL ? 'لوسيل، قطر' : 'Lusail, Qatar', type: 'text' },
+        { id: 'business_description', label: isRTL ? 'وصف النشاط' : 'Description', placeholder: isRTL ? 'خدمات راقية بمواعيد سهلة وسريعة' : 'Premium services with a smooth booking experience', type: 'textarea' },
+      ],
+    };
+  }
+
+  // \b word boundaries prevent generic words from false-matching inside unrelated words
+  // (e.g. "products" or "shop" appearing as a substring of another word/phrase).
+  if (/\b(shop|store|e-?commerce|abaya|fashion|boutique|clothing)\b|متجر|عباية|أزياء|ملابس/.test(prompt)) {
     return {
       siteType: isRTL ? 'متجر إلكتروني' : 'Online Store',
       heading: isRTL ? 'أخبرنا عن متجرك' : 'Tell us about your store',
@@ -156,20 +176,6 @@ const buildFallbackContextForm = (
         { id: 'phone_number', label: isRTL ? 'الهاتف' : 'Phone', placeholder: isRTL ? '+974 4444 4444' : '+974 4444 4444', type: 'tel' },
         { id: 'address', label: isRTL ? 'العنوان' : 'Address', placeholder: isRTL ? 'الدوحة، قطر' : 'Doha, Qatar', type: 'text' },
         { id: 'brand_story', label: isRTL ? 'القصة' : 'Story', placeholder: isRTL ? 'مطعم دافئ يجمع بين النكهات المحلية والتجربة الحديثة' : 'A warm dining concept blending local flavors with a modern experience', type: 'textarea' },
-      ],
-    };
-  }
-
-  if (/booking|appointment|salon|spa|clinic|service|حجز|موعد|صالون|سبا|عيادة|خدمة/.test(prompt)) {
-    return {
-      siteType: isRTL ? 'خدمات وحجوزات' : 'Bookings',
-      heading: isRTL ? 'أخبرنا عن نشاطك' : 'Tell us about your business',
-      fields: [
-        { id: 'business_name', label: isRTL ? 'اسم النشاط' : 'Business Name', placeholder: isRTL ? 'استوديو ليا' : 'Lia Studio', type: 'text' },
-        { id: 'specialty', label: isRTL ? 'التخصص' : 'Specialty', placeholder: isRTL ? 'عناية وجمال' : 'Beauty & wellness', type: 'text' },
-        { id: 'phone_number', label: isRTL ? 'الهاتف' : 'Phone', placeholder: isRTL ? '+974 6666 6666' : '+974 6666 6666', type: 'tel' },
-        { id: 'location', label: isRTL ? 'الموقع' : 'Location', placeholder: isRTL ? 'لوسيل، قطر' : 'Lusail, Qatar', type: 'text' },
-        { id: 'business_description', label: isRTL ? 'وصف النشاط' : 'Description', placeholder: isRTL ? 'خدمات راقية بمواعيد سهلة وسريعة' : 'Premium services with a smooth booking experience', type: 'textarea' },
       ],
     };
   }

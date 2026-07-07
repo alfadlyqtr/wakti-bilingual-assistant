@@ -8306,7 +8306,16 @@ Return ONLY the JSON object. No explanation.`;
         );
 
         try {
-          const polishPrompt = `${prompt}\n\nThe working first draft is already saved. Upgrade it into a premium final version without breaking the runtime entry, routing, backend wiring, or any working section. Improve hierarchy, composition, visual rhythm, CTA clarity, spacing, premium feel, and first impression. Keep all existing working functionality intact.`;
+          // 🔧 FIX: The draft prompt included the pre-generated image section map
+          // (imageSectionMapBlock) so the AI knew which real image URL to place in
+          // which section. This polish prompt is a SEPARATE full-rewrite call — if it
+          // doesn't repeat that map, the AI has no memory of the images and can drop
+          // or replace them while rewriting sections, wasting images that were already
+          // generated and paid for.
+          const polishImageReminder = preFetchedImages.length > 0
+            ? `${imageSectionMapBlock}\n\n⚠️ These images are ALREADY placed in the current draft — KEEP every one of them in its section exactly as-is. Do not remove, replace, or leave any of them unused while polishing.`
+            : '';
+          const polishPrompt = `${prompt}\n\nThe working first draft is already saved. Upgrade it into a premium final version without breaking the runtime entry, routing, backend wiring, or any working section. Improve hierarchy, composition, visual rhythm, CTA clarity, spacing, premium feel, and first impression. Keep all existing working functionality intact.${polishImageReminder}`;
           const polishResult = await callGeminiFullRewriteEdit(
             polishPrompt,
             files,

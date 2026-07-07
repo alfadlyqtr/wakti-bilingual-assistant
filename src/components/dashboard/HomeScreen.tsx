@@ -62,12 +62,21 @@ import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteS
 import { getTodayHealthSummary, getSleepAnalysis, isHealthKitSDKAvailable } from "@/integrations/natively/healthkitBridge";
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
+import { useOptimizedCalendarData } from "@/hooks/useOptimizedCalendarData";
 import { useWhoopData } from "@/hooks/useWhoopData";
 import { useJournalData } from "@/hooks/useJournalData";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { EntryType } from "@/utils/calendarUtils";
 import { SavedImagesPicker } from "@/components/dashboard/SavedImagesPicker";
 import { toast } from "sonner";
 import { getScopedStorageItem, migrateLegacyScopedStorage, removeScopedStorageItem, setActiveScopedUserId, setScopedStorageItem } from "@/utils/userScopedStorage";
+
+const HOME_WIDGET_CALENDAR_TYPES = new Set([
+  EntryType.MANUAL_NOTE,
+  EntryType.MAW3D_EVENT,
+  EntryType.TASK,
+  EntryType.REMINDER,
+]);
 
  // ─── App definitions ──────────────────────────────────────────────────────────
  const ALL_APPS = [
@@ -2672,10 +2681,13 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
 
   const { tasks, reminders }  = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
+  const { entries: calendarEntries } = useOptimizedCalendarData();
   const whoopData = useWhoopData();
   const journalData = useJournalData();
   const pendingTasks  = tasks.filter(t => !t.completed).length;
   const now = new Date();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
   const overdueRemindersCount = reminders.filter(r => {
     const due = new Date(r.due_date);
     if (r.due_time) {
@@ -2685,8 +2697,16 @@ export function HomeScreen({ displayName }: HomeScreenProps) {
     if (r.snoozed_until && new Date(r.snoozed_until) > now) return false;
     return due <= now;
   }).length;
-  const upcomingCount = maw3dEvents.filter(e => {
-    try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
+  const upcomingCount = calendarEntries.filter(entry => {
+    try {
+      if (!HOME_WIDGET_CALENDAR_TYPES.has(entry.type)) return false;
+      const entryDate = new Date(entry.date);
+      if (Number.isNaN(entryDate.getTime())) return false;
+      entryDate.setHours(0, 0, 0, 0);
+      return entryDate >= todayStart;
+    } catch {
+      return false;
+    }
   }).length;
 
   const [hsWidgets, setHsWidgets] = useState(() => {

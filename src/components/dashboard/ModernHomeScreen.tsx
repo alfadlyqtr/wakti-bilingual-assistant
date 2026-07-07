@@ -42,12 +42,14 @@ import { useTheme } from "@/providers/ThemeProvider";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useOptimizedTRData } from "@/hooks/useOptimizedTRData";
 import { useOptimizedMaw3dEvents } from "@/hooks/useOptimizedMaw3dEvents";
+import { useOptimizedCalendarData } from "@/hooks/useOptimizedCalendarData";
 import { useWhoopData } from "@/hooks/useWhoopData";
 import { useJournalData } from "@/hooks/useJournalData";
 import { getTodayHealthSummary, getSleepAnalysis } from "@/integrations/natively/healthkitBridge";
 import { getScopedStorageItem, setScopedStorageItem } from "@/utils/userScopedStorage";
 import { getQuoteForDisplay, getQuoteText, getQuoteAuthor } from "@/utils/quoteService";
 import { onEvent } from "@/utils/eventBus";
+import { EntryType } from "@/utils/calendarUtils";
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel";
 import { cn } from "@/lib/utils";
 import { WaktiIcon } from "@/components/icons/WaktiIcon";
@@ -93,6 +95,13 @@ const DEFAULT_MODERN_WIDGET_SETTINGS: ModernWidgetSettings = {
   showJournalWidget: true,
   showQuoteWidget: true,
 };
+
+const HOME_WIDGET_CALENDAR_TYPES = new Set([
+  EntryType.MANUAL_NOTE,
+  EntryType.MAW3D_EVENT,
+  EntryType.TASK,
+  EntryType.REMINDER,
+]);
 
 function sanitizeModernWidgetOrder(raw: unknown): ModernWidgetKey[] {
   if (!Array.isArray(raw)) return DEFAULT_MODERN_WIDGET_ORDER;
@@ -1634,6 +1643,7 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
 
   const { tasks, reminders } = useOptimizedTRData();
   const { events: maw3dEvents, attendingCounts } = useOptimizedMaw3dEvents();
+  const { entries: calendarEntries } = useOptimizedCalendarData();
   const whoopData = useWhoopData();
   const journalData = useJournalData();
 
@@ -1645,6 +1655,8 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
   const taskIconBg      = pct >= 70 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : pct >= 30 ? 'linear-gradient(135deg,#b45309,#f59e0b)' : pendingTasks === 0 ? 'linear-gradient(135deg,#16a34a,#22c55e)' : 'linear-gradient(135deg,#be123c,#ef4444)';
 
   const now = new Date();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
   const overdueRemindersCount = reminders.filter(r => {
     const due = new Date(r.due_date);
     if (r.due_time) {
@@ -1655,8 +1667,16 @@ export function ModernHomeScreen({ displayName: _displayName }: ModernHomeScreen
     return due <= now;
   }).length;
 
-  const upcomingCount = maw3dEvents.filter(e => {
-    try { return new Date(e.event_date) >= new Date(new Date().toDateString()); } catch { return false; }
+  const upcomingCount = calendarEntries.filter(entry => {
+    try {
+      if (!HOME_WIDGET_CALENDAR_TYPES.has(entry.type)) return false;
+      const entryDate = new Date(entry.date);
+      if (Number.isNaN(entryDate.getTime())) return false;
+      entryDate.setHours(0, 0, 0, 0);
+      return entryDate >= todayStart;
+    } catch {
+      return false;
+    }
   }).length;
 
   const isDark = theme === "dark";

@@ -92,7 +92,11 @@ const RULES: DetectionRule[] = [
   {
     capability: "ecommerce",
     keywords: [
-      /\b(shop|store|e-?commerce|ecommerce|products?|product\s*catalog|cart|checkout|marketplace|buy|sell|inventory|sku|catalog)\b/i,
+      // NOTE: bare "product(s)" is deliberately excluded — it's a generic word that
+      // shows up in unrelated prompts (e.g. "images for products/services" on a
+      // booking site) and was causing false ecommerce capability injection.
+      // "product catalog" as a phrase is still a strong, specific signal.
+      /\b(shop|store|e-?commerce|ecommerce|product\s*catalog|cart|checkout|marketplace|buy|sell|inventory|sku|catalog)\b/i,
     ],
   },
   {

@@ -82,6 +82,22 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
   const lastCompleted = [...progressSteps].reverse().find((s) => s.status === 'completed');
   const headline = activeStep?.label || lastCompleted?.label || (isRTL ? FALLBACK_HEADLINE.ar : FALLBACK_HEADLINE.en);
 
+  // Cosmetic "creep" bonus so the bar never visibly parks dead-still while a single
+  // real backend stage (e.g. the ~2-minute drafting call) is still in progress.
+  // Resets to 0 every time the real active step changes, and is capped low enough
+  // that it can never falsely claim a stage finished before the real data says so.
+  const [tickBonus, setTickBonus] = useState(0);
+  useEffect(() => {
+    setTickBonus(0);
+    if (!activeStep) return;
+    const startedAt = Date.now();
+    const interval = setInterval(() => {
+      const elapsedSec = (Date.now() - startedAt) / 1000;
+      setTickBonus(Math.min(6, elapsedSec / 15));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeStep?.label]);
+
   // REAL progress bar — derived from actual step completion, not a fake timer.
   // completed = 1 unit, loading = half credit, pending = 0.
   const totalUnits = progressSteps.length || 1;
@@ -90,7 +106,7 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
     if (s.status === 'loading') return sum + (typeof s.progress === 'number' ? s.progress : 0.5);
     return sum;
   }, 0);
-  const progressPercent = Math.max(6, Math.min(100, Math.round((completedUnits / totalUnits) * 100)));
+  const progressPercent = Math.max(6, Math.min(96, Math.round((completedUnits / totalUnits) * 100 + tickBonus)));
 
   const tip = BUILD_TIPS[tipIndex];
 
@@ -147,12 +163,15 @@ function EnhancedProjectLoader({ isRTL = false, progressSteps = [] }: { isRTL?: 
         </div>
 
         {/* Progress bar - driven by real step completion, RTL-aware */}
-        <div className="w-full h-1 bg-gray-800 rounded-full mt-8 mb-6 overflow-hidden relative" dir={isRTL ? 'rtl' : 'ltr'}>
+        <div className="w-full h-1 bg-gray-800 rounded-full mt-8 mb-2 overflow-hidden relative" dir={isRTL ? 'rtl' : 'ltr'}>
           <div
             className={`absolute inset-y-0 ${isRTL ? 'right-0' : 'left-0'} bg-gradient-to-r from-[hsl(210,100%,65%)] to-[hsl(280,70%,65%)] rounded-full transition-all duration-700 ease-out`}
             style={{ width: `${progressPercent}%` }}
           />
         </div>
+        <p className="text-center text-xs font-medium text-white/60 mb-4 tabular-nums">
+          {progressPercent}%
+        </p>
 
         {/* REAL current stage — identical text/source to the left AI Builder panel */}
         <h3 className="text-center text-lg font-medium text-white mb-2 transition-all duration-300">

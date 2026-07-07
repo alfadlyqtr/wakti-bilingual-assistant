@@ -64,7 +64,27 @@ function buildFallbackContextForm(rawPrompt: string): DetectedForm {
   const prompt = rawPrompt.toLowerCase();
   const isArabic = /[\u0600-\u06FF]/.test(rawPrompt);
 
-  if (/shop|store|e-?commerce|abaya|fashion|boutique|clothing|products?|متجر|عباية|أزياء|ملابس/.test(prompt)) {
+  // Booking/appointment intent is checked FIRST and is a strong, specific signal.
+  // This must run before the shop/store check below, otherwise a word like
+  // "Barbershop" (which contains the substring "shop") gets misclassified as
+  // an online store instead of a booking business.
+  if (/\b(booking|appointment|salon|spa|clinic|barber(?:shop)?)\b|service|حجز|موعد|صالون|سبا|عيادة|خدمة/.test(prompt)) {
+    return {
+      siteType: isArabic ? "خدمات وحجوزات" : "Bookings",
+      heading: isArabic ? "أخبرنا عن نشاطك" : "Tell us about your business",
+      fields: [
+        { id: "business_name", label: isArabic ? "اسم النشاط" : "Business Name", placeholder: isArabic ? "استوديو ليا" : "Lia Studio", type: "text" },
+        { id: "specialty", label: isArabic ? "التخصص" : "Specialty", placeholder: isArabic ? "عناية وجمال" : "Beauty & wellness", type: "text" },
+        { id: "phone_number", label: isArabic ? "الهاتف" : "Phone", placeholder: "+974 6666 6666", type: "tel" },
+        { id: "location", label: isArabic ? "الموقع" : "Location", placeholder: isArabic ? "لوسيل، قطر" : "Lusail, Qatar", type: "text" },
+        { id: "business_description", label: isArabic ? "الوصف" : "Description", placeholder: isArabic ? "خدمات راقية بمواعيد سهلة وسريعة" : "Premium services with a smooth booking experience", type: "textarea" },
+      ],
+    };
+  }
+
+  // \b word boundaries prevent "products" (a generic word used in unrelated prompts)
+  // and other substrings from false-matching inside unrelated words.
+  if (/\b(shop|store|e-?commerce|abaya|fashion|boutique|clothing)\b|متجر|عباية|أزياء|ملابس/.test(prompt)) {
     return {
       siteType: isArabic ? "متجر إلكتروني" : "Online Store",
       heading: isArabic ? "أخبرنا عن متجرك" : "Tell us about your store",
@@ -88,20 +108,6 @@ function buildFallbackContextForm(rawPrompt: string): DetectedForm {
         { id: "phone_number", label: isArabic ? "الهاتف" : "Phone", placeholder: "+974 4444 4444", type: "tel" },
         { id: "address", label: isArabic ? "العنوان" : "Address", placeholder: isArabic ? "الدوحة، قطر" : "Doha, Qatar", type: "text" },
         { id: "brand_story", label: isArabic ? "القصة" : "Story", placeholder: isArabic ? "مطعم دافئ يجمع بين النكهات المحلية والتجربة الحديثة" : "A warm dining concept blending local flavors with a modern experience", type: "textarea" },
-      ],
-    };
-  }
-
-  if (/booking|appointment|salon|spa|clinic|service|حجز|موعد|صالون|سبا|عيادة|خدمة/.test(prompt)) {
-    return {
-      siteType: isArabic ? "خدمات وحجوزات" : "Bookings",
-      heading: isArabic ? "أخبرنا عن نشاطك" : "Tell us about your business",
-      fields: [
-        { id: "business_name", label: isArabic ? "اسم النشاط" : "Business Name", placeholder: isArabic ? "استوديو ليا" : "Lia Studio", type: "text" },
-        { id: "specialty", label: isArabic ? "التخصص" : "Specialty", placeholder: isArabic ? "عناية وجمال" : "Beauty & wellness", type: "text" },
-        { id: "phone_number", label: isArabic ? "الهاتف" : "Phone", placeholder: "+974 6666 6666", type: "tel" },
-        { id: "location", label: isArabic ? "الموقع" : "Location", placeholder: isArabic ? "لوسيل، قطر" : "Lusail, Qatar", type: "text" },
-        { id: "business_description", label: isArabic ? "الوصف" : "Description", placeholder: isArabic ? "خدمات راقية بمواعيد سهلة وسريعة" : "Premium services with a smooth booking experience", type: "textarea" },
       ],
     };
   }
