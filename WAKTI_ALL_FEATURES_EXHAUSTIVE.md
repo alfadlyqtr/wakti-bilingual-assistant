@@ -537,7 +537,7 @@ Automatic categorization with smart suggestions:
 ##### **Prompt Amp** 🪄
 - Magic wand button
 - Prompt enhancement
-- DeepSeek-powered
+- OpenAI-powered
 - Available in all image modes
 - One-click improvement
 - Animated loading
@@ -1253,15 +1253,14 @@ Automatic categorization with smart suggestions:
 - **Chat**: OpenAI gpt-5-nano (text/search)
 - **Vision**: Claude 3.5 Sonnet (claude-sonnet-4-5-20250929)
 - **Fallback Chain**: Claude → OpenAI
-- **Prompt Enhancement**: DeepSeek
+- **Prompt Enhancement**: OpenAI
 - **Warranty AI**: Gemini 1.5 Flash
-- **Journal AI**: DeepSeek
+- **Journal AI**: OpenAI
 
 ### **External APIs**
 - Supabase (backend, DB, auth, storage)
-- OpenAI (chat, vision)
+- OpenAI (chat, vision, prompt enhancement)
 - Claude (vision)
-- DeepSeek (prompts, translations)
 - Gemini (warranty extraction)
 - ElevenLabs (voice TTS)
 - Runware (image generation)

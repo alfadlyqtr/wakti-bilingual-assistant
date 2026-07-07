@@ -1514,6 +1514,34 @@ ${priorSection}`;
           setActiveProductCardId(latestCard.id);
           setShowProductFormCard(true);
         }
+
+        // Restore an unresolved wizard popup if the conversation was left hanging
+        // (e.g. page refresh right after a wizard trigger). Only restore when the
+        // wizard message is the LAST message in the chat — if the user completed
+        // or moved past it, later messages will exist and we must not re-show it.
+        const lastMsg = typedData[typedData.length - 1];
+        if (lastMsg) {
+          try {
+            const parsedLast = JSON.parse(lastMsg.content);
+            if (parsedLast?.prompt) {
+              if (parsedLast.type === 'contact_form_wizard') {
+                setPendingFormPrompt(parsedLast.prompt);
+                setShowContactWizard(true);
+              } else if (parsedLast.type === 'booking_form_wizard') {
+                setPendingFormPrompt(parsedLast.prompt);
+                setShowBookingWizard(true);
+              } else if (parsedLast.type === 'auth_wizard') {
+                setPendingFormPrompt(parsedLast.prompt);
+                setShowAuthWizard(true);
+              } else if (parsedLast.type === 'media_wizard') {
+                setPendingFormPrompt(parsedLast.prompt);
+                setShowMediaWizard(true);
+              }
+            }
+          } catch {
+            // Not a JSON wizard message, nothing to restore
+          }
+        }
         
         // Force scroll to bottom after chat history loads with longer delays
         // This ensures scroll happens AFTER React renders the messages
@@ -5169,7 +5197,7 @@ ${fixInstructions}
       
       // CONTACT FORM DETECTION - Show wizard instead of direct AI call
       // Broader pattern to catch more variations like "button with contact form", "popup contact", etc.
-      const contactFormPatterns = /\b(add|create|build|make|need|want|show|display|popup|pop.?up).*(contact|inquiry|message\s*me|feedback|get.?in.?touch)\s*(form|page|popup|modal|button)?/i;
+      const contactFormPatterns = /\b(add|create|build|make|need|want|show|display|popup|pop.?up).*(contact|inquiry|message\s*me|feedback|get.?in.?touch)\s*(form|page|popup|modal|button)/i;
       const contactFormAltPatterns = /\b(contact|inquiry|message|feedback)\s*(form|page|popup|modal)\b/i;
       const hasContactFormRequest = contactFormPatterns.test(userMessage) || contactFormAltPatterns.test(userMessage);
       

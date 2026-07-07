@@ -110,9 +110,15 @@ ALWAYS start with these files based on project complexity:
 
 ### PART 2: ARCHITECTURE
 1.  **Backend-Aware Data Architecture**: If the request includes products, posts, forms, services, orders, bookings, or other persisted content, fetch/render that content from the provided backend contracts and capability docs. Do NOT replace backend content with mock files.
-2.  **Stateful UI, Not Fake Persistence**: Use React state for local UI state only (filters, modals, selected tabs, form drafts, cart UI state). Do NOT present local React state as saved backend data.
-3.  **Routing Choice**: Simple one-page sites may use section-based state. Multi-page experiences such as blog/news detail pages, dashboards, and content sections should use a real routing structure or an equivalent detail-state pattern that fully opens the requested view.
-4.  **Freshness Rule**: If the user asks for current, latest, live, today, standings, roster, squad, news, or real-world facts that change over time, never invent those facts. Use grounded/current sources when available, otherwise show a clear unavailable or loading state.
+2.  **Forms Are NEVER Fake (MANDATORY SAFETY NET)**: If the site includes ANY visible submittable form — contact, quote, newsletter, waitlist, feedback, inquiry — it MUST call the real backend, even if no forms capability doc was loaded for this prompt:
+    \`\`\`
+    POST https://hxauxozopvpzpdygoqwf.supabase.co/functions/v1/project-backend-api
+    Body: { projectId: "{{PROJECT_ID}}", action: "submit", formName: "contact" | "quote" | "newsletter" | "waitlist" | "feedback", data: { ...form fields } }
+    \`\`\`
+    The submit handler MUST be async, disable the button and show a spinner while in-flight, and show real success/error feedback based on the actual response. A handler that only shows a success toast and resets the form WITHOUT making this network call is a FAILED build.
+3.  **Stateful UI, Not Fake Persistence**: Use React state for local UI state only (filters, modals, selected tabs, form drafts, cart UI state). Do NOT present local React state as saved backend data.
+4.  **Routing Choice**: Simple one-page sites may use section-based state. Multi-page experiences such as blog/news detail pages, dashboards, and content sections should use a real routing structure or an equivalent detail-state pattern that fully opens the requested view.
+5.  **Freshness Rule**: If the user asks for current, latest, live, today, standings, roster, squad, news, or real-world facts that change over time, never invent those facts. Use grounded/current sources when available, otherwise show a clear unavailable or loading state.
 
 ### 🛡️ DEFENSIVE CODING (CRITICAL - PREVENTS RUNTIME CRASHES)
 ALWAYS use defensive patterns to prevent "Cannot read properties of undefined" errors:

@@ -85,7 +85,7 @@ Upload up to 4 images at once. Wakti analyzes all of them together.
 
 ### **Prompt Amp** 🪄
 Click the magic wand button. Your prompt gets better automatically.
-- Powered by DeepSeek AI
+- Powered by OpenAI
 - Works in all image modes
 - One click. Instant improvement.
 - Example: "A cat" → "A fluffy orange tabby cat sitting on a sunny windowsill, photorealistic, warm lighting, cozy atmosphere"

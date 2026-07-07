@@ -2848,7 +2848,7 @@ function VoicesTab({
       poemVoiceColor: 'warm close-mic Kuwaiti majlis voice color',
       poemHumanDelivery: 'natural breathing, soft micro-pauses, slight timing imperfections, conversational non-robotic flow',
       negativeBlockEnglish: 'qatari, saudi, emirati, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-kuwaiti, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
-      negativeBlockArabic: 'قطري, سعودي, إماراتي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير كويتي, غير خليجي, جودة منخفضة',
+      negativeBlockArabic: 'قطري, سعودي, إماراتي, بحريني, عماني, مصري, لهجة شامية, مغربي, عراقي, فصحى, غير كويتي, غير خليجي, جودة منخفضة',
     },
     qatari: {
       labelEn: 'Qatari',
@@ -2862,7 +2862,7 @@ function VoicesTab({
       poemVoiceColor: 'deep relaxed Qatari majlis voice color',
       poemHumanDelivery: 'natural chest resonance, calm thought-by-thought pauses, slight human timing drift, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, saudi, emirati, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-qatari, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
-      negativeBlockArabic: 'كويتي, سعودي, إماراتي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير قطري, غير خليجي, جودة منخفضة',
+      negativeBlockArabic: 'كويتي, سعودي, إماراتي, بحريني, عماني, مصري, لهجة شامية, مغربي, عراقي, فصحى, غير قطري, غير خليجي, جودة منخفضة',
     },
     saudi: {
       labelEn: 'Saudi',
@@ -2876,7 +2876,7 @@ function VoicesTab({
       poemVoiceColor: 'grounded Saudi Khaleeji chest-led voice color',
       poemHumanDelivery: 'natural breathing, grounded starts with relaxed line endings, subtle timing imperfections, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, qatari, emirati, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-saudi, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
-      negativeBlockArabic: 'كويتي, قطري, إماراتي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير سعودي, غير خليجي, جودة منخفضة',
+      negativeBlockArabic: 'كويتي, قطري, إماراتي, بحريني, عماني, مصري, لهجة شامية, مغربي, عراقي, فصحى, غير سعودي, غير خليجي, جودة منخفضة',
     },
     emirati: {
       labelEn: 'Emirati',
@@ -2890,7 +2890,7 @@ function VoicesTab({
       poemVoiceColor: 'warm Emirati majlis voice color',
       poemHumanDelivery: 'gentle breathing, natural pauses, slight human timing imperfections, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, qatari, saudi, bahraini, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-emirati, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
-      negativeBlockArabic: 'كويتي, قطري, سعودي, بحريني, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير إماراتي, غير خليجي, جودة منخفضة',
+      negativeBlockArabic: 'كويتي, قطري, سعودي, بحريني, عماني, مصري, لهجة شامية, مغربي, عراقي, فصحى, غير إماراتي, غير خليجي, جودة منخفضة',
     },
     bahraini: {
       labelEn: 'Bahraini',
@@ -2904,7 +2904,7 @@ function VoicesTab({
       poemVoiceColor: 'clear soft Bahraini spoken voice color',
       poemHumanDelivery: 'natural breathing, reflective pauses, subtle human timing, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, qatari, saudi, emirati, omani, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-bahraini, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
-      negativeBlockArabic: 'كويتي, قطري, سعودي, إماراتي, عماني, مصري, شامي, مغربي, عراقي, فصحى, غير بحريني, غير خليجي, جودة منخفضة',
+      negativeBlockArabic: 'كويتي, قطري, سعودي, إماراتي, عماني, مصري, لهجة شامية, مغربي, عراقي, فصحى, غير بحريني, غير خليجي, جودة منخفضة',
     },
     omani: {
       labelEn: 'Omani',
@@ -2918,7 +2918,7 @@ function VoicesTab({
       poemVoiceColor: 'calm earthy Omani spoken voice color',
       poemHumanDelivery: 'natural breathing, steady pauses, slight human timing imperfections, no robotic monotone',
       negativeBlockEnglish: 'kuwaiti, qatari, saudi, emirati, bahraini, egyptian, levantine, maghrebi, iraqi, fusha, msa, non-omani, non-khaleeji, mispronounced, quranic recitation, news anchor delivery, classical enunciation, hard final qaf, rolled trilled r, formal khutbah cadence',
-      negativeBlockArabic: 'كويتي, قطري, سعودي, إماراتي, بحريني, مصري, شامي, مغربي, عراقي, فصحى, غير عماني, غير خليجي, جودة منخفضة',
+      negativeBlockArabic: 'كويتي, قطري, سعودي, إماراتي, بحريني, مصري, لهجة شامية, مغربي, عراقي, فصحى, غير عماني, غير خليجي, جودة منخفضة',
     },
   };
   // Minimal mode only: styles include/exclude + prompt + duration
@@ -4944,8 +4944,8 @@ function VoicesTab({
     'سامري': GCC_DIALECT_BLOCK_AR, 'جلسة': GCC_DIALECT_BLOCK_AR,
     'ليوان': GCC_DIALECT_BLOCK_AR,
     'قصيدة خليجية': `${GCC_DIALECT_BLOCK_AR}, غناء, كورس, صراخ, هتاف, راب`,
-    'قصيدة عربية فصحى': 'إنجليزي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
-    'قصيدة إنجليزية': 'عربي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
+    'قصيدة عربية فصحى': 'إنجليزي, خليجي, مصري, لهجة شامية, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
+    'قصيدة إنجليزية': 'عربي, خليجي, مصري, لهجة شامية, مغربي, عراقي, غناء, كورس, صراخ, هتاف',
   };
 
   // Default rhythm + instrument anchors per GCC style — auto-filled when user skips those sections
@@ -7079,29 +7079,29 @@ function VoicesTab({
       // ── Negative shield: regional conditional first, GCC Morocco-Killer default (untouched) ──
       const REGIONAL_NEGATIVE: Record<string, string> = {
         // ── Egyptian (Shaabi & Pop) ──
-        'Egyptian':        'khaleeji, gulf, moroccan, maghrebi, darija, levantine, shami, iraqi, fusha, msa, noise, hiss, low quality, distorted',
-        'Egyptian Shaabi': 'khaleeji, gulf, moroccan, maghrebi, darija, levantine, shami, iraqi, fusha, msa, noise, hiss, low quality, distorted',
-        'مصري':            'خليجي, خليج, مغربي, دارجة, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
-        'شعبي مصري':       'خليجي, خليج, مغربي, دارجة, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
+        'Egyptian':        'khaleeji, gulf, moroccan, maghrebi, darija, levantine, iraqi, fusha, msa, noise, hiss, low quality, distorted',
+        'Egyptian Shaabi': 'khaleeji, gulf, moroccan, maghrebi, darija, levantine, iraqi, fusha, msa, noise, hiss, low quality, distorted',
+        'مصري':            'خليجي, خليج, مغربي, دارجة, لهجة شامية, عراقي, فصحى, noise, hiss, low quality, distorted',
+        'شعبي مصري':       'خليجي, خليج, مغربي, دارجة, لهجة شامية, عراقي, فصحى, noise, hiss, low quality, distorted',
         'Anasheed':        'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, [Exclude: 300Hz-500Hz mud, boxiness, frequency masking], noise, hiss, low quality, distorted',
         'أناشيد':          'instruments, music, drums, synth, bass, guitar, piano, electronic, percussion, strings, beat, [Exclude: 300Hz-500Hz mud, boxiness, frequency masking], noise, hiss, low quality, distorted',
         'GCC Poem':        'singing, sung chorus, screaming, shouting, non-khaleeji, non-gcc dialect, egyptian, levantine, maghrebi, iraqi',
         'Arabic Poem':     'english, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, chanting, clapping, drums, percussion, screaming, shouting',
         'English Poem':    'arabic, khaleeji, egyptian, levantine, maghrebi, iraqi, singing, chorus, chanting, clapping, drums, percussion, screaming, shouting',
         'قصيدة خليجية':    'غناء, كورس, هتاف, تصفيق, طبول, إيقاع, صراخ, غير خليجي, غير لهجة خليجية',
-        'قصيدة عربية فصحى': 'إنجليزي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, هتاف, تصفيق, طبول, إيقاع, صراخ',
-        'قصيدة إنجليزية':  'عربي, خليجي, مصري, شامي, مغربي, عراقي, غناء, كورس, هتاف, تصفيق, طبول, إيقاع, صراخ',
+        'قصيدة عربية فصحى': 'إنجليزي, خليجي, مصري, لهجة شامية, مغربي, عراقي, غناء, كورس, هتاف, تصفيق, طبول, إيقاع, صراخ',
+        'قصيدة إنجليزية':  'عربي, خليجي, مصري, لهجة شامية, مغربي, عراقي, غناء, كورس, هتاف, تصفيق, طبول, إيقاع, صراخ',
         // ── Iraqi ──
-        'Iraqi Style':     'egyptian, levantine, shami, moroccan, maghrebi, darija, khaleeji, gulf, fusha, msa, noise, hiss, low quality, distorted',
-        'عراقي':           'مصري, شامي, مغربي, دارجة, خليجي, فصحى, noise, hiss, low quality, distorted',
+        'Iraqi Style':     'egyptian, levantine, moroccan, maghrebi, darija, khaleeji, gulf, fusha, msa, noise, hiss, low quality, distorted',
+        'عراقي':           'مصري, لهجة شامية, مغربي, دارجة, خليجي, فصحى, noise, hiss, low quality, distorted',
         // ── Lebanese / Levant ──
         'Lebanese Style':  'khaleeji, gulf, egyptian, moroccan, maghrebi, darija, iraqi, fusha, msa, noise, hiss, low quality, distorted',
         'Levant Pop':      'khaleeji, gulf, egyptian, moroccan, maghrebi, darija, iraqi, fusha, msa, noise, hiss, low quality, distorted',
         'لبناني':          'خليجي, خليج, مصري, مغربي, دارجة, عراقي, فصحى, noise, hiss, low quality, distorted',
         'شامي':            'خليجي, خليج, مصري, مغربي, دارجة, عراقي, فصحى, noise, hiss, low quality, distorted',
         // ── Moroccan ──
-        'Moroccan Style':  'khaleeji, gulf, egyptian, levantine, shami, iraqi, fusha, msa, noise, hiss, low quality, distorted',
-        'مغربي':           'خليجي, خليج, مصري, شامي, عراقي, فصحى, noise, hiss, low quality, distorted',
+        'Moroccan Style':  'khaleeji, gulf, egyptian, levantine, iraqi, fusha, msa, noise, hiss, low quality, distorted',
+        'مغربي':           'خليجي, خليج, مصري, لهجة شامية, عراقي, فصحى, noise, hiss, low quality, distorted',
         // ── R&B / Soul / Funk shield ──
         'R&B':              'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',
         'soul':             'hiss, noise, distorted, low quality, muddy, amateur recording, muffled, static, background hum',

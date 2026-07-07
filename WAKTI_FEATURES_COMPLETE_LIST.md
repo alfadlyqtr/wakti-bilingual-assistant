@@ -26,7 +26,7 @@ The core AI chat and generation engine with multiple modes and capabilities.
 - **Image Mode** 🖼️
   - **Text-to-Image (T2I)**: Generate images from text descriptions
     - Quality options: Fast / Best
-    - Prompt enhancement with "Amp" button (DeepSeek-powered)
+    - Prompt enhancement with "Amp" button (OpenAI-powered)
     - Supports Arabic prompts (auto-translates to English)
   
   - **Image-to-Image (I2I)**: Transform existing images
@@ -304,7 +304,7 @@ Daily mood tracking and journaling with AI insights.
   - Tags: family, friends, care, exercise, sport, relax, movies, gaming, reading, cleaning, sleep, eat_healthy, shopping, study, work, music, meditation, nature, travel, cooking, walk, socialize, coffee, love, romance, spouse, prayer, writing, horse_riding, fishing, wife
 
 - **AI Insights** 🧠
-  - Journal Q&A with DeepSeek AI
+  - Journal Q&A with OpenAI
   - Pattern recognition
   - Personalized feedback
   - 60-80 word responses
@@ -552,7 +552,7 @@ Wearables integration and health tracking.
 ## 🎨 SMART TEXT FEATURES
 
 ### **Prompt Enhancement (Amp)**
-- DeepSeek-powered prompt improvement
+- OpenAI-powered prompt improvement
 - Available in all image modes
 - One-click enhancement
 - Magic wand animation
@@ -683,9 +683,8 @@ Context-aware suggestions based on:
 ## 🎯 KEY INTEGRATIONS
 
 - **Supabase**: Backend, database, auth, storage
-- **OpenAI**: GPT-4o-mini for chat, GPT-4o for vision
+- **OpenAI**: GPT-4o-mini for chat, GPT-4o for vision, prompt enhancement
 - **Claude**: Claude 3.5 Sonnet for vision
-- **DeepSeek**: Prompt enhancement, translations
 - **Gemini**: Warranty AI extraction
 - **ElevenLabs**: Voice TTS
 - **Runware**: Image generation

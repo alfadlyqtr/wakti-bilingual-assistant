@@ -132,6 +132,13 @@ const RULES: DetectionRule[] = [
     keywords: [
       /\b(contact\s*(us|form)?|quote\s*request|newsletter|waitlist|feedback|sign[- ]?up|subscribe|get\s*in\s*touch)\b/i,
       /تواصل\s*معنا|اتصل\s*بنا|نموذج\s*(تواصل|اتصال)|النشرة\s*البريدية|استفسار|طلب\s*عرض\s*سعر|قائمة\s*الانتظار/,
+      // Default-on for business/professional site types that almost always ship a
+      // contact section even when the prompt never says "contact form" explicitly
+      // (portfolios, agencies, restaurants, personal brands, etc.) — mirrors the
+      // stock_images default-on philosophy so the real backend contract is never
+      // left to guesswork just because the trigger word wasn't literally "contact".
+      /\b(portfolio|resume|cv|freelance(r)?|consultant|agency|studio|restaurant|cafe|hotel|clinic|dentist|law\s*firm|real\s*estate|realtor|photographer|personal\s*brand)\b/i,
+      /بورتفوليو|السيرة\s*الذاتية|مستقل|استشاري|وكالة|استوديو|مطعم|مقهى|فندق|عيادة|عقارات|مصور|موقع\s*شخصي/,
     ],
   },
   {

@@ -5046,6 +5046,7 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
             try {
               const filesToWrite: Record<string, string> = {};
               const changesApplied: string[] = [];
+              const changesFailed: string[] = [];
               const primaryFile = typeof parsed.file === 'string' ? parsed.file : null;
 
               // Helper: fetch current file content from DB
@@ -5067,13 +5068,19 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                   filesToWrite[np] = changeTo;
                   changesApplied.push(`Created ${np}`);
                 } else {
-                  const morphResult = await morphFastApply({ original: current, codeEdit: changeTo, instructions: desc });
-                  if (morphResult.success && morphResult.content) {
-                    filesToWrite[np] = morphResult.content;
+                  const morphResult = await morphFastApply({ originalCode: current, codeEdit: changeTo, instructions: desc });
+                  if (morphResult.success && morphResult.mergedCode) {
+                    filesToWrite[np] = morphResult.mergedCode;
                     changesApplied.push(`Updated ${np}`);
                   } else if (changeTo.length > 150) {
                     filesToWrite[np] = changeTo;
                     changesApplied.push(`Applied ${np}`);
+                  } else {
+                    // Merge failed and the snippet is too small to safely use as a
+                    // full-file replacement. Do NOT silently drop this — record it
+                    // so the response can honestly report a partial result instead
+                    // of falsely claiming the whole request was completed.
+                    changesFailed.push(np);
                   }
                 }
               };
@@ -5108,8 +5115,14 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
               if (Object.keys(filesToWrite).length > 0) {
                 await upsertProjectFiles(supabase, projectId, filesToWrite);
                 const title = typeof parsed.title === 'string' ? parsed.title.replace(/^[^\w]+/, '') : 'Changes applied';
-                const summary = `✅ Done! ${title}\n\nFiles updated:\n${changesApplied.map(c => `• ${c}`).join('\n')}${queuedFollowup ? '\n\n⏳ More components will be translated in the next pass.' : ''}`;
-                return createResponse({ ok: true, message: summary, mode: 'agent', creditUsage: chatCreditUsage, filesChanged: Object.keys(filesToWrite) });
+                if (changesFailed.length === 0) {
+                  const summary = `✅ Done! ${title}\n\nFiles updated:\n${changesApplied.map(c => `• ${c}`).join('\n')}${queuedFollowup ? '\n\n⏳ More components will be translated in the next pass.' : ''}`;
+                  return createResponse({ ok: true, message: summary, mode: 'agent', creditUsage: chatCreditUsage, filesChanged: Object.keys(filesToWrite) });
+                }
+                // Partial result: some steps landed, some did not. Never say "Done!"
+                // when part of the request silently failed — be explicit instead.
+                const partialSummary = `⚠️ Partially applied. ${title}\n\nFiles updated:\n${changesApplied.map(c => `• ${c}`).join('\n')}\n\nCould not safely auto-apply changes to:\n${changesFailed.map(c => `• ${c}`).join('\n')}\n\nTry resending that part with a more specific detail (e.g. the exact element or color).`;
+                return createResponse({ ok: true, message: partialSummary, mode: 'agent', creditUsage: chatCreditUsage, filesChanged: Object.keys(filesToWrite) });
               }
             } catch (autoExecErr) {
               console.error('[Chat Auto-Execute] Failed, falling back to plan:', autoExecErr);
