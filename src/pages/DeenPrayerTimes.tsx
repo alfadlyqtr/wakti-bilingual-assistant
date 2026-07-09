@@ -61,10 +61,19 @@ export default function DeenPrayerTimes() {
   const NextPrayerIcon = nextPrayer ? prayerIcon[nextPrayer.key] : null;
 
   const secondsLeft = nextPrayer ? Math.max(0, Math.floor((nextPrayer.time.getTime() - now.getTime()) / 1000)) : 0;
-  const progress =
+  const prayerWindowProgress =
     window?.previous && nextPrayer
       ? Math.min(100, Math.max(0, ((now.getTime() - window.previous.time.getTime()) / (nextPrayer.time.getTime() - window.previous.time.getTime())) * 100))
-      : 0;
+      : null;
+  const timerFallbackProgress = !window?.previous && nextPrayer
+    ? (() => {
+      const startOfDay = new Date(now);
+      startOfDay.setHours(0, 0, 0, 0);
+      const totalSeconds = Math.max(1, Math.floor((nextPrayer.time.getTime() - startOfDay.getTime()) / 1000));
+      return Math.min(100, Math.max(0, (1 - (secondsLeft / totalSeconds)) * 100));
+    })()
+    : null;
+  const progress = prayerWindowProgress ?? timerFallbackProgress ?? 0;
   const gregorianDate = new Intl.DateTimeFormat(isAr ? "ar-SA-u-ca-gregory" : "en-GB-u-ca-gregory", {
     weekday: "short",
     day: "numeric",
@@ -78,19 +87,12 @@ export default function DeenPrayerTimes() {
   }).format(now);
   const combinedDate = `${gregorianDate} • ${hijriDate}`;
   const hasCity = Boolean(location?.city && location.city.trim().length > 0);
-  const hasCountry = Boolean(location?.country && location.country.trim().length > 0);
-  const locationText = hasCity && hasCountry
-    ? `${location?.city}, ${location?.country}`
-    : hasCity
-      ? `${location?.city}`
-      : hasCountry
-        ? `${location?.country}`
-        : (isAr ? "حسب موقعك الحالي" : "For your location");
+  const locationText = hasCity ? `${location?.city}` : (isAr ? "حسب موقعك الحالي" : "For your location");
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden"
-      style={{ backgroundColor: bg, backgroundImage: patternSvg, backgroundSize: "60px 60px", paddingBottom: bottomSafe }}
+      className="h-[100dvh] min-h-0 flex flex-col overflow-hidden overscroll-y-none"
+      style={{ backgroundColor: bg, backgroundImage: patternSvg, backgroundSize: "60px 60px" }}
       dir={isAr ? "rtl" : "ltr"}
     >
       <div className="px-4 pt-4 pb-3 shrink-0 flex items-center gap-3">
@@ -113,7 +115,7 @@ export default function DeenPrayerTimes() {
         </div>
       </div>
 
-      <div className="prayer-times-scroll px-4 pb-4 flex-1 overflow-y-auto">
+      <div className="prayer-times-scroll px-4 pb-4 flex-1 min-h-0 overflow-y-auto overscroll-y-contain" style={{ paddingBottom: bottomSafe }}>
         {loading ? (
           <div className="h-full flex flex-col items-center justify-center gap-3">
             <div
