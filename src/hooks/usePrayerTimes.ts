@@ -55,6 +55,11 @@ const PRAYER_NAMES_AR: Record<string, string> = {
   isha: "العشاء",
 };
 
+const ARABIC_TWO_DIGIT_FORMATTER = new Intl.NumberFormat("ar-SA-u-nu-arab", {
+  minimumIntegerDigits: 2,
+  useGrouping: false,
+});
+
 function getPrayerTimes(adhanLib: AdhanModule, lat: number, lng: number, date: Date) {
   const coords = new adhanLib.Coordinates(lat, lng);
   const params = adhanLib.CalculationMethod.UmmAlQura();
@@ -142,6 +147,21 @@ export function formatCountdown(minutesLeft: number, isAr: boolean): string {
   if (h > 0 && m > 0) return `in ${h}h ${m}m`;
   if (h > 0) return `in ${h}h`;
   return `in ${m}m`;
+}
+
+export function formatLiveCountdown(secondsLeft: number, isAr: boolean): string {
+  if (secondsLeft <= 0) return isAr ? "الآن" : "Now";
+  const h = Math.floor(secondsLeft / 3600);
+  const m = Math.floor((secondsLeft % 3600) / 60);
+  const s = secondsLeft % 60;
+
+  if (isAr) {
+    const value = `${ARABIC_TWO_DIGIT_FORMATTER.format(h)}:${ARABIC_TWO_DIGIT_FORMATTER.format(m)}:${ARABIC_TWO_DIGIT_FORMATTER.format(s)}`;
+    return `بعد ${value}`;
+  }
+
+  const value = `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `in ${value}`;
 }
 
 export function formatPrayerTime(time: Date, isAr: boolean): string {
@@ -234,7 +254,7 @@ export function useDailyPrayerTimes() {
 
     const interval = setInterval(() => {
       setNow(new Date());
-    }, 60000);
+    }, 1000);
 
     return () => {
       cancelled = true;
