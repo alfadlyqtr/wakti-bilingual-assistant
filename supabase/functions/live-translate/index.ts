@@ -3,8 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkTrialAccess, checkAndConsumeTrialTokenOnce, buildTrialErrorPayload, buildTrialSuccessPayload } from "../_shared/trial-tracker.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") || "";
-const GOOGLE_APPLICATION_CREDENTIALS_JSON = Deno.env.get("GOOGLE_APPLICATION_CREDENTIALS_JSON") || "";
-const GOOGLE_TTS_KEY = Deno.env.get("GOOGLE_TTS_KEY") || Deno.env.get("GOOGLE_TTS_API_KEY") || Deno.env.get("GEMINI_API_KEY") || "";
+const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY") || "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 
@@ -14,48 +13,30 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// Gemini 2.5 Flash TTS voices — Cloud TTS API names
+// ElevenLabs voices — legacy cedar/marin keys kept for frontend compatibility
 const VOICE_MAP: Record<string, string> = {
-  cedar: "Puck",
-  marin: "Leda",
+  cedar: "TxvUy8tvDazkNBlnGcpU", // male
+  marin: "EST9Ui6982FZPSi7gCHi", // female
 };
 
-// ── OAuth token cache ─────────────────────────────────────────────────────
-type ServiceAccountJson = { client_email: string; private_key: string; token_uri?: string };
-let cachedToken: { token: string; expiresAtMs: number } | null = null;
+// Fastest ElevenLabs model (~75ms latency) — speed is critical for live translation
+const ELEVENLABS_MODEL = "eleven_flash_v2_5";
+const ELEVENLABS_VOICE_SETTINGS = {
+  stability: 1.0,
+  similarity_boost: 1.0,
+  style: 0.5,
+  use_speaker_boost: true,
+};
 
-function pemToDer(pem: string): ArrayBuffer {
-  const cleaned = pem.replace(/-----BEGIN[\s\S]*?-----/g, "").replace(/-----END[\s\S]*?-----/g, "").replace(/\s+/g, "");
-  const raw = atob(cleaned);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  return bytes.buffer;
-}
-
-function b64url(input: Uint8Array): string {
-  return btoa(String.fromCharCode(...input)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-}
-
-async function getGoogleBearerToken(): Promise<string | null> {
-  if (!GOOGLE_APPLICATION_CREDENTIALS_JSON) return null;
-  try {
-    if (cachedToken && cachedToken.expiresAtMs > Date.now() + 60_000) return cachedToken.token;
-    const sa = JSON.parse(GOOGLE_APPLICATION_CREDENTIALS_JSON) as ServiceAccountJson;
-    const nowSec = Math.floor(Date.now() / 1000);
-    const aud = sa.token_uri || "https://oauth2.googleapis.com/token";
-    const enc = new TextEncoder();
-    const header = b64url(enc.encode(JSON.stringify({ alg: "RS256", typ: "JWT" })));
-    const payload = b64url(enc.encode(JSON.stringify({ iss: sa.client_email, sub: sa.client_email, aud, iat: nowSec, exp: nowSec + 3600, scope: "https://www.googleapis.com/auth/cloud-platform" })));
-    const sigInput = `${header}.${payload}`;
-    const key = await crypto.subtle.importKey("pkcs8", pemToDer(sa.private_key), { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
-    const sig = b64url(new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, enc.encode(sigInput))));
-    const tokenResp = await fetch(aud, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: `${sigInput}.${sig}` }).toString() });
-    if (!tokenResp.ok) { console.error("[live-translate] OAuth token error:", await tokenResp.text()); return null; }
-    const tokenJson = await tokenResp.json() as { access_token?: string; expires_in?: number };
-    if (!tokenJson.access_token) return null;
-    cachedToken = { token: tokenJson.access_token, expiresAtMs: Date.now() + (tokenJson.expires_in ?? 3600) * 1000 };
-    return tokenJson.access_token;
-  } catch (e) { console.error("[live-translate] OAuth error:", e); return null; }
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(chunk) as unknown as number[]);
+  }
+  return btoa(binary);
 }
 
 serve(async (req: Request) => {
@@ -114,7 +95,7 @@ serve(async (req: Request) => {
       });
     }
 
-    const geminiVoice = VOICE_MAP[voiceKey] || "Puck";
+    const elevenLabsVoiceId = VOICE_MAP[voiceKey] || VOICE_MAP.cedar;
 
     // Languages NOT supported by Whisper — pass empty string so Whisper auto-detects
     const WHISPER_UNSUPPORTED = new Set(["rw", "fr_ca"]);
@@ -205,51 +186,41 @@ serve(async (req: Request) => {
     }
     console.log("[live-translate] Translation:", translation);
 
-    // ── Step 3: Cloud Text-to-Speech API ──────────────────────────────────
-    console.log("[live-translate] Step 3: Cloud TTS voice:", geminiVoice);
-    const bearerToken = await getGoogleBearerToken();
-    const ttsUrl = bearerToken
-      ? "https://texttospeech.googleapis.com/v1/text:synthesize"
-      : `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_KEY}`;
-    const ttsHeaders: Record<string, string> = { "Content-Type": "application/json" };
-    if (bearerToken) ttsHeaders["Authorization"] = `Bearer ${bearerToken}`;
+    // ── Step 3: ElevenLabs TTS (Flash v2.5 — ultra-low latency) ────────────
+    console.log("[live-translate] Step 3: ElevenLabs TTS voice:", elevenLabsVoiceId);
 
-    if (!bearerToken && !GOOGLE_TTS_KEY) {
+    if (!ELEVENLABS_API_KEY) {
       return new Response(JSON.stringify({ error: "Voice synthesis not configured." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const ttsRes = await fetch(ttsUrl, {
+    const ttsRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${elevenLabsVoiceId}`, {
       method: "POST",
-      headers: ttsHeaders,
+      headers: {
+        "Accept": "audio/mpeg",
+        "Content-Type": "application/json",
+        "xi-api-key": ELEVENLABS_API_KEY,
+      },
       body: JSON.stringify({
-        input: { text: translation },
-        voice: { languageCode: "en-US", name: geminiVoice, model_name: "gemini-2.5-flash-tts" },
-        audioConfig: { audioEncoding: "MP3" },
+        text: translation,
+        model_id: ELEVENLABS_MODEL,
+        voice_settings: ELEVENLABS_VOICE_SETTINGS,
       }),
     });
 
     if (!ttsRes.ok) {
       const err = await ttsRes.text();
-      console.error("[live-translate] Cloud TTS error:", ttsRes.status, err);
+      console.error("[live-translate] ElevenLabs TTS error:", ttsRes.status, err);
       return new Response(JSON.stringify({ error: "Voice synthesis failed. Please try again." }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const ttsData = await ttsRes.json();
-    const audioBase64 = ttsData?.audioContent as string | undefined;
-    if (!audioBase64) {
-      console.error("[live-translate] Cloud TTS no audio:", JSON.stringify(ttsData).slice(0, 300));
-      return new Response(JSON.stringify({ error: "Voice synthesis returned empty audio. Please try again." }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-    const audioMime = "audio/mp3";
+    const audioBase64 = arrayBufferToBase64(await ttsRes.arrayBuffer());
+    const audioMime = "audio/mpeg";
 
     const consume = await checkAndConsumeTrialTokenOnce(supabase, user.id, "interpreter", 5, requestId);
     const trialPayload = consume.allowed ? buildTrialSuccessPayload("interpreter", consume) : null;
