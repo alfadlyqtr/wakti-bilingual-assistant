@@ -3,12 +3,20 @@ import { ArrowLeft, CloudMoon, MapPin, Moon, Sun, SunDim, Sunrise, Sunset, type 
 import { useTheme } from "@/providers/ThemeProvider";
 import { formatLiveCountdown, formatPrayerTime, useDailyPrayerTimes, type DailyPrayer } from "@/hooks/usePrayerTimes";
 
+function isSameCalendarDay(a: Date, b: Date) {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
 export default function DeenPrayerTimes() {
   const navigate = useNavigate();
   const { language, theme } = useTheme();
   const isAr = language === "ar";
   const isDark = theme === "dark";
-  const { dailyPrayers, window, loading, now } = useDailyPrayerTimes();
+  const { dailyPrayers, window, loading, now, location } = useDailyPrayerTimes();
 
   const bg = isDark ? "#0c0f14" : "#fcfefd";
   const textPrimary = isDark ? "#f2f2f2" : "#060541";
@@ -57,6 +65,27 @@ export default function DeenPrayerTimes() {
     window?.previous && nextPrayer
       ? Math.min(100, Math.max(0, ((now.getTime() - window.previous.time.getTime()) / (nextPrayer.time.getTime() - window.previous.time.getTime())) * 100))
       : 0;
+  const gregorianDate = new Intl.DateTimeFormat(isAr ? "ar-SA-u-ca-gregory" : "en-GB-u-ca-gregory", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(now);
+  const hijriDate = new Intl.DateTimeFormat(isAr ? "ar-SA-u-ca-islamic" : "en-GB-u-ca-islamic", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(now);
+  const combinedDate = `${gregorianDate} • ${hijriDate}`;
+  const hasCity = Boolean(location?.city && location.city.trim().length > 0);
+  const hasCountry = Boolean(location?.country && location.country.trim().length > 0);
+  const locationText = hasCity && hasCountry
+    ? `${location?.city}, ${location?.country}`
+    : hasCity
+      ? `${location?.city}`
+      : hasCountry
+        ? `${location?.country}`
+        : (isAr ? "حسب موقعك الحالي" : "For your location");
 
   return (
     <div
@@ -79,7 +108,7 @@ export default function DeenPrayerTimes() {
             {isAr ? "مواقيت الصلاة" : "Prayer Times"}
           </h1>
           <p className="text-[11px]" style={{ color: textSecondary }}>
-            {isAr ? "حسب موقعك الحالي" : "Based on your current location"}
+            {locationText}
           </p>
         </div>
       </div>
@@ -109,6 +138,10 @@ export default function DeenPrayerTimes() {
           </div>
         ) : (
           <>
+            <p className="text-center text-[12px] mb-2" style={{ color: textPrimary }}>
+              {combinedDate}
+            </p>
+
             {nextPrayer && (
               <div
                 className="rounded-2xl p-4 mb-3"
@@ -154,6 +187,12 @@ export default function DeenPrayerTimes() {
               const isNext = nextPrayer?.key === prayer.key;
               const PrayerIcon = prayerIcon[prayer.key];
               const stripSideStyle = isAr ? { right: 8 } : { left: 8 };
+              const shouldUseNextDayFajr =
+                prayer.key === "fajr" &&
+                nextPrayer?.key === "fajr" &&
+                nextPrayer.time.getTime() > prayer.time.getTime();
+              const prayerDisplayTime = shouldUseNextDayFajr ? nextPrayer.time : prayer.time;
+              const showTomorrowLabel = shouldUseNextDayFajr && isSameCalendarDay(now, prayer.time);
 
               return (
                 <div
@@ -188,9 +227,16 @@ export default function DeenPrayerTimes() {
                     </p>
                   </div>
 
-                  <p className="text-[15px] font-medium tabular-nums" style={{ color: isNext ? accent : textSecondary }}>
-                    {formatPrayerTime(prayer.time, isAr)}
-                  </p>
+                  <div className="text-end">
+                    <p className="text-[15px] font-medium tabular-nums" style={{ color: isNext ? accent : textSecondary }}>
+                      {formatPrayerTime(prayerDisplayTime, isAr)}
+                    </p>
+                    {showTomorrowLabel && (
+                      <p className="text-[10px] font-medium" style={{ color: textSecondary }}>
+                        {isAr ? "غدًا" : "Tomorrow"}
+                      </p>
+                    )}
+                  </div>
                 </div>
               );
             })}

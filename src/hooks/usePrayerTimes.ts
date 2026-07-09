@@ -37,6 +37,11 @@ export interface PrayerWindow {
   next: DailyPrayer | null;
 }
 
+export interface PrayerLocation {
+  city?: string;
+  country?: string;
+}
+
 const PRAYER_NAMES_EN: Record<string, string> = {
   fajr: "Fajr",
   sunrise: "Sunrise",
@@ -225,6 +230,7 @@ export function usePrayerTimes() {
 export function useDailyPrayerTimes() {
   const [dailyPrayers, setDailyPrayers] = useState<DailyPrayer[] | null>(null);
   const [tomorrowFajr, setTomorrowFajr] = useState<Date | null>(null);
+  const [location, setLocation] = useState<PrayerLocation | null>(null);
   const [loading, setLoading] = useState(true);
   const [now, setNow] = useState(new Date());
 
@@ -236,6 +242,7 @@ export function useDailyPrayerTimes() {
       try {
         const loc = await getNativeLocation({ timeoutMs: 8000 });
         if (!cancelled && loc) {
+          setLocation({ city: loc.city, country: loc.country });
           const [result, fajr] = await Promise.all([
             getDailyPrayers(loc.latitude, loc.longitude),
             getTomorrowFajr(loc.latitude, loc.longitude),
@@ -273,5 +280,5 @@ export function useDailyPrayerTimes() {
     return { previous, next };
   }, [dailyPrayers, now, tomorrowFajr]);
 
-  return { dailyPrayers, window, loading, now };
+  return { dailyPrayers, window, loading, now, location };
 }
