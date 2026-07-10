@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { ArrowLeftRight, Mic, Volume2, Languages, Loader2, Bookmark, BookmarkCheck, Trash2, Play, Square } from 'lucide-react';
+import { ArrowLeftRight, Mic, Volume2, Languages, Loader2, Bookmark, BookmarkCheck, Trash2, Play, Square, Copy, Check } from 'lucide-react';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -142,6 +142,7 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -201,6 +202,25 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
     };
   }, []);
 
+  // ── Keep the live-translate function warm while this screen is open ────────
+  useEffect(() => {
+    const ping = async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+        if (!accessToken) return;
+        await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/live-translate`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'warmup' }),
+        });
+      } catch {}
+    };
+    ping();
+    const intervalId = setInterval(ping, 4 * 60 * 1000);
+    return () => clearInterval(intervalId);
+  }, []);
+
   // ── Load saved translations from Supabase ──────────────────────────────────
   const loadSaved = useCallback(async () => {
     setSavedLoading(true);
@@ -256,6 +276,16 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
     await db.from('saved_translations').delete().eq('id', id);
     setSavedList(prev => prev.filter(s => s.id !== id));
   }, []);
+
+  // ── Copy translated text ───────────────────────────────────────────────────
+  const handleCopy = useCallback(async () => {
+    if (!translatedText) return;
+    try {
+      await navigator.clipboard.writeText(translatedText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
+  }, [translatedText]);
 
   // ── Play saved translation (from stored audio — zero API calls) ─────────────
   const handlePlaySaved = useCallback(async (item: SavedTranslation) => {
@@ -664,6 +694,9 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
                       <Volume2 className="mr-1 h-3.5 w-3.5" /> {t('Replay', 'إعادة')}
                     </Button>
                   )}
+                  <Button type="button" variant="ghost" size="sm" onClick={handleCopy} disabled={!translatedText} title={t('Copy translation', 'نسخ الترجمة')} className={`h-7 px-2 text-[11px] transition-colors ${copied ? 'text-green-400' : 'text-muted-foreground hover:text-cyan-400'}`}>
+                    {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                  </Button>
                   <Button type="button" variant="ghost" size="sm" onClick={handleSave} disabled={saving || justSaved || !translatedText} className={`h-7 px-2 text-[11px] transition-colors ${justSaved ? 'text-green-400' : 'text-muted-foreground hover:text-cyan-400'}`}>
                     {justSaved ? <BookmarkCheck className="h-3.5 w-3.5" /> : <Bookmark className="h-3.5 w-3.5" />}
                   </Button>

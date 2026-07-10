@@ -65,6 +65,20 @@ serve(async (req: Request) => {
       });
     }
 
+    const contentType = req.headers.get("content-type") || "";
+
+    // Zero-cost warmup path: keep the isolate hot without touching trial gate or pipeline
+    if (contentType.includes("application/json")) {
+      const warmupBody = await req.json().catch(() => ({} as Record<string, unknown>));
+      if (warmupBody?.mode === "warmup") {
+        console.log("[live-translate] Warmup ping received, skipping pipeline.");
+        return new Response(JSON.stringify({ ok: true, warmed: true, ts: Date.now() }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Trial gate
     const trial = await checkTrialAccess(supabase, user.id, "interpreter", 5);
     if (!trial.allowed) {
@@ -74,7 +88,6 @@ serve(async (req: Request) => {
       });
     }
 
-    const contentType = req.headers.get("content-type") || "";
     if (!contentType.includes("multipart/form-data")) {
       return new Response(JSON.stringify({ error: "Expected multipart/form-data" }), {
         status: 400,
