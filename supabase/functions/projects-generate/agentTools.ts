@@ -2253,13 +2253,13 @@ export const AGENT_TOOLS = [
   // implementation docs are loaded on demand to keep the base prompt small.
   {
     name: "get_capability_doc",
-    description: "Load the full implementation doc for a specific capability. Valid names: stock_images, forms, booking, ecommerce, phaser_game. Call this BEFORE writing code that touches the backend for that capability so you use the correct API contract.",
+    description: "Load the full implementation doc for a specific capability. Valid names: stock_images, forms, booking, ecommerce, blog, sports, phaser_game, multi_file_features, comments, chat, roles. Call this BEFORE writing code that touches the backend for that capability (including cart or auth, which live under multi_file_features) so you use the correct API contract — never guess or fake it.",
     parameters: {
       type: "object",
       properties: {
         name: {
           type: "string",
-          description: "Capability name. One of: stock_images | forms | booking | ecommerce | phaser_game",
+          description: "Capability name. One of: stock_images | forms | booking | ecommerce | blog | sports | phaser_game | multi_file_features | comments | chat | roles",
         },
       },
       required: ["name"],

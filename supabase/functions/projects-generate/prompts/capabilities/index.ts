@@ -14,6 +14,9 @@ import { ECOMMERCE_CAPABILITY } from "./ecommerce.ts";
 import { BLOG_CAPABILITY } from "./blog.ts";
 import { SPORTS_CAPABILITY } from "./sports.ts";
 import { MULTI_FILE_FEATURES_CAPABILITY } from "./multiFileFeatures.ts";
+import { COMMENTS_CAPABILITY } from "./comments.ts";
+import { CHAT_CAPABILITY } from "./chat.ts";
+import { ROLES_CAPABILITY } from "./roles.ts";
 
 export type CapabilityName =
   | "phaser_game"
@@ -23,7 +26,10 @@ export type CapabilityName =
   | "ecommerce"
   | "blog"
   | "sports"
-  | "multi_file_features";
+  | "multi_file_features"
+  | "comments"
+  | "chat"
+  | "roles";
 
 // The short menu — always sent to the AI so it knows what's available.
 export const CAPABILITY_MANIFEST = `
@@ -43,6 +49,9 @@ auto-injected when the user's request matches.
 | sports          | Sports fan sites, rosters, standings, fixtures, team news.            |
 | phaser_game     | 2D games (racing, shooter, puzzle, platformer, arcade).               |
 | multi_file_features | Language toggle, dark mode, cart, auth, animations, modals, toasts, new pages, search. |
+| comments        | Comments, reviews, ratings, discussions on posts/products.           |
+| chat            | Live chat, messaging, direct messages, support inbox.                |
+| roles           | User roles, permissions, team/admin access, staff accounts.          |
 
 Rules:
 - Never hardcode data the backend provides (products, services, categories, filters).
@@ -60,6 +69,9 @@ const DOCS: Record<CapabilityName, string> = {
   blog: BLOG_CAPABILITY,
   sports: SPORTS_CAPABILITY,
   multi_file_features: MULTI_FILE_FEATURES_CAPABILITY,
+  comments: COMMENTS_CAPABILITY,
+  chat: CHAT_CAPABILITY,
+  roles: ROLES_CAPABILITY,
 };
 
 export function getCapabilityDoc(name: string): string | null {
@@ -154,12 +166,33 @@ const RULES: DetectionRule[] = [
       /\b(language|arabic|english|rtl|ltr|bilingual|i18n|translation|toggle|switch\s*lang)\b/i,
       /\b(dark\s*mode|light\s*mode|theme\s*toggle|night\s*mode|color\s*scheme)\b/i,
       /\b(cart|shopping|add\s*to\s*cart|checkout|basket)\b/i,
-      /\b(login|signup|sign\s*up|auth|authentication|logout|register|user\s*account)\b/i,
+      /\b(login|signup|sign\s*up|sign\s*in|auth|authentication|logout|register|user\s*account|member\s*(area|portal|login)|client\s*portal|dashboard|saas|user\s*profile|account\s*settings)\b/i,
       /\b(animation|animate|fade|slide|scroll\s*effect|aos|framer|motion|transition)\b/i,
       /\b(modal|popup|pop-up|dialog|overlay|lightbox)\b/i,
       /\b(toast|notification|alert\s*message|snackbar)\b/i,
       /\b(new\s*page|add\s*page|create\s*page|new\s*route|add\s*route|routing)\b/i,
       /\b(search|filter|sort|searchable)\b/i,
+    ],
+  },
+  {
+    capability: "comments",
+    keywords: [
+      /\b(comment(s)?|review(s)?|rating(s)?|discussion(s)?|reply|replies)\b/i,
+      /تعليق(ات)?|مراجعات|تقييم(ات)?/,
+    ],
+  },
+  {
+    capability: "chat",
+    keywords: [
+      /\b(live\s*chat|chat\s*room|chat\s*widget|messaging|direct\s*message|dm(s)?|support\s*inbox)\b/i,
+      /دردشة|محادثة|رسائل\s*مباشرة/,
+    ],
+  },
+  {
+    capability: "roles",
+    keywords: [
+      /\b(user\s*roles?|admin\s*role|permissions?|access\s*control|team\s*member(s)?|staff\s*account(s)?|role[- ]?based)\b/i,
+      /صلاحيات|أدوار\s*المستخدمين/,
     ],
   },
 ];
@@ -180,6 +213,9 @@ export function detectCapabilities(prompt: string): CapabilityName[] {
     detected.delete("ecommerce");
     detected.delete("booking");
     detected.delete("forms");
+    detected.delete("comments");
+    detected.delete("chat");
+    detected.delete("roles");
   }
   return Array.from(detected);
 }

@@ -100,6 +100,9 @@ serve(async (req: Request) => {
     // Languages NOT supported by Whisper — pass empty string so Whisper auto-detects
     const WHISPER_UNSUPPORTED = new Set(["rw", "fr_ca"]);
 
+    // ── Latency tracking ────────────────────────────────────────────────────
+    const pipelineStart = Date.now();
+
     // ── Step 1: Whisper transcription ──────────────────────────────────────
     console.log("[live-translate] Step 1: Whisper transcription...");
     const whisperLangCode = (spokenLanguage !== "auto" && !WHISPER_UNSUPPORTED.has(spokenLanguage))
@@ -133,9 +136,11 @@ serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    console.log("[live-translate] Transcript:", transcript);
+    const whisperMs = Date.now() - pipelineStart;
+    console.log(`[live-translate] Transcript (${whisperMs}ms):`, transcript);
 
     // ── Step 2: GPT-4o-mini translation ───────────────────────────────────
+    const step2Start = Date.now();
     console.log("[live-translate] Step 2: Translating...");
     const LANGUAGE_NAMES: Record<string, string> = {
       en: "English", ar: "Arabic", fr: "French", de: "German", es: "Spanish",
@@ -184,9 +189,11 @@ serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    console.log("[live-translate] Translation:", translation);
+    const gptMs = Date.now() - step2Start;
+    console.log(`[live-translate] Translation (${gptMs}ms):`, translation);
 
     // ── Step 3: ElevenLabs TTS (Flash v2.5 — ultra-low latency) ────────────
+    const step3Start = Date.now();
     console.log("[live-translate] Step 3: ElevenLabs TTS voice:", elevenLabsVoiceId);
 
     if (!ELEVENLABS_API_KEY) {
@@ -221,11 +228,13 @@ serve(async (req: Request) => {
 
     const audioBase64 = arrayBufferToBase64(await ttsRes.arrayBuffer());
     const audioMime = "audio/mpeg";
+    const ttsMs = Date.now() - step3Start;
+    const totalMs = Date.now() - pipelineStart;
 
     const consume = await checkAndConsumeTrialTokenOnce(supabase, user.id, "interpreter", 5, requestId);
     const trialPayload = consume.allowed ? buildTrialSuccessPayload("interpreter", consume) : null;
 
-    console.log("[live-translate] Done.");
+    console.log(`[live-translate] Done. whisper=${whisperMs}ms gpt=${gptMs}ms tts=${ttsMs}ms total=${totalMs}ms`);
     return new Response(
       JSON.stringify({ success: true, transcript, translation, audio_base64: audioBase64, audio_mime: audioMime, trial: trialPayload }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
