@@ -15,7 +15,7 @@ const STORAGE_BUCKET = "generated-files";
 const SIGNED_URL_EXPIRES_SECONDS = 10 * 60;
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_STATUS_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
-const KIE_MODEL = "recraft/remove-background";
+const KIE_MODEL = "grok-imagine/image-to-image";
 
 function uuid() {
   try {
@@ -65,6 +65,15 @@ function detectMimeAndExt(bytes: Uint8Array, mimeHint?: string): { mime: string;
 }
 
 const IMAGE_URL_KEYS = ["imageURL", "URL", "url", "outputUrl", "outputURL"];
+
+function buildBackgroundRemovalPrompt(positivePrompt?: string): string {
+  const cleanedPrompt = (positivePrompt || "").trim();
+  const basePrompt = "@image1 Remove the background completely and isolate only the main subject. Keep the subject unchanged and preserve the face, body, pose, clothing, hands, document text, edges, colors, and all important details. Do not add new objects, do not restyle the subject, and do not change the composition.";
+  if (!cleanedPrompt) {
+    return basePrompt;
+  }
+  return `${basePrompt} Extra instruction: ${cleanedPrompt}`;
+}
 
 function extractImageUrls(data: unknown): string[] {
   const urls: string[] = [];
@@ -165,14 +174,18 @@ async function pollKieTaskForImage(taskId: string): Promise<string> {
   throw new Error("KIE generation timed out");
 }
 
-async function submitKieBackgroundRemoval(imageUrl: string): Promise<string> {
+async function submitKieBackgroundRemoval(imageUrl: string, positivePrompt?: string): Promise<string> {
   if (!KIE_API_KEY) throw new Error("KIE_API_KEY not configured");
   const submitResp = await fetch(KIE_CREATE_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${KIE_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: KIE_MODEL,
-      input: { image: imageUrl },
+      input: {
+        prompt: buildBackgroundRemovalPrompt(positivePrompt),
+        image_urls: [imageUrl],
+        nsfw_checker: false,
+      },
     }),
   });
   const submitText = await submitResp.text();
@@ -208,7 +221,7 @@ serve(async (req) => {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     let authenticatedUserId = "anonymous";
 
-    // ── Trial Token Check: bg_removal ──
+    // â”€â”€ Trial Token Check: bg_removal â”€â”€
     const authHeader = req.headers.get('Authorization') || req.headers.get('authorization');
     if (authHeader) {
       const supabaseAdmin = createClient(
@@ -227,9 +240,10 @@ serve(async (req) => {
         }
       }
     }
-    // ── End Trial Token Check ──
+    // â”€â”€ End Trial Token Check â”€â”€
 
     const imagesToProcess: unknown[] = [];
+    const positivePrompt = typeof body?.positivePrompt === "string" ? body.positivePrompt : "";
     if (Array.isArray(body?.referenceImages)) {
       imagesToProcess.push(...(body.referenceImages as unknown[]));
     } else if (body?.image) {
@@ -265,7 +279,7 @@ serve(async (req) => {
           continue;
         }
         const sourceUrl = await uploadAndSignReferenceImage({ input: inputImage, userId: authenticatedUserId, index: i });
-        const outputUrl = await submitKieBackgroundRemoval(sourceUrl);
+        const outputUrl = await submitKieBackgroundRemoval(sourceUrl, positivePrompt);
         results.push({ index: i, imageUrl: outputUrl });
       } catch (error: unknown) {
         const msg = error instanceof Error ? error.message : String(error);
