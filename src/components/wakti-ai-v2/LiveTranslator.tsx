@@ -143,6 +143,7 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
   const [justSaved, setJustSaved] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -286,6 +287,15 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
       setTimeout(() => setCopied(false), 2000);
     } catch {}
   }, [translatedText]);
+
+  const handleCopySaved = useCallback(async (item: SavedTranslation) => {
+    if (!item.translated_text) return;
+    try {
+      await navigator.clipboard.writeText(item.translated_text);
+      setCopiedId(item.id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch {}
+  }, []);
 
   // ── Play saved translation (from stored audio — zero API calls) ─────────────
   const handlePlaySaved = useCallback(async (item: SavedTranslation) => {
@@ -733,6 +743,9 @@ export function LiveTranslator({ onBack, operatorPayload, onOperatorConsumed }: 
                   <div className="flex items-center gap-4">
                     <button type="button" title={playingId === item.id ? 'Stop' : 'Play'} onClick={() => handlePlaySaved(item)} className={`transition-colors ${playingId === item.id ? 'text-cyan-400' : 'text-muted-foreground hover:text-cyan-400'}`}>
                       {playingId === item.id ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                    </button>
+                    <button type="button" title={t('Copy translation', 'نسخ الترجمة')} onClick={() => handleCopySaved(item)} className={`transition-colors ${copiedId === item.id ? 'text-green-400' : 'text-muted-foreground hover:text-cyan-400'}`}>
+                      {copiedId === item.id ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
                     </button>
                     <button type="button" title="Delete" onClick={() => handleDelete(item.id)} className="text-red-400/60 hover:text-red-400 transition-colors">
                       <Trash2 className="w-4 h-4" />

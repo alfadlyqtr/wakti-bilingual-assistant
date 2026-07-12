@@ -11,6 +11,7 @@ interface EnhanceRequest {
   theme?: unknown;
   themeInstructions?: unknown;
   hasAssets?: unknown;
+  experience?: unknown;
 }
 
 interface OpenAIChatResponse {
@@ -50,6 +51,14 @@ const themeDescriptions: Record<string, string> = {
   'neon': 'neon theme with cyan (#22d3ee), lime (#a3e635), yellow (#facc15), and pink (#f472b6) - electric, futuristic, eye-catching',
 };
 
+function preserveOriginalRequest(enhancedPrompt: string, originalPrompt: string): string {
+  const marker = "ORIGINAL USER REQUEST (PRESERVED VERBATIM)";
+  if (enhancedPrompt.includes(marker) && enhancedPrompt.includes(originalPrompt)) {
+    return enhancedPrompt;
+  }
+  return `${marker}\n${originalPrompt}\n\n${enhancedPrompt}`;
+}
+
 Deno.serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -60,8 +69,11 @@ Deno.serve(async (req: Request) => {
     const body = (await req.json()) as EnhanceRequest;
     const rawPrompt = body.prompt;
     const theme = typeof body.theme === "string" ? body.theme : "";
-    const themeInstructions = typeof body.themeInstructions === "string" ? body.themeInstructions : "";
+    const themeInstructions = typeof body.themeInstructions === "string"
+      ? sanitizeUserInput(body.themeInstructions, { label: "theme instructions", maxLength: 2000 })
+      : "";
     const hasAssets = Boolean(body.hasAssets);
+    const experience = body.experience === "new_project" ? "new project build" : "project build";
 
     if (!rawPrompt || typeof rawPrompt !== "string") {
       return new Response(
@@ -93,6 +105,77 @@ Deno.serve(async (req: Request) => {
 
     console.log("[EMP] Enhancing prompt with theme:", theme, themeInstructions ? "(full instructions)" : themeDesc);
 
+    const systemPrompt = withUserInputGuard(`You are Wakti's universal AMP prompt enhancer for new projects. Turn a non-technical user's idea into a build-ready specification that an AI web/app coder can implement accurately.
+
+The user's request is the source of truth. Your job is to make it clearer and more complete without taking anything away from it.
+
+NON-NEGOTIABLE PRESERVATION RULES:
+1. Preserve every requirement, exact phrase, named item, URL, email, phone number, number, restriction, preference, and "do not" instruction from the user's request.
+2. Start the output with a section named "ORIGINAL USER REQUEST (PRESERVED VERBATIM)" and copy the complete sanitized user request exactly. Do not summarize it or replace it with your own words.
+3. Never delete, weaken, contradict, or silently change the user's core goal.
+4. Never invent factual business information such as names, prices, addresses, contact details, products, services, dates, testimonials, statistics, or payment providers.
+5. Never turn a requested real feature into a decorative mockup, fake button, local-only state, or pretend backend behavior.
+
+UNIVERSAL BUILD-BRIEF RULES:
+1. Detect the project type from the user's words. Do not assume a salon, store, portfolio, or any other domain when the user did not say one.
+2. Detect only the capabilities relevant to this request. When useful, name them with these canonical labels so the coding system can connect the right implementation guidance: phaser_game, stock_images, forms, booking, ecommerce, blog, sports, multi_file_features, comments, chat, roles.
+3. Expand implied implementation needs that are necessary to make the user's requested features real: pages, screens, user roles, permissions, workflows, saved backend data, validation, loading states, empty states, errors, and success states.
+4. Put every addition you make under "ADDED BUILD REQUIREMENTS" or "SAFE DEFAULTS". Make it clear that these are implementation guidance, not facts supplied by the user.
+5. If a decision cannot safely be made, put it under "NEEDS USER DECISION". Do not hide the uncertainty and do not block the whole brief with unnecessary questions.
+6. For a simple request, keep the brief focused. For a complex business or app request, provide a complete end-to-end plan.
+7. If the user asks for authentication, dashboards, bookings, payments, orders, staff, admin tools, or persistent data, explicitly describe the real workflows and permissions needed.
+8. Use real backend data where the platform supports it. Do not request or promise a payment provider, external integration, or capability that the user did not ask for unless it is clearly labeled as optional configuration.
+9. Keep the explanation in the same language as the user's request. Keep canonical capability labels unchanged.
+10. Return only the enhanced build brief. Do not add an introduction, apology, rating, or commentary outside the brief.
+
+REQUIRED OUTPUT STRUCTURE:
+ORIGINAL USER REQUEST (PRESERVED VERBATIM)
+[the complete user request copied exactly]
+
+PROJECT TYPE
+[detected project type, or "Needs clarification" if truly unclear]
+
+PROJECT GOAL
+[what the finished project should help people do, without adding a different goal]
+
+DETECTED CAPABILITIES
+[only relevant canonical capability labels, with one short reason for each]
+
+REQUIRED PAGES AND SCREENS
+[pages needed for the requested experience; include role-specific screens when relevant]
+
+USER TYPES AND PERMISSIONS
+[guest, customer, member, staff, admin, or other roles only when relevant]
+
+END-TO-END WORKFLOWS
+[the important journeys from start to finish]
+
+BACKEND AND PERSISTENCE REQUIREMENTS
+[what must be stored, fetched, updated, and protected so the requested behavior survives refresh and login]
+
+VALIDATION, EMPTY, ERROR, AND SUCCESS STATES
+[states needed for a trustworthy user experience]
+
+DESIGN AND THEME DIRECTION
+[apply the selected theme and assets without changing the user's product requirements]
+
+ADDED BUILD REQUIREMENTS
+[only implementation details needed to make the user's request real]
+
+SAFE DEFAULTS
+[reasonable choices that can be made without inventing user facts]
+
+NEEDS USER DECISION
+[only decisions that materially affect the build]
+
+BUILD ACCEPTANCE CHECKLIST
+[short, testable statements proving the requested project works]
+
+${themeDesc ? `SELECTED THEME:
+${themeDesc}` : 'SELECTED THEME: Choose a design direction that fits the detected project type without overriding the user request.'}${assetInfo}
+
+The user experience is: ${experience}.`);
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -101,49 +184,14 @@ Deno.serve(async (req: Request) => {
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
-        max_tokens: 3000,
-        temperature: 0.7,
+        max_tokens: 5000,
+        temperature: 0.3,
         messages: [
-          {
-            role: "system",
-            content: withUserInputGuard(`You are an expert prompt enhancer for an AI web developer. Your job is to prepare the user's request so an AI coder can build exactly what they want, with zero ambiguity.
-
-FIRST, decide which mode applies to the user's input:
-
-MODE A — SHORT/VAGUE INPUT (a simple idea with little detail, e.g. "restaurant menu", "portfolio for a photographer"):
-- Expand it into a focused, specific brief (roughly 3-6 sentences).
-- Add specific UI/UX suggestions (animations, layout, sections).
-- Do not invent exact headlines, body copy, or contact details the user never gave you.
-
-MODE B — DETAILED/STRUCTURED INPUT (the user already wrote sections, exact headlines or body copy, specific contact info like emails/phones/URLs, a list of requirements, or explicit "do not include X" rules):
-- Your ONLY job is to organize and clarify — NEVER summarize, shorten, condense, or cut anything.
-- Preserve every exact word of copy, every URL, every email/phone number, every named section, every explicit requirement, and every "do not" rule EXACTLY as written by the user.
-- You may add clear section headers and light connective structure so an AI coder cannot miss anything, and you may lightly polish grammar ONLY in the specific places the user explicitly asked to be polished.
-- If you are unsure whether something is important enough to keep, KEEP IT. Never remove content to save space or stay "concise" — length is not a goal in this mode.
-
-ABSOLUTE RULES (apply in both modes):
-1. NEVER remove or change the user's core request or any specific detail they provided.
-2. If assets are mentioned, specify exactly how to use them (e.g. "use the user's attached photo as the real hero/personal image, do not generate a substitute face").
-3. ${themeDesc ? 'Include the theme colors and mood naturally in your description' : 'Choose appropriate colors based on the content'}.
-4. Return ONLY the enhanced prompt text, no explanations, no prefixes, no meta-commentary about which mode you used.
-5. Write in the same language as the user's input.
-
-${themeDesc ? `THEME TO USE: ${themeDesc}` : ''}${assetInfo}
-
-Example (Mode A — short input):
-User: "restaurant menu"
-Enhanced: "Create a modern restaurant menu website with a ${themeDesc || 'clean design'}. Include an animated hero section with a featured dish, a glassmorphism menu grid with hover effects, smooth scroll navigation, and a sticky header with the restaurant logo."
-
-Example (Mode B — detailed input):
-User: A full multi-section brief with exact headlines, exact body copy, specific contact details, and a list of "do not include" rules.
-Enhanced: The exact same brief, reorganized with clear section labels, every exact copy line/URL/contact detail preserved verbatim, every requirement and "do not" rule carried forward exactly as written, with only light grammar polish applied where the user explicitly asked for it.
-
-Now enhance the user's prompt:`)
-          },
+          { role: "system", content: systemPrompt },
           {
             role: "user",
-            content: prompt
-          }
+            content: `ORIGINAL USER REQUEST (SOURCE OF TRUTH):\n${prompt}\n\nCreate the universal build brief now.`,
+          },
         ],
       }),
     });
@@ -167,15 +215,16 @@ Now enhance the user's prompt:`)
 
     if (!enhancedPrompt) {
       return new Response(
-        JSON.stringify({ ok: true, enhancedPrompt: prompt }),
+        JSON.stringify({ ok: true, enhancedPrompt: preserveOriginalRequest("", prompt) }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("[EMP] Enhanced:", enhancedPrompt.substring(0, 100));
+    const preservedPrompt = preserveOriginalRequest(enhancedPrompt, prompt);
+    console.log("[EMP] Enhanced:", preservedPrompt.substring(0, 100));
 
     return new Response(
-      JSON.stringify({ ok: true, enhancedPrompt }),
+      JSON.stringify({ ok: true, enhancedPrompt: preservedPrompt }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

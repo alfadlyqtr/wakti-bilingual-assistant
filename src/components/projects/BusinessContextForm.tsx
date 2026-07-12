@@ -19,6 +19,13 @@ interface BusinessContextFormProps {
   siteType: string;
   heading: string;
   fields: ContextField[];
+  /**
+   * Values already extracted from the user's own prompt (email, phone, url,
+   * an explicitly named business, a known location, or a description
+   * snippet). Never invented — only text the user already typed. Shown
+   * pre-filled so the user can confirm or edit instead of retyping.
+   */
+  initialValues?: Record<string, string>;
   onSubmit: (data: BusinessContextData) => void;
   isRTL?: boolean;
 }
@@ -27,12 +34,17 @@ export default function BusinessContextForm({
   siteType,
   heading,
   fields,
+  initialValues,
   onSubmit,
   isRTL = false,
 }: BusinessContextFormProps) {
-  const [values, setValues] = useState<Record<string, string>>({});
+  const [values, setValues] = useState<Record<string, string>>(() => initialValues || {});
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [showMoreFields, setShowMoreFields] = useState(false);
+  // Auto-expand "Add more details" when a hidden field was already prefilled,
+  // so the user sees what was detected instead of it being hidden by default.
+  const [showMoreFields, setShowMoreFields] = useState(
+    () => fields.slice(2).some(field => !!initialValues?.[field.id])
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (id: string, value: string) => {

@@ -129,6 +129,12 @@ verify_jwt = false
 [functions.project-backend-api]
 verify_jwt = false
 
+[functions.projects-enhance-prompt]
+verify_jwt = true
+
+[functions.projects-amp-prompt]
+verify_jwt = true
+
 [functions.a4-callback]
 verify_jwt = false
 

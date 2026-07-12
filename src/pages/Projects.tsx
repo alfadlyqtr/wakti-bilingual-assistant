@@ -97,6 +97,65 @@ const inferScreenshotIntent = (files: File[]): ScreenshotIntent => {
   return hasDocument ? 'content' : 'style';
 };
 
+// Cities/countries commonly used by Wakti users — matched only to prefill a
+// "location"/"address" field when the user already typed the name themselves.
+// This never guesses a location the user didn't write.
+const KNOWN_CONTEXT_LOCATIONS = [
+  'doha', 'lusail', 'al rayyan', 'al wakrah', 'al khor', 'al khobar', 'qatar',
+  'kuwait city', 'kuwait', 'dubai', 'abu dhabi', 'sharjah', 'riyadh', 'jeddah',
+  'mecca', 'medina', 'manama', 'bahrain', 'muscat', 'oman', 'cairo', 'amman',
+  'beirut',
+];
+
+/**
+ * Extracts prefill values for context-form fields using ONLY text the user
+ * already typed in their own prompt — never invents a name, price, or fact.
+ * Matching is generic (by field type + id keywords) so it works for both the
+ * AI-generated fields from projects-context-detect and the local fallback
+ * templates below, without any per-template special-casing.
+ */
+const extractLiteralPrefill = (
+  rawPrompt: string,
+  fields: ContextField[],
+): Record<string, string> => {
+  const values: Record<string, string> = {};
+  const text = (rawPrompt || '').trim();
+  if (!text || !fields?.length) return values;
+
+  const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+  const phoneMatch = text.match(/\+?\d[\d\s-]{7,}\d/);
+  const urlMatch = text.match(/https?:\/\/[^\s,]+|(?:www\.)?[a-zA-Z0-9-]+\.(?:com|net|org|qa|sa|ae|co)(?:\/[^\s,]*)?/i);
+  const nameMatch = text.match(/(?:called|named|is called|my name is)\s+["\u201c']?([A-Z][\w&' -]{1,40})["\u201d']?/i);
+  const lowerText = text.toLowerCase();
+  const locationHit = KNOWN_CONTEXT_LOCATIONS.find(place => new RegExp(`\\b${place}\\b`, 'i').test(lowerText));
+
+  // Only offer a description/bio snippet if the prompt is long enough to be
+  // more useful than the field's own example placeholder.
+  const snippet = text.length > 40
+    ? (text.length > 220 ? `${text.slice(0, 220).replace(/\s+\S*$/, '')}\u2026` : text)
+    : '';
+
+  for (const field of fields) {
+    const id = field.id.toLowerCase();
+
+    if ((field.type === 'email' || id.includes('email')) && emailMatch) {
+      values[field.id] = emailMatch[0];
+    } else if ((field.type === 'tel' || id.includes('phone') || id.includes('whatsapp')) && phoneMatch) {
+      values[field.id] = phoneMatch[0].trim();
+    } else if ((field.type === 'url' || id.includes('website') || id.includes('linkedin') || id.includes('instagram') || id.includes('social')) && urlMatch) {
+      values[field.id] = urlMatch[0];
+    } else if (id.includes('name') && !id.includes('specialty') && nameMatch) {
+      values[field.id] = nameMatch[1].trim();
+    } else if ((id.includes('location') || id.includes('address')) && locationHit) {
+      values[field.id] = locationHit.replace(/\b\w/g, c => c.toUpperCase());
+    } else if (field.type === 'textarea' && snippet) {
+      values[field.id] = snippet;
+    }
+  }
+
+  return values;
+};
+
 const buildFallbackContextForm = (
   rawPrompt: string,
   isRTL: boolean,
@@ -1013,7 +1072,7 @@ export default function Projects() {
   const [prompt, setPrompt] = useState('');
   const [generating, setGenerating] = useState(false);
   const [isDetectingContext, setIsDetectingContext] = useState(false);
-  const [contextFormData, setContextFormData] = useState<{ siteType: string; heading: string; fields: ContextField[] } | null>(null);
+  const [contextFormData, setContextFormData] = useState<{ siteType: string; heading: string; fields: ContextField[]; initialValues?: Record<string, string> } | null>(null);
   const pendingPromptRef = useRef<string>('');
   const [selectedTheme, setSelectedTheme] = useState('user_prompt');
   const [backendStatus, setBackendStatus] = useState<Record<string, boolean>>({});
@@ -1523,6 +1582,11 @@ Apply these styles consistently throughout the entire design.`;
       toast.error(isRTL ? 'اكتب شيئًا أولاً' : 'Write something first');
       return;
     }
+
+    if (isGuest) {
+      setGuestDialogOpen(true);
+      return;
+    }
     
     setIsEnhancing(true);
     try {
@@ -1533,6 +1597,7 @@ Apply these styles consistently throughout the entire design.`;
           theme: selectedTheme,
           themeInstructions: themeInstructions || undefined,
           hasAssets: attachedFiles.length > 0,
+          experience: 'new_project',
         },
       });
       
@@ -1626,7 +1691,13 @@ Apply these styles consistently throughout the entire design.`;
         });
         console.log('[ContextDetect] Response:', response.data, response.error);
         if (!response.error && response.data?.ok && response.data?.fields?.length > 0) {
-          setContextFormData({ siteType: response.data.siteType, heading: response.data.heading, fields: response.data.fields });
+          const detectedFields: ContextField[] = response.data.fields;
+          setContextFormData({
+            siteType: response.data.siteType,
+            heading: response.data.heading,
+            fields: detectedFields,
+            initialValues: extractLiteralPrefill(finalUserPrompt, detectedFields),
+          });
           setIsDetectingContext(false);
           return;
         }
@@ -1637,7 +1708,10 @@ Apply these styles consistently throughout the entire design.`;
       const fallbackContextForm = buildFallbackContextForm(finalUserPrompt, isRTL);
       if (fallbackContextForm?.fields?.length) {
         console.log('[ContextDetect] Using local fallback form:', fallbackContextForm.siteType);
-        setContextFormData(fallbackContextForm);
+        setContextFormData({
+          ...fallbackContextForm,
+          initialValues: extractLiteralPrefill(finalUserPrompt, fallbackContextForm.fields),
+        });
         setIsDetectingContext(false);
         return;
       }
@@ -2142,6 +2216,7 @@ Apply these styles consistently throughout the entire design.`;
             siteType={contextFormData.siteType}
             heading={contextFormData.heading}
             fields={contextFormData.fields}
+            initialValues={contextFormData.initialValues}
             onSubmit={handleContextFormSubmit}
             isRTL={isRTL}
           />
@@ -2367,7 +2442,7 @@ Apply these styles consistently throughout the entire design.`;
                         )}
                       </>
                     )}
-                    <span className="text-xs hidden sm:inline">{isRTL ? 'تحسين' : 'EMP'}</span>
+                    <span className="text-xs hidden sm:inline">{isRTL ? 'تحسين' : 'AMP'}</span>
                   </Button>
                   
                   {/* One-time tooltip for first-time users */}

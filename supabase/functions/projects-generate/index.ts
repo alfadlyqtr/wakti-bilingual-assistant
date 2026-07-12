@@ -8049,7 +8049,14 @@ If this is a portfolio/CV website, use the person's REAL name, REAL experience, 
         content = fixUnescapedNewlines(content);
         let parsed = JSON.parse(content);
         let { files, summary } = coerceFilesMap(parsed);
-        // If AI returned HTML instead of React, retry with ultra-strict prompt
+        // If AI returned HTML instead of React, retry with ultra-strict prompt.
+        // 🔧 FIX: This safety-net retry previously had no timeout budget and no
+        // try/catch — a single slow or timed-out retry threw uncaught and killed
+        // the entire job, discarding a working draft1 and already-paid-for images.
+        // It now gets a bounded, remaining-budget-aware timeout and falls back to
+        // keeping draft1's files on failure instead of destroying the whole job;
+        // the existing MISSING_APP_JS/assertNoHtml checks below still make the
+        // final call on whether the result is actually usable.
         if (!files["/App.js"] || files["/App.js"]?.toLowerCase().includes("<!doctype")) {
           const strictPrompt = `You are a REACT CODE generator. Return ONLY a JSON object with React files.
 
@@ -8065,13 +8072,22 @@ USER REQUEST: ${prompt}
 
 Return ONLY the JSON object. No explanation.`;
 
-          aiText = await callGemini25Pro(strictPrompt, "", true);
-          content = extractJsonObject(aiText);
-          content = fixUnescapedNewlines(content);
-          parsed = JSON.parse(content);
-          const retryResult = coerceFilesMap(parsed);
-          files = retryResult.files;
-          summary = retryResult.summary;
+          try {
+            const htmlRetryTimeoutMs = Math.max(30000, Math.min(120000, remainingCreateBudgetMs() - 15000));
+            const retryAiText = await callGemini25Pro(strictPrompt, "", true, { timeoutMs: htmlRetryTimeoutMs });
+            const retryContent = fixUnescapedNewlines(extractJsonObject(retryAiText));
+            const retryParsed = JSON.parse(retryContent);
+            const retryResult = coerceFilesMap(retryParsed);
+            if (retryResult.files["/App.js"] && !retryResult.files["/App.js"].toLowerCase().includes("<!doctype")) {
+              files = retryResult.files;
+              summary = retryResult.summary;
+            } else {
+              console.warn('[Create Mode] HTML-retry did not return a valid /App.js — keeping draft1 output.');
+            }
+          } catch (htmlRetryErr) {
+            const htmlRetryMsg = htmlRetryErr instanceof Error ? htmlRetryErr.message : String(htmlRetryErr);
+            console.warn(`[Create Mode] HTML-retry failed (${htmlRetryMsg}) — keeping draft1 output.`);
+          }
         }
 
         if (!files["/App.js"]) {
