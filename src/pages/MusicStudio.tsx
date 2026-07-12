@@ -11644,4 +11644,3 @@ function formatDuration(sec: number) {
   const s = sec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
-}
