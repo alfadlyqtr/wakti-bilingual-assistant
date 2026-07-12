@@ -4668,12 +4668,16 @@ IF NO (pure question like "what does X do?") → Return markdown
   "title": "🔧 Short description of the fix",
   "file": "/App.js",
   "steps": [
-    { "title": "Step description", "current": "old code snippet", "changeTo": "new code snippet" }
+    { "title": "Step description", "file": "/App.js", "current": "old code snippet", "changeTo": "new code snippet" }
   ],
   "codeChanges": [
     { "file": "/App.js", "line": 10, "code": "// Full code block to replace" }
   ]
 }
+
+⚠️ MULTI-FILE REQUESTS (e.g. a language toggle needing a NEW i18n/config file PLUS edits to a header component): give EACH step its OWN "file" field for the file THAT step touches. A step without "file" falls back to the single top-level "file" — only rely on the top-level "file" when every step truly touches the same one file.
+
+⚠️ OUTPUT SHAPE IS FLAT: return the object exactly as shown, at the top level. NEVER wrap it inside another object like {"plan": {...}} — "type", "title", "file", "steps", and "codeChanges" must be top-level keys, never nested one level deeper.
 
 📝 MARKDOWN FORMAT FOR QUESTIONS:
 Use emojis, **bold**, \`code\`, and bullet points. Be friendly!
@@ -4940,7 +4944,29 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       if (extractedJson && jsonType) {
         // Validate it's actually valid JSON before returning
         try {
-          const parsed = JSON.parse(extractedJson);
+          const rawParsed = JSON.parse(extractedJson);
+          // 🔧 Defensive unwrap: the AI is instructed to return a FLAT
+          // {"type":"plan","title":...,"file":...,"steps":[...]} object, but
+          // sometimes nests everything under an extra "plan" key instead
+          // (e.g. {"plan": {"title":...,"steps":[...]}}). Every downstream
+          // consumer below (contract verifier + auto-executor) reads flat
+          // parsed.title/.file/.steps/.codeChanges, so an unnoticed nested
+          // shape silently looks like an EMPTY plan: the verifier then
+          // reports everything as "missing", the auto-executor applies zero
+          // changes, and the raw JSON leaks into the chat as literal text
+          // instead of being executed. Unwrap once if the flat shape looks
+          // empty but a nested "plan" object holds the real content.
+          // deno-lint-ignore no-explicit-any
+          const parsed: any = ((): any => {
+            if (!rawParsed || typeof rawParsed !== 'object') return rawParsed;
+            const looksEmpty = !rawParsed.file && !Array.isArray(rawParsed.steps) && !Array.isArray(rawParsed.codeChanges) && !Array.isArray(rawParsed.files);
+            const nested = rawParsed.plan;
+            if (looksEmpty && nested && typeof nested === 'object') {
+              const hasNestedContent = nested.file || Array.isArray(nested.steps) || Array.isArray(nested.codeChanges) || Array.isArray(nested.files);
+              if (hasNestedContent) return { ...rawParsed, ...nested };
+            }
+            return rawParsed;
+          })();
           if (jsonType === 'asset_picker') {
             // Return asset_picker for frontend to show selection UI
             return createResponse({ 
@@ -4961,6 +4987,14 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
               const planFiles: string[] = [];
               if (parsed && typeof parsed === 'object') {
                 if (typeof parsed.file === 'string') planFiles.push(parsed.file);
+                if (Array.isArray(parsed.steps)) {
+                  for (const step of parsed.steps) {
+                    // Mirrors the auto-executor's own fallback below: a step
+                    // without its own "file" targets the plan's top-level file.
+                    if (step && typeof step.file === 'string') planFiles.push(step.file);
+                    else if (typeof parsed.file === 'string') planFiles.push(parsed.file);
+                  }
+                }
                 if (Array.isArray(parsed.codeChanges)) {
                   for (const ch of parsed.codeChanges) {
                     if (ch && typeof ch.file === 'string') planFiles.push(ch.file);
@@ -4980,9 +5014,15 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                 normalizedPlanFiles.some(p => p.endsWith('/' + basename.toLowerCase()) || p === '/' + basename.toLowerCase());
 
               if (isLanguageToggle) {
+                // Accept EITHER a dedicated LanguageContext provider OR an
+                // i18next-style config file — both are legitimate, commonly
+                // used architectures for bilingual support (the phase-2
+                // followup logic below already treats them as equivalent).
                 const hasContext =
                   normalizedPlanFiles.some(p => /\/context(s)?\/.*language/i.test(p)) ||
-                  planHits('languagecontext');
+                  planHits('languagecontext') ||
+                  normalizedPlanFiles.some(p => /i18n/i.test(p)) ||
+                  planHits('i18n');
                 const hasEntry = planHits(entryFile.toLowerCase()) || planHitsBasename(entryFile.split('/').pop() || 'index.js');
                 const hasApp = planHits(appFile.toLowerCase()) || planHitsBasename(appFile.split('/').pop() || 'App.js');
                 if (!hasContext) contractWarnings.push('Missing LanguageContext provider file.');
@@ -5000,7 +5040,7 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
               console.warn('[Contract Verifier] Partial plan detected:', contractWarnings);
               return createResponse({
                 ok: true,
-                plan: extractedJson,
+                plan: JSON.stringify(parsed),
                 mode: 'plan',
                 creditUsage: chatCreditUsage,
                 contractWarnings,
@@ -5131,7 +5171,7 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
             // Fallback: if auto-execution failed or produced no files, return the plan
             const planJsonToReturn = queuedFollowup
               ? JSON.stringify({ ...parsed, queuedFollowup })
-              : extractedJson;
+              : JSON.stringify(parsed);
             return createResponse({ ok: true, plan: planJsonToReturn, mode: 'plan', creditUsage: chatCreditUsage });
           }
         } catch {
