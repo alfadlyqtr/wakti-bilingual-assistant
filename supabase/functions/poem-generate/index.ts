@@ -21,10 +21,11 @@ const KIE_JOBS_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_SUNO_URL = "https://api.kie.ai/api/v1/generate";
 const SPEECH_MODEL = "elevenlabs/text-to-speech-multilingual-v2";
 
-// Calm, warm presets from the confirmed ElevenLabs preset catalog. Multilingual v2
-// speaks Arabic (Saudi/UAE-leaning) and English with the same voice IDs.
+// Dedicated native-accent voice IDs per language — English and Arabic never
+// share a voice. Same raw ElevenLabs voice IDs already proven in production
+// via presentation-elevenlabs-tts / generate-speech.
 const VOICE_MAP: Record<string, Record<"m" | "f", string>> = {
-  en: { m: "George", f: "Sarah" },
+  en: { m: "uju3wxzG5OhpWcoi3SMy", f: "gh8WokH7VR2QkmMmwWHS" },
   ar: { m: "George", f: "Sarah" },
 };
 
@@ -121,14 +122,14 @@ serve(async (req) => {
         input: {
           text: pacedText,
           voice: voiceId,
-          stability: 0.55,
-          similarity_boost: 0.8,
-          style: 0.15,
+          stability: 1.0,
+          similarity_boost: 1.0,
+          style: 0.5,
           speed: 0.92,
           timestamps: false,
           previous_text: "",
           next_text: "",
-          language_code: "",
+          language_code: language,
         },
       }),
     });
