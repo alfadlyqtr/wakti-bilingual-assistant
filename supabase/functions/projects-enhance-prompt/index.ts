@@ -52,8 +52,12 @@ const themeDescriptions: Record<string, string> = {
 };
 
 function preserveOriginalRequest(enhancedPrompt: string, originalPrompt: string): string {
-  const marker = "ORIGINAL USER REQUEST (PRESERVED VERBATIM)";
-  if (enhancedPrompt.includes(marker) && enhancedPrompt.includes(originalPrompt)) {
+  const marker = "YOUR REQUEST";
+  // Older responses (or a slow-to-update model) may still emit the previous
+  // internal-sounding heading — treat that as already-preserved too, instead
+  // of duplicating the original request under both headings.
+  const legacyMarker = "ORIGINAL USER REQUEST (PRESERVED VERBATIM)";
+  if ((enhancedPrompt.includes(marker) || enhancedPrompt.includes(legacyMarker)) && enhancedPrompt.includes(originalPrompt)) {
     return enhancedPrompt;
   }
   return `${marker}\n${originalPrompt}\n\n${enhancedPrompt}`;
@@ -111,7 +115,7 @@ The user's request is the source of truth. Your job is to make it clearer and mo
 
 NON-NEGOTIABLE PRESERVATION RULES:
 1. Preserve every requirement, exact phrase, named item, URL, email, phone number, number, restriction, preference, and "do not" instruction from the user's request.
-2. Start the output with a section named "ORIGINAL USER REQUEST (PRESERVED VERBATIM)" and copy the complete sanitized user request exactly. Do not summarize it or replace it with your own words.
+2. Start the output with a section named "YOUR REQUEST" and copy the complete sanitized user request exactly. Do not summarize it or replace it with your own words.
 3. Never delete, weaken, contradict, or silently change the user's core goal.
 4. Never invent factual business information such as names, prices, addresses, contact details, products, services, dates, testimonials, statistics, or payment providers.
 5. Never turn a requested real feature into a decorative mockup, fake button, local-only state, or pretend backend behavior.
@@ -129,7 +133,7 @@ UNIVERSAL BUILD-BRIEF RULES:
 10. Return only the enhanced build brief. Do not add an introduction, apology, rating, or commentary outside the brief.
 
 REQUIRED OUTPUT STRUCTURE:
-ORIGINAL USER REQUEST (PRESERVED VERBATIM)
+YOUR REQUEST
 [the complete user request copied exactly]
 
 PROJECT TYPE

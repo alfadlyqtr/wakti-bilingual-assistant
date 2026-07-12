@@ -107,6 +107,25 @@ const KNOWN_CONTEXT_LOCATIONS = [
   'beirut',
 ];
 
+// Specialty/service-type labels — matched only when the trigger word(s)
+// already appear in the user's own prompt. This NAMES a category the user
+// already described (e.g. "men's salon" -> "Men's Grooming"); it never adds
+// a business fact the user didn't state. Order matters: more specific
+// combinations are checked before their generic parent keyword.
+const SPECIALTY_KEYWORD_LABELS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /\bmen'?s?\b[\s\S]{0,25}\b(salon|barber|grooming|haircuts?)\b|\b(salon|barber|grooming|haircuts?)\b[\s\S]{0,25}\bmen'?s?\b/i, label: "Men's Grooming" },
+  { pattern: /\bwomen'?s?\b[\s\S]{0,25}\b(salon|beauty|spa)\b|\b(salon|beauty|spa)\b[\s\S]{0,25}\bwomen'?s?\b/i, label: "Women's Beauty & Spa" },
+  { pattern: /\bbarber(shop)?\b/i, label: 'Barbershop' },
+  { pattern: /\bnail(s)?\b/i, label: 'Nail Care' },
+  { pattern: /\bmassage\b/i, label: 'Massage Therapy' },
+  { pattern: /\btattoo\b/i, label: 'Tattoo Studio' },
+  { pattern: /\byoga\b/i, label: 'Yoga Studio' },
+  { pattern: /\bgym|fitness|personal train\w*/i, label: 'Fitness & Training' },
+  { pattern: /\bspa\b/i, label: 'Spa & Wellness' },
+  { pattern: /\bdentist|dental|clinic\b/i, label: 'Healthcare Services' },
+  { pattern: /\bsalon\b/i, label: 'Salon Services' },
+];
+
 /**
  * Extracts prefill values for context-form fields using ONLY text the user
  * already typed in their own prompt — never invents a name, price, or fact.
@@ -128,6 +147,7 @@ const extractLiteralPrefill = (
   const nameMatch = text.match(/(?:called|named|is called|my name is)\s+["\u201c']?([A-Z][\w&' -]{1,40})["\u201d']?/i);
   const lowerText = text.toLowerCase();
   const locationHit = KNOWN_CONTEXT_LOCATIONS.find(place => new RegExp(`\\b${place}\\b`, 'i').test(lowerText));
+  const specialtyHit = SPECIALTY_KEYWORD_LABELS.find(entry => entry.pattern.test(text));
 
   // Only offer a description/bio snippet if the prompt is long enough to be
   // more useful than the field's own example placeholder.
@@ -144,6 +164,8 @@ const extractLiteralPrefill = (
       values[field.id] = phoneMatch[0].trim();
     } else if ((field.type === 'url' || id.includes('website') || id.includes('linkedin') || id.includes('instagram') || id.includes('social')) && urlMatch) {
       values[field.id] = urlMatch[0];
+    } else if ((id.includes('specialty') || id.includes('service_type') || id.includes('category')) && specialtyHit) {
+      values[field.id] = specialtyHit.label;
     } else if (id.includes('name') && !id.includes('specialty') && nameMatch) {
       values[field.id] = nameMatch[1].trim();
     } else if ((id.includes('location') || id.includes('address')) && locationHit) {

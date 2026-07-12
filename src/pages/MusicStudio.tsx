@@ -77,6 +77,7 @@ import AIVideomaker from '@/components/video-maker/AIVideomaker';
 import StudioImageGenerator from '@/components/studio/StudioImageGenerator';
 import SavedImagesTab from '@/components/studio/SavedImagesTab';
 import QRCodeCreator from '@/components/studio/QRCodeCreator';
+import PoemReader from '@/components/studio/PoemReader';
 import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { readWaktiOperatorPayload } from '@/utils/waktiOperator';
@@ -1659,6 +1660,8 @@ export default function MusicStudio() {
           )}
         </>
       )}
+
+      {mainTab === 'poem' && <PoemReader />}
 
       {mainTab === 'qrcode' && <QRCodeCreator />}
 
@@ -11640,4 +11643,5 @@ function formatDuration(sec: number) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
+}
 }

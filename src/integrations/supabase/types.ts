@@ -5112,6 +5112,75 @@ export type Database = {
         }
         Relationships: []
       }
+      user_poem_tracks: {
+        Row: {
+          background_style: string
+          created_at: string
+          error_message: string | null
+          final_audio_url: string | null
+          final_storage_path: string | null
+          id: string
+          instrumental_audio_url: string | null
+          instrumental_status: string
+          instrumental_task_id: string | null
+          language: string
+          lyrics: string
+          speech_audio_url: string | null
+          speech_status: string
+          speech_task_id: string | null
+          status: string
+          title: string | null
+          updated_at: string
+          user_id: string
+          vocal_gender: string | null
+          voice_id: string
+        }
+        Insert: {
+          background_style?: string
+          created_at?: string
+          error_message?: string | null
+          final_audio_url?: string | null
+          final_storage_path?: string | null
+          id?: string
+          instrumental_audio_url?: string | null
+          instrumental_status?: string
+          instrumental_task_id?: string | null
+          language: string
+          lyrics: string
+          speech_audio_url?: string | null
+          speech_status?: string
+          speech_task_id?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+          vocal_gender?: string | null
+          voice_id: string
+        }
+        Update: {
+          background_style?: string
+          created_at?: string
+          error_message?: string | null
+          final_audio_url?: string | null
+          final_storage_path?: string | null
+          id?: string
+          instrumental_audio_url?: string | null
+          instrumental_status?: string
+          instrumental_task_id?: string | null
+          language?: string
+          lyrics?: string
+          speech_audio_url?: string | null
+          speech_status?: string
+          speech_task_id?: string | null
+          status?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+          vocal_gender?: string | null
+          voice_id?: string
+        }
+        Relationships: []
+      }
       user_personal_touch: {
         Row: {
           ai_nickname: string
