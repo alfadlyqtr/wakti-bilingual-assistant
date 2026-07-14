@@ -17,6 +17,7 @@ interface StudyPlan {
   currentAyah: number;
   startSurah?: number;
   startAyah?: number;
+  customName?: string;
 }
 
 interface StudyPlanStore {
@@ -99,6 +100,17 @@ function stripBasmala(text: string): string {
   // Drop the first 4 whitespace-separated tokens unconditionally.
   const words = text.trim().split(/\s+/);
   return words.slice(4).join(" ");
+}
+
+function surahName(n: number, isAr: boolean): string {
+  const s = SURAH_LIST.find((x) => x.n === n);
+  if (isAr) return s ? `سورة ${s.ar}` : `سورة ${n}`;
+  return s ? `Surah ${s.en}` : `Surah ${n}`;
+}
+
+function plainSurahName(n: number, isAr: boolean): string {
+  const s = SURAH_LIST.find((x) => x.n === n);
+  return s ? (isAr ? s.ar : s.en) : String(n);
 }
 
 function readPlanStore(): StudyPlanStore {
@@ -250,7 +262,7 @@ export default function DeenStudy() {
     toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟");
   }, [sessionAyah, plan, playerMode, upsertMemorization, reloadMemorization, isAr]);
 
-  const activatePlan = (type: PlanType, dailyGoal: number, startSurah: number, startAyah: number) => {
+  const activatePlan = (type: PlanType, dailyGoal: number, startSurah: number, startAyah: number, customName?: string) => {
     const newPlan: StudyPlan = {
       id: `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       type,
@@ -259,6 +271,7 @@ export default function DeenStudy() {
       currentAyah: startAyah,
       startSurah,
       startAyah,
+      customName: type === "custom" ? customName?.trim().slice(0, 25) || undefined : undefined,
     };
     setPlanStore((prev) => {
       const next: StudyPlanStore = {
@@ -384,7 +397,7 @@ export default function DeenStudy() {
                       <div className="min-w-0">
                         <p className="text-sm font-bold" style={{ color: textPri }}>{isAr ? "ابدأ جلسة اليوم" : "Start today's session"}</p>
                         <p className="text-xs mt-0.5" style={{ color: accentText }}>
-                          {isAr ? "سورة" : "Surah"} {plan.currentSurah} — {isAr ? "آية" : "Ayah"} {plan.currentAyah}
+                          {surahName(plan.currentSurah, isAr)} — {isAr ? "آية" : "Ayah"} {plan.currentAyah}
                         </p>
                       </div>
                     </div>
@@ -554,7 +567,7 @@ function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, emphasizeReview
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-xs font-semibold" style={{ color: textPri }}>
-          {isAr ? "سورة" : "Surah"} {m.surah_number} — {isAr ? "آية" : "Ayah"} {m.ayah_number}
+          {surahName(m.surah_number, isAr)} — {isAr ? "آية" : "Ayah"} {m.ayah_number}
         </p>
         <p className="text-[10px] mt-0.5" style={{ color: textSec }}>
           {isMemorized ? (isAr ? "✅ ثابت" : "✅ Strong") : isReview ? (isAr ? "🔄 راجع اليوم" : "🔄 Review today") : (isAr ? "📖 تتعلمها" : "📖 Learning")}
@@ -597,7 +610,7 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   dark: boolean;
   activePlan: StudyPlan | null;
   savedPlans: StudyPlan[];
-  onActivate: (type: PlanType, dailyGoal: number, startSurah: number, startAyah: number) => void;
+  onActivate: (type: PlanType, dailyGoal: number, startSurah: number, startAyah: number, customName?: string) => void;
   onSetActive: (planId: string) => void;
   onDeletePlan: (planId: string) => void;
 }) {
@@ -616,6 +629,7 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   );
   const [ayahMode, setAyahMode] = useState<"beginning" | "custom">("beginning");
   const [customAyah, setCustomAyah] = useState(activePlan?.startAyah ?? 1);
+  const [customName, setCustomName] = useState(activePlan?.customName ?? "");
 
   const filteredSurahs = surahSearch.trim()
     ? SURAH_LIST.filter((s) =>
@@ -640,6 +654,7 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
     setPickedSurah(activePlan?.startSurah ? (SURAH_LIST.find((s) => s.n === activePlan.startSurah) ?? null) : null);
     setCustomAyah(activePlan?.startAyah ?? 1);
     setAyahMode((activePlan?.startAyah ?? 1) > 1 ? "custom" : "beginning");
+    setCustomName(activePlan?.customName ?? "");
     setShowCustomEditor(false);
   }, [activePlan]);
 
@@ -647,7 +662,7 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
     if (!selectedType) return;
     if (selectedType === "custom") {
       if (!pickedSurah) return;
-      onActivate(selectedType, dailyGoal, pickedSurah.n, resolvedAyah);
+      onActivate(selectedType, dailyGoal, pickedSurah.n, resolvedAyah, customName);
     } else {
       const defaults: Record<PlanType, { surah: number; ayah: number }> = {
         beginner: { surah: 1, ayah: 1 },
@@ -676,11 +691,19 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
                 dir={isAr ? "rtl" : "ltr"}
               >
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold" style={{ color: textPri }}>
-                    {p.type === "juzamma" ? (isAr ? "جزء عمّ" : "Juz Amma") : p.type === "beginner" ? (isAr ? "مبتدئ" : "Beginner") : (isAr ? "مخصص" : "Custom")}
+                  <p className="text-sm font-bold truncate" style={{ color: textPri }}>
+                    {p.type === "juzamma"
+                      ? (isAr ? "جزء عمّ" : "Juz Amma")
+                      : p.type === "beginner"
+                        ? (isAr ? "مبتدئ" : "Beginner")
+                        : p.customName?.trim()
+                          ? p.customName.trim()
+                          : isAr
+                            ? `من ${plainSurahName(p.startSurah ?? p.currentSurah, true)}، آية ${p.startAyah ?? p.currentAyah}`
+                            : `From ${plainSurahName(p.startSurah ?? p.currentSurah, false)}, Ayah ${p.startAyah ?? p.currentAyah}`}
                   </p>
                   <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
-                    {isAr ? `سورة ${p.currentSurah} — آية ${p.currentAyah}` : `Surah ${p.currentSurah} — Ayah ${p.currentAyah}`}
+                    {surahName(p.currentSurah, isAr)} — {isAr ? "آية" : "Ayah"} {p.currentAyah}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
@@ -713,7 +736,9 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
           return (
             <button key={type} onClick={() => {
               setSelectedType(type);
+              const openingCustom = type === "custom" && (selectedType !== "custom" || !showCustomEditor);
               setShowCustomEditor(type === "custom" ? !showCustomEditor || selectedType !== "custom" : false);
+              if (openingCustom) setCustomName("");
             }}
               className="w-full flex items-center gap-3 rounded-xl p-4 text-left active:scale-[0.99] transition-all"
               style={{
@@ -739,6 +764,26 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
       {/* ── Custom Plan: surah picker + ayah choice ── */}
       {selectedType === "custom" && showCustomEditor && (
         <div className="rounded-xl flex flex-col gap-3" style={{ background: dark ? "hsla(25,95%,60%,0.06)" : "hsla(25,85%,45%,0.08)", border: "1px solid hsla(25,95%,60%,0.22)" }}>
+          {/* Plan name (optional) */}
+          <div className="p-3.5 pb-0 flex flex-col gap-2" dir={isAr ? "rtl" : "ltr"}>
+            <p className="text-xs font-semibold" style={{ color: textSec }}>
+              {isAr ? "اسم الخطة (اختياري)" : "Plan name (optional)"}
+            </p>
+            <input
+              type="text"
+              maxLength={25}
+              value={customName}
+              onChange={(e) => setCustomName(e.target.value.slice(0, 25))}
+              placeholder={isAr ? "مثال: خطة رمضان" : "e.g., Ramadan Plan"}
+              aria-label={isAr ? "اسم الخطة" : "Plan name"}
+              className="w-full rounded-xl px-3 py-2 text-xs outline-none"
+              style={{ background: inputBg, color: textPri, border: `1px solid ${surfBdr}` }}
+            />
+            <p className="text-[10px] text-right" style={{ color: textSec }}>
+              {customName.length}/25
+            </p>
+          </div>
+
           {/* Step 1: pick surah */}
           <div className="p-3.5 pb-0">
             <p className="text-xs font-semibold mb-2" style={{ color: textSec }}>
