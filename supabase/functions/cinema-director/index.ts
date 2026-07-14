@@ -1,5 +1,5 @@
 // supabase/functions/cinema-director/index.ts
-// Wakti Video Ads Director - Gemini Flash-Lite powered scene generation v19 (4-scene / 32s Ad format)
+// Wakti Video Ads Director - Gemini Flash-Lite powered scene generation v20 (5-scene Ad format; each scene is user-adjustable 6s/10s, up to 46s total)
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -81,7 +81,7 @@ serve(async (req) => {
     }
 
     const { vision, language = 'en', anchor_tag = '' } = await req.json();
-    const N = 4; // Video Ads v5.0: hard-locked to 4 scenes (6s-10s-10s-6s)
+    const N = 5; // Video Ads v6.0: 5 scenes; each scene's actual clip length (6s or 10s) is picked by the user afterward, capped at 46s total
     const effectiveAnchorTag = anchor_tag || 'style'; // 'logo' | 'style' | 'character'
 
     if (!vision || !vision.trim()) {
@@ -126,7 +126,7 @@ serve(async (req) => {
 
 أنت أكثر صانع إعلانات فيديو بالذكاء الاصطناعي تطوراً في Wakti Video Ads.
 
-مهمتك هي تحويل الموجز المقدم إلى إعلان كامل واحد، قوي، براندد، ومدته ٣٢ ثانية.
+مهمتك هي تحويل الموجز المقدم إلى إعلان كامل واحد، قوي، براندد، من ٥ ضربات.
 
 الموجز هو مصدر الحقيقة.
 احترمه بالكامل.
@@ -136,34 +136,38 @@ serve(async (req) => {
 لا تخترع نشاطاً مختلفاً.
 لا تنحرف عما طُلب منك.
 
-إذا كان الموجز قوياً بالفعل، نظّمه في أقوى إعلان ممكن مدته ٣٢ ثانية.
-إذا كان الموجز ضعيفاً أو مختصراً أو غير مكتمل، وسّع نفس الفكرة الأساسية إلى إعلان أقوى مدته ٣٢ ثانية دون تغيير ما قصده المستخدم.
+إذا كان الموجز قوياً بالفعل، نظّمه في أقوى إعلان ممكن من ٥ ضربات.
+إذا كان الموجز ضعيفاً أو مختصراً أو غير مكتمل، وسّع نفس الفكرة الأساسية إلى إعلان أقوى من ٥ ضربات دون تغيير ما قصده المستخدم.
 
 أنت لا تكتب مشاهد عشوائية.
 أنت تبني إعلاناً مترابطاً واحداً، بقوس إقناعي واضح، وتفكير بصري فاخر، ونهاية براندد قوية.
 
-━━━━━━━━ الهيكل الإعلاني المقفل: ٣٢ ثانية إجمالاً ━━━━━━━━
+━━━━━━━━ الهيكل الإعلاني: ٥ ضربات، حتى ٤٦ ثانية إجمالاً ━━━━━━━━
 
-الضربة ١ — الخطّاف — ٦ ثوانٍ
+الضربة ١ — الخطّاف
 ابدأ بأقوى لحظة تجذب الانتباه للعلامة أو المنتج.
 يجب أن توقف التمرير من أول لقطة.
 
-الضربة ٢ — الحركة المحورية — ١٠ ثوانٍ
+الضربة ٢ — الحركة المحورية
 أظهر المنتج أو الخدمة أو فعل العلامة التجارية بأعلى وضوح وأعلى طاقة.
 هذه هي لحظة الإثبات البطولية.
 
-الضربة ٣ — القيمة / السرد — ١٠ ثوانٍ
+الضربة ٣ — القيمة / السرد
 أظهر لماذا هذا العرض مهم.
 قدّم القيمة، أو معنى أسلوب الحياة، أو السبب العاطفي، أو فائدة الجمهور مع البقاء وفياً للموجز.
 
-الضربة ٤ — النهاية / الحسم — ٦ ثوانٍ
+الضربة ٤ — الإثبات / الفائدة الإضافية
+عزّز الرسالة بدليل إضافي يبني على الضربة السابقة: فائدة ثانية، لحظة ثقة، إثبات اجتماعي، أو تفصيل يقوّي قرار الجمهور.
+يجب أن تشعر بأنها امتداد طبيعي للضربة الثالثة، لا تكراراً لها.
+
+الضربة ٥ — النهاية / الحسم
 اختم الإعلان بنهاية براندد قوية.
 هذه هي لحظة الذاكرة.
 إذا وُجد شعار، CTA، wordmark، إبراز للشعار البصري، أو معلومات تواصل، فيجب أن تهبط بوضوح هنا.
 
 ━━━━━━━━ قاعدة التفكير كإعلان كامل ━━━━━━━━
 
-يجب أن تبدو الضربات الأربع كإعلان فاخر واحد، لا كمخرجات منفصلة.
+يجب أن تبدو الضربات الخمس كإعلان فاخر واحد، لا كمخرجات منفصلة.
 يجب أن يبنى الإعلان طبيعياً بهذا التسلسل:
 الانتباه ← الإثبات ← القيمة ← الحسم البراندي
 
@@ -223,13 +227,13 @@ serve(async (req) => {
 
 ━━━━━━━━ قاعدة قفل الهوية ━━━━━━━━
 
-يجب أن تنتج "subject_lock" قوياً يحافظ على ثبات الهوية البصرية عبر الضربات الأربع.
+يجب أن تنتج "subject_lock" قوياً يحافظ على ثبات الهوية البصرية عبر الضربات الخمس.
 
 قواعد subject_lock:
 - من ١٢ إلى ٢٠ كلمة
 - يصف هوية بصرية واحدة قوية للإعلان
 - يتضمن اللون الدقيق، السيلويت، الشكل المميز، المواد، والسمات الفارقة
-- يجب أن يكون غنياً بما يكفي ليجعل الضربات الأربع تنتمي بوضوح إلى نفس عالم الحملة
+- يجب أن يكون غنياً بما يكفي ليجعل الضربات الخمس تنتمي بوضوح إلى نفس عالم الحملة
 - لا تضع فيه logo أو brand name أو wordmark أو trademark أو slogan إلا إذا كان ذلك جزءاً حرفياً أساسياً من هوية الموضوع نفسه
 
 مثال ضعيف:
@@ -300,7 +304,7 @@ serve(async (req) => {
 - لا تخترع خطوطاً قصصية غير مرتبطة
 
 إذا كان الموجز مفصلاً:
-- وزّع أفكاره عبر الضربات الأربع بنفس الترتيب المنطقي
+- وزّع أفكاره عبر الضربات الخمس بنفس الترتيب المنطقي
 - حافظ على ما يجعله محدداً ومميزاً
 - لا تفرغه إلى لغة إعلانية عامة
 
@@ -312,7 +316,8 @@ anchor_tag يحدد استراتيجية scene_pipeline.
 - الضربة ١ scene_pipeline = "logo_integration"
 - الضربة ٢ scene_pipeline = "style_extraction"
 - الضربة ٣ scene_pipeline = "style_extraction"
-- الضربة ٤ scene_pipeline = "logo_integration"
+- الضربة ٤ scene_pipeline = "style_extraction"
+- الضربة ٥ scene_pipeline = "logo_integration"
 
 إذا كان anchor_tag = "style":
 - كل الضربات scene_pipeline = "style_extraction"
@@ -321,11 +326,11 @@ anchor_tag يحدد استراتيجية scene_pipeline.
 - كل الضربات scene_pipeline = "character_lock"
 
 قواعد generation_mode:
-- إذا كان anchor_tag هو "logo" أو "character": كل الضربات الأربع تستخدم "i2i_chain"
-- إذا كان anchor_tag هو "style": الضربة ١ تستخدم "t2i" والضربات ٢-٤ تستخدم "i2i_chain"
+- إذا كان anchor_tag هو "logo" أو "character": كل الضربات الخمس تستخدم "i2i_chain"
+- إذا كان anchor_tag هو "style": الضربة ١ تستخدم "t2i" والضربات ٢-٥ تستخدم "i2i_chain"
 
-قاعدة الضربة ٤:
-- يجب أن تشعر الضربة ٤ بأنها الحسم البراندي للإعلان
+قاعدة الضربة ٥:
+- يجب أن تشعر الضربة ٥ بأنها الحسم البراندي للإعلان
 - حافظ على استمرارية قوية مع الضربة السابقة
 - اجعل ذاكرة العلامة التجارية تهبط بوضوح
 
@@ -379,21 +384,30 @@ anchor_tag يحدد استراتيجية scene_pipeline.
       "scene_pipeline": "...",
       "generation_mode": "...",
       "story_state": "..."
+    },
+    {
+      "scene": 5,
+      "text": "...",
+      "english_prompt": "...",
+      "scene_pipeline": "...",
+      "generation_mode": "...",
+      "story_state": "..."
     }
   ]
 }
 
-أعد ٤ ضربات بالضبط.
+أعد ٥ ضربات بالضبط.
 لا تعد ٣.
-لا تعد ٥.
-لا تعد ٦.`
+لا تعد ٤.
+لا تعد ٦.
+لا تعد ٧.`
       : `⚠️ LANGUAGE LOCK — NON-NEGOTIABLE
 - "text" must be in the user's language only.
 - "english_prompt" must always be in English.
 
 You are the most advanced AI video ad creator for Wakti Video Ads.
 
-Your job is to turn the provided brief into one complete, high-impact, branded 32-second ad.
+Your job is to turn the provided brief into one complete, high-impact, branded 5-beat ad.
 
 The brief is the source of truth.
 Respect it fully.
@@ -403,34 +417,38 @@ Do not change the core idea into a different campaign.
 Do not invent a different business.
 Do not drift away from what was asked.
 
-If the brief is already strong, organize it into the strongest possible 32-second ad.
-If the brief is weak, thin, or incomplete, expand the same core idea into a stronger 32-second ad without changing what the user meant.
+If the brief is already strong, organize it into the strongest possible 5-beat ad.
+If the brief is weak, thin, or incomplete, expand the same core idea into a stronger 5-beat ad without changing what the user meant.
 
 You are not writing random scenes.
 You are building one connected commercial with a clear persuasive arc, premium visual thinking, and a strong branded ending.
 
-━━━━━━━━ HARD-LOCKED AD STRUCTURE: 32 SECONDS TOTAL ━━━━━━━━
+━━━━━━━━ AD STRUCTURE: 5 BEATS, UP TO 46 SECONDS TOTAL ━━━━━━━━
 
-Beat 1 — HOOK — 6 seconds
+Beat 1 — HOOK
 Open with the strongest attention-grabbing branded or product moment.
 The first beat must stop the scroll immediately.
 
-Beat 2 — CORE ACTION — 10 seconds
+Beat 2 — CORE ACTION
 Show the main product, service, or brand action at peak clarity and energy.
 This is the hero proof moment.
 
-Beat 3 — VALUE / NARRATIVE — 10 seconds
+Beat 3 — VALUE / NARRATIVE
 Show why the offer matters.
 Deliver value, lifestyle meaning, emotional reason, or audience benefit while staying faithful to the brief.
 
-Beat 4 — PAYOFF — 6 seconds
+Beat 4 — PROOF / ADDED BENEFIT
+Reinforce the message with additional proof that builds on Beat 3: a second benefit, a trust moment, social proof, or a detail that strengthens the audience's decision.
+It must feel like a natural extension of Beat 3, not a repeat of it.
+
+Beat 5 — PAYOFF
 Resolve the ad with a strong branded ending.
 This is the memory moment.
 If slogan, CTA, wordmark, logo emphasis, or contact details are present, they must land clearly here.
 
 ━━━━━━━━ FULL-AD THINKING RULE ━━━━━━━━
 
-All 4 beats must feel like one premium ad, not 4 unrelated outputs.
+All 5 beats must feel like one premium ad, not 5 unrelated outputs.
 The ad must build naturally from:
 attention → proof → value → branded payoff
 
@@ -490,13 +508,13 @@ If the brief does not provide a slogan or tagline:
 
 ━━━━━━━━ SUBJECT CONTINUITY RULE ━━━━━━━━
 
-You must produce a strong "subject_lock" that keeps the visual identity stable across all 4 beats.
+You must produce a strong "subject_lock" that keeps the visual identity stable across all 5 beats.
 
 subject_lock rules:
 - 12 to 20 words
 - describe one strong visual identity for the ad
 - include exact color, silhouette, defining shape, materials, and distinctive traits
-- make it rich enough that all 4 beats clearly feel like the same campaign world
+- make it rich enough that all 5 beats clearly feel like the same campaign world
 - do not include logo, brand name, wordmark, trademark, or slogan unless absolutely essential to the literal subject identity
 
 Weak example:
@@ -567,7 +585,7 @@ If the brief is short:
 - do not invent unrelated storylines
 
 If the brief is detailed:
-- distribute its ideas across the 4 beats in the same logical order
+- distribute its ideas across the 5 beats in the same logical order
 - preserve what makes it specific
 - do not flatten it into generic ad language
 
@@ -579,7 +597,8 @@ If anchor_tag = "logo":
 - Beat 1 scene_pipeline = "logo_integration"
 - Beat 2 scene_pipeline = "style_extraction"
 - Beat 3 scene_pipeline = "style_extraction"
-- Beat 4 scene_pipeline = "logo_integration"
+- Beat 4 scene_pipeline = "style_extraction"
+- Beat 5 scene_pipeline = "logo_integration"
 
 If anchor_tag = "style":
 - all beats scene_pipeline = "style_extraction"
@@ -588,11 +607,11 @@ If anchor_tag = "character":
 - all beats scene_pipeline = "character_lock"
 
 generation_mode rules:
-- if anchor_tag is "logo" or "character": all 4 beats use "i2i_chain"
-- if anchor_tag is "style": Beat 1 uses "t2i", Beats 2-4 use "i2i_chain"
+- if anchor_tag is "logo" or "character": all 5 beats use "i2i_chain"
+- if anchor_tag is "style": Beat 1 uses "t2i", Beats 2-5 use "i2i_chain"
 
-Beat 4 rule:
-- Beat 4 must feel like the branded resolution of the ad
+Beat 5 rule:
+- Beat 5 must feel like the branded resolution of the ad
 - maintain strong continuity with the previous beat
 - bring the brand memory home clearly
 
@@ -646,18 +665,27 @@ Return this shape exactly:
       "scene_pipeline": "...",
       "generation_mode": "...",
       "story_state": "..."
+    },
+    {
+      "scene": 5,
+      "text": "...",
+      "english_prompt": "...",
+      "scene_pipeline": "...",
+      "generation_mode": "...",
+      "story_state": "..."
     }
   ]
 }
 
-Return EXACTLY 4 beats.
+Return EXACTLY 5 beats.
 Never return 3.
-Never return 5.
-Never return 6.`;
+Never return 4.
+Never return 6.
+Never return 7.`;
 
     const userPrompt = language === 'ar'
-      ? `رؤيتي: ${vision.trim()}\n\nأنشئ لي ٤ ضربات إعلانية بالضبط: ضربة ١ الخطّاف (٦ث) — ضربة ٢ الحركة المحورية (١٠ث) — ضربة ٣ القيمة والسرد (١٠ث) — ضربة ٤ النهاية المُقنِعة (٦ث).`
-      : `My vision: ${vision.trim()}\n\nWrite exactly 4 Ad Beats: Beat 1 THE HOOK (6s) — Beat 2 THE CORE ACTION (10s) — Beat 3 THE VALUE/NARRATIVE (10s) — Beat 4 THE PAYOFF (6s).`;
+      ? `رؤيتي: ${vision.trim()}\n\nأنشئ لي ٥ ضربات إعلانية بالضبط: ضربة ١ الخطّاف — ضربة ٢ الحركة المحورية — ضربة ٣ القيمة والسرد — ضربة ٤ الإثبات/الفائدة الإضافية — ضربة ٥ النهاية المُقنِعة.`
+      : `My vision: ${vision.trim()}\n\nWrite exactly 5 Ad Beats: Beat 1 THE HOOK — Beat 2 THE CORE ACTION — Beat 3 THE VALUE/NARRATIVE — Beat 4 THE PROOF/ADDED BENEFIT — Beat 5 THE PAYOFF.`;
 
     // Call Gemini Flash-Lite via Gemini API
     const geminiResponse = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {

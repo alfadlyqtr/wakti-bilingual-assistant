@@ -317,9 +317,12 @@ const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null,
   return null;
 };
 
-// Video Ads v5.0 — hard-locked 4-scene / 32-second format
-const AD_DURATIONS = [6, 10, 10, 6] as const;
-const AD_SCENE_COUNT = 4;
+// Video Ads v6.0 — 5-scene format, each scene is 6s or 10s, user-adjustable, capped at 46s total
+const AD_SCENE_COUNT = 5;
+const DEFAULT_SCENE_DURATIONS = [6, 10, 10, 10, 6];
+const MIN_SCENE_DURATION = 6;
+const MAX_SCENE_DURATION = 10;
+const MAX_AD_DURATION = 46;
 
 export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [searchParams] = useSearchParams();
@@ -476,23 +479,22 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [selectedPlatform, setSelectedPlatform] = useState<'youtube' | 'tiktok' | 'instagram' | 'snapchat' | null>(null);
   const [selectedSubFormat, setSelectedSubFormat] = useState<string | null>(null);
   const [cinemaMode, setCinemaMode] = useState<'auto' | 'custom'>('auto');
-  const [cinemaAudio, setCinemaAudio] = useState(true);
 
   // Role 2 & 3 — Artist & Cloner
-  const [sceneImages, setSceneImages] = useState<(string | null)[]>([null, null, null, null]);
-  const [sceneImageOptions, setSceneImageOptions] = useState<(string[] | null)[]>([null, null, null, null]);
+  const [sceneImages, setSceneImages] = useState<(string | null)[]>(Array(AD_SCENE_COUNT).fill(null));
+  const [sceneImageOptions, setSceneImageOptions] = useState<(string[] | null)[]>(Array(AD_SCENE_COUNT).fill(null));
   const [anchorImageUrl, setAnchorImageUrl] = useState<string | null>(null);
   const [isCasting, setIsCasting] = useState(false);
   const [castingProgress, setCastingProgress] = useState<('idle' | 'loading' | 'done' | 'error')[]>(
-    ['idle', 'idle', 'idle', 'idle']
+    Array(AD_SCENE_COUNT).fill('idle')
   );
   const [activeCastingIdx, setActiveCastingIdx] = useState(0);
 
   // Role 4 — Animator
-  const [videoClips, setVideoClips] = useState<(string | null)[]>([null, null, null, null]);
-  const [animTaskIds, setAnimTaskIds] = useState<(string | null)[]>([null, null, null, null]);
+  const [videoClips, setVideoClips] = useState<(string | null)[]>(Array(AD_SCENE_COUNT).fill(null));
+  const [animTaskIds, setAnimTaskIds] = useState<(string | null)[]>(Array(AD_SCENE_COUNT).fill(null));
   const [animProgress, setAnimProgress] = useState<('idle' | 'queued' | 'rendering' | 'done' | 'error')[]>(
-    ['idle', 'idle', 'idle', 'idle']
+    Array(AD_SCENE_COUNT).fill('idle')
   );
   const [isFilming, setIsFilming] = useState(false);
   const animPollRef = useRef<NodeJS.Timeout | null>(null);
@@ -502,8 +504,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [autoStitchQueued, setAutoStitchQueued] = useState(false);
 
   // Visual Supervisor — per-scene spatial motion briefs from Gemini Flash-Lite
-  const [visualSupervisorPrompts, setVisualSupervisorPrompts] = useState<(string | null)[]>([null, null, null, null]);
-  const [vsStatus, setVsStatus] = useState<('idle' | 'scanning' | 'done' | 'error')[]>(['idle', 'idle', 'idle', 'idle']);
+  const [visualSupervisorPrompts, setVisualSupervisorPrompts] = useState<(string | null)[]>(Array(AD_SCENE_COUNT).fill(null));
+  const [vsStatus, setVsStatus] = useState<('idle' | 'scanning' | 'done' | 'error')[]>(Array(AD_SCENE_COUNT).fill('idle'));
 
   // Role 5 — Premiere
   const [isStitching, setIsStitching] = useState(false);
@@ -553,9 +555,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [editingSceneNum, setEditingSceneNum] = useState<number | null>(null); // which scene is being edited
   const [editingSceneText, setEditingSceneText] = useState('');
   // Per-scene overlay text — short text burned onto the image (phone, email, slogan, CTA)
-  const [sceneOverlayText, setSceneOverlayText] = useState<string[]>(['', '', '', '', '', '']);
-  // Per-scene clip trim duration in seconds (5–10s, default 10)
-  const [sceneClipTrim, setSceneClipTrim] = useState<number[]>([10, 10, 10, 10, 10, 10]);
+  const [sceneOverlayText, setSceneOverlayText] = useState<string[]>(Array(AD_SCENE_COUNT).fill(''));
+  // Per-scene clip duration in seconds — user picks 6 or 10 per scene, capped at MAX_AD_DURATION total
+  const [sceneDurations, setSceneDurations] = useState<number[]>(DEFAULT_SCENE_DURATIONS);
   const [regenSceneNum, setRegenSceneNum] = useState<number | null>(null); // which scene is regenerating
 
   // Cinema Visionnaire form state
@@ -575,7 +577,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [cinemaCharacters, setCinemaCharacters] = useState<string[]>([]);
   const [cinemaRelationship, setCinemaRelationship] = useState('');
   const [cinemaCTA, setCinemaCTA] = useState<string[]>([]);
-  const cinemaSceneCount = AD_SCENE_COUNT; // hard-locked to 4 (Video Ads v5.0)
+  const cinemaSceneCount = AD_SCENE_COUNT; // fixed at 5 scenes (Video Ads v6.0); per-scene duration is user-adjustable
   const [cinemaCTACustom, setCinemaCTACustom] = useState('');
 
   useEffect(() => {
@@ -1795,11 +1797,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     castingAnchorRef.current = {};
     setIsCasting(true);
     setAnchorImageUrl(null);
-    setSceneImages([null, null, null, null]);
-    setSceneImageOptions([null, null, null, null]);
+    setSceneImages(Array(AD_SCENE_COUNT).fill(null));
+    setSceneImageOptions(Array(AD_SCENE_COUNT).fill(null));
     setActiveCastingIdx(0);
-    // Scene 1 = loading, 2-4 = 'waiting' (shown as locked in UI)
-    setCastingProgress(['loading', 'idle', 'idle', 'idle'] as ('idle'|'loading'|'done'|'error')[]);
+    // Scene 1 = loading, rest = 'waiting' (shown as locked in UI)
+    setCastingProgress(['loading', ...Array(AD_SCENE_COUNT - 1).fill('idle')] as ('idle'|'loading'|'done'|'error')[]);
     setCinemaStep('casting');
 
     const artistCall = async (body: Record<string, unknown>) => {
@@ -1848,7 +1850,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         setSceneImages(prev => { const n = [...prev]; n[0] = sceneSlotMap[0]; return n; });
         setSceneImageOptions(prev => { const n = [...prev]; n[0] = null; return n; });
         setAnchorImageUrl(sceneSlotMap[0]);
-        setCastingProgress(['done', 'idle', 'idle', 'idle'] as ('idle'|'loading'|'done'|'error')[]);
+        setCastingProgress(['done', ...Array(AD_SCENE_COUNT - 1).fill('idle')] as ('idle'|'loading'|'done'|'error')[]);
       } else {
         try {
           let created: any;
@@ -1866,11 +1868,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           const optsToShow = s1opts.length >= 1 ? s1opts : [s1url];
           setSceneImageOptions(prev => { const n = [...prev]; n[0] = optsToShow; return n; });
           setSceneImages(prev => { const n = [...prev]; n[0] = null; return n; });
-          // Scenes 2-4 remain 'idle' — they unlock only after user picks Scene 1
-          setCastingProgress(['done', 'idle', 'idle', 'idle'] as ('idle'|'loading'|'done'|'error')[]);
+          // Remaining scenes stay 'idle' — they unlock only after user picks Scene 1
+          setCastingProgress(['done', ...Array(AD_SCENE_COUNT - 1).fill('idle')] as ('idle'|'loading'|'done'|'error')[]);
         } catch (s1err: any) {
           console.error('[cinema] Scene 1 failed:', s1err);
-          setCastingProgress(['error', 'idle', 'idle', 'idle'] as ('idle'|'loading'|'done'|'error')[]);
+          setCastingProgress(['error', ...Array(AD_SCENE_COUNT - 1).fill('idle')] as ('idle'|'loading'|'done'|'error')[]);
           toast.error(language === 'ar' ? 'فشل المشهد 1 — حاول مجدداً' : 'Scene 1 failed — please retry');
         }
       }
@@ -1912,8 +1914,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   }, []);
 
   // ── Role 4: Producer — Hailuo 2.3 parallel animation ──
-  // Fires ALL 4 Hailuo tasks simultaneously (parallel), then polls until all done.
-  // Uses AD_DURATIONS [6,10,10,6] per scene. VS briefs injected into motion prompts.
+  // Fires ALL scene Hailuo tasks simultaneously (parallel), then polls until all done.
+  // Uses sceneDurations (user-picked 6s/10s per scene). VS briefs injected into motion prompts.
   const handleFilm = useCallback(async () => {
     if (!user || isFilming) return;
     const images = sceneImages;
@@ -1966,11 +1968,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           image_url: imgUrl,
           prompt: motionPrompt || undefined,
           scene_index: idx,
-          duration: String(AD_DURATIONS[idx] ?? 6),
+          duration: String(sceneDurations[idx] ?? 6),
         });
         setAnimTaskIds(prev => { const n = [...prev]; n[idx] = result.task_id; return n; });
         setAnimProgress(prev => { const n = [...prev]; n[idx] = 'queued'; return n; });
-        console.log(`[ads] Beat ${idx + 1} task: ${result.task_id} (${AD_DURATIONS[idx]}s)`);
+        console.log(`[ads] Beat ${idx + 1} task: ${result.task_id} (${sceneDurations[idx]}s)`);
         return result.task_id as string;
       });
 
@@ -2047,7 +2049,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const handleStitchClips = useCallback(async () => {
     if (!user || isStitching) return;
     const orderedUrls = clipOrder.map(i => videoClips[i]).filter(Boolean) as string[];
-    const orderedDurations = clipOrder.map(i => AD_DURATIONS[i] ?? 10).slice(0, orderedUrls.length);
+    const orderedDurations = clipOrder.map(i => sceneDurations[i] ?? 10).slice(0, orderedUrls.length);
     if (orderedUrls.length < 1) return;
     setIsStitching(true);
     setAutoStitchQueued(false);
@@ -2168,20 +2170,20 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setCinemaCTA([]);
     setCinemaCTACustom('');
     setAnchorImageUrl(null);
-    setSceneImages([null, null, null, null]);
-    setSceneImageOptions([null, null, null, null]);
+    setSceneImages(Array(AD_SCENE_COUNT).fill(null));
+    setSceneImageOptions(Array(AD_SCENE_COUNT).fill(null));
     setActiveCastingIdx(0);
-    setCastingProgress(['idle', 'idle', 'idle', 'idle']);
-    setVisualSupervisorPrompts([null, null, null, null]);
-    setVsStatus(['idle', 'idle', 'idle', 'idle']);
-    setVideoClips([null, null, null, null]);
-    setAnimTaskIds([null, null, null, null]);
-    setAnimProgress(['idle', 'idle', 'idle', 'idle']);
+    setCastingProgress(Array(AD_SCENE_COUNT).fill('idle'));
+    setVisualSupervisorPrompts(Array(AD_SCENE_COUNT).fill(null));
+    setVsStatus(Array(AD_SCENE_COUNT).fill('idle'));
+    setVideoClips(Array(AD_SCENE_COUNT).fill(null));
+    setAnimTaskIds(Array(AD_SCENE_COUNT).fill(null));
+    setAnimProgress(Array(AD_SCENE_COUNT).fill('idle'));
     setClipOrder([]);
     setSwapClipIdx(null);
     setClipsReady(false);
     setAutoStitchQueued(false);
-    // cinemaSceneCount is hard-locked to AD_SCENE_COUNT (4) — no reset needed
+    // cinemaSceneCount is a fixed constant (AD_SCENE_COUNT); only per-scene durations are user-adjustable
     setIsFilming(false);
     setIsCasting(false);
     setIsStitching(false);
@@ -2194,8 +2196,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setCinemaRefTags([]);
     setEditingSceneNum(null);
     setRegenSceneNum(null);
-    setSceneOverlayText(['', '', '', '', '', '']);
-    setSceneClipTrim([10, 10, 10, 10, 10, 10]);
+    setSceneOverlayText(Array(AD_SCENE_COUNT).fill(''));
+    setSceneDurations(DEFAULT_SCENE_DURATIONS);
     setCinemaSetupOpen(true);
     setCinemaOpenSection(0);
     setCinematicSaveFallbackUrl(null);
@@ -2205,7 +2207,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setIsRegenningScene(false);
     setAnchorTag('style');
     setCinemaMode('auto');
-    setCinemaAudio(true);
     if (animPollRef.current) clearInterval(animPollRef.current);
   }, []);
 
@@ -2329,7 +2330,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         storage_path: null,
         video_url: premiereVideoUrl,
         thumbnail_url: sceneImages[0] || null,
-        duration_seconds: cinemaSceneCount * 10,
+        duration_seconds: totalSceneDuration,
         aspect_ratio: cinemaFormat,
         style_template: 'cinema',
         is_public: false,
@@ -2510,9 +2511,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const used = quota?.used || 0;
   const limit = quota?.limit || 30;
   const limitReached = quota !== null && !quota.canGenerate;
-  // Video Ads v5.0: each 32s ad costs 4 credits; quota tracks individual credits
+  // Video Ads v6.0: each ad costs AD_SCENE_COUNT credits; quota tracks individual credits
   const canAffordVideoAd = remaining >= AD_SCENE_COUNT;
   const maxAffordableCinemaScenes = Math.max(0, Math.min(6, remaining));
+  const totalSceneDuration = sceneDurations.slice(0, cinemaSceneCount).reduce((sum, d) => sum + d, 0);
 
   const needsArabicTranslation =
     language === 'ar' &&
@@ -2529,7 +2531,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     : false;
   const showLatestVideo = !generatedVideoUrl && !!(latestVideo?.signedUrl || latestVideo?.video_url);
 
-  // cinemaSceneCount is now hard-locked to AD_SCENE_COUNT (4) — no clamping needed
+  // cinemaSceneCount is a fixed constant (AD_SCENE_COUNT) — no clamping needed
 
   const getSignedVideoUrl = useCallback(async (storagePath?: string | null) => {
     if (!storagePath) return null;
@@ -3338,31 +3340,6 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <span style={{filter: cinemaMode==='custom' ? 'none' : 'grayscale(1) opacity(0.5)'}}>✏️</span><span>{language==='ar'?'مخصص':'Custom'}</span>
                           </button>
                         </div>
-                        
-                        {/* Cinematic Audio Toggle */}
-                        <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl mt-3 max-w-xs mx-auto" style={{background:'rgba(226,199,168,0.08)',border:'1px solid rgba(226,199,168,0.2)'}}>
-                          <div className="flex items-center gap-2">
-                            <span className="text-base">{cinemaAudio ? '🔊' : '🔇'}</span>
-                            <div>
-                              <p className="text-[11px] font-bold" style={{color:'#E2C7A8'}}>
-                                {language==='ar' ? 'صوت سينمائي' : 'Cinematic Audio'}
-                              </p>
-                              <p className="text-[9px]" style={{color:'rgba(226,199,168,0.5)'}}>
-                                {language==='ar' ? 'موسيقى خلفية تلقائية' : 'Auto background music'}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => setCinemaAudio(prev => !prev)}
-                            className="relative w-11 h-6 rounded-full transition-all flex-shrink-0"
-                            style={{background: cinemaAudio ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.12)'}}
-                            aria-label={language === 'ar' ? (cinemaAudio ? 'تعطيل الصوت السينمائي' : 'تفعيل الصوت السينمائي') : (cinemaAudio ? 'Disable cinematic audio' : 'Enable cinematic audio')}
-                          >
-                            <div className="absolute top-0.5 rounded-full w-5 h-5 bg-white shadow-md transition-all"
-                              style={{left: cinemaAudio ? '22px' : '2px'}} />
-                          </button>
-                        </div>
                       </div>
                       <div className="relative h-[3px] rounded-full overflow-hidden" style={{background: clr.progressTrack}}>
                         <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
@@ -3454,7 +3431,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                       {brandAnchor && <span className="ml-1 text-[#E2C7A8]">✓</span>}
                                     </p>
                                     <p className="text-[9px]" style={{color: clr.textSubtle}}>
-                                      {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري — يُثبِّت الهوية البصرية في جميع المشاهد' : 'Logo, product shot, or visual reference — locks your brand identity across all 4 scenes'}
+                                      {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري — يُثبِّت الهوية البصرية في جميع المشاهد' : 'Logo, product shot, or visual reference — locks your brand identity across all 5 scenes'}
                                     </p>
                                     <div className="flex items-center gap-3">
                                       {brandAnchor ? (
@@ -3910,8 +3887,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </div>
                           <p className="text-sm text-white/60 max-w-md text-center">
                             {language === 'ar'
-                              ? 'جاري تحليل رؤيتك وإنشاء ٤ مشاهد إعلانية (٣٢ث)...'
-                              : 'Analyzing your vision and scripting 4 ad scenes (32s)...'}
+                              ? 'جاري تحليل رؤيتك وإنشاء ٥ مشاهد إعلانية (حتى ٤٦ث)...'
+                              : 'Analyzing your vision and scripting 5 ad scenes (up to 46s)...'}
                           </p>
                         </div>
                       ) : (
@@ -3953,6 +3930,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       <div className="min-w-0">
                         <h3 className="text-lg font-bold text-white">{language === 'ar' ? 'اللوحة الإخراجية' : 'The Storyboard'}</h3>
                         <p className="text-xs text-white/50 mt-0.5">{language === 'ar' ? 'حرر أو أعد كتابة أي مشهد' : 'Edit or rewrite any scene'}</p>
+                        <p className="text-[10px] font-semibold mt-1" style={{color: totalSceneDuration >= MAX_AD_DURATION ? '#f87171' : 'rgba(226,199,168,0.75)'}}>
+                          {language === 'ar' ? `⏱ الإجمالي: ${totalSceneDuration}ث من ${MAX_AD_DURATION}ث كحد أقصى` : `⏱ Total: ${totalSceneDuration}s of ${MAX_AD_DURATION}s max`}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {/* Regen All */}
@@ -3989,16 +3969,39 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           >
                             {/* Scene badge + action buttons */}
                             <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
                                 <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
                                   style={{background: scene ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'rgba(255,255,255,0.08)', color: scene ? '#0c0f14' : 'rgba(255,255,255,0.4)'}}>
                                   {sceneNum}
                                 </div>
                                 <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
-                                  {language === 'ar'
-                                    ? `${['الخطّاف','الحركة المحورية','القيمة','النهاية'][sceneNum-1]} • ${AD_DURATIONS[sceneNum - 1]}ث`
-                                    : `${['THE HOOK','CORE ACTION','VALUE','PAYOFF'][sceneNum-1]} • ${AD_DURATIONS[sceneNum - 1]}s`}
+                                  {(language === 'ar'
+                                    ? ['الخطّاف','الحركة المحورية','القيمة','الإثبات','النهاية']
+                                    : ['THE HOOK','CORE ACTION','VALUE','PROOF','PAYOFF'])[sceneNum-1]}
                                 </span>
+                                {/* Per-scene duration picker: 6s or 10s, live-capped at MAX_AD_DURATION total */}
+                                <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{background:'rgba(255,255,255,0.06)'}}>
+                                  {[MIN_SCENE_DURATION, MAX_SCENE_DURATION].map((secOption) => {
+                                    const isSelected = sceneDurations[sceneNum - 1] === secOption;
+                                    const otherTotal = sceneDurations.reduce((sum, d, i) => i === sceneNum - 1 ? sum : sum + d, 0);
+                                    const wouldExceedCap = otherTotal + secOption > MAX_AD_DURATION;
+                                    return (
+                                      <button
+                                        key={secOption}
+                                        type="button"
+                                        disabled={wouldExceedCap && !isSelected}
+                                        onClick={() => setSceneDurations(prev => { const n = [...prev]; n[sceneNum - 1] = secOption; return n; })}
+                                        className="px-1.5 py-0.5 rounded-full text-[9px] font-bold transition-all disabled:opacity-25 disabled:cursor-not-allowed"
+                                        style={{
+                                          background: isSelected ? 'linear-gradient(135deg,#E2C7A8,#C5A47E)' : 'transparent',
+                                          color: isSelected ? '#0c0f14' : 'rgba(255,255,255,0.4)',
+                                        }}
+                                      >
+                                        {secOption}s
+                                      </button>
+                                    );
+                                  })}
+                                </div>
                               </div>
                               {scene && !isEditing && (
                                 <div className="flex items-center gap-1.5">
@@ -4678,7 +4681,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                 {cinemaStep === 'filming' && (() => {
                   const hasError = animProgress.slice(0, cinemaSceneCount).some(p => p === 'error');
                   const allClipsDone = clipsReady && clipOrder.length > 0;
-                  const totalAdDuration = AD_DURATIONS.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0);
+                  const totalAdDuration = sceneDurations.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0);
                   const doneCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'done').length;
                   const queuedCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'queued' || p === 'idle').length;
                   const renderingCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'rendering').length;
@@ -4911,7 +4914,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         </p>
                         <h2 className="text-2xl font-bold text-white">{language === 'ar' ? '🎬 العرض الأول' : '🎬 The Premiere'}</h2>
                         <p className="text-xs text-white/40">
-                          {language === 'ar' ? `${cinemaSceneCount} مشاهد • ${AD_DURATIONS.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}ث` : `${cinemaSceneCount} Scenes • ${AD_DURATIONS.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}s`}
+                          {language === 'ar' ? `${cinemaSceneCount} مشاهد • ${sceneDurations.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}ث` : `${cinemaSceneCount} Scenes • ${sceneDurations.slice(0, cinemaSceneCount).reduce((sum, dur) => sum + dur, 0)}s`}
                         </p>
                       </div>
                       {/* Clip progress dots */}

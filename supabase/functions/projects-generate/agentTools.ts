@@ -1508,6 +1508,70 @@ function validateBasicSyntax(content: string, filePath: string): { valid: boolea
 }
 
 // ============================================================================
+// 🔒 FULL-FILE-REPLACEMENT SAFETY - Catch truncated/partial content before it
+// silently overwrites a complete file. Shared by write_file (below) and the
+// chat-mode plan auto-executor in index.ts, so both paths use one definition.
+// ============================================================================
+
+/**
+ * Extract the named/default bindings a file's import statements introduce.
+ */
+export function extractImportedBindings(code: string): Set<string> {
+  const bindings = new Set<string>();
+  const importLineRegex = /^\s*import\s+([^;]+?)\s+from\s+['"][^'"]+['"]/gm;
+  let m: RegExpExecArray | null;
+  while ((m = importLineRegex.exec(code)) !== null) {
+    const clause = m[1];
+    const namedMatch = clause.match(/\{([^}]*)\}/);
+    if (namedMatch) {
+      for (const part of namedMatch[1].split(',')) {
+        const name = part.trim().split(/\s+as\s+/).pop()?.trim();
+        if (name) bindings.add(name);
+      }
+    }
+    const withoutNamed = clause.replace(/\{[^}]*\}/, '').replace(/,/g, ' ').trim();
+    for (const token of withoutNamed.split(/\s+/)) {
+      const name = token.replace(/^\*\s*as\s*/, '').trim();
+      if (name && name !== 'as') bindings.add(name);
+    }
+  }
+  return bindings;
+}
+
+/**
+ * Does the candidate drop an import that the ORIGINAL file had AND that the
+ * candidate's own body still references by name? That combination means the
+ * binding is used but no longer imported — a broken file, not a valid edit.
+ */
+export function dropsStillUsedImports(original: string, candidate: string): boolean {
+  const originalBindings = extractImportedBindings(original);
+  const candidateBindings = extractImportedBindings(candidate);
+  const candidateBodyOnly = candidate.replace(/^\s*import[^;]+;?/gm, '');
+  for (const name of originalBindings) {
+    if (candidateBindings.has(name)) continue;
+    if (new RegExp(`\\b${name}\\b`).test(candidateBodyOnly)) return true;
+  }
+  return false;
+}
+
+/**
+ * Does this candidate genuinely look like a complete, safe-to-write file (vs.
+ * a partial/truncated snippet that would silently wipe out the rest of the
+ * file if written as-is)? Checks: (1) if the original exported something,
+ * the candidate must too; (2) the candidate isn't a suspiciously tiny
+ * fraction of the original unless it still carries its own export; (3) no
+ * still-used import got silently dropped.
+ */
+export function looksLikeCompleteFile(original: string, candidate: string): boolean {
+  const originalHasExport = /\bexport\b/.test(original);
+  const candidateHasExport = /\bexport\b/.test(candidate);
+  if (originalHasExport && !candidateHasExport) return false;
+  if (candidate.length < original.length * 0.3 && !candidateHasExport) return false;
+  if (dropsStillUsedImports(original, candidate)) return false;
+  return true;
+}
+
+// ============================================================================
 // RENDER-PATH ENFORCEMENT - Trace active files from entrypoint
 // ============================================================================
 
@@ -3450,6 +3514,38 @@ export async function executeToolCall(
       }
       
       assertNoHtml(path, content);
+
+      // 🔒 Syntax check — same guard search_replace/morph_edit already use.
+      // Never let unbalanced brackets or clearly broken JSX reach the DB.
+      const writeFileSyntaxCheck = validateBasicSyntax(content, path);
+      if (!writeFileSyntaxCheck.valid) {
+        console.error(`[Agent] write_file REJECTED: syntax error in ${path}: ${writeFileSyntaxCheck.error}`);
+        return {
+          error: `BLOCKED: This content has a syntax error: ${writeFileSyntaxCheck.error}. The write was NOT applied.`,
+          suggestion: "Re-check the code, then retry write_file with corrected, complete content."
+        };
+      }
+
+      // 🔒 Completeness check — if this file already exists, make sure the new
+      // content genuinely looks like a full replacement (still exports what
+      // the original exported, hasn't dropped still-used imports, isn't a
+      // suspiciously tiny fragment). Prevents truncated/cut-off model output
+      // from silently wiping out a working file.
+      const { data: existingFileForWrite } = await supabase
+        .from('project_files')
+        .select('content')
+        .eq('project_id', projectId)
+        .eq('path', path)
+        .maybeSingle();
+      const existingContentForWrite = (existingFileForWrite as { content?: string } | null)?.content || '';
+
+      if (existingContentForWrite.trim() && !looksLikeCompleteFile(existingContentForWrite, content)) {
+        console.error(`[Agent] write_file REJECTED: ${path} looks like a partial/truncated fragment, not a complete file`);
+        return {
+          error: `BLOCKED: This write looks incomplete for ${path} — it's missing exports/imports the current file still needs (looks cut off mid-generation). The write was NOT applied.`,
+          suggestion: "Use read_file to see the full current content, then write the COMPLETE file, or use search_replace/morph_edit for a smaller targeted fix instead."
+        };
+      }
 
       // 🧩 Resolve {{PROJECT_ID}} placeholder so the preview works immediately (Phase A — Item A5).
       const resolvedContent = resolveProjectPlaceholders(content, projectId);
