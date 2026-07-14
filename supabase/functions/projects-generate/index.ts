@@ -5257,6 +5257,62 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                 return (data as { content?: string } | null)?.content || '';
               };
 
+              // 🛠️ ROOT-CAUSE FIX: extract the named/default bindings a file's
+              // import statements introduce, so we can tell whether a candidate
+              // replacement silently dropped imports its own body still needs.
+              const extractImportedBindings = (code: string): Set<string> => {
+                const bindings = new Set<string>();
+                const importLineRegex = /^\s*import\s+([^;]+?)\s+from\s+['"][^'"]+['"]/gm;
+                let m: RegExpExecArray | null;
+                while ((m = importLineRegex.exec(code)) !== null) {
+                  const clause = m[1];
+                  const namedMatch = clause.match(/\{([^}]*)\}/);
+                  if (namedMatch) {
+                    for (const part of namedMatch[1].split(',')) {
+                      const name = part.trim().split(/\s+as\s+/).pop()?.trim();
+                      if (name) bindings.add(name);
+                    }
+                  }
+                  const withoutNamed = clause.replace(/\{[^}]*\}/, '').replace(/,/g, ' ').trim();
+                  for (const token of withoutNamed.split(/\s+/)) {
+                    const name = token.replace(/^\*\s*as\s*/, '').trim();
+                    if (name && name !== 'as') bindings.add(name);
+                  }
+                }
+                return bindings;
+              };
+
+              // Does the candidate drop an import that the ORIGINAL file had
+              // AND that the candidate's own body still references by name?
+              // That combination means the binding is used but no longer
+              // imported — a broken file, not a valid edit.
+              const dropsStillUsedImports = (original: string, candidate: string): boolean => {
+                const originalBindings = extractImportedBindings(original);
+                const candidateBindings = extractImportedBindings(candidate);
+                const candidateBodyOnly = candidate.replace(/^\s*import[^;]+;?/gm, '');
+                for (const name of originalBindings) {
+                  if (candidateBindings.has(name)) continue;
+                  if (new RegExp(`\\b${name}\\b`).test(candidateBodyOnly)) return true;
+                }
+                return false;
+              };
+
+              // Does this candidate genuinely look like a complete, safe-to-write
+              // file (vs. a partial snippet that would silently wipe out the rest
+              // of the file if written as-is)? Checks: (1) if the original
+              // exported something, the candidate must too; (2) the candidate
+              // isn't a suspiciously tiny fraction of the original unless it
+              // still carries its own export; (3) no still-used import got
+              // silently dropped.
+              const looksLikeCompleteFile = (original: string, candidate: string): boolean => {
+                const originalHasExport = /\bexport\b/.test(original);
+                const candidateHasExport = /\bexport\b/.test(candidate);
+                if (originalHasExport && !candidateHasExport) return false;
+                if (candidate.length < original.length * 0.3 && !candidateHasExport) return false;
+                if (dropsStillUsedImports(original, candidate)) return false;
+                return true;
+              };
+
               // Helper: apply one change (new file or morphed edit)
               const applyChange = async (fp: string, changeTo: string, current: string, desc: string) => {
                 const np = fp.startsWith('/') ? fp : `/${fp}`;
@@ -5265,17 +5321,19 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                   changesApplied.push(`Created ${np}`);
                 } else {
                   const morphResult = await morphFastApply({ originalCode: current, codeEdit: changeTo, instructions: desc });
-                  if (morphResult.success && morphResult.mergedCode) {
+                  if (morphResult.success && morphResult.mergedCode && looksLikeCompleteFile(current, morphResult.mergedCode)) {
                     filesToWrite[np] = morphResult.mergedCode;
                     changesApplied.push(`Updated ${np}`);
-                  } else if (changeTo.length > 150) {
+                  } else if (changeTo.length > 150 && looksLikeCompleteFile(current, changeTo)) {
                     filesToWrite[np] = changeTo;
                     changesApplied.push(`Applied ${np}`);
                   } else {
-                    // Merge failed and the snippet is too small to safely use as a
-                    // full-file replacement. Do NOT silently drop this — record it
-                    // so the response can honestly report a partial result instead
-                    // of falsely claiming the whole request was completed.
+                    // Merge failed, OR what we got back doesn't genuinely look like
+                    // a complete file (missing exports / still-used imports / a
+                    // suspiciously tiny fragment). Do NOT silently apply this — it
+                    // would destroy the rest of the file. Record it as failed so
+                    // the response honestly reports a partial result instead of
+                    // falsely claiming the whole request was completed.
                     changesFailed.push(np);
                   }
                 }
