@@ -12,7 +12,7 @@ export const legal = {
   // Header
   privacyPolicyHeader: "🔐 WAKTI Privacy Policy & Terms of Use",
   lastUpdated: "Last Updated",
-  lastUpdatedDate: "June 11, 2025",
+  lastUpdatedDate: "July 14, 2026",
   welcomeText: "Welcome to WAKTI, the AI-powered platform offering smart task management, messaging, event scheduling, recording tools, and intelligent summaries. By using the WAKTI app or services, you agree to abide by the terms outlined below. If you do not agree to these terms, you must not use WAKTI.",
 
   // Section 1
@@ -23,15 +23,15 @@ export const legal = {
   // Section 2
   section2Title: "2. Data Privacy",
   section2_1Title: "2.1 What We Collect",
-  section2_1Text: "• Your account data: username, name, email, profile picture\n• Your activity: tasks, events, messages, voice recordings, summaries\n• Technical data: device info, app usage, crash logs\n• Temporary content (like audio files) for AI processing",
+  section2_1Text: "• Your account data: username, name, email, profile picture\n• Your activity: tasks, events, messages, voice recordings, summaries\n• If you connect Google or Gmail: your Gmail email address, connection tokens, email metadata, message content, and attachments needed for the Gmail features you choose to use\n• Technical data: device info, app usage, crash logs\n• Temporary content (like audio files) for AI processing",
 
   section2_2Title: "2.2 How It's Used",
-  section2_2Text: "• To operate and personalize your WAKTI experience\n• To process AI features like transcription, summarization, or image generation\n• To monitor app health, ensure legal usage, and improve service\n• For integration and service delivery via third-party providers, including but not limited to OpenAI, Google Gemini, Claude (Anthropic), Runware, and Supabase",
+  section2_2Text: "• To operate and personalize your WAKTI experience\n• To process AI features like transcription, summarization, drafting, or image generation\n• If you connect Gmail, to provide the Gmail features you request, such as reading emails, drafting replies, sending emails, summarizing messages, extracting tasks, marking messages as read, or moving messages to trash\n• To monitor app health, ensure legal usage, and improve service\n• For integration and service delivery via trusted third-party providers, including Google Gemini as a primary provider for certain AI features, and OpenAI, Claude (Anthropic), and Supabase where needed",
 
   section2_3Title: "2.3 Third-Party Data Sharing",
-  section2_3Text: "To deliver WAKTI's features, we use carefully selected third-party AI providers.",
-  section2_3Text2: "WAKTI only shares data necessary to operate these features and expects all partners to comply with privacy standards equivalent to those required under Qatari law. However, users acknowledge that data processed by third parties is subject to their own terms and privacy policies.",
-  section2_3Text3: "We do not sell your personal data to advertisers or unrelated third parties.",
+  section2_3Text: "To deliver WAKTI's features, we use carefully selected third-party service and AI providers.",
+  section2_3Text2: "WAKTI only shares the data needed to operate the requested feature. When you use Gmail or AI-powered features, relevant content may be securely shared with trusted service providers only as needed to deliver that feature. We use reasonable safeguards such as secure transmission, access controls, authenticated access, and restricted internal access to help protect sensitive data.",
+  section2_3Text3: "We do not sell your personal data or Google user data to advertisers or unrelated third parties, and we do not use Google user data for advertising.",
 
   section2_4Title: "2.4 Data Storage & Retention",
   section2_4Text: "• Voice recordings are automatically deleted after 10 days\n• Other data is stored only as long as required for functionality or by law\n• You can delete your account at any time, and your data will be removed unless retention is required by legal authorities",

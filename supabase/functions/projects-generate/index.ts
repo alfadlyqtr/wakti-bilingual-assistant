@@ -2205,6 +2205,99 @@ function recoverBrokenJson(text: string): Record<string, unknown> | null {
   return null;
 }
 
+// ============================================================================
+// 🛠️ CHAT-MODE PLAN JSON REPAIR CHAIN (AUDIT FIX — Options A/B/C)
+// The chat-mode plan JSON asks the model to embed real source code inside
+// JSON string values ("current"/"changeTo"/"code"). Source code is full of
+// double quotes and can be large enough to hit the token cap, so the raw
+// response sometimes comes back invalid. Previously, any parse failure fell
+// straight through to `return createResponse({ message: answer })` — i.e.
+// the broken raw JSON text was shown to the user AS IF it were a normal
+// answer, and nothing was ever implemented. This chain tries increasingly
+// strong repairs first, and only gives up with an honest, bilingual
+// message — raw JSON must NEVER reach the user again.
+// ============================================================================
+
+const PLAN_JSON_UNRECOVERABLE_MESSAGE =
+  "⚠️ I put together a plan for that, but it didn't come out in a valid format, so nothing was changed yet. Please try again — if it's a big request (e.g. a full bilingual translation), try splitting it into smaller steps, like adding the toggle UI first, then asking separately to translate the remaining pages.\n\n" +
+  "⚠️ لقد أعددت خطة لهذا الطلب، لكنها لم تخرج بصيغة صحيحة، فلم يتم تطبيق أي تغيير بعد. حاول مرة أخرى - وإذا كان طلبًا كبيرًا (مثل ترجمة كاملة للموقع)، جرّب تقسيمه إلى خطوات أصغر، مثل إضافة واجهة التبديل أولاً، ثم طلب ترجمة باقي الصفحات في رسالة لاحقة.";
+
+// Tier 1: mechanical recovery only (no network cost) — reuses the same
+// normalizeGeminiResponseText/recoverBrokenJson helpers already proven in
+// the create/execute/edit paths, just applied here too for consistency.
+// deno-lint-ignore no-explicit-any
+function tryMechanicalJsonRecovery(raw: string): any {
+  try {
+    const direct = JSON.parse(raw);
+    if (direct && typeof direct === 'object') return direct;
+  } catch { /* fall through */ }
+  try {
+    const normalized = JSON.parse(normalizeGeminiResponseText(raw));
+    if (normalized && typeof normalized === 'object') return normalized;
+  } catch { /* fall through */ }
+  return recoverBrokenJson(raw);
+}
+
+// Tier 2: ask the model to fix its own JSON syntax. Only reached when tier 1
+// fails — e.g. unescaped quotes inside embedded code, a semantic mistake
+// mechanical brace/newline fixers cannot safely guess. Bounded to ONE extra
+// call, cheap model, deterministic (temperature 0).
+// deno-lint-ignore no-explicit-any
+async function repairPlanJsonWithModel(brokenText: string, apiKey: string, timeoutMs: number): Promise<any> {
+  try {
+    const repairPrompt = `The text below was supposed to be ONE valid JSON object but failed to parse. This is almost always caused by source code embedded inside JSON string values ("current", "changeTo", or "code" fields) containing unescaped double quotes or raw newlines.
+
+Return ONLY the corrected, complete, valid JSON object — same structure, same content and meaning, just fixed syntax:
+- Escape every literal " that appears inside a string value as \\"
+- Escape every literal newline inside a string value as \\n
+- Do not change the actual code or content, only fix the JSON syntax
+- Output must start with { and end with } — no markdown fences, no explanation
+
+BROKEN JSON:
+${brokenText.slice(0, 60000)}`;
+
+    const response = await withTimeout(
+      fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL_SIMPLE}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: repairPrompt }] }],
+            generationConfig: {
+              temperature: 0,
+              maxOutputTokens: 16384,
+              responseMimeType: "application/json",
+            },
+          }),
+        }
+      ),
+      Math.max(20000, Math.min(timeoutMs, 60000)),
+      'GEMINI_JSON_REPAIR'
+    );
+    if (!response.ok) {
+      console.error(`[JSON Repair] Model repair call failed: ${response.status}`);
+      return null;
+    }
+    const data = await response.json();
+    const repairedText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!repairedText) return null;
+    return tryMechanicalJsonRecovery(repairedText);
+  } catch (repairErr) {
+    console.error('[JSON Repair] Model repair threw:', repairErr);
+    return null;
+  }
+}
+
+// Full chain: mechanical recovery, then model self-repair, then give up (null).
+// deno-lint-ignore no-explicit-any
+async function resolvePlanJson(extractedJson: string, apiKey: string, timeoutMs: number): Promise<any> {
+  const mechanical = tryMechanicalJsonRecovery(extractedJson);
+  if (mechanical) return mechanical;
+  console.warn('[JSON Repair] Mechanical recovery failed, attempting model self-repair...');
+  return await repairPlanJsonWithModel(extractedJson, apiKey, timeoutMs);
+}
+
 function coerceFilesMap(raw: unknown): { files: Record<string, string>; summary: string } {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const filesObjCandidate = obj.files;
@@ -4675,6 +4768,11 @@ IF NO (pure question like "what does X do?") → Return markdown
   ]
 }
 
+🔒 JSON STRING SAFETY (CRITICAL — the #1 cause of broken responses):
+The "current", "changeTo", and "code" fields hold SOURCE CODE as JSON string values. Source code (JSX attributes, imports, i18n objects) is full of double quotes — every single one MUST be escaped as \\" inside these fields, and every real line break MUST be written as \\n. Before you output, check yourself: "if I removed every \\" and \\n I added, would this still be exactly one valid, flat JSON object?" If not, fix it.
+Prefer single quotes ('...') for strings INSIDE the embedded code itself (imports, object keys, JSX attributes) whenever the existing code style allows it — this drastically reduces how much escaping you need and avoids this failure mode entirely.
+For large multi-file requests (e.g. a full bilingual translation), do NOT try to translate every file in one response — cover only the minimum files needed for the feature to work end-to-end in this pass; the remaining files will be handled in a follow-up message.
+
 ⚠️ MULTI-FILE REQUESTS (e.g. a language toggle needing a NEW i18n/config file PLUS edits to a header component): give EACH step its OWN "file" field for the file THAT step touches. A step without "file" falls back to the single top-level "file" — only rely on the top-level "file" when every step truly touches the same one file.
 
 ⚠️ OUTPUT SHAPE IS FLAT: return the object exactly as shown, at the top level. NEVER wrap it inside another object like {"plan": {...}} — "type", "title", "file", "steps", and "codeChanges" must be top-level keys, never nested one level deeper.
@@ -4884,10 +4982,63 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       }
 
       const chatData = await chatResponse.json();
-      const answer = chatData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      let answer = chatData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      const firstAttemptFinishReason = chatData.candidates?.[0]?.finishReason;
       chatOutputText = answer;
-      
-      // Log credit usage for chat mode
+
+      // 🛠️ AUDIT FIX (Option C): detect a truncated response (hit the token cap)
+      // BEFORE trying to parse it — a cut-off JSON plan can't be "escaped" back
+      // into validity, it needs to be regenerated smaller. One bounded retry
+      // with an explicit "keep it smaller" instruction is far more reliable
+      // than guessing how to close truncated JSON.
+      if (firstAttemptFinishReason === 'MAX_TOKENS') {
+        console.warn('[Chat Mode] Response hit MAX_TOKENS on first attempt — retrying once with a smaller-scope instruction.');
+        try {
+          const retryResponse = await withTimeout(
+            fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${selectedChatModel}:generateContent`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-goog-api-key": GEMINI_API_KEY,
+                },
+                body: JSON.stringify({
+                  contents: [{
+                    role: "user",
+                    parts: [
+                      ...contentParts,
+                      { text: "\n\n⚠️ Your previous attempt was cut off for being too large. This time, produce a SMALLER plan: touch only the minimum files needed to get the feature working end-to-end (e.g. for a language toggle: the i18n/config file with translations for JUST the header/nav text, plus wiring the entry file and header/App file). Leave translating the rest of the pages for a later follow-up message. Keep the exact same flat JSON shape." }
+                    ]
+                  }],
+                  systemInstruction: { parts: [{ text: chatSystemPrompt }] },
+                  generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 16384,
+                    responseMimeType: "application/json",
+                  },
+                }),
+              }
+            ),
+            Math.min(chatTimeout, 60000),
+            'GEMINI_CHAT_RETRY_SMALLER'
+          );
+          if (retryResponse.ok) {
+            const retryData = await retryResponse.json();
+            const retryAnswer = retryData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            if (retryAnswer) {
+              answer = retryAnswer;
+              chatOutputText += retryAnswer;
+            }
+          } else {
+            console.error(`[Chat Mode] Smaller-scope retry HTTP error: ${retryResponse.status}`);
+          }
+        } catch (retryErr) {
+          console.error('[Chat Mode] Smaller-scope retry failed:', retryErr);
+        }
+      }
+
+      // Log credit usage for chat mode (includes the smaller-scope retry, if any)
       const chatCreditUsage = logCreditUsage('chat', chatModelSelection, chatInputText, chatOutputText, projectId);
       
       // Check if the response contains a JSON (plan or asset_picker)
@@ -4942,9 +5093,14 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
       }
       
       if (extractedJson && jsonType) {
-        // Validate it's actually valid JSON before returning
-        try {
-          const rawParsed = JSON.parse(extractedJson);
+        // 🛠️ AUDIT FIX (Option B): never let malformed plan JSON leak to the user
+        // as raw text — try increasingly strong repairs before giving up honestly.
+        // deno-lint-ignore no-explicit-any
+        const rawParsed: any = await resolvePlanJson(extractedJson, GEMINI_API_KEY, chatTimeout);
+        if (!rawParsed) {
+          console.error('[Chat Mode] Plan/asset_picker JSON unrecoverable after all repair attempts. Raw length:', extractedJson.length);
+          return createResponse({ ok: true, message: PLAN_JSON_UNRECOVERABLE_MESSAGE, creditUsage: chatCreditUsage });
+        }
           // 🔧 Defensive unwrap: the AI is instructed to return a FLAT
           // {"type":"plan","title":...,"file":...,"steps":[...]} object, but
           // sometimes nests everything under an extra "plan" key instead
@@ -5174,9 +5330,6 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
               : JSON.stringify(parsed);
             return createResponse({ ok: true, plan: planJsonToReturn, mode: 'plan', creditUsage: chatCreditUsage });
           }
-        } catch {
-          // Invalid JSON, return as regular message
-        }
       }
       
       // Return as regular chat message with credit usage

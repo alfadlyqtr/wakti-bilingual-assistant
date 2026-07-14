@@ -27,6 +27,7 @@ export default function PrivacyTerms() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [openProvider, setOpenProvider] = useState<string | null>("OpenAI");
 
   // Auto-scroll hook with language prop
   const { isAutoScrollActive, userHasScrolled } = useAutoScroll({
@@ -183,6 +184,7 @@ export default function PrivacyTerms() {
                     {[
                       {
                         emoji: "🤖",
+                        logo: null as string | null,
                         name: "OpenAI",
                         color: "from-emerald-500/10 to-teal-500/10 border-emerald-500/20",
                         badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
@@ -192,15 +194,17 @@ export default function PrivacyTerms() {
                       },
                       {
                         emoji: "✨",
+                        logo: "/assets/providers/google-gemini.svg" as string | null,
                         name: "Google Gemini",
                         color: "from-amber-500/10 to-orange-500/10 border-amber-500/20",
                         badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
                         uses: language === 'ar'
-                          ? ["فهم الصور", "توليد الصور", "البحث على الويب", "البرمجة والكود"]
-                          : ["Image understanding", "Image generation", "Web search", "Code"],
+                          ? ["فهم الصور", "توليد الصور", "توليد الفيديو", "توليد النصوص", "تحويل النص إلى كلام", "البحث على الويب", "البرمجة والكود"]
+                          : ["Image understanding", "Image generation", "Video generation", "Text generation", "Text-to-speech (TTS)", "Web search", "Code"],
                       },
                       {
                         emoji: "📄",
+                        logo: "/assets/providers/anthropic.svg" as string | null,
                         name: "Claude (Anthropic)",
                         color: "from-purple-500/10 to-violet-500/10 border-purple-500/20",
                         badge: "bg-purple-500/15 text-purple-700 dark:text-purple-400",
@@ -209,25 +213,18 @@ export default function PrivacyTerms() {
                           : ["Document analysis", "Text generation"],
                       },
                       {
-                        emoji: "🎨",
-                        name: "Runware",
-                        color: "from-pink-500/10 to-rose-500/10 border-pink-500/20",
-                        badge: "bg-pink-500/15 text-pink-700 dark:text-pink-400",
-                        uses: language === 'ar'
-                          ? ["توليد الصور بالذكاء الاصطناعي"]
-                          : ["AI image generation"],
-                      },
-                      {
                         emoji: "🎬",
+                        logo: null as string | null,
                         name: "Grok AI",
                         color: "from-zinc-500/10 to-slate-500/10 border-zinc-500/20",
                         badge: "bg-zinc-500/15 text-zinc-700 dark:text-zinc-400",
                         uses: language === 'ar'
-                          ? ["توليد الفيديو بالذكاء الاصطناعي"]
-                          : ["AI video generation"],
+                          ? ["توليد الفيديو بالذكاء الاصطناعي", "توليد الصور بالذكاء الاصطناعي"]
+                          : ["AI video generation", "AI image generation"],
                       },
                       {
                         emoji: "🎙️",
+                        logo: "/assets/providers/elevenlabs.svg" as string | null,
                         name: "ElevenLabs",
                         color: "from-cyan-500/10 to-sky-500/10 border-cyan-500/20",
                         badge: "bg-cyan-500/15 text-cyan-700 dark:text-cyan-400",
@@ -235,29 +232,47 @@ export default function PrivacyTerms() {
                           ? ["تحويل النص إلى كلام (TTS) عالي الجودة", "استنساخ الأصوات"]
                           : ["High-quality text-to-speech", "Voice cloning"],
                       },
-                    ].map((provider) => (
-                      <div
-                        key={provider.name}
-                        className={`flex items-start gap-3 p-3 rounded-xl border bg-gradient-to-r ${provider.color}`}
-                      >
-                        <div className="text-2xl shrink-0 mt-0.5">{provider.emoji}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                            <span className="font-bold text-sm text-foreground">{provider.name}</span>
+                    ].map((provider) => {
+                      const isOpen = openProvider === provider.name;
+
+                      return (
+                        <button
+                          key={provider.name}
+                          type="button"
+                          onClick={() => setOpenProvider(isOpen ? null : provider.name)}
+                          className={`w-full text-left flex items-start gap-3 p-3 rounded-xl border bg-gradient-to-r transition-all ${provider.color}`}
+                          aria-expanded={isOpen}
+                        >
+                          <div className="w-9 h-9 shrink-0 rounded-full bg-white flex items-center justify-center overflow-hidden">
+                            {provider.logo ? (
+                              <img src={provider.logo} alt={`${provider.name} logo`} className="w-6 h-6 object-contain" />
+                            ) : (
+                              <span className="text-lg">{provider.emoji}</span>
+                            )}
                           </div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {provider.uses.map((use) => (
-                              <span
-                                key={use}
-                                className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${provider.badge}`}
-                              >
-                                {use}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between gap-3 mb-1.5">
+                              <span className="font-bold text-sm text-foreground">{provider.name}</span>
+                              <span className="text-xs font-semibold text-muted-foreground shrink-0">
+                                {isOpen ? (language === "ar" ? "إخفاء" : "Hide") : (language === "ar" ? "عرض" : "Show")}
                               </span>
-                            ))}
+                            </div>
+                            {isOpen ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {provider.uses.map((use) => (
+                                  <span
+                                    key={use}
+                                    className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${provider.badge}`}
+                                  >
+                                    {use}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
-                        </div>
-                      </div>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   <div className="space-y-2 text-sm leading-relaxed border-t border-border/40 pt-3">
