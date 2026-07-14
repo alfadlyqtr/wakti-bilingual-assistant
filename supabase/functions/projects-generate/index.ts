@@ -2300,6 +2300,78 @@ async function resolvePlanJson(extractedJson: string, apiKey: string, timeoutMs:
   return await repairPlanJsonWithModel(extractedJson, apiKey, timeoutMs);
 }
 
+// The AI is instructed to return a FLAT {"type":"plan","title":...,"file":...,"steps":[...]}
+// object, but sometimes nests everything under an extra "plan" key instead
+// (e.g. {"plan": {"title":...,"steps":[...]}}). Every downstream consumer reads
+// flat parsed.title/.file/.steps/.codeChanges, so an unnoticed nested shape
+// silently looks like an EMPTY plan. Unwrap once if the flat shape looks empty
+// but a nested "plan" object holds the real content.
+// deno-lint-ignore no-explicit-any
+function unwrapNestedPlan(rawParsed: any): any {
+  if (!rawParsed || typeof rawParsed !== 'object') return rawParsed;
+  const looksEmpty = !rawParsed.file && !Array.isArray(rawParsed.steps) && !Array.isArray(rawParsed.codeChanges) && !Array.isArray(rawParsed.files);
+  const nested = rawParsed.plan;
+  if (looksEmpty && nested && typeof nested === 'object') {
+    const hasNestedContent = nested.file || Array.isArray(nested.steps) || Array.isArray(nested.codeChanges) || Array.isArray(nested.files);
+    if (hasNestedContent) return { ...rawParsed, ...nested };
+  }
+  return rawParsed;
+}
+
+// 🛠️ AUDIT FIX: given a plan that FAILED the completion contract (e.g. a
+// language toggle plan that only touched the header, with no i18n/context
+// file and no entry-file wiring), ask the model to redo the SAME request but
+// this time include every missing piece in one flat JSON plan. Bounded to ONE
+// extra call — if this doesn't fully pass either, the caller falls back to
+// returning the still-partial plan honestly instead of guessing further.
+// deno-lint-ignore no-explicit-any
+async function completeContractPlanWithModel(
+  contentParts: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }>,
+  systemPrompt: string,
+  model: string,
+  apiKey: string,
+  timeoutMs: number,
+  missingPieces: string[]
+): Promise<any> {
+  try {
+    const completionInstruction = `\n\n⚠️ Your previous plan was INCOMPLETE. A toggle that only changes one component (e.g. just the header) is USELESS to the user — it must actually work end-to-end. Specifically missing: ${missingPieces.join(' ')}\n\nRedo this SAME request as ONE complete flat JSON plan (same shape: "type","title","file","steps","codeChanges") that includes ALL of the missing pieces above, in addition to anything you already had right. Do not drop anything that was already correct.`;
+    const response = await withTimeout(
+      fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+          body: JSON.stringify({
+            contents: [{
+              role: "user",
+              parts: [...contentParts, { text: completionInstruction }],
+            }],
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 16384,
+              responseMimeType: "application/json",
+            },
+          }),
+        }
+      ),
+      Math.max(20000, Math.min(timeoutMs, 60000)),
+      'GEMINI_CONTRACT_REPAIR'
+    );
+    if (!response.ok) {
+      console.error(`[Contract Repair] Model call failed: ${response.status}`);
+      return null;
+    }
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!text) return null;
+    return await resolvePlanJson(text, apiKey, timeoutMs);
+  } catch (err) {
+    console.error('[Contract Repair] threw:', err);
+    return null;
+  }
+}
+
 function coerceFilesMap(raw: unknown): { files: Record<string, string>; summary: string } {
   const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const filesObjCandidate = obj.files;
@@ -5115,16 +5187,7 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
           // instead of being executed. Unwrap once if the flat shape looks
           // empty but a nested "plan" object holds the real content.
           // deno-lint-ignore no-explicit-any
-          const parsed: any = ((): any => {
-            if (!rawParsed || typeof rawParsed !== 'object') return rawParsed;
-            const looksEmpty = !rawParsed.file && !Array.isArray(rawParsed.steps) && !Array.isArray(rawParsed.codeChanges) && !Array.isArray(rawParsed.files);
-            const nested = rawParsed.plan;
-            if (looksEmpty && nested && typeof nested === 'object') {
-              const hasNestedContent = nested.file || Array.isArray(nested.steps) || Array.isArray(nested.codeChanges) || Array.isArray(nested.files);
-              if (hasNestedContent) return { ...rawParsed, ...nested };
-            }
-            return rawParsed;
-          })();
+          let parsed: any = unwrapNestedPlan(rawParsed);
           if (jsonType === 'asset_picker') {
             // Return asset_picker for frontend to show selection UI
             return createResponse({ 
@@ -5140,62 +5203,93 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
             // touches the required wiring files. Attach a truthfulness warning
             // when the plan is partial so the frontend can show honest status.
             // ================================================================
-            const contractWarnings: string[] = [];
-            try {
-              const planFiles: string[] = [];
-              if (parsed && typeof parsed === 'object') {
-                if (typeof parsed.file === 'string') planFiles.push(parsed.file);
-                if (Array.isArray(parsed.steps)) {
-                  for (const step of parsed.steps) {
-                    // Mirrors the auto-executor's own fallback below: a step
-                    // without its own "file" targets the plan's top-level file.
-                    if (step && typeof step.file === 'string') planFiles.push(step.file);
-                    else if (typeof parsed.file === 'string') planFiles.push(parsed.file);
+            const computeContractWarnings = (planObj: any): string[] => {
+              const warnings: string[] = [];
+              try {
+                const planFiles: string[] = [];
+                if (planObj && typeof planObj === 'object') {
+                  if (typeof planObj.file === 'string') planFiles.push(planObj.file);
+                  if (Array.isArray(planObj.steps)) {
+                    for (const step of planObj.steps) {
+                      // Mirrors the auto-executor's own fallback below: a step
+                      // without its own "file" targets the plan's top-level file.
+                      if (step && typeof step.file === 'string') planFiles.push(step.file);
+                      else if (typeof planObj.file === 'string') planFiles.push(planObj.file);
+                    }
+                  }
+                  if (Array.isArray(planObj.codeChanges)) {
+                    for (const ch of planObj.codeChanges) {
+                      if (ch && typeof ch.file === 'string') planFiles.push(ch.file);
+                    }
+                  }
+                  if (Array.isArray(planObj.files)) {
+                    for (const f of planObj.files) {
+                      if (typeof f === 'string') planFiles.push(f);
+                      else if (f && typeof f.path === 'string') planFiles.push(f.path);
+                    }
                   }
                 }
-                if (Array.isArray(parsed.codeChanges)) {
-                  for (const ch of parsed.codeChanges) {
-                    if (ch && typeof ch.file === 'string') planFiles.push(ch.file);
-                  }
-                }
-                if (Array.isArray(parsed.files)) {
-                  for (const f of parsed.files) {
-                    if (typeof f === 'string') planFiles.push(f);
-                    else if (f && typeof f.path === 'string') planFiles.push(f.path);
-                  }
-                }
-              }
-              const normalizedPlanFiles = Array.from(new Set(planFiles.map(p => p.toLowerCase())));
-              const planHits = (needle: string) =>
-                normalizedPlanFiles.some(p => p.includes(needle.toLowerCase()));
-              const planHitsBasename = (basename: string) =>
-                normalizedPlanFiles.some(p => p.endsWith('/' + basename.toLowerCase()) || p === '/' + basename.toLowerCase());
+                const normalizedPlanFiles = Array.from(new Set(planFiles.map(p => p.toLowerCase())));
+                const planHits = (needle: string) =>
+                  normalizedPlanFiles.some(p => p.includes(needle.toLowerCase()));
+                const planHitsBasename = (basename: string) =>
+                  normalizedPlanFiles.some(p => p.endsWith('/' + basename.toLowerCase()) || p === '/' + basename.toLowerCase());
 
-              if (isLanguageToggle) {
-                // Accept EITHER a dedicated LanguageContext provider OR an
-                // i18next-style config file — both are legitimate, commonly
-                // used architectures for bilingual support (the phase-2
-                // followup logic below already treats them as equivalent).
-                const hasContext =
-                  normalizedPlanFiles.some(p => /\/context(s)?\/.*language/i.test(p)) ||
-                  planHits('languagecontext') ||
-                  normalizedPlanFiles.some(p => /i18n/i.test(p)) ||
-                  planHits('i18n');
-                const hasEntry = planHits(entryFile.toLowerCase()) || planHitsBasename(entryFile.split('/').pop() || 'index.js');
-                const hasApp = planHits(appFile.toLowerCase()) || planHitsBasename(appFile.split('/').pop() || 'App.js');
-                if (!hasContext) contractWarnings.push('Missing LanguageContext provider file.');
-                if (!hasEntry) contractWarnings.push(`Provider not mounted in ${entryFile}.`);
-                if (!hasApp) contractWarnings.push(`Toggle UI / translated labels not wired in ${appFile}.`);
-              } else if (isDarkModeToggle) {
-                const hasApp = planHits(appFile.toLowerCase()) || planHitsBasename(appFile.split('/').pop() || 'App.js');
-                if (!hasApp) contractWarnings.push(`Dark-mode toggle not wired in ${appFile}.`);
+                if (isLanguageToggle) {
+                  // Accept EITHER a dedicated LanguageContext provider OR an
+                  // i18next-style config file — both are legitimate, commonly
+                  // used architectures for bilingual support (the phase-2
+                  // followup logic below already treats them as equivalent).
+                  const hasContext =
+                    normalizedPlanFiles.some(p => /\/context(s)?\/.*language/i.test(p)) ||
+                    planHits('languagecontext') ||
+                    normalizedPlanFiles.some(p => /i18n/i.test(p)) ||
+                    planHits('i18n');
+                  const hasEntry = planHits(entryFile.toLowerCase()) || planHitsBasename(entryFile.split('/').pop() || 'index.js');
+                  const hasApp = planHits(appFile.toLowerCase()) || planHitsBasename(appFile.split('/').pop() || 'App.js');
+                  if (!hasContext) warnings.push('Missing LanguageContext provider file.');
+                  if (!hasEntry) warnings.push(`Provider not mounted in ${entryFile}.`);
+                  if (!hasApp) warnings.push(`Toggle UI / translated labels not wired in ${appFile}.`);
+                } else if (isDarkModeToggle) {
+                  const hasApp = planHits(appFile.toLowerCase()) || planHitsBasename(appFile.split('/').pop() || 'App.js');
+                  if (!hasApp) warnings.push(`Dark-mode toggle not wired in ${appFile}.`);
+                }
+              } catch (verifyErr) {
+                console.error('[Contract Verifier] Error:', verifyErr);
               }
-            } catch (verifyErr) {
-              console.error('[Contract Verifier] Error:', verifyErr);
+              return warnings;
+            };
+
+            let contractWarnings = computeContractWarnings(parsed);
+
+            // 🛠️ AUDIT FIX: an incomplete plan used to just ship with a warning
+            // attached — but nothing downstream (including the frontend's
+            // auto-execute-on-reroute) ever blocked on "partial", so it became
+            // the FINAL, silently-shipped result (e.g. only the header ever
+            // changed). Give the model ONE chance to complete the plan first.
+            if (contractWarnings.length > 0) {
+              console.warn('[Contract Verifier] Partial plan detected, attempting one completion repair:', contractWarnings);
+              const repaired = await completeContractPlanWithModel(
+                contentParts,
+                chatSystemPrompt,
+                selectedChatModel,
+                GEMINI_API_KEY,
+                chatTimeout,
+                contractWarnings
+              );
+              const unwrappedRepaired = unwrapNestedPlan(repaired);
+              if (unwrappedRepaired) {
+                const repairedWarnings = computeContractWarnings(unwrappedRepaired);
+                if (repairedWarnings.length === 0) {
+                  console.log('[Contract Verifier] Completion repair succeeded — plan now passes contract.');
+                  parsed = unwrappedRepaired;
+                  contractWarnings = [];
+                }
+              }
             }
 
             if (contractWarnings.length > 0) {
-              console.warn('[Contract Verifier] Partial plan detected:', contractWarnings);
+              console.warn('[Contract Verifier] Partial plan detected after repair attempt:', contractWarnings);
               return createResponse({
                 ok: true,
                 plan: JSON.stringify(parsed),
@@ -5320,12 +5414,12 @@ DO NOT make up fake information. Use EXACTLY what is in the extracted content.`;
                 const title = typeof parsed.title === 'string' ? parsed.title.replace(/^[^\w]+/, '') : 'Changes applied';
                 if (changesFailed.length === 0) {
                   const summary = `✅ Done! ${title}\n\nFiles updated:\n${changesApplied.map(c => `• ${c}`).join('\n')}${queuedFollowup ? '\n\n⏳ More components will be translated in the next pass.' : ''}`;
-                  return createResponse({ ok: true, message: summary, mode: 'agent', creditUsage: chatCreditUsage, filesChanged: Object.keys(filesToWrite) });
+                  return createResponse({ ok: true, message: summary, mode: 'agent', creditUsage: chatCreditUsage, filesChanged: Object.keys(filesToWrite), queuedFollowup });
                 }
                 // Partial result: some steps landed, some did not. Never say "Done!"
                 // when part of the request silently failed — be explicit instead.
                 const partialSummary = `⚠️ Partially applied. ${title}\n\nFiles updated:\n${changesApplied.map(c => `• ${c}`).join('\n')}\n\nCould not safely auto-apply changes to:\n${changesFailed.map(c => `• ${c}`).join('\n')}\n\nTry resending that part with a more specific detail (e.g. the exact element or color).`;
-                return createResponse({ ok: true, message: partialSummary, mode: 'agent', creditUsage: chatCreditUsage, filesChanged: Object.keys(filesToWrite) });
+                return createResponse({ ok: true, message: partialSummary, mode: 'agent', creditUsage: chatCreditUsage, filesChanged: Object.keys(filesToWrite), queuedFollowup });
               }
             } catch (autoExecErr) {
               console.error('[Chat Auto-Execute] Failed, falling back to plan:', autoExecErr);

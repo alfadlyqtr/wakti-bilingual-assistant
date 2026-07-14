@@ -5730,6 +5730,8 @@ ${fixInstructions}
       let assistantMsg: string;
       let snapshotToSave: any = null;
       let isPlanResponse = false; // Used to trigger auto-execute for rerouted complex requests
+      let isPartialPlan = false; // Contract verifier flagged this plan as incomplete — don't blind-auto-apply it
+      let queuedFollowupToChain: string | null = null; // Phase 2 prompt to auto-send after a direct Phase 1 auto-apply
 
       // IMPORTANT: Save snapshot of CURRENT state BEFORE applying changes (for revert + truthful diff checks)
       const beforeSnapshot: Record<string, string> = Object.keys(generatedFiles).length > 0
@@ -5759,6 +5761,17 @@ ${fixInstructions}
         // Adding a full new page/section/feature
         /\b(add|create|build)\s+(a\s+)?(new\s+)?(full\s+)?(page|blog|shop|store|dashboard|admin|portfolio|about\s+page|contact\s+page|pricing\s+page|landing\s+page)\b/i.test(userMessage);
       const effectiveMode = (leftPanelMode === 'code' && isComplexSystemRequest) ? 'chat' : leftPanelMode;
+
+      // 🎯 TRANSPARENCY FIX: never silently swap modes on the user — tell them
+      // when a request was big/complex enough to need the guided multi-step path.
+      if (effectiveMode === 'chat' && leftPanelMode === 'code') {
+        toast.info(
+          isRTL
+            ? 'هذا طلب كبير متعدد الملفات — سأبني خطة متعددة الخطوات وأنفذها تلقائيًا.'
+            : 'This is a bigger, multi-file change — building a multi-step plan and applying it automatically.',
+          { duration: 6000 }
+        );
+      }
 
       if (effectiveMode === 'chat') {
         // Chat mode: Smart AI that answers questions OR returns plans for code changes
@@ -5806,20 +5819,39 @@ ${fixInstructions}
           // AI detected a code change request - show Plan Card
           assistantMsg = response.data.plan;
           isPlanResponse = true;
-          // 🎯 COMPLETION CONTRACT: Surface partial-completion warnings honestly
+          // 🎯 COMPLETION CONTRACT: Surface partial-completion warnings honestly,
+          // and remember it so we don't blind-auto-apply a known-incomplete plan below.
           if (response.data.partial && Array.isArray(response.data.contractWarnings) && response.data.contractWarnings.length > 0) {
+            isPartialPlan = true;
             const warningText = response.data.contractWarnings.join(' ');
             console.warn('[ContractVerifier] Partial plan:', response.data.contractWarnings);
             toast.warning(
               isRTL
-                ? `تم إعداد خطة جزئية فقط. ${warningText} راجع الخطة قبل التطبيق.`
-                : `Partial plan detected. ${warningText} Review the plan before applying.`,
+                ? `تم إعداد خطة جزئية فقط. ${warningText} راجع الخطة أدناه واضغط "تنفيذ الخطة" عند الجاهزية.`
+                : `Partial plan detected. ${warningText} Review the plan below and click "Implement Plan" when ready.`,
               { duration: 8000 }
             );
           }
         } else {
-          // AI answered a question - show regular message
+          // AI answered a question, OR already wrote file changes straight to the
+          // DB itself (mode: 'agent') — show the message either way.
           assistantMsg = response.data.message || (isRTL ? 'لم أتمكن من الإجابة.' : 'Could not generate a response.');
+
+          // Backend auto-applied changes directly (e.g. Phase 1 of a language
+          // toggle) without going through the Plan Card — sync the editor/preview
+          // so it isn't stale, and remember any queued Phase 2 to auto-chain.
+          if (response.data.mode === 'agent' && Array.isArray(response.data.filesChanged) && response.data.filesChanged.length > 0) {
+            try {
+              const refreshedFiles = await loadFilesFromDb(id as string);
+              setGeneratedFiles(refreshedFiles);
+              setCodeContent(refreshedFiles['/App.js'] || Object.values(refreshedFiles)[0] || '');
+            } catch (reloadErr) {
+              console.error('[Chat Mode] Failed to reload files after auto-apply:', reloadErr);
+            }
+            if (response.data.queuedFollowup) {
+              queuedFollowupToChain = response.data.queuedFollowup;
+            }
+          }
         }
         setGenerationSteps(prev => prev.map(s => ({ ...s, status: 'completed' })));
         await delay(CHAT_MODE_TRANSITION_STEP_DELAY_MS);
@@ -6169,8 +6201,11 @@ ${fixInstructions}
         .single();
 
       if (assistError) console.error('Error saving assistant message:', assistError);
-      // Auto-execute the plan when a complex request was rerouted from Code to Chat mode
-      if (isComplexSystemRequest && isPlanResponse) {
+      // Auto-execute the plan when a complex request was rerouted from Code to Chat mode.
+      // Skip auto-execute when the contract verifier flagged this plan as incomplete —
+      // blindly applying a known-partial plan is exactly how "only the header changed"
+      // used to happen; let the user review it instead.
+      if (isComplexSystemRequest && isPlanResponse && !isPartialPlan) {
         pendingAutoExecuteRef.current = true;
       }
       if (assistantMsgData) setChatMessages(prev => [...prev, assistantMsgData as any]);
@@ -6181,6 +6216,24 @@ ${fixInstructions}
           content: assistantMsg,
           snapshot: snapshotToSave
         }]);
+      }
+
+      // Auto-continue a queued follow-up (e.g. language toggle Phase 2) when
+      // Phase 1 was auto-applied directly by the backend during this chat call.
+      if (queuedFollowupToChain) {
+        toast.info(
+          isRTL
+            ? 'المرحلة الأولى اكتملت! سيبدأ المساعد بترجمة باقي المكونات تلقائياً...'
+            : 'Phase 1 done! Starting Phase 2 automatically — translating remaining components...',
+          { duration: 5000 }
+        );
+        wizardPromptRef.current = queuedFollowupToChain;
+        setTimeout(() => {
+          const form = document.querySelector('form[class*="flex items-end gap-2"]');
+          if (form) {
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          }
+        }, 2000);
       }
 
       // Generate dynamic suggestions based on what was just done - ALWAYS parse the message content
