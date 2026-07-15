@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, X, Target, Search, Trash2 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
@@ -7,7 +7,6 @@ import { toast } from "sonner";
 
 type StudyTab = "today" | "review" | "plans";
 type PlanType = "beginner" | "juzamma" | "custom";
-type ReviewFilter = "needs_revision" | "learning" | "memorized";
 
 interface StudyPlan {
   id: string;
@@ -94,6 +93,8 @@ const SURAH_LIST: { n: number; en: string; ar: string; ayahs: number }[] = [
   { n:111,en:"Al-Masad",ar:"المسد",ayahs:5 },{ n:112,en:"Al-Ikhlas",ar:"الإخلاص",ayahs:4 },
   { n:113,en:"Al-Falaq",ar:"الفلق",ayahs:5 },{ n:114,en:"An-Nas",ar:"الناس",ayahs:6 },
 ];
+
+const TOTAL_QURAN_AYAHS = SURAH_LIST.reduce((sum, s) => sum + s.ayahs, 0);
 
 function stripBasmala(text: string): string {
   // quran-uthmani always prepends Basmala (4 words) to ayah 1 of every surah.
@@ -194,7 +195,7 @@ export default function DeenStudy() {
   const [sessionAyah, setSessionAyah] = useState<AyahData | null>(null);
   const [playerMode, setPlayerMode] = useState<"learn" | "review">("learn");
   const [fetchingAyah, setFetchingAyah] = useState(false);
-  const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("needs_revision");
+  const [expandedSurah, setExpandedSurah] = useState<number | null>(null);
   const plan = planStore.plans.find((p) => p.id === planStore.activePlanId) ?? planStore.plans[0] ?? null;
 
   const reloadMemorization = useCallback(() => {
@@ -243,10 +244,10 @@ export default function DeenStudy() {
     setPlayerMode("review");
   };
 
-  const onPlayerComplete = useCallback(async (result: "memorized" | "learning" | "needs_revision") => {
+  const onPlayerComplete = useCallback(async (result: "memorized") => {
     if (!sessionAyah) return;
     await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
-    if (result !== "needs_revision" && plan && playerMode === "learn") {
+    if (plan && playerMode === "learn") {
       const updated: StudyPlan = { ...plan, currentSurah: sessionAyah.surah_number, currentAyah: sessionAyah.ayah_number + 1 };
       setPlanStore((prev) => {
         const next: StudyPlanStore = {
@@ -306,9 +307,29 @@ export default function DeenStudy() {
     toast.success(isAr ? "تم حذف الخطة" : "Plan deleted");
   };
 
-  const reviewItems = memorization.filter((m) => m.status === "needs_revision");
-  const learningItems = memorization.filter((m) => m.status === "learning");
-  const memorizedCount = memorization.filter((m) => m.status === "memorized").length;
+  const memorizedItems = memorization.filter((m) => m.status === "memorized");
+  const memorizedCount = memorizedItems.length;
+  const memorizedPercent = ((memorizedCount / TOTAL_QURAN_AYAHS) * 100).toFixed(1);
+  const memorizedBySurah = useMemo(() => {
+    const grouped = new Map<number, any[]>();
+    memorizedItems.forEach((item) => {
+      const current = grouped.get(item.surah_number) ?? [];
+      grouped.set(item.surah_number, [...current, item]);
+    });
+
+    return Array.from(grouped.entries())
+      .map(([surahNumber, items]) => ({
+        surahNumber,
+        items: [...items].sort((a, b) => a.ayah_number - b.ayah_number),
+      }))
+      .sort((a, b) => a.surahNumber - b.surahNumber);
+  }, [memorizedItems]);
+
+  useEffect(() => {
+    if (expandedSurah !== null && !memorizedBySurah.some((g) => g.surahNumber === expandedSurah)) {
+      setExpandedSurah(null);
+    }
+  }, [memorizedBySurah, expandedSurah]);
 
   const tabs: { id: StudyTab; labelEn: string; labelAr: string }[] = [
     { id: "today", labelEn: "Today", labelAr: "اليوم" },
@@ -373,10 +394,9 @@ export default function DeenStudy() {
               <NoPlanState isAr={isAr} dark={dark} onSetupPlan={() => setActiveTab("plans")} />
             ) : (
               <>
-                <div className="grid grid-cols-3 gap-2">
-                  <StatCard value={learningItems.length} label={isAr ? "تتعلمه" : "Learning"} color="#60a5fa" bg="hsla(210,100%,65%,0.08)" dark={dark} onClick={() => { setReviewFilter("learning"); setActiveTab("review"); }} />
-                  <StatCard value={reviewItems.length} label={isAr ? "للمراجعة" : "Review due"} color="#f97316" bg="hsla(25,95%,60%,0.08)" dark={dark} onClick={() => { setReviewFilter("needs_revision"); setActiveTab("review"); }} />
-                  <StatCard value={memorizedCount} label={isAr ? "ثابت" : "Strong"} color="#4ade80" bg="hsla(142,76%,55%,0.08)" dark={dark} onClick={() => { setReviewFilter("memorized"); setActiveTab("review"); }} />
+                <div className="grid grid-cols-2 gap-2">
+                  <StatCard value={memorizedCount} label={isAr ? "آيات محفوظة" : "Memorized verses"} color="#4ade80" bg="hsla(142,76%,55%,0.08)" dark={dark} onClick={() => setActiveTab("review")} />
+                  <StatCard value={`${memorizedPercent}%`} label={isAr ? "نسبة الحفظ" : "Quran memorized"} color={accentText} bg={accentBg} dark={dark} />
                 </div>
 
                 <button
@@ -405,43 +425,11 @@ export default function DeenStudy() {
                   </div>
                 </button>
 
-                {reviewItems.length > 0 && (
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-xs font-bold" style={{ color: textPri }}>{isAr ? "تحتاج مراجعة" : "Due for review"}</p>
-                      <button onClick={() => setActiveTab("review")} className="text-[11px] font-semibold" style={{ color: accentText }}>
-                        {isAr ? "عرض الكل" : "See all"}
-                      </button>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      {reviewItems.slice(0, 2).map((m) => (
-                        <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
-                          onUpdate={updateMemorizationStatus}
-                          onTap={() => openReviewSession(m)}
-                          emphasizeReview />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {learningItems.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold mb-2" style={{ color: textPri }}>{isAr ? "تتعلمه الآن" : "Learning now"}</p>
-                    <div className="flex flex-col gap-2">
-                      {learningItems.slice(0, 3).map((m) => (
-                        <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
-                          onUpdate={updateMemorizationStatus}
-                          onTap={() => openReviewSession(m)} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {memorizedCount > 0 && (
                   <div>
                     <p className="text-xs font-bold mb-2" style={{ color: textPri }}>{isAr ? "المحفوظ بقوة" : "Strong now"}</p>
                     <div className="flex flex-col gap-2">
-                      {memorization.filter((m) => m.status === "memorized").slice(0, 3).map((m) => (
+                      {memorizedItems.slice(0, 3).map((m) => (
                         <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
                           onUpdate={updateMemorizationStatus}
                           onTap={() => openReviewSession(m)} />
@@ -459,51 +447,74 @@ export default function DeenStudy() {
         {/* ── REVIEW TAB ── */}
         {activeTab === "review" && (
           <div className="flex flex-col gap-2">
-            <div className="flex rounded-xl p-1 gap-1 mb-2" style={{ background: surface, border: `1px solid ${bdr}` }}>
-              {([
-                { id: "needs_revision", ar: "للمراجعة", en: "Review due" },
-                { id: "learning", ar: "تتعلمه", en: "Learning" },
-                { id: "memorized", ar: "ثابت", en: "Strong" },
-              ] as { id: ReviewFilter; ar: string; en: string }[]).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => setReviewFilter(item.id)}
-                  className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all active:scale-95"
-                  style={reviewFilter === item.id
-                    ? { background: accentBg, color: accentText, border: `1px solid ${accentBorder}` }
-                    : { color: textSec }}
-                >
-                  {isAr ? item.ar : item.en}
-                </button>
-              ))}
-            </div>
-            {loading ? <Loader /> : (reviewFilter === "needs_revision" ? reviewItems : reviewFilter === "learning" ? learningItems : memorization.filter((m) => m.status === "memorized")).length === 0 ? (
+            {loading ? <Loader /> : memorizedItems.length === 0 ? (
               <div className="flex flex-col items-center py-16 gap-3 text-center">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: surface, border: `1px solid ${bdr}` }}>
                   <RotateCcw className="w-7 h-7" style={{ color: textSec }} />
                 </div>
                 <p className="text-sm font-semibold" style={{ color: textPri }}>
-                  {reviewFilter === "needs_revision"
-                    ? (isAr ? "لا شيء للمراجعة" : "Nothing to review")
-                    : reviewFilter === "learning"
-                      ? (isAr ? "لا يوجد قيد التعلّم" : "Nothing in learning")
-                      : (isAr ? "لا يوجد محفوظ حتى الآن" : "Nothing strong yet")}
+                  {isAr ? "لا يوجد محفوظ حتى الآن" : "Nothing strong yet"}
                 </p>
                 <p className="text-xs max-w-[220px] leading-relaxed" style={{ color: textSec }}>
-                  {reviewFilter === "needs_revision"
-                    ? (isAr ? "حين تحفظ آيات ستظهر هنا للمراجعة الدورية." : "Once you memorize ayahs they will appear here for periodic revision.")
-                    : reviewFilter === "learning"
-                      ? (isAr ? "الآيات التي ما زلت تتعلمها ستظهر هنا." : "Ayahs you are still learning will appear here.")
-                      : (isAr ? "الآيات التي أتقنتها ستظهر هنا." : "Ayahs you have mastered will appear here.")}
+                  {isAr ? "الآيات التي أتقنتها ستظهر هنا." : "Ayahs you have mastered will appear here."}
                 </p>
               </div>
             ) : (
-              (reviewFilter === "needs_revision" ? reviewItems : reviewFilter === "learning" ? learningItems : memorization.filter((m) => m.status === "memorized")).map((m) => (
-                <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
-                  onUpdate={updateMemorizationStatus}
-                  onTap={() => openReviewSession(m)}
-                  emphasizeReview={reviewFilter === "needs_revision"} />
-              ))
+              memorizedBySurah.map((group) => {
+                const isExpanded = expandedSurah === group.surahNumber;
+                const firstAyah = group.items[0]?.ayah_number;
+                const lastAyah = group.items[group.items.length - 1]?.ayah_number;
+                return (
+                  <div
+                    key={group.surahNumber}
+                    className="rounded-xl p-2"
+                    style={{ background: surface, border: `1px solid ${bdr}` }}
+                  >
+                    <button
+                      onClick={() => setExpandedSurah((prev) => prev === group.surahNumber ? null : group.surahNumber)}
+                      className="w-full rounded-lg px-2 py-2 flex items-center gap-2 active:scale-[0.99] transition-all"
+                      style={{ background: dark ? "rgba(255,255,255,0.02)" : "rgba(6,5,65,0.02)" }}
+                      dir={isAr ? "rtl" : "ltr"}
+                    >
+                      <div className="flex-1 min-w-0" style={{ textAlign: isAr ? "right" : "left" }}>
+                        <p className="text-sm font-bold truncate" style={{ color: textPri }}>
+                          {surahName(group.surahNumber, isAr)}
+                        </p>
+                        <p className="text-[11px] mt-0.5" style={{ color: textSec }}>
+                          {isAr
+                            ? `${group.items.length} آيات محفوظة`
+                            : `${group.items.length} memorized ayahs`}
+                        </p>
+                      </div>
+                      <div
+                        className="px-2 py-1 rounded-full text-[10px] font-bold flex-shrink-0"
+                        style={{ background: dark ? "hsla(142,76%,55%,0.14)" : "hsla(142,76%,45%,0.12)", color: "#22c55e", border: "1px solid hsla(142,76%,55%,0.28)" }}
+                      >
+                        {firstAyah === lastAyah ? `${firstAyah}` : `${firstAyah}-${lastAyah}`}
+                      </div>
+                      <ChevronRight
+                        className="w-4 h-4 flex-shrink-0"
+                        style={{ color: textSec, transform: isExpanded ? "rotate(90deg)" : isAr ? "rotate(180deg)" : undefined }}
+                      />
+                    </button>
+
+                    {isExpanded && (
+                      <div className="mt-2 flex flex-col gap-2">
+                        {group.items.map((m) => (
+                          <MemorizationRow
+                            key={m.id}
+                            item={m}
+                            isAr={isAr}
+                            dark={dark}
+                            onUpdate={updateMemorizationStatus}
+                            onTap={() => openReviewSession(m)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         )}
@@ -517,7 +528,7 @@ export default function DeenStudy() {
   );
 }
 
-function StatCard({ value, label, color, bg, dark, onClick }: { value: number; label: string; color: string; bg: string; dark: boolean; onClick?: () => void }) {
+function StatCard({ value, label, color, bg, dark, onClick }: { value: number | string; label: string; color: string; bg: string; dark: boolean; onClick?: () => void }) {
   const textSec = dark ? "#858384" : "#606062";
   return (
     <button className="rounded-xl p-3 text-center active:scale-95 transition-all" style={{ background: bg, border: `1px solid ${color}33` }} onClick={onClick}>
@@ -542,7 +553,7 @@ function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, emphasizeReview
   emphasizeReview?: boolean;
 }) {
   const isMemorized = m.status === "memorized";
-  const isReview = m.status === "needs_revision";
+  const isLearning = m.status === "learning";
   const textPri = dark ? "#f2f2f2" : "#060541";
   const textSec = dark ? "#858384" : "#606062";
   const rowBg  = emphasizeReview
@@ -559,9 +570,9 @@ function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, emphasizeReview
     >
       <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-xs font-bold"
         style={{
-          background: isMemorized ? "hsla(142,76%,55%,0.12)" : isReview ? "hsla(25,95%,60%,0.12)" : "hsla(210,100%,65%,0.12)",
-          color: isMemorized ? "#4ade80" : isReview ? (dark ? "#f97316" : "#c2410c") : "#60a5fa",
-          border: `1px solid ${isMemorized ? "hsla(142,76%,55%,0.25)" : isReview ? "hsla(25,95%,60%,0.22)" : "hsla(210,100%,65%,0.25)"}`,
+          background: isMemorized ? "hsla(142,76%,55%,0.12)" : "hsla(210,100%,65%,0.12)",
+          color: isMemorized ? "#4ade80" : (isLearning ? "#60a5fa" : textSec),
+          border: `1px solid ${isMemorized ? "hsla(142,76%,55%,0.25)" : "hsla(210,100%,65%,0.25)"}`,
         }}>
         {m.surah_number}:{m.ayah_number}
       </div>
@@ -570,7 +581,7 @@ function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, emphasizeReview
           {surahName(m.surah_number, isAr)} — {isAr ? "آية" : "Ayah"} {m.ayah_number}
         </p>
         <p className="text-[10px] mt-0.5" style={{ color: textSec }}>
-          {isMemorized ? (isAr ? "✅ ثابت" : "✅ Strong") : isReview ? (isAr ? "🔄 راجع اليوم" : "🔄 Review today") : (isAr ? "📖 تتعلمها" : "📖 Learning")}
+          {isMemorized ? (isAr ? "✅ ثابت" : "✅ Strong") : (isAr ? " تتعلمها" : "📖 Learning")}
         </p>
       </div>
       <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: textSec, transform: isAr ? "rotate(180deg)" : undefined }} />
@@ -935,7 +946,7 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
   ayah: AyahData;
   mode: "learn" | "review";
   isAr: boolean;
-  onComplete: (result: "memorized" | "learning" | "needs_revision") => Promise<void>;
+  onComplete: (result: "memorized") => Promise<void>;
   onClose: () => void;
 }) {
   const { theme } = useTheme();
@@ -1021,11 +1032,21 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
     setProgress(t);
   };
 
-  const handleComplete = async (result: "memorized" | "learning" | "needs_revision") => {
+  const handleComplete = async (result: "memorized") => {
     audioRef.current?.pause();
     setCompleting(true);
     await onComplete(result);
     setCompleting(false);
+  };
+
+  const goBackToListen = () => {
+    audioRef.current?.pause();
+    setPlaying(false);
+    setPhase("listen");
+    setHidden(false);
+    setLoopCount(0);
+    setProgress(0);
+    if (audioRef.current) audioRef.current.currentTime = 0;
   };
 
   const progressPct = duration ? Math.round((progress / duration) * 100) : 0;
@@ -1051,8 +1072,6 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
   const amber     = "hsl(45,100%,60%)";
   const amberAlpha = (a: number) => `hsla(45,100%,60%,${a})`;
   const amberText = dark ? "#fbbf24" : "#b45309";
-  const red       = "hsl(0,80%,60%)";
-  const redAlpha  = (a: number) => `hsla(0,80%,60%,${a})`;
 
   return (
     <div
@@ -1270,20 +1289,11 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
 
             <div className="flex gap-2">
               <button
-                onClick={() => handleComplete("needs_revision")}
-                disabled={completing}
-                className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
-                style={{ background: redAlpha(0.12), color: red, border: `1px solid ${redAlpha(0.28)}` }}>
-                <span className="text-xl">😓</span>
-                {isAr ? "لم أتذكر" : "Not yet"}
-              </button>
-              <button
-                onClick={() => handleComplete("learning")}
-                disabled={completing}
+                onClick={goBackToListen}
                 className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
                 style={{ background: amberAlpha(0.12), color: amber, border: `1px solid ${amberAlpha(0.28)}` }}>
-                <span className="text-xl">🤔</span>
-                {isAr ? "تقريباً" : "Almost"}
+                <span className="text-xl">😓</span>
+                {isAr ? "ليس بعد" : "Not yet"}
               </button>
               <button
                 onClick={() => handleComplete("memorized")}
@@ -1291,7 +1301,7 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
                 className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
                 style={{ background: greenAlpha(0.12), color: green, border: `1px solid ${greenAlpha(0.28)}` }}>
                 <span className="text-xl">✅</span>
-                {isAr ? "حفظت!" : "Got it!"}
+                {isAr ? "محفوظ" : "Memorized"}
               </button>
             </div>
           </div>
