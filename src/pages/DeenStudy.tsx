@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, X, Target, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp, X, Target, Search, Trash2 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -95,6 +95,7 @@ const SURAH_LIST: { n: number; en: string; ar: string; ayahs: number }[] = [
 ];
 
 const TOTAL_QURAN_AYAHS = SURAH_LIST.reduce((sum, s) => sum + s.ayahs, 0);
+const LEARNT_TODAY_PREVIEW_COUNT = 2;
 
 function stripBasmala(text: string): string {
   // quran-uthmani always prepends Basmala (4 words) to ayah 1 of every surah.
@@ -196,6 +197,7 @@ export default function DeenStudy() {
   const [playerMode, setPlayerMode] = useState<"learn" | "review">("learn");
   const [fetchingAyah, setFetchingAyah] = useState(false);
   const [expandedSurah, setExpandedSurah] = useState<number | null>(null);
+  const [showAllLearntToday, setShowAllLearntToday] = useState(false);
   const plan = planStore.plans.find((p) => p.id === planStore.activePlanId) ?? planStore.plans[0] ?? null;
 
   const reloadMemorization = useCallback(() => {
@@ -263,6 +265,40 @@ export default function DeenStudy() {
     toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟");
   }, [sessionAyah, plan, playerMode, upsertMemorization, reloadMemorization, isAr]);
 
+  const onPlayerNotYet = useCallback(async () => {
+    if (!sessionAyah) return;
+    const removed = memorization.find((m) =>
+      m.surah_number === sessionAyah.surah_number &&
+      m.ayah_number === sessionAyah.ayah_number &&
+      m.status === "memorized"
+    );
+    if (!removed) return;
+
+    const { data: sd } = await supabase.auth.getSession();
+    const uid = sd.session?.user?.id;
+    if (!uid) return;
+
+    const { error } = await (supabase as any)
+      .from("deen_memorization")
+      .delete()
+      .eq("user_id", uid)
+      .eq("surah_number", sessionAyah.surah_number)
+      .eq("ayah_number", sessionAyah.ayah_number)
+      .eq("status", "memorized");
+
+    if (error) {
+      toast.error(isAr ? "تعذر تحديث حالة الآية" : "Could not update ayah status");
+      return;
+    }
+
+    setMemorization((prev) => prev.filter((m) => !(
+      m.surah_number === sessionAyah.surah_number &&
+      m.ayah_number === sessionAyah.ayah_number &&
+      m.status === "memorized"
+    )));
+
+  }, [sessionAyah, memorization, isAr]);
+
   const activatePlan = (type: PlanType, dailyGoal: number, startSurah: number, startAyah: number, customName?: string) => {
     const newPlan: StudyPlan = {
       id: `plan_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -310,6 +346,32 @@ export default function DeenStudy() {
   const memorizedItems = memorization.filter((m) => m.status === "memorized");
   const memorizedCount = memorizedItems.length;
   const memorizedPercent = ((memorizedCount / TOTAL_QURAN_AYAHS) * 100).toFixed(1);
+  const learntTodayItems = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfToday = startOfToday + (24 * 60 * 60 * 1000);
+
+    return memorizedItems.filter((item) => {
+      if (!item.updated_at) return false;
+      const updatedAt = new Date(item.updated_at).getTime();
+      if (Number.isNaN(updatedAt)) return false;
+      return updatedAt >= startOfToday && updatedAt < endOfToday;
+    });
+  }, [memorizedItems]);
+  const memorizedTodayCount = learntTodayItems.length;
+  const dailyGoal = Math.max(plan?.dailyGoal ?? 0, 0);
+  const dailyGoalProgress = dailyGoal > 0 ? Math.min(memorizedTodayCount / dailyGoal, 1) : 0;
+  const dailyAyahsLeft = Math.max(dailyGoal - memorizedTodayCount, 0);
+  const dailyGoalSummary = dailyGoal <= 0
+    ? (isAr ? "لا يوجد هدف يومي" : "No daily goal")
+    : dailyAyahsLeft === 0
+      ? (isAr ? `تم تحقيق الهدف اليومي • ${dailyGoal} آيات ✓` : `Daily goal reached • ${dailyGoal} ayahs ✓`)
+      : (isAr ? `متبقي ${dailyAyahsLeft} آيات للوصول للهدف` : `${dailyAyahsLeft} ayahs left to goal`);
+  const hasMoreLearntToday = learntTodayItems.length > LEARNT_TODAY_PREVIEW_COUNT;
+  const collapsedLearntTodayItems = learntTodayItems.slice(0, LEARNT_TODAY_PREVIEW_COUNT + 1);
+  const visibleLearntTodayItems = showAllLearntToday
+    ? learntTodayItems
+    : collapsedLearntTodayItems;
   const memorizedBySurah = useMemo(() => {
     const grouped = new Map<number, any[]>();
     memorizedItems.forEach((item) => {
@@ -350,6 +412,7 @@ export default function DeenStudy() {
           mode={playerMode}
           isAr={isAr}
           onComplete={onPlayerComplete}
+          onNotYet={onPlayerNotYet}
           onClose={() => setSessionAyah(null)}
         />
       )}
@@ -394,9 +457,25 @@ export default function DeenStudy() {
               <NoPlanState isAr={isAr} dark={dark} onSetupPlan={() => setActiveTab("plans")} />
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-2">
-                  <StatCard value={memorizedCount} label={isAr ? "آيات محفوظة" : "Memorized verses"} color="#4ade80" bg="hsla(142,76%,55%,0.08)" dark={dark} onClick={() => setActiveTab("review")} />
-                  <StatCard value={`${memorizedPercent}%`} label={isAr ? "نسبة الحفظ" : "Quran memorized"} color={accentText} bg={accentBg} dark={dark} />
+                <div className="grid grid-cols-3 gap-2">
+                  <StatCard
+                    value={memorizedTodayCount}
+                    valueSuffix={isAr ? "آية" : "ayah"}
+                    label={isAr ? "اليوم" : "Today"}
+                    color="#60a5fa"
+                    bg="hsla(210,100%,65%,0.10)"
+                    dark={dark}
+                  />
+                  <StatCard
+                    value={memorizedCount}
+                    valueSuffix={isAr ? "آية" : "ayah"}
+                    label={isAr ? "بالإجمالي" : "in total"}
+                    color="#4ade80"
+                    bg="hsla(142,76%,55%,0.08)"
+                    dark={dark}
+                    onClick={() => setActiveTab("review")}
+                  />
+                  <StatCard value={`${memorizedPercent}%`} label={isAr ? "% القرآن" : "% Quran"} color={accentText} bg={accentBg} dark={dark} />
                 </div>
 
                 <button
@@ -415,7 +494,7 @@ export default function DeenStudy() {
                           : <Play className="w-5 h-5" style={{ color: accentText }} />}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-bold" style={{ color: textPri }}>{isAr ? "ابدأ جلسة اليوم" : "Start today's session"}</p>
+                        <p className="text-sm font-bold" style={{ color: textPri }}>{isAr ? "ابدأ جلسة الحفظ" : "Start memorization session"}</p>
                         <p className="text-xs mt-0.5" style={{ color: accentText }}>
                           {surahName(plan.currentSurah, isAr)} — {isAr ? "آية" : "Ayah"} {plan.currentAyah}
                         </p>
@@ -423,20 +502,94 @@ export default function DeenStudy() {
                     </div>
                     <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: accentText, transform: isAr ? "rotate(180deg)" : undefined }} />
                   </div>
+                  <div className="mt-2.5">
+                    <div
+                      className="h-1 rounded-full overflow-hidden"
+                      style={{ background: dark ? "hsla(25,95%,60%,0.18)" : "hsla(25,85%,45%,0.20)" }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${dailyGoalProgress * 100}%`, background: accentText }}
+                      />
+                    </div>
+                    <p className="text-[10px] font-medium mt-1" style={{ color: textSec, textAlign: isAr ? "right" : "left" }}>
+                      {dailyGoalSummary}
+                    </p>
+                  </div>
                 </button>
 
-                {memorizedCount > 0 && (
-                  <div>
-                    <p className="text-xs font-bold mb-2" style={{ color: textPri }}>{isAr ? "المحفوظ بقوة" : "Strong now"}</p>
-                    <div className="flex flex-col gap-2">
-                      {memorizedItems.slice(0, 3).map((m) => (
-                        <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
-                          onUpdate={updateMemorizationStatus}
-                          onTap={() => openReviewSession(m)} />
-                      ))}
-                    </div>
+                <div className="mt-4">
+                  <div className="mb-2 flex items-center gap-3">
+                    <span className="h-px flex-1" style={{ background: bdr }} />
+                    <p className="text-xs font-bold" style={{ color: textPri }}>{isAr ? "المتعلم اليوم" : "Learnt today"}</p>
+                    <span className="h-px flex-1" style={{ background: bdr }} />
                   </div>
-                )}
+                  {learntTodayItems.length === 0 ? (
+                    <p className="text-[11px]" style={{ color: textSec }}>
+                      {isAr ? "لا توجد آيات متعلمة اليوم بعد" : "No verses learnt today yet"}
+                    </p>
+                  ) : (
+                    <div className={hasMoreLearntToday && !showAllLearntToday ? "relative" : undefined}>
+                      <div
+                        className="flex flex-col gap-2 overflow-hidden"
+                        style={hasMoreLearntToday && !showAllLearntToday ? { maxHeight: "220px" } : undefined}
+                      >
+                        {visibleLearntTodayItems.map((m, idx) => (
+                          <MemorizationRow key={m.id} item={m} isAr={isAr} dark={dark}
+                            onUpdate={updateMemorizationStatus}
+                            onTap={() => {
+                              if (hasMoreLearntToday && !showAllLearntToday && idx === LEARNT_TODAY_PREVIEW_COUNT) {
+                                setShowAllLearntToday(true);
+                                return;
+                              }
+                              void openReviewSession(m);
+                            }} />
+                        ))}
+                      </div>
+                      {hasMoreLearntToday && !showAllLearntToday && (
+                        <div
+                          className="pointer-events-none absolute inset-x-0 bottom-0 h-20"
+                          style={{ background: dark ? "linear-gradient(180deg, rgba(12,15,20,0) 0%, #0c0f14 85%)" : "linear-gradient(180deg, rgba(252,254,253,0) 0%, #fcfefd 85%)" }}
+                        />
+                      )}
+                    </div>
+                  )}
+                  {hasMoreLearntToday && (
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        onClick={() => setShowAllLearntToday((prev) => !prev)}
+                        className="text-xs font-semibold active:scale-95 transition-all inline-flex items-center gap-1"
+                        style={{ color: accentText }}
+                      >
+                        <span>
+                          {showAllLearntToday
+                            ? (isAr ? "عرض أقل" : "Show less")
+                            : (isAr ? "عرض المزيد" : "Show more")}
+                        </span>
+                        {showAllLearntToday ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-[35px] px-1">
+                  <p
+                    className="text-[13px] leading-relaxed font-medium italic text-center"
+                    style={{
+                      color: textSec,
+                      fontFamily: isAr
+                        ? "'Amiri', 'Noto Naskh Arabic', 'Noto Sans Arabic', 'Segoe UI', 'Tahoma', 'Arial', serif"
+                        : "system-ui, 'Segoe UI', Arial, sans-serif",
+                    }}
+                  >
+                    {isAr
+                      ? "«خيركم من تعلم القرآن وعلّمه»"
+                      : '"The best of you are those who learn the Quran and teach it."'}
+                  </p>
+                  <p className="text-[10px] mt-2 text-center" style={{ color: dark ? "#707070" : "#8a8a8a" }}>
+                    {isAr ? "المصدر: صحيح البخاري" : "Source: Sahih al-Bukhari"}
+                  </p>
+                </div>
 
                 {loading && <Loader />}
               </>
@@ -528,12 +681,18 @@ export default function DeenStudy() {
   );
 }
 
-function StatCard({ value, label, color, bg, dark, onClick }: { value: number | string; label: string; color: string; bg: string; dark: boolean; onClick?: () => void }) {
+function StatCard({ value, valueSuffix, label, subLabel, color, bg, dark, onClick }: { value: number | string; valueSuffix?: string; label: string; subLabel?: string; color: string; bg: string; dark: boolean; onClick?: () => void }) {
   const textSec = dark ? "#858384" : "#606062";
   return (
     <button className="rounded-xl p-3 text-center active:scale-95 transition-all" style={{ background: bg, border: `1px solid ${color}33` }} onClick={onClick}>
-      <p className="text-xl font-black" style={{ color }}>{value}</p>
-      <p className="text-[9px] font-semibold mt-0.5" style={{ color: textSec }}>{label}</p>
+      <p className="text-xl font-black leading-none inline-flex items-end gap-1" style={{ color }}>
+        <span>{value}</span>
+        {valueSuffix && <span className="text-[8px] font-semibold leading-none" style={{ color: textSec }}>{valueSuffix}</span>}
+      </p>
+      <p className="text-[9px] font-semibold mt-0.5 leading-tight" style={{ color: textSec }}>
+        <span className="block">{label}</span>
+        {subLabel && <span className="block text-[8px]">{subLabel}</span>}
+      </p>
     </button>
   );
 }
@@ -581,7 +740,7 @@ function MemorizationRow({ item: m, isAr, dark, onUpdate, onTap, emphasizeReview
           {surahName(m.surah_number, isAr)} — {isAr ? "آية" : "Ayah"} {m.ayah_number}
         </p>
         <p className="text-[10px] mt-0.5" style={{ color: textSec }}>
-          {isMemorized ? (isAr ? "✅ ثابت" : "✅ Strong") : (isAr ? " تتعلمها" : "📖 Learning")}
+          {isMemorized ? "" : (isAr ? " تتعلمها" : "📖 Learning")}
         </p>
       </div>
       <ChevronRight className="w-4 h-4 flex-shrink-0" style={{ color: textSec, transform: isAr ? "rotate(180deg)" : undefined }} />
@@ -942,11 +1101,12 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   );
 }
 
-function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
+function SessionPlayer({ ayah, mode, isAr, onComplete, onNotYet, onClose }: {
   ayah: AyahData;
   mode: "learn" | "review";
   isAr: boolean;
   onComplete: (result: "memorized") => Promise<void>;
+  onNotYet: () => Promise<void>;
   onClose: () => void;
 }) {
   const { theme } = useTheme();
@@ -1049,6 +1209,13 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
     if (audioRef.current) audioRef.current.currentTime = 0;
   };
 
+  const handleNotYet = async () => {
+    setCompleting(true);
+    await onNotYet();
+    goBackToListen();
+    setCompleting(false);
+  };
+
   const progressPct = duration ? Math.round((progress / duration) * 100) : 0;
 
   const fmt = (s: number) => {
@@ -1069,6 +1236,8 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
   const blueAlpha = (a: number) => `hsla(210,100%,65%,${a})`;
   const green     = "hsl(142,76%,55%)";
   const greenAlpha = (a: number) => `hsla(142,76%,55%,${a})`;
+  const red       = "hsl(0,80%,60%)";
+  const redAlpha  = (a: number) => `hsla(0,80%,60%,${a})`;
   const amber     = "hsl(45,100%,60%)";
   const amberAlpha = (a: number) => `hsla(45,100%,60%,${a})`;
   const amberText = dark ? "#fbbf24" : "#b45309";
@@ -1092,11 +1261,12 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
         {/* Back */}
         <button
           onClick={onClose}
-          className="w-9 h-9 rounded-xl flex items-center justify-center active:scale-90 transition-all flex-shrink-0"
+          className="h-9 px-3 rounded-xl flex items-center justify-center gap-1.5 active:scale-90 transition-all flex-shrink-0"
           style={{ background: surface, border: `1px solid ${border}` }}
           aria-label={isAr ? "رجوع" : "Back"}
         >
           <ArrowLeft className="w-4 h-4" style={{ color: textPri, transform: isAr ? "rotate(180deg)" : undefined }} />
+          <span className="text-xs font-semibold" style={{ color: textPri }}>{isAr ? "رجوع" : "Back"}</span>
         </button>
 
         {/* Title */}
@@ -1289,11 +1459,12 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
 
             <div className="flex gap-2">
               <button
-                onClick={goBackToListen}
+                onClick={handleNotYet}
+                disabled={completing}
                 className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
-                style={{ background: amberAlpha(0.12), color: amber, border: `1px solid ${amberAlpha(0.28)}` }}>
-                <span className="text-xl">😓</span>
-                {isAr ? "ليس بعد" : "Not yet"}
+                style={{ background: redAlpha(0.12), color: red, border: `1px solid ${redAlpha(0.28)}` }}>
+                <span className="text-xl">❌</span>
+                <span className="text-xs font-bold">{isAr ? "غير محفوظ" : "Not Memorized"}</span>
               </button>
               <button
                 onClick={() => handleComplete("memorized")}
@@ -1301,7 +1472,7 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onClose }: {
                 className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
                 style={{ background: greenAlpha(0.12), color: green, border: `1px solid ${greenAlpha(0.28)}` }}>
                 <span className="text-xl">✅</span>
-                {isAr ? "محفوظ" : "Memorized"}
+                <span className="text-xs font-bold">{isAr ? "محفوظ" : "Memorized"}</span>
               </button>
             </div>
           </div>
