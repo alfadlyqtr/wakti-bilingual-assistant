@@ -475,6 +475,11 @@ Deno.serve(async (req: Request) => {
     const { action } = body;
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    if (action !== "send_message") {
+      return jsonResponse({ error: "Gmail is currently available in send-only mode." }, 403);
+    }
+
     const accessToken = await getValidAccessToken(supabase, userId);
 
     if (action === "list_messages") {

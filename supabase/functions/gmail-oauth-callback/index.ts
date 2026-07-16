@@ -78,6 +78,7 @@ async function exchangeCodeForTokens(code: string, redirectUri: string) {
     access_token: string;
     refresh_token?: string;
     expires_in: number;
+    id_token?: string;
     token_type: string;
     scope: string;
   };
@@ -134,7 +135,6 @@ async function validateGmailConnection(supabase: ReturnType<typeof createClient>
     return { connected: false as const };
   }
 
-  let activeToken = data.access_token;
   const expiresAt = data.expires_at ? new Date(data.expires_at).getTime() : 0;
   const needsRefresh = expiresAt - Date.now() < 5 * 60 * 1000;
 
@@ -146,7 +146,6 @@ async function validateGmailConnection(supabase: ReturnType<typeof createClient>
 
     try {
       const refreshed = await refreshAccessToken(data.refresh_token);
-      activeToken = refreshed.access_token;
       await supabase
         .from("gmail_tokens")
         .update({
@@ -164,33 +163,29 @@ async function validateGmailConnection(supabase: ReturnType<typeof createClient>
     }
   }
 
-  const liveEmail = await fetchUserEmail(activeToken);
-  if (!liveEmail) {
-    await clearGmailTokens(supabase, userId);
-    return { connected: false as const, reconnect_required: true };
-  }
-
-  if (liveEmail !== data.email_address) {
-    await supabase
-      .from("gmail_tokens")
-      .update({ email_address: liveEmail })
-      .eq("user_id", userId);
-  }
-
   return {
     connected: true as const,
-    email_address: liveEmail,
+    email_address: data.email_address || null,
   };
 }
 
-async function fetchUserEmail(accessToken: string) {
-  const res = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/profile",
-    { headers: { Authorization: `Bearer ${accessToken}` } }
-  );
-  const data = await res.json();
-  if (!data.error && data.emailAddress) {
-    return data.emailAddress as string;
+function parseJwtPayload(token?: string | null) {
+  if (!token) return null;
+  const parts = token.split(".");
+  if (parts.length < 2) return null;
+  try {
+    const payload = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const normalized = payload + "=".repeat((4 - (payload.length % 4)) % 4);
+    return JSON.parse(atob(normalized)) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchUserEmail(accessToken: string, idToken?: string | null) {
+  const idTokenPayload = parseJwtPayload(idToken);
+  if (typeof idTokenPayload?.email === "string" && idTokenPayload.email) {
+    return idTokenPayload.email;
   }
 
   const fallbackRes = await fetch(
@@ -260,7 +255,7 @@ Deno.serve(async (req: Request) => {
         const tokens = await exchangeCodeForTokens(code, redirect_uri);
 
         // Fetch the user's Gmail email address
-        const emailAddress = await fetchUserEmail(tokens.access_token);
+        const emailAddress = await fetchUserEmail(tokens.access_token, tokens.id_token);
 
         const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
 

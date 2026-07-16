@@ -195,7 +195,7 @@ export default function Email() {
     noPrimaryEmail: language === 'ar' ? 'لا يوجد بريد متصل بعد' : 'No email connected yet',
     customMail: language === 'ar' ? 'بريد مخصص' : 'Custom Mail',
     customMailSubtitle: language === 'ar' ? 'الحسابات التي تم ربطها عبر IMAP / SMTP' : 'Accounts connected through IMAP / SMTP',
-    gmailSubtitle: language === 'ar' ? 'ربط Gmail بنفس التدفق الحالي العامل' : 'Connect Gmail using the existing working flow',
+    gmailSubtitle: language === 'ar' ? 'ربط Gmail للإرسال فقط حالياً' : 'Connect Gmail in send-only mode for now',
     appleSubtitle: language === 'ar' ? 'اربط بريد iCloud باستخدام كلمة مرور تطبيق من Apple' : 'Connect iCloud Mail using an Apple app-specific password',
     settingsSubtitle: language === 'ar' ? 'هذا هو المكان الرئيسي لربط وإدارة البريد' : 'This is the main place to connect and manage email',
     mailSubtitle: language === 'ar' ? 'استعرض وأدر حسابات البريد المخصص' : 'Review and manage your custom mail accounts',
@@ -613,6 +613,15 @@ export default function Email() {
 
   const renderGmailTab = () => (
     <div className="space-y-2">
+      <Card className={pageCardClass}>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <GmailIcon size={18} />
+            Gmail
+          </CardTitle>
+          <CardDescription>{t.gmailSubtitle}</CardDescription>
+        </CardHeader>
+      </Card>
       <GmailClient
         connected={gmailConnected}
         emailAddress={emailConn.gmail.connection.emailAddress}

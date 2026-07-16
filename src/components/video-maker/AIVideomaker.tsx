@@ -1969,6 +1969,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           prompt: motionPrompt || undefined,
           scene_index: idx,
           duration: String(sceneDurations[idx] ?? 6),
+          aspect_ratio: cinemaFormat,
         });
         setAnimTaskIds(prev => { const n = [...prev]; n[idx] = result.task_id; return n; });
         setAnimProgress(prev => { const n = [...prev]; n[idx] = 'queued'; return n; });

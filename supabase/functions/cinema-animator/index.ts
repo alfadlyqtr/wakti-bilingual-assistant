@@ -1,5 +1,5 @@
 // supabase/functions/cinema-animator/index.ts
-// Wakti Cinema Animator — KIE grok-imagine I2V (10s, 720p) task creation + status polling
+// Wakti Cinema Animator — KIE Grok Imagine Video 1.5 Preview (I2V, up to 15s, 720p) task creation + status polling
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -79,18 +79,24 @@ serve(async (req) => {
         });
       }
 
-      // Hailuo 2.3 valid durations: 6 or 10 seconds
-      const validDuration = ['6', '10'].includes(String(duration)) ? String(duration) : '6';
+      // Grok Imagine Video 1.5 Preview: duration 1-15 integer, default 6
+      const parsedDuration = Math.max(1, Math.min(15, Math.round(Number(duration) || 6)));
 
-      console.log(`[cinema-animator] Creating Hailuo I2V task for scene ${scene_index}, duration=${validDuration}s`);
+      // Map aspect_ratio: support 16:9, 9:16, 1:1, 3:2, 2:3; fallback 4:5 → auto
+      const { aspect_ratio } = body;
+      const VALID_AR = ['1:1', '16:9', '9:16', '3:2', '2:3'];
+      const finalAR = VALID_AR.includes(aspect_ratio) ? aspect_ratio : 'auto';
+
+      console.log(`[cinema-animator] Creating Grok Video 1.5 task for scene ${scene_index}, duration=${parsedDuration}s, ar=${finalAR}`);
 
       const requestBody = {
-        model: 'hailuo/2-3-image-to-video-standard',
+        model: 'grok-imagine-video-1-5-preview',
         input: {
-          image_url: String(image_url),
-          duration: validDuration,
-          resolution: '768P',
-          ...(prompt ? { prompt: String(prompt).slice(0, 2500) } : {}),
+          image_urls: [String(image_url)],
+          duration: parsedDuration,
+          resolution: '720p',
+          aspect_ratio: finalAR,
+          ...(prompt ? { prompt: String(prompt).slice(0, 4096) } : {}),
         },
       };
 
