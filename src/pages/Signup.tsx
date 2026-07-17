@@ -23,6 +23,19 @@ import { startGoogleSignIn } from "@/utils/googleSignIn";
 
 type AuthTab = "login" | "signup";
 
+const WAKTI_LOGO_SRC = "/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png";
+
+function GoogleMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
+      <path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.31h6.47a5.53 5.53 0 0 1-2.4 3.63l3.88 3.01c2.26-2.09 3.54-5.18 3.54-8.68Z" />
+      <path fill="#34A853" d="M12 24c3.24 0 5.96-1.07 7.95-2.91l-3.88-3.01c-1.08.72-2.46 1.14-4.07 1.14-3.12 0-5.76-2.11-6.7-4.96l-4 3.08C3.28 21.33 7.29 24 12 24Z" />
+      <path fill="#FBBC04" d="M5.3 14.26A7.2 7.2 0 0 1 4.93 12c0-.78.13-1.53.37-2.26L1.3 6.66A12 12 0 0 0 0 12c0 1.93.46 3.76 1.3 5.34l4-3.08Z" />
+      <path fill="#EA4335" d="M12 4.78c1.76 0 3.35.61 4.6 1.8l3.45-3.45C17.95 1.15 15.24 0 12 0 7.29 0 3.28 2.67 1.3 6.66l4 3.08c.94-2.85 3.58-4.96 6.7-4.96Z" />
+    </svg>
+  );
+}
+
 export default function Signup() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -618,6 +631,7 @@ export default function Signup() {
       appName: "WAKTI",
       createAccount: "Create Account",
       signInWithGoogle: "Continue with Google",
+      googleShort: "Google",
       name: "Name",
       username: "Username",
       email: "Email",
@@ -650,6 +664,7 @@ export default function Signup() {
       appName: "وقتي",
       createAccount: "إنشاء حساب",
       signInWithGoogle: "المتابعة باستخدام جوجل",
+      googleShort: "جوجل",
       name: "الاسم",
       username: "اسم المستخدم",
       email: "البريد الإلكتروني",
@@ -1129,6 +1144,77 @@ export default function Signup() {
           color: ${dk ? 'rgba(255,255,255,0.48)' : 'hsl(243,20%,44%)'};
         }
 
+        .su-auth-actions-row {
+          width: 100%;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .su-google-login-btn {
+          width: 100%;
+          height: 46px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          padding: 0 14px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.55);
+          background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
+          color: #1f1f1f;
+          font-size: 0.82rem;
+          font-weight: 800;
+          box-shadow: 0 8px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.85);
+          transition: all 0.22s ease;
+        }
+        .su-google-login-btn:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 12px 26px rgba(0,0,0,0.22), 0 0 0 1px rgba(66,133,244,0.15);
+        }
+        .su-google-login-btn:active { transform: scale(0.97); }
+        .su-google-login-btn:disabled {
+          opacity: 0.62;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
+        }
+        .su-google-mark {
+          width: 17px;
+          height: 17px;
+          flex-shrink: 0;
+        }
+        .su-google-entry {
+          border-color: ${dk ? 'rgba(255,255,255,0.12)' : 'rgba(66,133,244,0.16)'};
+          background: ${dk
+            ? 'linear-gradient(135deg, rgba(255,255,255,0.045) 0%, rgba(66,133,244,0.05) 100%)'
+            : 'linear-gradient(135deg, rgba(255,255,255,0.92) 0%, rgba(66,133,244,0.06) 100%)'
+          };
+        }
+        .su-google-entry:hover {
+          border-color: rgba(66,133,244,0.38);
+          box-shadow: ${dk ? '0 10px 28px rgba(0,0,0,0.26)' : '0 10px 24px rgba(66,133,244,0.12)'};
+        }
+        .su-google-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          height: 38px;
+          min-width: 128px;
+          padding: 0 14px;
+          border-radius: 999px;
+          background: #ffffff;
+          border: 1px solid rgba(66,133,244,0.12);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 3px 10px rgba(0,0,0,0.08);
+          flex-shrink: 0;
+        }
+        .su-google-badge-text {
+          font-size: 13px;
+          font-weight: 700;
+          letter-spacing: -0.01em;
+          color: #1f1f1f;
+        }
+
         /* ─── back button ─── */
         .su-back-btn {
           display: inline-flex; align-items: center; gap: 5px;
@@ -1514,34 +1600,69 @@ export default function Signup() {
 
               {/* Submit */}
               <div className="flex flex-col items-center gap-2.5 pt-1">
-                <button type="submit" disabled={isLoading || (authTab === "signup" && !agreedToTerms)} className="su-pill">
-                  {isLoading
-                    ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
-                    : authTab === "login"
-                      ? <><Sparkles className="w-3.5 h-3.5" />{language === 'en' ? 'Log in' : 'تسجيل الدخول'}</>
-                      : <><Sparkles className="w-3.5 h-3.5" />{t.signup}</>
-                  }
-                </button>
+                {authTab === "login" ? (
+                  <div className="su-auth-actions-row">
+                    <div className={cn("min-w-0", !isGuestUpgradeFlow ? "basis-[58%]" : "w-full")}>
+                      <button type="submit" disabled={isLoading} className="su-pill w-full">
+                        {isLoading
+                          ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                          : <><img src={WAKTI_LOGO_SRC} alt="" className="w-4 h-4 rounded-[5px] object-contain shadow-[0_1px_3px_rgba(0,0,0,0.35)]" />{language === 'en' ? 'Log in' : 'تسجيل الدخول'}</>
+                        }
+                      </button>
+                    </div>
 
-                {!isGuestUpgradeFlow && (
-                  <button
-                    type="button"
-                    disabled={isLoading}
-                    onClick={handleGoogleLogin}
-                    className={cn(
-                      "w-full h-11 rounded-full text-sm font-semibold transition-all duration-200 border",
-                      dk
-                        ? "border-white/12 bg-white/5 text-white hover:bg-white/8"
-                        : "border-[#060541]/12 bg-white/85 text-[#060541] hover:bg-white"
+                    {!isGuestUpgradeFlow && (
+                      <div className="basis-[42%] min-w-0">
+                        <button
+                          type="button"
+                          disabled={isLoading}
+                          onClick={handleGoogleLogin}
+                          className="su-google-login-btn"
+                          aria-label={t.signInWithGoogle}
+                        >
+                          <GoogleMark className="su-google-mark" />
+                          <span>{t.googleShort}</span>
+                        </button>
+                      </div>
                     )}
-                  >
-                    {t.signInWithGoogle}
+                  </div>
+                ) : (
+                  <button type="submit" disabled={isLoading || !agreedToTerms} className="su-pill">
+                    {isLoading
+                      ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
+                      : <><Sparkles className="w-3.5 h-3.5" />{t.signup}</>
+                    }
                   </button>
                 )}
               </div>
 
             </form>
           </motion.div>
+
+          {authTab === "signup" && !isGuestUpgradeFlow && (
+            <motion.button
+              type="button"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.12, duration: 0.35, ease: [0.22,1,0.36,1] }}
+              onClick={handleGoogleLogin}
+              disabled={isLoading}
+              className="su-partner-entry su-google-entry mt-3 w-full max-w-sm"
+            >
+              <span className="su-google-badge" aria-hidden="true">
+                <GoogleMark className="su-google-mark" />
+                <span className="su-google-badge-text">Google</span>
+              </span>
+              <div className={cn("flex-1", language === 'ar' ? 'text-right' : 'text-left')}>
+                <div className="su-partner-entry-copy">
+                  {t.signInWithGoogle}
+                </div>
+                <div className="su-partner-entry-note">
+                  {language === 'ar' ? 'استخدم حساب جوجل لإكمال التسجيل بسرعة' : 'Use your Google account for faster signup'}
+                </div>
+              </div>
+            </motion.button>
+          )}
 
           {authTab === "signup" && (
             <motion.button
