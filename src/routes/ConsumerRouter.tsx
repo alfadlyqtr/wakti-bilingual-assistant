@@ -86,6 +86,7 @@ const ProjectPreview = lazyRetry(() => import("@/pages/ProjectPreview"));
 const ChatbotPage = lazyRetry(() => import("@/pages/ChatbotPage"));
 const InstagramConnectCallback = lazyRetry(() => import("@/pages/InstagramConnectCallback"));
 const GoogleAuthCallback = lazyRetry(() => import("@/pages/GoogleAuthCallback"));
+const GoogleSignInCallback = lazyRetry(() => import("@/pages/GoogleSignInCallback"));
 const MyWishlists = lazyRetry(() => import("@/pages/MyWishlists"));
 const PublicWishlist = lazyRetry(() => import("@/pages/PublicWishlist"));
 const ContactGallery = lazyRetry(() => import("@/pages/ContactGallery"));
@@ -120,7 +121,7 @@ function usePrefetchDashboard() {
   React.useEffect(() => {
     // Only prefetch when user is on a route that typically leads to /dashboard next.
     // On deep routes (e.g. /wakti-ai-v2) the user is already in the app — no need.
-    const prefetchRoutes = ['/', '/home', '/login', '/signup', '/confirmed', '/auth/confirm'];
+    const prefetchRoutes = ['/', '/home', '/login', '/signup', '/confirmed', '/auth/confirm', '/auth/google/sign-in'];
     if (!prefetchRoutes.includes(location.pathname)) return;
 
     const prefetch = () => { import("@/pages/Dashboard"); };
@@ -172,6 +173,7 @@ export default function ConsumerRouter() {
         <Route path="/qr/view" element={<QRTextView />} />
         <Route path="/qr/cta" element={<QRCTAView />} />
         <Route path="/instagram-connect-callback" element={<InstagramConnectCallback />} />
+        <Route path="/auth/google/sign-in" element={<GoogleSignInCallback />} />
         <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
 
         {/* ── Protected app routes ──────────────────────────────────────── */}

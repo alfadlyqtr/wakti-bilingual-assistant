@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { setActiveScopedUserId } from "@/utils/userScopedStorage";
+import { startGoogleSignIn } from "@/utils/googleSignIn";
 
 interface LoginFormProps {
   redirectTo?: string;
@@ -132,11 +133,31 @@ export function LoginForm({
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setErrorMsg(null);
+    setIsLoading(true);
+
+    try {
+      const { error } = await startGoogleSignIn(redirectTo);
+      if (error) {
+        setErrorMsg(error.message);
+        toast.error(language === 'en' ? 'Google Login Failed: ' + error.message : 'فشل تسجيل الدخول بجوجل: ' + error.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : (language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+      setErrorMsg(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   // Translations
   const translations = {
     en: {
       login: "Login",
+      signInWithGoogle: "Continue with Google",
       email: "Email",
       password: "Password",
       forgotPassword: "Forgot Password?",
@@ -148,6 +169,7 @@ export function LoginForm({
     },
     ar: {
       login: "تسجيل الدخول",
+      signInWithGoogle: "المتابعة باستخدام جوجل",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
       forgotPassword: "نسيت كلمة المرور؟",
@@ -247,6 +269,16 @@ export function LoginForm({
           disabled={isLoading}
         >
           {isLoading ? t.loading : t.login}
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full text-base py-6 shadow-sm"
+          disabled={isLoading}
+          onClick={handleGoogleLogin}
+        >
+          {t.signInWithGoogle}
         </Button>
       </form>
 

@@ -19,6 +19,7 @@ import { validateDisplayName, validateEmail, validatePassword } from "@/utils/va
 import { countries } from "@/utils/countries";
 import { useAuth } from "@/contexts/AuthContext";
 import { setActiveScopedUserId } from "@/utils/userScopedStorage";
+import { startGoogleSignIn } from "@/utils/googleSignIn";
 
 type AuthTab = "login" | "signup";
 
@@ -593,10 +594,30 @@ export default function Signup() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setErrorMsg(null);
+    setIsLoading(true);
+
+    try {
+      const { error } = await startGoogleSignIn(returnTo);
+      if (error) {
+        setErrorMsg(error.message);
+        toast.error(language === 'en' ? 'Google Login Failed: ' + error.message : 'فشل تسجيل الدخول بجوجل: ' + error.message);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : (language === 'en' ? 'An unexpected error occurred' : 'حدث خطأ غير متوقع');
+      setErrorMsg(message);
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const translations = {
     en: {
       appName: "WAKTI",
       createAccount: "Create Account",
+      signInWithGoogle: "Continue with Google",
       name: "Name",
       username: "Username",
       email: "Email",
@@ -628,6 +649,7 @@ export default function Signup() {
     ar: {
       appName: "وقتي",
       createAccount: "إنشاء حساب",
+      signInWithGoogle: "المتابعة باستخدام جوجل",
       name: "الاسم",
       username: "اسم المستخدم",
       email: "البريد الإلكتروني",
@@ -1500,6 +1522,22 @@ export default function Signup() {
                       : <><Sparkles className="w-3.5 h-3.5" />{t.signup}</>
                   }
                 </button>
+
+                {!isGuestUpgradeFlow && (
+                  <button
+                    type="button"
+                    disabled={isLoading}
+                    onClick={handleGoogleLogin}
+                    className={cn(
+                      "w-full h-11 rounded-full text-sm font-semibold transition-all duration-200 border",
+                      dk
+                        ? "border-white/12 bg-white/5 text-white hover:bg-white/8"
+                        : "border-[#060541]/12 bg-white/85 text-[#060541] hover:bg-white"
+                    )}
+                  >
+                    {t.signInWithGoogle}
+                  </button>
+                )}
               </div>
 
             </form>
