@@ -97,6 +97,13 @@ interface VideoInvokeErrorPayload {
     limit?: number;
     extra?: number;
   };
+  trialQuotaFinished?: {
+    feature?: string;
+    consumed?: number;
+    limit?: number;
+    remaining?: number;
+    justExhausted?: boolean;
+  };
 }
 
 const generateVideoTitle = (raw: string): string => {
@@ -281,6 +288,43 @@ const shouldHighlightChildSafetyToggle = (payload: VideoInvokeErrorPayload | nul
     || rawMessage.includes('contains a child');
 };
 
+const getGenericVideoErrorMessage = (language: string): string => (
+  language === 'ar'
+    ? 'تعذر إنشاء الفيديو الآن. حاول بصورة أو وصف مختلف.'
+    : 'We could not generate this video right now. Please try a different image or prompt.'
+);
+
+const getSafeUserVisibleVideoMessage = (message: string | null | undefined, language: string): string => {
+  if (!message) return getGenericVideoErrorMessage(language);
+
+  const trimmed = message.trim();
+  if (!trimmed) return getGenericVideoErrorMessage(language);
+
+  const normalized = trimmed.toLowerCase();
+  if (
+    normalized.includes('kie') ||
+    normalized.includes('grok') ||
+    normalized.includes('veo') ||
+    normalized.includes('openai') ||
+    normalized.includes('gemini') ||
+    normalized.includes('model') ||
+    normalized.includes('provider') ||
+    normalized.includes('taskid') ||
+    normalized.includes('task id') ||
+    normalized.includes('api.') ||
+    normalized.includes('api/') ||
+    normalized.includes('request blocked') ||
+    normalized.includes('flagged by safety filters') ||
+    normalized.includes('public figure') ||
+    normalized.includes('{') ||
+    normalized.includes('}')
+  ) {
+    return getGenericVideoErrorMessage(language);
+  }
+
+  return trimmed;
+};
+
 const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null, language: string): string | null => {
   if (!payload) return null;
 
@@ -306,15 +350,13 @@ const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null,
       : 'You reached your monthly AI video limit.';
   }
 
-  if (payload.message) {
-    return payload.message;
+  if (rawCode === 'video_safety_restricted' || rawError === 'video_safety_restricted') {
+    return language === 'ar'
+      ? 'تعذر معالجة هذا الطلب وفق قواعد الأمان في وكتي. حاول بصورة أو وصف مختلف.'
+      : 'This request could not be processed under Wakti safety rules. Please try a different image or prompt.';
   }
 
-  if (payload.error && !payload.error.startsWith('TRIAL_')) {
-    return payload.error;
-  }
-
-  return null;
+  return getGenericVideoErrorMessage(language);
 };
 
 // Video Ads v6.0 — 5-scene format, each scene is 6s or 10s, user-adjustable, capped at 46s total
@@ -462,7 +504,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   }, [isKidsContentMode]);
 
   // Trial access check — Ads Creator is locked for 24-hour trial users
-  const { isSubscribed, isAdminGifted, hasTrialStarted } = useUserProfile();
+  const { isSubscribed, isAdminGifted, hasTrialStarted, refetch: refetchUserProfile } = useUserProfile();
   const isTrialUser = !isSubscribed && !isAdminGifted && hasTrialStarted;
   const isVideoAdsLocked = isTrialUser || isGuest;
 
@@ -1191,6 +1233,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         // Done!
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
         usageIncrementedRef.current = true;
+        const trialQuotaFinished = data?.data?.trialQuotaFinished;
         // Video URL is in generated array, NOT video.url!
         const videoUrl = data?.data?.generated?.[0] || data?.data?.video?.url;
         console.log('[AIVideomaker] Extracted videoUrl:', videoUrl);
@@ -1202,6 +1245,19 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           setGenerationStatus(language === 'ar' ? 'جاري الحفظ في فيديوهاتي...' : 'Auto-saving to My Videos...');
           toast.success(language === 'ar' ? 'تم إنشاء الفيديو!' : 'Video generated!');
           await loadQuota();
+          if (trialQuotaFinished?.feature === 'ai_video' && trialQuotaFinished?.justExhausted === true) {
+            emitEvent('wakti-trial-quota-finished', {
+              feature: 'ai_video',
+              consumed: trialQuotaFinished.consumed,
+              limit: trialQuotaFinished.limit,
+              remaining: trialQuotaFinished.remaining,
+              justExhausted: true,
+            });
+          }
+          refetchUserProfile();
+          try {
+            window.dispatchEvent(new CustomEvent('wakti-profile-updated'));
+          } catch {}
           await saveGeneratedVideoToMyVideos(videoUrl, { auto: true, navigateAfterSave: false });
           await loadLatestVideo();
         } else {
@@ -1230,7 +1286,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           openChildSafetyDialog();
           return;
         }
-        throw new Error(getVideoGenerationErrorMessage(statusPayload, language) || data?.data?.message || data?.data?.error || 'Video generation failed');
+        throw new Error(getVideoGenerationErrorMessage(statusPayload, language) || getGenericVideoErrorMessage(language));
       } else {
         // Still processing - update progress
         setGenerationProgress((prev) => Math.min(prev + 5, 90));
@@ -1249,15 +1305,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         return;
       }
       const friendlyMessage = getVideoGenerationErrorMessage(errorPayload, language);
-      const msg = friendlyMessage || errorPayload?.error || errorPayload?.message || e?.message || '';
-      const userMsg = msg.includes('generation failed')
-        ? (language === 'ar' ? 'فشل إنشاء الفيديو. حاول بصورة أو وصف مختلف.' : 'Video generation failed. Try a different image or prompt.')
-        : (msg || (language === 'ar' ? 'فشل إنشاء الفيديو' : 'Failed to generate video'));
-      toast.error(userMsg);
+      toast.error(getSafeUserVisibleVideoMessage(friendlyMessage || e?.message, language));
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [language, loadQuota, loadLatestVideo, openChildSafetyDialog, saveGeneratedVideoToMyVideos]);
+  }, [language, loadQuota, loadLatestVideo, openChildSafetyDialog, refetchUserProfile, saveGeneratedVideoToMyVideos]);
 
   const handleGenerate = async () => {
     // Validate based on mode
@@ -1525,7 +1577,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           return;
         }
         const friendlyMessage = getVideoGenerationErrorMessage(errorPayload, language);
-        throw new Error(friendlyMessage || error.message || 'Failed to start video generation');
+        throw new Error(getSafeUserVisibleVideoMessage(friendlyMessage || error.message, language));
       }
 
       if (data?.error === 'TRIAL_LIMIT_REACHED') {
@@ -1537,7 +1589,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       }
 
       if (data?.error === 'MONTHLY_VIDEO_LIMIT_REACHED' || data?.code === 'MONTHLY_VIDEO_LIMIT_REACHED') {
-        throw new Error(getVideoGenerationErrorMessage(data, language) || (language === 'ar' ? 'لقد وصلت إلى الحد الشهري للفيديوهات بالذكاء الاصطناعي.' : 'You reached your monthly AI video limit.'));
+        throw new Error(getSafeUserVisibleVideoMessage(getVideoGenerationErrorMessage(data, language), language));
       }
 
       if (!data?.ok || !data?.task_id) {
@@ -1549,7 +1601,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           openChildSafetyDialog();
           return;
         }
-        throw new Error(getVideoGenerationErrorMessage(data, language) || data?.error || 'Failed to create video task');
+        throw new Error(getSafeUserVisibleVideoMessage(getVideoGenerationErrorMessage(data, language), language));
       }
 
       const tid = data.task_id;
@@ -1573,7 +1625,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
     } catch (e: any) {
       console.error('AI Video generation error:', e);
-      toast.error(e?.message || (language === 'ar' ? 'فشل إنشاء الفيديو' : 'Failed to generate video'));
+      toast.error(getSafeUserVisibleVideoMessage(e?.message, language));
       setIsGenerating(false);
       setGenerationProgress(0);
       setGenerationStatus('');
@@ -2553,7 +2605,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
   return (
     <div className="relative">
-      <TrialGateOverlay featureKey={activeVideoTrial.key} limit={activeVideoTrial.limit} featureLabel={{ en: activeVideoTrial.en, ar: activeVideoTrial.ar }} />
+      <TrialGateOverlay featureKey={activeVideoTrial.key} limit={activeVideoTrial.limit} featureLabel={{ en: activeVideoTrial.en, ar: activeVideoTrial.ar }} deferBlockedUntilEvent={activeVideoTrial.key === 'ai_video'} showFinishedOverlay={activeVideoTrial.key !== 'ai_video'} />
       {/* Glowing background effects */}
       <div className="pointer-events-none absolute -inset-4 rounded-[2rem] opacity-40 blur-3xl bg-gradient-to-br from-[hsl(210,100%,65%)] via-[hsl(180,85%,60%)] to-[hsl(160,80%,55%)] dark:opacity-20" />
       

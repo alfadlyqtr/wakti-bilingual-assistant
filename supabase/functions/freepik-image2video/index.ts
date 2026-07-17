@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { buildTrialErrorPayload, checkAndConsumeTrialToken, type TrialFeatureKey } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, buildTrialSuccessPayload, checkAndConsumeTrialTokenOnce, checkTrialAccess, type TrialFeatureKey } from "../_shared/trial-tracker.ts";
 import { inspectGenerationPrompt, sanitizeUserInput } from "../_shared/promptSafety.ts";
 
 const corsHeaders = {
@@ -153,6 +153,21 @@ function buildVideoClientError(rawMessage: string, fallbackCode = "VIDEO_GENERAT
       error: "VIDEO_SAFETY_MINOR_DETECTED",
       code: "VIDEO_SAFETY_MINOR_DETECTED",
       message: "Wakti safety rules blocked this request.",
+      retryable: false,
+    };
+  }
+
+  if (
+    normalized.includes("flagged by safety filters") ||
+    normalized.includes("public figure") ||
+    normalized.includes("request blocked") ||
+    normalized.includes("safety policy") ||
+    normalized.includes("safety filters")
+  ) {
+    return {
+      error: "VIDEO_SAFETY_RESTRICTED",
+      code: "VIDEO_SAFETY_RESTRICTED",
+      message: "This video request could not be processed under Wakti safety rules. Please try a different image or prompt.",
       retryable: false,
     };
   }
@@ -1225,6 +1240,7 @@ serve(async (req: Request) => {
   let errorInputText = "";
   let errorModel = "kie-video";
   let errorMetadata: Record<string, unknown> = {};
+  const trialFeatureKey: TrialFeatureKey = "ai_video";
 
   try {
     // Verify JWT
@@ -1241,6 +1257,10 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") || "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
+    );
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -1296,12 +1316,15 @@ serve(async (req: Request) => {
       }
 
       const status = await getTaskStatus(task_id, task_provider === "veo" ? "veo" : task_provider === "kie" ? "kie" : undefined);
+      let trialQuotaFinished = null;
+      const completedVideoUrl = status.generated?.[0] || status.video?.url;
       if (
         increment_usage &&
         (status.status === "COMPLETED" ||
           status.status === "completed" ||
           status.status === "SUCCEEDED" ||
-          status.status === "succeeded")
+          status.status === "succeeded") &&
+        completedVideoUrl
       ) {
         const { error: usageError } = await supabase.rpc("increment_ai_video_usage", {
           p_user_id: user.id,
@@ -1309,9 +1332,15 @@ serve(async (req: Request) => {
         if (usageError) {
           console.error("[kie-image2video] Usage increment error (status):", usageError);
         }
+
+        const trialResult = await checkAndConsumeTrialTokenOnce(supabaseAdmin, user.id, trialFeatureKey, 1, String(task_id));
+        if (!trialResult.allowed) {
+          console.warn("[kie-image2video] Trial completion consume skipped:", trialResult.reason || "not_allowed");
+        }
+        trialQuotaFinished = buildTrialSuccessPayload(trialFeatureKey, trialResult);
       }
 
-      return new Response(JSON.stringify({ ok: true, data: status }), {
+      return new Response(JSON.stringify({ ok: true, data: trialQuotaFinished ? { ...status, trialQuotaFinished } : status }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -1351,12 +1380,7 @@ serve(async (req: Request) => {
     }
 
     // ── Trial Token Check: detect generation_type for correct key ──
-    const trialFeatureKey: TrialFeatureKey = 'ai_video';
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL") || "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""
-    );
-    const trial = await checkAndConsumeTrialToken(supabaseAdmin, user.id, trialFeatureKey, 1);
+    const trial = await checkTrialAccess(supabaseAdmin, user.id, trialFeatureKey, 1);
     if (!trial.allowed) {
       return new Response(
         JSON.stringify({ ok: false, ...buildTrialErrorPayload(trialFeatureKey, trial) }),
@@ -1554,6 +1578,12 @@ serve(async (req: Request) => {
       // Don't fail the request, video was generated
     }
 
+    const trialResult = await checkAndConsumeTrialTokenOnce(supabaseAdmin, user.id, trialFeatureKey, 1, task.task_id);
+    if (!trialResult.allowed) {
+      console.warn("[kie-image2video] Trial completion consume skipped:", trialResult.reason || "not_allowed");
+    }
+    const trialQuotaFinished = buildTrialSuccessPayload(trialFeatureKey, trialResult);
+
     // Log AI usage
     await logAIFromRequest(req, {
       functionName: "freepik-image2video",
@@ -1586,6 +1616,7 @@ serve(async (req: Request) => {
         ok: true,
         videoUrl: result.videoUrl,
         task_id: task.task_id,
+        trialQuotaFinished,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

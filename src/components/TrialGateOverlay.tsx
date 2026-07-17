@@ -19,9 +19,11 @@ interface TrialGateOverlayProps {
   featureKey: string;
   limit: number;
   featureLabel?: { en: string; ar: string };
+  deferBlockedUntilEvent?: boolean;
+  showFinishedOverlay?: boolean;
 }
 
-const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, featureLabel }) => {
+const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, featureLabel, deferBlockedUntilEvent = false, showFinishedOverlay = true }) => {
   const [overlayState, setOverlayState] = useState<OverlayState>({
     open: false,
     mode: 'blocked',
@@ -62,7 +64,7 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
     if (isSubscribed || isAdminGifted || !hasTrialStarted) return;
 
     // Check cached trial_usage
-    if (cachedProfile) {
+    if (cachedProfile && !deferBlockedUntilEvent) {
       const usage = (cachedProfile.trial_usage as Record<string, number>) ?? {};
       const current = typeof usage[featureKey] === 'number' ? usage[featureKey] : 0;
       if (limit <= 0) {
@@ -78,18 +80,20 @@ const TrialGateOverlay: React.FC<TrialGateOverlayProps> = ({ featureKey, limit, 
       }
     });
 
-    const offQuotaFinished = onEvent('wakti-trial-quota-finished', ({ feature, consumed, limit: eventLimit, justExhausted }) => {
-      if (justExhausted !== true) return;
-      if (feature === featureKey) {
-        openFinished(consumed, eventLimit);
-      }
-    });
+    const offQuotaFinished = showFinishedOverlay
+      ? onEvent('wakti-trial-quota-finished', ({ feature, consumed, limit: eventLimit, justExhausted }) => {
+          if (justExhausted !== true) return;
+          if (feature === featureKey) {
+            openFinished(consumed, eventLimit);
+          }
+        })
+      : () => {};
 
     return () => {
       offLimitReached();
       offQuotaFinished();
     };
-  }, [featureKey, limit, isSubscribed, isAdminGifted, hasTrialStarted, cachedProfile]);
+  }, [featureKey, limit, isSubscribed, isAdminGifted, hasTrialStarted, cachedProfile, deferBlockedUntilEvent, showFinishedOverlay]);
 
   if (!overlayState.open) return null;
 
