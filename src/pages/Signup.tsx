@@ -727,7 +727,8 @@ export default function Signup() {
         /* page: fixed, NO scroll */
         .su-page {
           position: fixed; inset: 0; width: 100%; height: 100dvh;
-          overflow: hidden; display: flex; flex-direction: column;
+          overflow-x: hidden; overflow-y: auto; display: flex; flex-direction: column;
+          -webkit-overflow-scrolling: touch;
           background: ${dk ? '#07080f' : '#eef0f8'};
         }
 
@@ -1288,10 +1289,10 @@ export default function Signup() {
         </div>
 
         {/* ── Main layout: everything fits in remaining height ── */}
-        <div className="relative z-10 flex flex-col items-center justify-center flex-1 overflow-hidden px-5 pb-3">
+        <div className="relative z-10 flex flex-col items-center justify-start sm:justify-center flex-1 px-5 pt-2 sm:pt-0 pb-5">
 
           {/* ── Logo ── */}
-          <div className="flex flex-col items-center gap-6 mb-4">
+          <div className="flex flex-col items-center gap-3 sm:gap-6 mb-3 sm:mb-4">
             <div className="cursor-pointer" onClick={() => navigate("/")}>
               <Logo3D size="lg" />
             </div>
@@ -1408,7 +1409,7 @@ export default function Signup() {
             )}
           </div>
 
-          <div className="w-full max-w-sm mb-3">
+          <div className="w-full max-w-sm mb-2 sm:mb-3">
             <div className="su-auth-tabs">
               <button
                 type="button"
