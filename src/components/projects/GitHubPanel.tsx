@@ -1,8 +1,10 @@
-import { useState } from 'react';
-import { Github, X, ExternalLink, CheckCircle2, Loader2, GitBranch, Lock, Unlock, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Github, X, ExternalLink, CheckCircle2, Loader2, GitBranch, Lock, Unlock, Eye, EyeOff, ArrowRight, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+
+type GitHubConnectionStatus = 'checking' | 'disconnected' | 'connected' | 'invalid';
 
 interface GitHubPanelProps {
   projectId: string;
@@ -31,7 +33,8 @@ export default function GitHubPanel({
   const [pat, setPat] = useState('');
   const [showPat, setShowPat] = useState(false);
   const [savingToken, setSavingToken] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<GitHubConnectionStatus>('checking');
+  const [verifiedUsername, setVerifiedUsername] = useState<string | null>(null);
 
   // ── Push state ────────────────────────────────────────────────────────────
   const [repoName, setRepoName] = useState(() => {
@@ -45,25 +48,81 @@ export default function GitHubPanel({
   const [pushResult, setPushResult] = useState<{ repoUrl: string; commitUrl: string; filesCount: number } | null>(null);
   const [pushStep, setPushStep] = useState('');
 
-  // ── Check if already connected (token exists in profile) ──────────────────
-  const [checkedConnection, setCheckedConnection] = useState(false);
-  const [alreadyConnected, setAlreadyConnected] = useState(false);
+  const connected = connectionStatus === 'connected';
+  const showReconnectState = connectionStatus === 'invalid';
 
-  if (!checkedConnection) {
-    setCheckedConnection(true);
-    supabase
-      .from('profiles' as any)
-      .select('settings')
-      .eq('id', session?.user?.id ?? '')
-      .single()
-      .then(({ data }: { data: any }) => {
+  const validateGitHubToken = async (token: string): Promise<{ ok: true; login: string } | { ok: false }> => {
+    const resp = await fetch('https://api.github.com/user', {
+      headers: {
+        Authorization: `Bearer ${token.trim()}`,
+        Accept: 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+    });
+
+    if (!resp.ok) {
+      return { ok: false };
+    }
+
+    const me = await resp.json() as { login: string };
+    return { ok: true, login: me.login };
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkSavedConnection = async () => {
+      if (!session?.user?.id) {
+        setConnectionStatus('disconnected');
+        setVerifiedUsername(null);
+        return;
+      }
+
+      setConnectionStatus('checking');
+
+      try {
+        const { data } = await supabase
+          .from('profiles' as any)
+          .select('settings')
+          .eq('id', session.user.id)
+          .single();
+
+        if (cancelled) return;
+
         const settings = (data?.settings ?? {}) as Record<string, unknown>;
-        if (settings.github_token) {
-          setAlreadyConnected(true);
-          setConnected(true);
+        const savedToken = typeof settings.github_token === 'string' ? settings.github_token : '';
+        const savedUsername = typeof settings.github_username === 'string' ? settings.github_username : null;
+
+        if (!savedToken) {
+          setConnectionStatus('disconnected');
+          setVerifiedUsername(null);
+          return;
         }
-      });
-  }
+
+        const validation = await validateGitHubToken(savedToken);
+        if (cancelled) return;
+
+        if (validation.ok) {
+          setConnectionStatus('connected');
+          setVerifiedUsername(validation.login);
+          return;
+        }
+
+        setConnectionStatus('invalid');
+        setVerifiedUsername(savedUsername);
+      } catch {
+        if (cancelled) return;
+        setConnectionStatus('disconnected');
+        setVerifiedUsername(null);
+      }
+    };
+
+    void checkSavedConnection();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session?.user?.id]);
 
   // ─────────────────────────────────────────────────────────────────────────
   // Save Personal Access Token
@@ -74,17 +133,12 @@ export default function GitHubPanel({
 
     setSavingToken(true);
     try {
-      // Validate token against GitHub API
-      const resp = await fetch('https://api.github.com/user', {
-        headers: { Authorization: `Bearer ${pat.trim()}` },
-      });
-      if (!resp.ok) {
-        toast.error(isRTL ? 'رمز GitHub غير صالح. تأكد من صحة الرمز وصلاحياته.' : 'Invalid GitHub token. Check it has "repo" scope.');
+      const validation = await validateGitHubToken(pat.trim());
+      if (!validation.ok) {
+        toast.error(isRTL ? 'رمز GitHub غير صالح أو منتهي. أنشئ رمزاً جديداً ثم أعد الربط.' : 'That GitHub token is invalid or expired. Create a fresh token and reconnect.');
         return;
       }
-      const me = await resp.json() as { login: string };
 
-      // Store in profiles.settings
       const { data: profileData } = await supabase
         .from('profiles' as any)
         .select('settings')
@@ -94,12 +148,13 @@ export default function GitHubPanel({
       const existingSettings = ((profileData as any)?.settings ?? {}) as Record<string, unknown>;
       await supabase
         .from('profiles' as any)
-        .update({ settings: { ...existingSettings, github_token: pat.trim(), github_username: me.login } })
+        .update({ settings: { ...existingSettings, github_token: pat.trim(), github_username: validation.login } })
         .eq('id', session.user.id);
 
-      setAlreadyConnected(true);
-      setConnected(true);
-      toast.success(isRTL ? `تم الربط بـ @${me.login} بنجاح ✓` : `Connected as @${me.login} ✓`);
+      setConnectionStatus('connected');
+      setVerifiedUsername(validation.login);
+      setPat('');
+      toast.success(isRTL ? `تم التحقق والربط بـ @${validation.login} بنجاح ✓` : `Verified and connected as @${validation.login} ✓`);
     } catch {
       toast.error(isRTL ? 'فشل التحقق من رمز GitHub' : 'Failed to verify GitHub token');
     } finally {
@@ -121,8 +176,8 @@ export default function GitHubPanel({
       .from('profiles' as any)
       .update({ settings: existingSettings })
       .eq('id', session.user.id);
-    setAlreadyConnected(false);
-    setConnected(false);
+    setConnectionStatus('disconnected');
+    setVerifiedUsername(null);
     setPat('');
     toast.success(isRTL ? 'تم قطع الاتصال بـ GitHub' : 'GitHub disconnected');
   };
@@ -132,6 +187,10 @@ export default function GitHubPanel({
   // ─────────────────────────────────────────────────────────────────────────
   const pushToGitHub = async () => {
     if (!session?.access_token) return;
+    if (connectionStatus === 'checking') {
+      toast.error(isRTL ? 'نحن نتحقق من اتصال GitHub الآن. انتظر لحظة ثم حاول مرة أخرى.' : 'I am still checking your GitHub connection. Please try again in a moment.');
+      return;
+    }
     if (!repoName.trim()) {
       toast.error(isRTL ? 'أدخل اسم المستودع' : 'Enter a repository name');
       return;
@@ -156,9 +215,19 @@ export default function GitHubPanel({
       });
 
       if (error) throw new Error(error.message);
-      if (!data?.ok) throw new Error(data?.error ?? 'Push failed');
+      if (!data?.ok) {
+        if (data?.needsReconnect || data?.code === 'GITHUB_BAD_CREDENTIALS') {
+          setConnectionStatus('invalid');
+          setVerifiedUsername(null);
+          toast.error(data?.error ?? (isRTL ? 'رمز GitHub المحفوظ لم يعد صالحاً. أعد الربط برمز جديد ثم حاول مرة أخرى.' : 'Your saved GitHub token is no longer valid. Reconnect GitHub with a fresh token and try again.'));
+          return;
+        }
+        throw new Error(data?.error ?? 'Push failed');
+      }
 
       setPushResult({ repoUrl: data.repoUrl, commitUrl: data.commitUrl, filesCount: data.filesCount });
+      setConnectionStatus('connected');
+      setVerifiedUsername(typeof data.owner === 'string' ? data.owner : verifiedUsername);
       onPushSuccess?.(data.repoUrl);
       toast.success(isRTL ? `✓ تم الرفع بنجاح — ${data.filesCount} ملف` : `✓ Pushed ${data.filesCount} files to GitHub`);
     } catch (err: any) {
@@ -197,9 +266,49 @@ export default function GitHubPanel({
           </button>
         </div>
 
-        {/* ── Not connected ── */}
-        {!connected && (
+        {connectionStatus === 'checking' && !pushResult && (
+          <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 text-center space-y-3">
+            <Loader2 className="h-5 w-5 animate-spin text-zinc-500 mx-auto" />
+            <div>
+              <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
+                {isRTL ? 'جاري التحقق من اتصال GitHub...' : 'Checking your GitHub connection...'}
+              </p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+                {isRTL ? 'نتأكد أن الرمز المحفوظ ما زال يعمل قبل أن نعرض حالة الاتصال.' : 'I am making sure the saved token still works before showing the connection state.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {connectionStatus !== 'connected' && connectionStatus !== 'checking' && (
           <div className="space-y-4">
+            {showReconnectState && (
+              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 space-y-3">
+                <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold">
+                      {isRTL ? 'رمز GitHub المحفوظ لم يعد صالحاً' : 'Your saved GitHub token is no longer valid'}
+                    </p>
+                    <p className="text-xs mt-1 text-amber-700 dark:text-amber-300">
+                      {isRTL ? 'GitHub رفض الرمز المحفوظ. الصق رمزاً جديداً أدناه لإعادة الربط ثم حاول الرفع مرة أخرى.' : 'GitHub rejected the saved token. Paste a fresh token below to reconnect, then try pushing again.'}
+                    </p>
+                    {verifiedUsername && (
+                      <p className="text-xs mt-2 text-amber-700 dark:text-amber-300">
+                        {isRTL ? `آخر حساب محفوظ: @${verifiedUsername}` : `Last saved account: @${verifiedUsername}`}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={disconnectGitHub}
+                  className="text-xs text-amber-800 dark:text-amber-200 underline underline-offset-2"
+                >
+                  {isRTL ? 'إزالة الرمز القديم' : 'Remove old token'}
+                </button>
+              </div>
+            )}
+
             {/* Step 1: one-click token generation */}
             <div className="p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 space-y-3">
               <p className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide">
@@ -257,7 +366,7 @@ export default function GitHubPanel({
               {savingToken ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />{isRTL ? 'جاري التحقق...' : 'Verifying...'}</>
               ) : (
-                <><CheckCircle2 className="h-4 w-4" />{isRTL ? 'ربط GitHub' : 'Connect GitHub'}</>
+                <><CheckCircle2 className="h-4 w-4" />{showReconnectState ? (isRTL ? 'إعادة ربط GitHub' : 'Reconnect GitHub') : (isRTL ? 'ربط GitHub' : 'Connect GitHub')}</>
               )}
             </button>
           </div>
@@ -270,7 +379,12 @@ export default function GitHubPanel({
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/50">
               <div className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300 font-medium">
                 <CheckCircle2 className="h-3.5 w-3.5" />
-                {isRTL ? 'GitHub متصل' : 'GitHub connected'}
+                {isRTL ? 'تم التحقق من GitHub' : 'GitHub verified'}
+                {verifiedUsername && (
+                  <span className="text-emerald-600/80 dark:text-emerald-400/80 font-mono">
+                    (@{verifiedUsername})
+                  </span>
+                )}
                 {githubRepo && (
                   <span className="text-emerald-600/70 dark:text-emerald-400/70 font-mono">
                     ({githubRepo})

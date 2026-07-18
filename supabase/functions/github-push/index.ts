@@ -34,6 +34,20 @@ async function ghJson<T>(token: string, path: string, options: RequestInit = {})
   return resp.json() as Promise<T>;
 }
 
+function getReconnectResponse(err: unknown) {
+  if (!(err instanceof Error)) return null;
+  const normalized = err.message.toLowerCase();
+  if (normalized.includes('github 401') && normalized.includes('bad credentials')) {
+    return {
+      ok: false,
+      code: 'GITHUB_BAD_CREDENTIALS',
+      needsReconnect: true,
+      error: 'Your saved GitHub token is no longer valid. Reconnect GitHub with a fresh token and try again.',
+    };
+  }
+  return null;
+}
+
 // ─── Repo helpers ───────────────────────────────────────────────────────────
 
 async function ensureRepo(token: string, owner: string, repo: string, isPrivate: boolean): Promise<boolean> {
@@ -248,8 +262,10 @@ serve(async (req) => {
     if (!githubToken) {
       return jsonResp({
         ok: false,
+        code: "GITHUB_NOT_CONNECTED",
+        needsReconnect: true,
         error: "GitHub not connected. Add your Personal Access Token in the GitHub settings panel.",
-      }, 400);
+      });
     }
 
     // Validate token + get actual GitHub username
@@ -331,6 +347,10 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("[github-push] Error:", err);
+    const reconnectResponse = getReconnectResponse(err);
+    if (reconnectResponse) {
+      return jsonResp(reconnectResponse);
+    }
     return jsonResp({
       ok: false,
       error: err instanceof Error ? err.message : "Unknown error",
