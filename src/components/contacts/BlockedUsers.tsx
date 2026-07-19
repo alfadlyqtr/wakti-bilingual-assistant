@@ -122,17 +122,17 @@ export function BlockedUsers({ onUnblockSuccess }: BlockedUsersProps) {
             <Card key={user.id} className="overflow-hidden border-destructive/30">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <Avatar>
                       <AvatarImage src={userProfile.avatar_url || ""} />
                       <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="font-medium">{displayName}</p>
-                      <p className="text-sm text-muted-foreground">@{username}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{displayName}</p>
+                      <p className="text-sm text-muted-foreground truncate">@{username}</p>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-col items-end gap-2 flex-shrink-0">
                     <Button 
                       size="sm" 
                       variant="outline"

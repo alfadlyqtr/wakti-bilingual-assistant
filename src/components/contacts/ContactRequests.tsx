@@ -185,20 +185,20 @@ export function ContactRequests() {
             <Card key={request.id || `request-${Math.random()}`} className="overflow-hidden">
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <Avatar>
                       <AvatarImage src={((userProfile as any).avatar_url as string) || ""} />
                       <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
                     </Avatar>
-                    <div>
-                      <p className="font-medium">{displayName}</p>
-                      <p className="text-sm text-muted-foreground">@{username}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{displayName}</p>
+                      <p className="text-sm text-muted-foreground truncate">@{username}</p>
                       <p className="text-xs text-muted-foreground mt-1">
                         Request ID: {request.id ? request.id.substring(0, 8) + '...' : 'missing'}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
                     <Button 
                       size="icon" 
                       variant="outline"
