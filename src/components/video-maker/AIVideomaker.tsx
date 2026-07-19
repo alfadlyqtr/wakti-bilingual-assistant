@@ -2672,7 +2672,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {language === 'ar' ? 'Gemini — أفضل حوار عربي' : 'Gemini — Best Arabic dialogue'}
+          {language === 'ar' ? 'أفضل حوار عربي' : 'Best Arabic dialogue'}
         </button>
         <button
           type="button"
@@ -2685,7 +2685,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {language === 'ar' ? 'الإنجليزية — الأفضل للحوار واللهجات' : 'English — Best for dialogue & accents'}
+          {language === 'ar' ? 'الحوار الإنجليزي واللهجات' : 'English dialogue & accents'}
         </button>
       </div>
     </div>
