@@ -195,7 +195,7 @@ export default function Email() {
     noPrimaryEmail: language === 'ar' ? 'لا يوجد بريد متصل بعد' : 'No email connected yet',
     customMail: language === 'ar' ? 'بريد مخصص' : 'Custom Mail',
     customMailSubtitle: language === 'ar' ? 'الحسابات التي تم ربطها عبر IMAP / SMTP' : 'Accounts connected through IMAP / SMTP',
-    gmailSubtitle: language === 'ar' ? 'ربط Gmail للإرسال فقط حالياً' : 'Connect Gmail in send-only mode for now',
+    gmailSubtitle: language === 'ar' ? 'اربط Gmail لكتابة الرسائل وإرسالها بسرعة' : 'Connect Gmail to draft and send faster',
     appleSubtitle: language === 'ar' ? 'اربط بريد iCloud باستخدام كلمة مرور تطبيق من Apple' : 'Connect iCloud Mail using an Apple app-specific password',
     settingsSubtitle: language === 'ar' ? 'هذا هو المكان الرئيسي لربط وإدارة البريد' : 'This is the main place to connect and manage email',
     mailSubtitle: language === 'ar' ? 'استعرض وأدر حسابات البريد المخصص' : 'Review and manage your custom mail accounts',

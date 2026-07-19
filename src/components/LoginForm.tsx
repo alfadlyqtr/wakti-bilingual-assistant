@@ -157,7 +157,7 @@ export function LoginForm({
   const translations = {
     en: {
       login: "Login",
-      signInWithGoogle: "Continue with Google",
+      signInWithGoogle: "Log in with Google",
       email: "Email",
       password: "Password",
       forgotPassword: "Forgot Password?",
@@ -169,7 +169,7 @@ export function LoginForm({
     },
     ar: {
       login: "تسجيل الدخول",
-      signInWithGoogle: "المتابعة باستخدام جوجل",
+      signInWithGoogle: "تسجيل الدخول باستخدام جوجل",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
       forgotPassword: "نسيت كلمة المرور؟",

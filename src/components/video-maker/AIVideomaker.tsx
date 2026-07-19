@@ -38,6 +38,7 @@ import {
   Video,
   Loader2,
   Download,
+  Eye,
   Share2,
   RefreshCw,
   Sparkles,
@@ -334,8 +335,8 @@ const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null,
 
   if (shouldHighlightChildSafetyToggle(payload)) {
     return language === 'ar'
-      ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي. فعّل زر أمان الأطفال ثم حاول مرة أخرى.'
-      : 'Wakti safety rules blocked this request. Please enable the Child Safety toggle and try again.';
+      ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي. فعّل خيار تحتوي الصورة على طفل ثم حاول مرة أخرى.'
+      : 'Wakti safety rules blocked this request. Turn on Contains child in image and try again.';
   }
 
   if (rawCode === 'video_temporary_unavailable') {
@@ -426,6 +427,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('720p');
   const [isKidsContentMode, setIsKidsContentMode] = useState(false);
+  const [isBestArabicQuality, setIsBestArabicQuality] = useState(false);
   const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
   const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
   const [showChildSafetyDialog, setShowChildSafetyDialog] = useState(false);
@@ -468,11 +470,16 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setResolution('720p');
     }
   }, [resolution]);
+  const handleBestArabicQualityToggle = useCallback(() => {
+    if (isGenerating || isKidsContentMode) return;
+    setIsBestArabicQuality((current) => !current);
+  }, [isGenerating, isKidsContentMode]);
   const handleKidsModeToggle = useCallback(() => {
     if (isGenerating) return;
     const nextValue = !isKidsContentMode;
     if (nextValue) {
       setIsKidsContentMode(true);
+      setIsBestArabicQuality(false);
       setHighlightKidsModeToggle(false);
       if (kidsModeHighlightTimeoutRef.current) {
         window.clearTimeout(kidsModeHighlightTimeoutRef.current);
@@ -496,6 +503,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
     if (!isKidsContentMode) {
       setIsKidsContentMode(true);
+      setIsBestArabicQuality(false);
       setDuration('6');
       setResolution('720p');
     }
@@ -636,6 +644,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       aspectRatio: string;
       resolution: '480p' | '720p' | '1080p';
       isKidsContentMode: boolean;
+      isBestArabicQuality?: boolean;
     }>('video');
 
     if (!draft) return;
@@ -651,6 +660,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setAspectRatio(draft.aspectRatio || '9:16');
     setResolution(draft.resolution || '720p');
     setIsKidsContentMode(Boolean(draft.isKidsContentMode));
+    setIsBestArabicQuality(Boolean(draft.isBestArabicQuality) && !draft.isKidsContentMode);
     clearStudioGuestDraft('video');
   }, [isGuest, searchParams]);
 
@@ -1333,6 +1343,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         aspectRatio,
         resolution,
         isKidsContentMode,
+        isBestArabicQuality,
       });
       setGuestRedirectTo(redirectTo);
       setGuestDialogOpen(true);
@@ -1461,7 +1472,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           duration,
           aspect_ratio: aspectRatio,
           resolution,
-          ...(isKidsContentMode ? { model: 'grok-imagine-video-1-5-preview' } : {}),
+          ...(isKidsContentMode
+            ? { model: 'grok-imagine-video-1-5-preview' }
+            : isBestArabicQuality
+              ? { model: 'gemini-omni-video' }
+              : {}),
           mode: 'async',
         };
       } else if (generationMode === '2images_to_video') {
@@ -2603,6 +2618,97 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   };
   const activeVideoTrial = videoTrialMap[generationMode] || videoTrialMap['image_to_video'];
 
+  const renderImageControls = () => (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={handleBestArabicQualityToggle}
+        disabled={isGenerating || isKidsContentMode}
+        className={`w-full rounded-xl border bg-background/60 p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-55 ${
+          isKidsContentMode
+            ? 'border-primary/10'
+            : 'border-primary/20 hover:border-primary/40'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-foreground">
+              {language === 'ar' ? 'أفضل جودة عربية' : 'Best Arabic Quality'}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground/90">
+              {language === 'ar'
+                ? 'نتائج عربية أفضل. قد يستغرق وقتًا أطول قليلًا.'
+                : 'Better Arabic results. May take a little more time.'}
+            </p>
+          </div>
+          <span
+            className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors ${
+              isBestArabicQuality && !isKidsContentMode ? 'bg-[hsl(210,100%,65%)]' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                isBestArabicQuality && !isKidsContentMode ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </span>
+        </div>
+      </button>
+
+      <button
+        type="button"
+        ref={kidsModeToggleRef}
+        onClick={handleKidsModeToggle}
+        disabled={isGenerating}
+        className={`w-full rounded-xl border bg-background/60 p-3 text-left transition-all disabled:opacity-60 ${
+          highlightKidsModeToggle
+            ? 'border-[hsl(210,100%,65%)] shadow-[0_0_24px_hsla(210,100%,65%,0.35)] ring-2 ring-[hsl(210,100%,65%)]/40'
+            : 'border-primary/20 hover:border-primary/40'
+        }`}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2">
+            <Eye className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(210,100%,65%)]" />
+            <div>
+              <p className="text-xs font-semibold text-foreground">
+                {language === 'ar' ? 'تحتوي الصورة على طفل' : 'Contains child in image'}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground/90">
+                {language === 'ar'
+                  ? 'فعّل هذا الخيار إذا كانت الصورة المرفوعة تحتوي على طفل.'
+                  : 'Turn this on if the uploaded image includes a child.'}
+              </p>
+            </div>
+          </div>
+          <span
+            className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors ${
+              isKidsContentMode ? 'bg-[hsl(210,100%,65%)]' : 'bg-muted-foreground/30'
+            }`}
+          >
+            <span
+              className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                isKidsContentMode ? 'translate-x-5' : 'translate-x-0.5'
+              }`}
+            />
+          </span>
+        </div>
+        {highlightKidsModeToggle && !isKidsContentMode && (
+          <p className="mt-2 text-[11px] font-semibold text-[hsl(210,100%,65%)]">
+            {language === 'ar' ? 'فعّل هذا الزر ثم أعد المحاولة.' : 'Turn this ON and try again.'}
+          </p>
+        )}
+      </button>
+
+      {isKidsContentMode && (
+        <p className="rounded-lg border border-[hsl(210,100%,65%)]/25 bg-[hsl(210,100%,65%)]/10 px-3 py-2 text-[11px] font-medium text-[hsl(210,100%,65%)]">
+          {language === 'ar'
+            ? 'تم تفعيل المعالجة الآمنة للأطفال. أفضل جودة عربية غير متاحة لهذا النوع من الصور.'
+            : 'Child-safe processing is active. Best Arabic Quality is unavailable for this image type.'}
+        </p>
+      )}
+    </div>
+  );
+
   return (
     <div className="relative">
       <TrialGateOverlay featureKey={activeVideoTrial.key} limit={activeVideoTrial.limit} featureLabel={{ en: activeVideoTrial.en, ar: activeVideoTrial.ar }} deferBlockedUntilEvent={activeVideoTrial.key === 'ai_video'} showFinishedOverlay={activeVideoTrial.key !== 'ai_video'} />
@@ -2945,46 +3051,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      ref={kidsModeToggleRef}
-                      onClick={handleKidsModeToggle}
-                      disabled={isGenerating}
-                      className={`rounded-xl border bg-background/60 p-3 text-left transition-all disabled:opacity-60 ${
-                        highlightKidsModeToggle
-                          ? 'border-[hsl(210,100%,65%)] shadow-[0_0_24px_hsla(210,100%,65%,0.35)] ring-2 ring-[hsl(210,100%,65%)]/40'
-                          : 'border-primary/20 hover:border-primary/40'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold text-foreground">
-                            {language === 'ar' ? 'وضع أمان الأطفال' : 'Child Safety Mode'}
-                          </p>
-                          <p className="mt-1 text-[11px] text-muted-foreground/90">
-                            {language === 'ar'
-                              ? 'فعّل هذا الخيار إذا كانت الصورة تحتوي على طفل، وفقًا لسياساتنا.'
-                              : 'Turn this ON when the image contains a child, as per our policies.'}
-                          </p>
-                        </div>
-                        <span
-                          className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors ${
-                            isKidsContentMode ? 'bg-[hsl(210,100%,65%)]' : 'bg-muted-foreground/30'
-                          }`}
-                        >
-                          <span
-                            className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                              isKidsContentMode ? 'translate-x-5' : 'translate-x-0.5'
-                            }`}
-                          />
-                        </span>
-                      </div>
-                      {highlightKidsModeToggle && !isKidsContentMode && (
-                        <p className="mt-2 text-[11px] font-semibold text-[hsl(210,100%,65%)]">
-                          {language === 'ar' ? 'فعّل هذا الزر ثم أعد المحاولة.' : 'Turn this ON and try again.'}
-                        </p>
-                      )}
-                    </button>
+                    {renderImageControls()}
                   </div>
                 ) : (
                   <div className="flex h-full min-h-[200px] flex-col gap-3">
@@ -3017,46 +3084,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         </Button>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      ref={kidsModeToggleRef}
-                      onClick={handleKidsModeToggle}
-                      disabled={isGenerating}
-                      className={`rounded-xl border bg-background/60 p-3 text-left transition-all disabled:opacity-60 ${
-                        highlightKidsModeToggle
-                          ? 'border-[hsl(210,100%,65%)] shadow-[0_0_24px_hsla(210,100%,65%,0.35)] ring-2 ring-[hsl(210,100%,65%)]/40'
-                          : 'border-primary/20 hover:border-primary/40'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold text-foreground">
-                            {language === 'ar' ? 'وضع أمان الأطفال' : 'Child Safety Mode'}
-                          </p>
-                          <p className="mt-1 text-[11px] text-muted-foreground/90">
-                            {language === 'ar'
-                              ? 'فعّل هذا الخيار إذا كانت الصورة تحتوي على طفل، وفقًا لسياساتنا.'
-                              : 'Turn this ON when the image contains a child, as per our policies.'}
-                          </p>
-                        </div>
-                        <span
-                          className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors ${
-                            isKidsContentMode ? 'bg-[hsl(210,100%,65%)]' : 'bg-muted-foreground/30'
-                          }`}
-                        >
-                          <span
-                            className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                              isKidsContentMode ? 'translate-x-5' : 'translate-x-0.5'
-                            }`}
-                          />
-                        </span>
-                      </div>
-                      {highlightKidsModeToggle && !isKidsContentMode && (
-                        <p className="mt-2 text-[11px] font-semibold text-[hsl(210,100%,65%)]">
-                          {language === 'ar' ? 'فعّل هذا الزر ثم أعد المحاولة.' : 'Turn this ON and try again.'}
-                        </p>
-                      )}
-                    </button>
+                    {renderImageControls()}
                   </div>
                 )}
 
@@ -5595,8 +5623,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </span>
               <span className="block text-sm text-[hsl(210,30%,80%)]">
                 {language === 'ar'
-                  ? 'إذا كانت الصورة تحتوي على طفل، فعّل وضع أمان الأطفال ثم حاول مرة أخرى.'
-                  : 'If the image contains a child, please enable Child Safety Mode and try again.'}
+                  ? 'إذا كانت الصورة تحتوي على طفل، فعّل خيار تحتوي الصورة على طفل ثم حاول مرة أخرى.'
+                  : 'If the image contains a child, turn on Contains child in image and try again.'}
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>

@@ -5,14 +5,6 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const GOOGLE_CLIENT_ID = Deno.env.get("GOOGLE_CLIENT_ID")!;
 const GOOGLE_CLIENT_SECRET = Deno.env.get("GOOGLE_CLIENT_SECRET")!;
 
-type MessageAttachment = {
-  id: string;
-  name: string;
-  contentType?: string;
-  size?: number;
-  inline?: boolean;
-};
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -111,106 +103,6 @@ async function getValidAccessToken(supabase: ReturnType<typeof createClient>, us
   }
 
   return tokenRow.access_token;
-}
-
-function decodeBase64Url(str: string): string {
-  const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
-  try {
-    return atob(base64);
-  } catch {
-    return "";
-  }
-}
-
-function normalizeBase64Url(str: string): string {
-  const normalized = str.replace(/-/g, "+").replace(/_/g, "/");
-  const padLength = normalized.length % 4;
-  return padLength === 0 ? normalized : normalized + "=".repeat(4 - padLength);
-}
-
-function extractBody(payload: any): { text: string; html: string } {
-  let text = "";
-  let html = "";
-
-  function walk(part: any) {
-    if (!part) return;
-    const mime = part.mimeType || "";
-    const data = part.body?.data;
-
-    if (mime === "text/plain" && data) {
-      text = decodeBase64Url(data);
-    } else if (mime === "text/html" && data) {
-      html = decodeBase64Url(data);
-    }
-
-    if (part.parts) {
-      for (const sub of part.parts) walk(sub);
-    }
-  }
-
-  walk(payload);
-  return { text, html };
-}
-
-function extractAttachments(payload: any): MessageAttachment[] {
-  const attachments: MessageAttachment[] = [];
-
-  function walk(part: any) {
-    if (!part) return;
-
-    const filename = typeof part.filename === "string" ? part.filename.trim() : "";
-    const attachmentId = typeof part.body?.attachmentId === "string" ? part.body.attachmentId : "";
-    const partId = typeof part.partId === "string" ? part.partId : "";
-    const mimeType = typeof part.mimeType === "string" ? part.mimeType : undefined;
-    const bodySize = typeof part.body?.size === "number" ? part.body.size : undefined;
-    const headers = Array.isArray(part.headers) ? part.headers : [];
-    const disposition = headers.find((header: any) => String(header?.name || "").toLowerCase() === "content-disposition")?.value || "";
-    const isInline = /inline/i.test(disposition);
-
-    if (filename && (attachmentId || partId)) {
-      attachments.push({
-        id: attachmentId || `part:${partId}`,
-        name: filename,
-        contentType: mimeType,
-        size: bodySize,
-        inline: isInline,
-      });
-    }
-
-    if (Array.isArray(part.parts)) {
-      for (const subPart of part.parts) walk(subPart);
-    }
-  }
-
-  walk(payload);
-  return attachments;
-}
-
-function findAttachmentPart(payload: any, attachmentId: string): any | null {
-  let match: any | null = null;
-
-  function walk(part: any) {
-    if (!part || match) return;
-
-    const directId = typeof part.body?.attachmentId === "string" ? part.body.attachmentId : "";
-    const partId = typeof part.partId === "string" ? part.partId : "";
-
-    if (directId === attachmentId || `part:${partId}` === attachmentId) {
-      match = part;
-      return;
-    }
-
-    if (Array.isArray(part.parts)) {
-      for (const subPart of part.parts) walk(subPart);
-    }
-  }
-
-  walk(payload);
-  return match;
-}
-
-function extractHeader(headers: Array<{ name: string; value: string }>, name: string): string {
-  return headers?.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || "";
 }
 
 type DraftAttachment = {
@@ -338,14 +230,6 @@ function encodeBase64Url(input: string): string {
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
   }
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-}
-
-function toBase64Url(value: string): string {
-  const binary = new TextEncoder().encode(value).reduce((acc, byte) => acc + String.fromCharCode(byte), "");
   return btoa(binary)
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
@@ -481,242 +365,57 @@ Deno.serve(async (req: Request) => {
     }
 
     const accessToken = await getValidAccessToken(supabase, userId);
+    const recipients = normalizeRecipients(body.to);
+    const ccRecipients = normalizeRecipients(body.cc);
+    const subject = String(body.subject || "");
+    const emailBody = String(body.body || "");
+    const htmlBody = body.htmlBody ? String(body.htmlBody) : "";
+    const threadId = body.threadId ? String(body.threadId) : undefined;
+    const attachments = Array.isArray(body.attachments)
+      ? (body.attachments as Array<Record<string, unknown>>)
+          .map((item) => ({
+            name: String(item.name || "attachment"),
+            contentType: item.contentType ? String(item.contentType) : undefined,
+            content: String(item.content || ""),
+          }))
+          .filter((item) => item.name && item.content)
+      : [];
 
-    if (action === "list_messages") {
-      const folder = body.folder || "INBOX";
-      const pageToken = body.pageToken || "";
-      const maxResults = body.maxResults || 20;
-
-      const params = new URLSearchParams({
-        labelIds: folder,
-        maxResults: String(maxResults),
-      });
-      if (pageToken) params.set("pageToken", pageToken);
-
-      const listRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?${params}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const listData = await listRes.json();
-
-      if (listData.error) {
-        return jsonResponse({ error: listData.error.message || "Gmail API error" }, 400);
-      }
-
-      const messages = listData.messages || [];
-      const nextPageToken = listData.nextPageToken || null;
-
-      const summaries = await Promise.all(
-        messages.map(async (msg: { id: string; threadId: string }) => {
-          const msgRes = await fetch(
-            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.id}?format=metadata&metadataHeaders=Subject&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Date`,
-            { headers: { Authorization: `Bearer ${accessToken}` } }
-          );
-          const msgData = await msgRes.json();
-          const headers = msgData.payload?.headers || [];
-          return {
-            id: msg.id,
-            threadId: msg.threadId,
-            subject: extractHeader(headers, "subject") || "(no subject)",
-            from: extractHeader(headers, "from"),
-            to: extractHeader(headers, "to"),
-            date: extractHeader(headers, "date"),
-            snippet: msgData.snippet || "",
-            labelIds: msgData.labelIds || [],
-            isUnread: (msgData.labelIds || []).includes("UNREAD"),
-          };
-        })
-      );
-
-      return jsonResponse({ messages: summaries, nextPageToken });
+    if (recipients.length === 0 || !subject || (!emailBody && !htmlBody)) {
+      return jsonResponse({ error: "to, subject, and body are required" }, 400);
     }
 
-    if (action === "get_message") {
-      const { messageId } = body;
-      if (!messageId) return jsonResponse({ error: "messageId required" }, 400);
+    const { data: tokenRow } = await getPreferredGmailTokenRow(supabase, userId);
+    const fromEmail = tokenRow?.email_address || "me";
 
-      const msgRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const msgData = await msgRes.json();
+    const raw = encodeBase64Url(buildRawEmailMessage({
+      from: fromEmail,
+      to: recipients,
+      cc: ccRecipients,
+      subject,
+      body: emailBody,
+      htmlBody: htmlBody || undefined,
+      attachments,
+    }));
 
-      if (msgData.error) {
-        return jsonResponse({ error: msgData.error.message || "Gmail API error" }, 400);
+    const sendBody: Record<string, string> = { raw };
+    if (threadId) sendBody.threadId = threadId;
+
+    const sendRes = await fetch(
+      "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify(sendBody),
       }
+    );
+    const sendData = await sendRes.json();
 
-      const headers = msgData.payload?.headers || [];
-      const { text, html } = extractBody(msgData.payload);
-      const attachments = extractAttachments(msgData.payload);
-
-      await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/modify`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ removeLabelIds: ["UNREAD"] }),
-        }
-      );
-
-      return jsonResponse({
-        id: messageId,
-        threadId: msgData.threadId,
-        subject: extractHeader(headers, "subject") || "(no subject)",
-        from: extractHeader(headers, "from"),
-        to: extractHeader(headers, "to"),
-        date: extractHeader(headers, "date"),
-        snippet: msgData.snippet || "",
-        labelIds: msgData.labelIds || [],
-        body: { text, html },
-        attachments,
-      });
+    if (sendData.error) {
+      return jsonResponse({ error: sendData.error.message || "Failed to send" }, 400);
     }
 
-    if (action === "download_attachment") {
-      const { messageId, attachmentId } = body;
-      if (!messageId || !attachmentId) {
-        return jsonResponse({ error: "messageId and attachmentId required" }, 400);
-      }
-
-      const msgRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const msgData = await msgRes.json();
-
-      if (msgData.error) {
-        return jsonResponse({ error: msgData.error.message || "Gmail API error" }, 400);
-      }
-
-      const attachmentPart = findAttachmentPart(msgData.payload, String(attachmentId));
-      if (!attachmentPart) {
-        return jsonResponse({ error: "Attachment not found" }, 404);
-      }
-
-      let content = "";
-      if (typeof attachmentPart.body?.attachmentId === "string") {
-        const attachmentRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/attachments/${attachmentPart.body.attachmentId}`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-        const attachmentData = await attachmentRes.json();
-        if (attachmentData.error) {
-          return jsonResponse({ error: attachmentData.error.message || "Failed to load attachment" }, 400);
-        }
-        content = typeof attachmentData.data === "string" ? normalizeBase64Url(attachmentData.data) : "";
-      } else if (typeof attachmentPart.body?.data === "string") {
-        content = normalizeBase64Url(attachmentPart.body.data);
-      }
-
-      if (!content) {
-        return jsonResponse({ error: "Attachment content unavailable" }, 400);
-      }
-
-      return jsonResponse({
-        name: attachmentPart.filename || "attachment",
-        contentType: attachmentPart.mimeType || "application/octet-stream",
-        size: typeof attachmentPart.body?.size === "number" ? attachmentPart.body.size : undefined,
-        content,
-      });
-    }
-
-    if (action === "send_message") {
-      const recipients = normalizeRecipients(body.to);
-      const ccRecipients = normalizeRecipients(body.cc);
-      const subject = String(body.subject || "");
-      const emailBody = String(body.body || "");
-      const htmlBody = body.htmlBody ? String(body.htmlBody) : "";
-      const threadId = body.threadId ? String(body.threadId) : undefined;
-      const attachments = Array.isArray(body.attachments)
-        ? (body.attachments as Array<Record<string, unknown>>)
-            .map((item) => ({
-              name: String(item.name || "attachment"),
-              contentType: item.contentType ? String(item.contentType) : undefined,
-              content: String(item.content || ""),
-            }))
-            .filter((item) => item.name && item.content)
-        : [];
-
-      if (recipients.length === 0 || !subject || (!emailBody && !htmlBody)) {
-        return jsonResponse({ error: "to, subject, and body are required" }, 400);
-      }
-
-      const { data: tokenRow } = await getPreferredGmailTokenRow(supabase, userId);
-      const fromEmail = tokenRow?.email_address || "me";
-
-      const raw = encodeBase64Url(buildRawEmailMessage({
-        from: fromEmail,
-        to: recipients,
-        cc: ccRecipients,
-        subject,
-        body: emailBody,
-        htmlBody: htmlBody || undefined,
-        attachments,
-      }));
-
-      const sendBody: any = { raw };
-      if (threadId) sendBody.threadId = threadId;
-
-      const sendRes = await fetch(
-        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify(sendBody),
-        }
-      );
-      const sendData = await sendRes.json();
-
-      if (sendData.error) {
-        return jsonResponse({ error: sendData.error.message || "Failed to send" }, 400);
-      }
-
-      return jsonResponse({ success: true, messageId: sendData.id, threadId: sendData.threadId });
-    }
-
-    if (action === "trash_message") {
-      const { messageId } = body;
-      if (!messageId) return jsonResponse({ error: "messageId required" }, 400);
-
-      const trashRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}/trash`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        }
-      );
-      const trashData = await trashRes.json();
-
-      if (trashData.error) {
-        return jsonResponse({ error: trashData.error.message || "Failed to move email to trash" }, 400);
-      }
-
-      return jsonResponse({ success: true, messageId: trashData.id });
-    }
-
-    if (action === "list_labels") {
-      const labelsRes = await fetch(
-        "https://gmail.googleapis.com/gmail/v1/users/me/labels",
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
-      const labelsData = await labelsRes.json();
-
-      if (labelsData.error) {
-        return jsonResponse({ error: labelsData.error.message || "Gmail API error" }, 400);
-      }
-
-      const labels = (labelsData.labels || []).map((l: any) => ({
-        id: l.id,
-        name: l.name,
-        type: l.type,
-        messagesTotal: l.messagesTotal,
-        messagesUnread: l.messagesUnread,
-      }));
-
-      return jsonResponse({ labels });
-    }
-
-    return jsonResponse({ error: "Unknown action" }, 400);
+    return jsonResponse({ success: true, messageId: sendData.id, threadId: sendData.threadId });
   } catch (err: any) {
     console.error("gmail-api error:", err);
     return jsonResponse({ error: err.message || "Internal server error" }, 500);

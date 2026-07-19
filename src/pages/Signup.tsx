@@ -631,7 +631,7 @@ export default function Signup() {
       appName: "WAKTI",
       createAccount: "Create Account",
       signInWithGoogle: "Continue with Google",
-      googleShort: "Google",
+      googleShort: "Log in with Google",
       name: "Name",
       username: "Username",
       email: "Email",
@@ -664,7 +664,7 @@ export default function Signup() {
       appName: "وقتي",
       createAccount: "إنشاء حساب",
       signInWithGoogle: "المتابعة باستخدام جوجل",
-      googleShort: "جوجل",
+      googleShort: "تسجيل الدخول باستخدام جوجل",
       name: "الاسم",
       username: "اسم المستخدم",
       email: "البريد الإلكتروني",
@@ -1149,7 +1149,7 @@ export default function Signup() {
           width: 100%;
           display: flex;
           align-items: center;
-          gap: 10px;
+          gap: 8px;
         }
         .su-google-login-btn {
           width: 100%;
@@ -1157,14 +1157,16 @@ export default function Signup() {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
-          padding: 0 14px;
+          gap: 7px;
+          padding: 0 10px;
           border-radius: 999px;
-          border: 1px solid rgba(255,255,255,0.55);
+          border: 1px solid rgba(255,255,255,0.72);
           background: linear-gradient(180deg, #ffffff 0%, #f5f7fb 100%);
           color: #1f1f1f;
-          font-size: 0.82rem;
+          font-size: clamp(0.64rem, 2.45vw, 0.78rem);
           font-weight: 800;
+          letter-spacing: 0.01em;
+          white-space: nowrap;
           box-shadow: 0 8px 20px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.85);
           transition: all 0.22s ease;
         }
@@ -1299,17 +1301,6 @@ export default function Signup() {
             
             {authTab === "signup" && (
               <div className="text-center space-y-2">
-                <h1
-                  className="text-3xl font-bold tracking-tight"
-                  style={{
-                    background: 'linear-gradient(135deg, var(--foreground) 0%, hsl(210, 60%, 55%) 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    backgroundClip: 'text',
-                  }}
-                >
-                  {language === 'en' ? 'Create Account' : 'إنشاء حساب'}
-                </h1>
                 <div className="flex justify-center mb-1">
                   <AnimatePresence mode="wait">
                     {isPlayingAudio ? (
@@ -1603,7 +1594,7 @@ export default function Signup() {
               <div className="flex flex-col items-center gap-2.5 pt-1">
                 {authTab === "login" ? (
                   <div className="su-auth-actions-row">
-                    <div className={cn("min-w-0", !isGuestUpgradeFlow ? "basis-[58%]" : "w-full")}>
+                    <div className={cn("min-w-0", !isGuestUpgradeFlow ? "basis-[50%]" : "w-full")}>
                       <button type="submit" disabled={isLoading} className="su-pill w-full">
                         {isLoading
                           ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
@@ -1613,13 +1604,13 @@ export default function Signup() {
                     </div>
 
                     {!isGuestUpgradeFlow && (
-                      <div className="basis-[42%] min-w-0">
+                      <div className="basis-[50%] min-w-0">
                         <button
                           type="button"
                           disabled={isLoading}
                           onClick={handleGoogleLogin}
                           className="su-google-login-btn"
-                          aria-label={t.signInWithGoogle}
+                          aria-label={t.googleShort}
                         >
                           <GoogleMark className="su-google-mark" />
                           <span>{t.googleShort}</span>

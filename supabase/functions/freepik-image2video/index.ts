@@ -34,7 +34,8 @@ type VisualAdsJobInsertClient = {
   };
 };
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
-const KIE_IMAGE2VIDEO_MODEL = "gemini-omni-video";
+const KIE_IMAGE2VIDEO_MODEL = "grok-imagine-video-1-5-preview";
+const KIE_IMAGE2VIDEO_QUALITY_MODEL = "gemini-omni-video";
 const KIE_TEXT2VIDEO_MODEL = "gemini-omni-video";
 const KIE_2IMAGES_MODEL = "veo3_lite";
 const KIE_VISUAL_ADS_MODEL = "gpt-image-2-image-to-image";
@@ -134,7 +135,9 @@ function resolveRequestedVideoModel(generationType: string, modelOverride?: stri
   if (generationType === "text_to_video") return KIE_TEXT2VIDEO_MODEL;
   if (generationType === "2images_to_video") return KIE_2IMAGES_MODEL;
   if (generationType === "visual_ads") return KIE_VISUAL_ADS_MODEL;
-  return modelOverride || KIE_IMAGE2VIDEO_MODEL;
+  if (modelOverride === KIE_IMAGE2VIDEO_QUALITY_MODEL) return KIE_IMAGE2VIDEO_QUALITY_MODEL;
+  if (modelOverride === KIE_IMAGE2VIDEO_MODEL) return KIE_IMAGE2VIDEO_MODEL;
+  return KIE_IMAGE2VIDEO_MODEL;
 }
 
 function buildVideoClientError(rawMessage: string, fallbackCode = "VIDEO_GENERATION_FAILED"): VideoClientErrorPayload {
@@ -834,8 +837,11 @@ async function createVideoTask(
   const sanitizedImageUrls = imageUrls.map(url => sanitizeImageUrl(url));
   const isTwoImages = sanitizedImageUrls.length === 2;
   void videoStyleMode;
-  const model = isTwoImages ? KIE_2IMAGES_MODEL : (modelOverride || KIE_IMAGE2VIDEO_MODEL);
-  const isGrokImageToVideoModel = !isTwoImages && model === "grok-imagine-video-1-5-preview";
+  const requestedSingleImageModel = modelOverride === KIE_IMAGE2VIDEO_QUALITY_MODEL
+    ? KIE_IMAGE2VIDEO_QUALITY_MODEL
+    : KIE_IMAGE2VIDEO_MODEL;
+  const model = isTwoImages ? KIE_2IMAGES_MODEL : requestedSingleImageModel;
+  const isGrokImageToVideoModel = !isTwoImages && model === KIE_IMAGE2VIDEO_MODEL;
   const validDuration = isTwoImages
     ? (["6", "8"].includes(duration || "") ? duration! : "8")
     : (["4", "6", "8", "10"].includes(duration || "") ? duration! : "6");
@@ -1588,13 +1594,7 @@ serve(async (req: Request) => {
     await logAIFromRequest(req, {
       functionName: "freepik-image2video",
       provider: "kie.ai",
-      model: generationType === "text_to_video"
-        ? KIE_TEXT2VIDEO_MODEL
-        : generationType === "2images_to_video"
-          ? KIE_2IMAGES_MODEL
-          : generationType === "visual_ads"
-            ? KIE_VISUAL_ADS_MODEL
-            : KIE_IMAGE2VIDEO_MODEL,
+      model: errorModel,
       inputText: prompt || image,
       outputText: result.videoUrl,
       durationMs: Date.now() - startTime,

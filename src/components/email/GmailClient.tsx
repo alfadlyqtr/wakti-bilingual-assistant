@@ -1,16 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useGmailMessages, GmailMessage, GmailMessageFull, GmailLabel } from '@/hooks/useGmailMessages';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useGmailMessages } from '@/hooks/useGmailMessages';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { MailComposer, MailComposerPreset, MailComposerSubmitInput } from '@/components/email/MailComposer';
-import { EmailAiAssistant } from '@/components/email/EmailAiAssistant';
-import { EmailMessageAttachments } from '@/components/email/EmailMessageAttachments';
-import { useNativeEmailExternalLinks } from '@/components/email/useNativeEmailExternalLinks';
-import { EmailMessageAttachment } from '@/utils/emailAttachmentDownload';
-import {
-  Inbox, Send, Pencil, ChevronLeft, RefreshCw, Loader2,
-  ChevronDown, Reply, Forward, Trash2, MailOpen, Search, X,
-} from 'lucide-react';
+import { Send, Pencil } from 'lucide-react';
 
 function GmailIcon({ size = 16 }: { size?: number }) {
   return (
@@ -22,243 +15,6 @@ function GmailIcon({ size = 16 }: { size?: number }) {
     </svg>
   );
 }
-
-function formatDate(dateStr: string): string {
-  if (!dateStr) return '';
-  try {
-    const d = new Date(dateStr);
-    const now = new Date();
-    const isToday = d.toDateString() === now.toDateString();
-    if (isToday) {
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-  } catch {
-    return dateStr;
-  }
-}
-
-function extractName(emailStr: string): string {
-  if (!emailStr) return '';
-  const match = emailStr.match(/^"?([^"<]+)"?\s*</);
-  if (match) return match[1].trim();
-  return emailStr.replace(/<.*>/, '').trim() || emailStr;
-}
-
-function extractEmailAddress(emailStr: string): string {
-  if (!emailStr) return '';
-  const bracketMatch = emailStr.match(/<([^>]+)>/);
-  if (bracketMatch) return bracketMatch[1].trim();
-  const plainMatch = emailStr.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
-  return plainMatch ? plainMatch[0] : emailStr.trim();
-}
-
-interface MessageRowProps {
-  message: GmailMessage;
-  activeFolder: string;
-  deleting: boolean;
-  onOpen: () => void;
-  onDelete: () => void;
-}
-
-function MessageRow({ message, activeFolder, deleting, onOpen, onDelete }: MessageRowProps) {
-  const personLabel = activeFolder === 'SENT'
-    ? `To: ${extractName(message.to) || message.to}`
-    : extractName(message.from) || message.from;
-
-  return (
-    <div className="group flex items-start gap-3 px-4 py-3 transition-colors hover:bg-[linear-gradient(180deg,rgba(243,245,255,0.96),rgba(239,242,255,0.96))] sm:px-5 sm:py-3.5 dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.72),rgba(14,17,24,0.68))]">
-      <div className="pt-1.5">
-        <div className={`h-2.5 w-2.5 rounded-full ${message.isUnread ? 'bg-blue-500 shadow-[0_0_12px_rgba(59,130,246,0.5)]' : 'bg-[#060541]/14 dark:bg-muted-foreground/20'}`} />
-      </div>
-
-      <button onClick={onOpen} className="min-w-0 flex-1 text-left">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className={`truncate text-sm ${message.isUnread ? 'font-semibold text-foreground' : 'font-medium text-foreground/80'}`}>
-              {personLabel}
-            </div>
-            <div className={`mt-0.5 truncate text-sm ${message.isUnread ? 'text-foreground/90' : 'text-muted-foreground'}`}>
-              {message.subject || '(no subject)'}
-            </div>
-            <div className="mt-1 truncate text-xs text-muted-foreground">
-              {message.snippet || 'No preview available'}
-            </div>
-          </div>
-          <div className="shrink-0 pt-0.5 text-[11px] text-muted-foreground">{formatDate(message.date)}</div>
-        </div>
-      </button>
-
-      <button
-        title="Delete"
-        onClick={onDelete}
-        disabled={deleting}
-        className="mt-0.5 shrink-0 rounded-xl p-2 text-muted-foreground transition-colors hover:bg-[#eef2ff] hover:text-red-500 disabled:opacity-60 dark:hover:bg-accent"
-      >
-        {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-      </button>
-    </div>
-  );
-}
-
-interface MessageViewProps {
-  message: GmailMessageFull;
-  onBack: () => void;
-  onReply: () => void;
-  onForward: () => void;
-  onDelete: () => void;
-  onDownloadAttachment: (attachment: EmailMessageAttachment) => void;
-  downloadingAttachmentId?: string | null;
-  deleting: boolean;
-  language?: string;
-  canReply?: boolean;
-  aiPanel?: React.ReactNode;
-}
-
-function formatPlainEmailBody(body: string, subject: string): string {
-  const normalized = body
-    .replace(/\r\n?/g, '\n')
-    .replace(/\u00a0/g, ' ')
-    .trim();
-
-  if (!normalized) return '';
-
-  let cleaned = normalized;
-  const trimmedSubject = subject.trim();
-  if (trimmedSubject) {
-    const escapedSubject = trimmedSubject.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    cleaned = cleaned.replace(new RegExp(`^${escapedSubject}(?:\\s*[-:;,.–—]+\\s*|\\s+)`, 'i'), '').trim();
-  }
-
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
-  if (/\n\s*\n/.test(cleaned)) {
-    return cleaned;
-  }
-
-  const flattened = cleaned
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join(' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-
-  const sentences = flattened
-    .split(/(?<=[.!?؟])\s+(?=[A-Z0-9\u0600-\u06FF])/)
-    .map((sentence) => sentence.trim())
-    .filter(Boolean);
-
-  if (sentences.length >= 4) {
-    const paragraphs: string[] = [];
-    for (let index = 0; index < sentences.length; index += 2) {
-      paragraphs.push(sentences.slice(index, index + 2).join(' '));
-    }
-    return paragraphs.join('\n\n');
-  }
-
-  return flattened;
-}
-
-function MessageView({ message, onBack, onReply, onForward, onDelete, onDownloadAttachment, downloadingAttachmentId = null, deleting, language = 'en', canReply = true, aiPanel }: MessageViewProps) {
-  const senderName = extractName(message.from) || message.from || '—';
-  const senderEmail = extractEmailAddress(message.from) || message.from || '—';
-  const backLabel = language === 'ar' ? 'رجوع' : 'Back';
-  const replyLabel = language === 'ar' ? 'رد' : 'Reply';
-  const forwardLabel = language === 'ar' ? 'إعادة إرسال' : 'Forward';
-  const senderLabel = language === 'ar' ? 'المرسل' : 'Sender';
-  const emailLabel = language === 'ar' ? 'البريد الإلكتروني' : 'Email';
-  const toLabel = language === 'ar' ? 'إلى' : 'To';
-  const dateLabel = language === 'ar' ? 'التاريخ' : 'Date';
-  const bodyHtml = message.body?.html || '';
-  const bodyText = formatPlainEmailBody(message.body?.text || message.snippet || '', message.subject || '');
-  const htmlBodyRef = useRef<HTMLDivElement | null>(null);
-  useNativeEmailExternalLinks(htmlBodyRef, Boolean(bodyHtml));
-
-  return (
-    <div className="flex flex-col h-full">
-      <div className="border-b border-[#060541]/10 pb-4 dark:border-border/40">
-        <div className="flex items-center gap-2">
-          <Button type="button" variant="outline" onClick={onBack} className="shrink-0 gap-1.5 rounded-xl px-3 h-9 text-xs border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.05)] hover:bg-[#eef2ff] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))]">
-            <ChevronLeft className="h-3.5 w-3.5" />
-            {backLabel}
-          </Button>
-          {aiPanel ? <div className="shrink-0">{aiPanel}</div> : null}
-          {canReply ? (
-            <Button type="button" variant="outline" onClick={onReply} className="shrink-0 gap-1.5 rounded-xl px-3 h-9 text-xs border-blue-500/20 bg-blue-50 text-blue-600 shadow-[0_4px_12px_rgba(59,130,246,0.08)] hover:bg-blue-100 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-300 dark:shadow-none dark:hover:bg-blue-500/20">
-              <Reply className="h-3.5 w-3.5" />
-              {replyLabel}
-            </Button>
-          ) : null}
-          <Button type="button" variant="outline" onClick={onForward} className="shrink-0 gap-1.5 rounded-xl px-3 h-9 text-xs border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.05)] hover:bg-[#eef2ff] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))]">
-            <Forward className="h-3.5 w-3.5" />
-            {forwardLabel}
-          </Button>
-        </div>
-        <div className="mt-4 flex items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-foreground break-words">{message.subject || '(no subject)'}</h2>
-          <button title="Delete" aria-label="Delete" onClick={onDelete} disabled={deleting} className="shrink-0 rounded-xl p-2 text-red-500 transition-colors hover:bg-red-50 disabled:opacity-60 dark:hover:bg-red-500/10">
-            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-          </button>
-        </div>
-      </div>
-      <div className="mt-4 rounded-2xl border border-[#060541]/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(248,249,255,0.96))] p-3 shadow-[0_8px_24px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(18,22,31,0.92),rgba(11,14,21,0.9))] dark:shadow-[0_12px_28px_rgba(0,0,0,0.24)]">
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="min-w-0 rounded-xl border border-[#060541]/10 bg-white/75 px-3 py-2 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.88))]">
-            <div className="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{senderLabel}</div>
-            <div className="mt-1 text-left truncate text-sm font-semibold text-foreground">{senderName}</div>
-          </div>
-          <div className="min-w-0 rounded-xl border border-[#060541]/10 bg-white/75 px-3 py-2 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.88))]">
-            <div className="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{emailLabel}</div>
-            <div className="mt-1 text-left truncate text-sm text-foreground/85">{senderEmail}</div>
-          </div>
-          <div className="min-w-0 rounded-xl border border-[#060541]/10 bg-white/75 px-3 py-2 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.88))] sm:col-span-2 xl:col-span-1">
-            <div className="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{toLabel}</div>
-            <div className="mt-1 text-left truncate text-sm text-foreground/85">{message.to || '—'}</div>
-          </div>
-          <div className="min-w-0 rounded-xl border border-[#060541]/10 bg-white/75 px-3 py-2 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.88))]">
-            <div className="text-left text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{dateLabel}</div>
-            <div className="mt-1 text-left truncate text-sm text-foreground/85">{formatDate(message.date)}</div>
-          </div>
-        </div>
-      </div>
-      <EmailMessageAttachments
-        attachments={message.attachments}
-        downloadingId={downloadingAttachmentId}
-        language={language}
-        onDownload={onDownloadAttachment}
-      />
-      <div className="flex-1 min-h-0">
-        <div className="h-full overflow-y-auto pt-4 pr-1">
-          <div className="px-1 py-1">
-            {bodyHtml ? (
-              <div
-                ref={htmlBodyRef}
-                className="email-message-html text-sm text-foreground"
-                dangerouslySetInnerHTML={{ __html: bodyHtml }}
-              />
-            ) : (
-              <div className="email-message-plain text-foreground">
-                {bodyText}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-interface FolderItem {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  systemFolder: boolean;
-}
-
-const SYSTEM_FOLDERS: FolderItem[] = [
-  { id: 'INBOX', label: 'Inbox', icon: <Inbox className="h-3.5 w-3.5" />, systemFolder: true },
-  { id: 'SENT', label: 'Sent', icon: <Send className="h-3.5 w-3.5" />, systemFolder: true },
-];
 
 interface GmailClientProps {
   connected: boolean;
@@ -272,122 +28,31 @@ interface GmailClientProps {
 
 export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, language = 'en', operatorPreset = null, onOperatorPresetConsumed }: GmailClientProps) {
   const gmail = useGmailMessages();
-  const [selectedMessage, setSelectedMessage] = useState<GmailMessageFull | null>(null);
-  const [loadingMessage, setLoadingMessage] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [downloadingAttachmentId, setDownloadingAttachmentId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [showCompose, setShowCompose] = useState(false);
-  const [replyTo, setReplyTo] = useState<{ to: string; subject: string; threadId: string } | undefined>();
-  const [composerInitialBody, setComposerInitialBody] = useState('');
   const [activePreset, setActivePreset] = useState<MailComposerPreset | null>(operatorPreset);
-  const [customFolders, setCustomFolders] = useState<GmailLabel[]>([]);
-  const [showFolders, setShowFolders] = useState(false);
-  const [deletingMessage, setDeletingMessage] = useState(false);
-  const [deletingRowId, setDeletingRowId] = useState<string | null>(null);
   const connectedLabel = language === 'ar' ? 'متصل' : 'Connected';
-  const composeLabel = language === 'ar' ? 'إنشاء' : 'Compose';
-  const refreshLabel = language === 'ar' ? 'تحديث' : 'Refresh';
-  const searchPlaceholder = language === 'ar' ? 'ابحث في المرسل أو الموضوع' : 'Search sender or subject';
-  const noSearchResultsLabel = language === 'ar' ? 'لا توجد نتائج مطابقة' : 'No matching results';
-  const activeFolderLabel = gmail.activeFolder === 'INBOX'
-    ? 'Inbox'
-    : gmail.activeFolder === 'SENT'
-      ? 'Sent'
-      : gmail.activeFolder;
   const mailboxLine = emailAddress ? `${language === 'ar' ? 'الحساب' : 'Account'}: ${emailAddress}` : 'Gmail account';
-  const normalizedSearch = searchQuery.trim().toLowerCase();
-  const hasInboxCache = gmail.hasCachedFolder('INBOX');
   const surfaceCardClass = 'rounded-[24px] border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(245,247,255,0.97))] p-3 text-[#060541] shadow-[0_16px_36px_rgba(6,5,65,0.08)] ring-1 ring-[#060541]/5 sm:p-4 dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(16,20,29,0.98),rgba(10,12,18,0.96))] dark:text-card-foreground dark:shadow-[0_18px_36px_rgba(0,0,0,0.4)] dark:ring-1 dark:ring-white/5';
   const chipClass = 'rounded-full border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] px-3 py-1 text-[11px] shadow-[0_4px_12px_rgba(6,5,65,0.05)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]';
-  const iconButtonClass = 'rounded-xl border border-[#060541]/16 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-2.5 text-[#060541] shadow-[0_4px_12px_rgba(6,5,65,0.06)] transition-colors hover:bg-[#f3f5ff] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:text-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))] dark:hover:text-accent-foreground';
-  const folderButtonBaseClass = 'border border-[#060541]/15 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.98))] text-[#060541]/76 shadow-[0_4px_12px_rgba(6,5,65,0.05)] hover:border-[#060541]/24 hover:bg-[#f3f5ff] hover:text-[#060541] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:text-muted-foreground dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)] dark:hover:!bg-[linear-gradient(180deg,rgba(26,31,43,0.96),rgba(14,17,24,0.94))] dark:hover:text-accent-foreground';
-  const filteredMessages = useMemo(() => {
-    if (!normalizedSearch) return gmail.messages;
-
-    return gmail.messages.filter((message) => {
-      const searchableText = [message.from, message.to, message.subject]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
-
-      return searchableText.includes(normalizedSearch);
-    });
-  }, [gmail.messages, normalizedSearch]);
 
   useEffect(() => {
     if (!connected) {
-      setSelectedMessage(null);
+      setShowCompose(false);
+      setActivePreset(null);
     }
   }, [connected]);
 
   useEffect(() => {
-    if (gmail.labels.length > 0) {
-      const userLabels = gmail.labels.filter(
-        l => l.type === 'user' && !['CHAT', 'SPAM', 'TRASH'].includes(l.id)
-      );
-      setCustomFolders(userLabels);
-    }
-  }, [gmail.labels]);
-
-  useEffect(() => {
     if (!operatorPreset) return;
-    setReplyTo(undefined);
-    setComposerInitialBody(operatorPreset.body || '');
     setActivePreset(operatorPreset);
     setShowCompose(true);
     onOperatorPresetConsumed?.();
   }, [onOperatorPresetConsumed, operatorPreset]);
 
-  const handleOpenMessage = async (msg: GmailMessage) => {
-    setLoadingMessage(true);
-    const full = await gmail.fetchMessage(msg.id);
-    setLoadingMessage(false);
-    if (full) {
-      setSelectedMessage(full);
-      if (msg.isUnread) {
-        gmail.fetchMessages(gmail.activeFolder);
-      }
-    }
-  };
-
-  const handleReply = () => {
-    if (!selectedMessage) return;
-    setReplyTo({
-      to: selectedMessage.from,
-      subject: selectedMessage.subject,
-      threadId: selectedMessage.threadId,
-    });
-    setComposerInitialBody('');
-    setShowCompose(true);
-  };
-
-  const handleForward = () => {
-    if (!selectedMessage) return;
-    const originalBody = selectedMessage.body?.text || selectedMessage.snippet || '';
-    const fwdSubject = selectedMessage.subject?.startsWith('Fwd:') ? selectedMessage.subject : `Fwd: ${selectedMessage.subject || ''}`;
-    setReplyTo({ to: '', subject: fwdSubject, threadId: '' });
-    setComposerInitialBody(`\n\n-------- Forwarded Message --------\nFrom: ${selectedMessage.from}\nDate: ${selectedMessage.date}\nSubject: ${selectedMessage.subject}\n\n${originalBody}`);
-    setShowCompose(true);
-  };
-
   const handleCloseCompose = () => {
     setShowCompose(false);
-    setReplyTo(undefined);
-    setComposerInitialBody('');
     setActivePreset(null);
   };
-
-  const handleUseAiReply = useCallback((text: string) => {
-    if (!selectedMessage) return;
-    setReplyTo({
-      to: selectedMessage.from,
-      subject: selectedMessage.subject,
-      threadId: selectedMessage.threadId,
-    });
-    setComposerInitialBody(text);
-    setShowCompose(true);
-  }, [selectedMessage]);
 
   const handleSend = async (input: MailComposerSubmitInput) => {
     const ok = await gmail.sendMessage(input);
@@ -395,119 +60,52 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
     handleCloseCompose();
     return ok;
   };
+  const handleOpenComposer = useCallback(() => {
+    setActivePreset(null);
+    setShowCompose(true);
+  }, []);
 
-  const handleFolderSwitch = (folderId: string) => {
-    setSelectedMessage(null);
-    setShowFolders(false);
-    gmail.fetchMessages(folderId);
-  };
-
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try {
-      await gmail.fetchMessages(gmail.activeFolder, undefined, { forceRefresh: true, background: gmail.messages.length > 0, quiet: gmail.messages.length > 0 });
-      await gmail.fetchLabels({ forceRefresh: true });
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  const handleDeleteMessage = async () => {
-    if (!selectedMessage) return;
-    setDeletingMessage(true);
-    const deleted = await gmail.trashMessage(selectedMessage.id);
-    if (deleted) {
-      setSelectedMessage(null);
-      await gmail.fetchLabels({ forceRefresh: true });
-    }
-    setDeletingMessage(false);
-  };
-
-  const handleDeleteFromList = async (message: GmailMessage) => {
-    setDeletingRowId(message.id);
-    await gmail.trashMessage(message.id);
-    await gmail.fetchLabels({ forceRefresh: true });
-    setDeletingRowId(null);
-  };
-
-  const handleDownloadAttachment = useCallback(async (attachment: EmailMessageAttachment) => {
-    if (!selectedMessage) return;
-    setDownloadingAttachmentId(attachment.id);
-    try {
-      await gmail.downloadAttachment(selectedMessage.id, attachment);
-    } finally {
-      setDownloadingAttachmentId(null);
-    }
-  }, [gmail, selectedMessage]);
-
-  const selectedMessageAiSource = useMemo(() => {
-    if (!selectedMessage) return null;
-    return {
-      subject: selectedMessage.subject,
-      from: selectedMessage.from,
-      to: selectedMessage.to,
-      date: selectedMessage.date,
-      snippet: selectedMessage.snippet,
-      bodyText: selectedMessage.body?.text || selectedMessage.snippet || '',
-    };
-  }, [selectedMessage]);
-
-  const resolveSelectedAttachmentContent = useCallback(async (attachment: EmailMessageAttachment) => {
-    if (!selectedMessage) return null;
-    return await gmail.getAttachmentContent(selectedMessage.id, attachment);
-  }, [gmail, selectedMessage]);
-
-  const resolveRecentMessages = useCallback(async () => {
-    const recent = gmail.messages.slice(0, 5);
-    const resolved = await Promise.all(recent.map(async (message) => {
-      try {
-        const full = await gmail.fetchMessage(message.id);
-        return {
-          subject: message.subject,
-          from: message.from,
-          to: message.to,
-          date: message.date,
-          snippet: message.snippet,
-          bodyText: full?.body?.text || message.snippet || '',
-        };
-      } catch {
-        return {
-          subject: message.subject,
-          from: message.from,
-          to: message.to,
-          date: message.date,
-          snippet: message.snippet,
-          bodyText: message.snippet || '',
-        };
-      }
-    }));
-    return resolved;
-  }, [gmail.fetchMessage, gmail.messages]);
+  const disconnectedTitle = language === 'ar' ? 'Gmail غير متصل' : 'Gmail not connected';
+  const disconnectedDescription = language === 'ar'
+    ? 'اربط Gmail لكتابة الرسائل داخل وقتي ثم مراجعتها وإرسالها بسرعة.'
+    : 'Connect Gmail to draft, review, and send faster inside Wakti.';
+  const sendOnlyTitle = language === 'ar' ? 'إرسال Gmail فقط' : 'Gmail send only';
+  const sendOnlyDescription = language === 'ar'
+    ? 'اكتب داخل وقتي ثم راجع الرسالة وأرسلها من Gmail. لا نقرأ صندوق البريد.'
+    : 'Write in Wakti, review the draft, then send with Gmail. No inbox reading.';
+  const openComposerLabel = language === 'ar' ? 'اكتب رسالة' : 'Write email';
+  const disconnectLabel = language === 'ar' ? 'فصل Gmail' : 'Disconnect Gmail';
+  const connectedDescription = language === 'ar'
+    ? 'اكتب وراجع وأرسل بسرعة باستخدام Gmail.'
+    : 'Write, review, and send faster with Gmail.';
+  const journeySteps = language === 'ar'
+    ? ['1. اربط Gmail', '2. اكتب داخل وقتي', '3. راجع ثم أرسل']
+    : ['1. Connect Gmail', '2. Draft in Wakti', '3. Review and send'];
 
   if (!connected) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+      <div className="flex flex-col items-center justify-center gap-4 py-12 text-center">
         <div className="rounded-full border border-[#060541]/14 bg-[linear-gradient(180deg,rgba(255,255,255,1),rgba(247,248,255,0.96))] p-4 shadow-[0_10px_24px_rgba(6,5,65,0.06)] dark:border-white/10 dark:!bg-[linear-gradient(180deg,rgba(20,24,34,0.92),rgba(12,15,20,0.9))] dark:shadow-[0_10px_24px_rgba(0,0,0,0.28)]">
           <GmailIcon size={32} />
         </div>
-        <div>
-          <div className="font-semibold text-base mb-1">Gmail not connected</div>
-          <div className="text-sm text-muted-foreground">Connect your Gmail account to send emails from Wakti</div>
+        <div className="max-w-md space-y-2">
+          <div className="text-base font-semibold">{disconnectedTitle}</div>
+          <div className="text-sm text-muted-foreground">{disconnectedDescription}</div>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          {journeySteps.map((step) => (
+            <div key={step} className={`${chipClass} text-muted-foreground`}>
+              {step}
+            </div>
+          ))}
         </div>
         <Button onClick={onConnect} className="bg-[#060541] hover:bg-[#0a0a5c] text-white gap-2">
           <GmailIcon size={14} />
-          Connect Gmail
+          {language === 'ar' ? 'ربط Gmail' : 'Connect Gmail'}
         </Button>
       </div>
     );
   }
-
-  const sendOnlyTitle = language === 'ar' ? 'Gmail للإرسال فقط حالياً' : 'Gmail is send-only for now';
-  const sendOnlyDescription = language === 'ar'
-    ? 'أوقفنا قراءة البريد وصناديق Gmail مؤقتاً حتى لا نستخدم صلاحيات Gmail المقيدة. ما زال بإمكانك كتابة الرسائل وإرسالها من هذا الحساب.'
-    : 'Inbox reading and mailbox actions are temporarily off so Wakti does not use restricted Gmail scopes. You can still compose and send emails from this account.';
-  const openComposerLabel = language === 'ar' ? 'اكتب رسالة' : 'Write email';
-  const disconnectLabel = language === 'ar' ? 'فصل Gmail' : 'Disconnect Gmail';
 
   return (
     <div className="flex flex-col gap-3">
@@ -524,6 +122,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
                   <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">{connectedLabel}</Badge>
                 </div>
                 <div className="mt-1 max-w-full truncate text-xs text-muted-foreground">{mailboxLine}</div>
+                <div className="mt-2 text-sm text-muted-foreground">{connectedDescription}</div>
               </div>
             </div>
 
@@ -542,7 +141,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
           <div className="flex w-full items-center gap-2 sm:w-auto sm:justify-end">
             <Button
               size="sm"
-              onClick={() => { setReplyTo(undefined); setShowCompose(true); }}
+              onClick={handleOpenComposer}
               className="h-10 flex-1 rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700 gap-1.5 sm:flex-none"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -570,16 +169,23 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
             <p className="text-sm leading-6 text-muted-foreground">{sendOnlyDescription}</p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
+            {journeySteps.map((step) => (
+              <div key={step} className={`${chipClass} text-muted-foreground`}>
+                {step}
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <Button
               size="sm"
-              onClick={() => { setReplyTo(undefined); setShowCompose(true); }}
+              onClick={handleOpenComposer}
               className="rounded-xl bg-blue-600 px-4 text-white hover:bg-blue-700 gap-1.5"
             >
               <Pencil className="h-3.5 w-3.5" />
               {openComposerLabel}
             </Button>
             <div className={`${chipClass} text-muted-foreground`}>
-              {language === 'ar' ? 'إرسال Gmail فقط بدون قراءة البريد' : 'Gmail send only, no inbox access'}
+              {language === 'ar' ? 'بدون صندوق بريد أو قراءة' : 'No inbox or mailbox reading'}
             </div>
           </div>
         </div>
@@ -589,9 +195,7 @@ export function GmailClient({ connected, emailAddress, onConnect, onDisconnect, 
         <MailComposer
           onClose={handleCloseCompose}
           onSend={handleSend}
-          replyTo={replyTo}
           fromLabel={emailAddress || 'Gmail'}
-          initialBody={composerInitialBody}
           preset={activePreset}
         />
       )}
