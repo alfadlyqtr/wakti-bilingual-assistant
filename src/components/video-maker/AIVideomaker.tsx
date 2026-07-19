@@ -335,8 +335,8 @@ const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null,
 
   if (shouldHighlightChildSafetyToggle(payload)) {
     return language === 'ar'
-      ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي. فعّل خيار تحتوي الصورة على طفل ثم حاول مرة أخرى.'
-      : 'Wakti safety rules blocked this request. Turn on Contains child in image and try again.';
+      ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي. فعّل المعالجة الآمنة للأطفال ثم حاول مرة أخرى.'
+      : 'Wakti safety rules blocked this request. Turn on Child-safe processing and try again.';
   }
 
   if (rawCode === 'video_temporary_unavailable') {
@@ -426,7 +426,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [duration, setDuration] = useState<'4' | '6' | '8' | '10'>('6');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('720p');
-  const [isKidsContentMode, setIsKidsContentMode] = useState(false);
+  const [isKidsContentMode, setIsKidsContentMode] = useState(true);
   const [isBestArabicQuality, setIsBestArabicQuality] = useState(false);
   const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
   const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
@@ -659,8 +659,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setDuration(draft.duration || '6');
     setAspectRatio(draft.aspectRatio || '9:16');
     setResolution(draft.resolution || '720p');
-    setIsKidsContentMode(Boolean(draft.isKidsContentMode));
-    setIsBestArabicQuality(Boolean(draft.isBestArabicQuality) && !draft.isKidsContentMode);
+    const restoredKidsContentMode = typeof draft.isKidsContentMode === 'boolean' ? draft.isKidsContentMode : true;
+    setIsKidsContentMode(restoredKidsContentMode);
+    setIsBestArabicQuality(Boolean(draft.isBestArabicQuality) && !restoredKidsContentMode);
     clearStudioGuestDraft('video');
   }, [isGuest, searchParams]);
 
@@ -2637,8 +2638,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground/90">
               {language === 'ar'
-                ? 'نتائج عربية أفضل. قد يستغرق وقتًا أطول قليلًا.'
-                : 'Better Arabic results. May take a little more time.'}
+                ? 'لنتائج عربية أفضل. إذا كانت الصورة تحتوي على طفل، اترك المعالجة الآمنة للأطفال مفعّلة.'
+                : 'For stronger Arabic results. If the image includes a child, keep Child-safe processing ON.'}
             </p>
           </div>
           <span
@@ -2671,12 +2672,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             <Eye className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(210,100%,65%)]" />
             <div>
               <p className="text-xs font-semibold text-foreground">
-                {language === 'ar' ? 'تحتوي الصورة على طفل' : 'Contains child in image'}
+                {language === 'ar' ? 'المعالجة الآمنة للأطفال' : 'Child-safe processing'}
               </p>
               <p className="mt-1 text-[11px] text-muted-foreground/90">
                 {language === 'ar'
-                  ? 'فعّل هذا الخيار إذا كانت الصورة المرفوعة تحتوي على طفل.'
-                  : 'Turn this on if the uploaded image includes a child.'}
+                  ? 'أبقِ هذا الخيار مفعّلًا عندما تحتوي الصورة على طفل.'
+                  : 'Keep this ON when the image includes a child.'}
               </p>
             </div>
           </div>
@@ -2694,7 +2695,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         </div>
         {highlightKidsModeToggle && !isKidsContentMode && (
           <p className="mt-2 text-[11px] font-semibold text-[hsl(210,100%,65%)]">
-            {language === 'ar' ? 'فعّل هذا الزر ثم أعد المحاولة.' : 'Turn this ON and try again.'}
+            {language === 'ar' ? 'أبقِ المعالجة الآمنة للأطفال مفعّلة ثم أعد المحاولة.' : 'Keep Child-safe processing ON and try again.'}
           </p>
         )}
       </button>
@@ -2702,8 +2703,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       {isKidsContentMode && (
         <p className="rounded-lg border border-[hsl(210,100%,65%)]/25 bg-[hsl(210,100%,65%)]/10 px-3 py-2 text-[11px] font-medium text-[hsl(210,100%,65%)]">
           {language === 'ar'
-            ? 'تم تفعيل المعالجة الآمنة للأطفال. أفضل جودة عربية غير متاحة لهذا النوع من الصور.'
-            : 'Child-safe processing is active. Best Arabic Quality is unavailable for this image type.'}
+            ? 'المعالجة الآمنة للأطفال مفعّلة. اتركها مفعّلة إذا كانت الصورة تحتوي على طفل، وأوقفها فقط للصور التي لا تحتوي على أطفال.'
+            : 'Child-safe processing is active. Keep it ON if the image includes a child, and turn it off only for images without children.'}
         </p>
       )}
     </div>
@@ -5623,8 +5624,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </span>
               <span className="block text-sm text-[hsl(210,30%,80%)]">
                 {language === 'ar'
-                  ? 'إذا كانت الصورة تحتوي على طفل، فعّل خيار تحتوي الصورة على طفل ثم حاول مرة أخرى.'
-                  : 'If the image contains a child, turn on Contains child in image and try again.'}
+                  ? 'إذا كانت الصورة تحتوي على طفل، فعّل المعالجة الآمنة للأطفال ثم حاول مرة أخرى.'
+                  : 'If the image contains a child, turn on Child-safe processing and try again.'}
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
