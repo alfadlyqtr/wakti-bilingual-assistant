@@ -32,6 +32,12 @@ interface AyahData {
   audioUrl?: string;
 }
 
+interface LocalHafsScriptRow {
+  sora?: number;
+  aya_no?: number;
+  aya_text?: string;
+}
+
 const STUDY_PLAN_KEY = "deen_study_plan_v2";
 
 const SURAH_LIST: { n: number; en: string; ar: string; ayahs: number }[] = [
@@ -198,6 +204,7 @@ export default function DeenStudy() {
   const [fetchingAyah, setFetchingAyah] = useState(false);
   const [expandedSurah, setExpandedSurah] = useState<number | null>(null);
   const [showAllLearntToday, setShowAllLearntToday] = useState(false);
+  const [localHafsByAyah, setLocalHafsByAyah] = useState<Record<string, string>>({});
   const plan = planStore.plans.find((p) => p.id === planStore.activePlanId) ?? planStore.plans[0] ?? null;
 
   const reloadMemorization = useCallback(() => {
@@ -212,6 +219,30 @@ export default function DeenStudy() {
   useEffect(() => {
     if (activeTab === "today" || activeTab === "review") reloadMemorization();
   }, [activeTab, reloadMemorization]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch("/quran/data/hafsData_v18.json");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const rows = (await res.json()) as LocalHafsScriptRow[];
+        const byAyah: Record<string, string> = {};
+        for (const row of rows) {
+          if (row.sora && row.aya_no && row.aya_text) {
+            byAyah[`${row.sora}:${row.aya_no}`] = row.aya_text;
+          }
+        }
+        if (!cancelled && Object.keys(byAyah).length > 0) {
+          setLocalHafsByAyah(byAyah);
+        }
+      } catch {
+        // silent: API text fallback stays available
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
 
   const updateMemorizationStatus = useCallback(async (id: string, status: string) => {
     await (supabase as any).from("deen_memorization").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
@@ -411,6 +442,7 @@ export default function DeenStudy() {
           ayah={sessionAyah}
           mode={playerMode}
           isAr={isAr}
+          localHafsByAyah={localHafsByAyah}
           onComplete={onPlayerComplete}
           onNotYet={onPlayerNotYet}
           onClose={() => setSessionAyah(null)}
@@ -1101,14 +1133,36 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   );
 }
 
-function SessionPlayer({ ayah, mode, isAr, onComplete, onNotYet, onClose }: {
+function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet, onClose }: {
   ayah: AyahData;
   mode: "learn" | "review";
   isAr: boolean;
+  localHafsByAyah: Record<string, string>;
   onComplete: (result: "memorized") => Promise<void>;
   onNotYet: () => Promise<void>;
   onClose: () => void;
 }) {
+  const cleanApiText = (text: string): string => {
+    return text
+      .replace(/\u06DD+[\s\d٠-٩]*/g, "")
+      .replace(/[\u0615\u0616\u0617\u0618\u0619\u061A\u08D2\u08D3\u08D4\u08D5\u08D6\u08D7]/g, "")
+      .trim();
+  };
+  const getArabicDisplay = (): string => {
+    // Keep existing Surah 1 behavior unchanged
+    if (ayah.surah_number === 1) {
+      return ayah.ayah_number === 1
+        ? stripBasmala(ayah.arabic)
+        : ayah.arabic;
+    }
+    const key = `${ayah.surah_number}:${ayah.ayah_number}`;
+    if (localHafsByAyah[key]) {
+      return localHafsByAyah[key];
+    }
+    return ayah.ayah_number === 1 && ayah.surah_number !== 9
+      ? stripBasmala(cleanApiText(ayah.arabic))
+      : cleanApiText(ayah.arabic);
+  };
   const { theme } = useTheme();
   const dark = theme === "dark";
   const [phase, setPhase] = useState<"listen" | "recall">("listen");
@@ -1290,7 +1344,7 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onNotYet, onClose }: {
       </div>
 
       {/* ── AYAH ZONE ── */}
-      <div className="flex-1 flex flex-col justify-center px-5 py-5 overflow-y-auto gap-4">
+      <div className="flex-1 flex flex-col justify-start px-5 py-5 overflow-y-auto gap-4">
 
         {/* Basmala */}
         {ayah.ayah_number === 1 && ayah.surah_number !== 9 && !hidden && (
@@ -1323,10 +1377,8 @@ function SessionPlayer({ ayah, mode, isAr, onComplete, onNotYet, onClose }: {
               </p>
             </div>
           ) : (
-            <p className="text-[1.6rem] leading-[2.2] font-serif" style={{ color: textPri }} dir="rtl">
-              {ayah.ayah_number === 1 && ayah.surah_number !== 9
-                ? stripBasmala(ayah.arabic)
-                : ayah.arabic}
+            <p className="text-[1.6rem] leading-[2.2]" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: textPri }} dir="rtl">
+              {getArabicDisplay()}
             </p>
           )}
         </div>
