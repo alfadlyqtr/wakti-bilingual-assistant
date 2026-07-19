@@ -48,15 +48,16 @@ serve(async (req) => {
       );
     }
 
-    // Extract storage paths from public URLs
-    // URL format: .../storage/v1/object/public/tasjeel_recordings/USER_ID/filename.ext
-    const extractStoragePath = (url: string | null): string | null => {
-      if (!url) return null;
+    const extractStoragePath = (value: string | null): string | null => {
+      if (!value) return null;
       try {
-        const marker = '/object/public/tasjeel_recordings/';
-        const idx = url.indexOf(marker);
-        if (idx === -1) return null;
-        return url.slice(idx + marker.length);
+        const rawValue = value.trim();
+        const publicMarker = '/storage/v1/object/public/tasjeel_recordings/';
+        const signedMarker = '/storage/v1/object/sign/tasjeel_recordings/';
+        if (rawValue.includes(publicMarker)) return rawValue.split(publicMarker)[1]?.split('?')[0] || null;
+        if (rawValue.includes(signedMarker)) return rawValue.split(signedMarker)[1]?.split('?')[0] || null;
+        if (rawValue.startsWith('http://') || rawValue.startsWith('https://')) return null;
+        return rawValue;
       } catch {
         return null;
       }

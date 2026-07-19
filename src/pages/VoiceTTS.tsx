@@ -131,6 +131,7 @@ export default function VoiceTTS({ operatorPayload, onOperatorConsumed }: VoiceT
   const handledOperatorPayloadIdRef = React.useRef<string | null>(null);
   const operatorAutoRunStepIdRef = React.useRef<string | null>(null);
   const operatorRunMetaRef = React.useRef<VoiceOperatorRunMeta | null>(null);
+  const generationLockRef = React.useRef(false);
 
   const { user, isGuest } = useAuth();
   const [guestDialogOpen, setGuestDialogOpen] = useState(false);
@@ -201,11 +202,13 @@ export default function VoiceTTS({ operatorPayload, onOperatorConsumed }: VoiceT
   };
 
   const generateSpeech = async () => {
+    if (generationLockRef.current || isGenerating) return;
     if (isGuest) {
       setGuestDialogOpen(true);
       return;
     }
     if (!canGenerate) return;
+    generationLockRef.current = true;
     if (operatorRunMetaRef.current?.runId && operatorRunMetaRef.current?.generateStepId) {
       emitEvent('wakti-operator-status', {
         runId: operatorRunMetaRef.current.runId,
@@ -274,6 +277,7 @@ export default function VoiceTTS({ operatorPayload, onOperatorConsumed }: VoiceT
       toast.error(e.message || (language === 'ar' ? 'فشل في إنشاء الصوت' : 'Failed to generate speech'));
     } finally {
       setIsGenerating(false);
+      generationLockRef.current = false;
     }
   };
 

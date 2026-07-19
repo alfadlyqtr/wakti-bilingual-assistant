@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase, manuallyDeleteOldRecordings } from "@/integrations/supabase/client";
 import { TasjeelRecord } from "./types";
 import { Card, CardContent } from "@/components/ui/card";
+import { createTasjeelSignedUrl } from '@/utils/tasjeelStorage';
 import { Separator } from "@/components/ui/separator";
 import { toast } from "@/components/ui/toast-helper";
 import { FileText, Download, Trash, AlertCircle, RefreshCw, Zap } from "lucide-react";
@@ -243,12 +244,18 @@ const SavedRecordings: React.FC = () => {
   };
 
   // Download audio function
-  const downloadAudio = (url: string, isSummary: boolean = false, title: string | null = null) => {
-    const link = document.createElement("a");
-    link.href = url;
-    const fileName = `tasjeel-${isSummary ? 'summary' : 'original'}-${title || new Date().toISOString().slice(0, 10)}.mp3`;
-    link.download = fileName;
-    link.click();
+  const downloadAudio = async (url: string, isSummary: boolean = false, title: string | null = null) => {
+    try {
+      const signedUrl = await createTasjeelSignedUrl(url);
+      if (!signedUrl) throw new Error('Audio source not found');
+      const link = document.createElement("a");
+      link.href = signedUrl;
+      link.download = `tasjeel-${isSummary ? 'summary' : 'original'}-${title || new Date().toISOString().slice(0, 10)}.mp3`;
+      link.click();
+    } catch (error) {
+      console.error('Error creating Tasjeel download URL:', error);
+      toast(t.errorPlayingAudio);
+    }
   };
 
   // Export to PDF function

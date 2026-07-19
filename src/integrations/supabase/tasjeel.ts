@@ -186,15 +186,8 @@ export const uploadAudioFile = async (options: AudioUploadOptions): Promise<stri
 
     if (error) throw error;
 
-    const { data: publicUrlData } = supabase
-      .storage
-      .from('tasjeel_recordings')
-      .getPublicUrl(filePath);
-
-    const audioUrl = publicUrlData.publicUrl;
-
-    if (onSuccess) onSuccess(audioUrl);
-    return audioUrl;
+    if (onSuccess) onSuccess(filePath);
+    return filePath;
   } catch (error) {
     console.error('Error uploading audio file:', error);
     if (onError) onError(error);

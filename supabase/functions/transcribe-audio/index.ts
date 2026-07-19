@@ -2,7 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { buildTrialErrorPayload, checkTrialAccess } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -66,22 +66,23 @@ serve(async (req) => {
       );
     }
 
-    // ── Trial Token Check (tasjeel: limit 1) ──
     const authHeader = req.headers.get('Authorization');
-    if (authHeader) {
-      const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
-      const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
-      if (user) {
-        const trial = await checkTrialAccess(supabaseAdmin, user.id, 'tasjeel', 1);
-        if (!trial.allowed) {
-          return new Response(
-            JSON.stringify(buildTrialErrorPayload('tasjeel', trial)),
-            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Authentication required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-    // ── End Trial Token Check ──
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''));
+    const user = authData.user;
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Log request size and content type
     const contentLength = req.headers.get('content-length');
@@ -95,81 +96,83 @@ serve(async (req) => {
     try {
       requestBody = await req.json();
       console.log('Request body parsed successfully:', {
-        hasAudioUrl: !!requestBody.audioUrl,
-        audioUrlType: typeof requestBody.audioUrl,
-        audioUrlLength: requestBody.audioUrl ? requestBody.audioUrl.length : 0,
-        audioUrlPreview: requestBody.audioUrl ? `${requestBody.audioUrl.substring(0, 20)}...` : null
+        hasStoragePath: !!requestBody.storagePath,
+        storagePathType: typeof requestBody.storagePath,
+        storagePathLength: requestBody.storagePath ? requestBody.storagePath.length : 0
       });
     } catch (error) {
-      console.error('Failed to parse request JSON:', error);
+      const parseError = error instanceof Error ? error.message : 'Invalid JSON body';
+      console.error('Failed to parse request JSON:', parseError);
       return new Response(
         JSON.stringify({ 
           error: 'Invalid request format', 
           details: 'Could not parse JSON body',
-          parseError: error.message
+          parseError
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Get the audio file URL and optional language hint from the request body
-    const { audioUrl, language: languageHint } = requestBody as { audioUrl?: string; language?: string };
+    // Get the storage path and optional language hint from the request body
+    const { storagePath, language: languageHint } = requestBody as { storagePath?: string; language?: string };
     // Defensive sanitize: decode URL-encoded spaces, trim whitespace, and validate
-    let cleanedAudioUrl = (typeof audioUrl === 'string' ? audioUrl : '').trim();
+    let cleanedStoragePath = (typeof storagePath === 'string' ? storagePath : '').trim();
     // Decode any URL-encoded characters (like %20 for space) and trim again
     try {
-      cleanedAudioUrl = decodeURIComponent(cleanedAudioUrl).trim();
+      cleanedStoragePath = decodeURIComponent(cleanedStoragePath).trim();
     } catch (e) {
       // If decoding fails, continue with the trimmed version
-      console.log('Could not decode URL, using trimmed version:', cleanedAudioUrl);
+      console.log('Could not decode storage path, using trimmed version');
     }
 
-    if (!cleanedAudioUrl) {
-      console.error('Missing audioUrl in request');
+    const pathParts = cleanedStoragePath.split('/');
+    const isOwnedStoragePath = pathParts.length >= 2
+      && pathParts[0] === user.id
+      && pathParts.every((part) => part.length > 0 && part !== '.' && part !== '..');
+
+    if (!isOwnedStoragePath || cleanedStoragePath.includes('://')) {
       return new Response(
-        JSON.stringify({ error: 'Audio URL is required' }),
+        JSON.stringify({ error: 'A valid owned storage path is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('Processing audio URL:', cleanedAudioUrl.substring(0, 30) + '...', 'languageHint:', languageHint || 'none');
+    const fileName = pathParts[pathParts.length - 1];
+    const folderPath = pathParts.slice(0, -1).join('/');
+    const { data: storageObjects, error: storageListError } = await supabaseAdmin.storage
+      .from('tasjeel_recordings')
+      .list(folderPath, { search: fileName, limit: 1 });
+
+    if (storageListError) {
+      console.error('Failed to verify storage ownership:', storageListError);
+      return new Response(
+        JSON.stringify({ error: 'Could not verify the audio file' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!storageObjects?.some((object: { name?: string }) => object.name === fileName)) {
+      return new Response(
+        JSON.stringify({ error: 'Audio file not found' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const trial = await checkAndConsumeTrialTokenOnce(supabaseAdmin, user.id, 'tasjeel', 1, cleanedStoragePath);
+    if (!trial.allowed) {
+      return new Response(
+        JSON.stringify(buildTrialErrorPayload('tasjeel', trial)),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log('Processing owned storage path:', `${pathParts[0]}/...`, 'languageHint:', languageHint || 'none');
 
     // Create a Supabase client with the service role key
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
     console.log('Supabase client created');
 
-    // Extract the path from the storage URL
-    let filePath = '';
-    try {
-      // Format: https://[project-ref].supabase.co/storage/v1/object/public/tasjeel_recordings/[user-id]/[filename].webm
-      const storageUrl = new URL(cleanedAudioUrl);
-      console.log('Storage URL parsed:', storageUrl.toString());
-      console.log('Storage pathname:', storageUrl.pathname);
-      
-      const pathParts = storageUrl.pathname.split('/');
-      console.log('Path parts:', pathParts);
-      
-      // Find the index of "public" and get everything after it
-      const publicIndex = pathParts.indexOf('public');
-      
-      if (publicIndex === -1) {
-        throw new Error('Invalid storage URL format - missing "public" path segment');
-      }
-      
-      // Filter out empty strings and get the path after "public/"
-      filePath = pathParts.filter(Boolean).slice(publicIndex + 1).join('/');
-      console.log('Extracted file path:', filePath);
-    } catch (error) {
-      console.error('Error parsing audio URL:', error);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Invalid audio URL format', 
-          details: error.message,
-          audioUrl: cleanedAudioUrl
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const filePath = cleanedStoragePath;
 
     // Use the consistent bucket ID "tasjeel_recordings"
     const bucketId = "tasjeel_recordings";
@@ -294,7 +297,8 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Unhandled error in transcription function:', error);
+    const message = error instanceof Error ? error.message : 'Unknown transcription error';
+    console.error('Unhandled error in transcription function:', message);
     
     // Log failed AI usage
     await logAIFromRequest(req, {
@@ -302,14 +306,13 @@ serve(async (req) => {
       provider: "openai",
       model: "gpt-4o-transcribe",
       status: "error",
-      errorMessage: (error as Error).message
+      errorMessage: message
     });
 
     return new Response(
       JSON.stringify({ 
         error: 'Transcription failed', 
-        details: error.message,
-        stack: error.stack
+        details: message
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

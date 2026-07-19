@@ -225,6 +225,7 @@ const Tasjeel: React.FC = () => {
   const [transcript, setTranscript] = useState("");
   const [summary, setSummary] = useState("");
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [audioStoragePath, setAudioStoragePath] = useState<string | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
@@ -371,6 +372,14 @@ const Tasjeel: React.FC = () => {
       setGuestDialogOpen(true);
       return;
     }
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setAudioUrl(null);
+    setAudioStoragePath(null);
+    setAudioBlob(null);
+    setTranscript('');
+    setSummary('');
+    setSummaryAudioUrl(null);
+    setSummaryAudioBlob(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       
@@ -549,15 +558,9 @@ const Tasjeel: React.FC = () => {
       
       console.log("Storage upload successful:", data);
       
-      // Get the public URL - works because bucket is set to public
-      const { data: publicUrlData } = supabase
-        .storage
-        .from(bucketId)
-        .getPublicUrl(filePath);
-      
-      const audioUrl = (publicUrlData.publicUrl || '').trim();
-      console.log("Generated public URL:", audioUrl);
-      setAudioUrl(audioUrl);
+      const localAudioUrl = URL.createObjectURL(audioBlob);
+      setAudioStoragePath(filePath);
+      setAudioUrl(localAudioUrl);
       setAudioBlob(audioBlob);
       
       // Generate a UUID for the recording but don't save to database yet
@@ -565,7 +568,7 @@ const Tasjeel: React.FC = () => {
       setCurrentRecordId(recordId);
       
       // Transcribe the audio
-      await transcribeAudio((audioUrl || '').trim(), transcriptionLanguage);
+      await transcribeAudio(filePath, transcriptionLanguage);
       
     } catch (error) {
       console.error("Error processing recording:", error);
@@ -598,21 +601,13 @@ const Tasjeel: React.FC = () => {
         
       if (error) throw error;
       
-      // Get public URL
-      const { data: publicUrlData } = supabase
-        .storage
-        .from("tasjeel_recordings")
-        .getPublicUrl(filePath);
-      
-      const audioUrl = (publicUrlData.publicUrl || '').trim();
-      setAudioUrl(audioUrl);
-      
-      // Create a blob from the file for local playback
       const fileBlob = new Blob([file], { type: file.type });
+      setAudioStoragePath(filePath);
+      setAudioUrl(URL.createObjectURL(fileBlob));
       setAudioBlob(fileBlob);
       
       // Transcribe the uploaded audio
-      await transcribeAudio((audioUrl || '').trim());
+      await transcribeAudio(filePath);
       
       toast(translationTexts.uploadSuccess);
     } catch (error) {
@@ -629,27 +624,19 @@ const Tasjeel: React.FC = () => {
   };
   
   // Transcribe audio function with enhanced logging
-  const transcribeAudio = async (audioUrl: string, langHint: 'auto' | 'ar' | 'en' = transcriptionLanguage) => {
+  const transcribeAudio = async (storagePath: string, langHint: 'auto' | 'ar' | 'en' = transcriptionLanguage) => {
     try {
       setIsTranscribing(true);
       
       console.log('Tasjeel: Starting transcription process');
-      // Defensive URL cleaning: decode and trim
-      let safeUrl = (audioUrl || '').trim();
-      try {
-        safeUrl = decodeURIComponent(safeUrl).trim();
-      } catch (e) {
-        console.warn('Could not decode URL, using trimmed version');
-      }
-      console.log('Tasjeel: Audio URL for transcription:', safeUrl);
-      
+      const safeStoragePath = (storagePath || '').trim();
       console.log('Tasjeel: Calling transcribe-audio edge function');
       const startTime = Date.now();
       
       const response = await callEdgeFunctionWithRetry<{ transcript: string }>(
         "transcribe-audio",
         { 
-          body: { audioUrl: safeUrl, language: langHint !== 'auto' ? (langHint === 'ar' ? 'ar' : 'en') : undefined },
+          body: { storagePath: safeStoragePath, language: langHint !== 'auto' ? (langHint === 'ar' ? 'ar' : 'en') : undefined },
           headers: { 'Content-Type': 'application/json' }
         }
       );
@@ -811,7 +798,7 @@ const Tasjeel: React.FC = () => {
   
   // New function to save the complete recording to the database
   const saveRecording = async () => {
-    if (!audioUrl) {
+    if (!audioStoragePath) {
       return;
     }
 
@@ -821,6 +808,9 @@ const Tasjeel: React.FC = () => {
       // Important: Use the permanent storage URL for summary audio
       // instead of the temporary object URL from the audio player
       let finalSummaryAudioPath = summaryAudioUrl as string | null;
+      if (finalSummaryAudioPath?.includes('/storage/v1/object/public/tasjeel_recordings/')) {
+        finalSummaryAudioPath = finalSummaryAudioPath.split('/storage/v1/object/public/tasjeel_recordings/')[1] || null;
+      }
       // If we don't have a URL but we do have a Blob (base64 flow), upload it now
       if (!finalSummaryAudioPath && summaryAudioBlob) {
         try {
@@ -839,11 +829,7 @@ const Tasjeel: React.FC = () => {
             });
           if (uploadErr) throw uploadErr;
 
-          const { data: publicUrlData } = supabase
-            .storage
-            .from(bucketId)
-            .getPublicUrl(filePath);
-          finalSummaryAudioPath = (publicUrlData.publicUrl || '').trim();
+          finalSummaryAudioPath = filePath;
         } catch (e) {
           console.warn('Failed to upload summary audio blob; saving without summary audio URL.', e);
         }
@@ -855,7 +841,7 @@ const Tasjeel: React.FC = () => {
 
       // Save a new record with all the data we've collected
       await saveTasjeelRecord({
-        original_recording_path: audioUrl,
+        original_recording_path: audioStoragePath,
         transcription: transcript,
         summary: summary,
         summary_audio_path: finalSummaryAudioPath,

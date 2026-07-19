@@ -38,7 +38,7 @@ function formatStage(stage: WaktiOperatorContextValue['stage'], language: string
   return language === 'ar' ? 'جاهز' : 'Ready';
 }
 
-async function blobToPublicAudioUrl(userId: string, blob: Blob) {
+async function uploadOperatorAudio(userId: string, blob: Blob) {
   const extension = blob.type.includes('mp4') ? 'mp4' : blob.type.includes('ogg') ? 'ogg' : 'webm';
   const path = `${userId}/voice-operator-${Date.now()}.${extension}`;
   const { error } = await supabase.storage.from('tasjeel_recordings').upload(path, blob, {
@@ -47,11 +47,7 @@ async function blobToPublicAudioUrl(userId: string, blob: Blob) {
     upsert: false,
   });
   if (error) throw error;
-  const { data } = supabase.storage.from('tasjeel_recordings').getPublicUrl(path);
-  if (!data?.publicUrl) {
-    throw new Error('Failed to create a public audio URL');
-  }
-  return data.publicUrl.trim();
+  return path;
 }
 
 export function WaktiOperatorProvider({ children }: { children: React.ReactNode }) {
@@ -176,10 +172,10 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
       throw new Error(language === 'ar' ? 'يجب تسجيل الدخول أولاً.' : 'You need to sign in first.');
     }
     setStage('transcribing');
-    const audioUrl = await blobToPublicAudioUrl(user.id, blob);
+    const storagePath = await uploadOperatorAudio(user.id, blob);
     const response = await callEdgeFunctionWithRetry<{ transcript: string }>('transcribe-audio', {
       body: {
-        audioUrl,
+        storagePath,
         language: language === 'ar' ? 'ar' : 'en',
       },
       headers: { 'Content-Type': 'application/json' },

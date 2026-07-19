@@ -1,7 +1,7 @@
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './client';
 
 interface TranscribeAudioPayload {
-  audioUrl: string;
+  storagePath?: string;
   [key: string]: unknown;
 }
 
@@ -40,8 +40,8 @@ export const callEdgeFunctionWithRetry = async <T>(
   if (functionName === 'transcribe-audio' && body) {
     const audioBody = body as TranscribeAudioPayload;
     if (false) console.log(`transcribe-audio request payload:`, {
-      audioUrlStart: audioBody.audioUrl ? `${audioBody.audioUrl.substring(0, 30)}...` : 'undefined',
-      audioUrlLength: audioBody.audioUrl ? audioBody.audioUrl.length : 0
+      hasStoragePath: !!audioBody.storagePath,
+      storagePathLength: audioBody.storagePath ? audioBody.storagePath.length : 0
     });
   } else if (functionName === 'summarize-text' && body) {
     const sBody = body as { transcript?: string; language?: string };

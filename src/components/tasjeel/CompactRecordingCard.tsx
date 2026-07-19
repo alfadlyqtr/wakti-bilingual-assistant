@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useTheme } from "@/providers/ThemeProvider";
 import { TasjeelRecord } from "./types";
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import AudioControls from "./AudioControls";
+import { createTasjeelSignedUrl } from '@/utils/tasjeelStorage';
 
 interface CompactRecordingCardProps {
   recording: TasjeelRecord;
@@ -31,6 +32,30 @@ interface CompactRecordingCardProps {
   onDownloadAudio: (url: string, isSummary: boolean, title: string | null) => void;
   translations: any;
 }
+
+const SignedAudioControls: React.FC<{
+  storagePath: string;
+  onPlaybackChange: (isPlaying: boolean) => void;
+  labels: any;
+}> = ({ storagePath, onPlaybackChange, labels }) => {
+  const [signedUrl, setSignedUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSignedUrl(null);
+    createTasjeelSignedUrl(storagePath).then((url) => {
+      if (!cancelled) setSignedUrl(url);
+    }).catch((error) => {
+      console.error('Error creating Tasjeel audio URL:', error);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [storagePath]);
+
+  if (!signedUrl) return null;
+  return <AudioControls audioUrl={signedUrl} onPlaybackChange={onPlaybackChange} labels={labels} />;
+};
 
 const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
   recording,
@@ -205,8 +230,8 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
                 {recording.original_recording_path && recording.original_recording_path !== "placeholder_for_quick_summary" && (
                   <div className="space-y-1">
                     <h4 className="text-xs font-medium">{t.playOriginalAudio}</h4>
-                    <AudioControls 
-                      audioUrl={recording.original_recording_path}
+                    <SignedAudioControls
+                      storagePath={recording.original_recording_path}
                       onPlaybackChange={handlePlayOriginal}
                       labels={{
                         play: t.playOriginalAudio,
@@ -223,8 +248,8 @@ const CompactRecordingCard: React.FC<CompactRecordingCardProps> = ({
                 {recording.summary_audio_path && (
                   <div className="space-y-1">
                     <h4 className="text-xs font-medium">{t.playSummaryAudio}</h4>
-                    <AudioControls 
-                      audioUrl={recording.summary_audio_path}
+                    <SignedAudioControls
+                      storagePath={recording.summary_audio_path}
                       onPlaybackChange={handlePlaySummary}
                       labels={{
                         play: t.playSummaryAudio,

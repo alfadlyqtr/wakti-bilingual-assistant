@@ -3,7 +3,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { logAIFromRequest } from "../_shared/aiLogger.ts";
-import { buildTrialErrorPayload, checkTrialAccess } from "../_shared/trial-tracker.ts";
+import { buildTrialErrorPayload, checkAndConsumeTrialTokenOnce } from "../_shared/trial-tracker.ts";
 
 // Orchestrator edge function for Tasjeel.
 // Replaces the multi-step client-side coordination:
@@ -40,23 +40,27 @@ const ELEVENLABS_VOICE_MAP: Record<string, string> = {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function extractStoragePath(url: string, bucket: string): string {
-  const marker = `/object/public/${bucket}/`;
-  const idx = url.indexOf(marker);
-  if (idx === -1) throw new Error(`URL does not contain expected bucket path: ${bucket}`);
-  return url.slice(idx + marker.length);
+function normalizeStoragePath(value: string): string {
+  const path = decodeURIComponent(value.trim());
+  const parts = path.split('/');
+  if (parts.length < 2 || parts.some((part) => !part || part === '.' || part === '..')) {
+    throw new Error('A valid storage path is required');
+  }
+  return path;
 }
 
 async function updateStatus(
   supabase: any,
   recordId: string,
+  userId: string,
   status: string,
   extra: Record<string, unknown> = {}
 ) {
   await supabase
     .from("tasjeel_records")
     .update({ processing_status: status, updated_at: new Date().toISOString(), ...extra })
-    .eq("id", recordId);
+    .eq("id", recordId)
+    .eq("user_id", userId);
 }
 
 function isArabicText(text: string): boolean {
@@ -153,55 +157,70 @@ serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-  // ── Trial check ──────────────────────────────────────────────────────────
   const authHeader = req.headers.get("Authorization");
-  let userId: string | null = null;
-
-  if (authHeader) {
-    const { data: { user } } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
-    if (user) {
-      userId = user.id;
-      const trial = await checkTrialAccess(supabase, user.id, "tasjeel", 1);
-      if (!trial.allowed) {
-        return new Response(
-          JSON.stringify(buildTrialErrorPayload("tasjeel", trial)),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
+  if (!authHeader) {
+    return new Response(
+      JSON.stringify({ error: "Authentication required" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
-  // ── Parse input ──────────────────────────────────────────────────────────
-  let recordId: string, audioUrl: string, language: string, voice: string;
+  const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+  if (authError || !user) {
+    return new Response(
+      JSON.stringify({ error: "Invalid authentication" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+  const userId = user.id;
+
+  let recordId: string, storagePath: string, language: string, voice: string;
   try {
     const body = await req.json();
     recordId = body.recordId;
-    audioUrl = (body.audioUrl as string || "").trim();
+    storagePath = normalizeStoragePath((body.storagePath as string || "").trim());
     language = body.language || "en";
     voice = body.voice || "auto";
   } catch {
     return new Response(
-      JSON.stringify({ error: "Invalid JSON body" }),
+      JSON.stringify({ error: "recordId and storagePath are required" }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
-  if (!recordId || !audioUrl) {
+  if (!recordId || storagePath.split('/')[0] !== userId) {
     return new Response(
-      JSON.stringify({ error: "recordId and audioUrl are required" }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({ error: "The recording does not belong to the authenticated user" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const { data: record, error: recordError } = await supabase
+    .from("tasjeel_records")
+    .select("user_id")
+    .eq("id", recordId)
+    .maybeSingle();
+  if (recordError || !record || record.user_id !== userId) {
+    return new Response(
+      JSON.stringify({ error: "Recording not found" }),
+      { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const trial = await checkAndConsumeTrialTokenOnce(supabase, userId, "tasjeel", 1, storagePath);
+  if (!trial.allowed) {
+    return new Response(
+      JSON.stringify(buildTrialErrorPayload("tasjeel", trial)),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
   // ── Step 1: Transcription ────────────────────────────────────────────────
-  await updateStatus(supabase, recordId, "transcribing");
+  await updateStatus(supabase, recordId, userId, "transcribing");
 
   let transcript = "";
   try {
-    let cleanUrl = audioUrl;
-    try { cleanUrl = decodeURIComponent(audioUrl).trim(); } catch { /* keep original */ }
-
-    const filePath = extractStoragePath(cleanUrl, "tasjeel_recordings");
+    const filePath = storagePath;
     const { data: audioBlob, error: dlErr } = await supabase.storage
       .from("tasjeel_recordings")
       .download(filePath);
@@ -243,10 +262,10 @@ serve(async (req) => {
       status: "success",
     });
 
-    await updateStatus(supabase, recordId, "summarizing", { transcription: transcript });
+    await updateStatus(supabase, recordId, userId, "summarizing", { transcription: transcript });
   } catch (err) {
     const msg = (err as Error).message;
-    await updateStatus(supabase, recordId, "failed", { error_message: `Transcription failed: ${msg}` });
+    await updateStatus(supabase, recordId, userId, "failed", { error_message: `Transcription failed: ${msg}` });
     return new Response(
       JSON.stringify({ error: "Transcription failed", details: msg }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -294,11 +313,11 @@ serve(async (req) => {
       status: "success",
     });
 
-    await updateStatus(supabase, recordId, "generating_speech", { summary });
+    await updateStatus(supabase, recordId, userId, "generating_speech", { summary });
   } catch (err) {
     const msg = (err as Error).message;
     // Summarization failure is partial — transcription succeeded, so mark partial
-    await updateStatus(supabase, recordId, "partial", {
+    await updateStatus(supabase, recordId, userId, "partial", {
       error_message: `Summarization failed: ${msg}`,
     });
     return new Response(
@@ -344,8 +363,7 @@ serve(async (req) => {
 
     if (uploadErr) throw new Error(`Storage upload failed: ${uploadErr.message}`);
 
-    const { data: urlData } = supabase.storage.from("tasjeel_recordings").getPublicUrl(audioFileName);
-    summaryAudioPath = urlData?.publicUrl ?? null;
+    summaryAudioPath = audioFileName;
 
     await logAIFromRequest(req, {
       functionName: "tasjeel-process/speech",
@@ -360,7 +378,7 @@ serve(async (req) => {
     const msg = (err as Error).message;
     console.warn("Speech generation failed (non-fatal):", msg);
     // Speech failure is partial — summary exists, audio does not
-    await updateStatus(supabase, recordId, "partial", {
+    await updateStatus(supabase, recordId, userId, "partial", {
       summary,
       summary_audio_path: null,
       error_message: `Speech generation failed: ${msg}`,
@@ -372,7 +390,7 @@ serve(async (req) => {
   }
 
   // ── Step 4: Mark done ────────────────────────────────────────────────────
-  await updateStatus(supabase, recordId, "done", {
+  await updateStatus(supabase, recordId, userId, "done", {
     transcription: transcript,
     summary,
     summary_audio_path: summaryAudioPath,

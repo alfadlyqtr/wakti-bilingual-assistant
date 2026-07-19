@@ -2481,6 +2481,7 @@ function VoicesTab({
   const [guestDialogOpen, setGuestDialogOpen] = useState(false);
   const [guestRedirectTo, setGuestRedirectTo] = useState(() => buildStudioGuestRestorePath('music', { studioTab: 'music', musicSubTab: 'compose' }));
   const musicDraftRestoredRef = useRef(false);
+  const musicGenerateLockRef = useRef(false);
 
   useEffect(() => {
     if (!operatorPayload?.music) return;
@@ -6880,6 +6881,7 @@ function VoicesTab({
   }
 
   const handleGenerate = async () => {
+    if (musicGenerateLockRef.current || submitting || generatingTask) return;
     if (overLimit) return;
     if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
       emitEvent('wakti-operator-status', {
@@ -7008,6 +7010,7 @@ function VoicesTab({
     const lyricPlanningText = parsedLyrics?.lyricText?.trim() ?? normalizedLyrics;
     const shouldSmartStructureLyrics = vocalType !== 'none' && Boolean(lyricPlanningText) && autoLabelLyrics && !hasStructuredLyricLabels(normalizedLyrics);
 
+    musicGenerateLockRef.current = true;
     setSubmitting(true);
     setGeneratedTracks([]);
     setLastError(null);
@@ -7036,6 +7039,7 @@ function VoicesTab({
           });
         }
         setSubmitting(false);
+        musicGenerateLockRef.current = false;
         return;
       }
 
@@ -7475,6 +7479,7 @@ function VoicesTab({
       if (genError?.message?.includes('TRIAL_LIMIT_REACHED') || genData?.error === 'TRIAL_LIMIT_REACHED') {
         emitEvent('wakti-trial-limit-reached', { feature: 'music' });
         setSubmitting(false);
+        musicGenerateLockRef.current = false;
         return;
       }
       if (genError) throw genError;
@@ -7500,6 +7505,7 @@ function VoicesTab({
           });
         }
         setSubmitting(false);
+        musicGenerateLockRef.current = false;
         setGeneratingTask(null);
         setGeneratedTracks(tracks);
         setTitleOpen(false);
@@ -7518,12 +7524,14 @@ function VoicesTab({
       }
 
       setGeneratingTask({ taskId, recordId });
+      musicGenerateLockRef.current = false;
       toast.info(language === 'ar' ? '🎵 ما زال إنشاء الموسيقى جارياً...' : '🎵 Music is still generating...');
 
     } catch (e: any) {
       const msg = e?.message || String(e);
       setLastError(msg);
       setSubmitting(false);
+      musicGenerateLockRef.current = false;
       if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
         emitEvent('wakti-operator-status', {
           runId: operatorPayload.runId,
@@ -7551,6 +7559,7 @@ function VoicesTab({
       }
       setGeneratingTask(null);
       setSubmitting(false);
+      musicGenerateLockRef.current = false;
       setGeneratedTracks(tracks);
       setTitleOpen(false);
       setMusicStyleOpen(false);
@@ -7575,6 +7584,7 @@ function VoicesTab({
       settled = true;
       setGeneratingTask(null);
       setSubmitting(false);
+      musicGenerateLockRef.current = false;
       setLastError(msg);
       setLastNotice(null);
       if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {

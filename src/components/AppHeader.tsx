@@ -480,7 +480,8 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
         </div>
         <div className={cn("flex items-center shrink-0", isMobile ? "gap-3" : "space-x-2")}>
           {/* Bg music indicator + mini-player */}
-          <div className="relative" ref={miniPlayerRef}>
+          {bgMusicSrc && (
+            <div className="relative" ref={miniPlayerRef}>
             <Button
               variant="ghost"
               size="sm"
@@ -572,7 +573,8 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                 </div>
               </div>
             )}
-          </div>
+            </div>
+          )}
 
           {/* Weather Button - Made smaller */}
           <WeatherButton />
