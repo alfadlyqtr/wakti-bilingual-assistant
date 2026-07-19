@@ -2,6 +2,7 @@ import type { MailComposerAttachment } from '@/components/email/MailComposer';
 import type { SmartTextPrefill, SmartTextPrefillTab, SmartTextToolBridge } from '@/utils/smartTextPrefill';
 import { getWaktiCapabilityGuide, getWaktiCapabilityRouteLabel, getWaktiCapabilitySteps, getWaktiCapabilitySupportSummary, getWaktiCapabilityTitle, type WaktiCapability } from '@/utils/waktiCapabilities';
 import { analyzeWaktiOperatorIntent, type WaktiOperatorIntentKind } from '@/utils/waktiOperatorIntent';
+import type { WaktiOperatorSemanticAnalysis } from '@/utils/waktiOperatorSemantic';
 import { saveTRPrefill, type TRPrefill, type TRReminderPrefillDraft, type TRTaskPrefillDraft } from '@/utils/trPrefill';
 
 const WAKTI_OPERATOR_PAYLOAD_PREFIX = 'wakti-operator-payload:';
@@ -64,6 +65,11 @@ export interface WaktiOperatorImageRequest {
 export interface WaktiOperatorMusicRequest {
   title: string;
   lyrics: string;
+  topic?: string;
+  style?: string;
+  mode?: 'custom' | 'instrumental';
+  vocalType?: 'auto' | 'none' | 'male' | 'female';
+  intent?: WaktiOperatorSemanticAnalysis['intent'];
   autoGenerate?: boolean;
 }
 
@@ -1394,7 +1400,91 @@ export function clearWaktiOperatorPayload(payloadId?: string | null) {
   window.sessionStorage.removeItem(`${WAKTI_OPERATOR_PAYLOAD_PREFIX}${payloadId}`);
 }
 
-export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en' = 'en'): WaktiOperatorPlan {
+function buildMusicOperatorRequest(transcript: string, semantic?: WaktiOperatorSemanticAnalysis | null): WaktiOperatorMusicRequest {
+  const topic = semantic?.topic?.trim() || '';
+  const style = semantic?.style?.trim() || '';
+  const mode = semantic?.mode || undefined;
+  const vocalType = semantic?.vocalType || (mode === 'instrumental' ? 'none' : undefined);
+  return {
+    title: semantic?.title?.trim() || extractMusicTitle(transcript),
+    lyrics: semantic?.lyrics?.trim() || '',
+    topic,
+    style,
+    mode,
+    vocalType,
+    intent: semantic?.intent,
+    autoGenerate: false,
+  };
+}
+
+function buildMusicSemanticPlan(
+  transcript: string,
+  language: 'ar' | 'en',
+  semantic: WaktiOperatorSemanticAnalysis,
+): WaktiOperatorPlan {
+  const planId = createId('plan');
+  const openStepId = createId('step');
+  const music = buildMusicOperatorRequest(transcript, semantic);
+  const payload: WaktiOperatorRoutePayload = {
+    runId: planId,
+    stepId: openStepId,
+    transcript,
+    summary: language === 'ar' ? 'تحضير طلب الموسيقى داخل الاستوديو' : 'Preparing the music request inside Studio',
+    stepRefs: { openStepId },
+    music,
+    source: 'voice',
+  };
+  const payloadId = stashWaktiOperatorPayload(payload);
+  const openAction = {
+    label: language === 'ar' ? 'افتح استوديو الموسيقى' : 'Open Music Studio',
+    href: `/music?waktiOperator=${payloadId}&operatorTarget=music`,
+  };
+  const isGuidance = semantic.intent === 'conversation' || semantic.intent === 'guidance' || semantic.intent === 'clarify' || semantic.intent === 'cancel';
+  const answer = semantic.response?.trim()
+    || semantic.clarificationQuestion?.trim()
+    || (semantic.intent === 'cancel'
+      ? (language === 'ar' ? 'حسناً، لن أنشئ الأغنية.' : 'Okay, I will not generate the song.')
+      : language === 'ar'
+        ? 'فهمت فكرة الموسيقى. أستطيع مساعدتك في تجهيزها داخل استوديو الموسيقى.'
+        : 'I understand the music idea. I can help you prepare it inside Music Studio.');
+
+  if (isGuidance) {
+    return {
+      id: planId,
+      transcript,
+      mode: 'guidance',
+      summary: answer,
+      answer,
+      primaryAction: semantic.intent === 'guidance' ? openAction : undefined,
+      steps: [buildGuidanceStep(semantic.clarificationQuestion || (language === 'ar' ? 'راجع الفكرة وقل لي ماذا تريد بعد ذلك.' : 'Review the idea and tell me what you want next.'))],
+    };
+  }
+
+  return {
+    id: planId,
+    transcript,
+    mode: 'execution',
+    summary: language === 'ar'
+      ? 'فهمت طلب الموسيقى. فتحت الاستوديو لتختار النمط والوضع والصوت والكلمات قبل الإنشاء.'
+      : 'I understood the music request. I opened the studio so you can choose the style, mode, vocals, and lyrics before generating.',
+    steps: [{
+      id: openStepId,
+      kind: 'open_music_studio',
+      label: language === 'ar' ? 'افتح استوديو الموسيقى' : 'Open Music Studio',
+      description: language === 'ar' ? 'راجع إعدادات الأغنية ثم اضغط إنشاء عندما تكون جاهزاً.' : 'Review the song settings, then press Generate when you are ready.',
+      risk: 'safe',
+      status: 'pending',
+      href: openAction.href,
+      payloadId,
+    }],
+  };
+}
+
+export function buildVoiceOperatorPlan(
+  transcript: string,
+  language: 'ar' | 'en' = 'en',
+  semantic?: WaktiOperatorSemanticAnalysis | null,
+): WaktiOperatorPlan {
   const normalized = trimSentence(transcript);
   const intentAnalysis = analyzeWaktiOperatorIntent(normalized);
   const matchedCapability = intentAnalysis.capability;
@@ -1418,6 +1508,10 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
     wantsImage || wantsMusic || wantsEmail || wantsTasks || wantsContactsChat ||
     wantsTextTools || wantsVoice || wantsMaw3d || wantsProjects || wantsCalendar
   );
+
+  if (semantic?.capability === 'music' && semantic.confidence >= 0.45) {
+    return buildMusicSemanticPlan(normalized, language, semantic);
+  }
 
   if (matchedCapability && shouldPreferGuidanceFlow(normalized, intentAnalysis.kind)) {
     return buildCapabilityGuidancePlan(normalized, language, matchedCapability);
@@ -1678,23 +1772,15 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
     }
   }
 
-  if (wantsMusic) {
+  if (wantsMusic && isExecutionLikeIntent) {
     const openStepId = createId('step');
-    const generateStepId = createId('step');
     const musicPayload: WaktiOperatorRoutePayload = {
       runId: planId,
       stepId: openStepId,
       transcript: normalized,
       summary: language === 'ar' ? 'تحضير طلب الموسيقى داخل الاستوديو' : 'Preparing the music request inside Studio',
-      stepRefs: {
-        openStepId,
-        generateStepId,
-      },
-      music: {
-        title: extractMusicTitle(normalized),
-        lyrics: extractMusicLyrics(normalized),
-        autoGenerate: true,
-      },
+      stepRefs: { openStepId },
+      music: buildMusicOperatorRequest(normalized, semantic),
       source: 'voice',
     };
     const payloadId = stashWaktiOperatorPayload(musicPayload);
@@ -1706,15 +1792,6 @@ export function buildVoiceOperatorPlan(transcript: string, language: 'ar' | 'en'
       risk: 'safe',
       status: 'pending',
       href: `/music?waktiOperator=${payloadId}&operatorTarget=music`,
-      payloadId,
-    });
-    steps.push({
-      id: generateStepId,
-      kind: 'generate_music',
-      label: language === 'ar' ? 'أنشئ الموسيقى' : 'Generate music',
-      description: musicPayload.music?.title || '',
-      risk: 'safe',
-      status: 'pending',
       payloadId,
     });
   }

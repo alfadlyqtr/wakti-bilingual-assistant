@@ -5,7 +5,8 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/edgeFunctions';
-import { buildVoiceOperatorPlan, type WaktiOperatorPlan, type WaktiOperatorStep } from '@/utils/waktiOperator';
+import { buildVoiceOperatorPlan, type WaktiOperatorMusicRequest, type WaktiOperatorPlan, type WaktiOperatorStep } from '@/utils/waktiOperator';
+import { analyzeWaktiOperatorSemantics } from '@/utils/waktiOperatorSemantic';
 import { onEvent } from '@/utils/eventBus';
 import { toast } from '@/components/ui/toast-helper';
 
@@ -64,6 +65,7 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
   const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const planRef = useRef<WaktiOperatorPlan | null>(null);
+  const pendingMusicRef = useRef<WaktiOperatorMusicRequest | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -86,6 +88,7 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
       cleanupStream();
       setStage('idle');
     }
+    pendingMusicRef.current = null;
     setIsOpen(false);
   }, [cleanupStream]);
 
@@ -186,7 +189,23 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
     }
     setTranscript(nextTranscript);
     setStage('planning');
-    const nextPlan = buildVoiceOperatorPlan(nextTranscript, language === 'ar' ? 'ar' : 'en');
+    const nextLanguage = language === 'ar' ? 'ar' : 'en';
+    const semantic = await analyzeWaktiOperatorSemantics(nextTranscript, nextLanguage, pendingMusicRef.current);
+    const nextPlan = buildVoiceOperatorPlan(nextTranscript, nextLanguage, semantic);
+    if (semantic?.capability === 'music' && semantic.intent !== 'cancel') {
+      pendingMusicRef.current = {
+        title: semantic.title || '',
+        lyrics: semantic.lyrics || '',
+        topic: semantic.topic || '',
+        style: semantic.style || '',
+        mode: semantic.mode || undefined,
+        vocalType: semantic.vocalType || undefined,
+        intent: semantic.intent,
+        autoGenerate: false,
+      };
+    } else if (semantic?.intent === 'cancel' || semantic?.capability === 'other') {
+      pendingMusicRef.current = null;
+    }
     planRef.current = nextPlan;
     setPlan(nextPlan);
     await executePlan(nextPlan);

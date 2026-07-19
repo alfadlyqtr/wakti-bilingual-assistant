@@ -2485,15 +2485,22 @@ function VoicesTab({
 
   useEffect(() => {
     if (!operatorPayload?.music) return;
-    setTitle((current) => current || operatorPayload.music?.title || '');
-    setLyricsText((current) => current || operatorPayload.music?.lyrics || '');
+    const music = operatorPayload.music;
+    setTitle((current) => current || music.title || '');
+    setStyleText((current) => current || music.style || '');
+    setLyricsText((current) => current || music.lyrics || '');
+    if (music.mode === 'instrumental' || music.vocalType === 'none') {
+      setVocalType('none');
+    } else if (music.vocalType === 'male' || music.vocalType === 'female' || music.vocalType === 'auto') {
+      setVocalType(music.vocalType);
+    }
+    setComposeStep(1);
+    setComposeDetailsVisible(false);
     setTitleOpen(true);
     setMusicStyleOpen(false);
     setVocalsOpen(false);
     setLyricsOpen(false);
-    if (operatorPayload.music.autoGenerate && operatorMusicAutoRunRef) {
-      operatorMusicAutoRunRef.current = operatorPayload.stepId;
-    }
+    if (operatorMusicAutoRunRef) operatorMusicAutoRunRef.current = null;
   }, [operatorPayload, operatorMusicAutoRunRef]);
 
   useEffect(() => {
@@ -7694,19 +7701,9 @@ function VoicesTab({
   }, [generatingTask, language]);
 
   useEffect(() => {
-    if (!operatorPayload?.music?.autoGenerate) return;
-    if (!operatorMusicAutoRunRef) return;
-    if (operatorMusicAutoRunRef.current !== operatorPayload.stepId) return;
-    if ((title || '').trim() !== (operatorPayload.music.title || '').trim()) return;
-    if ((lyricsText || '').trim() !== (operatorPayload.music.lyrics || '').trim()) return;
-    if (submitting) return;
-    operatorMusicAutoRunRef.current = null;
-    window.setTimeout(() => {
-      handleGenerate().catch((error) => {
-        console.error('Operator music generation failed:', error);
-      });
-    }, 180);
-  }, [handleGenerate, lyricsText, operatorPayload, submitting, title, operatorMusicAutoRunRef]);
+    if (!operatorPayload?.music || operatorPayload.music.autoGenerate) return;
+    if (operatorMusicAutoRunRef) operatorMusicAutoRunRef.current = null;
+  }, [operatorPayload, operatorMusicAutoRunRef]);
 
   // Position and outside-click handling for pickers
   useEffect(() => {

@@ -105,8 +105,8 @@ export const WAKTI_CAPABILITIES: WaktiCapability[] = [
     stepsEn: ['Open Music Studio', 'Stay on the compose tab', 'Set the title and lyrics or style', 'Press Generate', 'Review and save the track'],
     stepsAr: ['افتح استوديو الموسيقى', 'ابقَ في تبويب التأليف', 'حدد العنوان والكلمات أو النمط', 'اضغط إنشاء', 'راجع المقطع واحفظه'],
     supportLevel: 'full_operator',
-    supportSummaryEn: 'Operator can already open Music Studio, prefill the draft, and trigger generation for supported flows.',
-    supportSummaryAr: 'المشغّل يستطيع الآن فتح استوديو الموسيقى، تعبئة المسودة، وتشغيل الإنشاء في التدفقات المدعومة.',
+    supportSummaryEn: 'Operator can open Music Studio and prefill a music draft; review the style, mode, vocals, and lyrics before generating.',
+    supportSummaryAr: 'يستطيع المشغّل فتح استوديو الموسيقى وتعبئة مسودة؛ راجع النمط والوضع والصوت والكلمات قبل الإنشاء.',
   },
   {
     id: 'text_tools',

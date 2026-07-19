@@ -275,7 +275,7 @@ serve(async (req) => {
       return jsonResponse({ error: 'videoUrls[] or imageUrls[] required' }, 400);
     }
 
-    const isPortrait = format === '9:16';
+    const outputAspectRatio = ['16:9', '9:16', '4:5'].includes(format) ? format : '16:9';
     let timeline: ReturnType<typeof buildTimeline>;
 
     if (isVideoStitch) {
@@ -301,7 +301,7 @@ serve(async (req) => {
       output: {
         format: 'mp4',
         resolution: 'hd',
-        aspectRatio: isPortrait ? '9:16' : '16:9',
+        aspectRatio: outputAspectRatio,
         fps: 25,
         quality: 'medium',
       },

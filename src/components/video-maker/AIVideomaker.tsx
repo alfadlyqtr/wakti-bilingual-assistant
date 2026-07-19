@@ -1809,72 +1809,66 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   // prevIdx = 0-based index of the scene that was just picked
   // pickedUrl = the URL the user tapped
   const generateNextScene = useCallback(async (prevIdx: number, pickedUrl: string) => {
-    const nextIdx = prevIdx + 1;
-    if (nextIdx >= cinemaSceneCount) return; // all done
+    let nextIdx = prevIdx + 1;
+    let chainAnchor = pickedUrl;
+    if (nextIdx >= cinemaSceneCount) return;
 
     const session = castingSessionRef.current;
     if (!session.artistCall) return;
 
-    const scene = cinemaScenes.find(s => s.scene === nextIdx + 1);
-    if (!scene) return;
-
-    // Store the picked URL as the chain anchor for this scene
-    castingAnchorRef.current[prevIdx + 1] = pickedUrl; // 1-based: scene prevIdx+1 was picked
-
-    // If user pre-filled this slot, use it directly
-    if (session.sceneSlotMap[nextIdx]) {
-      const slotUrl = session.sceneSlotMap[nextIdx];
-      setSceneImages(prev => { const n = [...prev]; n[nextIdx] = slotUrl; return n; });
-      setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
-      setActiveCastingIdx(nextIdx);
-      castingAnchorRef.current[nextIdx + 1] = slotUrl;
-      return;
-    }
-
-    setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'loading'; return n; });
-    setActiveCastingIdx(nextIdx);
     setIsCasting(true);
-
     try {
-      const artistCall = session.artistCall;
-      const pollTask = makePollTask(artistCall);
-      const effectiveTag = session.effectiveTag;
+      while (nextIdx < cinemaSceneCount) {
+        const scene = cinemaScenes.find(s => s.scene === nextIdx + 1);
+        if (!scene) return;
 
-      const rawPrompt = scene.english_prompt || scene.text;
-      const lockIsPoisoned = subjectLock && /\b(logo|brand|emblem|wordmark|insignia)\b/i.test(subjectLock);
-      const useSubjectLock = subjectLock && !lockIsPoisoned && scene.scene_pipeline !== 'logo_integration';
-      const epScene = useSubjectLock && !rawPrompt.startsWith(subjectLock) ? `${subjectLock}. ${rawPrompt}` : rawPrompt;
+        castingAnchorRef.current[nextIdx] = chainAnchor;
+        setActiveCastingIdx(nextIdx);
 
-      const isLastScene = nextIdx === cinemaSceneCount - 1;
+        const slotUrl = session.sceneSlotMap[nextIdx];
+        if (slotUrl) {
+          setSceneImages(prev => { const n = [...prev]; n[nextIdx] = slotUrl; return n; });
+          setSceneImageOptions(prev => { const n = [...prev]; n[nextIdx] = null; return n; });
+          setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
+          castingAnchorRef.current[nextIdx + 1] = slotUrl;
+          void runVisualSupervisor(nextIdx, slotUrl, scene.english_prompt || scene.text || '');
+          chainAnchor = slotUrl;
+          nextIdx += 1;
+          continue;
+        }
 
-      let created: any;
+        setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'loading'; return n; });
+        const artistCall = session.artistCall;
+        const pollTask = makePollTask(artistCall);
+        const effectiveTag = session.effectiveTag;
+        const rawPrompt = scene.english_prompt || scene.text;
+        const lockIsPoisoned = subjectLock && /\b(logo|brand|emblem|wordmark|insignia)\b/i.test(subjectLock);
+        const useSubjectLock = subjectLock && !lockIsPoisoned && scene.scene_pipeline !== 'logo_integration';
+        const epScene = useSubjectLock && !rawPrompt.startsWith(subjectLock) ? `${subjectLock}. ${rawPrompt}` : rawPrompt;
+        const isLastScene = nextIdx === cinemaSceneCount - 1;
+        let created: any;
 
-      if (effectiveTag === 'character' && brandAnchor) {
-        // Character mode: chain from picked scene + character anchor blended
-        const chainPrompt = `Maintain 100% identity match with the character in the reference image. New environment and action only: ${epScene}`;
-        created = await artistCall({ mode: 'i2i_create', prompt: chainPrompt.slice(0, 2500), anchor_url: pickedUrl, anchor_pipeline: 'character', scene_index: nextIdx });
-      } else if (effectiveTag === 'logo' && brandAnchor && isLastScene) {
-        // Scene 4 (payoff): re-introduce brand logo strongly — i2i from picked S3 + logo emphasis in prompt
-        const payoffPrompt = `${epScene} The brand logo and visual identity must be strongly re-introduced. Maintain 100% subject consistency with the reference image.`;
-        created = await artistCall({ mode: 'i2i_create', prompt: payoffPrompt.slice(0, 2500), anchor_url: pickedUrl, anchor_pipeline: 'style', scene_index: nextIdx });
-      } else {
-        // Identity mute safeguard for middle scenes: chain from picked prev image using 'style' pipeline
-        // 'style' pipeline preserves subject form/color without burning the raw logo onto the scene
-        const chainPrompt = `Maintain the exact same subject identity, body form, proportions, and color from the reference image. Change only the environment, lighting, and camera angle to match: ${epScene}`;
-        created = await artistCall({ mode: 'i2i_create', prompt: chainPrompt.slice(0, 2500), anchor_url: pickedUrl, anchor_pipeline: 'style', scene_index: nextIdx });
+        if (effectiveTag === 'character' && brandAnchor) {
+          const chainPrompt = `Maintain 100% identity match with the character in the reference image. New environment and action only: ${epScene}`;
+          created = await artistCall({ mode: 'i2i_create', prompt: chainPrompt.slice(0, 2500), anchor_url: chainAnchor, anchor_pipeline: 'character', scene_index: nextIdx, aspect_ratio: cinemaFormat });
+        } else if (effectiveTag === 'logo' && brandAnchor && isLastScene) {
+          const payoffPrompt = `${epScene} The brand logo and visual identity must be strongly re-introduced. Maintain 100% subject consistency with the reference image.`;
+          created = await artistCall({ mode: 'i2i_create', prompt: payoffPrompt.slice(0, 2500), anchor_url: chainAnchor, anchor_pipeline: 'style', scene_index: nextIdx, aspect_ratio: cinemaFormat });
+        } else {
+          const chainPrompt = `Maintain the exact same subject identity, body form, proportions, and color from the reference image. Change only the environment, lighting, and camera angle to match: ${epScene}`;
+          created = await artistCall({ mode: 'i2i_create', prompt: chainPrompt.slice(0, 2500), anchor_url: chainAnchor, anchor_pipeline: 'style', scene_index: nextIdx, aspect_ratio: cinemaFormat });
+        }
+
+        const { url: imgUrl } = await pollTask(created.task_id, nextIdx);
+        setPrevSceneImages(prev => ({ ...prev, [scene.scene]: imgUrl }));
+        setSceneImageOptions(prev => { const n = [...prev]; n[nextIdx] = null; return n; });
+        setSceneImages(prev => { const n = [...prev]; n[nextIdx] = imgUrl; return n; });
+        setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
+        void runVisualSupervisor(nextIdx, imgUrl, scene.english_prompt || scene.text || '');
+        chainAnchor = imgUrl;
+        nextIdx += 1;
       }
-
-      const { url: imgUrl, options: imgOptions } = await pollTask(created.task_id, nextIdx);
-      setPrevSceneImages(prev => ({ ...prev, [scene.scene]: imgUrl }));
-
-      const optsToShow = imgOptions.length >= 1 ? imgOptions : [imgUrl];
-      setSceneImageOptions(prev => { const n = [...prev]; n[nextIdx] = optsToShow; return n; });
-      setSceneImages(prev => { const n = [...prev]; n[nextIdx] = null; return n; });
-      setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
-
-      if (nextIdx === cinemaSceneCount - 1) {
-        toast.success(language === 'ar' ? '🎬 جميع المشاهد جاهزة!' : '🎬 All scenes ready!');
-      }
+      toast.success(language === 'ar' ? '🎬 جميع المشاهد جاهزة!' : '🎬 All scenes ready!');
     } catch (err: any) {
       console.error(`[cinema] generateNextScene ${nextIdx + 1} failed:`, err);
       setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'error'; return n; });
@@ -1882,7 +1876,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsCasting(false);
     }
-  }, [cinemaScenes, cinemaSceneCount, subjectLock, brandAnchor, language]);
+  }, [cinemaScenes, cinemaSceneCount, subjectLock, brandAnchor, language, cinemaFormat]);
 
   // ── handleCast: generates Scene 1 ONLY, then stops and waits for user pick ──
   const handleCast = useCallback(async () => {
@@ -1949,25 +1943,30 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         setSceneImageOptions(prev => { const n = [...prev]; n[0] = null; return n; });
         setAnchorImageUrl(sceneSlotMap[0]);
         setCastingProgress(['done', ...Array(AD_SCENE_COUNT - 1).fill('idle')] as ('idle'|'loading'|'done'|'error')[]);
+        void runVisualSupervisor(0, sceneSlotMap[0], scene1.english_prompt || scene1.text || '');
+        await generateNextScene(0, sceneSlotMap[0]);
       } else {
         try {
           let created: any;
           if (effectiveTag === 'logo' && brandAnchor) {
             // Logo mode S1: i2i from brand logo — establishes the identity truth
-            created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'logo', scene_index: 0 });
+            created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'logo', scene_index: 0, aspect_ratio: cinemaFormat });
           } else if (effectiveTag === 'character' && brandAnchor) {
             // Character mode S1: i2i from character reference
-            created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'character', scene_index: 0 });
+            created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'character', scene_index: 0, aspect_ratio: cinemaFormat });
+          } else if (effectiveTag === 'style' && brandAnchor) {
+            created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'style', scene_index: 0, aspect_ratio: cinemaFormat });
           } else {
             // Style-only: S1 is t2i — no real identity image to anchor from
             created = await artistCall({ mode: 't2i_create', prompt: ep1, aspect_ratio: cinemaFormat });
           }
-          const { url: s1url, options: s1opts } = await pollTask(created.task_id, 0);
-          const optsToShow = s1opts.length >= 1 ? s1opts : [s1url];
-          setSceneImageOptions(prev => { const n = [...prev]; n[0] = optsToShow; return n; });
-          setSceneImages(prev => { const n = [...prev]; n[0] = null; return n; });
-          // Remaining scenes stay 'idle' — they unlock only after user picks Scene 1
+          const { url: s1url } = await pollTask(created.task_id, 0);
+          setSceneImageOptions(prev => { const n = [...prev]; n[0] = null; return n; });
+          setSceneImages(prev => { const n = [...prev]; n[0] = s1url; return n; });
+          setAnchorImageUrl(s1url);
           setCastingProgress(['done', ...Array(AD_SCENE_COUNT - 1).fill('idle')] as ('idle'|'loading'|'done'|'error')[]);
+          void runVisualSupervisor(0, s1url, scene1.english_prompt || scene1.text || '');
+          await generateNextScene(0, s1url);
         } catch (s1err: any) {
           console.error('[cinema] Scene 1 failed:', s1err);
           setCastingProgress(['error', ...Array(AD_SCENE_COUNT - 1).fill('idle')] as ('idle'|'loading'|'done'|'error')[]);
@@ -1981,7 +1980,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsCasting(false);
     }
-  }, [user, isCasting, cinemaScenes, cinemaSceneCount, cinemaFormat, language, cinemaReferenceImages, anchorTag, brandAnchor]);
+  }, [user, isCasting, cinemaScenes, cinemaSceneCount, cinemaFormat, language, cinemaReferenceImages, cinemaRefTags, anchorTag, brandAnchor, generateNextScene]);
 
   // ── Visual Supervisor: fire-and-forget per-scene spatial analysis ──
   // Called immediately when user picks Shot A or B. Runs in background, no await needed.
@@ -2027,7 +2026,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setAnimTaskIds(Array(cinemaSceneCount).fill(null));
     setAutoStitchQueued(false);
     setCinemaStep('filming');
-    setStitchStatus(language === 'ar' ? '🎬 جاري إطلاق مشاهد الإعلان...' : '🎬 Launching your ad scenes...');
+    setStitchStatus(language === 'ar' ? '🎬 جاري إطلاق مشاهد الفيديو...' : '🎬 Launching your video scenes...');
 
     try {
       const imageUrls = images.slice(0, cinemaSceneCount) as string[];
@@ -2071,7 +2070,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         });
         setAnimTaskIds(prev => { const n = [...prev]; n[idx] = result.task_id; return n; });
         setAnimProgress(prev => { const n = [...prev]; n[idx] = 'queued'; return n; });
-        console.log(`[ads] Beat ${idx + 1} task: ${result.task_id} (${sceneDurations[idx]}s)`);
+        console.log(`[cinema] Scene ${idx + 1} task: ${result.task_id} (${sceneDurations[idx]}s)`);
         return result.task_id as string;
       });
 
@@ -2092,17 +2091,17 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               clipUrls[idx] = statusResult.video_url;
               setVideoClips(prev => { const n = [...prev]; n[idx] = clipUrls[idx]; return n; });
               setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
-              console.log(`[ads] Beat ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}…`);
+              console.log(`[cinema] Scene ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}…`);
             } else if (statusResult.status === 'FAILED') {
               setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
-              pollFailure = statusResult.error || `Beat ${idx + 1} failed`;
+              pollFailure = statusResult.error || `Scene ${idx + 1} failed`;
             } else if (statusResult.status === 'IN_QUEUE') {
               setAnimProgress(prev => { const n = [...prev]; if (n[idx] !== 'done') n[idx] = 'queued'; return n; });
             } else {
               setAnimProgress(prev => { const n = [...prev]; if (n[idx] !== 'done') n[idx] = 'rendering'; return n; });
             }
           } catch (pollErr: any) {
-            console.warn(`[ads] Beat ${idx + 1} poll error:`, pollErr);
+            console.warn(`[cinema] Scene ${idx + 1} poll error:`, pollErr);
           }
         }));
         if (pollFailure) throw new Error(pollFailure);
@@ -2118,7 +2117,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
 
       if (!clipUrls.every(Boolean)) {
         const missing = clipUrls.map((u, i) => u ? null : i + 1).filter(Boolean);
-        throw new Error(`Timed out waiting for beats: ${missing.join(', ')}`);
+        throw new Error(`Timed out waiting for scenes: ${missing.join(', ')}`);
       }
 
       setClipOrder(clipUrls.map((_, i) => i));
@@ -2133,7 +2132,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setIsFilming(false);
     }
-  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat, visualSupervisorPrompts]);
+  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat, visualSupervisorPrompts, sceneDurations]);
 
   // ── Role 4b: Retry — re-trigger full Grok + Shotstack produce ──
   const handleRetryFilm = useCallback(async (_idx: number) => {
@@ -2157,7 +2156,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const { data: stitchResult, error: stitchErr } = await supabase.functions.invoke('cinema-producer', {
         body: {
           videoUrls: orderedUrls,
-          logoUrl: brandAnchor || null,
+          logoUrl: brandAnchor && anchorTag === 'logo' ? brandAnchor : null,
           format: cinemaFormat,
           clipDurations: orderedDurations,
         },
@@ -2205,7 +2204,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setIsStitching(false);
       setStitchStatus('');
     }
-  }, [user, isStitching, clipOrder, videoClips, brandAnchor, cinemaFormat, cinemaSceneCount, language, loadQuota]);
+  }, [user, isStitching, clipOrder, videoClips, brandAnchor, anchorTag, cinemaFormat, cinemaSceneCount, language, loadQuota, sceneDurations]);
 
   useEffect(() => {
     if (!autoStitchQueued || isStitching || cinemaStep !== 'filming' || !clipsReady || clipOrder.length === 0) return;
@@ -3380,21 +3379,23 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   const effectiveCharacters = cinemaCharacters.includes('Custom') ? (cinemaRelationship || 'custom characters') : cinemaCharacters.filter(v => v !== 'Custom').join(', ');
                   const isDark = theme === 'dark';
 
-                  // Explicit boolean checks — scene count is always ready (hard-locked to 4)
                   const f1 = cinemaSubject.trim().length > 0;
                   const platformDone = !!selectedSubFormat;
                   const f2 = cinemaCTA.length > 0 && (cinemaCTA.includes('Custom') ? cinemaCTACustom.trim().length > 0 : true);
                   const f4 = cinemaVibe.length > 0 && (cinemaVibe.includes('Custom') ? cinemaVibeCustom.trim().length > 0 : true);
                   const f5 = cinemaCharacters.length > 0;
-                  // Auto mode: only brief + platform required. Custom mode: chips required instead
-                  const autoReady = cinemaMode === 'auto' && f1 && platformDone;
-                  const customReady = cinemaMode === 'custom' && f2 && f4 && f5 && platformDone;
-                  const isFormReady = autoReady || customReady;
-                  const filledCount = cinemaMode === 'auto'
-                    ? [f1, platformDone].filter(Boolean).length
-                    : [f2, platformDone, f4, f5].filter(Boolean).length;
-                  const totalFields = cinemaMode === 'auto' ? 2 : 4;
-                  const progressPct = filledCount === 0 ? 0 : Math.round((filledCount / totalFields) * 100);
+                  const hasStructuredDirection = [
+                    f2,
+                    f4,
+                    f5,
+                    cinemaSetting.length > 0,
+                    cinemaAction.length > 0,
+                  ].some(Boolean);
+                  const hasCreativeInput = f1 || hasStructuredDirection || !!brandAnchor;
+                  const isFormReady = hasCreativeInput;
+                  const filledCount = hasCreativeInput ? 1 : 0;
+                  const totalFields = 1;
+                  const progressPct = filledCount === 0 ? 0 : 100;
 
                   const openSection = cinemaOpenSection;
 
@@ -3500,31 +3501,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     <div className="sticky top-0 z-20 pt-1 pb-3" style={{background: clr.stickyBg}}>
                       <div className="text-center mb-2">
                         <h3 className="text-xl font-bold" style={{color: clr.text, textShadow: isDark ? '0 0 20px rgba(226,199,168,0.5)' : 'none'}}>
-                          {language === 'ar' ? 'صانع الإعلانات' : 'Video Ads'}
+                          {language === 'ar' ? 'صانع الفيديو الإبداعي' : 'AI Video Creator'}
                         </h3>
-                        {/* Scene source toggle — renamed for clarity */}
-                        <div className="inline-flex mt-2 rounded-xl overflow-hidden" style={{border:'1px solid rgba(226,199,168,0.25)',background:'rgba(12,15,20,0.4)'}}>
-                          <button
-                            type="button"
-                            onClick={() => setCinemaMode('auto')}
-                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold transition-all"
-                            style={cinemaMode==='auto'
-                              ? {background:'#0f172a',color:'#E2C7A8',border:'2px solid #E2C7A8',boxShadow:'0 0 12px rgba(226,199,168,0.5)',borderRadius:'10px'}
-                              : {background:'transparent',color:'rgba(255,255,255,0.45)',border:'2px solid transparent',borderRadius:'10px'}}
-                          >
-                            <span style={{filter: cinemaMode==='auto' ? 'none' : 'grayscale(1) opacity(0.5)'}}>🪄</span><span>{language==='ar'?'تلقائي':'Auto'}</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCinemaMode('custom')}
-                            className="flex items-center gap-1.5 px-4 py-1.5 text-xs font-bold transition-all"
-                            style={cinemaMode==='custom'
-                              ? {background:'#0f172a',color:'#E2C7A8',border:'2px solid #E2C7A8',boxShadow:'0 0 12px rgba(226,199,168,0.5)',borderRadius:'10px'}
-                              : {background:'transparent',color:'rgba(255,255,255,0.45)',border:'2px solid transparent',borderRadius:'10px'}}
-                          >
-                            <span style={{filter: cinemaMode==='custom' ? 'none' : 'grayscale(1) opacity(0.5)'}}>✏️</span><span>{language==='ar'?'مخصص':'Custom'}</span>
-                          </button>
-                        </div>
+                        <p className="mt-2 text-xs" style={{color:'rgba(226,199,168,0.7)'}}>
+                          {language === 'ar' ? 'اكتب فكرتك أو اختر ما يساعدك — المخرج يفهم الصورة كاملة' : 'Describe your idea or choose helpful guidance — the Director understands the whole picture'}
+                        </p>
                       </div>
                       <div className="relative h-[3px] rounded-full overflow-hidden" style={{background: clr.progressTrack}}>
                         <div className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
@@ -3551,9 +3532,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               {isFormReady ? '✓' : '1'}
                             </span>
                             <div className="min-w-0">
-                              <p className="text-xs font-bold uppercase tracking-wider" style={{color: isFormReady ? '#C5A47E' : clr.text}}>{language==='ar'?'إعداد الإعلان':'Ad Setup'}</p>
+                              <p className="text-xs font-bold uppercase tracking-wider" style={{color: isFormReady ? '#C5A47E' : clr.text}}>{language==='ar'?'الإعداد الإبداعي':'Creative Setup'}</p>
                               <p className="text-[10px] truncate mt-0.5" style={{color: clr.textMuted}}>
-                                {cinemaMode==='auto' ? (language==='ar' ? 'موجز الإعلان، العلامة، والمنصة' : 'Brief, brand, and platform') : (language==='ar' ? 'هدف، أسلوب، الشخصيات، العلامة، والمنصة' : 'Goal, style, cast, brand, and platform')}
+                                {language==='ar' ? 'فكرة، توجيه، مرجع بصري، ومنصة اختيارية' : 'Idea, guidance, visual reference, and optional platform'}
                               </p>
                             </div>
                           </div>
@@ -3563,7 +3544,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         {cinemaSetupOpen && (
                           <div className="mt-4 flex flex-col gap-3">
                             <div>
-                              <SetupHeader idx={0} label={language==='ar'?'موجز الإعلان':'The Ad Brief'} done={f1} summary={cinemaSubject ? (cinemaSubject.length > 40 ? cinemaSubject.slice(0,40)+'...' : cinemaSubject) : undefined} />
+                              <SetupHeader idx={0} label={language==='ar'?'الفكرة الإبداعية':'Creative Idea'} done={f1} summary={cinemaSubject ? (cinemaSubject.length > 40 ? cinemaSubject.slice(0,40)+'...' : cinemaSubject) : undefined} />
                               {openSection === 0 && (
                                 <div className="mt-3 flex flex-col gap-2 px-1">
                                   <div className="rounded-xl overflow-hidden" style={{background: clr.inputBg, border:`1px solid ${clr.inputBorder(f1)}`}}>
@@ -3572,7 +3553,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                       onChange={(e) => setCinemaSubject(e.target.value.slice(0,800))}
                                       onInput={(e) => { const t=e.currentTarget; t.style.height='auto'; t.style.height=`${Math.min(t.scrollHeight,220)}px`; t.style.overflowY=t.scrollHeight>220?'auto':'hidden'; }}
                                       disabled={isDirecting} autoFocus rows={5} maxLength={800}
-                                      placeholder={language==='ar'?'مثال: تطبيق مالي جديد يستهدف الشباب، أسلوب فاخر، شعور بالحرية والتحكم...':'e.g., a new finance app for young adults — luxury feel, sense of freedom and control. Bold visuals, fast energy...'}
+                                      placeholder={language==='ar'?'مثال: أريد فيديو عن شخصية تكتشف عالماً جديداً، أو إعلاناً لمنتج بأسلوب سينمائي...':'e.g., a character discovers a new world, or a cinematic advertisement for my product...'}
                                       className="w-full resize-none bg-transparent px-4 py-3 text-base placeholder:text-black/25 outline-none min-h-[120px] max-h-[220px] leading-7" style={{color: clr.text}}
                                     />
                                   </div>
@@ -3824,11 +3805,10 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                               )}
                             </div>
 
-                            {/* ── CUSTOM MODE ONLY: chip sections ── */}
-                            {cinemaMode === 'custom' && (<>
+                            {(<>
 
                             <div>
-                              <SetupHeader idx={3} label={language==='ar'?'هدف الإعلان':'Ad Goal'} done={f2} summary={effectiveCTA ? effectiveCTA.split(' —')[0].trim() : undefined} />
+                              <SetupHeader idx={3} label={language==='ar'?'الهدف أو الغرض':'Purpose or Goal'} done={f2} summary={effectiveCTA ? effectiveCTA.split(' —')[0].trim() : undefined} />
                               {openSection === 3 && (
                                 <div className="mt-3 px-1">
                                   <div className="flex flex-wrap gap-2">
@@ -3873,7 +3853,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
 
                             <div>
-                              <SetupHeader idx={4} label={language==='ar'?'أسلوب الإعلان':'Ad Style'} done={f4} summary={effectiveVibe ? effectiveVibe.split(' —')[0].trim() : undefined} />
+                              <SetupHeader idx={4} label={language==='ar'?'الأسلوب البصري':'Visual Style'} done={f4} summary={effectiveVibe ? effectiveVibe.split(' —')[0].trim() : undefined} />
                               {openSection === 4 && (
                                 <div className="mt-3 px-1">
                                   <p className="text-[9px] mb-2" style={{color: clr.textMuted}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
@@ -3923,7 +3903,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             </div>
 
                             <div>
-                              <SetupHeader idx={5} label={language==='ar'?'من أو ما الذي يظهر؟':'Who or what appears?'} done={f5} summary={cinemaCharacters.length ? `${cinemaCharacters.length} selected` : undefined} />
+                              <SetupHeader idx={5} label={language==='ar'?'الشخصيات أو الموضوع':'Characters or Subject'} done={f5} summary={cinemaCharacters.length ? `${cinemaCharacters.length} selected` : undefined} />
                               {openSection === 5 && (
                                 <div className="mt-3 px-1">
                                   <div className="flex flex-wrap gap-2">
@@ -4011,7 +3991,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   </div>
                                   <div>
                                     <p className="text-[10px] mb-1 font-semibold uppercase tracking-wider" style={{color: clr.textMuted}}>
-                                      {language==='ar'?'الحركة أو اللقطة':'Main Action'}{effectiveAction && <span className="text-[#E2C7A8] ml-1">✓</span>}
+                                      {language==='ar'?'الحركة أو الحدث':'Main Action or Event'}{effectiveAction && <span className="text-[#E2C7A8] ml-1">✓</span>}
                                     </p>
                                     <p className="text-[9px] mb-2" style={{color: clr.textSubtle}}>{language==='ar'?'اختر واحداً أو أكثر':'Select one or more'}</p>
                                     <div className="flex flex-wrap gap-2">
@@ -4072,8 +4052,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                           </div>
                           <p className="text-sm text-white/60 max-w-md text-center">
                             {language === 'ar'
-                              ? 'جاري تحليل رؤيتك وإنشاء ٥ مشاهد إعلانية (حتى ٤٦ث)...'
-                              : 'Analyzing your vision and scripting 5 ad scenes (up to 46s)...'}
+                              ? 'جاري فهم فكرتك وإنشاء فيديو إبداعي مترابط...'
+                              : 'Understanding your idea and scripting one connected creative video...'}
                           </p>
                         </div>
                       ) : (
@@ -4160,9 +4140,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                   {sceneNum}
                                 </div>
                                 <span className="text-[10px] font-semibold text-white/40 uppercase tracking-wider">
-                                  {(language === 'ar'
-                                    ? ['الخطّاف','الحركة المحورية','القيمة','الإثبات','النهاية']
-                                    : ['THE HOOK','CORE ACTION','VALUE','PROOF','PAYOFF'])[sceneNum-1]}
+                                  {language === 'ar' ? `المشهد ${sceneNum}` : `SCENE ${sceneNum}`}
                                 </span>
                                 {/* Per-scene duration picker: 6s or 10s, live-capped at MAX_AD_DURATION total */}
                                 <div className="flex items-center gap-0.5 rounded-full p-0.5" style={{background:'rgba(255,255,255,0.06)'}}>
@@ -4326,36 +4304,21 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       <div className="cinema-sticky-footer px-4 py-3">
                         <button
                           onClick={() => {
-                            if (cinemaMode === 'custom') {
-                              setSceneImages(Array(cinemaSceneCount).fill(null));
-                              setSceneImageOptions(Array(cinemaSceneCount).fill(null));
-                              setCastingProgress(Array(cinemaSceneCount).fill('idle'));
-                              setCinemaStep('casting');
-                            } else {
-                              handleCast();
-                            }
+                            handleCast();
                           }}
                           disabled={isCasting}
                           className="relative w-full h-14 text-base font-bold rounded-xl overflow-hidden transition-all active:scale-[0.98] disabled:opacity-50"
-                          style={cinemaMode === 'custom'
-                            ? {background:'linear-gradient(135deg,hsl(210,100%,60%),hsl(280,70%,65%))',boxShadow:'0 8px 32px hsla(210,100%,65%,0.4)',color:'#fff'}
-                            : {background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 50%,#E2C7A8 100%)',backgroundSize:'200% 100%',animation:'shimmerGold 2.5s ease-in-out infinite',boxShadow:'0 8px 32px rgba(226,199,168,0.4)',color:'#0c0f14'}}
+                          style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 50%,#E2C7A8 100%)',backgroundSize:'200% 100%',animation:'shimmerGold 2.5s ease-in-out infinite',boxShadow:'0 8px 32px rgba(226,199,168,0.4)',color:'#0c0f14'}}
                         >
                           {isCasting ? (
                             <div className="flex items-center justify-center gap-2">
                               <Loader2 className="h-5 w-5 animate-spin" />
                               <span>{language === 'ar' ? 'المصور يرسم الصور...' : 'Artist is painting...'}</span>
                             </div>
-                          ) : cinemaMode === 'custom' ? (
-                            <div className="flex items-center justify-center gap-2">
-                              <span>🎥</span>
-                              <span>{language === 'ar' ? 'رفع صور المشاهد يدوياً' : 'Upload My Own Scene Images'}</span>
-                              <ArrowRight className="h-5 w-5" />
-                            </div>
                           ) : (
                             <div className="flex items-center justify-center gap-2">
                               <Camera className="h-5 w-5" />
-                              <span>{language === 'ar' ? 'بدء التصوير' : 'NEXT: CAST YOUR MOVIE'}</span>
+                              <span>{language === 'ar' ? 'إنشاء المشاهد تلقائياً' : 'GENERATE THE SCENES'}</span>
                               <ArrowRight className="h-5 w-5" />
                             </div>
                           )}
@@ -4370,23 +4333,19 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     {/* Header */}
                     <div className="text-center space-y-1 px-1">
                       <h3 className="text-lg font-bold text-white">
-                        {cinemaMode === 'custom'
-                          ? (language === 'ar' ? '🎥 رفع صور المشاهد' : '🎥 Upload Scene Images')
-                          : (language === 'ar' ? 'تصوير المشاهد' : 'Casting the Movie')}
+                        {language === 'ar' ? '🎥 تجهيز المشاهد' : '🎥 Preparing the Scenes'}
                       </h3>
                       <p className="text-xs text-white/50">
-                        {cinemaMode === 'custom'
-                          ? (language === 'ar' ? 'ارفع صورة لكل مشهد — ثم اضغط تصوير' : 'Upload one image per scene — then tap Film')
-                          : isCasting
-                            ? (language === 'ar' ? 'المصور الذكي يرسم مشاهدك...' : 'AI Artist is painting your scenes...')
-                            : (language === 'ar' ? 'اختر صورة المرساة للمشهد الأول' : 'Your scenes are ready — approve to film')}
+                        {isCasting
+                          ? (language === 'ar' ? 'المصور الذكي يرسم مشاهدك...' : 'AI Artist is painting your scenes...')
+                          : (language === 'ar' ? 'المشاهد جاهزة — راجعها ثم ابدأ التصوير' : 'Your scenes are ready — review them, then approve to film')}
                       </p>
                     </div>
 
                     {/* Master Anchor Preview — auto mode only */}
-                    {cinemaMode === 'auto' && anchorImageUrl && (
+                    {anchorImageUrl && (
                       <div className="mx-auto cinema-diamond-border rounded-2xl overflow-hidden"
-                        style={{width: cinemaFormat === '16:9' ? '100%' : '60%', aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight: '240px'}}>
+                        style={{width: cinemaFormat === '16:9' ? '100%' : '60%', aspectRatio: cinemaFormat === '16:9' ? '16/9' : cinemaFormat === '4:5' ? '4/5' : '9/16', maxHeight: '240px'}}>
                         <img src={anchorImageUrl} alt="Anchor scene" className="w-full h-full object-cover" />
                       </div>
                     )}
@@ -4402,7 +4361,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                             <div key={idx} className="relative flex flex-col gap-1">
                               <label
                                 className="relative rounded-2xl overflow-hidden cursor-pointer flex flex-col items-center justify-center transition-all active:scale-95"
-                                style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', minHeight: '100px', background: img ? 'rgba(12,15,20,0.9)' : 'rgba(12,15,20,0.5)', border: img ? '1px solid rgba(226,199,168,0.6)' : '2px dashed rgba(255,255,255,0.15)'}}>
+                                style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : cinemaFormat === '4:5' ? '4/5' : '9/16', minHeight: '100px', background: img ? 'rgba(12,15,20,0.9)' : 'rgba(12,15,20,0.5)', border: img ? '1px solid rgba(226,199,168,0.6)' : '2px dashed rgba(255,255,255,0.15)'}}>
                                 <input
                                   type="file"
                                   accept="image/*"
@@ -5122,7 +5081,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       )}
                       {/* Browser sequential player — clips play one after another */}
                       <div className="cinema-diamond-border rounded-2xl overflow-hidden w-full"
-                        style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : '9/16', maxHeight:'70vh'}}>
+                        style={{aspectRatio: cinemaFormat === '16:9' ? '16/9' : cinemaFormat === '4:5' ? '4/5' : '9/16', maxHeight:'70vh'}}>
                         <video
                           key={premiereVideoUrl}
                           src={premiereVideoUrl}
