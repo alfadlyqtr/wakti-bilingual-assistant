@@ -336,8 +336,8 @@ const getVideoGenerationErrorMessage = (payload: VideoInvokeErrorPayload | null,
 
   if (shouldHighlightChildSafetyToggle(payload)) {
     return language === 'ar'
-      ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي. فعّل المعالجة الآمنة للأطفال ثم حاول مرة أخرى.'
-      : 'Wakti safety rules blocked this request. Turn on Child-safe processing and try again.';
+      ? 'تم حظر هذا الطلب وفق قواعد الأمان في وكتي. فعّل حماية الأطفال ثم حاول مرة أخرى.'
+      : 'Wakti safety rules blocked this request. Turn on Child protection and try again.';
   }
 
   if (rawCode === 'video_temporary_unavailable') {
@@ -473,9 +473,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
   }, [resolution]);
   const handleBestArabicQualityToggle = useCallback(() => {
-    if (isGenerating || isKidsContentMode) return;
-    setIsBestArabicQuality((current) => !current);
-  }, [isGenerating, isKidsContentMode]);
+    if (isGenerating) return;
+    const nextValue = !isBestArabicQuality;
+    if (nextValue) {
+      disableKidsMode();
+    }
+    setIsBestArabicQuality(nextValue);
+  }, [disableKidsMode, isBestArabicQuality, isGenerating]);
   const handleTextVideoDialogueModeChange = useCallback((mode: 'english' | 'arabic') => {
     if (isGenerating || textVideoDialogueMode === mode) return;
     setTextVideoDialogueMode(mode);
@@ -1578,7 +1582,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               duration,
               aspect_ratio: aspectRatio,
               resolution,
-              ...(isKidsContentMode ? { model: 'grok-imagine-video-1-5-preview' } : {}),
+              ...(isKidsContentMode
+                ? { model: 'grok-imagine-video-1-5-preview' }
+                : isBestArabicQuality
+                  ? { model: 'gemini-omni-video' }
+                  : {}),
               mode: 'async',
             };
           }
@@ -2696,32 +2704,28 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       <button
         type="button"
         onClick={handleBestArabicQualityToggle}
-        disabled={isGenerating || isKidsContentMode}
-        className={`w-full rounded-xl border bg-background/60 p-3 text-left transition-all disabled:cursor-not-allowed disabled:opacity-55 ${
-          isKidsContentMode
-            ? 'border-primary/10'
-            : 'border-primary/20 hover:border-primary/40'
-        }`}
+        disabled={isGenerating}
+        className="w-full rounded-xl border border-primary/20 bg-background/60 p-3 text-left transition-all hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-55"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-xs font-semibold text-foreground">
-              {language === 'ar' ? 'أفضل جودة عربية' : 'Best Arabic Quality'}
+              {language === 'ar' ? 'تحسين الجودة العربية' : 'Arabic quality boost'}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground/90">
               {language === 'ar'
-                ? 'لنتائج عربية أفضل. إذا كانت الصورة تحتوي على طفل، اترك المعالجة الآمنة للأطفال مفعّلة.'
-                : 'For stronger Arabic results. If the image includes a child, keep Child-safe processing ON.'}
+                ? 'يحسّن النصوص والنتائج المرئية بالعربية. عند تفعيله يتم إيقاف حماية الأطفال تلقائيًا.'
+                : 'Improves Arabic text and visual results. Turning it on switches off Child protection automatically.'}
             </p>
           </div>
           <span
             className={`relative inline-flex h-5 w-10 shrink-0 items-center rounded-full transition-colors ${
-              isBestArabicQuality && !isKidsContentMode ? 'bg-[hsl(210,100%,65%)]' : 'bg-muted-foreground/30'
+              isBestArabicQuality ? 'bg-[hsl(210,100%,65%)]' : 'bg-muted-foreground/30'
             }`}
           >
             <span
               className={`h-4 w-4 rounded-full bg-white shadow transition-transform ${
-                isBestArabicQuality && !isKidsContentMode ? 'translate-x-5' : 'translate-x-0.5'
+                isBestArabicQuality ? 'translate-x-5' : 'translate-x-0.5'
               }`}
             />
           </span>
@@ -2744,12 +2748,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
             <Eye className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(210,100%,65%)]" />
             <div>
               <p className="text-xs font-semibold text-foreground">
-                {language === 'ar' ? 'المعالجة الآمنة للأطفال' : 'Child-safe processing'}
+                {language === 'ar' ? 'حماية الأطفال' : 'Child protection'}
               </p>
               <p className="mt-1 text-[11px] text-muted-foreground/90">
                 {language === 'ar'
-                  ? 'أبقِ هذا الخيار مفعّلًا عندما تحتوي الصورة على طفل.'
-                  : 'Keep this ON when the image includes a child.'}
+                  ? 'يُفعّل حماية الأطفال. عند تشغيله يتم إيقاف تحسين الجودة العربية تلقائيًا.'
+                  : 'Protects images with children. Turning it on switches off the Arabic quality boost automatically.'}
               </p>
             </div>
           </div>
@@ -2767,7 +2771,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         </div>
         {highlightKidsModeToggle && !isKidsContentMode && (
           <p className="mt-2 text-[11px] font-semibold text-[hsl(210,100%,65%)]">
-            {language === 'ar' ? 'أبقِ المعالجة الآمنة للأطفال مفعّلة ثم أعد المحاولة.' : 'Keep Child-safe processing ON and try again.'}
+            {language === 'ar' ? 'أبقِ حماية الأطفال مفعّلة ثم أعد المحاولة.' : 'Keep Child protection ON and try again.'}
           </p>
         )}
       </button>
@@ -2775,8 +2779,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       {isKidsContentMode && (
         <p className="rounded-lg border border-[hsl(210,100%,65%)]/25 bg-[hsl(210,100%,65%)]/10 px-3 py-2 text-[11px] font-medium text-[hsl(210,100%,65%)]">
           {language === 'ar'
-            ? 'المعالجة الآمنة للأطفال مفعّلة. اتركها مفعّلة إذا كانت الصورة تحتوي على طفل، وأوقفها فقط للصور التي لا تحتوي على أطفال.'
-            : 'Child-safe processing is active. Keep it ON if the image includes a child, and turn it off only for images without children.'}
+            ? 'حماية الأطفال مفعّلة افتراضيًا. عند تشغيل تحسين الجودة العربية سيتم إيقافها تلقائيًا.'
+            : 'Child protection is ON by default. Turning on the Arabic quality boost switches it off automatically.'}
         </p>
       )}
     </div>
@@ -5725,8 +5729,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
               </span>
               <span className="block text-sm text-[hsl(210,30%,80%)]">
                 {language === 'ar'
-                  ? 'إذا كانت الصورة تحتوي على طفل، فعّل المعالجة الآمنة للأطفال ثم حاول مرة أخرى.'
-                  : 'If the image contains a child, turn on Child-safe processing and try again.'}
+                  ? 'إذا كانت الصورة تحتوي على طفل، فعّل حماية الأطفال ثم حاول مرة أخرى.'
+                  : 'If the image contains a child, turn on Child protection and try again.'}
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
