@@ -131,6 +131,13 @@ function extractUsername(raw: string): string {
   return u;
 }
 
+function toLocalDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // ─── Country fuzzy match ─────────────────────────────────────────────────────
 
 function matchCountry(spoken: string): { code: string; name: string; nameAr: string } | null {
@@ -774,7 +781,7 @@ export function VoiceSignup({ onSignupComplete, onError }: VoiceSignupProps) {
         // Try to parse date from spoken text (e.g., "January 15 1990" or "1990-01-15")
         const parsed = new Date(value);
         if (!isNaN(parsed.getTime())) {
-          setFormData(prev => ({ ...prev, dob: parsed.toISOString().split('T')[0] }));
+          setFormData(prev => ({ ...prev, dob: toLocalDateString(parsed) }));
         }
         // If can't parse, just store raw (user can edit later)
         break;

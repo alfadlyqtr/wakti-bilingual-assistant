@@ -153,6 +153,19 @@ const openManageSubscriptions = () => {
   }
 };
 
+const toLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const parseLocalDateString = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+};
+
 export default function Account() {
   const { user, isGuest, updateProfile, updateEmail, updatePassword, signOut } = useAuth();
   const navigate = useNavigate();
@@ -252,7 +265,8 @@ export default function Account() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState<Date | undefined>(undefined);
-  const [dobInputValue, setDobInputValue] = useState("");
+  const [dobCalendarMonth, setDobCalendarMonth] = useState<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -266,6 +280,11 @@ export default function Account() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [confirmationEmail, setConfirmationEmail] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+  const dobMonthOptions = language === 'ar'
+    ? ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"]
+    : ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const dobCurrentYear = new Date().getFullYear();
+  const dobYearOptions = Array.from({ length: dobCurrentYear - 1899 }, (_, index) => (dobCurrentYear - index).toString());
   // Detect correct paywall variant using same logic as ProtectedRoute (priority: trial_expired > cancelled > new_user)
   const { isNewUser, wasSubscribed, isAccessExpired, profile } = useUserProfile();
   const paywallVariant: PaywallVariant = isAccessExpired ? 'trial_expired' : wasSubscribed ? 'cancelled' : 'new_user';
@@ -444,9 +463,11 @@ export default function Account() {
         setEmail(user.email);
       }
       if (user.user_metadata?.date_of_birth) {
-        const dobDate = new Date(user.user_metadata.date_of_birth);
-        setDateOfBirth(dobDate);
-        setDobInputValue(format(dobDate, "yyyy-MM-dd"));
+        const dobDate = parseLocalDateString(user.user_metadata.date_of_birth);
+        if (dobDate) {
+          setDateOfBirth(dobDate);
+          setDobCalendarMonth(new Date(dobDate.getFullYear(), dobDate.getMonth(), 1));
+        }
       }
       // Username: only show if it's a real user-set username (not auto-generated userXXXXXXXX)
       const rawUsername = userProfile?.username || user.user_metadata?.username || '';
@@ -551,29 +572,25 @@ export default function Account() {
     }
   };
   
-  // Handle date input change
-  const handleDobInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setDobInputValue(value);
-    
-    if (value) {
-      const newDate = new Date(value);
-      if (!isNaN(newDate.getTime())) {
-        setDateOfBirth(newDate);
-      }
-    } else {
-      setDateOfBirth(undefined);
-    }
-  };
-
   // Handle calendar date selection
   const handleCalendarDateSelect = (date: Date | undefined) => {
     setDateOfBirth(date);
     if (date) {
-      setDobInputValue(format(date, "yyyy-MM-dd"));
-    } else {
-      setDobInputValue("");
+      setDobCalendarMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+      setIsDobPopoverOpen(false);
     }
+  };
+
+  const handleDobMonthChange = (monthValue: string) => {
+    const month = Number(monthValue);
+    if (Number.isNaN(month) || month < 0 || month > 11) return;
+    setDobCalendarMonth((prev) => new Date(prev.getFullYear(), month, 1));
+  };
+
+  const handleDobYearChange = (yearValue: string) => {
+    const year = Number(yearValue);
+    if (Number.isNaN(year) || year < 1900 || year > dobCurrentYear) return;
+    setDobCalendarMonth((prev) => new Date(year, prev.getMonth(), 1));
   };
   
   const handleUpdateEmail = async (e: React.FormEvent) => {
@@ -773,7 +790,7 @@ export default function Account() {
     try {
       const { error } = await supabase.auth.updateUser({
         data: {
-          date_of_birth: dateOfBirth.toISOString().split('T')[0]
+          date_of_birth: toLocalDateString(dateOfBirth)
         }
       });
       
@@ -1013,7 +1030,16 @@ export default function Account() {
                       {t("dateOfBirth", language)}
                     </Label>
                     <div className="space-y-3">
-                      <Popover>
+                      <Popover
+                        open={isDobPopoverOpen}
+                        onOpenChange={(open) => {
+                          setIsDobPopoverOpen(open);
+                          if (open) {
+                            const baseDate = dateOfBirth ?? new Date();
+                            setDobCalendarMonth(new Date(baseDate.getFullYear(), baseDate.getMonth(), 1));
+                          }
+                        }}
+                      >
                         <PopoverTrigger asChild>
                           <Button
                             variant="outline"
@@ -1032,15 +1058,57 @@ export default function Account() {
                             )}
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="center">
+                        <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)] border-[#d7dbe5] dark:border-border bg-[hsla(220,35%,98%,0.92)] dark:bg-[hsla(222,20%,8%,0.85)] backdrop-blur-xl shadow-[0_18px_45px_hsla(222,20%,4%,0.38)]" align="center">
+                          <div className="p-3 border-b border-[#d7dbe5] dark:border-border/80">
+                            <div className="relative grid grid-cols-2 rounded-xl border border-[#d7dbe5] dark:border-white/15 bg-[hsla(220,30%,96%,0.65)] dark:bg-[hsla(222,22%,12%,0.72)] backdrop-blur-md overflow-hidden">
+                              <div className="absolute inset-y-2 left-1/2 w-px -translate-x-1/2 bg-[#d7dbe5] dark:bg-white/15" aria-hidden="true" />
+                            <Select
+                              value={dobCalendarMonth.getMonth().toString()}
+                              onValueChange={handleDobMonthChange}
+                            >
+                              <SelectTrigger className="h-11 border-0 bg-transparent shadow-none rounded-none focus:ring-0 focus-visible:ring-0 data-[state=open]:bg-white/25 dark:data-[state=open]:bg-white/8 px-3">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-72 border-[#d7dbe5] dark:border-white/15 bg-[hsla(220,30%,97%,0.96)] dark:bg-[hsla(222,22%,10%,0.94)] backdrop-blur-xl">
+                                {dobMonthOptions.map((monthLabel, monthIndex) => (
+                                  <SelectItem key={monthLabel} value={monthIndex.toString()}>
+                                    {monthLabel}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+
+                            <Select
+                              value={dobCalendarMonth.getFullYear().toString()}
+                              onValueChange={handleDobYearChange}
+                            >
+                              <SelectTrigger className="h-11 border-0 bg-transparent shadow-none rounded-none focus:ring-0 focus-visible:ring-0 data-[state=open]:bg-white/25 dark:data-[state=open]:bg-white/8 px-3">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-72 border-[#d7dbe5] dark:border-white/15 bg-[hsla(220,30%,97%,0.96)] dark:bg-[hsla(222,22%,10%,0.94)] backdrop-blur-xl">
+                                {dobYearOptions.map((year) => (
+                                  <SelectItem key={year} value={year}>
+                                    {year}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            </div>
+                          </div>
                           <Calendar
                             mode="single"
                             selected={dateOfBirth}
                             onSelect={handleCalendarDateSelect}
+                            month={dobCalendarMonth}
+                            onMonthChange={(month) => setDobCalendarMonth(new Date(month.getFullYear(), month.getMonth(), 1))}
                             disabled={(date) =>
                               date > new Date() || date < new Date("1900-01-01")
                             }
                             initialFocus
+                            classNames={{
+                              caption: "hidden",
+                              nav: "hidden",
+                            }}
                             className="p-3 pointer-events-auto"
                           />
                         </PopoverContent>

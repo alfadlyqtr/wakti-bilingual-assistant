@@ -25,6 +25,19 @@ type AuthTab = "login" | "signup";
 
 const WAKTI_LOGO_SRC = "/lovable-uploads/cffe5d1a-e69b-4cd9-ae4c-43b58d4bfbb4.png";
 
+const toLocalDateString = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const parseLocalDateString = (value: string) => {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return undefined;
+  return new Date(year, month - 1, day);
+};
+
 function GoogleMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true" className={className}>
@@ -327,7 +340,7 @@ export default function Signup() {
     const profileData = {
       full_name: name,
       username: username || '',
-      date_of_birth: dateOfBirth ? dateOfBirth.toISOString().split('T')[0] : '',
+      date_of_birth: dateOfBirth ? toLocalDateString(dateOfBirth) : '',
       country: selectedCountry?.name || '',
       country_code: country,
       city: city || '',
@@ -1522,7 +1535,7 @@ export default function Signup() {
                         {/* DOB full width */}
                         <div className="relative">
                           <CalendarIcon className="su-icon absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 pointer-events-none z-10" />
-                          <Input id="dob" type="date" disabled={isLoading} value={dateOfBirth ? dateOfBirth.toISOString().slice(0,10) : ""} onChange={(e) => { const v = e.target.value; setDateOfBirth(v ? new Date(`${v}T00:00:00`) : undefined); }} className={cn(fieldCls, "pl-9", !dateOfBirth && "text-muted-foreground")} min="1900-01-01" max={new Date().toISOString().slice(0,10)} />
+                          <Input id="dob" type="date" disabled={isLoading} value={dateOfBirth ? toLocalDateString(dateOfBirth) : ""} onChange={(e) => { const v = e.target.value; setDateOfBirth(v ? parseLocalDateString(v) : undefined); }} className={cn(fieldCls, "pl-9", !dateOfBirth && "text-muted-foreground")} min="1900-01-01" max={toLocalDateString(new Date())} />
                         </div>
                         {/* Country | City row */}
                         <div className="grid grid-cols-2 gap-2">
