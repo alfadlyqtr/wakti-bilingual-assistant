@@ -169,7 +169,7 @@ export function LoginForm({
     },
     ar: {
       login: "تسجيل الدخول",
-      signInWithGoogle: "تسجيل الدخول باستخدام جوجل",
+      signInWithGoogle: "تسجيل الدخول عبر جوجل",
       email: "البريد الإلكتروني",
       password: "كلمة المرور",
       forgotPassword: "نسيت كلمة المرور؟",

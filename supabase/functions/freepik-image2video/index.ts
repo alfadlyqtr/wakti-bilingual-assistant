@@ -36,7 +36,8 @@ type VisualAdsJobInsertClient = {
 const KIE_API_KEY = Deno.env.get("KIE_API_KEY") || "";
 const KIE_IMAGE2VIDEO_MODEL = "grok-imagine-video-1-5-preview";
 const KIE_IMAGE2VIDEO_QUALITY_MODEL = "gemini-omni-video";
-const KIE_TEXT2VIDEO_MODEL = "gemini-omni-video";
+const KIE_TEXT2VIDEO_ARABIC_MODEL = "gemini-omni-video";
+const KIE_TEXT2VIDEO_ENGLISH_MODEL = "kling-2.6/text-to-video";
 const KIE_2IMAGES_MODEL = "veo3_lite";
 const KIE_VISUAL_ADS_MODEL = "gpt-image-2-image-to-image";
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
@@ -131,8 +132,12 @@ function normalizeVideoErrorText(value: string): string {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function resolveRequestedVideoModel(generationType: string, modelOverride?: string): string {
-  if (generationType === "text_to_video") return KIE_TEXT2VIDEO_MODEL;
+function resolveRequestedVideoModel(generationType: string, modelOverride?: string, textVideoDialogueMode?: string): string {
+  if (generationType === "text_to_video" || typeof textVideoDialogueMode === "string") {
+    return textVideoDialogueMode === "arabic"
+      ? KIE_TEXT2VIDEO_ARABIC_MODEL
+      : KIE_TEXT2VIDEO_ENGLISH_MODEL;
+  }
   if (generationType === "2images_to_video") return KIE_2IMAGES_MODEL;
   if (generationType === "visual_ads") return KIE_VISUAL_ADS_MODEL;
   if (modelOverride === KIE_IMAGE2VIDEO_QUALITY_MODEL) return KIE_IMAGE2VIDEO_QUALITY_MODEL;
@@ -778,24 +783,36 @@ async function createTextToVideoTask(
   aspectRatio?: string,
   resolution?: string,
   videoStyleMode?: string,
+  dialogueMode?: string,
 ): Promise<VideoTaskCreateResult> {
   void videoStyleMode;
-  const validDuration = ["4", "6", "8"].includes(duration || "") ? duration! : "6";
-  const validResolution = ["720p", "1080p"].includes(resolution || "") ? resolution! : "720p";
-  const validAspectRatio = ["16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
-  const input: Record<string, unknown> = {
-    prompt: prompt.slice(0, 2500),
-    aspect_ratio: validAspectRatio,
-    duration: validDuration,
-    resolution: validResolution,
-  };
+  void resolution;
+  const isArabicDialogue = dialogueMode === "arabic";
+  const model = isArabicDialogue ? KIE_TEXT2VIDEO_ARABIC_MODEL : KIE_TEXT2VIDEO_ENGLISH_MODEL;
+  const validDuration = isArabicDialogue
+    ? (["4", "6", "8"].includes(duration || "") ? duration! : "6")
+    : (["5", "10"].includes(duration || "") ? duration! : "10");
+  const validAspectRatio = ["1:1", "16:9", "9:16"].includes(aspectRatio || "") ? aspectRatio! : "9:16";
+  const input: Record<string, unknown> = isArabicDialogue
+    ? {
+        prompt: prompt.slice(0, 2500),
+        aspect_ratio: validAspectRatio,
+        duration: validDuration,
+        resolution: ["720p", "1080p"].includes(resolution || "") ? resolution! : "720p",
+      }
+    : {
+        prompt: prompt.slice(0, 1000),
+        sound: true,
+        aspect_ratio: validAspectRatio,
+        duration: validDuration,
+      };
 
   const requestBody = {
-    model: KIE_TEXT2VIDEO_MODEL,
+    model,
     input,
   };
 
-  console.log("[kie-text2video] Creating task, model:", KIE_TEXT2VIDEO_MODEL);
+  console.log("[kie-text2video] Creating task, dialogue mode:", isArabicDialogue ? "arabic" : "english");
 
   const response = await fetch(KIE_CREATE_URL, {
     method: "POST",
@@ -1281,12 +1298,16 @@ serve(async (req: Request) => {
     // Parse request body (need it before trial check to detect generation_type)
     errorStage = "request_parse";
     const body = await req.json();
-    const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode, model: modelOverride } = body;
+    const { image, image1, image2, prompt, mode, duration: reqDuration, aspect_ratio, fixed_lens, generate_audio, generation_type, resolution, video_style_mode, model: modelOverride, text_video_dialogue_mode } = body;
     const safePrompt = typeof prompt === "string"
       ? sanitizeUserInput(prompt, { maxLength: 7000, label: "video_prompt" }).trim()
       : "";
     const generationType = generation_type || "image_to_video";
-    errorModel = resolveRequestedVideoModel(generationType, typeof modelOverride === "string" ? modelOverride : undefined);
+    errorModel = resolveRequestedVideoModel(
+      generationType,
+      typeof modelOverride === "string" ? modelOverride : undefined,
+      typeof text_video_dialogue_mode === "string" ? text_video_dialogue_mode : undefined,
+    );
     errorInputText = safePrompt || (typeof image === "string" ? image : "") || (typeof image1 === "string" ? image1 : "") || (typeof image2 === "string" ? image2 : "");
     errorMetadata = {
       generation_type: generationType,
@@ -1299,6 +1320,7 @@ serve(async (req: Request) => {
       has_image1: Boolean(image1),
       has_image2: Boolean(image2),
       child_safety_mode: modelOverride === "grok-imagine-video-1-5-preview",
+      text_video_dialogue_mode: typeof text_video_dialogue_mode === "string" ? text_video_dialogue_mode : null,
     };
 
     // Mode: 'status' to check task status
@@ -1436,7 +1458,7 @@ serve(async (req: Request) => {
     errorStage = "task_create";
     if (generationType === "text_to_video") {
       // Text-to-Video: no image needed
-      task = await createTextToVideoTask(finalPrompt, reqDuration, aspect_ratio, resolution, video_style_mode);
+      task = await createTextToVideoTask(finalPrompt, reqDuration, aspect_ratio, resolution, video_style_mode, text_video_dialogue_mode);
     } else if (generationType === "2images_to_video") {
       // 2Images-to-Video: requires both image1 and image2
       let imageUrl1: string = image1;

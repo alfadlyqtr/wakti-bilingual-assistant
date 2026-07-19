@@ -55,6 +55,7 @@ import {
   Lock,
   FolderOpen,
   Type,
+  Volume2,
   GalleryHorizontalEnd,
   Images,
   Film,
@@ -423,11 +424,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [imageFile2, setImageFile2] = useState<File | null>(null);
   const [imagePreview2, setImagePreview2] = useState<string | null>(null);
   const [prompt, setPrompt] = useState('');
-  const [duration, setDuration] = useState<'4' | '6' | '8' | '10'>('6');
+  const [duration, setDuration] = useState<'4' | '5' | '6' | '8' | '10'>('6');
   const [aspectRatio, setAspectRatio] = useState<string>('9:16');
   const [resolution, setResolution] = useState<'480p' | '720p' | '1080p'>('720p');
   const [isKidsContentMode, setIsKidsContentMode] = useState(true);
   const [isBestArabicQuality, setIsBestArabicQuality] = useState(false);
+  const [textVideoDialogueMode, setTextVideoDialogueMode] = useState<'english' | 'arabic'>('english');
   const [promptBlockedMessage, setPromptBlockedMessage] = useState('');
   const [showPromptBlockedDialog, setShowPromptBlockedDialog] = useState(false);
   const [showChildSafetyDialog, setShowChildSafetyDialog] = useState(false);
@@ -474,6 +476,11 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     if (isGenerating || isKidsContentMode) return;
     setIsBestArabicQuality((current) => !current);
   }, [isGenerating, isKidsContentMode]);
+  const handleTextVideoDialogueModeChange = useCallback((mode: 'english' | 'arabic') => {
+    if (isGenerating || textVideoDialogueMode === mode) return;
+    setTextVideoDialogueMode(mode);
+    setDuration(mode === 'english' ? '10' : '6');
+  }, [isGenerating, textVideoDialogueMode]);
   const handleKidsModeToggle = useCallback(() => {
     if (isGenerating) return;
     const nextValue = !isKidsContentMode;
@@ -640,11 +647,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       imagePreview: string | null;
       imagePreview2: string | null;
       prompt: string;
-      duration: '4' | '6' | '8' | '10';
+      duration: '4' | '5' | '6' | '8' | '10';
       aspectRatio: string;
       resolution: '480p' | '720p' | '1080p';
       isKidsContentMode: boolean;
       isBestArabicQuality?: boolean;
+      textVideoDialogueMode?: 'english' | 'arabic';
     }>('video');
 
     if (!draft) return;
@@ -660,10 +668,21 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     setAspectRatio(draft.aspectRatio || '9:16');
     setResolution(draft.resolution || '720p');
     const restoredKidsContentMode = typeof draft.isKidsContentMode === 'boolean' ? draft.isKidsContentMode : true;
+    const restoredTextVideoDialogueMode = draft.textVideoDialogueMode === 'arabic' ? 'arabic' : 'english';
     setIsKidsContentMode(restoredKidsContentMode);
     setIsBestArabicQuality(Boolean(draft.isBestArabicQuality) && !restoredKidsContentMode);
+    setTextVideoDialogueMode(restoredTextVideoDialogueMode);
     clearStudioGuestDraft('video');
   }, [isGuest, searchParams]);
+
+  useEffect(() => {
+    if (generationMode !== 'text_to_video') return;
+
+    const validDurations = textVideoDialogueMode === 'english' ? ['5', '10'] : ['4', '6', '8'];
+    if (!validDurations.includes(duration)) {
+      setDuration(textVideoDialogueMode === 'english' ? '10' : '6');
+    }
+  }, [generationMode, textVideoDialogueMode, duration]);
 
   useEffect(() => {
     if (generationMode !== 'image_to_video' || !isKidsContentMode) return;
@@ -1230,6 +1249,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           mode: 'status',
           task_id: tid,
           task_provider: providerHint ?? taskProviderRef.current ?? undefined,
+          text_video_dialogue_mode: generationMode === 'text_to_video' ? textVideoDialogueMode : undefined,
           increment_usage: !usageIncrementedRef.current,
         },
       });
@@ -1320,7 +1340,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [language, loadQuota, loadLatestVideo, openChildSafetyDialog, refetchUserProfile, saveGeneratedVideoToMyVideos]);
+  }, [generationMode, language, loadQuota, loadLatestVideo, openChildSafetyDialog, refetchUserProfile, saveGeneratedVideoToMyVideos, textVideoDialogueMode]);
 
   const handleGenerate = async () => {
     // Validate based on mode
@@ -1345,6 +1365,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         resolution,
         isKidsContentMode,
         isBestArabicQuality,
+        textVideoDialogueMode,
       });
       setGuestRedirectTo(redirectTo);
       setGuestDialogOpen(true);
@@ -1414,6 +1435,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           duration,
           aspect_ratio: aspectRatio,
           resolution,
+          text_video_dialogue_mode: textVideoDialogueMode,
           mode: 'async',
         };
       } else if (generationMode === 'image_to_video') {
@@ -2619,6 +2641,56 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   };
   const activeVideoTrial = videoTrialMap[generationMode] || videoTrialMap['image_to_video'];
 
+  const renderTextVideoControls = () => (
+    <div className="rounded-xl border border-primary/20 bg-background/60 p-3">
+      <div className="flex items-start gap-2">
+        <Volume2 className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(210,100%,65%)]" />
+        <div>
+          <p className="text-xs font-semibold text-foreground">
+            {language === 'ar' ? 'جودة الحوار' : 'Dialogue quality'}
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground/90">
+            {textVideoDialogueMode === 'english'
+              ? (language === 'ar'
+                  ? 'تم اختيار الحوار الإنجليزي افتراضيًا لأفضل وضوح في الكلام واللهجات.'
+                  : 'English dialogue is selected by default for clearer speech and accents.')
+              : (language === 'ar'
+                  ? 'استخدم Gemini عندما تكون جودة الحوار العربي هي الأهم.'
+                  : 'Use Gemini when Arabic dialogue quality matters most.')}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-muted/60 p-1" role="group" aria-label={language === 'ar' ? 'اختيار جودة الحوار' : 'Dialogue quality choice'}>
+        <button
+          type="button"
+          onClick={() => handleTextVideoDialogueModeChange('arabic')}
+          disabled={isGenerating}
+          aria-pressed={textVideoDialogueMode === 'arabic'}
+          className={`rounded-md px-2 py-2 text-[11px] font-semibold transition-all ${
+            textVideoDialogueMode === 'arabic'
+              ? 'bg-[hsl(210,100%,65%)] text-[hsl(222,20%,6%)] shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {language === 'ar' ? 'Gemini — أفضل حوار عربي' : 'Gemini — Best Arabic dialogue'}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleTextVideoDialogueModeChange('english')}
+          disabled={isGenerating}
+          aria-pressed={textVideoDialogueMode === 'english'}
+          className={`rounded-md px-2 py-2 text-[11px] font-semibold transition-all ${
+            textVideoDialogueMode === 'english'
+              ? 'bg-[hsl(210,100%,65%)] text-[hsl(222,20%,6%)] shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {language === 'ar' ? 'الإنجليزية — الأفضل للحوار واللهجات' : 'English — Best for dialogue & accents'}
+        </button>
+      </div>
+    </div>
+  );
+
   const renderImageControls = () => (
     <div className="space-y-2">
       <button
@@ -2768,41 +2840,68 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     </button>
                   </>
                 ) : generationMode === 'text_to_video' ? (
-                  <>
-                    <button
-                      onClick={() => !isGenerating && setDuration('4')}
-                      disabled={isGenerating}
-                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
-                        duration === '4'
-                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                          : 'text-muted-foreground hover:text-primary'
-                      }`}
-                    >
-                      {language === 'ar' ? '4 ث' : '4s'}
-                    </button>
-                    <button
-                      onClick={() => !isGenerating && setDuration('6')}
-                      disabled={isGenerating}
-                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
-                        duration === '6'
-                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                          : 'text-muted-foreground hover:text-primary'
-                      }`}
-                    >
-                      {language === 'ar' ? '6 ث' : '6s'}
-                    </button>
-                    <button
-                      onClick={() => !isGenerating && setDuration('8')}
-                      disabled={isGenerating}
-                      className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
-                        duration === '8'
-                          ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
-                          : 'text-muted-foreground hover:text-primary'
-                      }`}
-                    >
-                      {language === 'ar' ? '8 ث' : '8s'}
-                    </button>
-                  </>
+                  textVideoDialogueMode === 'english' ? (
+                    <>
+                      <button
+                        onClick={() => !isGenerating && setDuration('5')}
+                        disabled={isGenerating}
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                          duration === '5'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                            : 'text-muted-foreground hover:text-primary'
+                        }`}
+                      >
+                        {language === 'ar' ? '5 ث' : '5s'}
+                      </button>
+                      <button
+                        onClick={() => !isGenerating && setDuration('10')}
+                        disabled={isGenerating}
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                          duration === '10'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                            : 'text-muted-foreground hover:text-primary'
+                        }`}
+                      >
+                        {language === 'ar' ? '10 ث' : '10s'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => !isGenerating && setDuration('4')}
+                        disabled={isGenerating}
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                          duration === '4'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                            : 'text-muted-foreground hover:text-primary'
+                        }`}
+                      >
+                        {language === 'ar' ? '4 ث' : '4s'}
+                      </button>
+                      <button
+                        onClick={() => !isGenerating && setDuration('6')}
+                        disabled={isGenerating}
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                          duration === '6'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                            : 'text-muted-foreground hover:text-primary'
+                        }`}
+                      >
+                        {language === 'ar' ? '6 ث' : '6s'}
+                      </button>
+                      <button
+                        onClick={() => !isGenerating && setDuration('8')}
+                        disabled={isGenerating}
+                        className={`px-2.5 py-1.5 text-xs font-medium transition-all ${
+                          duration === '8'
+                            ? 'bg-gradient-to-r from-[hsl(210,100%,65%)]/30 to-[hsl(180,85%,60%)]/25 text-primary font-bold'
+                            : 'text-muted-foreground hover:text-primary'
+                        }`}
+                      >
+                        {language === 'ar' ? '8 ث' : '8s'}
+                      </button>
+                    </>
+                  )
                 ) : generationMode === 'image_to_video' && isKidsContentMode ? (
                   <>
                     <button
@@ -5100,6 +5199,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   </p>
                 </div>
               )}
+
+              {generationMode === 'text_to_video' && renderTextVideoControls()}
 
               {/* Amp row */}
               <div className="flex items-center justify-between px-1">

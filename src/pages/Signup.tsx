@@ -664,7 +664,7 @@ export default function Signup() {
       appName: "وقتي",
       createAccount: "إنشاء حساب",
       signInWithGoogle: "المتابعة باستخدام جوجل",
-      googleShort: "تسجيل الدخول باستخدام جوجل",
+      googleShort: "تسجيل الدخول عبر جوجل",
       name: "الاسم",
       username: "اسم المستخدم",
       email: "البريد الإلكتروني",
@@ -1148,8 +1148,9 @@ export default function Signup() {
         .su-auth-actions-row {
           width: 100%;
           display: flex;
-          align-items: center;
-          gap: 8px;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 10px;
         }
         .su-google-login-btn {
           width: 100%;
@@ -1594,7 +1595,7 @@ export default function Signup() {
               <div className="flex flex-col items-center gap-2.5 pt-1">
                 {authTab === "login" ? (
                   <div className="su-auth-actions-row">
-                    <div className={cn("min-w-0", !isGuestUpgradeFlow ? "basis-[50%]" : "w-full")}>
+                    <div className="w-full min-w-0">
                       <button type="submit" disabled={isLoading} className="su-pill w-full">
                         {isLoading
                           ? <span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" />
@@ -1604,7 +1605,7 @@ export default function Signup() {
                     </div>
 
                     {!isGuestUpgradeFlow && (
-                      <div className="basis-[50%] min-w-0">
+                      <div className="w-full min-w-0">
                         <button
                           type="button"
                           disabled={isLoading}
