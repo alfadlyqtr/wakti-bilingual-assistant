@@ -377,7 +377,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [searchParams] = useSearchParams();
   const { language, theme } = useTheme();
   const { user, isGuest } = useAuth();
-  const { stitchClips, isLoading: isFFmpegLoading, progress: ffmpegProgress, status: ffmpegStatus } = useFFmpegVideo();
+  const { loadFFmpeg, stitchClips, isLoading: isFFmpegLoading, progress: ffmpegProgress, status: ffmpegStatus } = useFFmpegVideo();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
   const emitTrialBlocked = useCallback((payload: VideoInvokeErrorPayload | null, fallbackFeature: string) => {
@@ -2186,6 +2186,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       });
 
       const taskIds = await Promise.all(taskPromises);
+      void loadFFmpeg();
       setStitchStatus(language === 'ar' ? '🎬 جاري تحريك اللقطات... ستظهر جاهزة واحدة تلو الأخرى' : '🎬 Rendering your clips... they will finish one by one');
 
       // ── Step 2: Poll all tasks in parallel until every clip is done ──
@@ -2246,7 +2247,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setClipOrder(clipUrls.map((_, i) => i));
       setClipsReady(true);
       setAutoStitchQueued(true);
-      setStitchStatus(language === 'ar' ? '🎬 كل اللقطات جاهزة — جاري بدء تجميع الفيلم النهائي...' : '🎬 All clips are ready — starting the final film stitch...');
+      setStitchStatus(language === 'ar' ? '🎬 كل اللقطات جاهزة — جاري إنشاء الفيلم النهائي...' : '🎬 All clips are ready — starting your final film...');
     } catch (err: any) {
       console.error('[ads] Film produce error:', err);
       setAnimProgress(prev => prev.map(p => p === 'rendering' ? 'error' : p));
@@ -2255,7 +2256,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     } finally {
       setIsFilming(false);
     }
-  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat, visualSupervisorPrompts, sceneDurations]);
+  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat, visualSupervisorPrompts, sceneDurations, loadFFmpeg]);
 
   // Start the Artist automatically after the Director finishes.
   useEffect(() => {
@@ -2289,14 +2290,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (orderedUrls.length < 1) return;
     setIsStitching(true);
     setAutoStitchQueued(false);
-    setStitchStatus(language === 'ar' ? '🎬 جاري تحميل محرك الفيديو...' : '🎬 Loading video engine...');
+    setStitchStatus(language === 'ar' ? '🎬 جاري تجهيز الفيلم النهائي...' : '🎬 Preparing your final film...');
     try {
       const blob = await stitchClips({
         clipUrls: orderedUrls,
         onProgress: (pct, msg) => {
           setStitchStatus(
             language === 'ar'
-              ? `🎬 ${pct}% — جاري الدمج...`
+              ? `🎬 ${pct}% — جاري تجميع الفيلم النهائي...`
               : `🎬 ${pct}% — ${msg}`
           );
         },
@@ -2313,7 +2314,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       toast.success(language === 'ar' ? '🎬 الفيلم جاهز!' : '🎬 Film ready!');
     } catch (err: any) {
       console.error('[cinema] FFmpeg stitch error:', err);
-      toast.error(language === 'ar' ? 'فشل الدمج: ' + err.message : 'Stitch failed: ' + err.message);
+      toast.error(language === 'ar' ? 'فشل إنشاء الفيلم: ' + err.message : 'Final film failed: ' + err.message);
     } finally {
       setIsStitching(false);
       setStitchStatus('');
@@ -2331,7 +2332,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (orderedClips.length < 1) return;
 
     setIsStitching(true);
-    setStitchStatus(language === 'ar' ? '🎬 جاري تحميل محرك الفيديو...' : '🎬 Loading video engine...');
+    setStitchStatus(language === 'ar' ? '🎬 جاري تجهيز الفيلم النهائي...' : '🎬 Preparing your final film...');
 
     try {
       const blob = await stitchClips({
@@ -2339,7 +2340,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         onProgress: (pct, msg) => {
           setStitchStatus(
             language === 'ar'
-              ? `🎬 ${pct}% — جاري الدمج...`
+              ? `🎬 ${pct}% — جاري تجميع الفيلم النهائي...`
               : `🎬 ${pct}% — ${msg}`
           );
         },
@@ -2356,7 +2357,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       toast.success(language === 'ar' ? '🎬 الفيلم جاهز!' : '🎬 Film ready!');
     } catch (err: any) {
       console.error('[cinema] FFmpeg stitch error:', err);
-      toast.error(language === 'ar' ? 'فشل الدمج: ' + err.message : 'Stitch failed: ' + err.message);
+      toast.error(language === 'ar' ? 'فشل إنشاء الفيلم: ' + err.message : 'Final film failed: ' + err.message);
     } finally {
       setIsStitching(false);
       setStitchStatus('');
@@ -5214,7 +5215,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                           </h3>
                         ) : isStitching ? (
                           <h3 className="text-lg font-bold text-white">
-                            {language === 'ar' ? '🎬 جاري تجميع الفيلم...' : '🎬 Stitching your film...'}
+                            {language === 'ar' ? '🎬 جاري إنهاء الفيلم...' : '🎬 Finalizing your film...'}
                           </h3>
                         ) : (
                           <h3 className="text-lg font-bold text-white">
@@ -5223,13 +5224,13 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         )}
                         <p className="text-xs text-white/50">
                           {autoStitchQueued
-                            ? (language === 'ar' ? 'كل المقاطع جاهزة • سيبدأ التجميع الآن تلقائياً' : 'All clips are ready • the final stitch is starting automatically')
+                            ? (language === 'ar' ? 'كل المقاطع جاهزة • سيبدأ إنشاء الفيلم الآن تلقائياً' : 'All clips are ready • your final film is starting automatically')
                             : allClipsDone && !isStitching
-                            ? (language === 'ar' ? 'بدّل المقاطع إن أردت • ثم اضغط تجميع الفيلم النهائي' : 'Swap clips if needed • then tap Stitch Final Film')
+                            ? (language === 'ar' ? 'بدّل المقاطع إن أردت • ثم اضغط إنشاء الفيلم النهائي' : 'Swap clips if needed • then tap Create Final Film')
                             : isStitching
                             ? (language === 'ar'
-                              ? `${stitchPercent}% • جاري دمج الفيلم النهائي`
-                              : `${stitchPercent}% • Final film stitching`)
+                              ? `${stitchPercent}% • تقدم الفيلم النهائي`
+                              : `${stitchPercent}% • Final film progress`)
                             : (language === 'ar'
                               ? `${animationPercent}% • ${doneCount}/${cinemaSceneCount} جاهز • ${renderingCount} قيد التحريك • ${queuedCount} في الانتظار • ${totalAdDuration}ث إجمالياً`
                               : `${animationPercent}% • ${doneCount}/${cinemaSceneCount} ready • ${renderingCount} rendering • ${queuedCount} queued • ${totalAdDuration}s total`)}
@@ -5262,7 +5263,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       {isStitching && (
                         <div className="space-y-2 px-1">
                           <div className="flex items-center justify-between text-[10px] font-semibold text-white/50">
-                            <span>{language === 'ar' ? 'تقدم الدمج عبر المتصفح' : 'Browser stitch progress'}</span>
+                            <span>{language === 'ar' ? 'تقدم الفيلم النهائي' : 'Final film progress'}</span>
                             <span>{stitchPercent}%</span>
                           </div>
                           <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
@@ -5412,7 +5413,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             className="flex-1 h-12 text-sm font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-[0.98]"
                             style={{background:'linear-gradient(135deg,#E2C7A8 0%,#C5A47E 100%)',color:'#0c0f14',boxShadow:'0 6px 24px rgba(226,199,168,0.35)'}}
                           >
-                            <span>{language === 'ar' ? '🎬 تجميع الفيلم النهائي' : '🎬 Stitch Final Film'}</span>
+                            <span>{language === 'ar' ? '🎬 إنشاء الفيلم النهائي' : '🎬 Create Final Film'}</span>
                           </button>
                         ) : (
                           <div

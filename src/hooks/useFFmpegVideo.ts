@@ -21,43 +21,69 @@ export interface UseFFmpegStitchReturn {
 }
 
 const CORE_BASE_URL = '/ffmpeg';
+const CORE_LOAD_TIMEOUT_MS = 60000;
+const CLIP_DOWNLOAD_TIMEOUT_MS = 120000;
+const FINAL_FILM_TIMEOUT_MS = 120000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
+  });
+}
 
 // Fetch a remote URL (possibly cross-origin) and return as a Uint8Array
 async function fetchAsBytes(url: string, onProgress?: (pct: number) => void): Promise<Uint8Array> {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Fetch failed ${res.status}: ${url}`);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CLIP_DOWNLOAD_TIMEOUT_MS);
 
-  const contentLength = res.headers.get('content-length');
-  const total = contentLength ? Number(contentLength) : null;
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`Fetch failed ${res.status}: ${url}`);
 
-  if (!res.body || !total) {
-    const buf = await res.arrayBuffer();
-    onProgress?.(100);
-    return new Uint8Array(buf);
-  }
+    const contentLength = res.headers.get('content-length');
+    const total = contentLength ? Number(contentLength) : null;
 
-  const reader = res.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let loaded = 0;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) {
-      chunks.push(value);
-      loaded += value.byteLength;
-      onProgress?.(Math.round((loaded / total) * 100));
+    if (!res.body || !total) {
+      const buf = await res.arrayBuffer();
+      onProgress?.(100);
+      return new Uint8Array(buf);
     }
-  }
 
-  const merged = new Uint8Array(loaded);
-  let offset = 0;
-  for (const c of chunks) { merged.set(c, offset); offset += c.byteLength; }
-  return merged;
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let loaded = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        loaded += value.byteLength;
+        onProgress?.(Math.round((loaded / total) * 100));
+      }
+    }
+
+    const merged = new Uint8Array(loaded);
+    let offset = 0;
+    for (const c of chunks) { merged.set(c, offset); offset += c.byteLength; }
+    return merged;
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error('A video clip took too long to download');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export function useFFmpegVideo(): UseFFmpegStitchReturn {
   const ffmpegRef = useRef<any>(null);
+  const loadPromiseRef = useRef<Promise<boolean> | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -65,98 +91,132 @@ export function useFFmpegVideo(): UseFFmpegStitchReturn {
   const [error, setError] = useState<string | null>(null);
 
   const loadFFmpeg = useCallback(async (): Promise<boolean> => {
-    if (ffmpegRef.current && isReady) return true;
+    if (ffmpegRef.current) return true;
+    if (loadPromiseRef.current) return loadPromiseRef.current;
 
-    setIsLoading(true);
-    setError(null);
-    setProgress(0);
-    setStatus('Loading video engine...');
-
-    try {
-      // Dynamic import so FFmpeg only loads when actually needed
-      const { FFmpeg } = await import('@ffmpeg/ffmpeg');
-      const { toBlobURL } = await import('@ffmpeg/util');
-
-      const ffmpeg = new FFmpeg();
-
-      // Log FFmpeg output for debugging
-      ffmpeg.on('log', ({ message }: { message: string }) => {
-        console.log('[ffmpeg]', message);
-      });
-
-      ffmpeg.on('progress', ({ progress: p }: { progress: number }) => {
-        const pct = Math.round(p * 100);
-        setProgress(20 + Math.round(pct * 0.7)); // 20-90 range during encode
-      });
-
-      setStatus('Loading FFmpeg core (30MB)...');
-      setProgress(5);
-
-      // Load single-thread core from /public/ffmpeg (no SharedArrayBuffer needed)
-      const coreJsUrl = await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript');
-      setProgress(15);
-      const coreWasmUrl = await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm');
-      setProgress(20);
-
-      await ffmpeg.load({
-        coreURL: coreJsUrl,
-        wasmURL: coreWasmUrl,
-      });
-
-      ffmpegRef.current = ffmpeg;
-      setIsReady(true);
+    const loadPromise = (async () => {
+      setIsLoading(true);
+      setError(null);
       setProgress(0);
-      setStatus('');
-      return true;
-    } catch (err: any) {
-      console.error('[useFFmpegVideo] load error:', err);
-      setError('Failed to load video engine: ' + (err?.message || 'unknown'));
-      setIsReady(false);
-      return false;
+      setStatus('Preparing your final film...');
+
+      try {
+        // Dynamic import so FFmpeg only loads when actually needed
+        const { FFmpeg } = await import('@ffmpeg/ffmpeg');
+        const { toBlobURL } = await import('@ffmpeg/util');
+
+        const ffmpeg = new FFmpeg();
+
+        // Log FFmpeg output for debugging
+        ffmpeg.on('log', ({ message }: { message: string }) => {
+          console.log('[ffmpeg]', message);
+        });
+
+        ffmpeg.on('progress', ({ progress: p }: { progress: number }) => {
+          const pct = Math.round(p * 100);
+          setProgress(20 + Math.round(pct * 0.7)); // 20-90 range during encode
+        });
+
+        setStatus('Preparing final film engine...');
+        setProgress(5);
+
+        // Load single-thread core from /public/ffmpeg (no SharedArrayBuffer needed)
+        const coreJsUrl = await withTimeout(
+          toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript'),
+          CORE_LOAD_TIMEOUT_MS,
+          'Final film engine took too long to load',
+        );
+        setProgress(15);
+        const coreWasmUrl = await withTimeout(
+          toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm'),
+          CORE_LOAD_TIMEOUT_MS,
+          'Final film engine took too long to load',
+        );
+        setProgress(20);
+
+        try {
+          await withTimeout(
+            ffmpeg.load({ coreURL: coreJsUrl, wasmURL: coreWasmUrl }),
+            CORE_LOAD_TIMEOUT_MS,
+            'Final film engine took too long to start',
+          );
+        } catch (loadError) {
+          try { ffmpeg.terminate(); } catch (_) {}
+          throw loadError;
+        }
+
+        ffmpegRef.current = ffmpeg;
+        setIsReady(true);
+        setProgress(0);
+        setStatus('');
+        return true;
+      } catch (err: any) {
+        console.error('[useFFmpegVideo] load error:', err);
+        setError('Failed to prepare the final film: ' + (err?.message || 'unknown'));
+        setIsReady(false);
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    })();
+
+    loadPromiseRef.current = loadPromise;
+    try {
+      return await loadPromise;
     } finally {
-      setIsLoading(false);
+      if (loadPromiseRef.current === loadPromise) loadPromiseRef.current = null;
     }
-  }, [isReady]);
+  }, []);
 
   const stitchClips = useCallback(async (opts: StitchOptions): Promise<Blob | null> => {
     const { clipUrls, onProgress } = opts;
 
     if (!clipUrls.length) {
-      setError('No clips to stitch');
+      setError('No clips to assemble');
       return null;
     }
 
     setIsLoading(true);
     setError(null);
     setProgress(0);
-    setStatus('Preparing to stitch...');
+    setStatus('Preparing your final film...');
+    onProgress?.(0, 'Preparing your final film...');
 
     try {
       // Load FFmpeg if not already loaded
       const ready = await loadFFmpeg();
-      if (!ready || !ffmpegRef.current) throw new Error('FFmpeg failed to load');
+      if (!ready || !ffmpegRef.current) throw new Error('Final film engine failed to load');
 
       const ffmpeg = ffmpegRef.current;
+      const inputFiles = clipUrls.map((_, i) => `clip${i}.mp4`);
+      const downloadProgress = new Array(clipUrls.length).fill(0);
+      let nextIndex = 0;
+      let writeQueue: Promise<unknown> = Promise.resolve();
 
-      // ── Step 1: Fetch each clip and write to FFmpeg virtual FS ──
-      const inputFiles: string[] = [];
-      for (let i = 0; i < clipUrls.length; i++) {
-        const pct = Math.round((i / clipUrls.length) * 40);
-        setProgress(pct);
-        const msg = `Downloading clip ${i + 1}/${clipUrls.length}...`;
-        setStatus(msg);
-        onProgress?.(pct, msg);
+      // Download up to three clips in parallel while keeping file writes ordered.
+      const downloadWorker = async () => {
+        while (true) {
+          const index = nextIndex++;
+          if (index >= clipUrls.length) return;
 
-        const bytes = await fetchAsBytes(clipUrls[i], (dlPct) => {
-          const overall = Math.round(((i + dlPct / 100) / clipUrls.length) * 40);
-          setProgress(overall);
-          onProgress?.(overall, msg);
-        });
+          const bytes = await fetchAsBytes(clipUrls[index], (downloadPct) => {
+            downloadProgress[index] = downloadPct;
+            const averageProgress = downloadProgress.reduce((sum, pct) => sum + pct, 0) / clipUrls.length;
+            const overall = Math.round(averageProgress * 0.4);
+            setProgress(overall);
+            onProgress?.(overall, 'Downloading clips...');
+          });
 
-        const fname = `clip${i}.mp4`;
-        await ffmpeg.writeFile(fname, bytes);
-        inputFiles.push(fname);
-      }
+          const write = writeQueue.then(() => ffmpeg.writeFile(inputFiles[index], bytes));
+          writeQueue = write;
+          await write;
+        }
+      };
+
+      setStatus('Downloading clips...');
+      await Promise.all(
+        Array.from({ length: Math.min(3, clipUrls.length) }, () => downloadWorker()),
+      );
 
       // ── Step 2: Build concat list file ──
       const concatList = inputFiles.map(f => `file '${f}'`).join('\n');
@@ -164,26 +224,34 @@ export function useFFmpegVideo(): UseFFmpegStitchReturn {
       await ffmpeg.writeFile('concat.txt', concatBytes);
 
       // ── Step 3: Run FFmpeg concat demuxer (fast, no re-encode) ──
-      setStatus('Stitching clips...');
+      setStatus('Assembling your final film...');
       setProgress(45);
-      onProgress?.(45, 'Stitching clips...');
+      onProgress?.(45, 'Assembling your final film...');
 
-      await ffmpeg.exec([
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', 'concat.txt',
-        '-c', 'copy',          // stream copy — no re-encode, very fast
-        '-movflags', '+faststart',
-        'output.mp4',
-      ]);
+      await withTimeout(
+        ffmpeg.exec([
+          '-f', 'concat',
+          '-safe', '0',
+          '-i', 'concat.txt',
+          '-c', 'copy',          // stream copy — no re-encode, very fast
+          '-movflags', '+faststart',
+          'output.mp4',
+        ]),
+        FINAL_FILM_TIMEOUT_MS,
+        'Final film assembly took too long',
+      );
 
       // ── Step 4: Read output ──
-      setStatus('Finalizing...');
+      setStatus('Finishing your film...');
       setProgress(92);
-      onProgress?.(92, 'Finalizing...');
+      onProgress?.(92, 'Finishing your film...');
 
-      const data = await ffmpeg.readFile('output.mp4');
-      const blob = new Blob([data], { type: 'video/mp4' });
+      const data = await withTimeout<Uint8Array>(
+        ffmpeg.readFile('output.mp4') as Promise<Uint8Array>,
+        FINAL_FILM_TIMEOUT_MS,
+        'Final film finalization took too long',
+      );
+      const blob = new Blob([data.buffer as ArrayBuffer], { type: 'video/mp4' });
 
       // Cleanup virtual FS
       for (const f of inputFiles) {
@@ -194,12 +262,12 @@ export function useFFmpegVideo(): UseFFmpegStitchReturn {
 
       setProgress(100);
       setStatus('');
-      onProgress?.(100, 'Done!');
+      onProgress?.(100, 'Your final film is ready!');
       return blob;
 
     } catch (err: any) {
-      console.error('[useFFmpegVideo] stitch error:', err);
-      const msg = err?.message || 'Stitch failed';
+      console.error('[useFFmpegVideo] final film error:', err);
+      const msg = err?.message || 'Final film assembly failed';
       setError(msg);
       onProgress?.(0, 'Error: ' + msg);
       return null;

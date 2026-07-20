@@ -72,6 +72,7 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
   const chunksRef = useRef<BlobPart[]>([]);
   const planRef = useRef<WaktiOperatorPlan | null>(null);
   const pendingMusicRef = useRef<WaktiOperatorMusicRequest | null>(null);
+  const isClosingRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -88,17 +89,22 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const close = useCallback(() => {
+    isClosingRef.current = true;
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
-    } else {
-      cleanupStream();
-      setStage('idle');
     }
+    cleanupStream();
     pendingMusicRef.current = null;
+    planRef.current = null;
+    setPlan(null);
+    setTranscript('');
+    setError(null);
+    setStage('idle');
     setIsOpen(false);
   }, [cleanupStream]);
 
   const open = useCallback(() => {
+    isClosingRef.current = false;
     setError(null);
     setPlan(null);
     setTranscript('');
@@ -150,10 +156,16 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
         return;
       }
       const hasRemainingSafeSteps = nextPlan.steps.some((step) => step.risk === 'safe' && step.status !== 'completed' && step.status !== 'paused');
+      const hasPausedSteps = nextPlan.steps.some((step) => step.status === 'paused');
       setError(null);
+      if (status === 'completed' && !hasRemainingSafeSteps && !hasPausedSteps) {
+        setStage('idle');
+        window.setTimeout(() => close(), 180);
+        return;
+      }
       setStage(hasRemainingSafeSteps ? 'executing' : 'idle');
     });
-  }, [language]);
+  }, [close, language]);
 
   const executePlan = useCallback(async (nextPlan: WaktiOperatorPlan) => {
     if (nextPlan.mode === 'guidance' || nextPlan.mode === 'interaction') {
@@ -186,6 +198,7 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
   }, [navigate, updateStep]);
 
   const runTextRequest = useCallback(async (request: string) => {
+    if (isClosingRef.current) return;
     if (!user?.id) {
       throw new Error(language === 'ar' ? 'يجب تسجيل الدخول أولاً.' : 'You need to sign in first.');
     }
@@ -266,6 +279,7 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
       headers: { 'Content-Type': 'application/json' },
     });
     const nextTranscript = (response?.transcript || '').trim();
+    if (isClosingRef.current) return;
     if (!nextTranscript) {
       throw new Error(language === 'ar' ? 'لم أسمع نصاً واضحاً.' : 'I did not get a clear transcript.');
     }
@@ -273,6 +287,7 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
   }, [language, runTextRequest, user?.id]);
 
   const startRecording = useCallback(async () => {
+    isClosingRef.current = false;
     if (!user) {
       toast.error(language === 'ar' ? 'سجّل الدخول أولاً.' : 'Please sign in first.');
       return;
