@@ -542,6 +542,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [cinemaFormat, setCinemaFormat] = useState<'16:9' | '9:16' | '4:5'>('16:9');
   const [selectedPlatform, setSelectedPlatform] = useState<'youtube' | 'tiktok' | 'instagram' | 'snapchat' | null>(null);
   const [selectedSubFormat, setSelectedSubFormat] = useState<string | null>(null);
+  const [cinemaMode] = useState<'auto' | 'custom'>('auto');
 
   // Role 2 & 3 — Artist & Cloner
   const [sceneImages, setSceneImages] = useState<(string | null)[]>([]);
@@ -579,7 +580,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [brandAnchor, setBrandAnchor] = useState<string | null>(null);
   const [isUploadingBrand, setIsUploadingBrand] = useState(false);
   const [showBrandSavedPicker, setShowBrandSavedPicker] = useState(false);
-  const [anchorTag, setAnchorTag] = useState<'logo' | 'style' | 'character'>('style');
+  const [anchorTag, setAnchorTag] = useState<'logo' | 'product' | 'style' | 'character'>('style');
 
   // Legacy saved-reference state remains available for existing saved assets.
   const [cinemaReferenceImages, setCinemaReferenceImages] = useState<(string | null)[]>([]);
@@ -591,7 +592,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const castingSessionRef = useRef<{
     artistCall: ((body: Record<string, unknown>) => Promise<any>) | null;
     sceneSlotMap: Record<number, string>;
-    effectiveTag: 'logo' | 'style' | 'character';
+    effectiveTag: 'logo' | 'product' | 'style' | 'character';
     accessToken: string;
   }>({ artistCall: null, sceneSlotMap: {}, effectiveTag: 'style', accessToken: '' });
 
@@ -1688,6 +1689,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     }
 
     setIsDirecting(true);
+    setCinemaVision(idea);
     setCinemaScenes([]);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
@@ -1812,6 +1814,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
         if (effectiveTag === 'character' && brandAnchor) {
           const chainPrompt = `Maintain 100% identity match with the character in the reference image. New environment and action only: ${epScene}`;
           created = await artistCall({ mode: 'i2i_create', prompt: chainPrompt.slice(0, 2500), anchor_url: chainAnchor, anchor_pipeline: 'character', scene_index: nextIdx, aspect_ratio: cinemaFormat });
+        } else if (effectiveTag === 'product' && brandAnchor) {
+          const productPrompt = `Maintain the exact same product design, proportions, materials, colors, and distinctive details from the reference image. Change only the setting, action, and composition: ${epScene}`;
+          created = await artistCall({ mode: 'i2i_create', prompt: productPrompt.slice(0, 2500), anchor_url: chainAnchor, anchor_pipeline: 'product', scene_index: nextIdx, aspect_ratio: cinemaFormat });
         } else if (effectiveTag === 'logo' && brandAnchor && isLastScene) {
           const payoffPrompt = `${epScene} The brand logo and visual identity must be strongly re-introduced. Maintain 100% subject consistency with the reference image.`;
           created = await artistCall({ mode: 'i2i_create', prompt: payoffPrompt.slice(0, 2500), anchor_url: chainAnchor, anchor_pipeline: 'style', scene_index: nextIdx, aspect_ratio: cinemaFormat });
@@ -1887,7 +1892,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       }
     });
 
-    const effectiveTag = (brandAnchor ? anchorTag : 'style') as 'logo' | 'style' | 'character';
+    const effectiveTag = (brandAnchor ? anchorTag : 'style') as 'logo' | 'product' | 'style' | 'character';
 
     // Store session context so generateNextScene can access it without stale closure
     castingSessionRef.current = { artistCall, sceneSlotMap, effectiveTag, accessToken };
@@ -1915,6 +1920,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
           } else if (effectiveTag === 'character' && brandAnchor) {
             // Character mode S1: i2i from character reference
             created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'character', scene_index: 0, aspect_ratio: cinemaFormat });
+          } else if (effectiveTag === 'product' && brandAnchor) {
+            // Product mode S1: i2i from product reference
+            created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'product', scene_index: 0, aspect_ratio: cinemaFormat });
           } else if (effectiveTag === 'style' && brandAnchor) {
             created = await artistCall({ mode: 'i2i_create', prompt: ep1, anchor_url: brandAnchor, anchor_pipeline: 'style', scene_index: 0, aspect_ratio: cinemaFormat });
           } else {
@@ -2275,20 +2283,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
       if (!accessToken) throw new Error('Not authenticated');
-      const effectiveVibe = cinemaVibe.includes('Custom') ? cinemaVibeCustom : cinemaVibe.filter(v => v !== 'Custom').join(', ');
-      const effectiveSetting = cinemaSetting.includes('Custom') ? cinemaSettingCustom : cinemaSetting.filter(v => v !== 'Custom').join(', ');
-      const effectiveAction = cinemaAction.includes('Custom') ? cinemaActionCustom : cinemaAction.filter(v => v !== 'Custom').join(', ');
-      const effectiveCTA = cinemaCTA.includes('Custom') ? cinemaCTACustom : cinemaCTA.filter(v => v !== 'Custom').join(', ');
-      const builtVision = [
-        cinemaSubject && `Subject: ${cinemaSubject}`,
-        effectiveSetting && `Setting: ${effectiveSetting}`,
-        effectiveAction && `Action: ${effectiveAction}`,
-        effectiveVibe && `Vibe: ${effectiveVibe}`,
-        effectiveCTA && `Goal: ${effectiveCTA}`,
-      ].filter(Boolean).join('. ');
-      const visionToSend = cinemaVision.trim() && builtVision
-        ? `PRODUCTION BRIEF:\n${builtVision}\n\nSTORY VISION:\n${cinemaVision.trim()}`
-        : cinemaVision.trim() || builtVision;
+      const visionToSend = cinemaSubject.trim();
       const promptSafety = inspectGenerationPrompt(visionToSend, language);
       if (!promptSafety.allowed) {
         showPromptBlockedPopup(promptSafety.message);
@@ -2297,7 +2292,12 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-director`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Accept: 'application/json', Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY },
-        body: JSON.stringify({ vision: visionToSend, language, scene_count: cinemaSceneCount }),
+        body: JSON.stringify({
+          vision: visionToSend,
+          language,
+          brand_anchor_url: brandAnchor || undefined,
+          anchor_tag: brandAnchor ? anchorTag : undefined,
+        }),
       });
       const result = await resp.json().catch(() => ({}));
       if (result?.success && Array.isArray(result.scenes)) {
@@ -2315,7 +2315,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } finally {
       setRegenSceneNum(null);
     }
-  }, [user, regenSceneNum, cinemaSubject, cinemaSetting, cinemaSettingCustom, cinemaAction, cinemaActionCustom, cinemaVibe, cinemaVibeCustom, cinemaCTA, cinemaCTACustom, cinemaVision, language, cinemaSceneCount]);
+  }, [user, regenSceneNum, cinemaSubject, language, brandAnchor, anchorTag]);
 
   // ── Cinema AMP ⚡️ — enhance cinemaSubject prompt with gpt-4o-mini ──
   const handleCinemaAmp = useCallback(async () => {
@@ -2382,8 +2382,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       // and returned a permanent public URL. We only need to insert the DB record.
       const { error: dbError } = await (supabase as any).from('user_videos').insert({
         user_id: user.id,
-        title: cinemaVision.trim().slice(0, 60) || 'Wakti Cinema',
-        description: cinemaVision.trim() || null,
+        title: cinemaSubject.trim().slice(0, 60) || 'Wakti Cinema',
+        description: cinemaSubject.trim() || null,
         storage_path: null,
         video_url: premiereVideoUrl,
         thumbnail_url: sceneImages[0] || null,
@@ -4438,7 +4438,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                     )}
 
                     {/* ── Scene Stepper (auto mode) / Upload grid (custom mode) ── */}
-                    {false ? (
+                    {cinemaMode === 'custom' ? (
                       // ── CUSTOM MODE: 2-col upload grid ──
                       <div className="grid grid-cols-2 gap-3">
                         {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {

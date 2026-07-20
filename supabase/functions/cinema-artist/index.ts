@@ -179,6 +179,8 @@ serve(async (req) => {
         fullPrompt = `Integrate the provided logo/brand asset into this background scene: ${prompt}. Keep the logo pixels 100% original and unmodified. Do not redraw or alter the logo shape.`;
       } else if (anchor_pipeline === 'character') {
         fullPrompt = `Recreate the EXACT same character(s) from the reference image in a NEW scene: ${prompt}. CRITICAL: preserve the exact same art style (cartoon, anime, 3D render, realistic — whatever the reference is), same character design, same faces, same proportions, same clothing/uniforms, same color palette. Only change the ACTION and COMPOSITION to match the new scene description. Do NOT change the art style to photorealistic if the reference is cartoon/animated.`;
+      } else if (anchor_pipeline === 'product') {
+        fullPrompt = `Recreate the EXACT same product from the reference image in a NEW scene: ${prompt}. Preserve its exact design, proportions, materials, colors, labels, and distinctive details. Only change the environment, action, camera, and composition. Do not redesign, replace, or invent a different product.`;
       } else {
         // style (default): extract color palette and lighting only
         fullPrompt = `Apply the color palette, lighting mood, and atmosphere of the reference image to this scene: ${prompt}. Do not draw the reference objects, logos, or brand marks — use only the colors and light.`;
@@ -187,7 +189,7 @@ serve(async (req) => {
 
       console.log(`[cinema-artist] I2I create scene ${scene_index}, pipeline=${anchor_pipeline}, anchor=${String(anchor_url).slice(0, 60)}`);
       try {
-        const charStrength = anchor_pipeline === 'character' ? 0.35 : anchor_pipeline === 'logo' ? 0.45 : 0.55;
+        const charStrength = anchor_pipeline === 'character' || anchor_pipeline === 'product' ? 0.35 : anchor_pipeline === 'logo' ? 0.45 : 0.55;
         const id = await kieCreateTask('grok-imagine/image-to-image', { prompt: fullPrompt, image_urls: [anchor_url], strength: charStrength });
         return new Response(JSON.stringify({ ok: true, task_id: id, scene_index }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       } catch (i2iErr) {

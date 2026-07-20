@@ -2598,9 +2598,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
             <Sparkles className="h-8 w-8 text-orange-500/60" />
           </div>
           <p className="text-sm text-muted-foreground text-center max-w-xs">
-            {language === 'ar'
-              ? 'صورتك ستظهر هنا. اكتب وصفاً واضغط إنشاء.'
-              : 'Your image will appear here. Write a prompt and hit Generate.'}
+            {submode === 'background-removal'
+              ? (language === 'ar' ? 'ارفع صورة واضغط إزالة الخلفية.' : 'Upload an image and tap Remove background.')
+              : (language === 'ar' ? 'صورتك ستظهر هنا. اكتب وصفاً واضغط إنشاء.' : 'Your image will appear here. Write a prompt and hit Generate.')}
           </p>
         </div>
       ))}
