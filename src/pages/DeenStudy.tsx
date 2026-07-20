@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp, X, Target, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp, X, Target, Search, Trash2, Loader2 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -17,6 +17,49 @@ interface StudyPlan {
   startSurah?: number;
   startAyah?: number;
   customName?: string;
+}
+
+async function fetchAyahLite(surahNumber: number, ayahNumber: number): Promise<AyahData | null> {
+  try {
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
+    const session = await supabase.auth.getSession();
+    const token = session.data.session?.access_token ?? anonKey;
+    const headers = { Authorization: `Bearer ${token}`, apikey: anonKey };
+    const buildUrl = (edition: string) => {
+      const u = new URL(`${supabaseUrl}/functions/v1/deen-quran-proxy`);
+      u.searchParams.set("path", `ayah/${surahNumber}:${ayahNumber}`);
+      u.searchParams.set("edition", edition);
+      return u.toString();
+    };
+    const [arRes, enRes, auRes] = await Promise.all([
+      fetch(buildUrl("quran-uthmani"), { headers }),
+      fetch(buildUrl("en.sahih"), { headers }),
+      fetch(buildUrl("ar.alafasy"), { headers }),
+    ]);
+
+    const arJson = await arRes.json();
+    const enJson = await enRes.json();
+    const auJson = await auRes.json();
+
+    const arText: string = arJson?.data?.text ?? "";
+    const enText: string = enJson?.data?.text ?? "";
+    const audioUrl: string = auJson?.data?.audio ?? "";
+
+    if (!arText) {
+      return fetchAyah(surahNumber, ayahNumber);
+    }
+
+    return {
+      surah_number: surahNumber,
+      ayah_number: ayahNumber,
+      arabic: arText,
+      translation: enText,
+      audioUrl,
+    };
+  } catch {
+    return fetchAyah(surahNumber, ayahNumber);
+  }
 }
 
 interface StudyPlanStore {
@@ -108,6 +151,31 @@ function stripBasmala(text: string): string {
   // Drop the first 4 whitespace-separated tokens unconditionally.
   const words = text.trim().split(/\s+/);
   return words.slice(4).join(" ");
+}
+
+function cleanApiText(text: string): string {
+  return text
+    .replace(/\u06DD+[\s\d٠-٩]*/g, "")
+    .replace(/[\u0615\u0616\u0617\u0618\u0619\u061A\u08D2\u08D3\u08D4\u08D5\u08D6\u08D7]/g, "")
+    .trim();
+}
+
+function getArabicDisplayText(
+  surahNum: number,
+  ayahNum: number,
+  apiText: string,
+  localHafsByAyah: Record<string, string>
+): string {
+  if (surahNum === 1) {
+    return ayahNum === 1 ? stripBasmala(apiText) : apiText;
+  }
+  const key = `${surahNum}:${ayahNum}`;
+  if (localHafsByAyah[key]) {
+    return localHafsByAyah[key];
+  }
+  return ayahNum === 1 && surahNum !== 9
+    ? stripBasmala(cleanApiText(apiText))
+    : cleanApiText(apiText);
 }
 
 function surahName(n: number, isAr: boolean): string {
@@ -205,6 +273,10 @@ export default function DeenStudy() {
   const [expandedSurah, setExpandedSurah] = useState<number | null>(null);
   const [showAllLearntToday, setShowAllLearntToday] = useState(false);
   const [localHafsByAyah, setLocalHafsByAyah] = useState<Record<string, string>>({});
+  const [reviewAyahs, setReviewAyahs] = useState<AyahData[]>([]);
+  const [showReview, setShowReview] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [loadingNextAyah, setLoadingNextAyah] = useState(false);
   const plan = planStore.plans.find((p) => p.id === planStore.activePlanId) ?? planStore.plans[0] ?? null;
 
   const reloadMemorization = useCallback(() => {
@@ -279,9 +351,17 @@ export default function DeenStudy() {
 
   const onPlayerComplete = useCallback(async (result: "memorized") => {
     if (!sessionAyah) return;
+    let nextSurah = sessionAyah.surah_number;
+    let nextAyah = sessionAyah.ayah_number + 1;
+    const currentSurahMeta = SURAH_LIST.find((s) => s.n === sessionAyah.surah_number);
+    if (currentSurahMeta && nextAyah > currentSurahMeta.ayahs) {
+      nextSurah = sessionAyah.surah_number + 1;
+      nextAyah = 1;
+    }
+
     await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
     if (plan && playerMode === "learn") {
-      const updated: StudyPlan = { ...plan, currentSurah: sessionAyah.surah_number, currentAyah: sessionAyah.ayah_number + 1 };
+      const updated: StudyPlan = { ...plan, currentSurah: nextSurah, currentAyah: nextAyah };
       setPlanStore((prev) => {
         const next: StudyPlanStore = {
           ...prev,
@@ -291,10 +371,39 @@ export default function DeenStudy() {
         return next;
       });
     }
-    setSessionAyah(null);
-    reloadMemorization();
-    toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟");
-  }, [sessionAyah, plan, playerMode, upsertMemorization, reloadMemorization, isAr]);
+    // Build continuous memorized chain backwards within same surah
+    const chain: AyahData[] = [sessionAyah];
+    let prev = sessionAyah.ayah_number - 1;
+    while (prev >= 1 && chain.length < 3) {
+      const isMemorized = memorization.some(
+        (m) => m.surah_number === sessionAyah.surah_number && m.ayah_number === prev && m.status === "memorized"
+      );
+      if (!isMemorized) break;
+      const data = await fetchAyahLite(sessionAyah.surah_number, prev);
+      if (data) chain.unshift(data);
+      prev--;
+    }
+    if (chain.length > 1) {
+      setReviewAyahs(chain);
+      setShowReview(true);
+      setSessionAyah(null);
+      reloadMemorization();
+    } else if (playerMode === "learn" && plan) {
+      setLoadingNextAyah(true);
+      const nextData = await fetchAyahLite(nextSurah, nextAyah);
+      setLoadingNextAyah(false);
+      if (nextData) {
+        setSessionAyah(nextData);
+        setPlayerMode("learn");
+      } else {
+        setSessionAyah(null);
+      }
+      reloadMemorization();
+    } else {
+      setSessionAyah(null);
+      reloadMemorization();
+    }
+  }, [sessionAyah, plan, playerMode, upsertMemorization, reloadMemorization, isAr, memorization]);
 
   const onPlayerNotYet = useCallback(async () => {
     if (!sessionAyah) return;
@@ -443,9 +552,34 @@ export default function DeenStudy() {
           mode={playerMode}
           isAr={isAr}
           localHafsByAyah={localHafsByAyah}
+          loadingNext={loadingNextAyah}
           onComplete={onPlayerComplete}
           onNotYet={onPlayerNotYet}
           onClose={() => setSessionAyah(null)}
+        />
+      )}
+
+      {showReview && (
+        <ReviewOverlay
+          ayahs={reviewAyahs}
+          isAr={isAr}
+          localHafsByAyah={localHafsByAyah}
+          loading={reviewLoading}
+          onReturn={() => { setShowReview(false); setActiveTab("today"); toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟"); }}
+          onNext={async () => {
+            if (!plan || !plan.currentSurah || !plan.currentAyah) return;
+            setReviewLoading(true);
+            const nextData = await fetchAyahLite(plan.currentSurah, plan.currentAyah);
+            setReviewLoading(false);
+            if (nextData) {
+              setShowReview(false);
+              setSessionAyah(nextData);
+              setPlayerMode("learn");
+              toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟");
+            } else {
+              toast.error(isAr ? "تعذر تحميل الآية التالية" : "Could not load next ayah");
+            }
+          }}
         />
       )}
 
@@ -1133,36 +1267,17 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   );
 }
 
-function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet, onClose }: {
+function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, loadingNext, onComplete, onNotYet, onClose }: {
   ayah: AyahData;
   mode: "learn" | "review";
   isAr: boolean;
   localHafsByAyah: Record<string, string>;
+  loadingNext?: boolean;
   onComplete: (result: "memorized") => Promise<void>;
   onNotYet: () => Promise<void>;
   onClose: () => void;
 }) {
-  const cleanApiText = (text: string): string => {
-    return text
-      .replace(/\u06DD+[\s\d٠-٩]*/g, "")
-      .replace(/[\u0615\u0616\u0617\u0618\u0619\u061A\u08D2\u08D3\u08D4\u08D5\u08D6\u08D7]/g, "")
-      .trim();
-  };
-  const getArabicDisplay = (): string => {
-    // Keep existing Surah 1 behavior unchanged
-    if (ayah.surah_number === 1) {
-      return ayah.ayah_number === 1
-        ? stripBasmala(ayah.arabic)
-        : ayah.arabic;
-    }
-    const key = `${ayah.surah_number}:${ayah.ayah_number}`;
-    if (localHafsByAyah[key]) {
-      return localHafsByAyah[key];
-    }
-    return ayah.ayah_number === 1 && ayah.surah_number !== 9
-      ? stripBasmala(cleanApiText(ayah.arabic))
-      : cleanApiText(ayah.arabic);
-  };
+  const displayArabic = getArabicDisplayText(ayah.surah_number, ayah.ayah_number, ayah.arabic, localHafsByAyah);
   const { theme } = useTheme();
   const dark = theme === "dark";
   const [phase, setPhase] = useState<"listen" | "recall">("listen");
@@ -1177,6 +1292,19 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const surahInfo = SURAH_LIST.find((s) => s.n === ayah.surah_number);
   const audioUrl = ayah.audioUrl ?? "";
+
+  // Reset player state when ayah changes
+  useEffect(() => {
+    setPhase("listen");
+    setHidden(false);
+    setPlaying(false);
+    setLoopCount(0);
+    setTargetLoops(3);
+    targetLoopsRef.current = 3;
+    setProgress(0);
+    setDuration(0);
+    setCompleting(false);
+  }, [ayah.surah_number, ayah.ayah_number]);
 
   useEffect(() => {
     const audio = new Audio(audioUrl);
@@ -1348,8 +1476,8 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
 
         {/* Basmala */}
         {ayah.ayah_number === 1 && ayah.surah_number !== 9 && !hidden && (
-          <p className="text-center font-serif text-base leading-loose" dir="rtl"
-            style={{ color: amberText }}>
+          <p className="text-center text-base leading-loose" dir="rtl"
+            style={{ color: amberText, fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif" }}>
             بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
           </p>
         )}
@@ -1366,7 +1494,14 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
                 : `0 4px 32px ${greenAlpha(0.10)}`,
           }}
         >
-          {hidden ? (
+          {loadingNext ? (
+            <div className="py-8 flex flex-col items-center gap-3">
+              <Loader2 className="w-8 h-8 animate-spin" style={{ color: textSec }} />
+              <p className="text-sm font-semibold" style={{ color: textSec }}>
+                {isAr ? "جاري تحميل الآية التالية..." : "Loading next ayah..."}
+              </p>
+            </div>
+          ) : hidden ? (
             <div className="py-5 flex flex-col items-center gap-3">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center"
                 style={{ background: greenAlpha(0.10), border: `1px solid ${greenAlpha(0.22)}` }}>
@@ -1378,7 +1513,7 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
             </div>
           ) : (
             <p className="text-[1.6rem] leading-[2.2]" style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: textPri }} dir="rtl">
-              {getArabicDisplay()}
+              {displayArabic}
             </p>
           )}
         </div>
@@ -1529,6 +1664,94 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
             </div>
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ReviewOverlay({ ayahs, isAr, localHafsByAyah, loading, onReturn, onNext }: {
+  ayahs: AyahData[];
+  isAr: boolean;
+  localHafsByAyah: Record<string, string>;
+  loading: boolean;
+  onReturn: () => void;
+  onNext: () => void | Promise<void>;
+}) {
+  const { theme } = useTheme();
+  const dark = theme === "dark";
+  const bg = dark ? "#0c0f14" : "#fcfefd";
+  const surface = dark ? "rgba(96,96,98,0.12)" : "rgba(220,220,222,0.18)";
+  const border = dark ? "rgba(96,96,98,0.28)" : "rgba(220,220,222,0.35)";
+  const textPri = dark ? "#f2f2f2" : "#060541";
+  const textSec = dark ? "#858384" : "#606062";
+  const green = "hsl(142,76%,40%)";
+  const surahInfo = SURAH_LIST.find((s) => s.n === ayahs[0]?.surah_number);
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: bg }}>
+      {/* Header */}
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between" style={{ borderBottom: `1px solid ${border}` }}>
+        <h1 className="text-base font-bold" style={{ color: textPri }}>
+          {isAr ? "مراجعة" : "Review"} — {surahInfo ? (isAr ? surahInfo.ar : surahInfo.en) : ""}
+        </h1>
+      </div>
+
+      {/* Scrollable content */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+        {ayahs.map((ayah) => (
+          <div
+            key={`${ayah.surah_number}:${ayah.ayah_number}`}
+            className="rounded-2xl px-5 py-6 text-center"
+            style={{ background: surface, border: `1px solid ${border}` }}
+          >
+            <p className="text-xs font-semibold mb-2" style={{ color: textSec }}>
+              {isAr ? `آية ${ayah.ayah_number}` : `Ayah ${ayah.ayah_number}`}
+            </p>
+            <p
+              className="text-[1.5rem] leading-[2.2]"
+              style={{ fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif", color: textPri }}
+              dir="rtl"
+            >
+              {getArabicDisplayText(ayah.surah_number, ayah.ayah_number, ayah.arabic, localHafsByAyah)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      {/* Sticky bottom */}
+      <div
+        className="px-4 py-3 flex flex-col gap-3"
+        style={{
+          borderTop: `1px solid ${border}`,
+          background: dark ? "rgba(12,15,20,0.96)" : "rgba(252,254,253,0.96)",
+          backdropFilter: "blur(20px)",
+          paddingBottom: "max(env(safe-area-inset-bottom, 0px) + 12px, 24px)",
+        }}
+      >
+        <p className="text-center text-xs font-semibold leading-snug" style={{ color: textSec }}>
+          {isAr ? "تدرب على التسلسل المحفوظ" : "Practice your memorized sequence"}
+        </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onReturn}
+            className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all"
+            style={{ background: surface, color: textPri, border: `1px solid ${border}` }}
+          >
+            {isAr ? "رجوع" : "Return"}
+          </button>
+        <button
+          onClick={onNext}
+          disabled={loading}
+          className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all flex items-center justify-center gap-1 disabled:opacity-50"
+          style={{ background: green, color: "#fff" }}
+        >
+          <span>{loading ? (isAr ? "جاري..." : "Loading...") : (isAr ? "التالي" : "Next")}</span>
+          {!loading && <ArrowRight
+            className="w-4 h-4"
+            style={{ transform: isAr ? "rotate(180deg)" : undefined }}
+          />}
+        </button>
+        </div>
       </div>
     </div>
   );
