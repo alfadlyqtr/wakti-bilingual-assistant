@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp, X, Target, Search, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Brain, Bookmark, CheckCircle, RotateCcw, Undo2, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp, X, Target, Search, Trash2 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -123,16 +123,28 @@ function getArabicDisplayText(
   apiText: string,
   localHafsByAyah: Record<string, string>
 ): string {
-  if (surahNum === 1) {
-    return ayahNum === 1 ? stripBasmala(apiText) : apiText;
-  }
   const key = `${surahNum}:${ayahNum}`;
   if (localHafsByAyah[key]) {
     return localHafsByAyah[key];
   }
+  if (surahNum === 1) {
+    return apiText;
+  }
   return ayahNum === 1 && surahNum !== 9
     ? stripBasmala(cleanApiText(apiText))
     : cleanApiText(apiText);
+}
+
+function getNextAyahCursor(surahNum: number, ayahNum: number): { surah: number; ayah: number } | null {
+  const index = SURAH_LIST.findIndex((s) => s.n === surahNum);
+  if (index === -1) return null;
+  const current = SURAH_LIST[index];
+  if (ayahNum < current.ayahs) {
+    return { surah: surahNum, ayah: ayahNum + 1 };
+  }
+  const next = SURAH_LIST[index + 1];
+  if (!next) return null;
+  return { surah: next.n, ayah: 1 };
 }
 
 function surahName(n: number, isAr: boolean): string {
@@ -233,6 +245,7 @@ export default function DeenStudy() {
   const [reviewAyahs, setReviewAyahs] = useState<AyahData[]>([]);
   const [showReview, setShowReview] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewSourceMode, setReviewSourceMode] = useState<"learn" | "review">("learn");
   const plan = planStore.plans.find((p) => p.id === planStore.activePlanId) ?? planStore.plans[0] ?? null;
 
   const reloadMemorization = useCallback(() => {
@@ -309,7 +322,10 @@ export default function DeenStudy() {
     if (!sessionAyah) return;
     await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
     if (plan && playerMode === "learn") {
-      const updated: StudyPlan = { ...plan, currentSurah: sessionAyah.surah_number, currentAyah: sessionAyah.ayah_number + 1 };
+      const nextCursor = getNextAyahCursor(sessionAyah.surah_number, sessionAyah.ayah_number);
+      const updated: StudyPlan = nextCursor
+        ? { ...plan, currentSurah: nextCursor.surah, currentAyah: nextCursor.ayah }
+        : { ...plan, currentSurah: sessionAyah.surah_number, currentAyah: sessionAyah.ayah_number };
       setPlanStore((prev) => {
         const next: StudyPlanStore = {
           ...prev,
@@ -332,6 +348,7 @@ export default function DeenStudy() {
       prev--;
     }
     setReviewAyahs(chain);
+    setReviewSourceMode(playerMode);
     setShowReview(true);
     setSessionAyah(null);
     reloadMemorization();
@@ -495,18 +512,31 @@ export default function DeenStudy() {
           ayahs={reviewAyahs}
           isAr={isAr}
           localHafsByAyah={localHafsByAyah}
+          reviewOnly={reviewSourceMode === "review"}
           loading={reviewLoading}
-          onReturn={() => { setShowReview(false); setActiveTab("today"); toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟"); }}
+          onReturn={() => { setShowReview(false); setActiveTab("today"); }}
           onNext={async () => {
+            if (reviewSourceMode === "review") {
+              setShowReview(false);
+              return;
+            }
             if (!plan || !plan.currentSurah || !plan.currentAyah) return;
+            const nextTarget = { surah: plan.currentSurah, ayah: plan.currentAyah };
+            const maxSurah = SURAH_LIST[SURAH_LIST.length - 1]?.n ?? 114;
+            const currentSurahMeta = SURAH_LIST.find((s) => s.n === nextTarget.surah);
+            if (!currentSurahMeta || nextTarget.surah > maxSurah || nextTarget.ayah < 1 || nextTarget.ayah > currentSurahMeta.ayahs) {
+              setShowReview(false);
+              toast.success(isAr ? "أكملت المصحف كاملًا 🌟" : "You completed the Quran 🌟");
+              return;
+            }
             setReviewLoading(true);
-            const nextData = await fetchAyah(plan.currentSurah, plan.currentAyah);
+            const nextData = await fetchAyah(nextTarget.surah, nextTarget.ayah);
             setReviewLoading(false);
             if (nextData) {
               setShowReview(false);
               setSessionAyah(nextData);
               setPlayerMode("learn");
-              toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟");
+              toast.success(isAr ? "أحسنت 🌟" : "Well done 🌟", { duration: 900 });
             } else {
               toast.error(isAr ? "تعذر تحميل الآية التالية" : "Could not load next ayah");
             }
@@ -1210,7 +1240,7 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
   const displayArabic = getArabicDisplayText(ayah.surah_number, ayah.ayah_number, ayah.arabic, localHafsByAyah);
   const { theme } = useTheme();
   const dark = theme === "dark";
-  const [phase, setPhase] = useState<"listen" | "recall">("listen");
+  const [phase, setPhase] = useState<"listen" | "recall">(mode === "review" ? "recall" : "listen");
   const [hidden, setHidden] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [loopCount, setLoopCount] = useState(0);
@@ -1324,6 +1354,7 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
   };
 
   const isListen = phase === "listen";
+  const shouldCenterAyahZone = !hidden && displayArabic.trim().length <= 120;
 
   // ── Wakti brand tokens (no purple) ──
   const bg        = dark ? "#0c0f14" : "#fcfefd";
@@ -1389,10 +1420,10 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
       </div>
 
       {/* ── AYAH ZONE ── */}
-      <div className="flex-1 flex flex-col justify-start px-5 py-5 overflow-y-auto gap-4">
+      <div className={`flex-1 flex flex-col px-5 py-5 overflow-y-auto gap-4 ${shouldCenterAyahZone ? "justify-center" : "justify-start"}`}>
 
         {/* Basmala */}
-        {ayah.ayah_number === 1 && ayah.surah_number !== 9 && !hidden && (
+        {ayah.ayah_number === 1 && ayah.surah_number !== 9 && ayah.surah_number !== 1 && !hidden && (
           <p className="text-center text-base leading-loose" dir="rtl"
             style={{ color: amberText, fontFamily: "'Uthmanic Hafs', 'Noto Sans Arabic', 'Amiri', serif" }}>
             بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
@@ -1447,15 +1478,23 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
         }}
       >
         {/* Guidance */}
-        <p className="text-center text-xs leading-snug" style={{ color: textSec }}>
-          {isListen
-            ? (loopCount === 0
+        {isListen ? (
+          <p className="text-center text-xs leading-snug" style={{ color: textSec }}>
+            {loopCount === 0
               ? (isAr ? "اضغط تشغيل واستمع بتركيز — حاول حفظها" : "Tap play · listen carefully · try to memorize it")
               : loopCount < targetLoops
                 ? (isAr ? "ردد الآية بصوت عالٍ مع كل تكرار" : "Repeat it aloud with every loop")
-                : (isAr ? "أحسنت! انتقل الآن إلى الاختبار" : "Well done! Now move on to recall"))
-            : (isAr ? "أخفِ الآية وحاول تذكرها، ثم قيّم نفسك" : "Hide the ayah · try to recall · then rate yourself")}
-        </p>
+                : (isAr ? "أحسنت! انتقل الآن إلى الاختبار" : "Well done! Now move on to recall")}
+          </p>
+        ) : mode === "review" ? (
+          <button
+            onClick={goBackToListen}
+            className="mx-auto px-3 py-1.5 rounded-full text-[11px] font-semibold active:scale-95 transition-all"
+            style={{ background: blueAlpha(dark ? 0.24 : 0.18), color: dark ? "#dbeafe" : "#060541", border: `1px solid ${blueAlpha(dark ? 0.50 : 0.42)}` }}
+          >
+            {isAr ? "تريد سماعها أولًا؟ انتقل إلى الاستماع" : "Prefer to hear it first? Go to listen"}
+          </button>
+        ) : null}
 
         {/* ── LISTEN controls ── */}
         {isListen && (
@@ -1561,7 +1600,15 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
                 className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
                 style={{ background: redAlpha(0.12), color: red, border: `1px solid ${redAlpha(0.28)}` }}>
                 <span className="text-xl">❌</span>
-                <span className="text-xs font-bold">{isAr ? "غير محفوظ" : "Not Memorized"}</span>
+                {mode === "review" ? (
+                  isAr ? (
+                    <span className="text-xs font-bold">وضع كغير محفوظ</span>
+                  ) : (
+                    <span className="text-xs font-bold">Remove</span>
+                  )
+                ) : (
+                  <span className="text-xs font-bold">{isAr ? "غير محفوظ" : "Not Memorized"}</span>
+                )}
               </button>
               <button
                 onClick={() => handleComplete("memorized")}
@@ -1569,7 +1616,7 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
                 className="flex-1 py-4 rounded-xl text-xs font-bold active:scale-95 transition-all disabled:opacity-50 flex flex-col items-center gap-1"
                 style={{ background: greenAlpha(0.12), color: green, border: `1px solid ${greenAlpha(0.28)}` }}>
                 <span className="text-xl">✅</span>
-                <span className="text-xs font-bold">{isAr ? "محفوظ" : "Memorized"}</span>
+                <span className="text-xs font-bold">{mode === "review" ? (isAr ? "تمام" : "All good") : (isAr ? "محفوظ" : "Memorized")}</span>
               </button>
             </div>
           </div>
@@ -1579,10 +1626,11 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet
   );
 }
 
-function ReviewOverlay({ ayahs, isAr, localHafsByAyah, loading, onReturn, onNext }: {
+function ReviewOverlay({ ayahs, isAr, localHafsByAyah, reviewOnly, loading, onReturn, onNext }: {
   ayahs: AyahData[];
   isAr: boolean;
   localHafsByAyah: Record<string, string>;
+  reviewOnly: boolean;
   loading: boolean;
   onReturn: () => void;
   onNext: () => void | Promise<void>;
@@ -1594,7 +1642,7 @@ function ReviewOverlay({ ayahs, isAr, localHafsByAyah, loading, onReturn, onNext
   const border = dark ? "rgba(96,96,98,0.28)" : "rgba(220,220,222,0.35)";
   const textPri = dark ? "#f2f2f2" : "#060541";
   const textSec = dark ? "#858384" : "#606062";
-  const green = "hsl(142,76%,40%)";
+  const green = "hsl(142,76%,32%)";
   const surahInfo = SURAH_LIST.find((s) => s.n === ayahs[0]?.surah_number);
 
   return (
@@ -1608,11 +1656,13 @@ function ReviewOverlay({ ayahs, isAr, localHafsByAyah, loading, onReturn, onNext
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-        {ayahs.map((ayah) => (
+        {ayahs.map((ayah, idx) => (
           <div
             key={`${ayah.surah_number}:${ayah.ayah_number}`}
             className="rounded-2xl px-5 py-6 text-center"
-            style={{ background: surface, border: `1px solid ${border}` }}
+            style={idx === ayahs.length - 1
+              ? { background: dark ? "hsla(142,76%,55%,0.08)" : "hsla(142,76%,40%,0.06)", border: `2px solid ${dark ? "hsla(142,76%,55%,0.24)" : "hsla(142,76%,32%,0.24)"}` }
+              : { background: surface, border: `1px solid ${border}` }}
           >
             <p className="text-xs font-semibold mb-2" style={{ color: textSec }}>
               {isAr ? `آية ${ayah.ayah_number}` : `Ayah ${ayah.ayah_number}`}
@@ -1641,27 +1691,43 @@ function ReviewOverlay({ ayahs, isAr, localHafsByAyah, loading, onReturn, onNext
         <p className="text-center text-xs font-semibold leading-snug" style={{ color: textSec }}>
           {isAr ? "تدرب على التسلسل المحفوظ" : "Practice your memorized sequence"}
         </p>
-        <div className="flex items-center gap-3">
+        {reviewOnly ? (
           <button
-            onClick={onReturn}
-            className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all"
-            style={{ background: surface, color: textPri, border: `1px solid ${border}` }}
+            onClick={onNext}
+            className="w-full py-4 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
+            style={{
+              background: "hsla(142,76%,55%,0.12)",
+              color: "hsl(142,76%,55%)",
+              border: "1px solid hsla(142,76%,55%,0.28)",
+            }}
           >
-            {isAr ? "رجوع" : "Return"}
+            <CheckCircle className="w-4 h-4" />
+            <span>{isAr ? "تمت المراجعة" : "Reviewed"}</span>
           </button>
-        <button
-          onClick={onNext}
-          disabled={loading}
-          className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all flex items-center justify-center gap-1 disabled:opacity-50"
-          style={{ background: green, color: "#fff" }}
-        >
-          <span>{loading ? (isAr ? "جاري..." : "Loading...") : (isAr ? "التالي" : "Next")}</span>
-          {!loading && <ArrowRight
-            className="w-4 h-4"
-            style={{ transform: isAr ? "rotate(180deg)" : undefined }}
-          />}
-        </button>
-        </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onReturn}
+              className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all flex items-center justify-center gap-1.5"
+              style={{ background: surface, color: textPri, border: `1px solid ${border}` }}
+            >
+              <Undo2 className="w-4 h-4" style={{ transform: isAr ? "scaleX(-1)" : undefined }} />
+              <span>{isAr ? "رجوع" : "Return"}</span>
+            </button>
+            <button
+              onClick={onNext}
+              disabled={loading}
+              className="flex-1 py-3 rounded-xl text-sm font-bold active:scale-95 transition-all flex items-center justify-center gap-1 disabled:opacity-50"
+              style={{ background: green, color: "#fff" }}
+            >
+              <span>{loading ? (isAr ? "جاري..." : "Loading...") : (isAr ? "التالي" : "Next")}</span>
+              {!loading && <ArrowRight
+                className="w-4 h-4"
+                style={{ transform: isAr ? "rotate(180deg)" : undefined }}
+              />}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
