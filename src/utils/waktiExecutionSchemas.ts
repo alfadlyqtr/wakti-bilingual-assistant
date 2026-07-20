@@ -3,7 +3,24 @@ import type { WaktiCapabilityId } from '@/utils/waktiCapabilities';
 export type WaktiExecutionMode = 'run' | 'prepare' | 'navigate' | 'guide';
 export type WaktiExecutionApproval = 'none' | 'review' | 'required';
 export type WaktiExecutionFieldType = 'text' | 'long_text' | 'choice' | 'date' | 'time' | 'contact' | 'file' | 'toggle';
+export type WaktiExecutionChoiceSource = 'music_style';
 export type WaktiExecutionStageId = 'understand' | 'collect' | 'open' | 'review' | 'run' | 'track' | 'complete';
+export type WaktiExecutionFieldValue = string | boolean | string[];
+
+export interface WaktiExecutionChoice {
+  value: string;
+  labelEn: string;
+  labelAr: string;
+  descriptionEn?: string;
+  descriptionAr?: string;
+}
+
+export interface WaktiExecutionChoiceGroup {
+  id: string;
+  labelEn: string;
+  labelAr: string;
+  choices: WaktiExecutionChoice[];
+}
 
 export interface WaktiExecutionField {
   key: string;
@@ -16,6 +33,29 @@ export interface WaktiExecutionField {
   helpEn: string;
   helpAr: string;
   allowedValues?: string[];
+  choices?: WaktiExecutionChoiceGroup[];
+  choiceSource?: WaktiExecutionChoiceSource;
+}
+
+export interface WaktiExecutionFieldDetails {
+  key: string;
+  label: string;
+  help: string;
+  type: WaktiExecutionFieldType;
+  required: boolean;
+  requiredWhen?: string;
+  defaultValue?: string;
+  allowedValues?: string[];
+  choices: Array<{
+    id: string;
+    label: string;
+    choices: Array<{
+      value: string;
+      label: string;
+      description?: string;
+    }>;
+  }>;
+  choiceSource?: WaktiExecutionChoiceSource;
 }
 
 export interface WaktiExecutionStage {
@@ -47,6 +87,26 @@ export interface WaktiExecutionAction {
   resultAr: string;
 }
 
+export interface WaktiExecutionActionDetails {
+  id: string;
+  label: string;
+  description: string;
+  target: string;
+  result: string;
+  route: string;
+  executionMode: WaktiExecutionMode;
+  approval: WaktiExecutionApproval;
+  adapter: string | null;
+  backend: string[];
+  fields: WaktiExecutionFieldDetails[];
+  preconditions: string[];
+  stages: Array<{
+    id: WaktiExecutionStageId;
+    label: string;
+    detail: string;
+  }>;
+}
+
 export interface WaktiExecutionSchema {
   capabilityId: WaktiCapabilityId;
   titleEn: string;
@@ -62,7 +122,7 @@ const field = (
   required: boolean,
   helpEn: string,
   helpAr: string,
-  options: Pick<WaktiExecutionField, 'requiredWhen' | 'defaultValue' | 'allowedValues'> = {},
+  options: Pick<WaktiExecutionField, 'requiredWhen' | 'defaultValue' | 'allowedValues' | 'choices' | 'choiceSource'> = {},
 ): WaktiExecutionField => ({ key, labelEn, labelAr, type, required, helpEn, helpAr, ...options });
 
 const stage = (
@@ -143,6 +203,7 @@ const action = (
 });
 
 const titleField = () => field('title', 'Title', 'العنوان', 'text', true, 'Use a short, clear title.', 'استخدم عنواناً قصيراً وواضحاً.');
+const musicStyleField = () => field('style', 'Style', 'النمط', 'choice', true, 'Choose the genre, mood, instruments, rhythm, and language that fit the track.', 'اختر النوع والمزاج والآلات والإيقاع واللغة المناسبة للمقطع.', { choiceSource: 'music_style' });
 const descriptionField = () => field('description', 'Description', 'الوصف', 'long_text', false, 'Add the details the person wants included.', 'أضف التفاصيل التي يريد المستخدم تضمينها.');
 const targetField = () => field('target', 'Target item', 'العنصر المستهدف', 'text', true, 'Identify the existing item to change.', 'حدد العنصر الحالي المطلوب تعديله.');
 
@@ -179,8 +240,8 @@ export const WAKTI_EXECUTION_SCHEMAS: Record<WaktiCapabilityId, WaktiExecutionSc
     titleEn: 'Music Studio',
     titleAr: 'استوديو الموسيقى',
     actions: [
-      action('prepare_music_track', 'Prepare music track', 'تجهيز مقطع موسيقي', 'Fill a music draft without starting generation.', 'تعبئة مسودة موسيقية دون بدء الإنشاء.', 'prepare', 'required', '/music?operatorTarget=music', 'Music Studio / Compose', 'استوديو الموسيقى / التأليف', [titleField(), field('style', 'Style', 'النمط', 'long_text', true, 'Describe genre, mood, instruments, rhythm, and language.', 'صف النوع والمزاج والآلات والإيقاع واللغة.'), field('mode', 'Mode', 'الوضع', 'choice', false, 'Choose vocal or instrumental music.', 'اختر موسيقى غنائية أو بدون كلمات.', { defaultValue: 'vocal', allowedValues: ['vocal', 'instrumental'] }), field('lyrics', 'Lyrics', 'الكلمات', 'long_text', false, 'Required for vocal music unless the person chooses instrumental.', 'مطلوبة للموسيقى الغنائية ما لم يختر المستخدم موسيقى بدون كلمات.', { requiredWhen: 'mode is vocal' }), field('vocalType', 'Vocal type', 'نوع الصوت', 'choice', false, 'Choose automatic, male, female, custom voice, or none.', 'اختر تلقائي أو رجالي أو نسائي أو صوت مخصص أو بدون صوت.', { defaultValue: 'automatic', allowedValues: ['automatic', 'male', 'female', 'custom', 'none'] }), field('duration', 'Duration', 'المدة', 'choice', false, 'Use the studio default unless a duration is stated.', 'استخدم الإعداد الافتراضي ما لم يحدد المستخدم مدة.')], { adapter: 'music_generation', backend: ['music-generate', 'music-status', 'music-callback'], preconditionsEn: ['The person must be signed in.', 'Music quota must allow generation.', 'A custom voice must be ready when selected.'], preconditionsAr: ['يجب تسجيل دخول المستخدم.', 'يجب أن تسمح حصة الموسيقى بالإنشاء.', 'يجب أن يكون الصوت المخصص جاهزاً عند اختياره.'] }),
-      action('generate_music_track', 'Generate approved music track', 'إنشاء مقطع موسيقي معتمد', 'Submit an approved Music Studio draft and track the real result.', 'إرسال مسودة استوديو الموسيقى المعتمدة ومتابعة النتيجة الحقيقية.', 'run', 'required', '/music?operatorTarget=music', 'Music Studio / Compose', 'استوديو الموسيقى / التأليف', [titleField(), field('style', 'Style', 'النمط', 'long_text', true, 'Describe genre, mood, instruments, rhythm, and language.', 'صف النوع والمزاج والآلات والإيقاع واللغة.'), field('mode', 'Mode', 'الوضع', 'choice', false, 'Choose vocal or instrumental music.', 'اختر موسيقى غنائية أو بدون كلمات.', { defaultValue: 'vocal', allowedValues: ['vocal', 'instrumental'] }), field('lyrics', 'Lyrics', 'الكلمات', 'long_text', false, 'Required for vocal music unless instrumental is selected.', 'مطلوبة للموسيقى الغنائية ما لم يتم اختيار موسيقى بدون كلمات.', { requiredWhen: 'mode is vocal' })], { adapter: 'music_generation', backend: ['music-generate', 'music-status', 'music-callback'], stages: [stage('understand', 'Understand the music request', 'فهم طلب الموسيقى', 'Use only the details the person actually gave.', 'استخدم التفاصيل التي ذكرها المستخدم فقط.'), stage('collect', 'Prepare the music draft', 'تجهيز مسودة الموسيقى', 'Fill the real Music Studio controls and identify missing information.', 'تعبئة حقول استوديو الموسيقى الحقيقية وتحديد المعلومات الناقصة.'), stage('review', 'Wait for approval', 'انتظار الموافقة', 'Show the final draft before submitting generation.', 'عرض المسودة النهائية قبل إرسال الإنشاء.'), stage('run', 'Submit music generation', 'إرسال إنشاء الموسيقى', 'Submit the approved request after quota and voice checks.', 'إرسال الطلب المعتمد بعد فحص الحصة والصوت.'), stage('track', 'Track music generation', 'متابعة إنشاء الموسيقى', 'Show real provider status until the tracks complete or fail.', 'إظهار حالة المزود الحقيقية حتى تكتمل المقاطع أو تفشل.'), stage('complete', 'Finalize tracks', 'تجهيز المقاطع النهائية', 'Show only saved completed tracks as successful.', 'عرض المقاطع المكتملة والمحفوظه فقط كنجاح.')], resultEn: 'Completed tracks are saved and ready to review.', resultAr: 'المقاطع المكتملة محفوظة وجاهزة للمراجعة.' }),
+      action('prepare_music_track', 'Prepare music track', 'تجهيز مقطع موسيقي', 'Fill a music draft without starting generation.', 'تعبئة مسودة موسيقية دون بدء الإنشاء.', 'prepare', 'required', '/music?operatorTarget=music', 'Music Studio / Compose', 'استوديو الموسيقى / التأليف', [titleField(), musicStyleField(), field('mode', 'Mode', 'الوضع', 'choice', false, 'Choose vocal or instrumental music.', 'اختر موسيقى غنائية أو بدون كلمات.', { defaultValue: 'vocal', allowedValues: ['vocal', 'instrumental'] }), field('lyrics', 'Lyrics', 'الكلمات', 'long_text', false, 'Required for vocal music unless the person chooses instrumental.', 'مطلوبة للموسيقى الغنائية ما لم يختر المستخدم موسيقى بدون كلمات.', { requiredWhen: 'mode is vocal' }), field('vocalType', 'Vocal type', 'نوع الصوت', 'choice', false, 'Choose automatic, male, female, custom voice, or none.', 'اختر تلقائي أو رجالي أو نسائي أو صوت مخصص أو بدون صوت.', { defaultValue: 'automatic', allowedValues: ['automatic', 'male', 'female', 'custom', 'none'] }), field('duration', 'Duration', 'المدة', 'choice', false, 'Use the studio default unless a duration is stated.', 'استخدم الإعداد الافتراضي ما لم يحدد المستخدم مدة.')], { adapter: 'music_generation', backend: ['music-generate', 'music-status', 'music-callback'], preconditionsEn: ['The person must be signed in.', 'Music quota must allow generation.', 'A custom voice must be ready when selected.'], preconditionsAr: ['يجب تسجيل دخول المستخدم.', 'يجب أن تسمح حصة الموسيقى بالإنشاء.', 'يجب أن يكون الصوت المخصص جاهزاً عند اختياره.'] }),
+      action('generate_music_track', 'Generate approved music track', 'إنشاء مقطع موسيقي معتمد', 'Submit an approved Music Studio draft and track the real result.', 'إرسال مسودة استوديو الموسيقى المعتمدة ومتابعة النتيجة الحقيقية.', 'run', 'required', '/music?operatorTarget=music', 'Music Studio / Compose', 'استوديو الموسيقى / التأليف', [titleField(), musicStyleField(), field('mode', 'Mode', 'الوضع', 'choice', false, 'Choose vocal or instrumental music.', 'اختر موسيقى غنائية أو بدون كلمات.', { defaultValue: 'vocal', allowedValues: ['vocal', 'instrumental'] }), field('lyrics', 'Lyrics', 'الكلمات', 'long_text', false, 'Required for vocal music unless instrumental is selected.', 'مطلوبة للموسيقى الغنائية ما لم يتم اختيار موسيقى بدون كلمات.', { requiredWhen: 'mode is vocal' })], { adapter: 'music_generation', backend: ['music-generate', 'music-status', 'music-callback'], stages: [stage('understand', 'Understand the music request', 'فهم طلب الموسيقى', 'Use only the details the person actually gave.', 'استخدم التفاصيل التي ذكرها المستخدم فقط.'), stage('collect', 'Prepare the music draft', 'تجهيز مسودة الموسيقى', 'Fill the real Music Studio controls and identify missing information.', 'تعبئة حقول استوديو الموسيقى الحقيقية وتحديد المعلومات الناقصة.'), stage('review', 'Wait for approval', 'انتظار الموافقة', 'Show the final draft before submitting generation.', 'عرض المسودة النهائية قبل إرسال الإنشاء.'), stage('run', 'Submit music generation', 'إرسال إنشاء الموسيقى', 'Submit the approved request after quota and voice checks.', 'إرسال الطلب المعتمد بعد فحص الحصة والصوت.'), stage('track', 'Track music generation', 'متابعة إنشاء الموسيقى', 'Show real provider status until the tracks complete or fail.', 'إظهار حالة المزود الحقيقية حتى تكتمل المقاطع أو تفشل.'), stage('complete', 'Finalize tracks', 'تجهيز المقاطع النهائية', 'Show only saved completed tracks as successful.', 'عرض المقاطع المكتملة والمحفوظه فقط كنجاح.')], resultEn: 'Completed tracks are saved and ready to review.', resultAr: 'المقاطع المكتملة محفوظة وجاهزة للمراجعة.' }),
     ],
   },
   video_studio: {
@@ -422,7 +483,7 @@ export function getWaktiExecutionAction(capabilityId?: WaktiCapabilityId | null,
   return getWaktiExecutionActions(capabilityId).find((item) => item.id === actionId) || null;
 }
 
-export function getWaktiExecutionActionDetails(actionSchema: WaktiExecutionAction, language: 'ar' | 'en') {
+export function getWaktiExecutionActionDetails(actionSchema: WaktiExecutionAction, language: 'ar' | 'en'): WaktiExecutionActionDetails {
   return {
     id: actionSchema.id,
     label: language === 'ar' ? actionSchema.labelAr : actionSchema.labelEn,
@@ -443,6 +504,22 @@ export function getWaktiExecutionActionDetails(actionSchema: WaktiExecutionActio
       requiredWhen: item.requiredWhen,
       defaultValue: item.defaultValue,
       allowedValues: item.allowedValues,
+      choices: item.choices?.map((group) => ({
+        id: group.id,
+        label: language === 'ar' ? group.labelAr : group.labelEn,
+        choices: group.choices.map((choice) => ({
+          value: choice.value,
+          label: language === 'ar' ? choice.labelAr : choice.labelEn,
+          description: language === 'ar' ? choice.descriptionAr : choice.descriptionEn,
+        })),
+      })) || (item.allowedValues?.length
+        ? [{
+            id: `${item.key}-options`,
+            label: language === 'ar' ? 'الخيارات' : 'Options',
+            choices: item.allowedValues.map((value) => ({ value, label: value })),
+          }]
+        : []),
+      choiceSource: item.choiceSource,
     })),
     preconditions: language === 'ar' ? actionSchema.preconditionsAr : actionSchema.preconditionsEn,
     stages: actionSchema.stages.map((item) => ({
@@ -451,6 +528,29 @@ export function getWaktiExecutionActionDetails(actionSchema: WaktiExecutionActio
       detail: language === 'ar' ? item.detailAr : item.detailEn,
     })),
   };
+}
+
+function isWaktiExecutionFieldRequired(fieldSchema: WaktiExecutionField, values: Record<string, WaktiExecutionFieldValue | undefined>) {
+  if (fieldSchema.required) return true;
+  if (!fieldSchema.requiredWhen) return false;
+  const match = fieldSchema.requiredWhen.match(/^([A-Za-z0-9_]+) is (.+)$/);
+  if (!match) return false;
+  const [, sourceKey, expectedValue] = match;
+  const sourceValue = values[sourceKey];
+  return typeof sourceValue === 'string' && sourceValue.toLowerCase() === expectedValue.trim().toLowerCase();
+}
+
+export function getWaktiExecutionMissingFields(
+  actionSchema: WaktiExecutionAction,
+  values: Record<string, WaktiExecutionFieldValue | undefined>,
+) {
+  return actionSchema.fields.filter((fieldSchema) => {
+    if (!isWaktiExecutionFieldRequired(fieldSchema, values)) return false;
+    const value = values[fieldSchema.key];
+    if (Array.isArray(value)) return value.length === 0;
+    if (typeof value === 'boolean') return false;
+    return !value?.trim();
+  });
 }
 
 export function buildWaktiExecutionKnowledgeManifest(language: 'ar' | 'en') {

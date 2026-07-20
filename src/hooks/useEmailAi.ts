@@ -93,6 +93,45 @@ function buildMessageContext(messages: EmailAiSourceMessage[], language: 'en' | 
   }).join('\n\n----------------\n\n');
 }
 
+function extractSenderName(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  const angleMatch = trimmed.match(/^"?([^"<]+)"?\s*<[^>]+>$/);
+  if (angleMatch?.[1]) return angleMatch[1].trim();
+
+  const emailMatch = trimmed.match(/([^@\s<>"]+)@/);
+  if (emailMatch?.[1]) {
+    const localPart = emailMatch[1].replace(/[._-]+/g, ' ').trim();
+    return localPart.replace(/\b\w/g, (letter) => letter.toUpperCase());
+  }
+
+  return trimmed;
+}
+
+function buildFallbackReplyDraft(message: EmailAiSourceMessage, language: 'en' | 'ar') {
+  const senderName = extractSenderName(message.from || '');
+  const subject = (message.subject || '').trim();
+
+  if (language === 'ar') {
+    return [
+      senderName ? `مرحبًا ${senderName}،` : 'مرحبًا،',
+      '',
+      subject ? `شكرًا على رسالتك بخصوص ${subject}.` : 'شكرًا على رسالتك.',
+      'استلمت رسالتك وأراجع التفاصيل الآن.',
+      'سأعود إليك قريبًا بتأكيد أو تحديث واضح.',
+    ].join('\n');
+  }
+
+  return [
+    senderName ? `Hello ${senderName},` : 'Hello,',
+    '',
+    subject ? `Thank you for your email about ${subject}.` : 'Thank you for your email.',
+    'I have received your message and I am reviewing the details now.',
+    'I will get back to you shortly with a clear update.',
+  ].join('\n');
+}
+
 function buildPrompt({ action, messages, language, tone, length, note }: RunEmailAiParams) {
   const lang: 'en' | 'ar' = language === 'ar' ? 'ar' : 'en';
   const context = buildMessageContext(messages, lang);
@@ -401,6 +440,17 @@ export function useEmailAi() {
       setResult(nextResult);
       return nextResult;
     } catch (runError) {
+      if (action === 'draft_reply') {
+        const fallbackResult: EmailAiResult = {
+          action,
+          title: actionTitles[lang][action],
+          text: buildFallbackReplyDraft(messages[0], lang),
+        };
+        setError('');
+        setResult(fallbackResult);
+        return fallbackResult;
+      }
+
       const message = runError instanceof Error ? runError.message : 'Email AI failed';
       setError(message);
       throw runError;

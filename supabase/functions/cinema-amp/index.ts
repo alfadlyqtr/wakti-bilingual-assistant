@@ -3,6 +3,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { sanitizeUserInput, withUserInputGuard } from '../_shared/promptSafety.ts';
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_GENAI_API_KEY') || '';
 const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
@@ -37,7 +38,11 @@ serve(async (req) => {
     }
 
     const { text, context } = await req.json();
-    if (!text || !text.trim()) {
+    const safeText = sanitizeUserInput(text, { maxLength: 1200, label: 'cinema idea' }).trim();
+    const safeContext = context && typeof context === 'object'
+      ? Object.fromEntries(Object.entries(context).map(([key, value]) => [key, sanitizeUserInput(value, { maxLength: 300, label: key })]))
+      : {};
+    if (!safeText) {
       return new Response(JSON.stringify({ ok: false, error: 'text is required' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
@@ -45,36 +50,33 @@ serve(async (req) => {
 
     // Build context block from all selected movie setup fields
     const ctxParts: string[] = [];
-    if (context?.sceneCount) ctxParts.push(`Scenes: ${context.sceneCount} scenes × 10s each`);
-    if (context?.vibe) ctxParts.push(`Vibe/Mood: ${context.vibe}`);
-    if (context?.characters) ctxParts.push(`Cast: ${context.characters}`);
-    if (context?.platform) ctxParts.push(`Platform: ${context.platform}`);
-    if (context?.cta) ctxParts.push(`Goal: ${context.cta}`);
-    if (context?.setting) ctxParts.push(`Setting: ${context.setting}`);
-    if (context?.action) ctxParts.push(`Action: ${context.action}`);
+    if (safeContext.sceneCount) ctxParts.push(`Requested scene count: ${safeContext.sceneCount}`);
+    if (safeContext.vibe) ctxParts.push(`Vibe/Mood: ${safeContext.vibe}`);
+    if (safeContext.characters) ctxParts.push(`Cast: ${safeContext.characters}`);
+    if (safeContext.platform) ctxParts.push(`Platform: ${safeContext.platform}`);
+    if (safeContext.cta) ctxParts.push(`Goal: ${safeContext.cta}`);
+    if (safeContext.setting) ctxParts.push(`Setting: ${safeContext.setting}`);
+    if (safeContext.action) ctxParts.push(`Action: ${safeContext.action}`);
     const contextBlock = ctxParts.length > 0
       ? `\n\nMOVIE SETUP CONTEXT (use this to tailor your enhancement):\n${ctxParts.join('\n')}`
       : '';
 
-    const systemPrompt = `You are an ad prompt refiner for AI video generation.
+    const systemPrompt = withUserInputGuard(`You are Wakti Cinema AMP, an assistant that improves a user's creative video idea for AI production.
 
-Your job is to make the user's prompt clearer and more visually usable while staying EXTREMELY faithful to what they actually asked for.
-
-You will receive the user's raw idea and movie setup context. Use the context only to sharpen the brief, not to replace it.
+The user's idea is the source of truth. Make it clearer, more visual, and easier for the Director to understand, but do not replace the idea.
 
 STRICT RULES:
-1. Language Lock: Match the user's language EXACTLY. English in = English out. Arabic in = Arabic out.
-2. Preserve the user's nouns, places, business type, and action beats. If they say trucking company, dry docks, company building, semi truck, highway — keep those exact ideas central.
-3. Preserve sequence. If the user describes two beats or two scenes, keep that order. Example: company building at dry docks first, truck driving on highway second.
-4. Do NOT invent generic cinematic filler like dawn, horizon, golden rays, cerulean sky, orchestral music, heroic poetry, or random emotional language unless the user explicitly asked for that.
-5. Do NOT add extra plot, characters, symbolism, or story twists.
-6. Keep it literal, commercial, and visual. Think: clean production brief for an ad, not a dramatic screenplay paragraph.
-7. Use short concrete camera language only when helpful: wide shot, aerial shot, tracking shot, close-up, vertical framing.
-8. If the user's input is already clear, improve wording lightly instead of rewriting heavily.
-9. LENGTH: Keep output between 180 and 320 characters when possible. Never exceed 420 characters.
-10. Output Format: Return ONLY the refined prompt text. No intro, no explanation, no quotes.`;
+1. Preserve the user's language exactly. English in = English out. Arabic in = Arabic out.
+2. Preserve every requested subject, character, object, place, action, order, brand detail, visible text, and constraint.
+3. Add only useful production detail: visual clarity, continuity, camera direction, lighting, movement, and scene relationships.
+4. Do not remove, weaken, reinterpret, or contradict any user instruction.
+5. Do not invent extra characters, plot twists, products, slogans, locations, or commercial claims.
+6. Do not force an advertisement structure. Follow the type of idea the user actually gave.
+7. If the idea is already clear, improve it lightly rather than rewriting it heavily.
+8. Use the optional setup context only to clarify the user's idea, never to replace it.
+9. Return only the enhanced idea. No introduction, explanation, labels, or quotation marks.`);
 
-    const userMessage = text.trim() + contextBlock;
+    const userMessage = safeText + contextBlock;
 
     const resp = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
@@ -88,8 +90,8 @@ STRICT RULES:
           },
         ],
         generationConfig: {
-          temperature: 0.25,
-          maxOutputTokens: 380,
+          temperature: 0.2,
+          maxOutputTokens: 1200,
         },
       }),
     });
@@ -106,8 +108,7 @@ STRICT RULES:
     let enhanced = parts.map((p) => p?.text || '').join('').trim();
     if (!enhanced) throw new Error('No content returned from Gemini');
 
-    // Hard server-side cap: truncate at last word boundary at or before 650 chars
-    const HARD_CAP = 420;
+    const HARD_CAP = 1200;
     if (enhanced.length > HARD_CAP) {
       const cut = enhanced.slice(0, HARD_CAP);
       const lastSpace = cut.lastIndexOf(' ');

@@ -66,13 +66,23 @@ function mapAspectRatio(ar: string): string {
 function parseImageUrls(resultJson: string): string[] {
   try {
     const parsed = JSON.parse(resultJson);
-    const urls: string[] =
-      parsed.resultUrls ||
-      parsed.images ||
-      (parsed.url ? [parsed.url] : null) ||
-      (Array.isArray(parsed) ? parsed : null) ||
-      [];
-    return urls.filter((u: unknown) => typeof u === 'string' && (u as string).startsWith('http'));
+    const found: string[] = [];
+    const visit = (value: unknown, depth = 0) => {
+      if (depth > 6 || value === null || value === undefined) return;
+      if (typeof value === 'string') {
+        if (/^https?:\/\//i.test(value)) found.push(value);
+        return;
+      }
+      if (Array.isArray(value)) {
+        value.forEach(item => visit(item, depth + 1));
+        return;
+      }
+      if (typeof value === 'object') {
+        Object.values(value as Record<string, unknown>).forEach(item => visit(item, depth + 1));
+      }
+    };
+    visit(parsed);
+    return [...new Set(found)];
   } catch {
     return [];
   }
@@ -112,7 +122,10 @@ async function kieGetStatus(taskId: string): Promise<{ status: string; image_url
 
     if (state === 'success' || state === 'finished' || state === 'completed') {
       const urls = rawResult ? parseImageUrls(rawResult) : [];
-      return { status: 'COMPLETED', image_url: urls[0] || null, image_urls: urls, error: null };
+      if (urls.length === 0) {
+        return { status: 'FAILED', image_url: null, image_urls: [], error: 'Image provider completed without returning an image URL' };
+      }
+      return { status: 'COMPLETED', image_url: urls[0], image_urls: urls, error: null };
     }
     if (state === 'fail' || state === 'failed' || state === 'error') {
       return { status: 'FAILED', image_url: null, image_urls: [], error: sanitizeError(data.data?.failMsg || 'Image generation failed') };
@@ -153,7 +166,9 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { mode, prompt, anchor_url, anchor_pipeline, scene_index, aspect_ratio = '16:9', task_id } = body;
+    const { mode, prompt, anchor_url, anchor_pipeline, scene_index, aspect_ratio = '16:9', task_id, seed } = body;
+    const numericSeed = seed === undefined || seed === null || seed === '' ? undefined : Number(seed);
+    const seedInput = Number.isFinite(numericSeed) ? { seed: numericSeed } : {};
 
     // ── Mode: create T2I task (returns task_id immediately) ──
     if (mode === 't2i_create') {
@@ -164,7 +179,7 @@ serve(async (req) => {
       const hasEnvKeyword = /\b(outdoor|exterior|aerial|highway|desert|street|mountain|port|rooftop|waterfront|sky|countryside|open road|open field|open sea)\b/i.test(prompt);
       const finalPrompt = (hasEnvKeyword ? prompt : prompt + OUTDOOR_SUFFIX).slice(0, 2500);
       const safeAR = mapAspectRatio(aspect_ratio);
-      const id = await kieCreateTask('grok-imagine/text-to-image', { prompt: finalPrompt, aspect_ratio: safeAR });
+      const id = await kieCreateTask('grok-imagine/text-to-image', { prompt: finalPrompt, aspect_ratio: safeAR, ...seedInput });
       return new Response(JSON.stringify({ ok: true, task_id: id }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
@@ -190,7 +205,7 @@ serve(async (req) => {
       console.log(`[cinema-artist] I2I create scene ${scene_index}, pipeline=${anchor_pipeline}, anchor=${String(anchor_url).slice(0, 60)}`);
       try {
         const charStrength = anchor_pipeline === 'character' || anchor_pipeline === 'product' ? 0.35 : anchor_pipeline === 'logo' ? 0.45 : 0.55;
-        const id = await kieCreateTask('grok-imagine/image-to-image', { prompt: fullPrompt, image_urls: [anchor_url], strength: charStrength });
+        const id = await kieCreateTask('grok-imagine/image-to-image', { prompt: fullPrompt, image_urls: [anchor_url], strength: charStrength, ...seedInput });
         return new Response(JSON.stringify({ ok: true, task_id: id, scene_index }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       } catch (i2iErr) {
         // I2I failed — auto-fallback to T2I with the original scene prompt
@@ -199,7 +214,7 @@ serve(async (req) => {
         const hasEnvKeyword = /\b(outdoor|exterior|aerial|highway|desert|street|mountain|port|rooftop|waterfront|sky|countryside|open road|open field|open sea)\b/i.test(prompt);
         const t2iPrompt = (hasEnvKeyword ? prompt : prompt + OUTDOOR_SUFFIX).slice(0, 2500);
         const safeAR = mapAspectRatio(aspect_ratio);
-        const fallbackId = await kieCreateTask('grok-imagine/text-to-image', { prompt: t2iPrompt, aspect_ratio: safeAR });
+        const fallbackId = await kieCreateTask('grok-imagine/text-to-image', { prompt: t2iPrompt, aspect_ratio: safeAR, ...seedInput });
         console.log(`[cinema-artist] T2I fallback succeeded for scene ${scene_index}, task=${fallbackId}`);
         return new Response(JSON.stringify({ ok: true, task_id: fallbackId, scene_index, fallback: 't2i' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }

@@ -586,23 +586,16 @@ export function AppHeader({ unreadTotal = 0 }: AppHeaderProps) {
                   type="button"
                   onClick={handleOperatorButtonClick}
                   className={cn(
-                    "relative inline-flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border transition-all active:scale-95",
+                    "relative inline-flex h-8 min-w-[52px] items-center justify-center rounded-full border px-2.5 text-xs font-semibold transition-all active:scale-95",
                     operatorBusy
                       ? "border-cyan-300/60 ring-2 ring-cyan-300/25 shadow-[0_0_18px_rgba(56,189,248,0.35)]"
-                      : "border-black/10 dark:border-white/15 shadow-sm hover:shadow-md"
+                      : theme === 'dark'
+                        ? "border-blue-800/90 shadow-[0_0_8px_rgba(30,64,175,0.75)] hover:shadow-[0_0_12px_rgba(30,64,175,0.9)]"
+                        : "border-black/50 shadow-[0_2px_6px_rgba(0,0,0,0.16)] hover:shadow-[0_3px_8px_rgba(0,0,0,0.22)]"
                   )}
-                  aria-label={language === 'ar' ? 'افتح مشغل وكتي' : 'Open Wakti Operator'}
+                  aria-label={language === 'ar' ? 'افتح اجنت' : 'Open Agent'}
                 >
-                  <img
-                    src="/wakti-image-1779978811747.jpg"
-                    alt="Wakti Operator"
-                    className="h-full w-full object-cover"
-                  />
-                  {operatorBusy ? (
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/25 backdrop-blur-[1px]">
-                      <Sparkles className="h-4 w-4 text-white drop-shadow-[0_0_8px_rgba(56,189,248,0.75)]" />
-                    </span>
-                  ) : null}
+                  <span className="leading-none">{language === 'ar' ? 'اجنت' : 'Agent'}</span>
                 </button>
               </TooltipTrigger>
               <TooltipContent>

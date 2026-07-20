@@ -1,10 +1,10 @@
 import type { MailComposerAttachment } from '@/components/email/MailComposer';
 import type { SmartTextPrefill, SmartTextPrefillTab, SmartTextToolBridge } from '@/utils/smartTextPrefill';
-import { getWaktiCapability, getWaktiCapabilityGuide, getWaktiCapabilityRouteLabel, getWaktiCapabilitySupportSummary, getWaktiCapabilityTitle, type WaktiCapability } from '@/utils/waktiCapabilities';
+import { getWaktiCapability, getWaktiCapabilityGuide, getWaktiCapabilityRouteLabel, getWaktiCapabilitySupportSummary, getWaktiCapabilityTitle, type WaktiCapability, type WaktiCapabilityId } from '@/utils/waktiCapabilities';
 import { analyzeWaktiOperatorIntent, type WaktiOperatorIntentKind } from '@/utils/waktiOperatorIntent';
 import type { WaktiOperatorSemanticAnalysis } from '@/utils/waktiOperatorSemantic';
 import { getWaktiCapabilityContract, getWaktiCapabilityStages } from '@/utils/waktiCapabilityContracts';
-import { getWaktiExecutionAction, getWaktiExecutionActionDetails, getWaktiExecutionActions } from '@/utils/waktiExecutionSchemas';
+import { getWaktiExecutionAction, getWaktiExecutionActionDetails, getWaktiExecutionActions, getWaktiExecutionMissingFields, type WaktiExecutionActionDetails, type WaktiExecutionFieldValue } from '@/utils/waktiExecutionSchemas';
 import { saveTRPrefill, type TRPrefill, type TRReminderPrefillDraft, type TRTaskPrefillDraft } from '@/utils/trPrefill';
 
 const WAKTI_OPERATOR_PAYLOAD_PREFIX = 'wakti-operator-payload:';
@@ -48,7 +48,10 @@ export type WaktiOperatorStepKind =
   | 'prepare_vitality_request'
   | 'open_calendar'
   | 'change_calendar_view'
-  | 'prepare_calendar_entry';
+  | 'prepare_calendar_entry'
+  | 'collect_action_details'
+  | 'review_action_details'
+  | 'handoff_action';
 
 export interface WaktiOperatorEmailDraft {
   to: string[];
@@ -152,6 +155,13 @@ export interface WaktiOperatorCalendarRequest {
   time?: string;
 }
 
+export interface WaktiOperatorExecutionRequest {
+  capabilityId: WaktiCapabilityId;
+  actionId: string;
+  values: Record<string, WaktiExecutionFieldValue>;
+  focusFieldKey?: string;
+}
+
 export interface WaktiOperatorRoutePayload {
   runId: string;
   stepId: string;
@@ -178,6 +188,7 @@ export interface WaktiOperatorRoutePayload {
   vitality?: WaktiOperatorVitalityRequest;
   taskAction?: WaktiOperatorTaskRequest;
   calendar?: WaktiOperatorCalendarRequest;
+  execution?: WaktiOperatorExecutionRequest;
   trPrefill?: TRPrefill;
   source?: string;
 }
@@ -198,13 +209,23 @@ export interface WaktiOperatorAction {
   href: string;
 }
 
+export interface WaktiOperatorInteraction {
+  capabilityId: WaktiCapabilityId;
+  actionId: string;
+  action: WaktiExecutionActionDetails;
+  values: Record<string, WaktiExecutionFieldValue>;
+  phase: 'collect' | 'review';
+  focusFieldKey?: string;
+}
+
 export interface WaktiOperatorPlan {
   id: string;
   transcript: string;
   summary: string;
-  mode?: 'guidance' | 'navigation' | 'execution';
+  mode?: 'guidance' | 'navigation' | 'execution' | 'interaction';
   answer?: string;
   primaryAction?: WaktiOperatorAction;
+  interaction?: WaktiOperatorInteraction;
   steps: WaktiOperatorStep[];
 }
 
@@ -1286,11 +1307,47 @@ function buildCapabilityGuidancePlan(
   };
 }
 
+function createInteractionValues(
+  actionSchema: NonNullable<ReturnType<typeof getWaktiExecutionAction>>,
+  initialValues: Record<string, WaktiExecutionFieldValue> = {},
+) {
+  return actionSchema.fields.reduce<Record<string, WaktiExecutionFieldValue>>((values, fieldSchema) => {
+    const initialValue = initialValues[fieldSchema.key];
+    if (initialValue !== undefined && initialValue !== '') {
+      values[fieldSchema.key] = initialValue;
+      return values;
+    }
+    if (fieldSchema.defaultValue !== undefined) values[fieldSchema.key] = fieldSchema.defaultValue;
+    return values;
+  }, {});
+}
+
+function getInteractionAnswer(
+  action: WaktiExecutionActionDetails,
+  missingFieldLabels: string[],
+  phase: 'collect' | 'review',
+  language: 'ar' | 'en',
+) {
+  if (missingFieldLabels.length > 0) {
+    return language === 'ar'
+      ? `أحتاج فقط إلى: ${missingFieldLabels.join('، ')}. اختر من الخيارات الحقيقية أو أضف التفاصيل ثم سأتابع نفس الطلب.`
+      : `I only need: ${missingFieldLabels.join(', ')}. Choose from the real options or add the detail, then I will continue this same request.`;
+  }
+  if (phase === 'review') {
+    return language === 'ar'
+      ? `راجِع تفاصيل ${action.label} ثم تابع إلى ${action.target}. لن أعتبر الإجراء مكتملًا حتى تؤكد الميزة النتيجة الحقيقية.`
+      : `Review the ${action.label} details, then continue to ${action.target}. I will not mark the action complete until the feature confirms the real result.`;
+  }
+  return action.description;
+}
+
 function buildSchemaActionPlan(
   transcript: string,
   language: 'ar' | 'en',
   capability: WaktiCapability,
   actionId: string,
+  initialValues: Record<string, WaktiExecutionFieldValue> = {},
+  planId = createId('plan'),
 ): WaktiOperatorPlan | null {
   const actionSchema = getWaktiExecutionAction(capability.id, actionId);
   if (!actionSchema) return null;
@@ -1300,34 +1357,276 @@ function buildSchemaActionPlan(
   }
 
   const action = getWaktiExecutionActionDetails(actionSchema, language);
-  const requiredFields = action.fields.filter((item) => item.required);
-  const requirementNote = requiredFields.length > 0
-    ? (language === 'ar'
-      ? ` سأفتح ${action.target} وأتحقق من: ${requiredFields.map((item) => item.label).join('، ')}.`
-      : ` I will open ${action.target} and check: ${requiredFields.map((item) => item.label).join(', ')}.`)
-    : (language === 'ar'
-      ? ` سأفتح ${action.target} في الخطوة الصحيحة.`
-      : ` I will open ${action.target} at the correct step.`);
+  if (action.fields.length === 0 && action.approval === 'none') {
+    return {
+      id: planId,
+      transcript,
+      mode: 'navigation',
+      summary: action.label,
+      answer: action.description,
+      primaryAction: {
+        label: action.label,
+        href: action.route,
+      },
+      steps: [{
+        id: createId('step'),
+        kind: 'open_feature',
+        label: action.label,
+        description: action.description,
+        risk: 'safe',
+        status: 'pending',
+        href: action.route,
+      }],
+    };
+  }
+
+  const values = createInteractionValues(actionSchema, initialValues);
+  const missingFields = getWaktiExecutionMissingFields(actionSchema, values);
+  const missingFieldLabels = missingFields.map((fieldSchema) => language === 'ar' ? fieldSchema.labelAr : fieldSchema.labelEn);
+  const phase = missingFields.length > 0 ? 'collect' : 'review';
+  const collectStepId = createId('step');
+  const reviewStepId = createId('step');
 
   return {
-    id: createId('plan'),
+    id: planId,
     transcript,
-    mode: 'navigation',
-    summary: action.label,
-    answer: trimSentence(`${action.description}${requirementNote}`),
-    primaryAction: {
-      label: action.label,
-      href: action.route,
+    mode: 'interaction',
+    summary: phase === 'collect'
+      ? (language === 'ar' ? `أكمل تفاصيل ${action.label}` : `Complete ${action.label} details`)
+      : (language === 'ar' ? `راجع ${action.label}` : `Review ${action.label}`),
+    answer: getInteractionAnswer(action, missingFieldLabels, phase, language),
+    interaction: {
+      capabilityId: capability.id,
+      actionId: actionSchema.id,
+      action,
+      values,
+      phase,
+      focusFieldKey: missingFields[0]?.key,
     },
-    steps: [{
-      id: createId('step'),
-      kind: 'open_feature',
-      label: action.label,
-      description: action.description,
-      risk: 'safe',
-      status: 'pending',
-      href: action.route,
-    }],
+    steps: [
+      {
+        id: collectStepId,
+        kind: 'collect_action_details',
+        label: language === 'ar' ? 'اجمع التفاصيل المطلوبة' : 'Collect the required details',
+        description: missingFieldLabels.length > 0
+          ? missingFieldLabels.join(language === 'ar' ? '، ' : ', ')
+          : (language === 'ar' ? 'التفاصيل المطلوبة مكتملة.' : 'The required details are complete.'),
+        risk: 'safe',
+        status: missingFields.length > 0 ? 'paused' : 'completed',
+      },
+      {
+        id: reviewStepId,
+        kind: 'review_action_details',
+        label: language === 'ar' ? 'راجع قبل المتابعة' : 'Review before continuing',
+        description: action.result,
+        risk: action.approval === 'none' ? 'safe' : 'approval_required',
+        status: missingFields.length > 0 ? 'pending' : 'paused',
+      },
+    ],
+  };
+}
+
+export function updateWaktiOperatorInteraction(
+  plan: WaktiOperatorPlan,
+  values: Record<string, WaktiExecutionFieldValue>,
+  language: 'ar' | 'en',
+): WaktiOperatorPlan {
+  if (!plan.interaction) return plan;
+  const actionSchema = getWaktiExecutionAction(plan.interaction.capabilityId, plan.interaction.actionId);
+  if (!actionSchema) return plan;
+
+  const nextValues = createInteractionValues(actionSchema, { ...plan.interaction.values, ...values });
+  const missingFields = getWaktiExecutionMissingFields(actionSchema, nextValues);
+  const missingFieldLabels = missingFields.map((fieldSchema) => language === 'ar' ? fieldSchema.labelAr : fieldSchema.labelEn);
+  const phase = missingFields.length > 0 ? 'collect' : 'review';
+
+  return {
+    ...plan,
+    summary: phase === 'collect'
+      ? (language === 'ar' ? `أكمل تفاصيل ${plan.interaction.action.label}` : `Complete ${plan.interaction.action.label} details`)
+      : (language === 'ar' ? `راجع ${plan.interaction.action.label}` : `Review ${plan.interaction.action.label}`),
+    answer: getInteractionAnswer(plan.interaction.action, missingFieldLabels, phase, language),
+    interaction: {
+      ...plan.interaction,
+      values: nextValues,
+      phase,
+      focusFieldKey: missingFields[0]?.key,
+    },
+    steps: plan.steps.map((step) => {
+      if (step.kind === 'collect_action_details') {
+        return {
+          ...step,
+          description: missingFieldLabels.length > 0
+            ? missingFieldLabels.join(language === 'ar' ? '، ' : ', ')
+            : (language === 'ar' ? 'التفاصيل المطلوبة مكتملة.' : 'The required details are complete.'),
+          status: missingFields.length > 0 ? 'paused' : 'completed',
+        };
+      }
+      if (step.kind === 'review_action_details') {
+        return { ...step, status: missingFields.length > 0 ? 'pending' : 'paused' };
+      }
+      return step;
+    }),
+  };
+}
+
+function appendWaktiOperatorPayloadId(route: string, payloadId: string) {
+  const separator = route.includes('?') ? '&' : '?';
+  return `${route}${separator}waktiOperator=${encodeURIComponent(payloadId)}`;
+}
+
+function getInteractionString(values: Record<string, WaktiExecutionFieldValue>, key: string) {
+  const value = values[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export function createWaktiOperatorInteractionExecutionPlan(
+  plan: WaktiOperatorPlan,
+  language: 'ar' | 'en',
+): WaktiOperatorPlan | null {
+  if (!plan.interaction) return null;
+  const { interaction } = plan;
+  const actionSchema = getWaktiExecutionAction(interaction.capabilityId, interaction.actionId);
+  if (!actionSchema) return null;
+  const missingFields = getWaktiExecutionMissingFields(actionSchema, interaction.values);
+  if (missingFields.length > 0) return updateWaktiOperatorInteraction(plan, {}, language);
+
+  const action = interaction.action;
+  const openStepId = createId('step');
+  const handoffStepId = createId('step');
+  const payload: WaktiOperatorRoutePayload = {
+    runId: plan.id,
+    stepId: openStepId,
+    transcript: plan.transcript,
+    summary: action.label,
+    stepRefs: {
+      openStepId,
+      handoffStepId,
+    },
+    execution: {
+      capabilityId: interaction.capabilityId,
+      actionId: interaction.actionId,
+      values: interaction.values,
+      focusFieldKey: interaction.focusFieldKey,
+    },
+    source: 'voice',
+  };
+
+  if (interaction.capabilityId === 'music_studio') {
+    const reviewStepId = createId('step');
+    const generateStepId = action.executionMode === 'run' ? createId('step') : undefined;
+    const trackingStepId = action.executionMode === 'run' ? createId('step') : undefined;
+    const mode = getInteractionString(interaction.values, 'mode');
+    const vocalType = getInteractionString(interaction.values, 'vocalType');
+    payload.stepRefs = { openStepId, reviewStepId, generateStepId, trackingStepId };
+    payload.music = {
+      title: getInteractionString(interaction.values, 'title'),
+      style: getInteractionString(interaction.values, 'style'),
+      lyrics: getInteractionString(interaction.values, 'lyrics'),
+      mode: mode === 'instrumental' ? 'instrumental' : 'custom',
+      vocalType: vocalType === 'auto' || vocalType === 'none' || vocalType === 'male' || vocalType === 'female' ? vocalType : undefined,
+      intent: action.executionMode === 'run' ? 'generate' : 'prepare',
+      requiresApproval: true,
+      autoGenerate: false,
+    };
+  }
+
+  if (interaction.capabilityId === 'image_studio') {
+    payload.image = {
+      prompt: getInteractionString(interaction.values, 'prompt'),
+      submode: interaction.actionId === 'transform_image' ? 'image2image' : 'text2image',
+      autoGenerate: false,
+      autoSave: false,
+    };
+  }
+
+  const payloadId = stashWaktiOperatorPayload(payload);
+  const href = appendWaktiOperatorPayloadId(action.route, payloadId);
+  const completedSteps = plan.steps.map((step) => ({ ...step, status: 'completed' as const }));
+
+  if (interaction.capabilityId === 'music_studio') {
+    const reviewStepId = payload.stepRefs?.reviewStepId as string;
+    const generateStepId = payload.stepRefs?.generateStepId;
+    const trackingStepId = payload.stepRefs?.trackingStepId;
+    return {
+      ...plan,
+      mode: 'execution',
+      summary: language === 'ar' ? `فتح ${action.target}` : `Opening ${action.target}`,
+      answer: language === 'ar' ? 'جهزت التفاصيل الحقيقية. ستظهر المسودة في استوديو الموسيقى للمراجعة قبل الإنشاء.' : 'The real details are ready. Music Studio will show the draft for review before generation.',
+      interaction: undefined,
+      steps: [
+        ...completedSteps,
+        {
+          id: openStepId,
+          kind: 'open_music_studio',
+          label: language === 'ar' ? 'افتح استوديو الموسيقى' : 'Open Music Studio',
+          description: action.description,
+          risk: 'safe',
+          status: 'pending',
+          href,
+          payloadId,
+        },
+        {
+          id: reviewStepId,
+          kind: 'review_music_draft',
+          label: language === 'ar' ? 'راجع مسودة الموسيقى' : 'Review the music draft',
+          description: action.result,
+          risk: 'approval_required',
+          status: 'pending',
+          payloadId,
+        },
+        ...(generateStepId ? [{
+          id: generateStepId,
+          kind: 'generate_music' as const,
+          label: language === 'ar' ? 'أنشئ المقطع الموسيقي' : 'Generate the music track',
+          description: action.description,
+          risk: 'safe' as const,
+          status: 'pending' as const,
+          payloadId,
+        }] : []),
+        ...(trackingStepId ? [{
+          id: trackingStepId,
+          kind: 'track_music_generation' as const,
+          label: language === 'ar' ? 'تابع إنشاء الموسيقى' : 'Track music generation',
+          description: action.result,
+          risk: 'safe' as const,
+          status: 'pending' as const,
+          payloadId,
+        }] : []),
+      ],
+    };
+  }
+
+  return {
+    ...plan,
+    mode: 'execution',
+    summary: language === 'ar' ? `فتح ${action.target}` : `Opening ${action.target}`,
+    answer: language === 'ar'
+      ? `جهزت التفاصيل الحقيقية لـ ${action.label}. سأفتح الشاشة الصحيحة، وسيبقى الإجراء بانتظار تأكيد النتيجة من هذه الميزة.`
+      : `The real details for ${action.label} are ready. I will open the correct screen, and the action will remain waiting for that feature to confirm the result.`,
+    interaction: undefined,
+    steps: [
+      ...completedSteps,
+      {
+        id: openStepId,
+        kind: 'open_feature',
+        label: language === 'ar' ? `افتح ${action.target}` : `Open ${action.target}`,
+        description: action.description,
+        risk: 'safe',
+        status: 'pending',
+        href,
+        payloadId,
+      },
+      {
+        id: handoffStepId,
+        kind: 'handoff_action',
+        label: language === 'ar' ? 'انتظر نتيجة الميزة' : 'Wait for the feature result',
+        description: action.result,
+        risk: action.approval === 'none' ? 'safe' : 'approval_required',
+        status: 'pending',
+        payloadId,
+      },
+    ],
   };
 }
 

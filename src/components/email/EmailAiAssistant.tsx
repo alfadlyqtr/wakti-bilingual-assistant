@@ -27,7 +27,6 @@ interface EmailAiAssistantProps {
   resolveAttachmentContent?: (attachment: EmailMessageAttachment) => Promise<EmailMessageAttachmentContent | null>;
   canReply?: boolean;
   onUseAsReply?: (text: string) => void;
-  onStartReply?: () => void;
   variant?: 'panel' | 'floating';
 }
 
@@ -340,7 +339,6 @@ export function EmailAiAssistant({
   resolveAttachmentContent,
   canReply = false,
   onUseAsReply,
-  onStartReply,
   variant = 'panel',
 }: EmailAiAssistantProps) {
   const navigate = useNavigate();
@@ -400,13 +398,17 @@ export function EmailAiAssistant({
     notes: lang === 'ar' ? 'تعليماتك الإضافية' : 'Your extra instructions',
     notesPlaceholder: lang === 'ar' ? 'مثال: اعتذر بلطف، واطلب تأكيد الموعد.' : 'Example: be warm, keep it short, and ask them to confirm the date.',
     copy: lang === 'ar' ? 'نسخ' : 'Copy',
-    useInReply: lang === 'ar' ? 'نقله إلى الرد' : 'Move to reply',
+    useInReply: lang === 'ar' ? 'افتح الرد بهذه المسودة' : 'Open reply with this draft',
     openTextTool: lang === 'ar' ? 'افتحه في مولد النص الذكي' : 'Open in Smart Text Generator',
     result: lang === 'ar' ? 'النتيجة' : 'Result',
     optionalInstruction: lang === 'ar' ? 'تعليمات إضافية اختيارية' : 'Optional instruction',
     optionalInstructionHelper: lang === 'ar' ? 'اكتب هنا شيئًا إضافيًا إذا أردت من الذكاء أن يراعيه في الملخص أو الرد.' : 'Add anything extra you want the AI to respect in the summary or reply.',
     replySetupTitle: lang === 'ar' ? 'إعدادات الرد' : 'Reply settings',
     draftFromHere: lang === 'ar' ? 'اكتب ردًا بهذه الإعدادات' : 'Draft reply with these settings',
+    quickRewriteTitle: lang === 'ar' ? 'تعديلات سريعة' : 'Quick changes',
+    shorterReply: lang === 'ar' ? 'أقصر' : 'Shorter',
+    morePoliteReply: lang === 'ar' ? 'ألطف' : 'More polite',
+    moreFirmReply: lang === 'ar' ? 'أكثر حزمًا' : 'More firm',
     importantThings: lang === 'ar' ? 'أهم النقاط' : 'Important things',
     tasksFound: lang === 'ar' ? 'المهام' : 'Tasks',
     deadlinesFound: lang === 'ar' ? 'المواعيد' : 'Deadlines',
@@ -496,12 +498,41 @@ export function EmailAiAssistant({
     return await resolveRecentMessages();
   }, [message, mode, resolveRecentMessages]);
 
+  const handleDraftReply = useCallback(async (overrides?: Partial<{ tone: EmailAiTone; length: EmailAiLength; note: string }>) => {
+    const nextTone = overrides?.tone ?? tone;
+    const nextLength = overrides?.length ?? length;
+    const nextNote = overrides?.note ?? note;
+
+    shouldRevealReplyResultRef.current = true;
+    setReplySetupOpen(true);
+    setTone(nextTone);
+    setLength(nextLength);
+    setNote(nextNote);
+
+    try {
+      const messages = await loadMessages();
+      await runAction({
+        action: 'draft_reply',
+        messages,
+        language: lang,
+        tone: nextTone,
+        length: nextLength,
+        note: nextNote,
+      });
+    } catch {
+      shouldRevealReplyResultRef.current = false;
+    }
+  }, [lang, length, loadMessages, note, runAction, tone]);
+
   const handleAction = useCallback(async (action: EmailAiAction) => {
+    if (action === 'draft_reply') {
+      await handleDraftReply();
+      return;
+    }
+
     if (action !== 'draft_reply') {
       shouldRevealReplyResultRef.current = false;
       setReplySetupOpen(false);
-    } else {
-      shouldRevealReplyResultRef.current = true;
     }
     try {
       const messages = await loadMessages();
@@ -513,15 +544,9 @@ export function EmailAiAssistant({
         length,
         note,
       });
-      if (action === 'draft_reply') {
-        setReplySetupOpen(false);
-      }
     } catch {
-      if (action === 'draft_reply') {
-        shouldRevealReplyResultRef.current = false;
-      }
     }
-  }, [lang, length, loadMessages, note, runAction, tone]);
+  }, [handleDraftReply, lang, length, loadMessages, note, runAction, tone]);
 
   const handleSummarizeWithPdf = useCallback(async () => {
     if (mode !== 'message' || !message || !resolveAttachmentContent || pdfAttachments.length === 0) {
@@ -583,14 +608,8 @@ export function EmailAiAssistant({
   }, [lang, labels.pdfSummaryNeedsAttachment, labels.pdfSummaryUnavailable, length, message, mode, note, pdfAttachments, resolveAttachmentContent, runAction, tone]);
 
   const handleStartReplyFlow = useCallback(() => {
-    if (onStartReply) {
-      setReplySetupOpen(false);
-      setOpen(false);
-      onStartReply();
-      return;
-    }
     setReplySetupOpen(true);
-  }, [onStartReply]);
+  }, []);
 
   const handleCopy = useCallback(async () => {
     if (!result?.text) return;
@@ -885,6 +904,23 @@ export function EmailAiAssistant({
                       <Reply className="h-4 w-4" />
                       {labels.draftFromHere}
                     </Button>
+
+                    {result?.action === 'draft_reply' ? (
+                      <div className="mt-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{labels.quickRewriteTitle}</div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => void handleDraftReply({ length: 'short' })} disabled={busy}>
+                            {labels.shorterReply}
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => void handleDraftReply({ tone: 'diplomatic' })} disabled={busy}>
+                            {labels.morePoliteReply}
+                          </Button>
+                          <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => void handleDraftReply({ tone: 'firm' })} disabled={busy}>
+                            {labels.moreFirmReply}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -1129,6 +1165,23 @@ export function EmailAiAssistant({
             <Reply className="h-4 w-4" />
             {labels.draftFromHere}
           </Button>
+
+          {result?.action === 'draft_reply' ? (
+            <div className="mt-3">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{labels.quickRewriteTitle}</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => void handleDraftReply({ length: 'short' })} disabled={busy}>
+                  {labels.shorterReply}
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => void handleDraftReply({ tone: 'diplomatic' })} disabled={busy}>
+                  {labels.morePoliteReply}
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="rounded-full" onClick={() => void handleDraftReply({ tone: 'firm' })} disabled={busy}>
+                  {labels.moreFirmReply}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

@@ -80,9 +80,13 @@ serve(async (req) => {
       }
     }
 
-    const { vision, language = 'en', anchor_tag = '' } = await req.json();
+    const { vision, language = 'en', anchor_tag = '', scene_count, seed } = await req.json();
     const MIN_SCENES = 3;
     const MAX_SCENES = 8;
+    const parsedSceneCount = Number(scene_count);
+    const requestedSceneCount = Number.isInteger(parsedSceneCount) && parsedSceneCount >= MIN_SCENES && parsedSceneCount <= MAX_SCENES
+      ? parsedSceneCount
+      : undefined;
     const effectiveAnchorTag = anchor_tag || 'style'; // 'logo' | 'product' | 'style' | 'character'
 
     if (!vision || !vision.trim()) {
@@ -117,7 +121,7 @@ serve(async (req) => {
     userCoreText = userCoreText.trim();
     const wordCount = userCoreText.split(/\s+/).filter(Boolean).length;
     const isShortPrompt = wordCount < 30;
-    console.log(`[cinema-director] wordCount=${wordCount}, isShortPrompt=${isShortPrompt}, sceneRange=${MIN_SCENES}-${MAX_SCENES}, lang=${language}`);
+    console.log(`[cinema-director] wordCount=${wordCount}, isShortPrompt=${isShortPrompt}, sceneRange=${requestedSceneCount || `${MIN_SCENES}-${MAX_SCENES}`}, seed=${seed || 'auto'}, lang=${language}`);
 
     // System prompt for Gemini Flash-Lite — Ad Agency Copywriter v2 (Phase 2 beat-scripting)
     const systemPrompt = language === 'ar'
@@ -654,7 +658,7 @@ Never return fewer than 3 scenes or more than 8 scenes.`;
       ? `أنت المخرج الإبداعي لفيديو Wakti.
 حوّل فكرة المستخدم القصيرة إلى فيديو واحد متصل ومثير. قد يكون قصة، إعلاناً، عرض منتج، رحلة شخصية، فيديو علامة تجارية، أو أي فكرة أخرى. لا تفرض قالب إعلان.
 
-اختر عدد المشاهد الذي تحتاجه الفكرة فقط، بين ٣ و٨ مشاهد. لا تستخدم عدداً ثابتاً. الفكرة البسيطة قد تحتاج ٣ مشاهد، والفكرة الأوسع قد تحتاج أكثر.
+${requestedSceneCount ? `أعد بالضبط ${requestedSceneCount} مشاهد لأن المستخدم اختار هذا العدد.` : 'اختر عدد المشاهد الذي تحتاجه الفكرة فقط، بين ٣ و٨ مشاهد. لا تستخدم عدداً ثابتاً. الفكرة البسيطة قد تحتاج ٣ مشاهد، والفكرة الأوسع قد تحتاج أكثر.'}
 
 اجعل المشاهد قوساً بصرياً واحداً:
 - بداية قوية مناسبة للفكرة
@@ -671,7 +675,7 @@ Never return fewer than 3 scenes or more than 8 scenes.`;
       : `You are Wakti's creative video director.
 Turn the user's short idea into one connected, exciting video. It may be a story, advertisement, product showcase, character journey, brand film, or any other idea. Do not force an advertisement format.
 
-Choose only the number of scenes the idea needs, between 3 and 8. Do not use a fixed count. A simple idea may need 3 scenes; a broader idea may need more.
+${requestedSceneCount ? `Return exactly ${requestedSceneCount} scenes because the user selected that count.` : 'Choose only the number of scenes the idea needs, between 3 and 8. Do not use a fixed count. A simple idea may need 3 scenes; a broader idea may need more.'}
 
 Build one visual arc:
 - a strong opening that fits the idea
@@ -687,8 +691,8 @@ Return only valid JSON, no markdown, in this shape:
 Return 3 to 8 scenes, using only the number the idea needs. Every english_prompt must begin with the exact same subject_lock.`;
 
     const userPrompt = language === 'ar'
-      ? `رؤيتي: ${vision.trim()}\n\nأنشئ فيديو إبداعياً متصلاً بعدد مشاهد مناسب للفكرة، بين ٣ و٨ مشاهد. لا تفرض قالب إعلان إذا كانت الفكرة قصة أو عرضاً أو رحلة شخصية.`
-      : `My vision: ${vision.trim()}\n\nCreate one connected creative video using the number of scenes the idea needs, between 3 and 8. Do not force an advertisement format if the idea is a story, showcase, or character journey.`;
+      ? `رؤيتي: ${vision.trim()}\n\n${requestedSceneCount ? `أعد بالضبط ${requestedSceneCount} مشاهد.` : 'أنشئ فيديو إبداعياً متصلاً بعدد مشاهد مناسب للفكرة، بين ٣ و٨ مشاهد.'} لا تفرض قالب إعلان إذا كانت الفكرة قصة أو عرضاً أو رحلة شخصية.`
+      : `My vision: ${vision.trim()}\n\n${requestedSceneCount ? `Return exactly ${requestedSceneCount} scenes.` : 'Create one connected creative video using the number of scenes the idea needs, between 3 and 8.'} Do not force an advertisement format if the idea is a story, showcase, or character journey.`;
 
     // Call Gemini Flash-Lite via Gemini API
     const geminiResponse = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
@@ -766,12 +770,15 @@ Return 3 to 8 scenes, using only the number the idea needs. Every english_prompt
     if (!scenes || scenes.length < MIN_SCENES) {
       throw new Error(`AI director returned fewer than ${MIN_SCENES} scenes`);
     }
+    if (requestedSceneCount && scenes.length < requestedSceneCount) {
+      throw new Error(`AI director returned ${scenes.length} scenes instead of the requested ${requestedSceneCount}`);
+    }
 
     const response: DirectorResponse = {
       success: true,
       visualDna: '',
       subject_lock: subjectLock,
-      scenes: scenes.slice(0, MAX_SCENES).map((s, i) => ({
+      scenes: scenes.slice(0, requestedSceneCount || MAX_SCENES).map((s, i) => ({
         scene: i + 1,
         text: s.text || '',
         english_prompt: s.english_prompt || s.text || '',
