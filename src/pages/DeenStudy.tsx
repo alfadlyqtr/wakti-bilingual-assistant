@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp, X, Target, Search, Trash2, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Brain, Bookmark, CheckCircle, RotateCcw, BookOpen, Play, Pause, Eye, EyeOff, ChevronRight, ChevronDown, ChevronUp, X, Target, Search, Trash2 } from "lucide-react";
 import { useTheme } from "@/providers/ThemeProvider";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -17,49 +17,6 @@ interface StudyPlan {
   startSurah?: number;
   startAyah?: number;
   customName?: string;
-}
-
-async function fetchAyahLite(surahNumber: number, ayahNumber: number): Promise<AyahData | null> {
-  try {
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
-    const session = await supabase.auth.getSession();
-    const token = session.data.session?.access_token ?? anonKey;
-    const headers = { Authorization: `Bearer ${token}`, apikey: anonKey };
-    const buildUrl = (edition: string) => {
-      const u = new URL(`${supabaseUrl}/functions/v1/deen-quran-proxy`);
-      u.searchParams.set("path", `ayah/${surahNumber}:${ayahNumber}`);
-      u.searchParams.set("edition", edition);
-      return u.toString();
-    };
-    const [arRes, enRes, auRes] = await Promise.all([
-      fetch(buildUrl("quran-uthmani"), { headers }),
-      fetch(buildUrl("en.sahih"), { headers }),
-      fetch(buildUrl("ar.alafasy"), { headers }),
-    ]);
-
-    const arJson = await arRes.json();
-    const enJson = await enRes.json();
-    const auJson = await auRes.json();
-
-    const arText: string = arJson?.data?.text ?? "";
-    const enText: string = enJson?.data?.text ?? "";
-    const audioUrl: string = auJson?.data?.audio ?? "";
-
-    if (!arText) {
-      return fetchAyah(surahNumber, ayahNumber);
-    }
-
-    return {
-      surah_number: surahNumber,
-      ayah_number: ayahNumber,
-      arabic: arText,
-      translation: enText,
-      audioUrl,
-    };
-  } catch {
-    return fetchAyah(surahNumber, ayahNumber);
-  }
 }
 
 interface StudyPlanStore {
@@ -276,7 +233,6 @@ export default function DeenStudy() {
   const [reviewAyahs, setReviewAyahs] = useState<AyahData[]>([]);
   const [showReview, setShowReview] = useState(false);
   const [reviewLoading, setReviewLoading] = useState(false);
-  const [loadingNextAyah, setLoadingNextAyah] = useState(false);
   const plan = planStore.plans.find((p) => p.id === planStore.activePlanId) ?? planStore.plans[0] ?? null;
 
   const reloadMemorization = useCallback(() => {
@@ -351,17 +307,9 @@ export default function DeenStudy() {
 
   const onPlayerComplete = useCallback(async (result: "memorized") => {
     if (!sessionAyah) return;
-    let nextSurah = sessionAyah.surah_number;
-    let nextAyah = sessionAyah.ayah_number + 1;
-    const currentSurahMeta = SURAH_LIST.find((s) => s.n === sessionAyah.surah_number);
-    if (currentSurahMeta && nextAyah > currentSurahMeta.ayahs) {
-      nextSurah = sessionAyah.surah_number + 1;
-      nextAyah = 1;
-    }
-
     await upsertMemorization(sessionAyah.surah_number, sessionAyah.ayah_number, result);
     if (plan && playerMode === "learn") {
-      const updated: StudyPlan = { ...plan, currentSurah: nextSurah, currentAyah: nextAyah };
+      const updated: StudyPlan = { ...plan, currentSurah: sessionAyah.surah_number, currentAyah: sessionAyah.ayah_number + 1 };
       setPlanStore((prev) => {
         const next: StudyPlanStore = {
           ...prev,
@@ -379,30 +327,14 @@ export default function DeenStudy() {
         (m) => m.surah_number === sessionAyah.surah_number && m.ayah_number === prev && m.status === "memorized"
       );
       if (!isMemorized) break;
-      const data = await fetchAyahLite(sessionAyah.surah_number, prev);
+      const data = await fetchAyah(sessionAyah.surah_number, prev);
       if (data) chain.unshift(data);
       prev--;
     }
-    if (chain.length > 1) {
-      setReviewAyahs(chain);
-      setShowReview(true);
-      setSessionAyah(null);
-      reloadMemorization();
-    } else if (playerMode === "learn" && plan) {
-      setLoadingNextAyah(true);
-      const nextData = await fetchAyahLite(nextSurah, nextAyah);
-      setLoadingNextAyah(false);
-      if (nextData) {
-        setSessionAyah(nextData);
-        setPlayerMode("learn");
-      } else {
-        setSessionAyah(null);
-      }
-      reloadMemorization();
-    } else {
-      setSessionAyah(null);
-      reloadMemorization();
-    }
+    setReviewAyahs(chain);
+    setShowReview(true);
+    setSessionAyah(null);
+    reloadMemorization();
   }, [sessionAyah, plan, playerMode, upsertMemorization, reloadMemorization, isAr, memorization]);
 
   const onPlayerNotYet = useCallback(async () => {
@@ -552,7 +484,6 @@ export default function DeenStudy() {
           mode={playerMode}
           isAr={isAr}
           localHafsByAyah={localHafsByAyah}
-          loadingNext={loadingNextAyah}
           onComplete={onPlayerComplete}
           onNotYet={onPlayerNotYet}
           onClose={() => setSessionAyah(null)}
@@ -569,7 +500,7 @@ export default function DeenStudy() {
           onNext={async () => {
             if (!plan || !plan.currentSurah || !plan.currentAyah) return;
             setReviewLoading(true);
-            const nextData = await fetchAyahLite(plan.currentSurah, plan.currentAyah);
+            const nextData = await fetchAyah(plan.currentSurah, plan.currentAyah);
             setReviewLoading(false);
             if (nextData) {
               setShowReview(false);
@@ -1267,12 +1198,11 @@ function PlansSetup({ isAr, dark, activePlan, savedPlans, onActivate, onSetActiv
   );
 }
 
-function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, loadingNext, onComplete, onNotYet, onClose }: {
+function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, onComplete, onNotYet, onClose }: {
   ayah: AyahData;
   mode: "learn" | "review";
   isAr: boolean;
   localHafsByAyah: Record<string, string>;
-  loadingNext?: boolean;
   onComplete: (result: "memorized") => Promise<void>;
   onNotYet: () => Promise<void>;
   onClose: () => void;
@@ -1292,19 +1222,6 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, loadingNext, onCompl
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const surahInfo = SURAH_LIST.find((s) => s.n === ayah.surah_number);
   const audioUrl = ayah.audioUrl ?? "";
-
-  // Reset player state when ayah changes
-  useEffect(() => {
-    setPhase("listen");
-    setHidden(false);
-    setPlaying(false);
-    setLoopCount(0);
-    setTargetLoops(3);
-    targetLoopsRef.current = 3;
-    setProgress(0);
-    setDuration(0);
-    setCompleting(false);
-  }, [ayah.surah_number, ayah.ayah_number]);
 
   useEffect(() => {
     const audio = new Audio(audioUrl);
@@ -1494,14 +1411,7 @@ function SessionPlayer({ ayah, mode, isAr, localHafsByAyah, loadingNext, onCompl
                 : `0 4px 32px ${greenAlpha(0.10)}`,
           }}
         >
-          {loadingNext ? (
-            <div className="py-8 flex flex-col items-center gap-3">
-              <Loader2 className="w-8 h-8 animate-spin" style={{ color: textSec }} />
-              <p className="text-sm font-semibold" style={{ color: textSec }}>
-                {isAr ? "جاري تحميل الآية التالية..." : "Loading next ayah..."}
-              </p>
-            </div>
-          ) : hidden ? (
+          {hidden ? (
             <div className="py-5 flex flex-col items-center gap-3">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center"
                 style={{ background: greenAlpha(0.10), border: `1px solid ${greenAlpha(0.22)}` }}>
