@@ -65,6 +65,7 @@ export interface WaktiOperatorEmailDraft {
 export interface WaktiOperatorImageRequest {
   prompt: string;
   submode?: 'text2image' | 'image2image';
+  quality?: 'quick' | 'fast' | 'best_fast';
   autoGenerate?: boolean;
   autoSave?: boolean;
   nextEmailDraft?: WaktiOperatorEmailDraft | null;
@@ -607,8 +608,8 @@ function extractVoiceTtsText(transcript: string) {
   const quoted = extractQuotedText(transcript);
   if (quoted) return quoted.slice(0, 800);
   const patterns = [
-    /(?:read|say|speak|narrate|voice|convert|turn)\s+(?:this|the following)?\s*(?:text)?\s*(?:out loud|aloud|into speech|to speech)?\s*[:\-]?\s+(.+)/i,
-    /(?:اقرأ|اقرا|انطق|قول|حوّل|حول)\s+(?:هذا|النص|الجملة)?\s*(?:إلى صوت|الى صوت|كصوت)?\s*[:\-]?\s+(.+)/,
+    /(?:read|say|speak|narrate|voice|convert|turn)\s+(?:this|the following)?\s*(?:text)?\s*(?:out loud|aloud|into speech|to speech)?\s*[:-]?\s+(.+)/i,
+    /(?:اقرأ|اقرا|انطق|قول|حوّل|حول)\s+(?:هذا|النص|الجملة)?\s*(?:إلى صوت|الى صوت|كصوت)?\s*[:-]?\s+(.+)/,
   ];
   for (const pattern of patterns) {
     const match = transcript.match(pattern);
@@ -857,8 +858,8 @@ function extractTextReplySource(transcript: string) {
   const quoted = extractQuotedText(transcript);
   if (quoted) return quoted.slice(0, 800);
   const patterns = [
-    /(?:reply|respond)(?:\s+to)?\s+(?:this|the following|following)?\s*[:\-]?\s*(.+)/i,
-    /(?:رد|جاوب)(?:\s+على)?\s*(?:هذا|التالي)?\s*[:\-]?\s*(.+)/,
+    /(?:reply|respond)(?:\s+to)?\s+(?:this|the following|following)?\s*[:-]?\s*(.+)/i,
+    /(?:رد|جاوب)(?:\s+على)?\s*(?:هذا|التالي)?\s*[:-]?\s*(.+)/,
   ];
   for (const pattern of patterns) {
     const match = transcript.match(pattern);
@@ -1307,6 +1308,111 @@ function buildCapabilityGuidancePlan(
   };
 }
 
+function extractSchemaVisualPrompt(transcript: string) {
+  return trimSentence(
+    transcript
+      .replace(/^(?:please\s+)?(?:create|generate|make|prepare)\s+(?:an?\s+)?(?:text[\s-]*to[\s-]*video|image[\s-]*to[\s-]*video|two[\s-]*image\s+video|cinema\s+video|video|image|picture|photo|poster|logo|thumbnail|cover)\s*(?:of|for|about)?\s*/i, '')
+      .replace(/^(?:أنشئ|انشئ|اصنع|اعمل|جهز)\s+(?:فيديو|فيديو من نص|فيديو من صورة|صورة|بوستر|شعار)\s*(?:عن|لـ|من)?\s*/i, ''),
+  );
+}
+
+function buildSchemaInitialValues(capabilityId: WaktiCapabilityId, transcript: string): Record<string, WaktiExecutionFieldValue> {
+  const values: Record<string, WaktiExecutionFieldValue> = {};
+  const plainRequest = trimSentence(transcript);
+  const genericText = stripOperatorPhrases(plainRequest);
+
+  if (capabilityId === 'image_studio') {
+    const prompt = extractImagePrompt(plainRequest);
+    if (prompt && prompt !== 'A polished image for Wakti') values.prompt = prompt;
+  }
+
+  if (capabilityId === 'video_studio') {
+    const prompt = extractSchemaVisualPrompt(plainRequest);
+    if (prompt) values.prompt = prompt;
+  }
+
+  if (capabilityId === 'qr_creator') {
+    const url = plainRequest.match(/https?:\/\/[^\s]+/i)?.[0];
+    const email = extractEmailAddresses(plainRequest)[0];
+    const phone = plainRequest.match(/(?:\+?\d[\d\s()-]{6,}\d)/)?.[0];
+    if (url) values.url = url;
+    if (email) values.email = email;
+    if (phone) values.phone = trimSentence(phone);
+    const text = plainRequest.replace(/(?:create|make|generate|prepare|qr|code|رمز|كود|أنشئ|انشئ|اصنع|جهز)/gi, ' ').replace(url || '', '').trim();
+    if (text) values.text = text;
+  }
+
+  if (capabilityId === 'email') {
+    const recipients = extractEmailAddresses(plainRequest);
+    const subject = plainRequest.match(/(?:subject(?:\s+line)?|الموضوع)\s*[:-]?\s*(.+?)(?=\s+(?:body|message|قل|وقل|and\s+say|saying)\b|$)/i)?.[1];
+    const body = extractQuotedText(plainRequest)
+      || plainRequest.match(/(?:say|saying|body|message|قل|وقل|نصها|محتواها)\s*[:-]?\s*(.+)$/i)?.[1];
+    if (recipients.length > 0) values.recipients = recipients.join(', ');
+    if (subject?.trim()) values.subject = trimSentence(subject);
+    if (body?.trim()) values.body = trimSentence(body);
+  }
+
+  if (capabilityId === 'contacts_chat') {
+    const contact = extractChatTargetName(plainRequest);
+    const message = extractChatDraftMessage(plainRequest);
+    if (contact) values.contact = contact;
+    if (message) values.message = message;
+  }
+
+  if (capabilityId === 'text_tools') {
+    const text = stripTextRequestLanguage(plainRequest);
+    if (text) {
+      values.goal = text;
+      values.sourceText = text;
+      values.topic = text;
+      values.content = text;
+      values.documentType = text;
+    }
+  }
+
+  if (capabilityId === 'voice_studio') {
+    const text = genericText || plainRequest;
+    if (text) values.text = text;
+  }
+
+  if (capabilityId === 'tasks_reminders') {
+    const task = buildTaskOperatorRequest(plainRequest);
+    if (task.targetTitle) values.target = task.targetTitle;
+    if (task.taskDraft?.title) values.title = task.taskDraft.title;
+    if (task.taskDraft?.description) values.description = task.taskDraft.description;
+    if (task.taskDraft?.priority) values.priority = task.taskDraft.priority;
+    if (task.reminderDraft?.title) values.title = task.reminderDraft.title;
+    if (task.reminderDraft?.description) values.description = task.reminderDraft.description;
+    if (task.reminderDraft?.due_date) values.dueDate = task.reminderDraft.due_date;
+    if (task.reminderDraft?.due_time) values.dueTime = task.reminderDraft.due_time;
+    if (task.subtasks?.length) values.subtasks = task.subtasks.join('\n');
+  }
+
+  if (capabilityId === 'calendar') {
+    const calendar = buildCalendarOperatorRequest(plainRequest);
+    if (calendar.date) values.date = calendar.date;
+    if (calendar.view) values.view = calendar.view;
+    if (calendar.title) values.title = calendar.title;
+    if (calendar.targetTitle) values.target = calendar.targetTitle;
+    if (calendar.description) values.description = calendar.description;
+    if (calendar.time) values.time = calendar.time;
+  }
+
+  if (capabilityId === 'maw3d') {
+    const title = titleCaseFromWords(genericText || plainRequest, 8);
+    if (title) values.title = title;
+  }
+
+  if (capabilityId === 'projects') values.goal = genericText || plainRequest;
+  if (capabilityId === 'deen') values.question = genericText || plainRequest;
+  if (capabilityId === 'wakti_ai') {
+    values.request = plainRequest;
+    values.query = plainRequest;
+  }
+
+  return values;
+}
+
 function createInteractionValues(
   actionSchema: NonNullable<ReturnType<typeof getWaktiExecutionAction>>,
   initialValues: Record<string, WaktiExecutionFieldValue> = {},
@@ -1352,7 +1458,7 @@ function buildSchemaActionPlan(
   const actionSchema = getWaktiExecutionAction(capability.id, actionId);
   if (!actionSchema) return null;
 
-  if (actionSchema.executionMode === 'guide') {
+  if (actionSchema.executionMode === 'guide' && actionSchema.fields.length === 0) {
     return buildCapabilityGuidancePlan(transcript, language, capability, false, actionSchema.id);
   }
 
@@ -1380,7 +1486,10 @@ function buildSchemaActionPlan(
     };
   }
 
-  const values = createInteractionValues(actionSchema, initialValues);
+  const values = createInteractionValues(actionSchema, {
+    ...buildSchemaInitialValues(capability.id, transcript),
+    ...initialValues,
+  });
   const missingFields = getWaktiExecutionMissingFields(actionSchema, values);
   const missingFieldLabels = missingFields.map((fieldSchema) => language === 'ar' ? fieldSchema.labelAr : fieldSchema.labelEn);
   const phase = missingFields.length > 0 ? 'collect' : 'review';
@@ -1480,16 +1589,47 @@ function getInteractionString(values: Record<string, WaktiExecutionFieldValue>, 
   return typeof value === 'string' ? value.trim() : '';
 }
 
+export function editWaktiOperatorInteraction(
+  plan: WaktiOperatorPlan,
+  fieldKey?: string,
+  language: 'ar' | 'en' = 'en',
+): WaktiOperatorPlan {
+  if (!plan.interaction) return plan;
+  const focusField = plan.interaction.action.fields.find((field) => field.key === fieldKey)
+    || plan.interaction.action.fields[0];
+  if (!focusField) return plan;
+  return {
+    ...plan,
+    summary: language === 'ar' ? `عدّل تفاصيل ${plan.interaction.action.label}` : `Edit ${plan.interaction.action.label} details`,
+    answer: language === 'ar' ? `عدّل ${focusField.label} ثم راجع الطلب مرة أخرى.` : `Edit ${focusField.label}, then review the request again.`,
+    interaction: {
+      ...plan.interaction,
+      phase: 'collect',
+      focusFieldKey: focusField.key,
+    },
+    steps: plan.steps.map((step) => {
+      if (step.kind === 'collect_action_details') return { ...step, status: 'paused' };
+      if (step.kind === 'review_action_details') return { ...step, status: 'pending' };
+      return step;
+    }),
+  };
+}
+
 export function createWaktiOperatorInteractionExecutionPlan(
   plan: WaktiOperatorPlan,
   language: 'ar' | 'en',
+  allowFeatureCollection = false,
 ): WaktiOperatorPlan | null {
   if (!plan.interaction) return null;
   const { interaction } = plan;
   const actionSchema = getWaktiExecutionAction(interaction.capabilityId, interaction.actionId);
   if (!actionSchema) return null;
   const missingFields = getWaktiExecutionMissingFields(actionSchema, interaction.values);
-  if (missingFields.length > 0) return updateWaktiOperatorInteraction(plan, {}, language);
+  const canCollectOnlyInFeature = missingFields.length > 0
+    && missingFields.every((fieldSchema) => fieldSchema.type === 'file' || fieldSchema.type === 'contact');
+  if (missingFields.length > 0 && (!allowFeatureCollection || !canCollectOnlyInFeature)) {
+    return updateWaktiOperatorInteraction(plan, {}, language);
+  }
 
   const action = interaction.action;
   const openStepId = createId('step');
@@ -1501,13 +1641,12 @@ export function createWaktiOperatorInteractionExecutionPlan(
     summary: action.label,
     stepRefs: {
       openStepId,
-      handoffStepId,
     },
     execution: {
       capabilityId: interaction.capabilityId,
       actionId: interaction.actionId,
       values: interaction.values,
-      focusFieldKey: interaction.focusFieldKey,
+      focusFieldKey: missingFields[0]?.key || interaction.focusFieldKey,
     },
     source: 'voice',
   };
@@ -1535,9 +1674,139 @@ export function createWaktiOperatorInteractionExecutionPlan(
     payload.image = {
       prompt: getInteractionString(interaction.values, 'prompt'),
       submode: interaction.actionId === 'transform_image' ? 'image2image' : 'text2image',
+      quality: ['quick', 'fast', 'best_fast'].includes(getInteractionString(interaction.values, 'quality')) ? getInteractionString(interaction.values, 'quality') as WaktiOperatorImageRequest['quality'] : undefined,
       autoGenerate: false,
       autoSave: false,
     };
+  }
+
+  if (interaction.capabilityId === 'email') {
+    payload.email = {
+      to: getInteractionString(interaction.values, 'recipients').split(/[;,\s]+/).map((item) => item.trim()).filter(Boolean),
+      subject: getInteractionString(interaction.values, 'subject'),
+      body: getInteractionString(interaction.values, 'body'),
+      attachments: [],
+      preferredProvider: /gmail/i.test(plan.transcript) ? 'gmail' : 'mail',
+    };
+  }
+
+  if (interaction.capabilityId === 'contacts_chat') {
+    payload.chat = {
+      targetContactName: getInteractionString(interaction.values, 'contact'),
+      draftMessage: getInteractionString(interaction.values, 'message'),
+    };
+  }
+
+  if (interaction.capabilityId === 'text_tools') {
+    const tabByAction: Record<string, SmartTextPrefillTab> = {
+      compose_text: 'compose',
+      reply_to_text: 'reply',
+      translate_text: 'translate',
+      create_diagram: 'diagrams',
+      create_presentation: 'presentation',
+      create_a4_document: 'a4',
+    };
+    const tab = tabByAction[interaction.actionId] || 'compose';
+    const sourceText = getInteractionString(interaction.values, 'sourceText');
+    const topic = getInteractionString(interaction.values, 'topic') || getInteractionString(interaction.values, 'goal');
+    payload.textTool = tab === 'reply'
+      ? { tab, prefill: { tab, originalMessage: sourceText } }
+      : tab === 'translate'
+        ? { tab, prefill: { tab }, bridge: { tab, sourceText, targetLanguage: getInteractionString(interaction.values, 'targetLanguage') } }
+        : tab === 'diagrams'
+          ? { tab, prefill: { tab }, bridge: { tab, sourceText: topic, prompt: topic } }
+          : tab === 'presentation'
+            ? { tab, prefill: { tab }, bridge: { tab, topic, prompt: topic } }
+            : tab === 'a4'
+              ? { tab, prefill: { tab }, bridge: { tab, sourceText: getInteractionString(interaction.values, 'content') || getInteractionString(interaction.values, 'documentType'), prompt: getInteractionString(interaction.values, 'content') || getInteractionString(interaction.values, 'documentType') } }
+              : { tab, prefill: { tab, topic } };
+  }
+
+  if (interaction.capabilityId === 'voice_studio') {
+    const tabByAction: Record<string, WaktiOperatorVoiceRequest['tab']> = {
+      generate_speech: 'tts',
+      live_translate_voice: 'live-translator',
+      clone_voice: 'clone',
+      record_audio: 'tasjeel',
+    };
+    payload.voiceTool = {
+      tab: tabByAction[interaction.actionId] || 'tts',
+      text: getInteractionString(interaction.values, 'text'),
+      targetLanguage: getInteractionString(interaction.values, 'targetLanguage'),
+      spokenLanguage: getInteractionString(interaction.values, 'spokenLanguage'),
+      autoGenerate: false,
+    };
+  }
+
+  if (interaction.capabilityId === 'maw3d') {
+    payload.maw3d = {
+      action: 'create',
+      title: getInteractionString(interaction.values, 'title'),
+      description: getInteractionString(interaction.values, 'description'),
+      location: getInteractionString(interaction.values, 'location'),
+      eventDate: getInteractionString(interaction.values, 'date'),
+      startTime: getInteractionString(interaction.values, 'startTime'),
+      endTime: getInteractionString(interaction.values, 'endTime'),
+    };
+  }
+
+  if (interaction.capabilityId === 'projects') {
+    payload.project = {
+      action: 'create',
+      prompt: getInteractionString(interaction.values, 'goal'),
+      tab: getInteractionString(interaction.values, 'mode') === 'assistant' ? 'assistant' : 'coder',
+    };
+  }
+
+  if (interaction.capabilityId === 'calendar') {
+    const calendarActionById: Record<string, WaktiOperatorCalendarRequest['action']> = {
+      open_calendar_date: 'open_date',
+      change_calendar_view: 'change_view',
+      create_calendar_note: 'create_note',
+      edit_calendar_note: 'edit_note',
+    };
+    payload.calendar = {
+      action: calendarActionById[interaction.actionId] || 'open_date',
+      date: getInteractionString(interaction.values, 'date'),
+      view: getInteractionString(interaction.values, 'view') as WaktiOperatorCalendarRequest['view'] | undefined,
+      title: getInteractionString(interaction.values, 'title'),
+      targetTitle: getInteractionString(interaction.values, 'target'),
+      description: getInteractionString(interaction.values, 'description') || getInteractionString(interaction.values, 'changes'),
+    };
+  }
+
+  if (interaction.capabilityId === 'tasks_reminders') {
+    const values = interaction.values;
+    const taskDraft: TRTaskPrefillDraft = {
+      title: getInteractionString(values, 'title'),
+      description: getInteractionString(values, 'description') || undefined,
+      due_date: getInteractionString(values, 'dueDate') || null,
+      due_time: getInteractionString(values, 'dueTime') || null,
+      priority: ['normal', 'high', 'urgent'].includes(getInteractionString(values, 'priority')) ? getInteractionString(values, 'priority') as TRTaskPrefillDraft['priority'] : undefined,
+    };
+    const reminderDraft: TRReminderPrefillDraft = {
+      title: getInteractionString(values, 'title'),
+      description: getInteractionString(values, 'description') || undefined,
+      due_date: getInteractionString(values, 'dueDate') || null,
+      due_time: getInteractionString(values, 'dueTime') || null,
+    };
+    if (interaction.actionId === 'create_task' || interaction.actionId === 'create_reminder') {
+      const prefill: TRPrefill = interaction.actionId === 'create_reminder'
+        ? { version: 1, kind: 'reminder', openTab: 'reminders', openModal: 'create', needsConfirmation: true, draft: reminderDraft }
+        : { version: 1, kind: 'task', openTab: 'tasks', openModal: 'create', needsConfirmation: true, draft: taskDraft };
+      saveTRPrefill(prefill);
+      payload.trPrefill = prefill;
+    } else {
+      payload.taskAction = {
+        action: interaction.actionId === 'complete_task' ? 'complete' : interaction.actionId === 'snooze_reminder' ? 'snooze' : interaction.actionId === 'add_subtasks' ? 'add_subtasks' : 'edit',
+        kind: interaction.actionId === 'snooze_reminder' ? 'reminder' : 'task',
+        targetTitle: getInteractionString(values, 'target'),
+        taskDraft,
+        reminderDraft,
+        subtasks: getInteractionString(values, 'subtasks').split(/\n|,/).map((item) => item.trim()).filter(Boolean),
+        snoozeMinutes: extractSnoozeMinutes(plan.transcript),
+      };
+    }
   }
 
   const payloadId = stashWaktiOperatorPayload(payload);
@@ -1621,7 +1890,11 @@ export function createWaktiOperatorInteractionExecutionPlan(
         id: handoffStepId,
         kind: 'handoff_action',
         label: language === 'ar' ? 'انتظر نتيجة الميزة' : 'Wait for the feature result',
-        description: action.result,
+        description: canCollectOnlyInFeature
+          ? (language === 'ar'
+            ? `اختر ${missingFields.map((fieldSchema) => fieldSchema.labelAr).join(' أو ')} من داخل الميزة ثم تابع.`
+            : `Choose ${missingFields.map((fieldSchema) => fieldSchema.labelEn).join(' or ')} inside the feature, then continue.`)
+          : action.result,
         risk: action.approval === 'none' ? 'safe' : 'approval_required',
         status: 'pending',
         payloadId,
@@ -1811,104 +2084,41 @@ function buildMusicSemanticPlan(
   language: 'ar' | 'en',
   semantic: WaktiOperatorSemanticAnalysis,
 ): WaktiOperatorPlan {
-  const planId = createId('plan');
-  const openStepId = createId('step');
-  const reviewStepId = createId('step');
-  const generateStepId = createId('step');
-  const trackingStepId = createId('step');
+  const capability = getWaktiCapability('music_studio');
+  const musicActionId = semantic.actionId || (semantic.intent === 'prepare' ? 'prepare_music_track' : 'generate_music_track');
   const music = buildMusicOperatorRequest(transcript, semantic);
-  const musicAction = getWaktiExecutionAction(
-    'music_studio',
-    semantic.actionId || (semantic.intent === 'prepare' ? 'prepare_music_track' : 'generate_music_track'),
-  ) || getWaktiExecutionAction('music_studio', 'generate_music_track');
-  const actionStages = musicAction ? getWaktiExecutionActionDetails(musicAction, language).stages : [];
-  const getStage = (id: string, label: string, detail: string) => actionStages.find((stage) => stage.id === id) || { id, label, detail };
-  const prepareStage = getStage('collect', language === 'ar' ? 'تجهيز مسودة الموسيقى' : 'Prepare the music draft', language === 'ar' ? 'أجهز تفاصيل الأغنية.' : 'Prepare the song details.');
-  const reviewStage = getStage('review', language === 'ar' ? 'بانتظار الموافقة' : 'Waiting for approval', language === 'ar' ? 'راجع المسودة قبل الإرسال.' : 'Review the draft before it is sent.');
-  const submitStage = getStage('run', language === 'ar' ? 'إرسال إنشاء الموسيقى' : 'Submit music generation', language === 'ar' ? 'أرسل الطلب المتحقق منه.' : 'Submit the validated request.');
-  const generateStage = getStage('track', language === 'ar' ? 'جارٍ إنشاء الموسيقى' : 'Generating music', language === 'ar' ? 'أتابع المهمة حتى تكتمل.' : 'Track the provider task until it completes.');
-  const payload: WaktiOperatorRoutePayload = {
-    runId: planId,
-    stepId: openStepId,
-    transcript,
-    summary: language === 'ar' ? 'تحضير طلب الموسيقى داخل الاستوديو' : 'Preparing the music request inside Studio',
-    stepRefs: { openStepId, reviewStepId, generateStepId, trackingStepId },
-    music,
-    source: 'voice',
-  };
-  const payloadId = stashWaktiOperatorPayload(payload);
-  const openAction = {
-    label: language === 'ar' ? 'افتح استوديو الموسيقى' : 'Open Music Studio',
-    href: `/music?waktiOperator=${payloadId}&operatorTarget=music`,
-  };
-  const isGuidance = semantic.intent === 'conversation' || semantic.intent === 'guidance' || semantic.intent === 'clarify' || semantic.intent === 'cancel';
-  const answer = semantic.response?.trim()
-    || semantic.clarificationQuestion?.trim()
-    || (semantic.intent === 'cancel'
-      ? (language === 'ar' ? 'حسناً، لن أنشئ الأغنية.' : 'Okay, I will not generate the song.')
-      : language === 'ar'
-        ? 'فهمت فكرة الموسيقى. أستطيع مساعدتك في تجهيزها داخل استوديو الموسيقى.'
-        : 'I understand the music idea. I can help you prepare it inside Music Studio.');
 
-  if (isGuidance) {
-    return {
-      id: planId,
-      transcript,
-      mode: 'guidance',
-      summary: answer,
-      answer,
-      primaryAction: semantic.intent === 'guidance' ? openAction : undefined,
-      steps: [buildGuidanceStep(semantic.clarificationQuestion || (language === 'ar' ? 'راجع الفكرة وقل لي ماذا تريد بعد ذلك.' : 'Review the idea and tell me what you want next.'))],
-    };
+  if (!capability || semantic.intent === 'cancel' || semantic.intent === 'conversation' || semantic.intent === 'guidance') {
+    const answer = semantic.response?.trim()
+      || semantic.clarificationQuestion?.trim()
+      || (semantic.intent === 'cancel'
+        ? (language === 'ar' ? 'حسناً، لن أنشئ الأغنية.' : 'Okay, I will not generate the song.')
+        : language === 'ar'
+          ? 'فهمت فكرة الموسيقى. أستطيع مساعدتك في تجهيزها داخل استوديو الموسيقى.'
+          : 'I understand the music idea. I can help you prepare it inside Music Studio.');
+    return capability
+      ? {
+          ...buildCapabilityGuidancePlan(transcript, language, capability, false, musicActionId),
+          summary: answer,
+          answer,
+        }
+      : {
+          id: createId('plan'),
+          transcript,
+          mode: 'guidance',
+          summary: answer,
+          answer,
+          steps: [buildGuidanceStep(answer)],
+        };
   }
 
-  return {
-    id: planId,
-    transcript,
-    mode: 'execution',
-    summary: language === 'ar'
-      ? 'فهمت طلب الموسيقى. سأجهز المسودة، وأعرضها لك للمراجعة، ثم أتابع حالة الإنشاء الحقيقية بعد موافقتك.'
-      : 'I understood the music request. I will prepare the draft, show it for your review, then track the real generation after your approval.',
-    steps: [
-      {
-        id: openStepId,
-        kind: 'open_music_studio',
-        label: prepareStage.label,
-        description: prepareStage.detail,
-        risk: 'safe',
-        status: 'pending',
-        href: openAction.href,
-        payloadId,
-      },
-      {
-        id: reviewStepId,
-        kind: 'review_music_draft',
-        label: reviewStage.label,
-        description: reviewStage.detail,
-        risk: 'approval_required',
-        status: 'pending',
-        payloadId,
-      },
-      {
-        id: generateStepId,
-        kind: 'generate_music',
-        label: submitStage.label,
-        description: submitStage.detail,
-        risk: 'safe',
-        status: 'pending',
-        payloadId,
-      },
-      {
-        id: trackingStepId,
-        kind: 'track_music_generation',
-        label: generateStage.label,
-        description: generateStage.detail,
-        risk: 'safe',
-        status: 'pending',
-        payloadId,
-      },
-    ],
-  };
+  return buildSchemaActionPlan(transcript, language, capability, musicActionId, {
+    title: music.title,
+    style: music.style,
+    lyrics: music.lyrics,
+    mode: music.mode === 'instrumental' ? 'instrumental' : 'vocal',
+    vocalType: music.vocalType || 'auto',
+  }) || buildCapabilityGuidancePlan(transcript, language, capability, false, musicActionId);
 }
 
 export function buildVoiceOperatorPlan(
@@ -1956,6 +2166,16 @@ export function buildVoiceOperatorPlan(
 
   if (wantsMusic && isExecutionLikeIntent) {
     return buildMusicSemanticPlan(normalized, language, buildFallbackMusicSemantic(normalized));
+  }
+
+  if (semanticCapability && semanticAction && (
+    semantic?.intent === 'prepare'
+    || semantic?.intent === 'generate'
+    || semantic?.intent === 'clarify'
+    || semantic?.intent === 'confirm'
+  )) {
+    const schemaPlan = buildSchemaActionPlan(normalized, language, semanticCapability, semanticAction.id);
+    if (schemaPlan) return schemaPlan;
   }
 
   const shouldUseCapabilityGuidance = semantic?.intent === 'conversation'

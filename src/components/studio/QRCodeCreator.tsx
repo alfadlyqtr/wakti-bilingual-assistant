@@ -34,6 +34,7 @@ import {
   Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { WaktiOperatorExecutionRequest } from '@/utils/waktiOperator';
 
 /* ─────────────────────── Types ─────────────────────── */
 
@@ -121,7 +122,7 @@ function getCtaPayloadLabel(index: number, label: string): string {
 
 /* ─────────────────────── Component ─────────────────────── */
 
-export default function QRCodeCreator() {
+export default function QRCodeCreator({ operatorExecution }: { operatorExecution?: WaktiOperatorExecutionRequest }) {
   const [searchParams] = useSearchParams();
   const { language } = useTheme();
   const { isGuest } = useAuth();
@@ -192,6 +193,37 @@ export default function QRCodeCreator() {
   const [wifiPassword, setWifiPassword] = useState('');
   const [wifiEncryption, setWifiEncryption] = useState('WPA');
   const [wifiHidden, setWifiHidden] = useState(false);
+  const handledOperatorExecutionRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (operatorExecution?.capabilityId !== 'qr_creator') return;
+    const executionKey = `${operatorExecution.actionId}:${JSON.stringify(operatorExecution.values)}`;
+    if (handledOperatorExecutionRef.current === executionKey) return;
+    handledOperatorExecutionRef.current = executionKey;
+    const values = operatorExecution.values;
+    const value = (key: string) => typeof values[key] === 'string' ? values[key] as string : '';
+    const typeByAction: Record<string, QRType> = {
+      create_url_qr: 'url',
+      create_text_qr: 'text',
+      create_email_qr: 'email',
+      create_phone_qr: 'phone',
+      create_wifi_qr: 'wifi',
+    };
+    const nextType = typeByAction[operatorExecution.actionId];
+    if (!nextType) return;
+    setSubTab('create');
+    setQrType(nextType);
+    setUrlInput(value('url'));
+    const urlMode = value('urlMode');
+    if (urlMode === 'direct' || urlMode === 'dynamic' || urlMode === 'cta') setUrlMode(urlMode);
+    setTextInput(value('text'));
+    setEmailInput(value('email'));
+    setEmailSubject(value('subject'));
+    setPhoneInput(value('phone'));
+    setWifiSSID(value('ssid'));
+    setWifiPassword(value('password'));
+    if (value('encryption')) setWifiEncryption(value('encryption'));
+  }, [operatorExecution]);
 
   // Config
   const [config, setConfig] = useState<QRConfig>({

@@ -30,6 +30,7 @@ import {
   STUDIO_GUEST_RESTORE_QUERY_KEY,
 } from '@/utils/studioGuestDraft';
 import { emitEvent } from '@/utils/eventBus';
+import type { WaktiOperatorExecutionRequest } from '@/utils/waktiOperator';
 import TrialGateOverlay from '@/components/TrialGateOverlay';
 import { toast } from 'sonner';
 import {
@@ -71,6 +72,7 @@ interface QuotaInfo {
 
 interface AIVideomakerProps {
   onSaveSuccess?: () => void;
+  operatorExecution?: WaktiOperatorExecutionRequest;
 }
 
 interface LatestVideo {
@@ -371,7 +373,7 @@ const MAX_VIDEO_DURATION = 60;
 
 const sceneArray = <T,>(sceneCount: number, value: T): T[] => Array.from({ length: sceneCount }, () => value);
 
-export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
+export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVideomakerProps) {
   const [searchParams] = useSearchParams();
   const { language, theme } = useTheme();
   const { user, isGuest } = useAuth();
@@ -547,6 +549,45 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
   const [selectedPlatform, setSelectedPlatform] = useState<'youtube' | 'tiktok' | 'instagram' | 'snapchat' | null>(null);
   const [selectedSubFormat, setSelectedSubFormat] = useState<string | null>(null);
   const [cinemaMode] = useState<'auto' | 'custom'>('auto');
+  const handledOperatorExecutionRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (operatorExecution?.capabilityId !== 'video_studio') return;
+    const executionKey = `${operatorExecution.actionId}:${JSON.stringify(operatorExecution.values)}`;
+    if (handledOperatorExecutionRef.current === executionKey) return;
+    handledOperatorExecutionRef.current = executionKey;
+    const values = operatorExecution.values;
+    const value = (key: string) => typeof values[key] === 'string' ? values[key] as string : '';
+    const modeByAction: Record<string, 'image_to_video' | 'text_to_video' | '2images_to_video' | 'cinema'> = {
+      create_text_video: 'text_to_video',
+      create_image_video: 'image_to_video',
+      create_two_image_video: '2images_to_video',
+      create_cinema_video: 'cinema',
+    };
+    const mode = modeByAction[operatorExecution.actionId];
+    if (!mode) return;
+    setGenerationModeRaw(mode);
+    if (mode === '2images_to_video') {
+      setDuration('8');
+      setResolution('720p');
+    } else if (mode === 'text_to_video' || mode === 'image_to_video') {
+      setDuration('6');
+      setResolution('720p');
+    }
+    const promptValue = value('prompt');
+    if (promptValue) {
+      setPrompt(promptValue);
+      if (mode === 'cinema') setCinemaVision(promptValue);
+    }
+    const durationValue = value('duration');
+    if (durationValue === '4' || durationValue === '5' || durationValue === '6' || durationValue === '8' || durationValue === '10') {
+      setDuration(durationValue);
+    }
+    const resolutionValue = value('resolution');
+    if (resolutionValue === '480p' || resolutionValue === '720p' || resolutionValue === '1080p') {
+      setResolution(resolutionValue);
+    }
+  }, [operatorExecution]);
 
   // Role 2 & 3 — Artist & Cloner
   const [sceneImages, setSceneImages] = useState<(string | null)[]>([]);

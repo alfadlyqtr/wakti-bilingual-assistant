@@ -941,7 +941,9 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
     operatorSetupRef.current = operatorPayloadId;
     setSubmode(operatorPayload.image.submode || 'text2image');
     setPrompt(operatorPayload.image.prompt || '');
-    if (operatorPayload.image.autoGenerate) {
+    if (operatorPayload.image.quality) {
+      setQuality(operatorPayload.image.quality);
+    } else if (operatorPayload.image.autoGenerate) {
       setQuality('fast');
     }
     if (operatorPayload.image.autoGenerate) {

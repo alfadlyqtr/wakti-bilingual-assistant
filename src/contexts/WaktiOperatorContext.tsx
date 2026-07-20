@@ -5,7 +5,9 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/edgeFunctions';
-import { buildVoiceOperatorPlan, type WaktiOperatorMusicRequest, type WaktiOperatorPlan, type WaktiOperatorStep } from '@/utils/waktiOperator';
+import { buildVoiceOperatorPlan, createWaktiOperatorInteractionExecutionPlan, editWaktiOperatorInteraction, updateWaktiOperatorInteraction, type WaktiOperatorMusicRequest, type WaktiOperatorPlan, type WaktiOperatorStep } from '@/utils/waktiOperator';
+import type { WaktiExecutionFieldValue } from '@/utils/waktiExecutionSchemas';
+import { getWaktiMusicStyleGroups } from '@/utils/musicStyleCatalog';
 import { analyzeWaktiOperatorSemantics } from '@/utils/waktiOperatorSemantic';
 import { onEvent } from '@/utils/eventBus';
 import { toast } from '@/components/ui/toast-helper';
@@ -22,6 +24,9 @@ interface WaktiOperatorContextValue {
   startRecording: () => Promise<void>;
   stopRecording: () => void;
   runTextRequest: (request: string) => Promise<void>;
+  updateInteraction: (values: Record<string, WaktiExecutionFieldValue>) => void;
+  continueInteraction: (allowFeatureCollection?: boolean) => Promise<void>;
+  editInteraction: (fieldKey?: string) => void;
 }
 
 const WaktiOperatorContext = createContext<WaktiOperatorContextValue | null>(null);
@@ -151,7 +156,7 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
   }, [language]);
 
   const executePlan = useCallback(async (nextPlan: WaktiOperatorPlan) => {
-    if (nextPlan.mode === 'guidance') {
+    if (nextPlan.mode === 'guidance' || nextPlan.mode === 'interaction') {
       setStage('idle');
       return;
     }
@@ -166,6 +171,15 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
     if (nextPlan.steps.length === 1) {
       window.setTimeout(() => {
         updateStep(firstStep.id, (current) => ({ ...current, status: 'completed' }));
+        setStage('idle');
+      }, 120);
+      return;
+    }
+    const handoffStep = nextPlan.steps.find((step) => step.kind === 'handoff_action');
+    if (handoffStep) {
+      window.setTimeout(() => {
+        updateStep(firstStep.id, (current) => ({ ...current, status: 'completed' }));
+        updateStep(handoffStep.id, (current) => ({ ...current, status: 'paused' }));
         setStage('idle');
       }, 120);
     }
@@ -205,6 +219,38 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
     setPlan(nextPlan);
     await executePlan(nextPlan);
   }, [executePlan, language, user?.id]);
+
+  const updateInteraction = useCallback((values: Record<string, WaktiExecutionFieldValue>) => {
+    setPlan((current) => {
+      if (!current?.interaction) return current;
+      const nextPlan = updateWaktiOperatorInteraction(current, values, language === 'ar' ? 'ar' : 'en');
+      planRef.current = nextPlan;
+      return nextPlan;
+    });
+    setError(null);
+    setStage('idle');
+  }, [language]);
+
+  const continueInteraction = useCallback(async (allowFeatureCollection = false) => {
+    const currentPlan = planRef.current;
+    if (!currentPlan?.interaction) return;
+    const nextPlan = createWaktiOperatorInteractionExecutionPlan(currentPlan, language === 'ar' ? 'ar' : 'en', allowFeatureCollection);
+    if (!nextPlan) return;
+    planRef.current = nextPlan;
+    setPlan(nextPlan);
+    await executePlan(nextPlan);
+  }, [executePlan, language]);
+
+  const editInteraction = useCallback((fieldKey?: string) => {
+    setPlan((current) => {
+      if (!current?.interaction) return current;
+      const nextPlan = editWaktiOperatorInteraction(current, fieldKey, language === 'ar' ? 'ar' : 'en');
+      planRef.current = nextPlan;
+      return nextPlan;
+    });
+    setError(null);
+    setStage('idle');
+  }, [language]);
 
   const handleRecordedBlob = useCallback(async (blob: Blob) => {
     if (!user?.id) {
@@ -314,7 +360,10 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
     startRecording,
     stopRecording,
     runTextRequest,
-  }), [close, error, isOpen, open, plan, runTextRequest, showIntro, stage, startRecording, stopRecording, transcript]);
+    updateInteraction,
+    continueInteraction,
+    editInteraction,
+  }), [close, continueInteraction, editInteraction, error, isOpen, open, plan, runTextRequest, showIntro, stage, startRecording, stopRecording, transcript, updateInteraction]);
 
   return <WaktiOperatorContext.Provider value={value}>{children}</WaktiOperatorContext.Provider>;
 }
@@ -331,8 +380,10 @@ export function WaktiOperatorOverlay() {
   const { language, theme } = useTheme();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { isOpen, stage, showIntro, transcript, plan, error, close, startRecording, stopRecording } = useWaktiOperator();
+  const { isOpen, stage, showIntro, transcript, plan, error, close, startRecording, stopRecording, updateInteraction, continueInteraction, editInteraction } = useWaktiOperator();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [openChoiceGroupId, setOpenChoiceGroupId] = useState<string | null>(null);
+  const [interactionDraftText, setInteractionDraftText] = useState('');
   const [visualMode, setVisualMode] = useState<'default' | 'subtle'>('default');
   const statusLabel = formatStage(stage, language);
   const isBusy = stage === 'transcribing' || stage === 'planning' || stage === 'executing';
@@ -341,7 +392,15 @@ export function WaktiOperatorOverlay() {
   const isArabic = language === 'ar';
   const hasPlanSteps = Boolean(plan?.steps?.length);
   const isGuidancePlan = plan?.mode === 'guidance';
+  const isInteractionPlan = plan?.mode === 'interaction' && Boolean(plan?.interaction);
   const guidanceSteps = isGuidancePlan ? (plan?.steps || []) : [];
+  const interaction = isInteractionPlan ? plan?.interaction : undefined;
+  const activeInteractionField = interaction?.phase === 'collect'
+    ? interaction.action.fields.find((field) => field.key === interaction.focusFieldKey) || interaction.action.fields[0]
+    : undefined;
+  const activeMusicStyleGroups = activeInteractionField?.choiceSource === 'music_style'
+    ? getWaktiMusicStyleGroups(language === 'ar' ? 'ar' : 'en')
+    : [];
   const runningStep = plan?.steps.find((step) => step.status === 'running') || null;
   const pausedStep = plan?.steps.find((step) => step.status === 'paused') || null;
   const nextStep = plan?.steps.find((step) => step.status === 'pending') || null;
@@ -377,14 +436,22 @@ export function WaktiOperatorOverlay() {
       setIsExpanded(true);
       return;
     }
-    if (isGuidancePlan && hasPlanSteps) {
+    if ((isGuidancePlan || isInteractionPlan) && hasPlanSteps) {
       setIsExpanded(true);
       return;
     }
     if (isBusy) {
       setIsExpanded(false);
     }
-  }, [hasPlanSteps, isBusy, isGuidancePlan, isRecording, showIntro, stage]);
+  }, [hasPlanSteps, isBusy, isGuidancePlan, isInteractionPlan, isRecording, showIntro, stage]);
+
+  useEffect(() => {
+    const value = activeInteractionField && typeof interaction?.values[activeInteractionField.key] === 'string'
+      ? interaction.values[activeInteractionField.key] as string
+      : '';
+    setInteractionDraftText(value);
+    setOpenChoiceGroupId(null);
+  }, [activeInteractionField?.key, interaction?.values]);
 
   useEffect(() => {
     return onEvent('wakti-operator-visual-mode', ({ mode }) => {
@@ -397,7 +464,7 @@ export function WaktiOperatorOverlay() {
   return (
     <div
       dir={isArabic ? 'rtl' : 'ltr'}
-      className={`fixed right-3 top-[4.55rem] z-[85] overflow-hidden rounded-[1.7rem] border backdrop-blur-2xl transition-all duration-300 ${shellClass} ${showIntro || isExpanded ? 'w-[min(24.5rem,calc(100vw-1.5rem))] p-4' : shouldUseCompactBusyShell ? 'w-[min(18.75rem,calc(100vw-1.5rem))] p-3' : 'w-[min(22.5rem,calc(100vw-1.5rem))] p-3.5'} ${isSubtle ? 'scale-[0.9] opacity-12 pointer-events-none saturate-50' : 'opacity-100'}`}
+      className={`fixed right-3 top-[4.55rem] z-[85] max-h-[calc(100dvh-5.5rem)] overflow-x-hidden overflow-y-auto rounded-[1.7rem] border backdrop-blur-2xl transition-all duration-300 ${shellClass} ${showIntro || isExpanded ? 'w-[min(24.5rem,calc(100vw-1.5rem))] p-4' : shouldUseCompactBusyShell ? 'w-[min(18.75rem,calc(100vw-1.5rem))] p-3' : 'w-[min(22.5rem,calc(100vw-1.5rem))] p-3.5'} ${isSubtle ? 'scale-[0.9] opacity-12 pointer-events-none saturate-50' : 'opacity-100'}`}
     >
       <div className={`pointer-events-none absolute inset-x-0 top-0 h-px ${isDark ? 'bg-white/14' : 'bg-white/75'}`} />
       <div className="relative flex items-start justify-between gap-3">
@@ -409,7 +476,7 @@ export function WaktiOperatorOverlay() {
           <p className={`mt-3 text-[1.02rem] font-extrabold leading-[1.35] tracking-[-0.015em] ${isDark ? 'text-white/96' : 'text-[#060541]'}`}>
             {showReadyState
               ? (language === 'ar' ? 'قل لي أين تريد الذهاب أو ماذا تريد إنجازه.' : 'Tell me where you want to go or what you want done.')
-              : isGuidancePlan && plan?.summary
+              : (isGuidancePlan || isInteractionPlan) && plan?.summary
                 ? plan.summary
                 : currentStep?.label || statusLabel}
           </p>
@@ -542,6 +609,178 @@ export function WaktiOperatorOverlay() {
         </div>
       ) : null}
 
+      {isExpanded && isInteractionPlan && interaction ? (
+        <div className="mt-4 space-y-3">
+          {plan?.answer ? (
+            <div className={`rounded-[1.3rem] border px-3.5 py-3.5 text-sm leading-6 ${secondarySurfaceClass} ${transcriptClass}`}>
+              {plan.answer}
+            </div>
+          ) : null}
+
+          {interaction.phase === 'collect' && activeInteractionField ? (
+            <div className={`rounded-[1.3rem] border px-3.5 py-3.5 ${secondarySurfaceClass}`}>
+              <div className={`flex items-start justify-between gap-3 ${isArabic ? 'text-right' : 'text-left'}`}>
+                <div className="min-w-0 flex-1">
+                  <p className={`text-sm font-bold ${isDark ? 'text-white' : 'text-[#060541]'}`}>
+                    {activeInteractionField.label}
+                    {activeInteractionField.required ? <span className="ms-1 text-rose-400">*</span> : null}
+                  </p>
+                  <p className={`mt-1 text-xs leading-5 ${supportingTextClass}`}>{activeInteractionField.help}</p>
+                </div>
+                <span className={`rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.14em] ${isDark ? 'bg-cyan-400/10 text-cyan-200' : 'bg-cyan-500/10 text-cyan-700'}`}>
+                  {activeInteractionField.required ? (language === 'ar' ? 'مطلوب' : 'Needed') : (language === 'ar' ? 'اختياري' : 'Optional')}
+                </span>
+              </div>
+
+              {(activeInteractionField.type === 'file' || activeInteractionField.type === 'contact') ? (
+                <div className="mt-4 space-y-3">
+                  <p className={`text-sm leading-6 ${mutedTextClass}`}>
+                    {language === 'ar'
+                      ? 'هذا العنصر موجود بالفعل داخل وكتي، لذلك سأفتح المكان الصحيح لتختاره بأمان.'
+                      : 'This is an existing item inside Wakti, so I will open the right place for you to choose it safely.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => continueInteraction(true)}
+                    className={`inline-flex min-h-[3rem] w-full items-center justify-center rounded-[1.1rem] px-4 py-3 text-sm font-bold transition-all active:scale-[0.98] ${primaryButtonClass}`}
+                  >
+                    {language === 'ar' ? `افتح لاختيار ${activeInteractionField.label}` : `Open to choose ${activeInteractionField.label}`}
+                  </button>
+                </div>
+              ) : activeMusicStyleGroups.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  <p className={`text-xs ${mutedTextClass}`}>{language === 'ar' ? 'اختر من مجموعات الأنماط الحقيقية في استوديو الموسيقى.' : 'Choose from the real style groups in Music Studio.'}</p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {activeMusicStyleGroups.map((group) => {
+                      const isOpen = openChoiceGroupId === group.id;
+                      return (
+                        <div key={group.id} className={`overflow-hidden rounded-[1rem] border ${isDark ? 'border-white/10 bg-black/15' : 'border-[#060541]/10 bg-white/75'}`}>
+                          <button
+                            type="button"
+                            onClick={() => setOpenChoiceGroupId((current) => current === group.id ? null : group.id)}
+                            className={`flex min-h-[2.8rem] w-full items-center justify-between gap-3 px-3 text-sm font-bold ${isArabic ? 'text-right' : 'text-left'}`}
+                          >
+                            <span>{group.title}</span>
+                            {isOpen ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+                          </button>
+                          {isOpen ? (
+                            <div className="flex flex-wrap gap-2 border-t border-current/10 p-3">
+                              {group.items.map((choice) => (
+                                <button
+                                  key={choice}
+                                  type="button"
+                                  onClick={() => updateInteraction({ [activeInteractionField.key]: choice })}
+                                  className={`min-h-[2.35rem] rounded-xl border px-3 py-2 text-xs font-semibold transition-all active:scale-95 ${isDark ? 'border-cyan-300/20 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/18' : 'border-cyan-500/20 bg-cyan-500/8 text-cyan-800 hover:bg-cyan-500/14'}`}
+                                >
+                                  {choice}
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : activeInteractionField.choices.length > 0 ? (
+                <div className="mt-4 space-y-3">
+                  {activeInteractionField.choices.map((group) => (
+                    <div key={group.id} className="space-y-2">
+                      <p className={`text-xs font-bold uppercase tracking-[0.12em] ${mutedTextClass}`}>{group.label}</p>
+                      <div className="flex flex-wrap gap-2">
+                        {group.choices.map((choice) => (
+                          <button
+                            key={choice.value}
+                            type="button"
+                            onClick={() => updateInteraction({ [activeInteractionField.key]: choice.value })}
+                            className={`min-h-[2.45rem] rounded-xl border px-3 py-2 text-sm font-semibold transition-all active:scale-95 ${isDark ? 'border-cyan-300/20 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/18' : 'border-cyan-500/20 bg-cyan-500/8 text-cyan-800 hover:bg-cyan-500/14'}`}
+                          >
+                            {choice.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : activeInteractionField.type === 'toggle' ? (
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  {[true, false].map((value) => (
+                    <button
+                      key={String(value)}
+                      type="button"
+                      onClick={() => updateInteraction({ [activeInteractionField.key]: value })}
+                      className={`min-h-[2.8rem] rounded-xl border px-3 py-2 text-sm font-bold transition-all active:scale-95 ${isDark ? 'border-cyan-300/20 bg-cyan-400/10 text-cyan-50 hover:bg-cyan-400/18' : 'border-cyan-500/20 bg-cyan-500/8 text-cyan-800 hover:bg-cyan-500/14'}`}
+                    >
+                      {value ? (language === 'ar' ? 'نعم' : 'Yes') : (language === 'ar' ? 'لا' : 'No')}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 space-y-2">
+                  {activeInteractionField.type === 'long_text' ? (
+                    <textarea
+                      value={interactionDraftText}
+                      onChange={(event) => setInteractionDraftText(event.target.value)}
+                      rows={4}
+                      className={`w-full resize-y rounded-[1rem] border px-3 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-white/12 bg-black/20 text-white placeholder:text-white/35 focus:border-cyan-300/50' : 'border-[#060541]/12 bg-white text-[#060541] placeholder:text-[#060541]/35 focus:border-cyan-600/40'}`}
+                      placeholder={activeInteractionField.help}
+                    />
+                  ) : (
+                    <input
+                      type={activeInteractionField.type === 'date' ? 'date' : activeInteractionField.type === 'time' ? 'time' : 'text'}
+                      value={interactionDraftText}
+                      onChange={(event) => setInteractionDraftText(event.target.value)}
+                      className={`min-h-[3rem] w-full rounded-[1rem] border px-3 py-2.5 text-sm outline-none transition-colors ${isDark ? 'border-white/12 bg-black/20 text-white placeholder:text-white/35 focus:border-cyan-300/50' : 'border-[#060541]/12 bg-white text-[#060541] placeholder:text-[#060541]/35 focus:border-cyan-600/40'}`}
+                      placeholder={activeInteractionField.help}
+                    />
+                  )}
+                  <button
+                    type="button"
+                    disabled={!interactionDraftText.trim() && activeInteractionField.required}
+                    onClick={() => updateInteraction({ [activeInteractionField.key]: interactionDraftText.trim() })}
+                    className={`inline-flex min-h-[2.85rem] w-full items-center justify-center rounded-[1rem] px-4 py-2.5 text-sm font-bold transition-all active:scale-[0.98] ${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    {language === 'ar' ? 'احفظ وتابع' : 'Save and continue'}
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className={`rounded-[1.3rem] border px-3.5 py-3.5 ${secondarySurfaceClass}`}>
+              <p className={`text-sm font-bold ${isDark ? 'text-white' : 'text-[#060541]'}`}>{language === 'ar' ? 'راجع التفاصيل' : 'Review the details'}</p>
+              <div className="mt-3 space-y-2">
+                {interaction.action.fields
+                  .map((field) => {
+                    const value = interaction.values[field.key];
+                    const hasValue = value !== undefined && value !== '' && (!Array.isArray(value) || value.length > 0);
+                    const displayValue = hasValue
+                      ? (Array.isArray(value) ? value.join(', ') : typeof value === 'boolean' ? (value ? (language === 'ar' ? 'نعم' : 'Yes') : (language === 'ar' ? 'لا' : 'No')) : value)
+                      : (language === 'ar' ? 'اضغط لإضافة التفاصيل' : 'Tap to add details');
+                    return (
+                      <button
+                        key={field.key}
+                        type="button"
+                        onClick={() => editInteraction(field.key)}
+                        className={`w-full rounded-xl border px-3 py-2.5 transition-colors ${isArabic ? 'text-right' : 'text-left'} ${isDark ? 'border-white/8 bg-black/15 hover:bg-white/8' : 'border-[#060541]/8 bg-white/75 hover:bg-white'}`}
+                      >
+                        <p className={`text-[11px] font-black uppercase tracking-[0.12em] ${mutedTextClass}`}>{field.label}</p>
+                        <p className={`mt-1 text-sm leading-5 ${isDark ? 'text-white/90' : 'text-[#060541]/85'}`}>{displayValue}</p>
+                      </button>
+                    );
+                  })}
+              </div>
+              <button
+                type="button"
+                onClick={() => continueInteraction()}
+                className={`mt-4 inline-flex min-h-[3rem] w-full items-center justify-center rounded-[1.1rem] px-4 py-3 text-sm font-bold transition-all active:scale-[0.98] ${primaryButtonClass}`}
+              >
+                {language === 'ar' ? `تابع إلى ${interaction.action.target}` : `Continue to ${interaction.action.target}`}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
+
       {error ? (
         <div className="mt-4 flex items-start gap-2 rounded-2xl border border-rose-300/20 bg-rose-400/10 px-3 py-3 text-sm text-rose-50">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -549,7 +788,7 @@ export function WaktiOperatorOverlay() {
         </div>
       ) : null}
 
-      {isExpanded && hasPlanSteps && !isGuidancePlan ? (
+      {isExpanded && hasPlanSteps && !isGuidancePlan && !isInteractionPlan ? (
         <div className="mt-4 space-y-2">
           {plan?.steps.map((step) => (
             <div key={step.id} className={`rounded-[1.25rem] border px-3.5 py-3.5 text-sm ${step.status === 'completed' ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-50' : step.status === 'running' ? 'border-cyan-300/20 bg-cyan-400/10 text-cyan-50' : step.status === 'paused' ? 'border-amber-300/20 bg-amber-300/10 text-amber-50' : isDark ? 'border-white/10 bg-black/15 text-white/80' : 'border-[#060541]/10 bg-white/70 text-[#060541]/78'}`}>
@@ -567,7 +806,7 @@ export function WaktiOperatorOverlay() {
         </div>
       ) : null}
 
-      {!showIntro && !showCompactReadyBar ? (
+      {!showIntro && !showCompactReadyBar && !isInteractionPlan ? (
         <div className={`flex items-center gap-2 ${isExpanded ? 'mt-4' : 'mt-3'}`}>
           <button
             type="button"

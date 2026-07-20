@@ -1160,6 +1160,20 @@ export default function MusicStudio() {
         });
       }
     }
+    if (operatorPayload.execution?.capabilityId === 'video_studio' && mainTab === 'video') {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.openStepId,
+        status: 'completed',
+      });
+    }
+    if (operatorPayload.execution?.capabilityId === 'qr_creator' && mainTab === 'qrcode') {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.openStepId,
+        status: 'completed',
+      });
+    }
   }, [imageMode, mainTab, musicSubTab, operatorPayload, searchParams]);
 
   useEffect(() => {
@@ -1169,6 +1183,8 @@ export default function MusicStudio() {
     const shouldUseSubtleMode = !hasTrackedMusicRun && (
       (operatorTarget === 'image' && mainTab === 'image')
       || (operatorTarget === 'music' && mainTab === 'music')
+      || (operatorPayload?.execution?.capabilityId === 'video_studio' && mainTab === 'video')
+      || (operatorPayload?.execution?.capabilityId === 'qr_creator' && mainTab === 'qrcode')
     );
     emitEvent('wakti-operator-visual-mode', {
       mode: shouldUseSubtleMode ? 'subtle' : 'default',
@@ -1665,7 +1681,7 @@ export default function MusicStudio() {
           </nav>
 
           {videoMode === 'ai' ? (
-            <AIVideomaker onSaveSuccess={() => setVideoMode('saved')} />
+            <AIVideomaker onSaveSuccess={() => setVideoMode('saved')} operatorExecution={operatorPayload?.execution} />
           ) : (
             <SavedVideosTab onCreate={() => setVideoMode('ai')} />
           )}
@@ -1674,7 +1690,7 @@ export default function MusicStudio() {
 
       {mainTab === 'poem' && <PoemReader />}
 
-      {mainTab === 'qrcode' && <QRCodeCreator />}
+      {mainTab === 'qrcode' && <QRCodeCreator operatorExecution={operatorPayload?.execution} />}
 
       {mainTab === 'image' && (
         <>
@@ -2500,15 +2516,19 @@ function VoicesTab({
     setTitle((current) => current || music.title || '');
     setStyleText((current) => current || music.style || '');
     setLyricsText((current) => current || music.lyrics || '');
+    if (music.style) {
+      setIncludeTags((current) => current.length > 0 ? current : [music.style!]);
+    }
     if (music.mode === 'instrumental' || music.vocalType === 'none') {
       setVocalType('none');
     } else if (music.vocalType === 'male' || music.vocalType === 'female' || music.vocalType === 'auto') {
       setVocalType(music.vocalType);
     }
-    setComposeStep(1);
-    setComposeDetailsVisible(false);
-    setTitleOpen(true);
-    setMusicStyleOpen(false);
+    setComposeStep(music.style ? 2 : 1);
+    setComposeDetailsVisible(Boolean(music.style));
+    setTitleOpen(!music.style);
+    setMusicStyleOpen(Boolean(music.style));
+    setStylesOpen(Boolean(music.style));
     setVocalsOpen(false);
     setLyricsOpen(false);
     if (operatorMusicAutoRunRef) operatorMusicAutoRunRef.current = null;
