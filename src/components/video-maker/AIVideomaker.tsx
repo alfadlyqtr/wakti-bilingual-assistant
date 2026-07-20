@@ -550,6 +550,17 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [selectedSubFormat, setSelectedSubFormat] = useState<string | null>(null);
   const [cinemaMode] = useState<'auto' | 'custom'>('auto');
   const handledOperatorExecutionRef = useRef<string | null>(null);
+  const operatorAutoGenerateRef = useRef<string | null>(null);
+
+  const emitOperatorVideoStatus = useCallback((status: 'running' | 'completed' | 'failed', error?: string) => {
+    if (!operatorExecution?.runId || !operatorExecution.generateStepId) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorExecution.runId,
+      stepId: operatorExecution.generateStepId,
+      status,
+      error,
+    });
+  }, [operatorExecution]);
 
   useEffect(() => {
     if (operatorExecution?.capabilityId !== 'video_studio') return;
@@ -635,6 +646,14 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
 
   // Sequential casting chain: stores the selected image URL from each scene.
   const castingAnchorRef = useRef<Record<number, string>>({});
+  const castingImagesRef = useRef<(string | null)[]>([]);
+  const commitCastingImage = useCallback((sceneIndex: number, imageUrl: string | null) => {
+    const nextImages = [...castingImagesRef.current];
+    nextImages[sceneIndex] = imageUrl;
+    castingImagesRef.current = nextImages;
+    setSceneImages(nextImages);
+    return nextImages;
+  }, []);
   const castingSessionRef = useRef<{
     artistCall: ((body: Record<string, unknown>) => Promise<any>) | null;
     sceneSlotMap: Record<number, string>;
@@ -1313,6 +1332,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         const videoUrl = data?.data?.generated?.[0] || data?.data?.video?.url;
         console.log('[AIVideomaker] Extracted videoUrl:', videoUrl);
         if (videoUrl) {
+          emitOperatorVideoStatus('completed');
           setGeneratedVideoUrl(videoUrl);
           setIsSaved(false);
           setSaveErrorMessage(null);
@@ -1380,11 +1400,12 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         return;
       }
       const friendlyMessage = getVideoGenerationErrorMessage(errorPayload, language);
+      emitOperatorVideoStatus('failed', friendlyMessage || e?.message || getGenericVideoErrorMessage(language));
       toast.error(getSafeUserVisibleVideoMessage(friendlyMessage || e?.message, language));
     } finally {
       pollInFlightRef.current = false;
     }
-  }, [generationMode, language, loadQuota, loadLatestVideo, openChildSafetyDialog, refetchUserProfile, saveGeneratedVideoToMyVideos, textVideoDialogueMode]);
+  }, [emitOperatorVideoStatus, generationMode, language, loadQuota, loadLatestVideo, openChildSafetyDialog, refetchUserProfile, saveGeneratedVideoToMyVideos, textVideoDialogueMode]);
 
   const handleGenerate = async () => {
     // Validate based on mode
@@ -1453,6 +1474,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       return;
     }
 
+    emitOperatorVideoStatus('running');
     setIsGenerating(true);
     setGenerationProgress(5);
     setGeneratedVideoUrl(null);
@@ -1716,8 +1738,19 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setGenerationProgress(0);
       setGenerationStatus('');
       taskProviderRef.current = null;
+      emitOperatorVideoStatus('failed', e instanceof Error ? e.message : getGenericVideoErrorMessage(language));
     }
   };
+
+  useEffect(() => {
+    if (operatorExecution?.capabilityId !== 'video_studio' || operatorExecution.actionId !== 'create_text_video' || !operatorExecution.autoExecute || !operatorExecution.runId || !operatorExecution.generateStepId) return;
+    if (operatorAutoGenerateRef.current === operatorExecution.runId || loadingQuota || generationMode !== 'text_to_video' || !prompt.trim()) return;
+    operatorAutoGenerateRef.current = operatorExecution.runId;
+    const timer = window.setTimeout(() => {
+      void handleGenerate();
+    }, 240);
+    return () => window.clearTimeout(timer);
+  }, [generationMode, handleGenerate, loadingQuota, operatorExecution, prompt]);
 
   // Cinema: the Director turns one short idea into a complete connected video.
   const handleDirect = useCallback(async () => {
@@ -1776,7 +1809,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setCinemaScenes(selectedScenes);
       setVisualDNA(result.visualDna || '');
       setSubjectLock(result.subject_lock || '');
-      setSceneImages(sceneArray(selectedScenes.length, null));
+      castingImagesRef.current = sceneArray(selectedScenes.length, null);
+      setSceneImages(castingImagesRef.current);
       setSceneImageOptions(sceneArray(selectedScenes.length, null));
       setCastingProgress(sceneArray(selectedScenes.length, 'idle'));
       setVisualSupervisorPrompts(sceneArray(selectedScenes.length, null));
@@ -1805,16 +1839,24 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     async (task_id: string, scene_index: number): Promise<{ url: string; options: string[] }> => {
       setCastingStatus(language === 'ar' ? `جاري التحقق من المشهد ${scene_index + 1}...` : `Checking Scene ${scene_index + 1}...`);
       for (let i = 0; i < 36; i++) {
-        await new Promise(r => setTimeout(r, 5000));
+        await new Promise(r => setTimeout(r, i === 0 ? 0 : 5000));
         let res: any;
-        try { res = await artistCall({ mode: 'status', task_id, scene_index }); }
-        catch { throw new Error('Image generation failed'); }
-        if (res.status === 'COMPLETED') {
+        try {
+          res = await artistCall({ mode: 'status', task_id, scene_index });
+        } catch (err) {
+          if (i < 35) {
+            setCastingStatus(language === 'ar' ? `تعذر التحقق من المشهد ${scene_index + 1} — إعادة المحاولة...` : `Scene ${scene_index + 1} status check failed — retrying...`);
+            continue;
+          }
+          throw new Error(err instanceof Error ? err.message : 'Image generation failed');
+        }
+        const status = String(res?.status || '').toUpperCase();
+        if (status === 'COMPLETED' || status === 'SUCCESS' || status === 'FINISHED') {
           if (!res.image_url) throw new Error(res.error || `Scene ${scene_index + 1} completed without an image URL`);
           const opts: string[] = Array.isArray(res.image_urls) && res.image_urls.length > 0 ? res.image_urls : [res.image_url];
           return { url: res.image_url as string, options: opts };
         }
-        if (res.status === 'FAILED') throw new Error(res.error || 'Image generation failed');
+        if (status === 'FAILED' || status === 'ERROR') throw new Error(res.error || 'Image generation failed');
       }
       throw new Error('Image generation timed out');
     };
@@ -1828,22 +1870,26 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     if (nextIdx >= cinemaSceneCount) return;
 
     const session = castingSessionRef.current;
-    if (!session.artistCall) return;
+    if (!session.artistCall) throw new Error('Image generation session is unavailable');
 
     setIsCasting(true);
     try {
       while (nextIdx < cinemaSceneCount) {
         const scene = cinemaScenes.find(s => s.scene === nextIdx + 1);
-        if (!scene) return;
+        if (!scene) throw new Error(`Scene ${nextIdx + 1} is unavailable`);
 
         castingAnchorRef.current[nextIdx] = chainAnchor;
         setActiveCastingIdx(nextIdx);
 
         const slotUrl = session.sceneSlotMap[nextIdx];
         if (slotUrl) {
-          setSceneImages(prev => { const n = [...prev]; n[nextIdx] = slotUrl; return n; });
+          const confirmedImages = commitCastingImage(nextIdx, slotUrl);
           setSceneImageOptions(prev => { const n = [...prev]; n[nextIdx] = null; return n; });
           setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
+          const allImagesReady = confirmedImages.slice(0, cinemaSceneCount).length === cinemaSceneCount && confirmedImages.slice(0, cinemaSceneCount).every(Boolean);
+          setCastingStatus(allImagesReady
+            ? (language === 'ar' ? 'اكتملت جميع المشاهد — نبدأ تحريك الفيديو...' : 'All scenes are ready — starting animation...')
+            : (language === 'ar' ? `اكتمل المشهد ${nextIdx + 1} — ننتقل للمشهد التالي...` : `Scene ${nextIdx + 1} is ready — moving to the next scene...`));
           castingAnchorRef.current[nextIdx + 1] = slotUrl;
           void runVisualSupervisor(nextIdx, slotUrl, scene.english_prompt || scene.text || '');
           chainAnchor = slotUrl;
@@ -1880,15 +1926,20 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
 
         const { url: imgUrl } = await pollTask(created.task_id, nextIdx);
         setPrevSceneImages(prev => ({ ...prev, [scene.scene]: imgUrl }));
+        const confirmedImages = commitCastingImage(nextIdx, imgUrl);
         setSceneImageOptions(prev => { const n = [...prev]; n[nextIdx] = null; return n; });
-        setSceneImages(prev => { const n = [...prev]; n[nextIdx] = imgUrl; return n; });
         setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'done'; return n; });
-        setCastingStatus(language === 'ar' ? `اكتمل المشهد ${nextIdx + 1} — ننتقل للمشهد التالي...` : `Scene ${nextIdx + 1} is ready — moving to the next scene...`);
+        const allImagesReady = confirmedImages.slice(0, cinemaSceneCount).length === cinemaSceneCount && confirmedImages.slice(0, cinemaSceneCount).every(Boolean);
+        setCastingStatus(allImagesReady
+          ? (language === 'ar' ? 'اكتملت جميع المشاهد — نبدأ تحريك الفيديو...' : 'All scenes are ready — starting animation...')
+          : (language === 'ar' ? `اكتمل المشهد ${nextIdx + 1} — ننتقل للمشهد التالي...` : `Scene ${nextIdx + 1} is ready — moving to the next scene...`));
         void runVisualSupervisor(nextIdx, imgUrl, scene.english_prompt || scene.text || '');
         chainAnchor = imgUrl;
         nextIdx += 1;
       }
-      toast.success(language === 'ar' ? '🎬 جميع المشاهد جاهزة!' : '🎬 All scenes ready!');
+      if (castingImagesRef.current.slice(0, cinemaSceneCount).length === cinemaSceneCount && castingImagesRef.current.slice(0, cinemaSceneCount).every(Boolean)) {
+        toast.success(language === 'ar' ? '🎬 جميع المشاهد جاهزة!' : '🎬 All scenes ready!');
+      }
     } catch (err: any) {
       console.error(`[cinema] generateNextScene ${nextIdx + 1} failed:`, err);
       setCastingProgress(prev => { const n = [...prev]; n[nextIdx] = 'error'; return n; });
@@ -1896,7 +1947,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     } finally {
       setIsCasting(false);
     }
-  }, [cinemaScenes, cinemaSceneCount, subjectLock, brandAnchor, language, cinemaFormat, cinemaSeed]);
+  }, [cinemaScenes, cinemaSceneCount, subjectLock, brandAnchor, language, cinemaFormat, cinemaSeed, commitCastingImage]);
 
   // ── handleCast: generates Scene 1 ONLY, then stops and waits for user pick ──
   const handleCast = useCallback(async () => {
@@ -1910,7 +1961,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     setIsCasting(true);
     setCastingStatus(language === 'ar' ? 'جاري تجهيز المشهد الأول...' : 'Preparing Scene 1...');
     setAnchorImageUrl(null);
-    setSceneImages(sceneArray(cinemaSceneCount, null));
+    castingImagesRef.current = sceneArray(cinemaSceneCount, null);
+    setSceneImages(castingImagesRef.current);
     setSceneImageOptions(sceneArray(cinemaSceneCount, null));
     setActiveCastingIdx(0);
     // Scene 1 starts first; the remaining scenes follow automatically.
@@ -1918,16 +1970,32 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     setCinemaStep('casting');
 
     const artistCall = async (body: Record<string, unknown>) => {
-      const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-artist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${accessToken}`,
-          apikey: SUPABASE_ANON_KEY,
-        },
-        body: JSON.stringify(body),
-      });
-      const json = await resp.json();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      let resp: Response;
+      try {
+        resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-artist`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${accessToken}`,
+            apikey: SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify(body),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        throw new Error(err instanceof Error && err.name === 'AbortError' ? 'Image service request timed out' : 'Image service request failed');
+      } finally {
+        clearTimeout(timeoutId);
+      }
+      const responseText = await resp.text();
+      let json: any;
+      try {
+        json = JSON.parse(responseText);
+      } catch {
+        throw new Error(`Image service returned an invalid response (${resp.status})`);
+      }
       if (!resp.ok || !json.ok) throw new Error(json.error || `Image generation failed (${resp.status})`);
       return json;
     };
@@ -1961,7 +2029,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       // ── Scene 1: always anchored to brand identity asset ──
       if (sceneSlotMap[0]) {
         // User pre-filled slot — use directly, skip generation
-        setSceneImages(prev => { const n = [...prev]; n[0] = sceneSlotMap[0]; return n; });
+        commitCastingImage(0, sceneSlotMap[0]);
         setSceneImageOptions(prev => { const n = [...prev]; n[0] = null; return n; });
         setAnchorImageUrl(sceneSlotMap[0]);
         setCastingProgress(['done', ...sceneArray(Math.max(0, cinemaSceneCount - 1), 'idle')] as ('idle'|'loading'|'done'|'error')[]);
@@ -1987,7 +2055,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
           }
           const { url: s1url } = await pollTask(created.task_id, 0);
           setSceneImageOptions(prev => { const n = [...prev]; n[0] = null; return n; });
-          setSceneImages(prev => { const n = [...prev]; n[0] = s1url; return n; });
+          commitCastingImage(0, s1url);
           setAnchorImageUrl(s1url);
           setCastingProgress(['done', ...sceneArray(Math.max(0, cinemaSceneCount - 1), 'idle')] as ('idle'|'loading'|'done'|'error')[]);
           void runVisualSupervisor(0, s1url, scene1.english_prompt || scene1.text || '');
@@ -1995,17 +2063,19 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
         } catch (s1err: any) {
           console.error('[cinema] Scene 1 failed:', s1err);
           setCastingProgress(['error', ...sceneArray(Math.max(0, cinemaSceneCount - 1), 'idle')] as ('idle'|'loading'|'done'|'error')[]);
+          setCastingStatus(language === 'ar' ? 'فشل المشهد 1 — حاول مجدداً' : 'Scene 1 failed — please retry');
           toast.error(language === 'ar' ? 'فشل المشهد 1 — حاول مجدداً' : 'Scene 1 failed — please retry');
         }
       }
     } catch (err: any) {
       console.error('[cinema] Cast error:', err);
+      setCastingStatus(language === 'ar' ? 'فشل إنشاء الصور — حاول مجدداً' : 'Image creation failed — please retry');
       toast.error(language === 'ar' ? 'فشل إنشاء الصور: ' + err.message : 'Casting failed: ' + err.message);
       setCinemaStep('casting');
     } finally {
       setIsCasting(false);
     }
-  }, [user, isCasting, cinemaScenes, cinemaSceneCount, cinemaFormat, language, cinemaReferenceImages, cinemaRefTags, anchorTag, brandAnchor, cinemaSeed, generateNextScene]);
+  }, [user, isCasting, cinemaScenes, cinemaSceneCount, cinemaFormat, language, cinemaReferenceImages, cinemaRefTags, anchorTag, brandAnchor, cinemaSeed, generateNextScene, commitCastingImage]);
 
   // ── Visual Supervisor: fire-and-forget per-scene spatial analysis ──
   // Called immediately when user picks Shot A or B. Runs in background, no await needed.
@@ -2038,9 +2108,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   // ── Role 4: Producer — Hailuo 2.3 parallel animation ──
   // Fires ALL scene Hailuo tasks simultaneously (parallel), then polls until all done.
   // Uses sceneDurations (user-picked 6s/10s per scene). VS briefs injected into motion prompts.
-  const handleFilm = useCallback(async () => {
+  const handleFilm = useCallback(async (confirmedImages?: (string | null)[]) => {
     if (!user || isFilming) return;
-    const images = sceneImages;
+    const images = confirmedImages ?? (castingImagesRef.current.length ? castingImagesRef.current : sceneImages);
     if (images.slice(0, cinemaSceneCount).some(img => img === null)) {
       toast.error(language === 'ar' ? 'لم تكتمل جميع الصور بعد' : 'Not all scene images are ready');
       return;
@@ -2063,16 +2133,32 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       if (!accessToken) throw new Error('Not authenticated');
 
       const animatorCall = async (body: Record<string, unknown>) => {
-        const resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-animator`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${accessToken}`,
-            'apikey': SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify(body),
-        });
-        const json = await resp.json();
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        let resp: Response;
+        try {
+          resp = await fetch(`${SUPABASE_URL}/functions/v1/cinema-animator`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${accessToken}`,
+              'apikey': SUPABASE_ANON_KEY,
+            },
+            body: JSON.stringify(body),
+            signal: controller.signal,
+          });
+        } catch (err) {
+          throw new Error(err instanceof Error && err.name === 'AbortError' ? 'Animator request timed out' : 'Animator request failed');
+        } finally {
+          clearTimeout(timeoutId);
+        }
+        const responseText = await resp.text();
+        let json: any;
+        try {
+          json = JSON.parse(responseText);
+        } catch {
+          throw new Error(`cinema-animator returned an invalid response (${resp.status})`);
+        }
         if (!resp.ok || !json.ok) throw new Error(json.error || `cinema-animator ${resp.status}`);
         return json;
       };
@@ -2117,7 +2203,17 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
               setVideoClips(prev => { const n = [...prev]; n[idx] = clipUrls[idx]; return n; });
               setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
               console.log(`[cinema] Scene ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}…`);
-            } else if (statusResult.status === 'FAILED') {
+            } else if (['COMPLETED', 'SUCCESS', 'FINISHED'].includes(String(statusResult.status || '').toUpperCase())) {
+              if (statusResult.video_url) {
+                clipUrls[idx] = statusResult.video_url;
+                setVideoClips(prev => { const n = [...prev]; n[idx] = clipUrls[idx]; return n; });
+                setAnimProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
+                console.log(`[cinema] Scene ${idx + 1} ready: ${clipUrls[idx].slice(0, 60)}…`);
+              } else {
+                setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
+                pollFailure = statusResult.error || `Scene ${idx + 1} completed without a video URL`;
+              }
+            } else if (statusResult.status === 'FAILED' || statusResult.status === 'ERROR') {
               setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
               pollFailure = statusResult.error || `Scene ${idx + 1} failed`;
             } else if (statusResult.status === 'IN_QUEUE') {
@@ -2127,6 +2223,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
             }
           } catch (pollErr: any) {
             console.warn(`[cinema] Scene ${idx + 1} poll error:`, pollErr);
+            setAnimProgress(prev => { const n = [...prev]; n[idx] = 'error'; return n; });
+            pollFailure = pollErr instanceof Error ? pollErr.message : `Scene ${idx + 1} status check failed`;
           }
         }));
         if (pollFailure) throw new Error(pollFailure);
@@ -2170,8 +2268,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   // Start the Animator automatically after the Artist finishes every scene.
   useEffect(() => {
     if (cinemaStep !== 'casting' || isCasting || isFilming || !cinemaScenes.length) return;
-    const allImagesReady = sceneImages.length === cinemaScenes.length && sceneImages.every(image => image !== null);
-    if (allImagesReady) void handleFilm();
+    const confirmedImages = castingImagesRef.current.slice(0, cinemaScenes.length);
+    const allImagesReady = confirmedImages.length === cinemaScenes.length && confirmedImages.every(image => image !== null);
+    if (allImagesReady) void handleFilm(confirmedImages);
   }, [cinemaStep, cinemaScenes, sceneImages, isCasting, isFilming, handleFilm]);
 
   // ── Role 4b: Retry — re-trigger full Grok + Shotstack produce ──
@@ -2183,68 +2282,43 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     await handleFilm();
   }, [handleFilm]);
 
-  // ── Role 4c: Stitch clips in user-chosen order via Shotstack ──
+  // ── Role 4c: Stitch clips in user-chosen order via browser FFmpeg ──
   const handleStitchClips = useCallback(async () => {
     if (!user || isStitching) return;
     const orderedUrls = clipOrder.map(i => videoClips[i]).filter(Boolean) as string[];
-    const orderedDurations = clipOrder.map(i => sceneDurations[i] ?? 10).slice(0, orderedUrls.length);
     if (orderedUrls.length < 1) return;
     setIsStitching(true);
     setAutoStitchQueued(false);
-    setStitchStatus(language === 'ar' ? '🎬 جاري تجميع الفيلم النهائي...' : '🎬 Stitching your final film...');
+    setStitchStatus(language === 'ar' ? '🎬 جاري تحميل محرك الفيديو...' : '🎬 Loading video engine...');
     try {
-      const { data: stitchResult, error: stitchErr } = await supabase.functions.invoke('cinema-producer', {
-        body: {
-          videoUrls: orderedUrls,
-          logoUrl: brandAnchor && anchorTag === 'logo' ? brandAnchor : null,
-          format: cinemaFormat,
-          clipDurations: orderedDurations,
+      const blob = await stitchClips({
+        clipUrls: orderedUrls,
+        onProgress: (pct, msg) => {
+          setStitchStatus(
+            language === 'ar'
+              ? `🎬 ${pct}% — جاري الدمج...`
+              : `🎬 ${pct}% — ${msg}`
+          );
         },
       });
-      if (stitchErr) throw new Error(stitchErr.message || 'Stitch invoke failed');
-      if (!stitchResult?.renderId) throw new Error(stitchResult?.error || 'No renderId returned');
-      const { renderId } = stitchResult;
-      console.log('[cinema] Shotstack stitch renderId:', renderId);
+      if (!blob) throw new Error('FFmpeg returned no output');
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-      const MAX_STITCH_POLLS = 60;
-      for (let i = 0; i < MAX_STITCH_POLLS; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-        const pollResp = await fetch(
-          `${SUPABASE_URL}/functions/v1/cinema-producer?renderId=${renderId}`,
-          { method: 'GET', headers: { Authorization: `Bearer ${accessToken}`, apikey: SUPABASE_ANON_KEY } }
-        );
-        const pollResult = await pollResp.json();
-        const { status, url, progress } = pollResult;
-        setStitchStatus(
-          language === 'ar'
-            ? `🎬 تجميع الفيلم... ${progress ? `(${progress}%)` : ''}`
-            : `🎬 Stitching... ${progress ? `(${progress}%)` : ''}`
-        );
-        if (status === 'done' && url) {
-          setPremiereClips(orderedUrls);
-          setPremiereVideoUrl(url);
-          setPremiereClipIndex(0);
-          setAnimProgress(Array(cinemaSceneCount).fill('done'));
-          setCinemaStep('premiere');
-          supabase.rpc('increment_ai_video_usage', { p_user_id: user!.id }).then(() => loadQuota());
-          toast.success(language === 'ar' ? '🎬 الفيلم جاهز!' : '🎬 Film ready!');
-          return;
-        }
-        if (status === 'failed') {
-          throw new Error(pollResult.error || 'Stitch render failed');
-        }
-      }
-      throw new Error('Stitch timed out after 5 minutes');
+      const url = URL.createObjectURL(blob);
+      setPremiereClips(orderedUrls);
+      setPremiereClipIndex(0);
+      setPremiereVideoUrl(url);
+      setAnimProgress(Array(cinemaSceneCount).fill('done'));
+      setCinemaStep('premiere');
+      supabase.rpc('increment_ai_video_usage', { p_user_id: user!.id }).then(() => loadQuota());
+      toast.success(language === 'ar' ? '🎬 الفيلم جاهز!' : '🎬 Film ready!');
     } catch (err: any) {
-      console.error('[cinema] Stitch error:', err);
-      toast.error(language === 'ar' ? 'فشل التجميع: ' + err.message : 'Stitch failed: ' + err.message);
+      console.error('[cinema] FFmpeg stitch error:', err);
+      toast.error(language === 'ar' ? 'فشل الدمج: ' + err.message : 'Stitch failed: ' + err.message);
     } finally {
       setIsStitching(false);
       setStitchStatus('');
     }
-  }, [user, isStitching, clipOrder, videoClips, brandAnchor, anchorTag, cinemaFormat, cinemaSceneCount, language, loadQuota, sceneDurations]);
+  }, [user, isStitching, clipOrder, videoClips, stitchClips, language, cinemaSceneCount, loadQuota]);
 
   useEffect(() => {
     if (!autoStitchQueued || isStitching || cinemaStep !== 'filming' || !clipsReady || clipOrder.length === 0) return;
@@ -2312,6 +2386,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     setCinemaCTA([]);
     setCinemaCTACustom('');
     setAnchorImageUrl(null);
+    castingImagesRef.current = [];
     setSceneImages([]);
     setSceneImageOptions([]);
     setActiveCastingIdx(0);
@@ -2550,9 +2625,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       // If multiple shots returned, show options picker (same as initial cast)
       if (result.options.length > 1) {
         setSceneImageOptions(prev => { const n = [...prev]; n[sceneIdx] = result.options; return n; });
-        setSceneImages(prev => { const n = [...prev]; n[sceneIdx] = null; return n; });
+        commitCastingImage(sceneIdx, null);
       } else {
-        setSceneImages(prev => { const n = [...prev]; n[sceneIdx] = result.url; return n; });
+        commitCastingImage(sceneIdx, result.url);
         setSceneImageOptions(prev => { const n = [...prev]; n[sceneIdx] = null; return n; });
       }
       setCastingProgress(prev => { const n = [...prev]; n[sceneIdx] = 'done'; return n; });
@@ -2569,7 +2644,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       setCastingRegenUseMaster(true);
       setCastingRegenSceneAnchor(null);
     }
-  }, [user, cinemaScenes, cinemaFormat, language, subjectLock]);
+  }, [user, cinemaScenes, cinemaFormat, language, subjectLock, commitCastingImage]);
 
   const handleSimpleBrandUpload = async (file: File) => {
     if (!user) return;
@@ -4330,7 +4405,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       </div>
                       {subjectLock && <div className="rounded-2xl px-3 py-2" style={{background:'rgba(226,199,168,0.06)',border:'1px solid rgba(226,199,168,0.15)'}}><p className="text-[9px] uppercase tracking-wider text-white/35">{language === 'ar' ? 'قفل الهوية' : 'Identity lock'}</p><p className="text-xs text-[#E2C7A8]/85 mt-1">{subjectLock}</p></div>}
                       <div className="space-y-2">
-                        {cinemaScenes.map((scene) => <div key={scene.scene} className="flex gap-3 rounded-2xl px-3 py-2.5" style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}><span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{background:'rgba(226,199,168,0.18)',color:'#E2C7A8'}}>{scene.scene}</span><div className="min-w-0"><p className="text-xs leading-relaxed text-white/75">{scene.text}</p><p className="text-[9px] text-white/30 mt-1">{scene.story_state || (language === 'ar' ? 'يحافظ على الاستمرارية مع المشهد السابق' : 'Maintains continuity with the previous scene')}</p></div></div>)}
+                        {cinemaScenes.map((scene) => <div key={scene.scene} className="flex gap-3 rounded-2xl px-3 py-2.5" style={{background:'rgba(255,255,255,0.03)',border:'1px solid rgba(255,255,255,0.06)'}}><span className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold" style={{background:'rgba(226,199,168,0.18)',color:'#E2C7A8'}}>{scene.scene}</span><div className="min-w-0"><p className="text-xs leading-relaxed text-white/75">{language === 'ar' ? scene.text : (scene.english_prompt || scene.text)}</p><p className="text-[9px] text-white/30 mt-1">{scene.story_state || (language === 'ar' ? 'يحافظ على الاستمرارية مع المشهد السابق' : 'Maintains continuity with the previous scene')}</p></div></div>)}
                       </div>
                     </div>
                     <div className="flex gap-3">
@@ -4464,8 +4539,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 const match = raw.match(/Visual DNA:\s*([^\n\[]+)/i) || raw.match(/\[VISUAL DNA\]\s*([^\[]+)/i);
                                 return match ? match[1].trim().slice(0, 60) : null;
                               };
-                              const dnaBadge = scene ? extractDnaBadge(scene.text) : null;
-                              const cleanText = scene ? sanitizeSceneText(scene.text) : '';
+                              const localizedSceneText = scene ? (language === 'ar' ? scene.text : (scene.english_prompt || scene.text)) : '';
+                              const dnaBadge = scene ? extractDnaBadge(localizedSceneText) : null;
+                              const cleanText = scene ? sanitizeSceneText(localizedSceneText) : '';
                               return (
                             <div className="flex-1 min-h-[40px]">
                               {dnaBadge && !isEditing && (
@@ -4506,7 +4582,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 </div>
                               ) : scene ? (
                                 <p className="text-xs leading-relaxed text-[#E2C7A8]/90">
-                                  <TypewriterText text={cleanText || scene.text} delay={sceneNum * 200} />
+                                  <TypewriterText text={cleanText || localizedSceneText} delay={sceneNum * 200} />
                                 </p>
                               ) : (
                                 <div className="flex items-center justify-center h-full">
@@ -4664,7 +4740,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                       await supabase.storage.from('avatars').upload(path, file, { upsert: true, contentType: file.type });
                                       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
                                       if (urlData?.publicUrl) {
-                                        setSceneImages(prev => { const n = [...prev]; n[idx] = urlData.publicUrl; return n; });
+                                        commitCastingImage(idx, urlData.publicUrl);
                                         setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
                                       }
                                     } catch {
@@ -4693,7 +4769,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                 {img && (
                                   <button
                                     type="button"
-                                    onClick={(e) => { e.preventDefault(); setSceneImages(prev => { const n = [...prev]; n[idx] = null; return n; }); setCastingProgress(prev => { const n = [...prev]; n[idx] = 'idle'; return n; }); }}
+                                    onClick={(e) => { e.preventDefault(); commitCastingImage(idx, null); setCastingProgress(prev => { const n = [...prev]; n[idx] = 'idle'; return n; }); }}
                                     className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full flex items-center justify-center"
                                     style={{background:'rgba(0,0,0,0.7)',color:'rgba(255,255,255,0.7)'}}
                                   >✕</button>
@@ -4854,7 +4930,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                                         key={shotIdx}
                                         type="button"
                                         onClick={() => {
-                                          setSceneImages(prev => { const n = [...prev]; n[idx] = shotUrl; return n; });
+                                          commitCastingImage(idx, shotUrl);
                                           setSceneImageOptions(prev => { const n = [...prev]; n[idx] = null; return n; });
                                           setCastingProgress(prev => { const n = [...prev]; n[idx] = 'done'; return n; });
                                           if (idx === 0) setAnchorImageUrl(shotUrl);
@@ -5118,6 +5194,8 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                   const doneCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'done').length;
                   const queuedCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'queued' || p === 'idle').length;
                   const renderingCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'rendering').length;
+                  const animationPercent = cinemaSceneCount > 0 ? Math.round((doneCount / cinemaSceneCount) * 100) : 0;
+                  const stitchPercent = Math.min(100, Math.max(0, Math.round(ffmpegProgress)));
                   return (
                     <div className="flex flex-col gap-6 pb-4">
                       {/* Header */}
@@ -5148,9 +5226,13 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                             ? (language === 'ar' ? 'كل المقاطع جاهزة • سيبدأ التجميع الآن تلقائياً' : 'All clips are ready • the final stitch is starting automatically')
                             : allClipsDone && !isStitching
                             ? (language === 'ar' ? 'بدّل المقاطع إن أردت • ثم اضغط تجميع الفيلم النهائي' : 'Swap clips if needed • then tap Stitch Final Film')
+                            : isStitching
+                            ? (language === 'ar'
+                              ? `${stitchPercent}% • جاري دمج الفيلم النهائي`
+                              : `${stitchPercent}% • Final film stitching`)
                             : (language === 'ar'
-                              ? `${doneCount}/${cinemaSceneCount} جاهز • ${renderingCount} قيد التحريك • ${queuedCount} في الانتظار • ${totalAdDuration}ث إجمالياً`
-                              : `${doneCount}/${cinemaSceneCount} ready • ${renderingCount} rendering • ${queuedCount} queued • ${totalAdDuration}s total`)}
+                              ? `${animationPercent}% • ${doneCount}/${cinemaSceneCount} جاهز • ${renderingCount} قيد التحريك • ${queuedCount} في الانتظار • ${totalAdDuration}ث إجمالياً`
+                              : `${animationPercent}% • ${doneCount}/${cinemaSceneCount} ready • ${renderingCount} rendering • ${queuedCount} queued • ${totalAdDuration}s total`)}
                         </p>
                       </div>
 
@@ -5163,22 +5245,30 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                       )}
 
                       {/* Animated pulse bar — only during generation or stitching */}
-                      {!hasError && !allClipsDone && (
+                      {!hasError && !allClipsDone && !isStitching && (
                         <div className="space-y-2 px-1">
+                          <div className="flex items-center justify-between text-[10px] font-semibold text-white/50">
+                            <span>{language === 'ar' ? 'تقدم إنتاج المشاهد' : 'Scene production progress'}</span>
+                            <span>{animationPercent}%</span>
+                          </div>
                           <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
                             <div
-                              className="h-full rounded-full cinema-progress-bar"
-                              style={{width:'100%', background:'linear-gradient(90deg,#E2C7A8,#C5A47E,hsl(210,100%,65%))', animation:'cinema-progress-scroll 2s linear infinite'}}
+                              className="h-full rounded-full cinema-progress-bar transition-[width] duration-500"
+                              style={{width:`${animationPercent}%`, background:'linear-gradient(90deg,#E2C7A8,#C5A47E,hsl(210,100%,65%))'}}
                             />
                           </div>
                         </div>
                       )}
                       {isStitching && (
                         <div className="space-y-2 px-1">
+                          <div className="flex items-center justify-between text-[10px] font-semibold text-white/50">
+                            <span>{language === 'ar' ? 'تقدم الدمج عبر المتصفح' : 'Browser stitch progress'}</span>
+                            <span>{stitchPercent}%</span>
+                          </div>
                           <div className="h-2 rounded-full overflow-hidden" style={{background:'rgba(255,255,255,0.06)'}}>
                             <div
-                              className="h-full rounded-full cinema-progress-bar"
-                              style={{width:'100%', background:'linear-gradient(90deg,hsl(210,100%,60%),hsl(280,70%,65%),hsl(210,100%,60%))', animation:'cinema-progress-scroll 2s linear infinite'}}
+                              className="h-full rounded-full cinema-progress-bar transition-[width] duration-500"
+                              style={{width:`${stitchPercent}%`, background:'linear-gradient(90deg,hsl(210,100%,60%),hsl(280,70%,65%),hsl(210,100%,60%))'}}
                             />
                           </div>
                         </div>

@@ -116,6 +116,94 @@ type MailRecipient = {
   headerValue: string;
 };
 
+type EmailSendReceiptRow = {
+  send_id: string;
+  connection_id: string | null;
+  transport_message_id: string | null;
+  message_id: string | null;
+  thread_id: string | null;
+  mailbox_login: string | null;
+  sent_folder: string | null;
+  saved_to_sent: boolean | null;
+  subject: string | null;
+  sent_at: string;
+};
+
+function normalizeSendId(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 120);
+}
+
+function buildWaktiMessageId(sendId?: string): string {
+  const localPart = sendId || crypto.randomUUID();
+  return `<wakti-${localPart}@mail.wakti.qa>`;
+}
+
+async function getEmailSendReceipt(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  provider: "imap" | "gmail",
+  sendId: string,
+): Promise<EmailSendReceiptRow | null> {
+  const { data, error } = await supabase
+    .from("email_send_receipts")
+    .select("send_id, connection_id, transport_message_id, message_id, thread_id, mailbox_login, sent_folder, saved_to_sent, subject, sent_at")
+    .eq("user_id", userId)
+    .eq("provider", provider)
+    .eq("send_id", sendId)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data as EmailSendReceiptRow | null) || null;
+}
+
+async function storeEmailSendReceipt(
+  supabase: ReturnType<typeof createClient>,
+  payload: {
+    userId: string;
+    provider: "imap" | "gmail";
+    sendId: string;
+    transportMessageId?: string;
+    messageId?: string;
+    threadId?: string;
+    mailboxLogin?: string;
+    sentFolder?: string | null;
+    savedToSent?: boolean;
+    subject?: string;
+    toRecipients?: string[];
+    ccRecipients?: string[];
+    metadata?: Record<string, unknown>;
+  },
+) {
+  const { error } = await supabase
+    .from("email_send_receipts")
+    .upsert({
+      user_id: payload.userId,
+      provider: payload.provider,
+      send_id: payload.sendId,
+      transport_message_id: payload.transportMessageId || null,
+      message_id: payload.messageId || null,
+      thread_id: payload.threadId || null,
+      mailbox_login: payload.mailboxLogin || null,
+      sent_folder: payload.sentFolder || null,
+      saved_to_sent: payload.savedToSent === true,
+      subject: payload.subject || "",
+      to_recipients: payload.toRecipients || [],
+      cc_recipients: payload.ccRecipients || [],
+      metadata: payload.metadata || {},
+      sent_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: "user_id,provider,send_id",
+    });
+
+  if (error) throw error;
+}
+
 function splitRecipientList(value: string): string[] {
   const tokens: string[] = [];
   let current = "";
@@ -275,10 +363,12 @@ function buildRawEmailMessage(params: {
   body: string;
   htmlBody?: string;
   attachments: DraftAttachment[];
-}): string {
-  const { from, to, cc, subject, body, htmlBody, attachments } = params;
+  sendId?: string;
+}): { raw: string; messageId: string } {
+  const { from, to, cc, subject, body, htmlBody, attachments, sendId } = params;
   const outerBoundary = `----WaktiMixed${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
   const alternativeBoundary = `----WaktiAlt${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+  const messageId = buildWaktiMessageId(sendId);
 
   let raw = "";
   raw += `From: ${sanitizeHeaderValue(from)}\r\n`;
@@ -289,6 +379,10 @@ function buildRawEmailMessage(params: {
   raw += `Subject: ${sanitizeHeaderValue(subject)}\r\n`;
   raw += `MIME-Version: 1.0\r\n`;
   raw += `Date: ${new Date().toUTCString()}\r\n`;
+  raw += `Message-ID: ${messageId}\r\n`;
+  if (sendId) {
+    raw += `X-Wakti-Send-Id: ${sanitizeHeaderValue(sendId)}\r\n`;
+  }
 
   if (attachments.length > 0) {
     raw += `Content-Type: multipart/mixed; boundary="${outerBoundary}"\r\n\r\n`;
@@ -319,7 +413,7 @@ function buildRawEmailMessage(params: {
     }
 
     raw += `--${outerBoundary}--\r\n`;
-    return raw;
+    return { raw, messageId };
   }
 
   if (htmlBody) {
@@ -333,13 +427,13 @@ function buildRawEmailMessage(params: {
     raw += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
     raw += `${encodeQuotedPrintable(htmlBody)}\r\n`;
     raw += `--${alternativeBoundary}--\r\n`;
-    return raw;
+    return { raw, messageId };
   }
 
   raw += `Content-Type: text/plain; charset="UTF-8"\r\n`;
   raw += `Content-Transfer-Encoding: quoted-printable\r\n\r\n`;
   raw += `${encodeQuotedPrintable(body)}\r\n`;
-  return raw;
+  return { raw, messageId };
 }
 
 Deno.serve(async (req: Request) => {
@@ -357,11 +451,35 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json();
     const { action } = body;
+    const sendId = normalizeSendId(body.send_id);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    if (action === "get_send_receipt") {
+      if (!sendId) return jsonResponse({ error: "send_id required" }, 400);
+      const receipt = await getEmailSendReceipt(supabase, userId, "gmail", sendId);
+      return jsonResponse({
+        found: Boolean(receipt),
+        receipt,
+      });
+    }
+
     if (action !== "send_message") {
       return jsonResponse({ error: "Gmail is currently available in send-only mode." }, 403);
+    }
+
+    if (sendId) {
+      const existingReceipt = await getEmailSendReceipt(supabase, userId, "gmail", sendId);
+      if (existingReceipt) {
+        return jsonResponse({
+          success: true,
+          duplicate: true,
+          sendId,
+          messageId: existingReceipt.message_id,
+          threadId: existingReceipt.thread_id,
+          transportMessageId: existingReceipt.transport_message_id,
+        });
+      }
     }
 
     const accessToken = await getValidAccessToken(supabase, userId);
@@ -388,7 +506,7 @@ Deno.serve(async (req: Request) => {
     const { data: tokenRow } = await getPreferredGmailTokenRow(supabase, userId);
     const fromEmail = tokenRow?.email_address || "me";
 
-    const raw = encodeBase64Url(buildRawEmailMessage({
+    const outgoing = buildRawEmailMessage({
       from: fromEmail,
       to: recipients,
       cc: ccRecipients,
@@ -396,7 +514,9 @@ Deno.serve(async (req: Request) => {
       body: emailBody,
       htmlBody: htmlBody || undefined,
       attachments,
-    }));
+      sendId: sendId || undefined,
+    });
+    const raw = encodeBase64Url(outgoing.raw);
 
     const sendBody: Record<string, string> = { raw };
     if (threadId) sendBody.threadId = threadId;
@@ -415,7 +535,38 @@ Deno.serve(async (req: Request) => {
       return jsonResponse({ error: sendData.error.message || "Failed to send" }, 400);
     }
 
-    return jsonResponse({ success: true, messageId: sendData.id, threadId: sendData.threadId });
+    if (sendId) {
+      try {
+        await storeEmailSendReceipt(supabase, {
+          userId,
+          provider: "gmail",
+          sendId,
+          transportMessageId: sendData.id ? String(sendData.id) : undefined,
+          messageId: outgoing.messageId,
+          threadId: sendData.threadId ? String(sendData.threadId) : threadId,
+          mailboxLogin: fromEmail,
+          sentFolder: "SENT",
+          savedToSent: true,
+          subject,
+          toRecipients: recipients.map((recipient) => recipient.address),
+          ccRecipients: ccRecipients.map((recipient) => recipient.address),
+          metadata: {
+            gmailThreadId: sendData.threadId ? String(sendData.threadId) : threadId || null,
+          },
+        });
+      } catch (receiptError) {
+        console.error("gmail-api send receipt store failed:", receiptError);
+      }
+    }
+
+    return jsonResponse({
+      success: true,
+      sendId: sendId || null,
+      messageId: sendData.id,
+      threadId: sendData.threadId,
+      transportMessageId: sendData.id,
+      smtpMessageId: outgoing.messageId,
+    });
   } catch (err: any) {
     console.error("gmail-api error:", err);
     return jsonResponse({ error: err.message || "Internal server error" }, 500);

@@ -23,6 +23,9 @@ export type WaktiOperatorStepKind =
   | 'snooze_reminder'
   | 'open_image_studio'
   | 'generate_image'
+  | 'generate_video'
+  | 'generate_qr'
+  | 'generate_speech'
   | 'save_image'
   | 'open_music_studio'
   | 'review_music_draft'
@@ -161,6 +164,9 @@ export interface WaktiOperatorExecutionRequest {
   actionId: string;
   values: Record<string, WaktiExecutionFieldValue>;
   focusFieldKey?: string;
+  runId?: string;
+  generateStepId?: string;
+  autoExecute?: boolean;
 }
 
 export interface WaktiOperatorRoutePayload {
@@ -1633,6 +1639,12 @@ export function createWaktiOperatorInteractionExecutionPlan(
 
   const action = interaction.action;
   const openStepId = createId('step');
+  const autoExecute = (interaction.capabilityId === 'image_studio' && interaction.actionId === 'generate_image')
+    || (interaction.capabilityId === 'music_studio' && interaction.actionId === 'generate_music_track')
+    || (interaction.capabilityId === 'video_studio' && interaction.actionId === 'create_text_video')
+    || (interaction.capabilityId === 'qr_creator' && interaction.actionId.startsWith('create_'))
+    || (interaction.capabilityId === 'voice_studio' && interaction.actionId === 'generate_speech');
+  const actionStepId = autoExecute ? createId('step') : undefined;
   const handoffStepId = createId('step');
   const payload: WaktiOperatorRoutePayload = {
     runId: plan.id,
@@ -1641,12 +1653,16 @@ export function createWaktiOperatorInteractionExecutionPlan(
     summary: action.label,
     stepRefs: {
       openStepId,
+      generateStepId: actionStepId,
     },
     execution: {
       capabilityId: interaction.capabilityId,
       actionId: interaction.actionId,
       values: interaction.values,
       focusFieldKey: missingFields[0]?.key || interaction.focusFieldKey,
+      runId: plan.id,
+      generateStepId: actionStepId,
+      autoExecute,
     },
     source: 'voice',
   };
@@ -1666,7 +1682,7 @@ export function createWaktiOperatorInteractionExecutionPlan(
       vocalType: vocalType === 'auto' || vocalType === 'none' || vocalType === 'male' || vocalType === 'female' ? vocalType : undefined,
       intent: action.executionMode === 'run' ? 'generate' : 'prepare',
       requiresApproval: true,
-      autoGenerate: false,
+      autoGenerate: autoExecute && action.executionMode === 'run',
     };
   }
 
@@ -1675,7 +1691,7 @@ export function createWaktiOperatorInteractionExecutionPlan(
       prompt: getInteractionString(interaction.values, 'prompt'),
       submode: interaction.actionId === 'transform_image' ? 'image2image' : 'text2image',
       quality: ['quick', 'fast', 'best_fast'].includes(getInteractionString(interaction.values, 'quality')) ? getInteractionString(interaction.values, 'quality') as WaktiOperatorImageRequest['quality'] : undefined,
-      autoGenerate: false,
+      autoGenerate: autoExecute && interaction.actionId === 'generate_image',
       autoSave: false,
     };
   }
@@ -1734,7 +1750,7 @@ export function createWaktiOperatorInteractionExecutionPlan(
       text: getInteractionString(interaction.values, 'text'),
       targetLanguage: getInteractionString(interaction.values, 'targetLanguage'),
       spokenLanguage: getInteractionString(interaction.values, 'spokenLanguage'),
-      autoGenerate: false,
+      autoGenerate: autoExecute && interaction.actionId === 'generate_speech',
     };
   }
 
@@ -1809,6 +1825,11 @@ export function createWaktiOperatorInteractionExecutionPlan(
     }
   }
 
+  if (payload.execution) {
+    payload.execution.runId = plan.id;
+    payload.execution.generateStepId = payload.stepRefs?.generateStepId;
+    payload.execution.autoExecute = autoExecute;
+  }
   const payloadId = stashWaktiOperatorPayload(payload);
   const href = appendWaktiOperatorPayloadId(action.route, payloadId);
   const completedSteps = plan.steps.map((step) => ({ ...step, status: 'completed' as const }));
@@ -1862,6 +1883,47 @@ export function createWaktiOperatorInteractionExecutionPlan(
           status: 'pending' as const,
           payloadId,
         }] : []),
+      ],
+    };
+  }
+
+  const autoActionKind = interaction.capabilityId === 'image_studio'
+    ? 'generate_image' as const
+    : interaction.capabilityId === 'video_studio'
+      ? 'generate_video' as const
+      : interaction.capabilityId === 'voice_studio'
+        ? 'generate_speech' as const
+        : 'generate_qr' as const;
+  if (autoExecute && actionStepId && ['image_studio', 'video_studio', 'qr_creator', 'voice_studio'].includes(interaction.capabilityId)) {
+    return {
+      ...plan,
+      mode: 'execution',
+      summary: language === 'ar' ? `تنفيذ ${action.label}` : `Running ${action.label}`,
+      answer: language === 'ar'
+        ? `سأفتح ${action.target} وأبدأ الإجراء الحقيقي الآن.`
+        : `I will open ${action.target} and start the real action now.`,
+      interaction: undefined,
+      steps: [
+        ...completedSteps,
+        {
+          id: openStepId,
+          kind: 'open_feature',
+          label: language === 'ar' ? `افتح ${action.target}` : `Open ${action.target}`,
+          description: action.description,
+          risk: 'safe',
+          status: 'pending',
+          href,
+          payloadId,
+        },
+        {
+          id: actionStepId,
+          kind: autoActionKind,
+          label: action.label,
+          description: action.result,
+          risk: 'safe',
+          status: 'pending',
+          payloadId,
+        },
       ],
     };
   }
@@ -2046,8 +2108,10 @@ export function clearWaktiOperatorPayload(payloadId?: string | null) {
 function buildMusicOperatorRequest(transcript: string, semantic?: WaktiOperatorSemanticAnalysis | null): WaktiOperatorMusicRequest {
   const topic = semantic?.topic?.trim() || '';
   const style = semantic?.style?.trim() || '';
-  const mode = semantic?.mode || undefined;
-  const vocalType = semantic?.vocalType || (mode === 'instrumental' ? 'none' : undefined);
+  const explicitlyInstrumental = /\b(instrumental|without vocals|no vocals|music only)\b/i.test(transcript)
+    || /\b(بدون كلمات|بدون غناء|موسيقى فقط|موسيقى بدون صوت)\b/.test(transcript);
+  const mode = explicitlyInstrumental ? 'instrumental' : semantic?.mode === 'instrumental' ? undefined : semantic?.mode;
+  const vocalType = mode === 'instrumental' ? 'none' : semantic?.vocalType || undefined;
   return {
     title: semantic?.title?.trim() || extractMusicTitle(transcript),
     lyrics: semantic?.lyrics?.trim() || '',

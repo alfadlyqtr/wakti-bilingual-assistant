@@ -32,11 +32,19 @@ interface KieStatusResponse {
 
 function mapKieState(state: string): string {
   switch (state?.toLowerCase()) {
-    case 'success': return 'COMPLETED';
-    case 'fail': return 'FAILED';
+    case 'success':
+    case 'finished':
+    case 'completed': return 'COMPLETED';
+    case 'fail':
+    case 'failed':
+    case 'error': return 'FAILED';
     case 'waiting':
-    case 'queuing': return 'IN_QUEUE';
-    case 'generating': return 'IN_PROGRESS';
+    case 'queued':
+    case 'queuing':
+    case 'pending': return 'IN_QUEUE';
+    case 'generating':
+    case 'processing':
+    case 'in_progress': return 'IN_PROGRESS';
     default: return 'IN_PROGRESS';
   }
 }
@@ -155,14 +163,20 @@ serve(async (req) => {
 
       console.log(`[cinema-animator] Scene ${scene_index} task ${task_id} state=${state} mapped=${mappedStatus}`);
 
-      if (mappedStatus === 'COMPLETED' && statusData.data?.resultJson) {
-        const parsed = JSON.parse(statusData.data.resultJson);
-        const videoUrl = (parsed.resultUrls || [])[0];
-        if (videoUrl) {
-          return new Response(JSON.stringify({
-            ok: true, task_id, scene_index, status: 'COMPLETED', video_url: videoUrl,
-          }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      if (mappedStatus === 'COMPLETED') {
+        if (statusData.data?.resultJson) {
+          const parsed = JSON.parse(statusData.data.resultJson);
+          const videoUrl = (parsed.resultUrls || [])[0];
+          if (videoUrl) {
+            return new Response(JSON.stringify({
+              ok: true, task_id, scene_index, status: 'COMPLETED', video_url: videoUrl,
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
         }
+        return new Response(JSON.stringify({
+          ok: false, task_id, scene_index, status: 'FAILED',
+          error: 'Video provider completed without returning a video URL',
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       if (mappedStatus === 'FAILED') {

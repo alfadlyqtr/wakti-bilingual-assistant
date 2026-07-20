@@ -16,6 +16,7 @@ export interface GmailDraftInput {
   htmlBody?: string;
   threadId?: string;
   attachments?: GmailDraftAttachment[];
+  sendId?: string;
 }
 
 function normalizeMailApiError(error: unknown, fallbackMessage: string): Error {
@@ -27,6 +28,11 @@ function normalizeMailApiError(error: unknown, fallbackMessage: string): Error {
     return new Error(message);
   }
   return new Error(fallbackMessage);
+}
+
+function isNetworkLikeMailError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /load failed|failed to fetch|networkerror|could not reach gmail/i.test(message);
 }
 
 async function callGmailApi(action: string, params: Record<string, unknown> = {}) {
@@ -55,7 +61,7 @@ async function callGmailApi(action: string, params: Record<string, unknown> = {}
 }
 
 export function useGmailMessages() {
-  const sendMessage = useCallback(async ({ to, cc, subject, body, htmlBody, threadId, attachments }: GmailDraftInput) => {
+  const sendMessage = useCallback(async ({ to, cc, subject, body, htmlBody, threadId, attachments, sendId }: GmailDraftInput) => {
     try {
       await callGmailApi('send_message', {
         to,
@@ -65,10 +71,22 @@ export function useGmailMessages() {
         htmlBody,
         threadId,
         attachments: attachments || [],
+        send_id: sendId,
       });
       toast.success('Email sent');
       return true;
     } catch (err: any) {
+      if (sendId && isNetworkLikeMailError(err)) {
+        try {
+          const receipt = await callGmailApi('get_send_receipt', {
+            send_id: sendId,
+          });
+          if (receipt?.found) {
+            toast.success('Email sent');
+            return true;
+          }
+        } catch {}
+      }
       toast.error(err.message || 'Failed to send email');
       return false;
     }

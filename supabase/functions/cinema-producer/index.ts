@@ -156,7 +156,7 @@ function buildTimeline(
     });
   }
 
-  return { soundtrack: null, background: '#000000', tracks };
+  return { background: '#000000', tracks };
 }
 
 // ── Build Shotstack timeline for VIDEO stitching (Grok clips) ───────────────
@@ -207,7 +207,7 @@ function buildVideoStitchTimeline(
     });
   }
 
-  return { soundtrack: null, background: '#000000', tracks };
+  return { background: '#000000', tracks };
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────

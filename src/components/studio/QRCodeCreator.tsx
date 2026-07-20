@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { StudioGuestLoginDialog } from '@/components/studio/StudioGuestLoginDialog';
+import { emitEvent } from '@/utils/eventBus';
 import { QRCodeCanvas } from 'qrcode.react';
 import { supabase, getCurrentUserId } from '@/integrations/supabase/client';
 import {
@@ -194,6 +195,7 @@ export default function QRCodeCreator({ operatorExecution }: { operatorExecution
   const [wifiEncryption, setWifiEncryption] = useState('WPA');
   const [wifiHidden, setWifiHidden] = useState(false);
   const handledOperatorExecutionRef = useRef<string | null>(null);
+  const operatorAutoGenerateRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (operatorExecution?.capabilityId !== 'qr_creator') return;
@@ -388,13 +390,25 @@ export default function QRCodeCreator({ operatorExecution }: { operatorExecution
     wifiHidden,
   ]);
 
+  const emitOperatorQrStatus = useCallback((status: 'running' | 'completed' | 'failed', error?: string) => {
+    if (!operatorExecution?.runId || !operatorExecution.generateStepId) return;
+    emitEvent('wakti-operator-status', {
+      runId: operatorExecution.runId,
+      stepId: operatorExecution.generateStepId,
+      status,
+      error,
+    });
+  }, [operatorExecution]);
+
   // Generate QR — renders via hidden QRCodeCanvas, then exports to data URL
   const handleGenerate = useCallback(() => {
     const text = getQRText();
     if (!text) {
+      emitOperatorQrStatus('failed', isArabic ? 'يرجى إدخال المحتوى أولاً' : 'Please enter content first');
       toast.error(isArabic ? 'يرجى إدخال المحتوى أولاً' : 'Please enter content first');
       return;
     }
+    emitOperatorQrStatus('running');
 
     if (isGuest) {
       const redirectTo = buildStudioGuestRestorePath('qrcode', {
@@ -433,9 +447,12 @@ export default function QRCodeCreator({ operatorExecution }: { operatorExecution
       const canvas = qrCanvasRef.current?.querySelector('canvas');
       if (canvas) {
         setQrDataUrl(canvas.toDataURL('image/png'));
+        emitOperatorQrStatus('completed');
+      } else {
+        emitOperatorQrStatus('failed', isArabic ? 'تعذر إنشاء رمز QR' : 'QR code could not be rendered');
       }
       setIsGenerating(false);
-      setGenerated(true);
+      setGenerated(Boolean(canvas));
     }, 800);
   }, [
     config,
@@ -460,7 +477,25 @@ export default function QRCodeCreator({ operatorExecution }: { operatorExecution
     wifiHidden,
     wifiPassword,
     wifiSSID,
+    emitOperatorQrStatus,
   ]);
+
+  useEffect(() => {
+    if (operatorExecution?.capabilityId !== 'qr_creator' || !operatorExecution.autoExecute || !operatorExecution.runId || !operatorExecution.generateStepId) return;
+    if (operatorAutoGenerateRef.current === operatorExecution.runId) return;
+    const text = getQRText();
+    if (!text) return;
+    operatorAutoGenerateRef.current = operatorExecution.runId;
+    emitEvent('wakti-operator-status', {
+      runId: operatorExecution.runId,
+      stepId: operatorExecution.generateStepId,
+      status: 'running',
+    });
+    const timer = window.setTimeout(() => {
+      handleGenerate();
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [getQRText, handleGenerate, operatorExecution]);
 
   // Download
   const handleDownload = useCallback(async () => {

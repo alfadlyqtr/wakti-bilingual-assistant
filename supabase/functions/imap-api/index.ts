@@ -1009,6 +1009,101 @@ type MailRecipient = {
   headerValue: string;
 };
 
+type EmailSendReceiptRow = {
+  send_id: string;
+  connection_id: string | null;
+  transport_message_id: string | null;
+  message_id: string | null;
+  thread_id: string | null;
+  mailbox_login: string | null;
+  sent_folder: string | null;
+  saved_to_sent: boolean | null;
+  subject: string | null;
+  sent_at: string;
+};
+
+function normalizeSendId(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 120);
+}
+
+function buildWaktiMessageId(sendId?: string): string {
+  const localPart = sendId || crypto.randomUUID();
+  return `<wakti-${localPart}@mail.wakti.qa>`;
+}
+
+async function getEmailSendReceipt(
+  supabase: ReturnType<typeof createClient>,
+  userId: string,
+  provider: "imap" | "gmail",
+  sendId: string,
+  connectionId?: string,
+): Promise<EmailSendReceiptRow | null> {
+  let query = supabase
+    .from("email_send_receipts")
+    .select("send_id, connection_id, transport_message_id, message_id, thread_id, mailbox_login, sent_folder, saved_to_sent, subject, sent_at")
+    .eq("user_id", userId)
+    .eq("provider", provider)
+    .eq("send_id", sendId)
+    .order("sent_at", { ascending: false })
+    .limit(1);
+
+  if (connectionId) {
+    query = query.eq("connection_id", connectionId);
+  }
+
+  const { data, error } = await query.maybeSingle();
+  if (error) throw error;
+  return (data as EmailSendReceiptRow | null) || null;
+}
+
+async function storeEmailSendReceipt(
+  supabase: ReturnType<typeof createClient>,
+  payload: {
+    userId: string;
+    provider: "imap" | "gmail";
+    sendId: string;
+    connectionId?: string;
+    transportMessageId?: string;
+    messageId?: string;
+    threadId?: string;
+    mailboxLogin?: string;
+    sentFolder?: string | null;
+    savedToSent?: boolean;
+    subject?: string;
+    toRecipients?: string[];
+    ccRecipients?: string[];
+    metadata?: Record<string, unknown>;
+  },
+) {
+  const { error } = await supabase
+    .from("email_send_receipts")
+    .upsert({
+      user_id: payload.userId,
+      provider: payload.provider,
+      send_id: payload.sendId,
+      connection_id: payload.connectionId || null,
+      transport_message_id: payload.transportMessageId || null,
+      message_id: payload.messageId || null,
+      thread_id: payload.threadId || null,
+      mailbox_login: payload.mailboxLogin || null,
+      sent_folder: payload.sentFolder || null,
+      saved_to_sent: payload.savedToSent === true,
+      subject: payload.subject || "",
+      to_recipients: payload.toRecipients || [],
+      cc_recipients: payload.ccRecipients || [],
+      metadata: payload.metadata || {},
+      sent_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }, {
+      onConflict: "user_id,provider,send_id",
+    });
+
+  if (error) throw error;
+}
+
 function splitRecipientList(value: string): string[] {
   const tokens: string[] = [];
   let current = "";
@@ -1156,11 +1251,12 @@ function buildOutgoingMessage(params: {
   body: string;
   htmlBody?: string;
   attachments: DraftAttachment[];
+  sendId?: string;
 }): { rawMessage: string; messageId: string } {
-  const { from, to, cc, subject, body, htmlBody, attachments } = params;
+  const { from, to, cc, subject, body, htmlBody, attachments, sendId } = params;
   const boundary = `----WaktiMail${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
   const alternativeBoundary = `----WaktiAlt${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
-  const messageId = `<wakti-${crypto.randomUUID()}@mail.wakti.qa>`;
+  const messageId = buildWaktiMessageId(sendId);
 
   let msg = "";
   msg += `MIME-Version: 1.0\r\n`;
@@ -1172,6 +1268,9 @@ function buildOutgoingMessage(params: {
   msg += `Subject: ${sanitizeHeaderValue(subject)}\r\n`;
   msg += `Date: ${new Date().toUTCString()}\r\n`;
   msg += `Message-ID: ${messageId}\r\n`;
+  if (sendId) {
+    msg += `X-Wakti-Send-Id: ${sanitizeHeaderValue(sendId)}\r\n`;
+  }
 
   if (attachments.length > 0) {
     msg += `Content-Type: multipart/mixed; boundary="${boundary}"\r\n\r\n`;
@@ -1975,6 +2074,18 @@ Deno.serve(async (req: Request) => {
 
     const body = await req.json();
     const { action, connection_id } = body;
+    const sendId = normalizeSendId(body.send_id);
+
+    if (action === "get_send_receipt") {
+      if (!sendId) return jsonResponse({ error: "send_id required" }, 400);
+      if (!connection_id) return jsonResponse({ error: "connection_id required" }, 400);
+      const receipt = await getEmailSendReceipt(supabase, userId, "imap", sendId, String(connection_id));
+      return jsonResponse({
+        found: Boolean(receipt),
+        receipt,
+      });
+    }
+
     const inlineConfig = body.config && typeof body.config === "object"
       ? normalizeConnectionConfig(body.config as Record<string, unknown>)
       : null;
@@ -2199,6 +2310,26 @@ Deno.serve(async (req: Request) => {
     }
 
     if (action === "send_message") {
+      if (sendId) {
+        const existingReceipt = await getEmailSendReceipt(
+          supabase,
+          userId,
+          "imap",
+          sendId,
+          connection_id ? String(connection_id) : undefined,
+        );
+        if (existingReceipt) {
+          return jsonResponse({
+            success: true,
+            duplicate: true,
+            sendId,
+            messageId: existingReceipt.message_id,
+            sentFolder: existingReceipt.sent_folder,
+            savedToSent: existingReceipt.saved_to_sent === true,
+          });
+        }
+      }
+
       const recipients = normalizeRecipients(body.to);
       const ccRecipients = normalizeRecipients(body.cc);
       const subject = String(body.subject || "");
@@ -2225,11 +2356,40 @@ Deno.serve(async (req: Request) => {
         body: emailBody,
         htmlBody: htmlBody || undefined,
         attachments,
+        sendId: sendId || undefined,
       });
       await sendViaBestSmtpLogin(conn, recipients, ccRecipients, outgoing.rawMessage, attachments.length > 0);
       const sentCopy = await ensureSentCopy(conn, outgoing.rawMessage, outgoing.messageId);
+      if (sendId) {
+        try {
+          await storeEmailSendReceipt(supabase, {
+            userId,
+            provider: "imap",
+            sendId,
+            connectionId: connection_id ? String(connection_id) : undefined,
+            messageId: outgoing.messageId,
+            mailboxLogin: String(conn.email_address || conn.username || "").trim(),
+            sentFolder: sentCopy.folder,
+            savedToSent: sentCopy.saved || sentCopy.skipped,
+            subject,
+            toRecipients: recipients.map((recipient) => recipient.address),
+            ccRecipients: ccRecipients.map((recipient) => recipient.address),
+            metadata: {
+              savedToSentByAppend: sentCopy.saved,
+              savedToSentSkipped: sentCopy.skipped,
+            },
+          });
+        } catch (receiptError) {
+          console.error("[imap-api] failed to store send receipt", {
+            sendId,
+            error: receiptError instanceof Error ? receiptError.message : String(receiptError),
+          });
+        }
+      }
       return jsonResponse({
         success: true,
+        sendId: sendId || null,
+        messageId: outgoing.messageId,
         savedToSent: sentCopy.saved || sentCopy.skipped,
         savedToSentByAppend: sentCopy.saved,
         sentFolder: sentCopy.folder,

@@ -31,6 +31,7 @@ export interface MailComposerSubmitInput {
   htmlBody?: string;
   attachments: MailComposerAttachment[];
   threadId?: string;
+  sendId?: string;
 }
 
 export interface MailComposerPreset {
@@ -650,6 +651,7 @@ export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody 
   const [subject, setSubject] = useState(preset?.subject || (replyTo ? `Re: ${replyTo.subject.replace(/^Re:\s*/i, '')}` : ''));
   const [body, setBody] = useState(preset?.body ?? initialBody);
   const [sending, setSending] = useState(false);
+  const [sendId] = useState(() => crypto.randomUUID());
   const [loadingAttachments, setLoadingAttachments] = useState(false);
   const [attachments, setAttachments] = useState<MailComposerAttachment[]>(preset?.attachments || []);
   const [attachSourceOpen, setAttachSourceOpen] = useState(false);
@@ -869,6 +871,7 @@ export function MailComposer({ onClose, onSend, replyTo, fromLabel, initialBody 
       htmlBody: composedBodies.htmlBody,
       attachments,
       threadId: replyTo?.threadId,
+      sendId,
     });
     setSending(false);
     if (ok) onClose();

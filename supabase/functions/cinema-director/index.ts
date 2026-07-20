@@ -33,6 +33,50 @@ interface DirectorResponse {
   error?: string;
 }
 
+function containsArabic(value: string): boolean {
+  return /[\u0600-\u06FF]/u.test(value);
+}
+
+async function repairArabicSceneTexts(scenes: Scene[]): Promise<Scene[]> {
+  if (scenes.every((scene) => containsArabic(scene.text))) return scenes;
+
+  const repairResponse = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [{
+          text: 'Rewrite each scene description in clear, natural Arabic only. Preserve the exact subject, action, order, objects, and meaning. Return only a JSON array of strings in the same order. Do not include English, Spanish, explanations, or markdown.',
+        }],
+      },
+      contents: [{
+        role: 'user',
+        parts: [{ text: JSON.stringify(scenes.map((scene) => scene.text)) }],
+      }],
+      generationConfig: { temperature: 0.1, maxOutputTokens: 1800 },
+    }),
+  });
+
+  if (!repairResponse.ok) throw new Error('Arabic scene language correction failed');
+  const repairData = await repairResponse.json();
+  const repairContent = Array.isArray(repairData?.candidates?.[0]?.content?.parts)
+    ? repairData.candidates[0].content.parts.map((part: { text?: string }) => part?.text || '').join('').trim()
+    : '';
+  const cleaned = repairContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+  let repairedTexts: unknown;
+  try {
+    repairedTexts = JSON.parse(cleaned);
+  } catch {
+    throw new Error('Arabic scene language correction returned invalid data');
+  }
+
+  if (!Array.isArray(repairedTexts) || repairedTexts.length !== scenes.length || repairedTexts.some((text) => typeof text !== 'string' || !containsArabic(text))) {
+    throw new Error('Arabic scene language correction returned invalid text');
+  }
+
+  return scenes.map((scene, index) => ({ ...scene, text: repairedTexts[index] as string }));
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -774,18 +818,23 @@ Return 3 to 8 scenes, using only the number the idea needs. Every english_prompt
       throw new Error(`AI director returned ${scenes.length} scenes instead of the requested ${requestedSceneCount}`);
     }
 
+    const normalizedScenes = scenes.slice(0, requestedSceneCount || MAX_SCENES).map((s, i) => ({
+      scene: i + 1,
+      text: s.text || s.english_prompt || '',
+      english_prompt: s.english_prompt || s.text || '',
+      scene_pipeline: s.scene_pipeline || 'style_extraction',
+      generation_mode: s.generation_mode || (effectiveAnchorTag === 'logo' || effectiveAnchorTag === 'character' ? 'i2i_chain' : (i === 0 ? 't2i' : 'i2i_chain')),
+      story_state: s.story_state || '',
+    }));
+    const localizedScenes = language === 'ar'
+      ? await repairArabicSceneTexts(normalizedScenes)
+      : normalizedScenes.map((scene) => ({ ...scene, text: scene.english_prompt }));
+
     const response: DirectorResponse = {
       success: true,
       visualDna: '',
       subject_lock: subjectLock,
-      scenes: scenes.slice(0, requestedSceneCount || MAX_SCENES).map((s, i) => ({
-        scene: i + 1,
-        text: s.text || '',
-        english_prompt: s.english_prompt || s.text || '',
-        scene_pipeline: s.scene_pipeline || 'style_extraction',
-        generation_mode: s.generation_mode || (effectiveAnchorTag === 'logo' || effectiveAnchorTag === 'character' ? 'i2i_chain' : (i === 0 ? 't2i' : 'i2i_chain')),
-        story_state: s.story_state || '',
-      }))
+      scenes: localizedScenes,
     };
 
     return new Response(

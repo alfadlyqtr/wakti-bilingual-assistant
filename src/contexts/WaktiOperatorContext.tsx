@@ -398,6 +398,7 @@ export function WaktiOperatorOverlay() {
   const activeInteractionField = interaction?.phase === 'collect'
     ? interaction.action.fields.find((field) => field.key === interaction.focusFieldKey) || interaction.action.fields[0]
     : undefined;
+  const activeInteractionFieldValue = activeInteractionField ? interaction?.values[activeInteractionField.key] : undefined;
   const activeMusicStyleGroups = activeInteractionField?.choiceSource === 'music_style'
     ? getWaktiMusicStyleGroups(language === 'ar' ? 'ar' : 'en')
     : [];
@@ -406,6 +407,11 @@ export function WaktiOperatorOverlay() {
   const nextStep = plan?.steps.find((step) => step.status === 'pending') || null;
   const hasIncompleteSteps = Boolean(plan?.steps?.some((step) => step.status !== 'completed'));
   const currentStep = runningStep || pausedStep || nextStep || plan?.steps[plan.steps.length - 1] || null;
+  const hasActiveFeatureAction = Boolean(plan?.mode === 'execution' && plan.steps.some((step) => (
+    ['generate_image', 'generate_video', 'generate_qr', 'generate_speech', 'generate_music', 'track_music_generation'].includes(step.kind)
+    && step.status !== 'completed'
+    && step.status !== 'failed'
+  )));
   const completedSteps = plan?.steps.filter((step) => step.status === 'completed').length || 0;
   const showReadyState = stage === 'idle' && !isRecording && !isBusy && !error && (!hasPlanSteps || !hasIncompleteSteps);
   const showCompactReadyBar = showReadyState && !showIntro;
@@ -446,12 +452,9 @@ export function WaktiOperatorOverlay() {
   }, [hasPlanSteps, isBusy, isGuidancePlan, isInteractionPlan, isRecording, showIntro, stage]);
 
   useEffect(() => {
-    const value = activeInteractionField && typeof interaction?.values[activeInteractionField.key] === 'string'
-      ? interaction.values[activeInteractionField.key] as string
-      : '';
-    setInteractionDraftText(value);
+    setInteractionDraftText(typeof activeInteractionFieldValue === 'string' ? activeInteractionFieldValue : '');
     setOpenChoiceGroupId(null);
-  }, [activeInteractionField?.key, interaction?.values]);
+  }, [activeInteractionField?.key, activeInteractionFieldValue]);
 
   useEffect(() => {
     return onEvent('wakti-operator-visual-mode', ({ mode }) => {
@@ -806,7 +809,7 @@ export function WaktiOperatorOverlay() {
         </div>
       ) : null}
 
-      {!showIntro && !showCompactReadyBar && !isInteractionPlan ? (
+      {!showIntro && !showCompactReadyBar && !isInteractionPlan && !hasActiveFeatureAction ? (
         <div className={`flex items-center gap-2 ${isExpanded ? 'mt-4' : 'mt-3'}`}>
           <button
             type="button"

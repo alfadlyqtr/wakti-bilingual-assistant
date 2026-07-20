@@ -1057,7 +1057,8 @@ export default function MusicStudio() {
   const { user: authUser } = useAuth();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const operatorPayload = useMemo(() => readWaktiOperatorPayload(searchParams.get('waktiOperator')), [searchParams]);
+  const operatorPayloadId = searchParams.get('waktiOperator');
+  const operatorPayload = useMemo(() => readWaktiOperatorPayload(operatorPayloadId), [operatorPayloadId]);
   const operatorMusicAutoRunRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -7770,9 +7771,15 @@ function VoicesTab({
   }, [generatingTask, language]);
 
   useEffect(() => {
-    if (!operatorPayload?.music || operatorPayload.music.autoGenerate) return;
-    if (operatorMusicAutoRunRef) operatorMusicAutoRunRef.current = null;
-  }, [operatorPayload, operatorMusicAutoRunRef]);
+    if (!operatorPayloadId || !operatorPayload?.music?.autoGenerate) return;
+    if (operatorMusicAutoRunRef?.current === operatorPayloadId) return;
+    if (!title.trim() || (vocalType !== 'none' && !lyricsText.trim())) return;
+    operatorMusicAutoRunRef.current = operatorPayloadId;
+    const timer = window.setTimeout(() => {
+      void handleGenerate();
+    }, 220);
+    return () => window.clearTimeout(timer);
+  }, [handleGenerate, lyricsText, operatorMusicAutoRunRef, operatorPayload, operatorPayloadId, title, vocalType]);
 
   // Position and outside-click handling for pickers
   useEffect(() => {

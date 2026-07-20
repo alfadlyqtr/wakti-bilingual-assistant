@@ -43,6 +43,7 @@ export interface ImapDraftInput {
   body: string;
   htmlBody?: string;
   attachments?: ImapDraftAttachment[];
+  sendId?: string;
 }
 
 type ImapFolderName = 'INBOX' | 'SENT';
@@ -76,6 +77,11 @@ function normalizeMailApiError(error: unknown, fallbackMessage: string): Error {
     return new Error(message);
   }
   return new Error(fallbackMessage);
+}
+
+function isNetworkLikeMailError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /load failed|failed to fetch|networkerror|could not reach the mail server/i.test(message);
 }
 
 function mergeImapMessages(primary: ImapMessage[], secondary: ImapMessage[]): ImapMessage[] {
@@ -443,7 +449,7 @@ export function useImapMessages(connectionId: string) {
     }
   }, [connectionId, getFolderCacheKey, getMessageCacheKey, messages]);
 
-  const sendMessage = useCallback(async ({ to, cc, subject, body, htmlBody, attachments }: ImapDraftInput): Promise<boolean> => {
+  const sendMessage = useCallback(async ({ to, cc, subject, body, htmlBody, attachments, sendId }: ImapDraftInput): Promise<boolean> => {
     if (!connectionId) return false;
     try {
       await callImapApi('send_message', {
@@ -454,10 +460,23 @@ export function useImapMessages(connectionId: string) {
         body,
         htmlBody,
         attachments: attachments || [],
+        send_id: sendId,
       });
       toast.success('Email sent');
       return true;
     } catch (err: any) {
+      if (sendId && isNetworkLikeMailError(err)) {
+        try {
+          const receipt = await callImapApi('get_send_receipt', {
+            connection_id: connectionId,
+            send_id: sendId,
+          });
+          if (receipt?.found) {
+            toast.success('Email sent');
+            return true;
+          }
+        } catch {}
+      }
       toast.error(err.message || 'Failed to send email');
       return false;
     }
