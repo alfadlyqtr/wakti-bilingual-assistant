@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase, SUPABASE_URL } from '@/integrations/supabase/client';
+import { supabase, SUPABASE_ANON_KEY, SUPABASE_URL } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { downloadEmailAttachment, EmailMessageAttachment, EmailMessageAttachmentContent } from '@/utils/emailAttachmentDownload';
 
@@ -66,6 +66,17 @@ type ImapMailboxCacheRow = {
 
 const IMAP_FOLDER_CACHE_STORAGE_KEY = 'wakti-imap-folder-cache-v1';
 const IMAP_PAGE_SIZE = 20;
+
+function normalizeMailApiError(error: unknown, fallbackMessage: string): Error {
+  if (error instanceof Error) {
+    const message = error.message?.trim() || fallbackMessage;
+    if (/load failed|failed to fetch|networkerror/i.test(message)) {
+      return new Error('Could not reach the mail server. Please try again.');
+    }
+    return new Error(message);
+  }
+  return new Error(fallbackMessage);
+}
 
 function mergeImapMessages(primary: ImapMessage[], secondary: ImapMessage[]): ImapMessage[] {
   const seen = new Set<number>();
@@ -177,18 +188,25 @@ async function callImapApi(action: string, params: Record<string, unknown>) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not logged in');
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/imap-api`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ action, ...params }),
-  });
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/imap-api`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ action, ...params }),
+    });
 
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data;
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+      throw new Error(typeof data.error === 'string' ? data.error : 'Mail request failed');
+    }
+    return data;
+  } catch (error) {
+    throw normalizeMailApiError(error, 'Mail request failed');
+  }
 }
 
 export function useImapMessages(connectionId: string) {

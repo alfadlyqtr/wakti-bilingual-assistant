@@ -11,6 +11,7 @@ import { useOptimizedTRData } from '@/hooks/useOptimizedTRData';
 import { useOptimizedMaw3dEvents } from '@/hooks/useOptimizedMaw3dEvents';
 import { TRService } from '@/services/trService';
 import { toast } from '@/components/ui/toast-helper';
+import { useWaktiOperator } from '@/contexts/WaktiOperatorContext';
 import { CalendarClock, CheckCircle2, FileAudio, ListTodo, Loader2, PencilLine, Sparkles, XCircle } from 'lucide-react';
 
 function cardToneClass(tone: WaktiAgentCardItem['tone']) {
@@ -41,6 +42,7 @@ export default function WaktiAgent() {
   const [approved, setApproved] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
   const [selectedDraftIds, setSelectedDraftIds] = useState<Set<string>>(new Set());
+  const { runTextRequest } = useWaktiOperator();
 
   const { tasks, reminders, loading: trLoading, error: trError, refresh } = useOptimizedTRData();
   const { events, attendingCounts, loading: eventsLoading, error: eventsError, refetch } = useOptimizedMaw3dEvents();
@@ -88,6 +90,23 @@ export default function WaktiAgent() {
       else next.add(draftId);
       return next;
     });
+  };
+
+  const handlePrimaryAction = async () => {
+    if (!run.primaryAction) return;
+    if (run.capabilityContract?.adapter !== 'music_generation') {
+      navigate(run.primaryAction.href);
+      return;
+    }
+    try {
+      setIsApplying(true);
+      await runTextRequest(request);
+    } catch (error) {
+      console.error('Wakti Agent music request failed:', error);
+      toast.error(language === 'ar' ? 'تعذر تجهيز طلب الموسيقى.' : 'Could not prepare the music request.');
+    } finally {
+      setIsApplying(false);
+    }
   };
 
   const handleApprove = async () => {
@@ -341,7 +360,8 @@ export default function WaktiAgent() {
             </div>
             <div className="flex flex-wrap gap-2 md:justify-end">
               {run.primaryAction ? (
-                <Button onClick={() => navigate(run.primaryAction!.href)} className="bg-cyan-400 text-[#060541] hover:bg-cyan-300">
+                <Button onClick={handlePrimaryAction} disabled={isApplying} className="bg-cyan-400 text-[#060541] hover:bg-cyan-300 disabled:opacity-60">
+                  {isApplying && run.capabilityContract?.adapter === 'music_generation' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {run.primaryAction.label}
                 </Button>
               ) : null}

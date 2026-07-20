@@ -1,7 +1,8 @@
 import { Maw3dEvent } from '@/types/maw3d';
 import { TRReminder, TRTask } from '@/services/trService';
 import { WaktiAgentIntent, WaktiAgentPayload, getWaktiAgentPreset } from '@/utils/waktiAgent';
-import { findBestWaktiCapabilityMatch, getWaktiCapability, getWaktiCapabilityGuide, getWaktiCapabilityRouteLabel, getWaktiCapabilitySteps, getWaktiCapabilitySupportSummary, getWaktiCapabilityTitle, type WaktiCapabilityId } from '@/utils/waktiCapabilities';
+import { findBestWaktiCapabilityMatch, getWaktiCapability, getWaktiCapabilityGuide, getWaktiCapabilityRouteLabel, getWaktiCapabilitySupportSummary, getWaktiCapabilityTitle, type WaktiCapabilityId } from '@/utils/waktiCapabilities';
+import { getWaktiCapabilityContract, getWaktiCapabilityRequirements, getWaktiCapabilityStages } from '@/utils/waktiCapabilityContracts';
 
 export interface WaktiAgentCardItem {
   id: string;
@@ -41,6 +42,24 @@ export interface WaktiAgentRunOutput {
   secondaryAction?: {
     label: string;
     href: string;
+  };
+  capabilityContract?: {
+    adapter: string;
+    approval: string;
+    backend: string | null;
+    requirements: Array<{
+      key: string;
+      label: string;
+      help: string;
+      required: boolean;
+      requiredWhen?: string;
+      defaultValue?: string;
+    }>;
+    stages: Array<{
+      id: string;
+      label: string;
+      detail: string;
+    }>;
   };
 }
 
@@ -187,7 +206,9 @@ function buildCapabilityGuidanceRun(options: BuildWaktiAgentRunOptions): WaktiAg
 
   const language = options.language === 'ar' ? 'ar' : 'en';
   const title = getWaktiCapabilityTitle(capability, language);
-  const steps = getWaktiCapabilitySteps(capability, language);
+  const contract = getWaktiCapabilityContract(capability.id);
+  const requirements = contract ? getWaktiCapabilityRequirements(contract, language) : [];
+  const stages = contract ? getWaktiCapabilityStages(contract, language) : [];
   const support = getWaktiCapabilitySupportSummary(capability, language);
   const guide = getWaktiCapabilityGuide(capability, language);
   const sourceText = uniqueTexts([
@@ -204,12 +225,19 @@ function buildCapabilityGuidanceRun(options: BuildWaktiAgentRunOptions): WaktiAg
     found: [
       guide,
       language === 'ar' ? `فهمت أنك تسأل عن ${title}.` : `I understood that you are asking about ${title}.`,
+      ...(requirements.length > 0
+        ? [language === 'ar'
+          ? `سأتحقق من: ${requirements.filter((item) => item.required).map((item) => item.label).join('، ') || 'المعلومات المناسبة للطلب'}.`
+          : `I will check: ${requirements.filter((item) => item.required).map((item) => item.label).join(', ') || 'the information needed for this request'}.`]
+        : []),
       support,
     ],
-    actions: steps,
-    result: language === 'ar'
-      ? 'يمكنني الآن شرح الطريق لك أو نقلك مباشرة إلى المكان الصحيح داخل وكتي.'
-      : 'I can now explain the path or take you directly to the right place inside Wakti.',
+    actions: stages.length > 0 ? stages.map((item) => item.label) : [language === 'ar' ? 'افتح الميزة المطلوبة' : 'Open the requested feature'],
+    result: contract
+      ? (language === 'ar'
+        ? `هذا التدفق يستخدم ${contract.adapter} ويتطلب ${contract.approval === 'required' ? 'موافقتك الواضحة قبل التنفيذ' : contract.approval === 'review' ? 'مراجعة الطلب قبل التنفيذ' : 'تنفيذاً آمناً دون موافقة إضافية'}.`
+        : `This flow uses ${contract.adapter} and ${contract.approval === 'required' ? 'requires your clear approval before execution' : contract.approval === 'review' ? 'requires a request review before execution' : 'can continue safely without further approval'}.`)
+      : (language === 'ar' ? 'يمكنني الآن شرح الطريق لك أو نقلك مباشرة إلى المكان الصحيح داخل وكتي.' : 'I can now explain the path or take you directly to the right place inside Wakti.'),
     cards: [
       {
         id: 'capability-what',
@@ -220,9 +248,9 @@ function buildCapabilityGuidanceRun(options: BuildWaktiAgentRunOptions): WaktiAg
       },
       {
         id: 'capability-how',
-        label: language === 'ar' ? 'كيف تصل إليه' : 'How to get there',
-        title: steps[0] || (language === 'ar' ? 'ابدأ من هنا' : 'Start here'),
-        body: steps.join(language === 'ar' ? ' ← ' : ' → '),
+        label: language === 'ar' ? 'كيف سينفذها' : 'How it will run',
+        title: stages[0]?.label || (language === 'ar' ? 'ابدأ من هنا' : 'Start here'),
+        body: stages.map((item) => item.label).join(language === 'ar' ? ' ← ' : ' → ') || guide,
         tone: 'amber',
       },
       {
@@ -232,14 +260,30 @@ function buildCapabilityGuidanceRun(options: BuildWaktiAgentRunOptions): WaktiAg
         body: truncate(sourceText, 180),
         tone: capability.supportLevel === 'full_operator' ? 'emerald' : 'rose',
       },
+      ...(requirements.length > 0 ? [{
+        id: 'capability-requirements',
+        label: language === 'ar' ? 'ما أحتاجه' : 'What I need',
+        title: requirements.filter((item) => item.required).map((item) => item.label).join(language === 'ar' ? '، ' : ', ') || (language === 'ar' ? 'تفاصيل اختيارية' : 'Optional details'),
+        body: requirements.map((item) => `${item.label}: ${item.help}`).join(language === 'ar' ? ' • ' : ' • '),
+        tone: 'amber' as const,
+      }] : []),
     ],
     drafts: [],
-    approvalLabel: language === 'ar' ? 'فهمت' : 'Got it',
+    approvalLabel: contract?.approval === 'required' ? (language === 'ar' ? 'راجع قبل التنفيذ' : 'Review before execution') : (language === 'ar' ? 'فهمت' : 'Got it'),
     successLabel: language === 'ar' ? 'تم تجهيز الإرشاد.' : 'The guidance is ready.',
     primaryAction: {
-      label: getWaktiCapabilityRouteLabel(capability, language),
+      label: contract?.adapter === 'music_generation'
+        ? (language === 'ar' ? 'جهّز طلب الموسيقى' : 'Prepare music request')
+        : getWaktiCapabilityRouteLabel(capability, language),
       href: capability.route,
     },
+    capabilityContract: contract ? {
+      adapter: contract.adapter,
+      approval: contract.approval,
+      backend: contract.backend,
+      requirements,
+      stages,
+    } : undefined,
     secondaryAction: capability.supportLevel === 'full_operator'
       ? {
           label: language === 'ar' ? 'ارجع للمشغّل ونفّذها' : 'Go back and let Operator do it',

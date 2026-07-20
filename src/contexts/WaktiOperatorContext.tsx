@@ -21,6 +21,7 @@ interface WaktiOperatorContextValue {
   close: () => void;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
+  runTextRequest: (request: string) => Promise<void>;
 }
 
 const WaktiOperatorContext = createContext<WaktiOperatorContextValue | null>(null);
@@ -170,23 +171,17 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
     }
   }, [navigate, updateStep]);
 
-  const handleRecordedBlob = useCallback(async (blob: Blob) => {
+  const runTextRequest = useCallback(async (request: string) => {
     if (!user?.id) {
       throw new Error(language === 'ar' ? 'يجب تسجيل الدخول أولاً.' : 'You need to sign in first.');
     }
-    setStage('transcribing');
-    const storagePath = await uploadOperatorAudio(user.id, blob);
-    const response = await callEdgeFunctionWithRetry<{ transcript: string }>('transcribe-audio', {
-      body: {
-        storagePath,
-        language: language === 'ar' ? 'ar' : 'en',
-      },
-      headers: { 'Content-Type': 'application/json' },
-    });
-    const nextTranscript = (response?.transcript || '').trim();
+    const nextTranscript = request.trim();
     if (!nextTranscript) {
-      throw new Error(language === 'ar' ? 'لم أسمع نصاً واضحاً.' : 'I did not get a clear transcript.');
+      throw new Error(language === 'ar' ? 'اكتب أو قل طلباً واضحاً أولاً.' : 'Please provide a clear request first.');
     }
+    setIsOpen(true);
+    setError(null);
+    setPlan(null);
     setTranscript(nextTranscript);
     setStage('planning');
     const nextLanguage = language === 'ar' ? 'ar' : 'en';
@@ -210,6 +205,26 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
     setPlan(nextPlan);
     await executePlan(nextPlan);
   }, [executePlan, language, user?.id]);
+
+  const handleRecordedBlob = useCallback(async (blob: Blob) => {
+    if (!user?.id) {
+      throw new Error(language === 'ar' ? 'يجب تسجيل الدخول أولاً.' : 'You need to sign in first.');
+    }
+    setStage('transcribing');
+    const storagePath = await uploadOperatorAudio(user.id, blob);
+    const response = await callEdgeFunctionWithRetry<{ transcript: string }>('transcribe-audio', {
+      body: {
+        storagePath,
+        language: language === 'ar' ? 'ar' : 'en',
+      },
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const nextTranscript = (response?.transcript || '').trim();
+    if (!nextTranscript) {
+      throw new Error(language === 'ar' ? 'لم أسمع نصاً واضحاً.' : 'I did not get a clear transcript.');
+    }
+    await runTextRequest(nextTranscript);
+  }, [language, runTextRequest, user?.id]);
 
   const startRecording = useCallback(async () => {
     if (!user) {
@@ -298,7 +313,8 @@ export function WaktiOperatorProvider({ children }: { children: React.ReactNode 
     close,
     startRecording,
     stopRecording,
-  }), [close, error, isOpen, open, plan, showIntro, stage, startRecording, stopRecording, transcript]);
+    runTextRequest,
+  }), [close, error, isOpen, open, plan, runTextRequest, showIntro, stage, startRecording, stopRecording, transcript]);
 
   return <WaktiOperatorContext.Provider value={value}>{children}</WaktiOperatorContext.Provider>;
 }
@@ -327,9 +343,10 @@ export function WaktiOperatorOverlay() {
   const isGuidancePlan = plan?.mode === 'guidance';
   const guidanceSteps = isGuidancePlan ? (plan?.steps || []) : [];
   const runningStep = plan?.steps.find((step) => step.status === 'running') || null;
+  const pausedStep = plan?.steps.find((step) => step.status === 'paused') || null;
   const nextStep = plan?.steps.find((step) => step.status === 'pending') || null;
   const hasIncompleteSteps = Boolean(plan?.steps?.some((step) => step.status !== 'completed'));
-  const currentStep = runningStep || nextStep || plan?.steps[plan.steps.length - 1] || null;
+  const currentStep = runningStep || pausedStep || nextStep || plan?.steps[plan.steps.length - 1] || null;
   const completedSteps = plan?.steps.filter((step) => step.status === 'completed').length || 0;
   const showReadyState = stage === 'idle' && !isRecording && !isBusy && !error && (!hasPlanSteps || !hasIncompleteSteps);
   const showCompactReadyBar = showReadyState && !showIntro;
@@ -394,7 +411,7 @@ export function WaktiOperatorOverlay() {
               ? (language === 'ar' ? 'قل لي أين تريد الذهاب أو ماذا تريد إنجازه.' : 'Tell me where you want to go or what you want done.')
               : isGuidancePlan && plan?.summary
                 ? plan.summary
-                : statusLabel}
+                : currentStep?.label || statusLabel}
           </p>
           {showIntro ? (
             <p className={`mt-2 max-w-[28ch] text-[0.92rem] leading-6 ${supportingTextClass} ${isArabic ? 'mr-0' : 'ml-0'}`}>
@@ -446,6 +463,7 @@ export function WaktiOperatorOverlay() {
             </div>
             {currentStep.status === 'completed' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : null}
             {currentStep.status === 'running' ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" /> : null}
+            {currentStep.status === 'paused' ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : null}
           </div>
         </div>
       ) : null}
@@ -542,6 +560,7 @@ export function WaktiOperatorOverlay() {
                 </div>
                 {step.status === 'completed' ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" /> : null}
                 {step.status === 'running' ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" /> : null}
+                {step.status === 'paused' ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> : null}
               </div>
             </div>
           ))}

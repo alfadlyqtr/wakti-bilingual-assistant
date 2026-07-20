@@ -15,7 +15,7 @@ const STORAGE_BUCKET = "generated-files";
 const SIGNED_URL_EXPIRES_SECONDS = 10 * 60;
 const KIE_CREATE_URL = "https://api.kie.ai/api/v1/jobs/createTask";
 const KIE_STATUS_URL = "https://api.kie.ai/api/v1/jobs/recordInfo";
-const KIE_MODEL = "grok-imagine/image-to-image";
+const KIE_MODEL = "recraft/remove-background";
 
 function uuid() {
   try {
@@ -182,9 +182,7 @@ async function submitKieBackgroundRemoval(imageUrl: string, positivePrompt?: str
     body: JSON.stringify({
       model: KIE_MODEL,
       input: {
-        prompt: buildBackgroundRemovalPrompt(positivePrompt),
-        image_urls: [imageUrl],
-        nsfw_checker: false,
+        image: imageUrl,
       },
     }),
   });

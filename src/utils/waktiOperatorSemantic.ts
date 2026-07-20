@@ -1,4 +1,6 @@
 import { callEdgeFunctionWithRetry } from '@/integrations/supabase/edgeFunctions';
+import { buildWaktiCapabilityKnowledgeManifest } from '@/utils/waktiCapabilityContracts';
+import type { WaktiCapabilityId } from '@/utils/waktiCapabilities';
 
 export type WaktiOperatorSemanticIntent =
   | 'conversation'
@@ -20,6 +22,7 @@ export interface WaktiOperatorSemanticMusicContext {
 
 export interface WaktiOperatorSemanticAnalysis {
   capability: 'music' | 'other' | 'unknown';
+  capabilityId: WaktiCapabilityId | null;
   intent: WaktiOperatorSemanticIntent;
   confidence: number;
   title: string | null;
@@ -42,6 +45,7 @@ export async function analyzeWaktiOperatorSemantics(
       body: {
         transcript,
         language,
+        capabilityManifest: buildWaktiCapabilityKnowledgeManifest(language),
         previousMusic: previousMusic || null,
       },
       headers: { 'Content-Type': 'application/json' },
@@ -50,11 +54,13 @@ export async function analyzeWaktiOperatorSemantics(
     });
 
     if (!result || typeof result.intent !== 'string' || typeof result.capability !== 'string') return null;
+    if (result.capabilityId !== null && typeof result.capabilityId !== 'string') return null;
     if (!previousMusic) return result;
     const isMusicFollowUp = result.intent === 'confirm' || result.intent === 'cancel';
     return {
       ...result,
       capability: isMusicFollowUp ? 'music' : result.capability,
+      capabilityId: isMusicFollowUp ? 'music_studio' : result.capabilityId,
       title: result.title || previousMusic.title || null,
       topic: result.topic || previousMusic.topic || null,
       lyrics: result.lyrics || previousMusic.lyrics || null,

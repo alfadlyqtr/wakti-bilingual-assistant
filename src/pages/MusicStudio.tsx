@@ -1152,13 +1152,24 @@ export default function MusicStudio() {
         stepId: operatorPayload.stepRefs.openStepId,
         status: 'completed',
       });
+      if (operatorPayload.music?.requiresApproval && operatorPayload.stepRefs.reviewStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.reviewStepId,
+          status: 'paused',
+        });
+      }
     }
   }, [imageMode, mainTab, musicSubTab, operatorPayload, searchParams]);
 
   useEffect(() => {
     const operatorTarget = searchParams.get('operatorTarget');
-    const shouldUseSubtleMode = (operatorTarget === 'image' && mainTab === 'image')
-      || (operatorTarget === 'music' && mainTab === 'music');
+    const hasTrackedMusicRun = operatorTarget === 'music'
+      && Boolean(operatorPayload?.music?.requiresApproval && operatorPayload.stepRefs?.trackingStepId);
+    const shouldUseSubtleMode = !hasTrackedMusicRun && (
+      (operatorTarget === 'image' && mainTab === 'image')
+      || (operatorTarget === 'music' && mainTab === 'music')
+    );
     emitEvent('wakti-operator-visual-mode', {
       mode: shouldUseSubtleMode ? 'subtle' : 'default',
     });
@@ -1167,7 +1178,7 @@ export default function MusicStudio() {
         mode: 'default',
       });
     };
-  }, [mainTab, searchParams]);
+  }, [mainTab, operatorPayload, searchParams]);
 
   useEffect(() => {
     try {
@@ -6889,7 +6900,24 @@ function VoicesTab({
 
   const handleGenerate = async () => {
     if (musicGenerateLockRef.current || submitting || generatingTask) return;
-    if (overLimit) return;
+    if (overLimit) {
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.generateStepId,
+          status: 'failed',
+          error: isAr ? 'تم الوصول إلى الحد الشهري' : 'Monthly limit reached',
+        });
+      }
+      return;
+    }
+    if (operatorPayload?.runId && operatorPayload.stepRefs?.reviewStepId) {
+      emitEvent('wakti-operator-status', {
+        runId: operatorPayload.runId,
+        stepId: operatorPayload.stepRefs.reviewStepId,
+        status: 'completed',
+      });
+    }
     if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
       emitEvent('wakti-operator-status', {
         runId: operatorPayload.runId,
@@ -7511,6 +7539,13 @@ function VoicesTab({
             status: 'completed',
           });
         }
+        if (operatorPayload?.runId && operatorPayload.stepRefs?.trackingStepId) {
+          emitEvent('wakti-operator-status', {
+            runId: operatorPayload.runId,
+            stepId: operatorPayload.stepRefs.trackingStepId,
+            status: 'completed',
+          });
+        }
         setSubmitting(false);
         musicGenerateLockRef.current = false;
         setGeneratingTask(null);
@@ -7531,6 +7566,20 @@ function VoicesTab({
       }
 
       setGeneratingTask({ taskId, recordId });
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.generateStepId,
+          status: 'completed',
+        });
+      }
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.trackingStepId) {
+        emitEvent('wakti-operator-status', {
+          runId: operatorPayload.runId,
+          stepId: operatorPayload.stepRefs.trackingStepId,
+          status: 'running',
+        });
+      }
       musicGenerateLockRef.current = false;
       toast.info(language === 'ar' ? '🎵 ما زال إنشاء الموسيقى جارياً...' : '🎵 Music is still generating...');
 
@@ -7576,10 +7625,10 @@ function VoicesTab({
       setSongsRemaining((v) => Math.max(0, v - 1));
       setLastError(null);
       setLastNotice(null);
-      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.trackingStepId) {
         emitEvent('wakti-operator-status', {
           runId: operatorPayload.runId,
-          stepId: operatorPayload.stepRefs.generateStepId,
+          stepId: operatorPayload.stepRefs.trackingStepId,
           status: 'completed',
         });
       }
@@ -7594,10 +7643,10 @@ function VoicesTab({
       musicGenerateLockRef.current = false;
       setLastError(msg);
       setLastNotice(null);
-      if (operatorPayload?.runId && operatorPayload.stepRefs?.generateStepId) {
+      if (operatorPayload?.runId && operatorPayload.stepRefs?.trackingStepId) {
         emitEvent('wakti-operator-status', {
           runId: operatorPayload.runId,
-          stepId: operatorPayload.stepRefs.generateStepId,
+          stepId: operatorPayload.stepRefs.trackingStepId,
           status: 'failed',
           error: msg,
         });

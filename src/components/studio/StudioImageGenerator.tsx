@@ -1036,7 +1036,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
       toast.error(language === 'ar' ? 'اكتب وصفاً للصورة' : 'Enter an image description');
       return;
     }
-    if ((submode === 'image2image' || submode === 'background-removal') && !uploadedFile && !prompt.trim()) {
+    if (submode === 'background-removal' && !uploadedFile) {
+      toast.error(language === 'ar' ? 'أرفق صورة أولاً' : 'Attach an image first');
+      return;
+    }
+    if (submode === 'image2image' && !uploadedFile && !prompt.trim()) {
       toast.error(language === 'ar' ? 'أرفق صورة أو اكتب وصفاً' : 'Attach an image or enter a description');
       return;
     }
@@ -1673,8 +1677,10 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
 
   // ─── Derived state ───
   const needsUpload = submode === 'image2image' || submode === 'background-removal' || submode === 'visual-ads';
-  const showPrompt = true;
-  const canGenerate = prompt.trim().length > 0 || (needsUpload && !!uploadedFile);
+  const showPrompt = submode !== 'background-removal';
+  const canGenerate = submode === 'background-removal'
+    ? !!uploadedFile
+    : prompt.trim().length > 0 || (needsUpload && !!uploadedFile);
 
   // ─── Trial gate ───
   const submodeTrialMap: Record<ImageSubmode, { key: string; limit: number; en: string; ar: string }> = {
@@ -2885,7 +2891,7 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
         )}
 
         {/* Quick chips — hidden when 2 images uploaded */}
-        {needsUpload && uploadedFile && !uploadedFile2 && !uploadedFile3 && !uploadedFile4 && prompt === '' && (
+        {submode !== 'background-removal' && needsUpload && uploadedFile && !uploadedFile2 && !uploadedFile3 && !uploadedFile4 && prompt === '' && (
           <div className="flex gap-2 flex-wrap">
             {getQuickChips().map((chip, i) => (
               <button
@@ -2940,8 +2946,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
               </div>
             )}
 
-            {/* Action buttons row */}
-            <div className="flex items-center gap-2">
+          </div>
+        )}
+
+        {/* Action buttons row */}
+        <div className="flex items-center gap-2">
               {/* Amp button — always visible when there's a prompt */}
               {prompt.trim().length > 0 && (
                 <button
@@ -2968,13 +2977,11 @@ export default function StudioImageGenerator({ onSaveSuccess }: StudioImageGener
                 ) : (
                   <>
                     <Send className="h-4 w-4" />
-                    <span>{language === 'ar' ? 'إنشاء' : 'Generate'}</span>
+                    <span>{submode === 'background-removal' ? (language === 'ar' ? 'إزالة الخلفية' : 'Remove background') : (language === 'ar' ? 'إنشاء' : 'Generate')}</span>
                   </>
                 )}
               </button>
-            </div>
-          </div>
-        )}
+        </div>
 
         {/* Progress bar */}
         {isGenerating && (

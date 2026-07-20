@@ -81,7 +81,8 @@ serve(async (req) => {
     }
 
     const { vision, language = 'en', anchor_tag = '' } = await req.json();
-    const N = 5; // Video Ads v6.0: 5 scenes; each scene's actual clip length (6s or 10s) is picked by the user afterward, capped at 46s total
+    const MIN_SCENES = 3;
+    const MAX_SCENES = 8;
     const effectiveAnchorTag = anchor_tag || 'style'; // 'logo' | 'style' | 'character'
 
     if (!vision || !vision.trim()) {
@@ -116,7 +117,7 @@ serve(async (req) => {
     userCoreText = userCoreText.trim();
     const wordCount = userCoreText.split(/\s+/).filter(Boolean).length;
     const isShortPrompt = wordCount < 30;
-    console.log(`[cinema-director] wordCount=${wordCount}, isShortPrompt=${isShortPrompt}, N=${N}, lang=${language}`);
+    console.log(`[cinema-director] wordCount=${wordCount}, isShortPrompt=${isShortPrompt}, sceneRange=${MIN_SCENES}-${MAX_SCENES}, lang=${language}`);
 
     // System prompt for Gemini Flash-Lite — Ad Agency Copywriter v2 (Phase 2 beat-scripting)
     const systemPrompt = language === 'ar'
@@ -653,16 +654,52 @@ Never return 4.
 Never return 6.
 Never return 7.`;
 
+    const dynamicSystemPrompt = language === 'ar'
+      ? `أنت المخرج الإبداعي لفيديو Wakti.
+حوّل فكرة المستخدم القصيرة إلى فيديو واحد متصل ومثير. قد يكون قصة، إعلاناً، عرض منتج، رحلة شخصية، فيديو علامة تجارية، أو أي فكرة أخرى. لا تفرض قالب إعلان.
+
+اختر عدد المشاهد الذي تحتاجه الفكرة فقط، بين ٣ و٨ مشاهد. لا تستخدم عدداً ثابتاً. الفكرة البسيطة قد تحتاج ٣ مشاهد، والفكرة الأوسع قد تحتاج أكثر.
+
+اجعل المشاهد قوساً بصرياً واحداً:
+- بداية قوية مناسبة للفكرة
+- تطور طبيعي دون إعادة تشغيل
+- نهاية أو لحظة وصول مناسبة للفكرة
+
+حافظ على هوية الشخص أو المنتج أو العالم البصري عبر المشاهد. غيّر الفعل أو المكان أو التكوين أو الإضاءة فقط عندما يخدم تطور الفكرة.
+إذا وُجد مرجع بصري، احترم دوره: الشعار يبقى شعاراً ولا يُعاد رسمه، الشخصية تبقى نفسها، ومرجع النمط يحدد الألوان والضوء والمزاج فقط.
+لا تخترع شعاراً أو CTA أو رسالة تجارية لم يقدمها المستخدم.
+
+أعد JSON صالحاً فقط، بدون markdown، بهذا الشكل:
+{"subject_lock":"هوية بصرية قصيرة","scenes":[{"scene":1,"text":"وصف طبيعي بلغة المستخدم","english_prompt":"وصف صورة ثابتة بالإنجليزية","scene_pipeline":"style_extraction","generation_mode":"t2i","story_state":"ما يبقى وما يتغير ولماذا"}]}
+أعد من ٣ إلى ٨ مشاهد، بالعدد الذي تحتاجه الفكرة فقط. يجب أن تبدأ كل english_prompt بهوية subject_lock نفسها حرفياً.`
+      : `You are Wakti's creative video director.
+Turn the user's short idea into one connected, exciting video. It may be a story, advertisement, product showcase, character journey, brand film, or any other idea. Do not force an advertisement format.
+
+Choose only the number of scenes the idea needs, between 3 and 8. Do not use a fixed count. A simple idea may need 3 scenes; a broader idea may need more.
+
+Build one visual arc:
+- a strong opening that fits the idea
+- natural development without resetting
+- a satisfying ending or arrival that fits the idea
+
+Keep the person, product, subject, and visual world consistent. Change action, setting, composition, or lighting only when it serves the idea's progression.
+If a visual reference exists, respect its role: a logo stays a logo and is not redrawn, a character stays the same, and a style reference guides colors, light, and mood only.
+Never invent a slogan, CTA, or commercial message the user did not provide.
+
+Return only valid JSON, no markdown, in this shape:
+{"subject_lock":"short visual identity","scenes":[{"scene":1,"text":"natural description in the user's language","english_prompt":"English still-image direction","scene_pipeline":"style_extraction","generation_mode":"t2i","story_state":"what stays, what changes, and why"}]}
+Return 3 to 8 scenes, using only the number the idea needs. Every english_prompt must begin with the exact same subject_lock.`;
+
     const userPrompt = language === 'ar'
-      ? `رؤيتي: ${vision.trim()}\n\nأنشئ لي ٥ مشاهد إبداعية مترابطة بالضبط. افهم من الموجز هل هي قصة أو إعلان أو عرض منتج أو رحلة شخصية، ثم ابنِ بداية وتطوراً ونهاية مناسبة دون تغيير الفكرة.`
-      : `My vision: ${vision.trim()}\n\nWrite exactly 5 connected creative video scenes. Infer whether the brief is a story, advertisement, product showcase, character journey, or another creative sequence, then build a fitting opening, development, and resolution without changing the user's idea.`;
+      ? `رؤيتي: ${vision.trim()}\n\nأنشئ فيديو إبداعياً متصلاً بعدد مشاهد مناسب للفكرة، بين ٣ و٨ مشاهد. لا تفرض قالب إعلان إذا كانت الفكرة قصة أو عرضاً أو رحلة شخصية.`
+      : `My vision: ${vision.trim()}\n\nCreate one connected creative video using the number of scenes the idea needs, between 3 and 8. Do not force an advertisement format if the idea is a story, showcase, or character journey.`;
 
     // Call Gemini Flash-Lite via Gemini API
     const geminiResponse = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
+        system_instruction: { parts: [{ text: dynamicSystemPrompt }] },
         contents: [
           {
             role: 'user',
@@ -730,15 +767,15 @@ Never return 7.`;
       throw new Error('Invalid JSON from AI director');
     }
 
-    if (!scenes || scenes.length < N) {
-      throw new Error(`AI director returned fewer than ${N} scenes`);
+    if (!scenes || scenes.length < MIN_SCENES) {
+      throw new Error(`AI director returned fewer than ${MIN_SCENES} scenes`);
     }
 
     const response: DirectorResponse = {
       success: true,
       visualDna: '',
       subject_lock: subjectLock,
-      scenes: scenes.slice(0, N).map((s, i) => ({
+      scenes: scenes.slice(0, MAX_SCENES).map((s, i) => ({
         scene: i + 1,
         text: s.text || '',
         english_prompt: s.english_prompt || s.text || '',
