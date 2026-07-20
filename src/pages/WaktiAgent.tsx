@@ -94,7 +94,10 @@ export default function WaktiAgent() {
 
   const handlePrimaryAction = async () => {
     if (!run.primaryAction) return;
-    if (run.capabilityContract?.adapter !== 'music_generation') {
+    const usesExecutionLifecycle = run.capabilityContract?.executionActions.some((action) => (
+      action.executionMode === 'run' || action.executionMode === 'prepare'
+    ));
+    if (!usesExecutionLifecycle) {
       navigate(run.primaryAction.href);
       return;
     }
@@ -102,8 +105,8 @@ export default function WaktiAgent() {
       setIsApplying(true);
       await runTextRequest(request);
     } catch (error) {
-      console.error('Wakti Agent music request failed:', error);
-      toast.error(language === 'ar' ? 'تعذر تجهيز طلب الموسيقى.' : 'Could not prepare the music request.');
+      console.error('Wakti Agent execution request failed:', error);
+      toast.error(language === 'ar' ? 'تعذر تجهيز الطلب.' : 'Could not prepare the request.');
     } finally {
       setIsApplying(false);
     }
@@ -361,7 +364,7 @@ export default function WaktiAgent() {
             <div className="flex flex-wrap gap-2 md:justify-end">
               {run.primaryAction ? (
                 <Button onClick={handlePrimaryAction} disabled={isApplying} className="bg-cyan-400 text-[#060541] hover:bg-cyan-300 disabled:opacity-60">
-                  {isApplying && run.capabilityContract?.adapter === 'music_generation' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  {isApplying ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                   {run.primaryAction.label}
                 </Button>
               ) : null}

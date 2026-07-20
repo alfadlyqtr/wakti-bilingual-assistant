@@ -3,6 +3,8 @@ export type WaktiCapabilityId =
   | 'wakti_ai'
   | 'image_studio'
   | 'music_studio'
+  | 'video_studio'
+  | 'qr_creator'
   | 'text_tools'
   | 'voice_studio'
   | 'email'
@@ -16,6 +18,9 @@ export type WaktiCapabilityId =
   | 'vitality'
   | 'deen'
   | 'games'
+  | 'journal'
+  | 'account'
+  | 'wishlists'
   | 'settings'
   | 'help';
 
@@ -107,6 +112,40 @@ export const WAKTI_CAPABILITIES: WaktiCapability[] = [
     supportLevel: 'full_operator',
     supportSummaryEn: 'Operator can open Music Studio and prefill a music draft; review the style, mode, vocals, and lyrics before generating.',
     supportSummaryAr: 'يستطيع المشغّل فتح استوديو الموسيقى وتعبئة مسودة؛ راجع النمط والوضع والصوت والكلمات قبل الإنشاء.',
+  },
+  {
+    id: 'video_studio',
+    category: 'creation',
+    titleEn: 'Video Studio',
+    titleAr: 'استوديو الفيديو',
+    route: '/music?studioTab=video',
+    routeLabelEn: 'Open Video Studio',
+    routeLabelAr: 'افتح استوديو الفيديو',
+    keywords: ['video', 'make video', 'generate video', 'ai video', 'text to video', 'image to video', 'video studio', 'فيديو', 'إنشاء فيديو', 'صانع الفيديو', 'فيديو بالذكاء'],
+    guideEn: 'Use Video Studio to create AI video from text, one image, two images, or the cinema workflow.',
+    guideAr: 'استخدم استوديو الفيديو لإنشاء فيديو بالذكاء من نص أو صورة واحدة أو صورتين أو تدفق السينما.',
+    stepsEn: ['Open Video Studio', 'Choose the generation mode', 'Review the prompt, sources, duration, and quality before generation'],
+    stepsAr: ['افتح استوديو الفيديو', 'اختر وضع الإنشاء', 'راجع الوصف والمصادر والمدة والجودة قبل الإنشاء'],
+    supportLevel: 'guided_operator',
+    supportSummaryEn: 'Operator can open the exact Video Studio workflow and identify its required inputs. Generation remains review-based inside Video Studio.',
+    supportSummaryAr: 'يستطيع المشغّل فتح تدفق استوديو الفيديو الدقيق وتحديد مدخلاته المطلوبة. يبقى الإنشاء بعد المراجعة داخل استوديو الفيديو.',
+  },
+  {
+    id: 'qr_creator',
+    category: 'creation',
+    titleEn: 'QR Creator',
+    titleAr: 'منشئ رموز QR',
+    route: '/music?studioTab=qrcode',
+    routeLabelEn: 'Open QR Creator',
+    routeLabelAr: 'افتح منشئ رموز QR',
+    keywords: ['qr', 'qr code', 'barcode', 'scan code', 'wifi qr', 'رمز qr', 'كود qr', 'باركود', 'رمز مسح', 'رمز واي فاي'],
+    guideEn: 'Use QR Creator to make QR codes for links, text, email, phone numbers, Wi-Fi, and multi-link pages.',
+    guideAr: 'استخدم منشئ رموز QR لإنشاء رموز للروابط والنص والبريد والهاتف والواي فاي وصفحات الروابط المتعددة.',
+    stepsEn: ['Open QR Creator', 'Choose the QR content type', 'Review content and design before saving or sharing'],
+    stepsAr: ['افتح منشئ رموز QR', 'اختر نوع محتوى الرمز', 'راجع المحتوى والتصميم قبل الحفظ أو المشاركة'],
+    supportLevel: 'guided_operator',
+    supportSummaryEn: 'Operator can open the exact QR workflow and explain its verified input fields. Saving and sharing remain inside QR Creator.',
+    supportSummaryAr: 'يستطيع المشغّل فتح تدفق QR الدقيق وشرح حقول الإدخال الموثقة. يبقى الحفظ والمشاركة داخل منشئ رموز QR.',
   },
   {
     id: 'text_tools',
@@ -328,6 +367,57 @@ export const WAKTI_CAPABILITIES: WaktiCapability[] = [
     supportLevel: 'full_operator',
     supportSummaryEn: 'Operator can now open the requested game screen such as Chess, Tic-Tac-Toe, Solitaire, or Letters. Actual gameplay and invite choices still continue inside Games.',
     supportSummaryAr: 'يستطيع المشغّل الآن فتح شاشة اللعبة المطلوبة مثل الشطرنج أو إكس-أو أو سوليتير أو الحروف. أما اللعب الفعلي وخيارات الدعوة فما زالت تتم من داخل الألعاب.',
+  },
+  {
+    id: 'journal',
+    category: 'productivity',
+    titleEn: 'Journal',
+    titleAr: 'اليومية',
+    route: '/journal',
+    routeLabelEn: 'Open Journal',
+    routeLabelAr: 'افتح اليومية',
+    keywords: ['journal', 'diary', 'check in', 'check-in', 'mood log', 'gratitude', 'reflection', 'اليومية', 'مذكرات', 'يومياتي', 'تسجيل المزاج', 'امتنان', 'تأمل'],
+    guideEn: 'Use Journal to record daily mood, notes, reflections, gratitude, and review personal patterns.',
+    guideAr: 'استخدم اليومية لتسجيل المزاج اليومي والملاحظات والتأملات والامتنان ومراجعة الأنماط الشخصية.',
+    stepsEn: ['Open Journal', 'Choose Today, Timeline, Charts, or Ask Journal', 'Review before saving personal entries'],
+    stepsAr: ['افتح اليومية', 'اختر اليوم أو السجل أو الإحصائيات أو اسأل اليومية', 'راجع قبل حفظ أي إدخال شخصي'],
+    supportLevel: 'guided_operator',
+    supportSummaryEn: 'Operator can open the exact Journal area and explain the required fields. Personal journal changes remain review-based inside Journal.',
+    supportSummaryAr: 'يستطيع المشغّل فتح القسم الدقيق داخل اليومية وشرح الحقول المطلوبة. تبقى تغييرات اليومية الشخصية بعد المراجعة داخل اليومية.',
+  },
+  {
+    id: 'account',
+    category: 'system',
+    titleEn: 'Account',
+    titleAr: 'حسابي',
+    route: '/account',
+    routeLabelEn: 'Open Account',
+    routeLabelAr: 'افتح حسابي',
+    keywords: ['account', 'profile', 'my profile', 'billing', 'subscription', 'password', 'my account', 'حسابي', 'الملف الشخصي', 'الفاتورة', 'الاشتراك', 'كلمة المرور'],
+    guideEn: 'Use Account to review your profile, wishes, billing, subscription, and account details.',
+    guideAr: 'استخدم حسابي لمراجعة الملف الشخصي والرغبات والفاتورة والاشتراك وتفاصيل الحساب.',
+    stepsEn: ['Open Account', 'Choose Profile, Wishes, or Billing', 'Review before any account-changing action'],
+    stepsAr: ['افتح حسابي', 'اختر الملف الشخصي أو الرغبات أو الفاتورة', 'راجع قبل أي تغيير يؤثر على الحساب'],
+    supportLevel: 'guided_operator',
+    supportSummaryEn: 'Operator can take you to the exact Account area, while profile, billing, and security changes remain explicitly reviewed by you.',
+    supportSummaryAr: 'يستطيع المشغّل نقلك إلى القسم الدقيق في حسابي، بينما تبقى تغييرات الملف والفاتورة والأمان بعد مراجعتك الصريحة.',
+  },
+  {
+    id: 'wishlists',
+    category: 'productivity',
+    titleEn: 'Wishlists',
+    titleAr: 'قوائم الرغبات',
+    route: '/wishlists',
+    routeLabelEn: 'Open Wishlists',
+    routeLabelAr: 'افتح قوائم الرغبات',
+    keywords: ['wishlist', 'wish list', 'wishes', 'gift list', 'gift idea', 'قائمة رغبات', 'قوائم الرغبات', 'رغبات', 'هدايا'],
+    guideEn: 'Use Wishlists to create and organize personal wish lists, add items, share public lists, and manage gift claims.',
+    guideAr: 'استخدم قوائم الرغبات لإنشاء قوائمك وتنظيمها وإضافة عناصر ومشاركة القوائم العامة وإدارة طلبات الهدايا.',
+    stepsEn: ['Open Wishlists', 'Choose a list or create one', 'Review list privacy and sharing before saving'],
+    stepsAr: ['افتح قوائم الرغبات', 'اختر قائمة أو أنشئ واحدة', 'راجع خصوصية القائمة والمشاركة قبل الحفظ'],
+    supportLevel: 'guided_operator',
+    supportSummaryEn: 'Operator can open the correct wishlist area and explain the real form fields. Creating, changing privacy, and sharing remain review-based.',
+    supportSummaryAr: 'يستطيع المشغّل فتح القسم الصحيح من قوائم الرغبات وشرح حقول النموذج الحقيقي. إنشاء القوائم وتغيير الخصوصية والمشاركة تبقى بعد المراجعة.',
   },
   {
     id: 'settings',

@@ -1,5 +1,5 @@
 // supabase/functions/cinema-director/index.ts
-// Wakti Video Ads Director - Gemini Flash-Lite powered scene generation v20 (5-scene Ad format; each scene is user-adjustable 6s/10s, up to 46s total)
+// Wakti Cinema Director - Gemini Flash-Lite powered connected video scene generation with an AI-selected 3–8 scene count
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -83,7 +83,7 @@ serve(async (req) => {
     const { vision, language = 'en', anchor_tag = '' } = await req.json();
     const MIN_SCENES = 3;
     const MAX_SCENES = 8;
-    const effectiveAnchorTag = anchor_tag || 'style'; // 'logo' | 'style' | 'character'
+    const effectiveAnchorTag = anchor_tag || 'style'; // 'logo' | 'product' | 'style' | 'character'
 
     if (!vision || !vision.trim()) {
       return new Response(
@@ -127,7 +127,7 @@ serve(async (req) => {
 
 أنت المخرج الإبداعي للفيديو في Wakti.
 
-مهمتك تحويل الموجز إلى فيديو إبداعي واحد مترابط من ٥ مشاهد. قد يكون الفيديو قصة، إعلاناً، عرضاً لمنتج، رحلة لشخصية، فيلماً للعلامة التجارية، أو أي تسلسل بصري آخر. استنتج الغرض من الموجز ولا تفرض عليه قالب إعلان إذا لم يطلبه المستخدم.
+مهمتك تحويل الموجز إلى فيديو إبداعي واحد مترابط بعدد مشاهد يختاره المخرج. قد يكون الفيديو قصة، إعلاناً، عرضاً لمنتج، رحلة لشخصية، فيلماً للعلامة التجارية، أو أي تسلسل بصري آخر. استنتج الغرض من الموجز ولا تفرض عليه قالب إعلان إذا لم يطلبه المستخدم.
 
 الموجز هو مصدر الحقيقة.
 احترمه بالكامل.
@@ -140,7 +140,7 @@ serve(async (req) => {
 إذا كان الموجز مختصراً أو ناقصاً، وسّع نفس الفكرة إلى فيديو أقوى دون تغيير معناها.
 أنت لا تكتب مشاهد عشوائية، بل تبني قوساً بصرياً واحداً مترابطاً له بداية وتطور ونهاية.
 
-━━━━━━━━ هيكل الفيديو: ٥ مشاهد مترابطة، حتى ٤٦ ثانية إجمالاً ━━━━━━━━
+━━━━━━━━ هيكل الفيديو: عدد مشاهد مترابط يختاره المخرج ━━━━━━━━
 
 المشهد ١ — التأسيس والخطّاف
 قدّم أقوى بداية بصرية تناسب الفكرة. عرّف العالم والشخصية أو المنتج واجعل المشاهد يريد معرفة ما سيحدث.
@@ -151,12 +151,12 @@ serve(async (req) => {
 المشهد ٤ — التصاعد أو الإثبات
 ارفع الرهان أو أظهر التحول أو الفائدة أو لحظة الاكتشاف التي تجعل النهاية مستحقة.
 
-المشهد ٥ — الحسم
+المشهد الأخير — الحسم
 اختم القوس البصري بشكل طبيعي. إذا كان الفيديو إعلاناً وكان هناك شعار أو CTA أو معلومات تواصل، اجعلها تهبط بوضوح هنا. إذا كان قصة، قدّم نهاية قصصية مرضية دون اختراع رسالة تجارية.
 
 ━━━━━━━━ قاعدة التفكير كفيديو كامل ━━━━━━━━
 
-يجب أن تبدو المشاهد الخمسة كفيديو إبداعي واحد، لا كمخرجات منفصلة.
+يجب أن تبدو المشاهد المختارة كفيديو إبداعي واحد، لا كمخرجات منفصلة.
 اتبع ترتيب الفكرة كما وردت في الموجز، واجعل كل مشهد يغيّر شيئاً مهماً مع الحفاظ على الاستمرارية.
 
 ━━━━━━━━ قاعدة الاستمرارية من مشهد إلى مشهد ━━━━━━━━
@@ -215,13 +215,13 @@ serve(async (req) => {
 
 ━━━━━━━━ قاعدة قفل الهوية ━━━━━━━━
 
-يجب أن تنتج "subject_lock" قوياً يحافظ على ثبات الهوية البصرية عبر المشاهد الخمس.
+يجب أن تنتج "subject_lock" قوياً يحافظ على ثبات الهوية البصرية عبر المشاهد المختارة.
 
 قواعد subject_lock:
 - من ١٢ إلى ٢٠ كلمة
 - يصف هوية بصرية واحدة قوية للفيديو
 - يتضمن اللون الدقيق، السيلويت، الشكل المميز، المواد، والسمات الفارقة
-- يجب أن يكون غنياً بما يكفي ليجعل المشاهد الخمسة تنتمي بوضوح إلى نفس العالم البصري
+- يجب أن يكون غنياً بما يكفي ليجعل المشاهد المختارة تنتمي بوضوح إلى نفس العالم البصري
 - لا تضع فيه logo أو brand name أو wordmark أو trademark أو slogan إلا إذا كان ذلك جزءاً حرفياً أساسياً من هوية الموضوع نفسه
 
 مثال ضعيف:
@@ -292,7 +292,7 @@ serve(async (req) => {
 - لا تخترع خطوطاً قصصية غير مرتبطة
 
 إذا كان الموجز مفصلاً:
-- وزّع أفكاره عبر المشاهد الخمس بنفس الترتيب المنطقي
+- وزّع أفكاره عبر المشاهد المختارة بنفس الترتيب المنطقي
 - حافظ على ما يجعله محدداً ومميزاً
 - لا تفرغه إلى لغة إعلانية عامة
 
@@ -303,7 +303,7 @@ anchor_tag يحدد استراتيجية scene_pipeline.
 إذا كان anchor_tag = "logo":
 - المشهد ١ scene_pipeline = "logo_integration"
 - المشاهد ٢ و٣ و٤ scene_pipeline = "style_extraction"
-- المشهد ٥ scene_pipeline = "logo_integration"
+- المشهد الأخير scene_pipeline = "logo_integration"
 
 إذا كان anchor_tag = "style":
 - كل المشاهد scene_pipeline = "style_extraction"
@@ -312,11 +312,11 @@ anchor_tag يحدد استراتيجية scene_pipeline.
 - كل المشاهد scene_pipeline = "character_lock"
 
 قواعد generation_mode:
-- إذا كان anchor_tag هو "logo" أو "character": كل المشاهد الخمسة تستخدم "i2i_chain"
-- إذا كان anchor_tag هو "style": المشهد ١ يستخدم "t2i" والمشاهد ٢-٥ تستخدم "i2i_chain"
+- إذا كان anchor_tag هو "logo" أو "character": كل المشاهد المختارة تستخدم "i2i_chain"
+- إذا كان anchor_tag هو "style": المشهد ١ يستخدم "t2i" والمشاهد اللاحقة تستخدم "i2i_chain"
 
 قاعدة المشهد الأخير:
-- يجب أن يشعر المشهد ٥ بأنه الحسم الطبيعي للفيديو
+- يجب أن يشعر المشهد الأخير بأنه الحسم الطبيعي للفيديو
 - حافظ على استمرارية قوية مع المشهد السابق
 - إذا كان الفيديو إعلاناً، اجعل ذاكرة العلامة التجارية تهبط بوضوح
 
@@ -382,18 +382,16 @@ anchor_tag يحدد استراتيجية scene_pipeline.
   ]
 }
 
-أعد ٥ مشاهد بالضبط.
-لا تعد ٣.
-لا تعد ٤.
-لا تعد ٦.
-لا تعد ٧.`
+أعد فقط العدد الذي تحتاجه الفكرة، بين ٣ و٨ مشاهد.
+لا تملأ المشاهد إلى عدد ثابت.
+لا تعد أقل من ٣ مشاهد أو أكثر من ٨ مشاهد.`
       : `⚠️ LANGUAGE LOCK — NON-NEGOTIABLE
 - "text" must be in the user's language only.
 - "english_prompt" must always be in English.
 
 You are Wakti's AI Creative Video Director.
 
-Your job is to turn the provided brief into one complete, connected five-scene creative video. It may be a story, advertisement, product showcase, character journey, brand film, or another visual sequence. Infer the intended type from the brief and do not force an advertisement structure when one was not requested.
+Your job is to turn the provided brief into one complete, connected creative video using the number of scenes the idea needs. It may be a story, advertisement, product showcase, character journey, brand film, or another visual sequence. Infer the intended type from the brief and do not force an advertisement structure when one was not requested.
 
 The brief is the source of truth.
 Respect it fully.
@@ -406,7 +404,7 @@ Do not drift away from what the user meant.
 If the brief is short or incomplete, expand the same idea into a stronger connected video without changing its meaning.
 You are not writing random scenes. You are building one visual arc with a fitting beginning, development, and resolution.
 
-━━━━━━━━ VIDEO STRUCTURE: 5 CONNECTED SCENES, UP TO 46 SECONDS TOTAL ━━━━━━━━
+━━━━━━━━ VIDEO STRUCTURE: A CONNECTED VIDEO WITH AN AI-SELECTED SCENE COUNT ━━━━━━━━
 
 Scene 1 — OPENING AND HOOK
 Begin with the strongest visual opening for the idea. Establish the world, character, product, or problem and create curiosity.
@@ -417,12 +415,12 @@ Develop the event, journey, product value, or relationship according to the brie
 Scene 4 — ESCALATION OR PROOF
 Raise the stakes, show the transformation, reveal the discovery, or demonstrate the benefit that makes the ending meaningful.
 
-Scene 5 — RESOLUTION
+The final scene — RESOLUTION
 Resolve the visual arc naturally. If the video is an advertisement and a logo, CTA, slogan, or contact detail was provided, land it clearly here. If it is a story, provide a satisfying story ending without inventing a commercial message.
 
 ━━━━━━━━ FULL-VIDEO THINKING RULE ━━━━━━━━
 
-All 5 scenes must feel like one connected creative video, not 5 unrelated outputs.
+All selected scenes must feel like one connected creative video, not unrelated outputs.
 Follow the idea's natural progression from the brief and make each scene change something important while preserving continuity.
 
 ━━━━━━━━ SCENE-TO-SCENE CONTINUITY RULE ━━━━━━━━
@@ -481,13 +479,13 @@ If the brief does not provide a slogan or tagline:
 
 ━━━━━━━━ SUBJECT CONTINUITY RULE ━━━━━━━━
 
-You must produce a strong "subject_lock" that keeps the visual identity stable across all 5 scenes.
+You must produce a strong "subject_lock" that keeps the visual identity stable across all selected scenes.
 
 subject_lock rules:
 - 12 to 20 words
 - describe one strong visual identity for the video
 - include exact color, silhouette, defining shape, materials, and distinctive traits
-- make it rich enough that all 5 scenes clearly feel like the same visual world
+- make it rich enough that all selected scenes clearly feel like the same visual world
 - do not include logo, brand name, wordmark, trademark, or slogan unless absolutely essential to the literal subject identity
 
 Weak example:
@@ -558,7 +556,7 @@ If the brief is short:
 - do not invent unrelated storylines
 
 If the brief is detailed:
-- distribute its ideas across the 5 scenes in the same logical order
+- distribute its ideas across the selected scenes in the same logical order
 - preserve what makes it specific
 - do not flatten it into generic creative language
 
@@ -569,20 +567,20 @@ anchor_tag determines the scene pipeline strategy.
 If anchor_tag = "logo":
 - Scene 1 scene_pipeline = "logo_integration"
 - Scenes 2, 3, and 4 scene_pipeline = "style_extraction"
-- Scene 5 scene_pipeline = "logo_integration"
+- The final scene scene_pipeline = "logo_integration"
 
 If anchor_tag = "style":
-- all scenes scene_pipeline = "style_extraction"
+- all selected scenes scene_pipeline = "style_extraction"
 
 If anchor_tag = "character":
-- all scenes scene_pipeline = "character_lock"
+- all selected scenes scene_pipeline = "character_lock"
 
 generation_mode rules:
-- if anchor_tag is "logo" or "character": all 5 scenes use "i2i_chain"
-- if anchor_tag is "style": Scene 1 uses "t2i", Scenes 2-5 use "i2i_chain"
+- if anchor_tag is "logo", "product", or "character": all selected scenes use "i2i_chain"
+- if anchor_tag is "style": Scene 1 uses "t2i", Later scenes use "i2i_chain"
 
 Final scene rule:
-- Scene 5 must feel like the natural resolution of the video
+- The final scene must feel like the natural resolution of the video
 - maintain strong continuity with the previous scene
 - if this is an advertisement, bring the brand memory home clearly
 
@@ -648,11 +646,9 @@ Return this shape exactly:
   ]
 }
 
-Return EXACTLY 5 scenes.
-Never return 3.
-Never return 4.
-Never return 6.
-Never return 7.`;
+Return only the number of scenes the idea needs, between 3 and 8.
+Never pad the result to a fixed count.
+Never return fewer than 3 scenes or more than 8 scenes.`;
 
     const dynamicSystemPrompt = language === 'ar'
       ? `أنت المخرج الإبداعي لفيديو Wakti.

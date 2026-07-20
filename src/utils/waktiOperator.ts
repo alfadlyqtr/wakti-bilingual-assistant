@@ -4,6 +4,7 @@ import { getWaktiCapability, getWaktiCapabilityGuide, getWaktiCapabilityRouteLab
 import { analyzeWaktiOperatorIntent, type WaktiOperatorIntentKind } from '@/utils/waktiOperatorIntent';
 import type { WaktiOperatorSemanticAnalysis } from '@/utils/waktiOperatorSemantic';
 import { getWaktiCapabilityContract, getWaktiCapabilityStages } from '@/utils/waktiCapabilityContracts';
+import { getWaktiExecutionAction, getWaktiExecutionActionDetails, getWaktiExecutionActions } from '@/utils/waktiExecutionSchemas';
 import { saveTRPrefill, type TRPrefill, type TRReminderPrefillDraft, type TRTaskPrefillDraft } from '@/utils/trPrefill';
 
 const WAKTI_OPERATOR_PAYLOAD_PREFIX = 'wakti-operator-payload:';
@@ -12,6 +13,7 @@ export type WaktiOperatorRisk = 'safe' | 'approval_required';
 export type WaktiOperatorStepStatus = 'pending' | 'running' | 'completed' | 'paused' | 'failed';
 export type WaktiOperatorStepKind =
   | 'open_wakti_agent'
+  | 'open_feature'
   | 'show_guidance'
   | 'create_task'
   | 'create_reminder'
@@ -1248,29 +1250,84 @@ function buildCapabilityGuidancePlan(
   language: 'ar' | 'en',
   capability: WaktiCapability,
   includeSupportNote = false,
+  actionId?: string | null,
 ) {
-  const title = getWaktiCapabilityTitle(capability, language);
-  const guide = getWaktiCapabilityGuide(capability, language);
+  const actionSchema = getWaktiExecutionAction(capability.id, actionId);
+  const action = actionSchema ? getWaktiExecutionActionDetails(actionSchema, language) : null;
+  const title = action?.label || getWaktiCapabilityTitle(capability, language);
+  const guide = action?.description || getWaktiCapabilityGuide(capability, language);
   const contract = getWaktiCapabilityContract(capability.id);
-  const requirements = contract ? getWaktiCapabilityStages(contract, language) : [];
-  const requiredFields = contract?.requirements.filter((item) => item.required) || [];
+  const stages = action?.stages || (contract ? getWaktiCapabilityStages(contract, language) : []);
+  const requiredFields = action
+    ? action.fields.filter((item) => item.required)
+    : contract?.requirements.filter((item) => item.required) || [];
   const supportNote = includeSupportNote ? getWaktiCapabilitySupportSummary(capability, language) : '';
   const requirementNote = requiredFields.length > 0
     ? (language === 'ar'
-      ? ` سأتحقق من: ${requiredFields.map((item) => item.labelAr).join('، ')}.`
-      : ` I will check: ${requiredFields.map((item) => item.labelEn).join(', ')}.`)
+      ? ` سأتحقق من: ${requiredFields.map((item) => item.label).join('، ')}.`
+      : ` I will check: ${requiredFields.map((item) => item.label).join(', ')}.`)
+    : '';
+  const preconditionNote = action && action.preconditions.length > 0
+    ? (language === 'ar'
+      ? ` المتطلبات: ${action.preconditions.join('، ')}.`
+      : ` Requirements: ${action.preconditions.join(', ')}.`)
     : '';
   return {
     id: createId('plan'),
     transcript,
     mode: 'guidance' as const,
     summary: title,
-    answer: trimSentence(`${guide}${requirementNote}${supportNote ? ` ${supportNote}` : ''}`),
+    answer: trimSentence(`${guide}${requirementNote}${preconditionNote}${supportNote ? ` ${supportNote}` : ''}`),
     primaryAction: {
-      label: getWaktiCapabilityRouteLabel(capability, language),
-      href: capability.route,
+      label: action?.label || getWaktiCapabilityRouteLabel(capability, language),
+      href: action?.route || capability.route,
     },
-    steps: (requirements.length > 0 ? requirements.map((item) => item.label) : [guide]).map((step) => buildGuidanceStep(step)),
+    steps: (stages.length > 0 ? stages.map((item) => item.label) : [guide]).map((step) => buildGuidanceStep(step)),
+  };
+}
+
+function buildSchemaActionPlan(
+  transcript: string,
+  language: 'ar' | 'en',
+  capability: WaktiCapability,
+  actionId: string,
+): WaktiOperatorPlan | null {
+  const actionSchema = getWaktiExecutionAction(capability.id, actionId);
+  if (!actionSchema) return null;
+
+  if (actionSchema.executionMode === 'guide') {
+    return buildCapabilityGuidancePlan(transcript, language, capability, false, actionSchema.id);
+  }
+
+  const action = getWaktiExecutionActionDetails(actionSchema, language);
+  const requiredFields = action.fields.filter((item) => item.required);
+  const requirementNote = requiredFields.length > 0
+    ? (language === 'ar'
+      ? ` سأفتح ${action.target} وأتحقق من: ${requiredFields.map((item) => item.label).join('، ')}.`
+      : ` I will open ${action.target} and check: ${requiredFields.map((item) => item.label).join(', ')}.`)
+    : (language === 'ar'
+      ? ` سأفتح ${action.target} في الخطوة الصحيحة.`
+      : ` I will open ${action.target} at the correct step.`);
+
+  return {
+    id: createId('plan'),
+    transcript,
+    mode: 'navigation',
+    summary: action.label,
+    answer: trimSentence(`${action.description}${requirementNote}`),
+    primaryAction: {
+      label: action.label,
+      href: action.route,
+    },
+    steps: [{
+      id: createId('step'),
+      kind: 'open_feature',
+      label: action.label,
+      description: action.description,
+      risk: 'safe',
+      status: 'pending',
+      href: action.route,
+    }],
   };
 }
 
@@ -1436,6 +1493,7 @@ function buildFallbackMusicSemantic(transcript: string): WaktiOperatorSemanticAn
   return {
     capability: 'music',
     capabilityId: 'music_studio',
+    actionId: 'generate_music_track',
     intent: 'generate',
     confidence: 1,
     title: extractMusicTitle(transcript) || null,
@@ -1460,13 +1518,16 @@ function buildMusicSemanticPlan(
   const generateStepId = createId('step');
   const trackingStepId = createId('step');
   const music = buildMusicOperatorRequest(transcript, semantic);
-  const musicContract = getWaktiCapabilityContract('music_studio');
-  const contractStages = musicContract ? getWaktiCapabilityStages(musicContract, language) : [];
-  const getStage = (id: string, label: string, detail: string) => contractStages.find((stage) => stage.id === id) || { id, label, detail };
-  const prepareStage = getStage('prepare', language === 'ar' ? 'تجهيز مسودة الموسيقى' : 'Prepare the music draft', language === 'ar' ? 'أجهز تفاصيل الأغنية.' : 'Prepare the song details.');
+  const musicAction = getWaktiExecutionAction(
+    'music_studio',
+    semantic.actionId || (semantic.intent === 'prepare' ? 'prepare_music_track' : 'generate_music_track'),
+  ) || getWaktiExecutionAction('music_studio', 'generate_music_track');
+  const actionStages = musicAction ? getWaktiExecutionActionDetails(musicAction, language).stages : [];
+  const getStage = (id: string, label: string, detail: string) => actionStages.find((stage) => stage.id === id) || { id, label, detail };
+  const prepareStage = getStage('collect', language === 'ar' ? 'تجهيز مسودة الموسيقى' : 'Prepare the music draft', language === 'ar' ? 'أجهز تفاصيل الأغنية.' : 'Prepare the song details.');
   const reviewStage = getStage('review', language === 'ar' ? 'بانتظار الموافقة' : 'Waiting for approval', language === 'ar' ? 'راجع المسودة قبل الإرسال.' : 'Review the draft before it is sent.');
-  const submitStage = getStage('submit', language === 'ar' ? 'إرسال إنشاء الموسيقى' : 'Submit music generation', language === 'ar' ? 'أرسل الطلب المتحقق منه.' : 'Submit the validated request.');
-  const generateStage = getStage('generate', language === 'ar' ? 'جارٍ إنشاء الموسيقى' : 'Generating music', language === 'ar' ? 'أتابع المهمة حتى تكتمل.' : 'Track the provider task until it completes.');
+  const submitStage = getStage('run', language === 'ar' ? 'إرسال إنشاء الموسيقى' : 'Submit music generation', language === 'ar' ? 'أرسل الطلب المتحقق منه.' : 'Submit the validated request.');
+  const generateStage = getStage('track', language === 'ar' ? 'جارٍ إنشاء الموسيقى' : 'Generating music', language === 'ar' ? 'أتابع المهمة حتى تكتمل.' : 'Track the provider task until it completes.');
   const payload: WaktiOperatorRoutePayload = {
     runId: planId,
     stepId: openStepId,
@@ -1562,6 +1623,9 @@ export function buildVoiceOperatorPlan(
     ? getWaktiCapability(semantic.capabilityId)
     : null;
   const matchedCapability = semanticCapability || intentAnalysis.capability;
+  const semanticAction = semanticCapability && semantic?.actionId
+    ? getWaktiExecutionAction(semanticCapability.id, semantic.actionId)
+    : null;
 
   // Detect real, do-it-now requests up front. These mirror the execution
   // builders at the bottom of this function. We compute them early so the
@@ -1572,10 +1636,10 @@ export function buildVoiceOperatorPlan(
     || semantic?.intent === 'prepare'
     || semantic?.intent === 'generate'
     || semantic?.intent === 'confirm';
-  const wantsImage = /(image|picture|photo|poster|logo|thumbnail|cover|صورة|بوستر|شعار)/i.test(normalized);
-  const wantsMusic = /(music|song|track|beat|jingle|anthem|أغنية|موسيقى|مقطع)/i.test(normalized);
+  const wantsImage = matchedCapability?.id === 'image_studio' || /(image|picture|photo|poster|logo|thumbnail|cover|صورة|بوستر|شعار)/i.test(normalized);
+  const wantsMusic = matchedCapability?.id === 'music_studio' || /(music|song|track|beat|jingle|anthem|أغنية|موسيقى|مقطع)/i.test(normalized);
   const wantsEmail = matchedCapability?.id === 'email' || /(email|mail|gmail|بريد|ايميل)/i.test(normalized) || extractEmailAddresses(normalized).length > 0;
-  const wantsTasks = /(task|todo|to do|remind|reminder|schedule|مهمة|تذكير|ذكرني|رتب)/i.test(normalized);
+  const wantsTasks = matchedCapability?.id === 'tasks_reminders' || /(task|todo|to do|remind|reminder|schedule|مهمة|تذكير|ذكرني|رتب)/i.test(normalized);
   const wantsContactsChat = matchedCapability?.id === 'contacts_chat' || /\b(contact|contacts|chat|dm|direct message|conversation|group chat|جهات الاتصال|جهة الاتصال|دردشة|محادثة)\b/i.test(normalized);
   const wantsTextTools = matchedCapability?.id === 'text_tools' || /\b(write|rewrite|reply|respond|translate|translation|diagram|presentation|summarize|document|a4|compose|text tools|text generator|اكتب|أكتب|إعادة صياغة|اعادة صياغة|رد|جاوب|ترجم|ترجمة|مخطط|عرض|مستند|لخص|لخّص)\b/i.test(normalized);
   const wantsVoice = matchedCapability?.id === 'voice_studio' || /\b(voice|speech|audio|tts|text to speech|read aloud|say this|speak this|voice clone|clone my voice|live translator|voice translator|tasjeel|صوت|صوتي|نطق|اقرأ بصوت|تحويل النص إلى كلام|استنساخ الصوت|تسجيل|مترجم صوتي|ترجمة صوتية)\b/i.test(normalized);
@@ -1600,7 +1664,10 @@ export function buildVoiceOperatorPlan(
     || semantic?.intent === 'clarify'
     || shouldPreferGuidanceFlow(normalized, intentAnalysis.kind);
   if (matchedCapability && shouldUseCapabilityGuidance) {
-    return buildCapabilityGuidancePlan(normalized, language, matchedCapability);
+    const guidancePlan = buildCapabilityGuidancePlan(normalized, language, matchedCapability, false, semanticAction?.id);
+    return semantic?.clarificationQuestion?.trim()
+      ? { ...guidancePlan, summary: semantic.clarificationQuestion.trim(), answer: semantic.clarificationQuestion.trim() }
+      : guidancePlan;
   }
 
   if (matchedCapability?.id === 'social' && !hasDirectExecution && (intentAnalysis.kind === 'navigation' || intentAnalysis.kind === 'execution' || intentAnalysis.kind === 'mixed')) {
@@ -2258,6 +2325,19 @@ export function buildVoiceOperatorPlan(
       status: 'pending',
       payloadId,
     });
+  }
+
+  if (steps.length === 0 && semanticCapability && semanticAction) {
+    const schemaPlan = buildSchemaActionPlan(normalized, language, semanticCapability, semanticAction.id);
+    if (schemaPlan) return schemaPlan;
+  }
+
+  if (steps.length === 0 && matchedCapability) {
+    const fallbackAction = getWaktiExecutionActions(matchedCapability.id)[0];
+    if (fallbackAction) {
+      const schemaPlan = buildSchemaActionPlan(normalized, language, matchedCapability, fallbackAction.id);
+      if (schemaPlan) return schemaPlan;
+    }
   }
 
   if (steps.length === 0) {

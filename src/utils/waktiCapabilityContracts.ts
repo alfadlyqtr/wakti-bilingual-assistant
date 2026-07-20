@@ -1,10 +1,13 @@
 import type { WaktiCapabilityId } from '@/utils/waktiCapabilities';
+import { buildWaktiExecutionKnowledgeManifest } from '@/utils/waktiExecutionSchemas';
 
 export type WaktiCapabilityAdapter =
   | 'navigation'
   | 'module_handoff'
   | 'image_generation'
   | 'music_generation'
+  | 'video_action'
+  | 'qr_action'
   | 'text_generation'
   | 'voice_generation'
   | 'email_draft'
@@ -15,7 +18,10 @@ export type WaktiCapabilityAdapter =
   | 'project_action'
   | 'social_action'
   | 'game_action'
-  | 'vitality_action';
+  | 'vitality_action'
+  | 'journal_action'
+  | 'account_action'
+  | 'wishlist_action';
 
 export type WaktiCapabilityApproval = 'none' | 'review' | 'required';
 
@@ -162,6 +168,40 @@ const contracts: WaktiCapabilityContract[] = [
       stage('generate', 'Generating music', 'جارٍ إنشاء الموسيقى', 'Track the provider task until completed or failed.', 'متابعة مهمة المزود حتى تكتمل أو تفشل.'),
       stage('finalize', 'Finalize tracks', 'تجهيز المقاطع النهائية', 'Save completed variants and make them available in Music Studio.', 'حفظ النسخ المكتملة وإتاحتها داخل استوديو الموسيقى.'),
     ],
+  },
+  {
+    capabilityId: 'video_studio',
+    adapter: 'video_action',
+    approval: 'review',
+    purposeEn: 'Open the correct AI video workflow and prepare its prompt, sources, duration, and resolution for review.',
+    purposeAr: 'فتح تدفق الفيديو بالذكاء الصحيح وتجهيز الوصف والمصادر والمدة والدقة للمراجعة.',
+    backend: 'AI Videomaker pipeline',
+    resultEn: 'The verified Video Studio workflow is ready for the person to review and generate.',
+    resultAr: 'تدفق استوديو الفيديو الموثق جاهز ليراجعه المستخدم ويبدأ الإنشاء.',
+    requirements: [
+      requirement('mode', 'Video mode', 'وضع الفيديو', true, 'Choose text, one image, two images, or cinema.', 'اختر نصاً أو صورة واحدة أو صورتين أو السينما.'),
+      requirement('prompt', 'Video prompt', 'وصف الفيديو', false, 'Required for text and cinema workflows, and useful to guide image animation.', 'مطلوب لتدفقات النص والسينما ومفيد لتوجيه تحريك الصورة.'),
+    ],
+    preconditionsEn: ['Video quota must allow generation.', 'Any required source image must be supplied before generation.'],
+    preconditionsAr: ['يجب أن تسمح حصة الفيديو بالإنشاء.', 'يجب توفير أي صورة مصدر مطلوبة قبل الإنشاء.'],
+    stages: actionStages('Video Studio', 'استوديو الفيديو', 'Generate reviewed video', 'إنشاء الفيديو المراجع'),
+  },
+  {
+    capabilityId: 'qr_creator',
+    adapter: 'qr_action',
+    approval: 'review',
+    purposeEn: 'Open QR Creator and prepare a QR code using the correct content type and verified input fields.',
+    purposeAr: 'فتح منشئ رموز QR وتجهيز رمز باستخدام نوع المحتوى الصحيح وحقول الإدخال الموثقة.',
+    backend: 'QR Creator / saved_qr_codes',
+    resultEn: 'The QR code request is ready for review, generation, saving, or sharing.',
+    resultAr: 'طلب رمز QR جاهز للمراجعة أو الإنشاء أو الحفظ أو المشاركة.',
+    requirements: [
+      requirement('type', 'QR type', 'نوع رمز QR', true, 'Choose URL, text, email, phone, or Wi-Fi.', 'اختر رابطاً أو نصاً أو بريداً أو هاتفاً أو واي فاي.'),
+      requirement('content', 'QR content', 'محتوى رمز QR', true, 'Provide the content that the QR code should contain.', 'أضف المحتوى الذي يجب أن يتضمنه رمز QR.'),
+    ],
+    preconditionsEn: [],
+    preconditionsAr: [],
+    stages: actionStages('QR Creator', 'منشئ رموز QR', 'Generate reviewed QR code', 'إنشاء رمز QR المراجع'),
   },
   {
     capabilityId: 'text_tools',
@@ -389,6 +429,57 @@ const contracts: WaktiCapabilityContract[] = [
     stages: navigationStages('Games', 'الألعاب'),
   },
   {
+    capabilityId: 'journal',
+    adapter: 'journal_action',
+    approval: 'required',
+    purposeEn: 'Open Journal for reviewed personal check-ins, history, charts, and private questions.',
+    purposeAr: 'فتح اليومية للتسجيلات الشخصية المراجعة والسجل والإحصائيات والأسئلة الخاصة.',
+    backend: 'Journal service / journal-qa',
+    resultEn: 'The requested Journal area is open and personal entries remain reviewable before saving.',
+    resultAr: 'قسم اليومية المطلوب مفتوح وتبقى الإدخالات الشخصية قابلة للمراجعة قبل الحفظ.',
+    requirements: [
+      requirement('action', 'Journal action', 'إجراء اليومية', true, 'Choose a check-in, timeline, charts, or question.', 'اختر تسجيلاً أو سجلاً أو إحصائيات أو سؤالاً.'),
+      requirement('content', 'Personal entry or question', 'الإدخال الشخصي أو السؤال', false, 'Needed when preparing a check-in or asking Journal.', 'مطلوب عند تجهيز تسجيل أو سؤال اليومية.'),
+    ],
+    preconditionsEn: ['Personal Journal changes require a clear review before saving.'],
+    preconditionsAr: ['تغييرات اليومية الشخصية تحتاج مراجعة واضحة قبل الحفظ.'],
+    stages: actionStages('Journal', 'اليومية', 'Open reviewed Journal action', 'فتح إجراء اليومية المراجع'),
+  },
+  {
+    capabilityId: 'account',
+    adapter: 'account_action',
+    approval: 'required',
+    purposeEn: 'Open Account profile, wishes, billing, and account changes for explicit review.',
+    purposeAr: 'فتح الملف الشخصي والرغبات والفاتورة وتغييرات الحساب للمراجعة الصريحة.',
+    backend: 'Account and profile services',
+    resultEn: 'The requested Account area is open and account-changing actions remain reviewable.',
+    resultAr: 'قسم الحساب المطلوب مفتوح وتبقى الإجراءات المؤثرة على الحساب قابلة للمراجعة.',
+    requirements: [
+      requirement('section', 'Account section', 'قسم الحساب', true, 'Choose profile, wishes, or billing.', 'اختر الملف الشخصي أو الرغبات أو الفاتورة.'),
+      requirement('change', 'Requested change', 'التغيير المطلوب', false, 'Needed for a profile or account change.', 'مطلوب لتغيير الملف الشخصي أو الحساب.'),
+    ],
+    preconditionsEn: ['Account, security, and billing changes require the person’s explicit review.'],
+    preconditionsAr: ['تغييرات الحساب والأمان والفاتورة تتطلب مراجعة المستخدم الصريحة.'],
+    stages: actionStages('Account', 'حسابي', 'Open reviewed account action', 'فتح إجراء الحساب المراجع'),
+  },
+  {
+    capabilityId: 'wishlists',
+    adapter: 'wishlist_action',
+    approval: 'required',
+    purposeEn: 'Open Wishlists to prepare lists, items, sharing, and gift claims for review.',
+    purposeAr: 'فتح قوائم الرغبات لتجهيز القوائم والعناصر والمشاركة وحجوزات الهدايا للمراجعة.',
+    backend: 'Wishlists service',
+    resultEn: 'The requested Wishlist work is ready for the person to review before it changes shared data.',
+    resultAr: 'عمل قائمة الرغبات المطلوب جاهز لمراجعة المستخدم قبل أن يغير البيانات المشتركة.',
+    requirements: [
+      requirement('action', 'Wishlist action', 'إجراء قائمة الرغبات', true, 'Choose a list, item, sharing, or claim action.', 'اختر إجراء قائمة أو عنصر أو مشاركة أو حجز.'),
+      requirement('wishlist', 'Wishlist', 'قائمة الرغبات', false, 'Identify the list when adding an item, sharing, or reviewing claims.', 'حدد القائمة عند إضافة عنصر أو المشاركة أو مراجعة الحجوزات.'),
+    ],
+    preconditionsEn: ['Sharing requires a public wishlist with sharing enabled.'],
+    preconditionsAr: ['المشاركة تتطلب قائمة رغبات عامة مع تفعيل المشاركة.'],
+    stages: actionStages('Wishlists', 'قوائم الرغبات', 'Open reviewed wishlist action', 'فتح إجراء قائمة الرغبات المراجع'),
+  },
+  {
     capabilityId: 'settings',
     adapter: 'module_handoff',
     approval: 'required',
@@ -451,11 +542,5 @@ export function getWaktiCapabilityStages(contract: WaktiCapabilityContract, lang
 }
 
 export function buildWaktiCapabilityKnowledgeManifest(language: 'ar' | 'en') {
-  return contracts.map((contract) => {
-    const requirements = getWaktiCapabilityRequirements(contract, language)
-      .filter((item) => item.required)
-      .map((item) => item.label)
-      .join(', ');
-    return `${contract.capabilityId} | adapter=${contract.adapter} | approval=${contract.approval} | required=${requirements || (language === 'ar' ? 'لا شيء' : 'none')}`;
-  }).join('\n');
+  return buildWaktiExecutionKnowledgeManifest(language);
 }

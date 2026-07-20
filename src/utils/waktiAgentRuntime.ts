@@ -3,6 +3,7 @@ import { TRReminder, TRTask } from '@/services/trService';
 import { WaktiAgentIntent, WaktiAgentPayload, getWaktiAgentPreset } from '@/utils/waktiAgent';
 import { findBestWaktiCapabilityMatch, getWaktiCapability, getWaktiCapabilityGuide, getWaktiCapabilityRouteLabel, getWaktiCapabilitySupportSummary, getWaktiCapabilityTitle, type WaktiCapabilityId } from '@/utils/waktiCapabilities';
 import { getWaktiCapabilityContract, getWaktiCapabilityRequirements, getWaktiCapabilityStages } from '@/utils/waktiCapabilityContracts';
+import { getWaktiExecutionActionDetails, getWaktiExecutionActions } from '@/utils/waktiExecutionSchemas';
 
 export interface WaktiAgentCardItem {
   id: string;
@@ -59,6 +60,34 @@ export interface WaktiAgentRunOutput {
       id: string;
       label: string;
       detail: string;
+    }>;
+    executionActions: Array<{
+      id: string;
+      label: string;
+      description: string;
+      target: string;
+      result: string;
+      route: string;
+      executionMode: 'run' | 'prepare' | 'navigate' | 'guide';
+      approval: 'none' | 'review' | 'required';
+      adapter: string | null;
+      backend: string[];
+      fields: Array<{
+        key: string;
+        label: string;
+        help: string;
+        type: string;
+        required: boolean;
+        requiredWhen?: string;
+        defaultValue?: string;
+        allowedValues?: string[];
+      }>;
+      preconditions: string[];
+      stages: Array<{
+        id: string;
+        label: string;
+        detail: string;
+      }>;
     }>;
   };
 }
@@ -209,6 +238,7 @@ function buildCapabilityGuidanceRun(options: BuildWaktiAgentRunOptions): WaktiAg
   const contract = getWaktiCapabilityContract(capability.id);
   const requirements = contract ? getWaktiCapabilityRequirements(contract, language) : [];
   const stages = contract ? getWaktiCapabilityStages(contract, language) : [];
+  const executionActions = getWaktiExecutionActions(capability.id).map((item) => getWaktiExecutionActionDetails(item, language));
   const support = getWaktiCapabilitySupportSummary(capability, language);
   const guide = getWaktiCapabilityGuide(capability, language);
   const sourceText = uniqueTexts([
@@ -232,7 +262,11 @@ function buildCapabilityGuidanceRun(options: BuildWaktiAgentRunOptions): WaktiAg
         : []),
       support,
     ],
-    actions: stages.length > 0 ? stages.map((item) => item.label) : [language === 'ar' ? 'افتح الميزة المطلوبة' : 'Open the requested feature'],
+    actions: executionActions.length > 0
+      ? executionActions.map((item) => item.label)
+      : stages.length > 0
+        ? stages.map((item) => item.label)
+        : [language === 'ar' ? 'افتح الميزة المطلوبة' : 'Open the requested feature'],
     result: contract
       ? (language === 'ar'
         ? `هذا التدفق يستخدم ${contract.adapter} ويتطلب ${contract.approval === 'required' ? 'موافقتك الواضحة قبل التنفيذ' : contract.approval === 'review' ? 'مراجعة الطلب قبل التنفيذ' : 'تنفيذاً آمناً دون موافقة إضافية'}.`
@@ -249,8 +283,10 @@ function buildCapabilityGuidanceRun(options: BuildWaktiAgentRunOptions): WaktiAg
       {
         id: 'capability-how',
         label: language === 'ar' ? 'كيف سينفذها' : 'How it will run',
-        title: stages[0]?.label || (language === 'ar' ? 'ابدأ من هنا' : 'Start here'),
-        body: stages.map((item) => item.label).join(language === 'ar' ? ' ← ' : ' → ') || guide,
+        title: executionActions[0]?.label || stages[0]?.label || (language === 'ar' ? 'ابدأ من هنا' : 'Start here'),
+        body: executionActions.length > 0
+          ? executionActions.map((item) => `${item.label}: ${item.description}`).join(language === 'ar' ? ' • ' : ' • ')
+          : stages.map((item) => item.label).join(language === 'ar' ? ' ← ' : ' → ') || guide,
         tone: 'amber',
       },
       {
@@ -283,6 +319,7 @@ function buildCapabilityGuidanceRun(options: BuildWaktiAgentRunOptions): WaktiAg
       backend: contract.backend,
       requirements,
       stages,
+      executionActions,
     } : undefined,
     secondaryAction: capability.supportLevel === 'full_operator'
       ? {

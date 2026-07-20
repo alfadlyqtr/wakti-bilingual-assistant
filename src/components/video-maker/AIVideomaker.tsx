@@ -1737,8 +1737,8 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setAnimProgress(sceneArray(selectedScenes.length, 'idle'));
       setSceneOverlayText(sceneArray(selectedScenes.length, ''));
       setSceneDurations(sceneArray(selectedScenes.length, DEFAULT_SCENE_DURATION));
-      setCinemaStep('storyboard');
-      toast.success(language === 'ar' ? `تم بناء فيديو من ${selectedScenes.length} مشاهد` : `${selectedScenes.length}-scene video plan ready`);
+      setCinemaStep('casting');
+      toast.success(language === 'ar' ? `تم بناء فيديو من ${selectedScenes.length} مشاهد — جاري إنشاء الصور تلقائياً` : `${selectedScenes.length}-scene plan ready — creating the scenes automatically`);
     } catch (err: any) {
       console.error('[AIVideomaker] Direct error:', err);
       toast.error(language === 'ar' ? 'فشل إنشاء الفيديو: ' + (err.message || '') : 'Failed to create video: ' + (err.message || ''));
@@ -1945,7 +1945,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
     } catch (err: any) {
       console.error('[cinema] Cast error:', err);
       toast.error(language === 'ar' ? 'فشل إنشاء الصور: ' + err.message : 'Casting failed: ' + err.message);
-      setCinemaStep('storyboard');
+      setCinemaStep('casting');
     } finally {
       setIsCasting(false);
     }
@@ -2102,6 +2102,21 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
       setIsFilming(false);
     }
   }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat, visualSupervisorPrompts, sceneDurations]);
+
+  // Start the Artist automatically after the Director finishes.
+  useEffect(() => {
+    if (cinemaStep !== 'casting' || !cinemaScenes.length || isCasting || isFilming) return;
+    const sceneCountReady = sceneImages.length === cinemaScenes.length;
+    const waitingToStart = castingProgress.length === cinemaScenes.length && castingProgress.every(status => status === 'idle') && sceneImages.every(image => image === null);
+    if (sceneCountReady && waitingToStart) void handleCast();
+  }, [cinemaStep, cinemaScenes, sceneImages, castingProgress, isCasting, isFilming, handleCast]);
+
+  // Start the Animator automatically after the Artist finishes every scene.
+  useEffect(() => {
+    if (cinemaStep !== 'casting' || isCasting || isFilming || !cinemaScenes.length) return;
+    const allImagesReady = sceneImages.length === cinemaScenes.length && sceneImages.every(image => image !== null);
+    if (allImagesReady) void handleFilm();
+  }, [cinemaStep, cinemaScenes, sceneImages, isCasting, isFilming, handleFilm]);
 
   // ── Role 4b: Retry — re-trigger full Grok + Shotstack produce ──
   const handleRetryFilm = useCallback(async (_idx: number) => {
@@ -3684,7 +3699,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                       {brandAnchor && <span className="ml-1 text-[#E2C7A8]">✓</span>}
                                     </p>
                                     <p className="text-[9px]" style={{color: clr.textSubtle}}>
-                                      {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري — يُثبِّت الهوية البصرية في جميع المشاهد' : 'Logo, product shot, or visual reference — locks your brand identity across all 5 scenes'}
+                                      {language==='ar' ? 'شعار، صورة منتج، أو مرجع بصري — يُثبِّت الهوية البصرية في جميع المشاهد' : 'Logo, product shot, or visual reference — locks your brand identity across all selected scenes'}
                                     </p>
                                     <div className="flex items-center gap-3">
                                       {brandAnchor ? (
@@ -4415,7 +4430,42 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                   </div>
                 )}
 
-                {cinemaStep === 'casting' && (
+                {cinemaStep === 'casting' && (() => {
+                  const finishedScenes = sceneImages.slice(0, cinemaSceneCount).filter(Boolean).length;
+                  const progress = cinemaSceneCount ? Math.round((finishedScenes / cinemaSceneCount) * 100) : 0;
+                  const hasSceneError = castingProgress.slice(0, cinemaSceneCount).some(status => status === 'error');
+                  return (
+                    <div className="flex flex-col gap-5 max-w-xl mx-auto w-full py-6">
+                      <div className="text-center space-y-2">
+                        <div className="mx-auto w-16 h-16 rounded-3xl flex items-center justify-center" style={{background:'linear-gradient(135deg,rgba(210,180,140,0.3),rgba(110,80,180,0.35))',boxShadow:'0 0 40px rgba(170,130,220,0.28)'}}>
+                          <Camera className="h-8 w-8" style={{color:'#E2C7A8'}} />
+                        </div>
+                        <h3 className="text-xl font-bold text-white">{language === 'ar' ? 'وكتي يبني فيديوك' : 'Wakti is building your video'}</h3>
+                        <p className="text-sm text-white/50">{language === 'ar' ? 'يولد كل مشهد ويحافظ على الاستمرارية تلقائياً.' : 'Every scene is being created automatically with continuity.'}</p>
+                      </div>
+                      <div className="rounded-3xl p-5 space-y-4" style={{background:'rgba(255,255,255,0.04)',border:'1px solid rgba(226,199,168,0.25)'}}>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-[#E2C7A8]">{language === 'ar' ? 'المشاهد' : 'Scenes'}</span>
+                          <span className="text-white/50">{finishedScenes} / {cinemaSceneCount}</span>
+                        </div>
+                        <div className="h-2 rounded-full overflow-hidden bg-white/10">
+                          <div className="h-full rounded-full transition-all duration-700" style={{width:`${progress}%`,background:'linear-gradient(90deg,#C5A47E,#E2C7A8)',boxShadow:'0 0 16px rgba(226,199,168,0.5)'}} />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-center text-[10px] text-white/45">
+                          <span className="rounded-xl py-2 bg-white/[0.03]">{language === 'ar' ? 'المخرج ✓' : 'Director ✓'}</span>
+                          <span className="rounded-xl py-2 bg-white/[0.03]">{finishedScenes === cinemaSceneCount ? (language === 'ar' ? 'المصور ✓' : 'Artist ✓') : (language === 'ar' ? 'المصور...' : 'Artist...')}</span>
+                          <span className="rounded-xl py-2 bg-white/[0.03]">{language === 'ar' ? 'المحرك لاحقاً' : 'Animator next'}</span>
+                        </div>
+                      </div>
+                      {hasSceneError && !isCasting && (
+                        <button type="button" onClick={() => void handleCast()} className="w-full h-12 rounded-2xl text-sm font-bold" style={{background:'linear-gradient(135deg,#E2C7A8,#C5A47E)',color:'#0c0f14'}}>
+                          {language === 'ar' ? 'إعادة المحاولة تلقائياً' : 'RETRY AUTOMATICALLY'}
+                        </button>
+                      )}
+                      <button type="button" onClick={handleCinemaReset} className="mx-auto text-xs text-white/35 hover:text-white/60 transition-colors">{language === 'ar' ? 'إلغاء والبدء من جديد' : 'Cancel and start over'}</button>
+                    </div>
+                  );
+                  return (
                   <div className="flex flex-col gap-4 pb-4">
                     {/* Header */}
                     <div className="text-center space-y-1 px-1">
@@ -4429,7 +4479,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       </p>
                     </div>
 
-                    {/* Master Anchor Preview — auto mode only */}
+                    {/* Generated reference preview */}
                     {anchorImageUrl && (
                       <div className="mx-auto cinema-diamond-border rounded-2xl overflow-hidden"
                         style={{width: cinemaFormat === '16:9' ? '100%' : '60%', aspectRatio: cinemaFormat === '16:9' ? '16/9' : cinemaFormat === '4:5' ? '4/5' : '9/16', maxHeight: '240px'}}>
@@ -4437,9 +4487,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       </div>
                     )}
 
-                    {/* ── Scene Stepper (auto mode) / Upload grid (custom mode) ── */}
+                    {/* ── Automatic scene progress ── */}
                     {cinemaMode === 'custom' ? (
-                      // ── CUSTOM MODE: 2-col upload grid ──
+                      // ── Legacy upload fallback ──
                       <div className="grid grid-cols-2 gap-3">
                         {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
                           const img = sceneImages[idx];
@@ -4508,7 +4558,7 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                         })}
                       </div>
                     ) : (
-                      // ── AUTO MODE: Focused Scene Stepper ──
+                      // ── Automatic scene progress fallback ──
                       <div className="flex flex-col gap-2">
                         {Array.from({length: cinemaSceneCount}, (_, i) => i).map((idx) => {
                           const img = sceneImages[idx];
@@ -4585,9 +4635,9 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                                     : prog === 'error'
                                     ? (language === 'ar' ? 'فشل التوليد' : 'Generation failed')
                                     : canOpen
-                                    ? (language === 'ar' ? `مشهد ${idx + 1} — اضغط للاختيار` : `Scene ${idx + 1} — tap to pick`)
+                                    ? (language === 'ar' ? `مشهد ${idx + 1} — اضغط للاختيار` : `Scene ${idx + 1} — being prepared automatically`)
                                     : isLocked
-                                    ? (language === 'ar' ? `مشهد ${idx + 1} — في انتظار اختيارك للمشهد السابق` : `Scene ${idx + 1} — waiting for previous pick`)
+                                    ? (language === 'ar' ? `مشهد ${idx + 1} — في انتظار اختيارك للمشهد السابق` : `Scene ${idx + 1} — waiting for automatic continuity`)
                                     : (language === 'ar' ? `مشهد ${idx + 1}` : `Scene ${idx + 1}`)}
                                 </p>
                                 {prog === 'error' && (
@@ -4902,12 +4952,13 @@ export default function AIVideomaker({ onSaveSuccess }: AIVideomakerProps) {
                       >
                         <div className="flex items-center justify-center gap-2">
                           <Film className="h-4 w-4" />
-                          <span>{language === 'ar' ? 'موافقة وابدأ التصوير' : 'APPROVE & FILM'}</span>
+                          <span>{language === 'ar' ? 'يبدأ الإنتاج تلقائياً' : 'PRODUCTION STARTS AUTOMATICALLY'}</span>
                         </div>
                       </button>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {cinemaStep === 'filming' && (() => {
                   const hasError = animProgress.slice(0, cinemaSceneCount).some(p => p === 'error');
