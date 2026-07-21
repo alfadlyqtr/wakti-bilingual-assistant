@@ -65,6 +65,10 @@ serve(async (req: Request) => {
     const requestedTranscriptionModel = ALLOWED_TRANSCRIPTION_MODELS.has(requestedTranscriptionRaw)
       ? requestedTranscriptionRaw
       : "";
+    const transcriptionLanguage = body?.language === "ar" ? "ar" : "en";
+    const transcriptionPrompt = transcriptionLanguage === "ar"
+      ? "Transcribe the speaker in Arabic only. Do not translate into another language. If the audio is unclear, wait for clearer speech rather than guessing a different language."
+      : "Transcribe the speaker in English only. Do not translate into another language. If the audio is unclear, wait for clearer speech rather than guessing Chinese, Dutch, Irish, or another language.";
     const modelCandidates = uniqueNonEmpty([
       requestedModel,
       ...DEFAULT_MODEL_CANDIDATES,
@@ -99,7 +103,12 @@ serve(async (req: Request) => {
           model,
           audio: {
             input: {
-              transcription: { model: transcriptionModel },
+              transcription: {
+                model: transcriptionModel,
+                language: transcriptionLanguage,
+                prompt: transcriptionPrompt,
+              },
+              noise_reduction: { type: "near_field" },
             },
             output: { voice: realtimeVoice },
           },

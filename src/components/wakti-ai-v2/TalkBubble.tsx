@@ -184,6 +184,10 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
   // Helpful Memory is loaded read-only when the Talk bubble opens. It is NOT
   // captured/forgotten in Talk (by design) — forget/capture happens in Chat.
   const helpfulMemoryBlockRef = useRef<string>('');
+  const audioActuallyEndedAtRef = useRef(0);
+  const transcriptUpdateTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const userTranscriptSettleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingUserTranscriptRef = useRef('');
 
   const onUserMessageRef = useRef(onUserMessage);
   const onAssistantMessageRef = useRef(onAssistantMessage);
@@ -487,37 +491,30 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
 
   const isLikelyAssistantEcho = useCallback((userTranscript: string) => {
     const now = Date.now();
-    if (now - lastAssistantFinishedAtRef.current > 2200) {
-      return false;
-    }
+    const audioEnded = audioActuallyEndedAtRef.current;
 
+    // audioActuallyEndedAtRef is set ~900ms after finishAssistantTurn
+    // (scheduled inside finishAssistantTurn via setTimeout).
+    // No marker = no prior completed response, skip echo check.
+    if (audioEnded === 0 || now - audioEnded > 2500) return false;
+
+    // Within 2.5s of audio ending: check text similarity
     const assistant = normalizeForEchoCheck(lastAssistantTranscriptRef.current);
     const user = normalizeForEchoCheck(userTranscript);
-    if (!assistant || !user || user.length < 4) {
-      return false;
-    }
+    if (!assistant || !user || user.length < 4) return false;
 
-    if (assistant === user) {
-      return true;
-    }
-
-    if ((assistant.includes(user) && user.length >= 8) || (user.includes(assistant) && assistant.length >= 8)) {
-      return true;
-    }
+    if (assistant === user) return true;
+    if ((assistant.includes(user) && user.length >= 8) || (user.includes(assistant) && assistant.length >= 8)) return true;
 
     const assistantTokens = new Set(assistant.split(' ').filter(token => token.length > 2));
     const userTokens = user.split(' ').filter(token => token.length > 2);
-    if (userTokens.length < 3 || assistantTokens.size === 0) {
-      return false;
-    }
+    if (userTokens.length < 3 || assistantTokens.size === 0) return false;
 
     let overlap = 0;
     userTokens.forEach(token => {
-      if (assistantTokens.has(token)) {
-        overlap += 1;
-      }
+      if (assistantTokens.has(token)) overlap += 1;
     });
-    return overlap / userTokens.length >= 0.75;
+    return overlap / userTokens.length >= 0.55;
   }, [normalizeForEchoCheck]);
 
   const beginAssistantTurn = useCallback(() => {
@@ -545,7 +542,6 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     }
 
     assistantTranscriptBufferRef.current = normalized;
-    setAiTranscript(normalized);
     return normalized;
   }, [normalizeAssistantTranscript]);
 
@@ -642,6 +638,9 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       syncAssistantMessage(finalTranscript);
     }
     bumpAssistantPlaybackLock(700);
+    // Mark audio as fully played out ~900ms after turn ends (lock 700ms + ~200ms buffer).
+    // WebRTC streams don't fire audio.onended between turns, so we use this as the proxy.
+    setTimeout(() => { audioActuallyEndedAtRef.current = Date.now(); }, 900);
     assistantAwaitingOutputAudioDoneRef.current = false;
     assistantResponseActiveRef.current = false;
     setError(null);
@@ -957,6 +956,16 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     lastAssistantTranscriptRef.current = '';
     lastAssistantFinishedAtRef.current = 0;
     assistantPlaybackLockUntilRef.current = 0;
+    audioActuallyEndedAtRef.current = 0;
+    if (transcriptUpdateTimerRef.current) {
+      clearTimeout(transcriptUpdateTimerRef.current);
+      transcriptUpdateTimerRef.current = null;
+    }
+    if (userTranscriptSettleTimerRef.current) {
+      clearTimeout(userTranscriptSettleTimerRef.current);
+      userTranscriptSettleTimerRef.current = null;
+    }
+    pendingUserTranscriptRef.current = '';
     outboundEventCounterRef.current = 0;
     outboundEventMetaRef.current.clear();
     setIsConversationActive(false);
@@ -1038,6 +1047,15 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     return 'unknown';
   }, []);
 
+  const isReliableTranscript = useCallback((text: string, appLang: 'ar' | 'en'): boolean => {
+    if (!text || text.trim().length < 1) return false;
+    if (appLang === 'ar') {
+      return /[\u0600-\u06FF]/.test(text) && !/[\u4E00-\u9FFF]/.test(text);
+    }
+    return /[A-Za-z]/.test(text)
+      && !/[\u0600-\u06FF\u4E00-\u9FFF\u3040-\u30FF]/.test(text);
+  }, []);
+
   const isDuplicateUserTranscript = useCallback((text: string) => {
     const normalized = normalizeAssistantTranscript(text);
     if (!normalized) {
@@ -1114,8 +1132,8 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          noiseSuppression: false,
+          autoGainControl: false,
           channelCount: { ideal: 1 },
           sampleRate: { ideal: 48000 },
           sampleSize: { ideal: 16 },
@@ -1253,6 +1271,10 @@ What to do instead:
         const memoryContext = buildMemoryContext(language === 'ar' ? 'ar' : 'en');
         const personalTouchSection = buildPersonalTouchSection();
         const helpfulMemoryBlock = buildHelpfulMemoryBlock();
+        const transcriptionLanguage = language === 'ar' ? 'ar' : 'en';
+        const transcriptionPrompt = transcriptionLanguage === 'ar'
+          ? 'Transcribe the speaker in Arabic only. Do not translate into another language. If the audio is unclear, wait for clearer speech rather than guessing a different language.'
+          : 'Transcribe the speaker in English only. Do not translate into another language. If the audio is unclear, wait for clearer speech rather than guessing Chinese, Dutch, Irish, or another language.';
 
         const instructions = t(
           `You are WAKTI — a warm, natural voice assistant. You're having a real conversation, not reading from a manual. ${personalTouch}
@@ -1311,12 +1333,15 @@ ${memoryContext ? memoryContext : ''}`
               input: {
                 transcription: {
                   model: transcriptionModelRef.current,
+                  language: transcriptionLanguage,
+                  prompt: transcriptionPrompt,
                 },
+                noise_reduction: { type: 'near_field' },
                 turn_detection: {
                   type: 'server_vad',
-                  threshold: 0.62,
+                  threshold: 0.72,
                   prefix_padding_ms: 500,
-                  silence_duration_ms: 1100,
+                  silence_duration_ms: 1800,
                   create_response: false,
                   interrupt_response: false,
                 },
@@ -1677,7 +1702,6 @@ ${memoryContext ? memoryContext : ''}`
       case 'input_audio_transcription.completed': {
         // User's speech transcribed
         const transcript = normalizeAssistantTranscript(msg.transcript || msg.delta || '');
-        setLiveTranscript(transcript);
         
         // Only proceed if user actually said something (not empty/silence)
         if (transcript.length > 0) {
@@ -1704,6 +1728,20 @@ ${memoryContext ? memoryContext : ''}`
           const appLang: 'ar' | 'en' = language === 'ar' ? 'ar' : 'en';
           const detectedLang = appLang;
 
+          if (!isReliableTranscript(transcript, appLang)) {
+            console.warn('[Talk] Transcript failed language reliability check (likely hallucinated echo):', transcript);
+            if (responseTimeoutRef.current) {
+              clearTimeout(responseTimeoutRef.current);
+              responseTimeoutRef.current = null;
+            }
+            assistantResponseActiveRef.current = false;
+            if (isConversationActiveRef.current) {
+              rearmListening(200);
+            }
+            return;
+          }
+
+          setLiveTranscript(transcript);
           disableNoiseGuard(true);
           resetNoiseStrikes();
 
@@ -1722,32 +1760,34 @@ ${memoryContext ? memoryContext : ''}`
           }
 
           detectedLanguageRef.current = appLang;
-
-          addConversationTurn('user', transcript, true);
-          
-          // If in search mode, perform web search then respond
-          if (searchModeRef.current) {
-            console.log('[Talk] Search mode active - performing web search for:', transcript);
-            pendingTranscriptRef.current = transcript;
-            setAiTranscript(''); // clear any stale AI text
-            
-            // Clean the transcript for better search results (removes filler words)
-            const cleanedQuery = cleanSearchQuery(transcript);
-            
-            // Auto-reset search mode BEFORE async work to prevent double-trigger
-            setSearchMode(false);
-            searchModeRef.current = false;
-            
-            // Perform search and then send response with results
-            performWebSearch(cleanedQuery, detectedLang).then((searchContext) => {
-              console.log('[Talk] Search complete, sending response with context');
-              sendResponseCreate(searchContext, transcript, detectedLang);
-            });
-          } else {
-            // Talk mode - respond normally (transcript already validated as non-empty)
-            console.log('[Talk] Talk mode - sending response for:', transcript);
-            sendResponseCreate(undefined, transcript, detectedLang);
+          pendingUserTranscriptRef.current = transcript;
+          if (userTranscriptSettleTimerRef.current) {
+            clearTimeout(userTranscriptSettleTimerRef.current);
           }
+          setAiTranscript('');
+          userTranscriptSettleTimerRef.current = setTimeout(() => {
+            userTranscriptSettleTimerRef.current = null;
+            if (!isConversationActiveRef.current || pendingUserTranscriptRef.current !== transcript) {
+              return;
+            }
+            pendingUserTranscriptRef.current = '';
+            addConversationTurn('user', transcript, true);
+
+            if (searchModeRef.current) {
+              console.log('[Talk] Search mode active - performing web search for:', transcript);
+              pendingTranscriptRef.current = transcript;
+              const cleanedQuery = cleanSearchQuery(transcript);
+              setSearchMode(false);
+              searchModeRef.current = false;
+              performWebSearch(cleanedQuery, detectedLang).then((searchContext) => {
+                console.log('[Talk] Search complete, sending response with context');
+                sendResponseCreate(searchContext, transcript, detectedLang);
+              });
+            } else {
+              console.log('[Talk] Talk mode - sending stable transcript:', transcript);
+              sendResponseCreate(undefined, transcript, detectedLang);
+            }
+          }, 500);
         } else {
           // User didn't say anything - go back to ready without responding
           console.log('[Talk] Empty transcript - user did not speak, skipping response');
@@ -1768,6 +1808,7 @@ ${memoryContext ? memoryContext : ''}`
         console.log('[Talk] Assistant response created');
         assistantResponseActiveRef.current = true;
         assistantAwaitingOutputAudioDoneRef.current = true;
+        audioActuallyEndedAtRef.current = 0;
         bumpAssistantPlaybackLock(1800);
         setStatus('processing');
         break;
@@ -1854,7 +1895,7 @@ ${memoryContext ? memoryContext : ''}`
       default:
         break;
     }
-  }, [addConversationTurn, bumpAssistantPlaybackLock, clearAssistantTurnRecovery, detectTranscriptLanguage, disableNoiseGuard, finishAssistantTurn, isAssistantPlaybackLocked, isDuplicateUserTranscript, isLikelyAssistantEcho, language, normalizeAssistantTranscript, rearmListening, registerNoiseStrike, resetNoiseStrikes, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
+  }, [addConversationTurn, bumpAssistantPlaybackLock, clearAssistantTurnRecovery, detectTranscriptLanguage, disableNoiseGuard, finishAssistantTurn, isAssistantPlaybackLocked, isDuplicateUserTranscript, isLikelyAssistantEcho, isReliableTranscript, language, normalizeAssistantTranscript, rearmListening, registerNoiseStrike, resetNoiseStrikes, scheduleAssistantTurnRecovery, setMicTracksEnabled, tLang, updateAssistantTranscript]);
 
   // Keep ref in sync so dc.onmessage always dispatches the latest handler
   useEffect(() => {
@@ -2010,6 +2051,11 @@ ${memoryContext ? memoryContext : ''}`
     lastAssistantTranscriptRef.current = '';
     lastAssistantFinishedAtRef.current = 0;
     assistantPlaybackLockUntilRef.current = 0;
+    if (userTranscriptSettleTimerRef.current) {
+      clearTimeout(userTranscriptSettleTimerRef.current);
+      userTranscriptSettleTimerRef.current = null;
+    }
+    pendingUserTranscriptRef.current = '';
     setDebugHint('');
     setMicTracksEnabled(false);
     if (dcRef.current && dcRef.current.readyState === 'open') {
@@ -2039,6 +2085,11 @@ ${memoryContext ? memoryContext : ''}`
     lastAssistantTranscriptRef.current = '';
     lastAssistantFinishedAtRef.current = 0;
     assistantPlaybackLockUntilRef.current = 0;
+    if (userTranscriptSettleTimerRef.current) {
+      clearTimeout(userTranscriptSettleTimerRef.current);
+      userTranscriptSettleTimerRef.current = null;
+    }
+    pendingUserTranscriptRef.current = '';
     setDebugHint('');
     setAiTranscript(''); // Clear previous AI response
     rearmListening();
