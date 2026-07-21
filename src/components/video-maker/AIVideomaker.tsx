@@ -19,6 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserProfile } from '@/hooks/useUserProfile';
+import { useFFmpegVideo } from '@/hooks/useFFmpegVideo';
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/integrations/supabase/client';
 import { inspectGenerationPrompt } from '@/utils/generationPromptGuard';
 import {
@@ -376,6 +377,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [searchParams] = useSearchParams();
   const { language, theme } = useTheme();
   const { user, isGuest } = useAuth();
+  const { stitchClips: ffmpegStitchClips } = useFFmpegVideo();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
   const emitTrialBlocked = useCallback((payload: VideoInvokeErrorPayload | null, fallbackFeature: string) => {
@@ -2281,36 +2283,32 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     await handleFilm();
   }, [handleFilm]);
 
-  const stitchOnServer = useCallback(async (clipUrls: string[], clipDurations: number[]) => {
+  const stitchOnServer = useCallback(async (clipUrls: string[], _clipDurations: number[]) => {
     if (!user?.id) throw new Error('Not authenticated');
 
-    const isLocal = typeof window !== 'undefined'
-      && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    const stitchBase = isLocal ? 'https://www.wakti.qa' : '';
-    const response = await fetch(`${stitchBase}/api/video/stitch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        videoUrls: clipUrls,
-        userId: user.id,
-        format: cinemaFormat,
-        clip_durations: clipDurations,
-      }),
-      signal: AbortSignal.timeout(5 * 60 * 1000),
+    const blob = await ffmpegStitchClips({
+      clipUrls,
+      onProgress: (pct, msg) => {
+        setStitchProgress(Math.round(pct * 0.88));
+        setStitchStatus(msg);
+      },
     });
+    if (!blob) throw new Error('Film assembly failed — no output produced');
 
-    const responseText = await response.text();
-    let result: { url?: string; error?: string };
-    try {
-      result = JSON.parse(responseText);
-    } catch {
-      throw new Error(`Video stitch returned an invalid response (${response.status})`);
-    }
-    if (!response.ok || !result?.url) {
-      throw new Error(result?.error || `Video stitch failed (${response.status})`);
-    }
-    return result.url as string;
-  }, [user, cinemaFormat]);
+    setStitchProgress(90);
+    setStitchStatus(language === 'ar' ? '🎬 جاري رفع الفيلم...' : '🎬 Uploading your film...');
+
+    const fileName = `cinema/${user.id}/${Date.now()}.mp4`;
+    const { error: uploadErr } = await supabase.storage
+      .from('videos')
+      .upload(fileName, blob, { contentType: 'video/mp4', upsert: true });
+    if (uploadErr) throw new Error(uploadErr.message);
+
+    const { data: pubData } = supabase.storage.from('videos').getPublicUrl(fileName);
+    const videoUrl = pubData?.publicUrl;
+    if (!videoUrl) throw new Error('Failed to get video URL after upload');
+    return videoUrl;
+  }, [user, ffmpegStitchClips, language]);
 
   const handleStitchClips = useCallback(async () => {
     if (!user || isStitching) return;
@@ -2327,11 +2325,9 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     const orderedDurations = orderedEntries.map(entry => entry.duration);
     setIsStitching(true);
     setAutoStitchQueued(false);
-    setStitchProgress(10);
-    setStitchStatus(language === 'ar' ? '🎬 جاري إرسال المقاطع إلى محرك الفيديو...' : '🎬 Sending clips to the video engine...');
+    setStitchProgress(0);
+    setStitchStatus(language === 'ar' ? '🎬 جاري تجهيز محرك الفيلم...' : '🎬 Preparing final film engine...');
     try {
-      setStitchProgress(50);
-      setStitchStatus(language === 'ar' ? '🎬 جاري إنشاء الفيلم النهائي...' : '🎬 Creating your final film...');
       const url = await stitchOnServer(orderedUrls, orderedDurations);
       setStitchProgress(100);
       setPremiereClips(orderedUrls);
