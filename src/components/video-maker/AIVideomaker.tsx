@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useFFmpegVideo } from '@/hooks/useFFmpegVideo';
 import InstagramPublishButton from '@/components/instagram/InstagramPublishButton';
 import { SavedImagesPicker } from '@/components/dashboard/SavedImagesPicker';
 import { Button } from '@/components/ui/button';
@@ -377,7 +376,6 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [searchParams] = useSearchParams();
   const { language, theme } = useTheme();
   const { user, isGuest } = useAuth();
-  const { loadFFmpeg, stitchClips, isLoading: isFFmpegLoading, progress: ffmpegProgress, status: ffmpegStatus } = useFFmpegVideo();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef2 = useRef<HTMLInputElement>(null);
   const emitTrialBlocked = useCallback((payload: VideoInvokeErrorPayload | null, fallbackFeature: string) => {
@@ -627,6 +625,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   // Role 5 — Premiere
   const [isStitching, setIsStitching] = useState(false);
   const [stitchStatus, setStitchStatus] = useState('');
+  const [stitchProgress, setStitchProgress] = useState(0);
   const [premiereVideoUrl, setPremiereVideoUrl] = useState<string | null>(null);
   const [premiereClipIndex, setPremiereClipIndex] = useState(0);
   const [premiereClips, setPremiereClips] = useState<string[]>([]); // ordered clip URLs for browser player
@@ -2186,7 +2185,6 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       });
 
       const taskIds = await Promise.all(taskPromises);
-      void loadFFmpeg();
       setStitchStatus(language === 'ar' ? '🎬 جاري تحريك اللقطات... ستظهر جاهزة واحدة تلو الأخرى' : '🎬 Rendering your clips... they will finish one by one');
 
       // ── Step 2: Poll all tasks in parallel until every clip is done ──
@@ -2256,7 +2254,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     } finally {
       setIsFilming(false);
     }
-  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat, visualSupervisorPrompts, sceneDurations, loadFFmpeg]);
+  }, [user, isFilming, sceneImages, cinemaScenes, cinemaSceneCount, language, cinemaFormat, visualSupervisorPrompts, sceneDurations]);
 
   // Start the Artist automatically after the Director finishes.
   useEffect(() => {
@@ -2283,86 +2281,82 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     await handleFilm();
   }, [handleFilm]);
 
-  // ── Role 4c: Stitch clips in user-chosen order via browser FFmpeg ──
+  const stitchOnServer = useCallback(async (clipUrls: string[], clipDurations: number[]) => {
+    if (!user?.id) throw new Error('Not authenticated');
+
+    const isLocal = typeof window !== 'undefined'
+      && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    const stitchBase = isLocal ? 'https://www.wakti.qa' : '';
+    const response = await fetch(`${stitchBase}/api/video/stitch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoUrls: clipUrls,
+        userId: user.id,
+        format: cinemaFormat,
+        clip_durations: clipDurations,
+      }),
+      signal: AbortSignal.timeout(5 * 60 * 1000),
+    });
+
+    const responseText = await response.text();
+    let result: { url?: string; error?: string };
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      throw new Error(`Video stitch returned an invalid response (${response.status})`);
+    }
+    if (!response.ok || !result?.url) {
+      throw new Error(result?.error || `Video stitch failed (${response.status})`);
+    }
+    return result.url as string;
+  }, [user, cinemaFormat]);
+
   const handleStitchClips = useCallback(async () => {
     if (!user || isStitching) return;
-    const orderedUrls = clipOrder.map(i => videoClips[i]).filter(Boolean) as string[];
-    if (orderedUrls.length < 1) return;
+    const orderedIndices = clipOrder.length > 0 ? clipOrder : videoClips.map((_, index) => index);
+    const orderedEntries = orderedIndices
+      .map(index => ({
+        url: videoClips[index],
+        duration: Number(sceneDurations[index] ?? DEFAULT_SCENE_DURATION),
+      }))
+      .filter((entry): entry is { url: string; duration: number } => Boolean(entry.url));
+    if (orderedEntries.length < 1) return;
+
+    const orderedUrls = orderedEntries.map(entry => entry.url);
+    const orderedDurations = orderedEntries.map(entry => entry.duration);
     setIsStitching(true);
     setAutoStitchQueued(false);
-    setStitchStatus(language === 'ar' ? '🎬 جاري تجهيز الفيلم النهائي...' : '🎬 Preparing your final film...');
+    setStitchProgress(10);
+    setStitchStatus(language === 'ar' ? '🎬 جاري إرسال المقاطع إلى محرك الفيديو...' : '🎬 Sending clips to the video engine...');
     try {
-      const blob = await stitchClips({
-        clipUrls: orderedUrls,
-        onProgress: (pct, msg) => {
-          setStitchStatus(
-            language === 'ar'
-              ? `🎬 ${pct}% — جاري تجميع الفيلم النهائي...`
-              : `🎬 ${pct}% — ${msg}`
-          );
-        },
-      });
-      if (!blob) throw new Error('FFmpeg returned no output');
-
-      const url = URL.createObjectURL(blob);
+      setStitchProgress(50);
+      setStitchStatus(language === 'ar' ? '🎬 جاري إنشاء الفيلم النهائي...' : '🎬 Creating your final film...');
+      const url = await stitchOnServer(orderedUrls, orderedDurations);
+      setStitchProgress(100);
       setPremiereClips(orderedUrls);
       setPremiereClipIndex(0);
       setPremiereVideoUrl(url);
       setAnimProgress(Array(cinemaSceneCount).fill('done'));
       setCinemaStep('premiere');
-      supabase.rpc('increment_ai_video_usage', { p_user_id: user!.id }).then(() => loadQuota());
+      supabase.rpc('increment_ai_video_usage', { p_user_id: user.id }).then(() => loadQuota());
       toast.success(language === 'ar' ? '🎬 الفيلم جاهز!' : '🎬 Film ready!');
-    } catch (err: any) {
-      console.error('[cinema] FFmpeg stitch error:', err);
-      toast.error(language === 'ar' ? 'فشل إنشاء الفيلم: ' + err.message : 'Final film failed: ' + err.message);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown server stitch error';
+      console.error('[cinema] Server stitch error:', err);
+      toast.error(language === 'ar' ? 'فشل إنشاء الفيلم: ' + errorMessage : 'Final film failed: ' + errorMessage);
     } finally {
       setIsStitching(false);
+      setStitchProgress(0);
       setStitchStatus('');
     }
-  }, [user, isStitching, clipOrder, videoClips, stitchClips, language, cinemaSceneCount, loadQuota]);
+  }, [user, isStitching, clipOrder, videoClips, sceneDurations, stitchOnServer, language, cinemaSceneCount, loadQuota]);
 
   useEffect(() => {
     if (!autoStitchQueued || isStitching || cinemaStep !== 'filming' || !clipsReady || clipOrder.length === 0) return;
     handleStitchClips();
   }, [autoStitchQueued, isStitching, cinemaStep, clipsReady, clipOrder, handleStitchClips]);
 
-  // ── Role 5: Premiere — FFmpeg.wasm in-browser stitch → single MP4 blob ──
-  const handleStitch = useCallback(async () => {
-    const orderedClips = (clipOrder.length > 0 ? clipOrder.map(i => videoClips[i]) : videoClips).filter(Boolean) as string[];
-    if (orderedClips.length < 1) return;
-
-    setIsStitching(true);
-    setStitchStatus(language === 'ar' ? '🎬 جاري تجهيز الفيلم النهائي...' : '🎬 Preparing your final film...');
-
-    try {
-      const blob = await stitchClips({
-        clipUrls: orderedClips,
-        onProgress: (pct, msg) => {
-          setStitchStatus(
-            language === 'ar'
-              ? `🎬 ${pct}% — جاري تجميع الفيلم النهائي...`
-              : `🎬 ${pct}% — ${msg}`
-          );
-        },
-      });
-
-      if (!blob) throw new Error('FFmpeg returned no output');
-
-      const url = URL.createObjectURL(blob);
-      setPremiereClips(orderedClips);   // keep for dot nav fallback
-      setPremiereClipIndex(0);
-      setPremiereVideoUrl(url);
-      setCinemaStep('premiere');
-      supabase.rpc('increment_ai_video_usage', { p_user_id: user!.id }).then(() => loadQuota());
-      toast.success(language === 'ar' ? '🎬 الفيلم جاهز!' : '🎬 Film ready!');
-    } catch (err: any) {
-      console.error('[cinema] FFmpeg stitch error:', err);
-      toast.error(language === 'ar' ? 'فشل إنشاء الفيلم: ' + err.message : 'Final film failed: ' + err.message);
-    } finally {
-      setIsStitching(false);
-      setStitchStatus('');
-    }
-  }, [videoClips, clipOrder, stitchClips, language, user, loadQuota]);
 
   // ── Cinema full reset ──
   const handleCinemaReset = useCallback(() => {
@@ -2405,6 +2399,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     setIsFilming(false);
     setIsCasting(false);
     setIsStitching(false);
+    setStitchProgress(0);
     setPremiereVideoUrl(null);
     setPremiereClipIndex(0);
     setPremiereClips([]);
@@ -3498,7 +3493,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
 
             {/* Cinema mode - Director's Desk */}
             {generationMode === 'cinema' && (
-              <div className="relative col-span-full flex flex-col">
+              <div className="relative col-span-full flex flex-col" style={cinemaStep !== 'desk' ? {background:'#0c0f14',borderRadius:'1.25rem',padding:'0.5rem'} : {}}>
                 {cinemaStep === 'desk' ? (() => {
                   const simpleIsDark = theme === 'dark';
                   const simpleText = simpleIsDark ? '#f2f2f2' : '#060541';
@@ -5196,7 +5191,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                   const queuedCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'queued' || p === 'idle').length;
                   const renderingCount = animProgress.slice(0, cinemaSceneCount).filter(p => p === 'rendering').length;
                   const animationPercent = cinemaSceneCount > 0 ? Math.round((doneCount / cinemaSceneCount) * 100) : 0;
-                  const stitchPercent = Math.min(100, Math.max(0, Math.round(ffmpegProgress)));
+                  const stitchPercent = Math.min(100, Math.max(0, Math.round(stitchProgress)));
                   return (
                     <div className="flex flex-col gap-6 pb-4">
                       {/* Header */}

@@ -131,7 +131,7 @@ function buildArgs(inputPaths, outputPath, clipDurations) {
 
   // Trim each input to its target duration
   for (let i = 0; i < n; i++) {
-    filterParts.push(`[${i}:v]trim=0:${durations[i]},setpts=PTS-STARTPTS[tv${i}]`);
+    filterParts.push(`[${i}:v]trim=0:${durations[i]},setpts=PTS-STARTPTS,fps=24[tv${i}]`);
     filterParts.push(`[${i}:a]atrim=0:${durations[i]},asetpts=PTS-STARTPTS[ta${i}]`);
   }
 

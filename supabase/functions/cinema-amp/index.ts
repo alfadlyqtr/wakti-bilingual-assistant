@@ -6,7 +6,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { sanitizeUserInput, withUserInputGuard } from '../_shared/promptSafety.ts';
 
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_GENAI_API_KEY') || '';
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
 
@@ -15,7 +15,72 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-natively-app',
 };
 
-serve(async (req) => {
+type GeminiPart = { text?: unknown };
+type GeminiResponse = {
+  candidates?: Array<{
+    content?: { parts?: GeminiPart[] };
+    finishReason?: string;
+  }>;
+  promptFeedback?: { blockReason?: string };
+  error?: { message?: string; status?: string };
+};
+
+function parseGeminiResponse(raw: string): GeminiResponse {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed as GeminiResponse : {};
+  } catch {
+    return {};
+  }
+}
+
+function extractGeminiText(data: GeminiResponse): string {
+  const parts = data.candidates?.[0]?.content?.parts || [];
+  return parts
+    .map((part) => typeof part.text === 'string' ? part.text : '')
+    .join('')
+    .trim();
+}
+
+function getGeminiFailureReason(data: GeminiResponse, status: number): string {
+  return data.promptFeedback?.blockReason
+    || data.candidates?.[0]?.finishReason
+    || data.error?.status
+    || data.error?.message
+    || `HTTP ${status}`;
+}
+
+async function callGemini(
+  userMessage: string,
+  systemPrompt: string,
+): Promise<{ text: string; reason: string } | { text: null; reason: string }> {
+  const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: [{ text: userMessage }] }],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 1200,
+        thinkingConfig: { thinkingLevel: 'minimal' },
+      },
+    }),
+  });
+
+  const raw = await resp.text();
+  const data = parseGeminiResponse(raw);
+  if (!resp.ok) {
+    return { text: null, reason: getGeminiFailureReason(data, resp.status) };
+  }
+
+  const text = extractGeminiText(data);
+  return text
+    ? { text, reason: 'STOP' }
+    : { text: null, reason: getGeminiFailureReason(data, resp.status) };
+}
+
+serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -78,35 +143,18 @@ STRICT RULES:
 
     const userMessage = safeText + contextBlock;
 
-    const resp = await fetch(`${GEMINI_URL}?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: systemPrompt }] },
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: userMessage }],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 1200,
-        },
-      }),
-    });
+    if (!GEMINI_API_KEY) throw new Error('Gemini API key not configured');
 
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(`Gemini error: ${resp.status} - ${err}`);
+    let enhanced = '';
+    try {
+      const attempt = await callGemini(userMessage, systemPrompt);
+      if (attempt.text) enhanced = attempt.text;
+      else throw new Error(`${GEMINI_MODEL}: ${attempt.reason}`);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'request failed';
+      console.error(`[cinema-amp] ${GEMINI_MODEL} failed: ${reason}`);
+      throw new Error(`No enhanced idea returned (${GEMINI_MODEL}: ${reason})`);
     }
-
-    const data = await resp.json();
-    const parts = Array.isArray(data?.candidates?.[0]?.content?.parts)
-      ? data.candidates[0].content.parts as Array<{ text?: string }>
-      : [];
-    let enhanced = parts.map((p) => p?.text || '').join('').trim();
-    if (!enhanced) throw new Error('No content returned from Gemini');
 
     const HARD_CAP = 1200;
     if (enhanced.length > HARD_CAP) {
