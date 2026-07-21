@@ -201,16 +201,23 @@ export function useFFmpegVideo(): UseFFmpegStitchReturn {
       setStatus('Downloading clips...');
       await Promise.all(Array.from({ length: Math.min(3, clipUrls.length) }, () => dlWorker()));
 
-      const concatTxt = new TextEncoder().encode(inputFiles.map(f => `file '${f}'`).join('\n'));
-      await proxy.send('WRITE_FILE', { path: 'concat.txt', data: concatTxt }, [concatTxt.buffer]);
-
       setStatus('Assembling your final film...'); setProgress(45);
       onProgress?.(45, 'Assembling your final film...');
+
+      // Build filter_complex concat — more reliable than concat demuxer in FFmpeg.wasm
+      // (concat demuxer opens files via text path which fails with Emscripten CWD mismatch)
+      const n = inputFiles.length;
+      const inputArgs = inputFiles.flatMap(f => ['-i', f]);
+      const resetPts  = Array.from({ length: n }, (_, i) => `[${i}:v]setpts=PTS-STARTPTS[v${i}]`).join(';');
+      const concatIn  = Array.from({ length: n }, (_, i) => `[v${i}]`).join('');
+      const filterStr = `${resetPts};${concatIn}concat=n=${n}:v=1:a=0[outv]`;
 
       await withTimeout(
         proxy.send('EXEC', {
           args: [
-            '-f', 'concat', '-safe', '0', '-i', 'concat.txt',
+            ...inputArgs,
+            '-filter_complex', filterStr,
+            '-map', '[outv]',
             '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23',
             '-an',
             '-movflags', '+faststart',
@@ -227,7 +234,7 @@ export function useFFmpegVideo(): UseFFmpegStitchReturn {
       const raw  = await proxy.send('READ_FILE', { path: 'output.mp4' }) as Uint8Array;
       const blob = new Blob([raw.buffer as ArrayBuffer], { type: 'video/mp4' });
 
-      for (const f of [...inputFiles, 'concat.txt', 'output.mp4']) {
+      for (const f of [...inputFiles, 'output.mp4']) {
         try { await proxy.send('DELETE_FILE', { path: f }); } catch (_) {}
       }
 
