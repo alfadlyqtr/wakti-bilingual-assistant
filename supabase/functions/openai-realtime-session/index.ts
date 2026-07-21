@@ -10,6 +10,7 @@ const DEFAULT_MODEL_CANDIDATES = ["gpt-realtime-2", "gpt-realtime"];
 const ALLOWED_TRANSCRIPTION_MODELS = new Set(["gpt-4o-transcribe", "gpt-realtime-whisper"]);
 const DEFAULT_TRANSCRIPTION_CANDIDATES = ["gpt-4o-transcribe", "gpt-realtime-whisper"];
 const REALTIME_CALLS_URL = "https://api.openai.com/v1/realtime/calls";
+const OPENAI_REALTIME_TIMEOUT_MS = 18000;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +28,27 @@ function uniqueNonEmpty(values: string[]): string[] {
     out.push(value);
   }
   return out;
+}
+
+function toCompactSingleLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function summarizeOpenAIFailure(status: number, rawText: string): string {
+  const compact = toCompactSingleLine(rawText);
+  if (status === 504 || /gateway time-out|gateway timeout/i.test(compact)) {
+    return "OpenAI voice service timed out";
+  }
+  if (status === 429) {
+    return "OpenAI voice service is rate limited";
+  }
+  if (status >= 500) {
+    return `OpenAI voice service returned ${status}`;
+  }
+  if (!compact) {
+    return `OpenAI voice request failed (${status})`;
+  }
+  return compact.length > 220 ? `${compact.slice(0, 220)}…` : compact;
 }
 
 serve(async (req: Request) => {
@@ -125,13 +147,43 @@ serve(async (req: Request) => {
         formData.set("sdp", sdp_offer);
         formData.set("session", sessionConfig);
 
-        const openaiResponse = await fetch(REALTIME_CALLS_URL, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${OPENAI_API_KEY}`,
-          },
-          body: formData,
-        });
+        let openaiResponse: Response;
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), OPENAI_REALTIME_TIMEOUT_MS);
+          try {
+            openaiResponse = await fetch(REALTIME_CALLS_URL, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${OPENAI_API_KEY}`,
+              },
+              body: formData,
+              signal: controller.signal,
+            });
+          } finally {
+            clearTimeout(timeoutId);
+          }
+        } catch (fetchError) {
+          const message = fetchError instanceof Error ? fetchError.message : String(fetchError || "Unknown fetch error");
+          const isTimeout = fetchError instanceof DOMException
+            ? fetchError.name === "AbortError"
+            : /abort|timeout|timed out/i.test(message);
+          lastStatus = isTimeout ? 504 : 502;
+          lastErrorText = isTimeout
+            ? "OpenAI voice service timed out"
+            : "OpenAI voice service request failed";
+          console.warn(
+            "[openai-realtime-session] Candidate request failed:",
+            `${model} / ${transcriptionModel}`,
+            "status:",
+            lastStatus,
+            "details:",
+            lastErrorText,
+            "cause:",
+            message,
+          );
+          break;
+        }
 
         if (openaiResponse.ok) {
           const sdpAnswer = await openaiResponse.text();
@@ -150,7 +202,8 @@ serve(async (req: Request) => {
         }
 
         lastStatus = openaiResponse.status;
-        lastErrorText = await openaiResponse.text();
+        const rawErrorText = await openaiResponse.text();
+        lastErrorText = summarizeOpenAIFailure(openaiResponse.status, rawErrorText);
         console.warn(
           "[openai-realtime-session] Candidate failed:",
           `${model} / ${transcriptionModel}`,
@@ -159,13 +212,21 @@ serve(async (req: Request) => {
           "details:",
           lastErrorText,
         );
+
+        if (openaiResponse.status >= 500 || openaiResponse.status === 429) {
+          break;
+        }
+      }
+
+      if (lastStatus >= 500 || lastStatus === 429) {
+        break;
       }
     }
 
     console.error("[openai-realtime-session] All candidates failed:", attempted.join(" | "));
     return new Response(JSON.stringify({
       error: "Failed to create realtime session",
-      stage: "openai_sdp_exchange",
+      stage: lastStatus === 504 ? "openai_timeout" : "openai_sdp_exchange",
       details: lastErrorText,
       attempted,
     }), {
@@ -175,7 +236,7 @@ serve(async (req: Request) => {
 
   } catch (err) {
     console.error("[openai-realtime-session] Error:", err);
-    return new Response(JSON.stringify({ error: "Internal server error", stage: "server_exception", details: String(err) }), {
+    return new Response(JSON.stringify({ error: "Internal server error", stage: "server_exception", details: "Voice session server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

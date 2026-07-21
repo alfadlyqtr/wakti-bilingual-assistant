@@ -195,6 +195,32 @@ export function TalkBubble({ isOpen, onClose, onUserMessage, onAssistantMessage 
     onAssistantMessageRef.current = onAssistantMessage;
   }, [onUserMessage, onAssistantMessage]);
 
+  const cancelPendingConnection = useCallback(() => {
+    pendingAutoStartAfterConnectRef.current = false;
+    connectionInitIdRef.current += 1;
+    connectionInitInFlightRef.current = false;
+    initialSessionConfiguredRef.current = false;
+
+    if (sessionReadyFallbackTimeoutRef.current) {
+      clearTimeout(sessionReadyFallbackTimeoutRef.current);
+      sessionReadyFallbackTimeoutRef.current = null;
+    }
+
+    if (dcRef.current) {
+      try { dcRef.current.close(); } catch {}
+      dcRef.current = null;
+    }
+    if (pcRef.current) {
+      try { pcRef.current.close(); } catch {}
+      pcRef.current = null;
+    }
+
+    setIsConnectionReady(false);
+    setStatus('ready');
+    setError(null);
+    setDebugHint(t('Connection canceled. Tap once to try again.', 'تم إلغاء الاتصال. اضغط مرة للمحاولة من جديد.'));
+  }, [t]);
+
   useEffect(() => {
     isConversationActiveRef.current = isConversationActive;
   }, [isConversationActive]);
@@ -1548,21 +1574,31 @@ ${memoryContext ? memoryContext : ''}`
       } else if (connectionStage === 'auth' || edgeStage === 'auth') {
         userError = language === 'ar' ? 'يرجى تسجيل الدخول مرة أخرى' : 'Please sign in again';
       } else if (connectionStage === 'edge') {
-        userError = language === 'ar' ? 'فشل خادم الصوت في بدء الجلسة' : 'Voice session server failed';
+        userError = language === 'ar' ? 'تعذر بدء جلسة الصوت' : 'Could not start voice session';
       } else if (connectionStage === 'answer') {
         userError = language === 'ar' ? 'فشلت خطوة الاتصال الأخيرة' : 'Final connection step failed';
       }
 
       const stageCode = edgeStage || connectionStage;
       const compactDetail = (edgeDetails || detail || '').replace(/\s+/g, ' ').trim();
-      const trimmedDetail = compactDetail.length > 140 ? `${compactDetail.slice(0, 140)}…` : compactDetail;
+      const isTimeoutFailure = /timeout|timed out|gateway time-out|gateway timeout|\b504\b/i.test(compactDetail);
+
+      if (connectionStage === 'edge' && isTimeoutFailure) {
+        userError = language === 'ar' ? 'خدمة الصوت مشغولة الآن' : 'Voice service is busy right now';
+      }
 
       setError(userError);
-      setDebugHint(
-        language === 'ar'
-          ? `مرحلة الفشل: ${stageCode}${trimmedDetail ? ` — ${trimmedDetail}` : ''}`
-          : `Failure stage: ${stageCode}${trimmedDetail ? ` — ${trimmedDetail}` : ''}`
-      );
+      if (connectionStage === 'edge' && isTimeoutFailure) {
+        setDebugHint(t('Voice service is busy right now. Tap once to try again.', 'خدمة الصوت مشغولة الآن. اضغط مرة للمحاولة من جديد.'));
+      } else if (connectionStage === 'edge') {
+        setDebugHint(t('Could not start the voice session. Tap once to try again.', 'تعذر بدء جلسة الصوت. اضغط مرة للمحاولة من جديد.'));
+      } else if (stageCode === 'auth') {
+        setDebugHint(t('Please sign in again, then try Talk one more time.', 'يرجى تسجيل الدخول مرة أخرى، ثم جرّب التحدث مرة أخرى.'));
+      } else if (connectionStage === 'microphone') {
+        setDebugHint(t('Please allow microphone access, then tap again.', 'يرجى السماح بالوصول إلى المايك، ثم اضغط مرة أخرى.'));
+      } else {
+        setDebugHint(t('Tap once to try again.', 'اضغط مرة للمحاولة من جديد.'));
+      }
       setStatus('ready');
       setIsConnectionReady(false);
     } finally {
@@ -2075,7 +2111,12 @@ ${memoryContext ? memoryContext : ''}`
   }, [flushConversationToChat, onClose, stopRecording]);
 
   const handleTalkButtonPress = useCallback(() => {
-    if (status === 'connecting' || status === 'processing' || status === 'speaking') {
+    if (status === 'processing' || status === 'speaking') {
+      return;
+    }
+
+    if (status === 'connecting') {
+      cancelPendingConnection();
       return;
     }
 
@@ -2095,7 +2136,7 @@ ${memoryContext ? memoryContext : ''}`
     if (!isConversationActive) {
       startRecording();
     }
-  }, [initializeConnection, isConnectionReady, isConversationActive, isNoiseGuardActive, rearmListening, startRecording, status]);
+  }, [cancelPendingConnection, initializeConnection, isConnectionReady, isConversationActive, isNoiseGuardActive, rearmListening, startRecording, status]);
 
   if (!isOpen) return null;
 
@@ -2474,7 +2515,7 @@ ${memoryContext ? memoryContext : ''}`
           <button
             onClick={handleTalkButtonPress}
             onContextMenu={(e) => e.preventDefault()}
-            disabled={status === 'processing' || status === 'speaking' || status === 'connecting'}
+            disabled={status === 'processing' || status === 'speaking'}
             className="voice-orb touch-none"
             aria-label={statusText[status]}
           >
@@ -2493,7 +2534,9 @@ ${memoryContext ? memoryContext : ''}`
 
         {/* Instruction text */}
         <p className={`text-sm text-center max-w-[240px] select-none ${theme === 'dark' ? 'text-white/60' : 'text-[#060541]/60'}`}>
-          {isConversationActive
+          {status === 'connecting'
+            ? t('Connecting now. Tap again to cancel.', 'جارٍ الاتصال الآن. اضغط مرة أخرى للإلغاء.')
+            : isConversationActive
             ? (
               isNoiseGuardActive
                 ? t('Noisy place mode is on. Tap the orb, speak, then I return to normal loop.', 'وضع الضوضاء مفعل. اضغط الدائرة وتكلم، ثم أرجع للوضع الطبيعي.')
