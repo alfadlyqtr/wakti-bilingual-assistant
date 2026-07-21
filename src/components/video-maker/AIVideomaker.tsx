@@ -630,6 +630,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
   const [stitchProgress, setStitchProgress] = useState(0);
   const [premiereVideoUrl, setPremiereVideoUrl] = useState<string | null>(null);
   const [stitchedVideoUrl, setStitchedVideoUrl] = useState<string | null>(null);
+  const [stitchedBlobUrl, setStitchedBlobUrl] = useState<string | null>(null);
   const [premiereClipIndex, setPremiereClipIndex] = useState(0);
   const [premiereClips, setPremiereClips] = useState<string[]>([]); // ordered clip URLs for browser player
   const [isCinemaSaving, setIsCinemaSaving] = useState(false);
@@ -2295,6 +2296,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
       },
     });
     if (!blob) throw new Error('Film assembly failed — no output produced');
+    setStitchedBlobUrl(prev => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(blob); });
 
     setStitchProgress(90);
     setStitchStatus(language === 'ar' ? '🎬 جاري رفع الفيلم...' : '🎬 Uploading your film...');
@@ -2399,6 +2401,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
     setIsStitching(false);
     setStitchProgress(0);
     setStitchedVideoUrl(null);
+    setStitchedBlobUrl(prev => { if (prev) URL.revokeObjectURL(prev); return null; });
     setPremiereVideoUrl(null);
     setPremiereClipIndex(0);
     setPremiereClips([]);
@@ -5502,7 +5505,7 @@ export default function AIVideomaker({ onSaveSuccess, operatorExecution }: AIVid
                         </button>
                         {/* Download */}
                         <a
-                          href={stitchedVideoUrl || premiereVideoUrl}
+                          href={stitchedBlobUrl || stitchedVideoUrl || premiereVideoUrl}
                           download="Wakti-Cinema.mp4"
                           className="h-12 px-4 rounded-xl text-sm font-bold flex items-center justify-center gap-2 flex-shrink-0 transition-all active:scale-95"
                           style={{background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.85)'}}
